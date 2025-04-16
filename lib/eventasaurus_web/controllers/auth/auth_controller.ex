@@ -137,11 +137,27 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Handle callback routes for authentication flows, such as OAuth or email confirmations.
   """
-  def callback(conn, _params) do
-    # This would be implemented for OAuth or email confirmation flows
-    # For now, redirect to home
-    conn
-    |> put_flash(:info, "Authentication completed.")
-    |> redirect(to: ~p"/")
+  def callback(conn, params) do
+    case params do
+      %{"access_token" => access_token, "refresh_token" => refresh_token, "type" => type} ->
+        auth_data = %{access_token: access_token, refresh_token: refresh_token}
+        {:ok, conn} = Auth.store_session(conn, auth_data)
+
+        message = case type do
+          "signup" -> "Your email has been confirmed and you're now signed in!"
+          "recovery" -> "Your password has been reset successfully."
+          _ -> "Authentication completed successfully."
+        end
+
+        conn
+        |> put_flash(:info, message)
+        |> redirect(to: ~p"/")
+
+      _ ->
+        # No tokens provided, just redirect to home
+        conn
+        |> put_flash(:error, "Invalid authentication callback. Please try logging in.")
+        |> redirect(to: ~p"/login")
+    end
   end
 end

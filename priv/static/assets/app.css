@@ -1333,6 +1333,10 @@ select {
   padding-right: 1.5rem;
 }
 
+.pt-16 {
+  padding-top: 4rem;
+}
+
 .text-left {
   text-align: left;
 }
