@@ -10,4 +10,4 @@
               {applications,[kernel,stdlib,elixir,logger,telemetry]},
               {description,"Provides a common interface for defining metrics based on Telemetry events.\n"},
               {registered,[]},
-              {vsn,"1.1.0"}]}.
+              {vsn,"0.6.2"}]}.

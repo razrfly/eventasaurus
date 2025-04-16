@@ -21,7 +21,7 @@ let Hooks = {
       if(this.preflightedWas !== newPreflights){
         this.preflightedWas = newPreflights
         if(newPreflights === ""){
-          this.__view().cancelSubmit(this.el.form)
+          this.__view.cancelSubmit(this.el.form)
         }
       }
 
@@ -47,26 +47,8 @@ let Hooks = {
     mounted(){
       this.focusStart = this.el.firstElementChild
       this.focusEnd = this.el.lastElementChild
-      this.focusStart.addEventListener("focus", (e) => {
-        if(!e.relatedTarget || !this.el.contains(e.relatedTarget)){ 
-          // Handle focus entering from outside (e.g. Tab when body is focused)
-          // https://github.com/phoenixframework/phoenix_live_view/issues/3636
-          const nextFocus = e.target.nextElementSibling
-          ARIA.attemptFocus(nextFocus) || ARIA.focusFirst(nextFocus)
-        } else {
-          ARIA.focusLast(this.el)
-        }
-      })
-      this.focusEnd.addEventListener("focus", (e) => {
-        if(!e.relatedTarget || !this.el.contains(e.relatedTarget)){ 
-          // Handle focus entering from outside (e.g. Shift+Tab when body is focused)
-          // https://github.com/phoenixframework/phoenix_live_view/issues/3636
-          const nextFocus = e.target.previousElementSibling
-          ARIA.attemptFocus(nextFocus) || ARIA.focusLast(nextFocus)
-        } else {
-          ARIA.focusFirst(this.el)
-        }
-      })
+      this.focusStart.addEventListener("focus", () => ARIA.focusLast(this.el))
+      this.focusEnd.addEventListener("focus", () => ARIA.focusFirst(this.el))
       this.el.addEventListener("phx:show-end", () => this.el.focus())
       if(window.getComputedStyle(this.el).display !== "none"){
         ARIA.focusFirst(this.el)
@@ -78,7 +60,7 @@ let Hooks = {
 let findScrollContainer = (el) => {
   // the scroll event won't be fired on the html/body element even if overflow is set
   // therefore we return null to instead listen for scroll events on document
-  if(["HTML", "BODY"].indexOf(el.nodeName.toUpperCase()) >= 0) return null
+  if (["HTML", "BODY"].indexOf(el.nodeName.toUpperCase()) >= 0) return null
   if(["scroll", "auto"].indexOf(getComputedStyle(el).overflowY) >= 0) return el
   return findScrollContainer(el.parentElement)
 }
@@ -113,17 +95,17 @@ let top = (scrollContainer) => {
 
 let isAtViewportTop = (el, scrollContainer) => {
   let rect = el.getBoundingClientRect()
-  return Math.ceil(rect.top) >= top(scrollContainer) && Math.ceil(rect.left) >= 0 && Math.floor(rect.top) <= bottom(scrollContainer)
+  return rect.top >= top(scrollContainer) && rect.left >= 0 && rect.top <= bottom(scrollContainer)
 }
 
 let isAtViewportBottom = (el, scrollContainer) => {
   let rect = el.getBoundingClientRect()
-  return Math.ceil(rect.bottom) >= top(scrollContainer) && Math.ceil(rect.left) >= 0 && Math.floor(rect.bottom) <= bottom(scrollContainer)
+  return rect.right >= top(scrollContainer) && rect.left >= 0 && rect.bottom <= bottom(scrollContainer)
 }
 
 let isWithinViewport = (el, scrollContainer) => {
   let rect = el.getBoundingClientRect()
-  return Math.ceil(rect.top) >= top(scrollContainer) && Math.ceil(rect.left) >= 0 && Math.floor(rect.top) <= bottom(scrollContainer)
+  return rect.top >= top(scrollContainer) && rect.left >= 0 && rect.top <= bottom(scrollContainer)
 }
 
 Hooks.InfiniteScroll = {
@@ -222,7 +204,7 @@ Hooks.InfiniteScroll = {
       let remainingTime = interval - (now - lastCallAt)
 
       if(remainingTime <= 0 || remainingTime > interval){
-        if(timer){
+        if(timer) {
           clearTimeout(timer)
           timer = null
         }
