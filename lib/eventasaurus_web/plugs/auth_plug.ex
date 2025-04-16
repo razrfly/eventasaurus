@@ -39,7 +39,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_user(conn, _opts) do
     if conn.assigns[:current_user] do
-      maybe_refresh_token(conn)
+      conn = maybe_refresh_token(conn)
+      conn
     else
       conn
       |> put_flash(:error, "You must log in to access this page.")
@@ -56,7 +57,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def redirect_if_user_is_authenticated(conn, _opts) do
     if conn.assigns[:current_user] do
       conn
-      |> redirect(to: ~p"/")
+      |> redirect(to: ~p"/dashboard")
       |> halt()
     else
       conn
@@ -65,23 +66,37 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   @doc """
   Attempts to refresh the access token if it's near expiration.
+
+  Returns the updated connection with new tokens if refreshed,
+  or redirects to login if refresh fails.
   """
-  defp maybe_refresh_token(conn) do
+  def maybe_refresh_token(conn) do
     refresh_token = get_session(conn, :refresh_token)
 
-    # Get the current access token and check if it needs refreshing
-    # In a real implementation, we'd check the token's expiry time
-    # For now, we'll just always refresh it to demonstrate the flow
+    # Only try to refresh if we have a refresh token
     if refresh_token do
       case Client.refresh_token(refresh_token) do
-        {:ok, %{access_token: access_token, refresh_token: new_refresh_token}} ->
-          # Update the session with the new tokens
-          conn
-          |> put_session(:access_token, access_token)
-          |> put_session(:refresh_token, new_refresh_token)
+        {:ok, auth_data} ->
+          # Extract the tokens from the response
+          access_token = get_token_value(auth_data, "access_token")
+          new_refresh_token = get_token_value(auth_data, "refresh_token")
+
+          if access_token && new_refresh_token do
+            # Update the session with the new tokens
+            conn
+            |> put_session(:access_token, access_token)
+            |> put_session(:refresh_token, new_refresh_token)
+            |> configure_session(renew: true)
+          else
+            # If tokens couldn't be extracted, clear the session and redirect
+            Auth.clear_session(conn)
+            |> put_flash(:error, "Your session has expired. Please log in again.")
+            |> redirect(to: ~p"/login")
+            |> halt()
+          end
 
         {:error, _reason} ->
-          # If refresh fails, clear the session
+          # If refresh fails, clear the session and redirect to login
           Auth.clear_session(conn)
           |> put_flash(:error, "Your session has expired. Please log in again.")
           |> redirect(to: ~p"/login")
@@ -89,6 +104,20 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       end
     else
       conn
+    end
+  end
+
+  # Helper to get a token value from various response formats
+  defp get_token_value(auth_data, key) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, key) ->
+        Map.get(auth_data, key)
+      is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
+        Map.get(auth_data, String.to_atom(key))
+      is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
+        Map.get(auth_data, "token")
+      true ->
+        nil
     end
   end
 end

@@ -6,6 +6,7 @@ defmodule EventasaurusApp.Auth do
 
   alias EventasaurusApp.Auth.Client
   import Plug.Conn
+  require Logger
 
   @doc """
   Register a new user with email and password.
@@ -45,13 +46,63 @@ defmodule EventasaurusApp.Auth do
   @doc """
   Store authentication tokens in the session.
   """
-  def store_session(conn, %{access_token: access_token, refresh_token: refresh_token}) do
-    conn = conn
-    |> put_session(:access_token, access_token)
-    |> put_session(:refresh_token, refresh_token)
-    |> configure_session(renew: true)
+  def store_session(conn, auth_data) do
+    # Add debug logging to see the structure of auth_data
+    Logger.debug("Auth data: #{inspect(auth_data)}")
 
-    {:ok, conn}
+    # Extract tokens from auth_data which could have different formats
+    access_token = extract_token(auth_data, :access_token)
+    refresh_token = extract_token(auth_data, :refresh_token)
+
+    Logger.debug("Extracted access_token: #{inspect(access_token)}")
+    Logger.debug("Extracted refresh_token: #{inspect(refresh_token)}")
+
+    # Only proceed if we have both tokens
+    if access_token && refresh_token do
+      conn = conn
+      |> put_session(:access_token, access_token)
+      |> put_session(:refresh_token, refresh_token)
+      |> configure_session(renew: true)
+
+      {:ok, conn}
+    else
+      {:error, :invalid_auth_data}
+    end
+  end
+
+  # Helper to extract tokens from different response formats
+  defp extract_token(auth_data, token_key) do
+    cond do
+      # Pattern 1: Using atom keys
+      is_map(auth_data) && Map.has_key?(auth_data, token_key) ->
+        Map.get(auth_data, token_key)
+
+      # Pattern 2: Using string keys
+      is_map(auth_data) && Map.has_key?(auth_data, to_string(token_key)) ->
+        Map.get(auth_data, to_string(token_key))
+
+      # Pattern 3: Using camelCase keys
+      is_map(auth_data) && token_key == :access_token && Map.has_key?(auth_data, "accessToken") ->
+        Map.get(auth_data, "accessToken")
+      is_map(auth_data) && token_key == :refresh_token && Map.has_key?(auth_data, "refreshToken") ->
+        Map.get(auth_data, "refreshToken")
+
+      # Pattern 4: Supabase standard format
+      is_map(auth_data) && token_key == :access_token && Map.has_key?(auth_data, "access_token") ->
+        Map.get(auth_data, "access_token")
+      is_map(auth_data) && token_key == :refresh_token && Map.has_key?(auth_data, "refresh_token") ->
+        Map.get(auth_data, "refresh_token")
+
+      # Pattern 5: Using different key names
+      is_map(auth_data) && token_key == :access_token && Map.has_key?(auth_data, "token") ->
+        Map.get(auth_data, "token")
+      is_map(auth_data) && token_key == :access_token && Map.has_key?(auth_data, "jwt") ->
+        Map.get(auth_data, "jwt")
+
+      # No match found
+      true ->
+        nil
+    end
   end
 
   @doc """

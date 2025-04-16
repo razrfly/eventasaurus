@@ -27,12 +27,30 @@ defmodule EventasaurusWeb.Router do
     plug :redirect_if_user_is_authenticated
   end
 
-  # Public routes
-  scope "/", EventasaurusWeb do
-    pipe_through :browser
+  # LiveView session configuration
+  live_session :default, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user}] do
+    # Public routes
+    scope "/", EventasaurusWeb do
+      pipe_through :browser
 
-    get "/", PageController, :home
+      get "/", PageController, :home
+      # Add public LiveView routes here
+      # live "/events/:slug", EventLive.Show
+    end
   end
+
+  # LiveView session for authenticated routes
+  live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    scope "/", EventasaurusWeb do
+      pipe_through [:browser, :authenticated]
+
+      # Add authenticated LiveView routes here
+      # live "/events/new", EventLive.New
+      # live "/events/:id/edit", EventLive.Edit
+    end
+  end
+
+  # Regular controller routes that don't need LiveView sessions
 
   # Authentication routes
   scope "/", EventasaurusWeb do
@@ -55,9 +73,9 @@ defmodule EventasaurusWeb.Router do
     pipe_through [:browser, :authenticated]
 
     get "/logout", Auth.AuthController, :logout
-    # Add other authenticated routes here
-    # get "/dashboard", DashboardController, :index
-    # resources "/events", EventController
+    get "/dashboard", DashboardController, :index
+    # Add other authenticated controller routes here
+    # resources "/venues", VenueController
   end
 
   # Other scopes may use custom stacks.
