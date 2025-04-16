@@ -70,19 +70,15 @@ defmodule Phoenix.LiveView.TagEngine do
   and other engine implementations to render `Phoenix.Component`s. For example,
   the following:
 
-  ```heex
-  <MyApp.Weather.city name="Kraków" />
-  ```
+      <MyApp.Weather.city name="Kraków" />
 
   Is the same as:
 
-  ```heex
-  <%= component(
-        &MyApp.Weather.city/1,
-        [name: "Kraków"],
-        {__ENV__.module, __ENV__.function, __ENV__.file, __ENV__.line}
-      ) %>
-  ```
+      <%= component(
+            &MyApp.Weather.city/1,
+            [name: "Kraków"],
+            {__ENV__.module, __ENV__.function, __ENV__.file, __ENV__.line}
+          ) %>
 
   """
   def component(func, assigns, caller)
@@ -183,7 +179,7 @@ defmodule Phoenix.LiveView.TagEngine do
     tag_handler = Keyword.fetch!(opts, :tag_handler)
 
     %{
-      cont: {:text, :enabled},
+      cont: :text,
       tokens: [],
       subengine: subengine,
       substate: subengine.init(opts),
@@ -230,7 +226,6 @@ defmodule Phoenix.LiveView.TagEngine do
     Enum.any?(tokens, fn
       {:text, _, _} -> false
       {:expr, _, _} -> false
-      {:body_expr, _, _} -> false
       _ -> true
     end)
   end
@@ -444,14 +439,6 @@ defmodule Phoenix.LiveView.TagEngine do
     |> update_subengine(:handle_expr, [marker, expr])
   end
 
-  defp handle_token({:body_expr, value, %{line: line, column: column}}, state) do
-    quoted = Code.string_to_quoted!(value, line: line, column: column, file: state.file)
-
-    state
-    |> set_root_on_not_tag()
-    |> update_subengine(:handle_expr, ["=", quoted])
-  end
-
   # Text
 
   defp handle_token({:text, text, %{line_end: line, column_end: column}}, state) do
@@ -472,7 +459,7 @@ defmodule Phoenix.LiveView.TagEngine do
          {:remote_component, name, attrs, %{closing: :self} = tag_meta},
          state
        ) do
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
     {mod_ast, mod_size, fun} = decompose_remote_component_tag!(name, tag_meta, state)
     %{line: line, column: column} = tag_meta
 
@@ -543,7 +530,7 @@ defmodule Phoenix.LiveView.TagEngine do
     %{mod_fun: {mod_ast, mod_size, fun}, line: line, column: column} = tag_meta
 
     mod = expand_with_line(mod_ast, line, state.caller)
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
 
     {assigns, attr_info, slot_info, state} =
       build_component_assigns({"remote component", name}, attrs, line, tag_meta, state)
@@ -577,7 +564,7 @@ defmodule Phoenix.LiveView.TagEngine do
        ) do
     slot_name = String.to_atom(slot_name)
     validate_slot!(state, slot_name, tag_meta)
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
     %{line: line} = tag_meta
     {special, roots, attrs, attr_info} = split_component_attrs({"slot", slot_name}, attrs, state)
     let = special[":let"]
@@ -607,7 +594,7 @@ defmodule Phoenix.LiveView.TagEngine do
     slot_name = String.to_atom(slot_name)
     {{:slot, _name, attrs, %{line: line} = tag_meta}, state} = pop_tag!(state, token)
 
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
     {special, roots, attrs, attr_info} = split_component_attrs({"slot", slot_name}, attrs, state)
     clauses = build_component_clauses(special[":let"], state)
 
@@ -630,7 +617,7 @@ defmodule Phoenix.LiveView.TagEngine do
   defp handle_token({:local_component, name, attrs, %{closing: :self} = tag_meta}, state) do
     fun = String.to_atom(name)
     %{line: line, column: column} = tag_meta
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
 
     {assigns, attr_info} =
       build_self_close_component_assigns({"local component", fun}, attrs, line, state)
@@ -695,7 +682,7 @@ defmodule Phoenix.LiveView.TagEngine do
     {{:local_component, name, attrs, tag_meta}, state} = pop_tag!(state, token)
     fun = String.to_atom(name)
     %{line: line, column: column} = tag_meta
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
     mod = actual_component_module(state.caller, fun)
 
     {assigns, attr_info, slot_info, state} =
@@ -726,7 +713,7 @@ defmodule Phoenix.LiveView.TagEngine do
 
   defp handle_token({:tag, name, attrs, %{closing: closing} = tag_meta}, state) do
     suffix = if closing == :void, do: ">", else: "></#{name}>"
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
     validate_phx_attrs!(attrs, tag_meta, state)
     validate_tag_attrs!(attrs, tag_meta, state)
 
@@ -751,7 +738,7 @@ defmodule Phoenix.LiveView.TagEngine do
   defp handle_token({:tag, name, attrs, tag_meta} = token, state) do
     validate_phx_attrs!(attrs, tag_meta, state)
     validate_tag_attrs!(attrs, tag_meta, state)
-    attrs = remove_phx_no_attrs(attrs)
+    attrs = remove_phx_no_break(attrs)
 
     case pop_special_attrs!(attrs, tag_meta, state) do
       {false, tag_meta, attrs} ->
@@ -1213,23 +1200,6 @@ defmodule Phoenix.LiveView.TagEngine do
   defp attr_type(value) when is_float(value), do: {:float, value}
   defp attr_type(value) when is_boolean(value), do: {:boolean, value}
   defp attr_type(value) when is_atom(value), do: {:atom, value}
-  defp attr_type({:fn, _, [{:->, _, [args, _]}]}), do: {:fun, length(args)}
-  defp attr_type({:&, _, [{:/, _, [_, arity]}]}), do: {:fun, arity}
-
-  # this could be a &myfun(&1, &2)
-  defp attr_type({:&, _, args}) do
-    {_ast, arity} =
-      Macro.prewalk(args, 0, fn
-        {:&, _, [n]} = ast, acc when is_integer(n) ->
-          {ast, max(n, acc)}
-
-        ast, acc ->
-          {ast, acc}
-      end)
-
-    (arity > 0 && {:fun, arity}) || :any
-  end
-
   defp attr_type(_value), do: :any
 
   ## Helpers
@@ -1243,23 +1213,27 @@ defmodule Phoenix.LiveView.TagEngine do
     end
   end
 
-  defp remove_phx_no_attrs(attrs) do
-    for {key, value, meta} <- attrs,
-        key != "phx-no-format" and key != "phx-no-curly-interpolation",
-        do: {key, value, meta}
+  defp remove_phx_no_break(attrs) do
+    List.keydelete(attrs, "phx-no-format", 0)
   end
 
   defp validate_tag_attrs!(attrs, %{tag_name: "input"}, state) do
     # warn if using name="id" on an input
     case Enum.find(attrs, &match?({"name", {:string, "id", _}, _}, &1)) do
       {_name, _value, attr_meta} ->
-        meta = [
-          line: attr_meta.line,
-          column: attr_meta.column,
-          file: state.file,
-          module: state.caller.module,
-          function: state.caller.function
-        ]
+        # TODO: Remove conditional once we require Elixir v1.14+
+        meta =
+          if Version.match?(System.version(), ">= 1.14.0") do
+            [
+              line: attr_meta.line,
+              column: attr_meta.column,
+              file: state.file,
+              module: state.caller.module,
+              function: state.caller.function
+            ]
+          else
+            Macro.Env.stacktrace(%{state.caller | line: attr_meta.line})
+          end
 
         IO.warn(
           """
@@ -1272,8 +1246,7 @@ defmodule Phoenix.LiveView.TagEngine do
           meta
         )
 
-      _ ->
-        :ok
+      _ -> :ok
     end
   end
 

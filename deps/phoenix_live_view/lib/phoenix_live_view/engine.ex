@@ -77,7 +77,7 @@ defmodule Phoenix.LiveView.Comprehension do
 
   @doc false
   def __mark_consumable__(%Phoenix.LiveView.LiveStream{} = stream) do
-    %{stream | consumable?: true}
+    %Phoenix.LiveView.LiveStream{stream | consumable?: true}
   end
 
   def __mark_consumable__(collection), do: collection
@@ -151,6 +151,10 @@ defmodule Phoenix.LiveView.Rendered do
 
     def to_iodata(%_{} = struct) do
       Phoenix.HTML.Safe.to_iodata(struct)
+    end
+
+    def to_iodata(nil) do
+      raise "cannot convert .heex/.leex template with change tracking to iodata"
     end
 
     def to_iodata(other) do
@@ -238,9 +242,7 @@ defmodule Phoenix.LiveView.Engine do
   `Phoenix.LiveView` also tracks changes across live
   templates. Therefore, if your view has this:
 
-  ```heex
-  {render("form.html", assigns)}
-  ```
+      <%= render "form.html", assigns %>
 
   Phoenix will be able to track what is static and dynamic
   across templates, as well as what changed. A rendered
@@ -253,9 +255,7 @@ defmodule Phoenix.LiveView.Engine do
   which live template was rendered. For example,
   imagine this code:
 
-  ```heex
-  <%= if something?, do: render("one.html", assigns), else: render("other.html", assigns) %>
-  ```
+      <%= if something?, do: render("one.html", assigns), else: render("other.html", assigns) %>
 
   To solve this, all `Phoenix.LiveView.Rendered` structs
   also contain a fingerprint field that uniquely identifies
@@ -268,12 +268,10 @@ defmodule Phoenix.LiveView.Engine do
   Another optimization done by live templates is to
   track comprehensions. If your code has this:
 
-  ```heex
-  <%= for point <- @points do %>
-    x: {point.x}
-    y: {point.y}
-  <% end %>
-  ```
+      <%= for point <- @points do %>
+        x: <%= point.x %>
+        y: <%= point.y %>
+      <% end %>
 
   Instead of rendering all points with both static and
   dynamic parts, it returns a `Phoenix.LiveView.Comprehension`
@@ -290,12 +288,9 @@ defmodule Phoenix.LiveView.Engine do
         ]
       }
 
-  This allows live templates to send the static parts only once,
-  regardless of the number of items. On the other hand, keep in
-  mind the collection itself is not "diffed" across renders.
-  If one entry in the comprehension changes, the whole collection
-  is sent again. Consider using `Phoenix.LiveComponent` and
-  `Phoenix.LiveView.stream/4` to optimize those cases.
+  This allows live templates to drastically optimize
+  the data sent by comprehensions, as the static parts
+  are emitted only once, regardless of the number of items.
 
   The list of dynamics is always a list of iodatas or components,
   as we don't perform change tracking inside the comprehensions
@@ -1141,14 +1136,14 @@ defmodule Phoenix.LiveView.Engine do
 
           def add(assigns) do
             result = assigns.a + assigns.b
-            ~H"the result is: {result}"
+            ~H"the result is: <%= result %>"
           end
 
       You must do:
 
           def add(assigns) do
             assigns = assign(assigns, :result, assigns.a + assigns.b)
-            ~H"the result is: {@result}"
+            ~H"the result is: <%= @result %>"
           end
       """
 
@@ -1281,10 +1276,7 @@ defmodule Phoenix.LiveView.Engine do
   end
 
   defp recur_changed_assign([{:access, head}], %Form{} = form1, %Form{} = form2) do
-    # Phoenix.HTML does not know about LiveView's _unused_ input tracking,
-    # therefore we also need to check if the input's unused state changed
-    Form.input_changed?(form1, form2, head) or
-      Phoenix.Component.used_input?(form1[head]) !== Phoenix.Component.used_input?(form2[head])
+    Form.input_changed?(form1, form2, head)
   end
 
   defp recur_changed_assign([{:access, head} | tail], assigns, changed) do
@@ -1298,7 +1290,6 @@ defmodule Phoenix.LiveView.Engine do
   defp recur_changed_assign([], head, assigns, changed) do
     case {assigns, changed} do
       {%{^head => value}, %{^head => value}} -> false
-      {m1, m2} when not is_map_key(m1, head) and not is_map_key(m2, head) -> false
       {_, %{^head => value}} when is_map(value) -> value
       {_, _} -> true
     end

@@ -1,6 +1,6 @@
 defmodule Tailwind do
   # https://github.com/tailwindlabs/tailwindcss/releases
-  @latest_version "4.0.9"
+  @latest_version "3.4.6"
 
   @moduledoc """
   Tailwind is an installer and runner for [tailwind](https://tailwindcss.com/).
@@ -15,6 +15,7 @@ defmodule Tailwind do
         version: "#{@latest_version}",
         default: [
           args: ~w(
+            --config=tailwind.config.js
             --input=css/app.css
             --output=../priv/static/assets/app.css
           ),
@@ -23,7 +24,7 @@ defmodule Tailwind do
 
   ## Tailwind configuration
 
-  There are four global configurations for the tailwind application:
+  There are two global configurations for the tailwind application:
 
     * `:version` - the expected tailwind version
 
@@ -31,13 +32,12 @@ defmodule Tailwind do
       Useful when you manage the tailwind executable with an external
       tool (eg. npm)
 
+    * `:cacerts_path` - the directory to find certificates for
+      https connections
+
     * `:path` - the path to find the tailwind executable at. By
       default, it is automatically downloaded and placed inside
       the `_build` directory of your current app
-
-    * `:target` - the target architecture for the tailwind executable.
-      For example `"linux-x64-musl"`. By default, it is automatically detected
-      based on system information.
 
   Overriding the `:path` is not recommended, as we will automatically
   download and manage `tailwind` for you. But in case you can't download
@@ -113,13 +113,6 @@ defmodule Tailwind do
   end
 
   @doc """
-  Returns the configured tailwind target. By default, it is automatically detected.
-  """
-  def configured_target do
-    Application.get_env(:tailwind, :target, target())
-  end
-
-  @doc """
   Returns the configuration for the given profile.
 
   Returns nil if the profile does not exist.
@@ -133,6 +126,7 @@ defmodule Tailwind do
             version: "#{@latest_version}",
             #{profile}: [
               args: ~w(
+                --config=tailwind.config.js
                 --input=css/app.css
                 --output=../priv/static/assets/app.css
               ),
@@ -147,7 +141,7 @@ defmodule Tailwind do
   The executable may not be available if it was not yet installed.
   """
   def bin_path do
-    name = "tailwind-#{configured_target()}"
+    name = "tailwind-#{target()}"
 
     Application.get_env(:tailwind, :path) ||
       if Code.ensure_loaded?(Mix.Project) do
@@ -257,62 +251,23 @@ defmodule Tailwind do
   #  tailwindcss-windows-x64.exe
   defp target do
     arch_str = :erlang.system_info(:system_architecture)
-    target_triple = arch_str |> List.to_string() |> String.split("-")
+    [arch | _] = arch_str |> List.to_string() |> String.split("-")
 
-    {arch, abi} =
-      case target_triple do
-        [arch, _vendor, _system, abi] -> {arch, abi}
-        [arch, _vendor, abi] -> {arch, abi}
-        [arch | _] -> {arch, nil}
-      end
-
-    case {:os.type(), arch, abi, :erlang.system_info(:wordsize) * 8} do
-      {{:win32, _}, _arch, _abi, 64} ->
-        "windows-x64.exe"
-
-      {{:unix, :darwin}, arch, _abi, 64} when arch in ~w(arm aarch64) ->
-        "macos-arm64"
-
-      {{:unix, :darwin}, "x86_64", _abi, 64} ->
-        "macos-x64"
-
-      {{:unix, :freebsd}, "aarch64", _abi, 64} ->
-        "freebsd-arm64"
-
-      {{:unix, :freebsd}, arch, _abi, 64} when arch in ~w(x86_64 amd64) ->
-        "freebsd-x64"
-
-      {{:unix, :linux}, "aarch64", abi, 64} ->
-        "linux-arm64" <> maybe_add_abi_suffix(abi)
-
-      {{:unix, :linux}, "arm", _abi, 32} ->
-        "linux-armv7"
-
-      {{:unix, :linux}, "armv7" <> _, _abi, 32} ->
-        "linux-armv7"
-
-      {{:unix, _osname}, arch, abi, 64} when arch in ~w(x86_64 amd64) ->
-        "linux-x64" <> maybe_add_abi_suffix(abi)
-
-      {_os, _arch, _abi, _wordsize} ->
-        raise "tailwind is not available for architecture: #{arch_str}"
+    case {:os.type(), arch, :erlang.system_info(:wordsize) * 8} do
+      {{:win32, _}, _arch, 64} -> "windows-x64.exe"
+      {{:unix, :darwin}, arch, 64} when arch in ~w(arm aarch64) -> "macos-arm64"
+      {{:unix, :darwin}, "x86_64", 64} -> "macos-x64"
+      {{:unix, :freebsd}, "aarch64", 64} -> "freebsd-arm64"
+      {{:unix, :freebsd}, "amd64", 64} -> "freebsd-x64"
+      {{:unix, :linux}, "aarch64", 64} -> "linux-arm64"
+      {{:unix, :linux}, "arm", 32} -> "linux-armv7"
+      {{:unix, :linux}, "armv7" <> _, 32} -> "linux-armv7"
+      {{:unix, _osname}, arch, 64} when arch in ~w(x86_64 amd64) -> "linux-x64"
+      {_os, _arch, _wordsize} -> raise "tailwind is not available for architecture: #{arch_str}"
     end
   end
 
-  defp maybe_add_abi_suffix("musl") do
-    # Tailwind CLI v4+ added explicit musl versions for Linux as
-    # tailwind-linux-x64-musl
-    # tailwind-linux-arm64-musl
-    if Version.match?(configured_version(), "~> 4.0") do
-      "-musl"
-    else
-      ""
-    end
-  end
-
-  defp maybe_add_abi_suffix(_), do: ""
-
-  defp fetch_body!(url, retry \\ true) when is_binary(url) do
+  defp fetch_body!(url, retry \\ true) do
     scheme = URI.parse(url).scheme
     url = String.to_charlist(url)
     Logger.debug("Downloading tailwind from #{url}")
@@ -327,11 +282,14 @@ defmodule Tailwind do
       :httpc.set_options([{set_option, {{String.to_charlist(host), port}, []}}])
     end
 
+    # https://erlef.github.io/security-wg/secure_coding_and_deployment_hardening/inets
+    cacertfile = cacertfile() |> String.to_charlist()
+
     http_options =
       [
         ssl: [
           verify: :verify_peer,
-          cacerts: :public_key.cacerts_get(),
+          cacertfile: cacertfile,
           depth: 2,
           customize_hostname_check: [
             match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
@@ -347,23 +305,11 @@ defmodule Tailwind do
       {_, {:ok, {{_, 200, _}, _headers, body}}} ->
         body
 
-      {_, {:ok, {{_, 404, _}, _headers, _body}}} ->
-        raise """
-        The tailwind binary couldn't be found at: #{url}
-
-        This could mean that you're trying to install a version that does not support the detected
-        target architecture. For example, Tailwind v4+ dropped support for 32-bit ARM.
-
-        You can see the available files for the configured version at:
-
-        https://github.com/tailwindlabs/tailwindcss/releases/tag/v#{configured_version()}
-        """
-
       {true, {:error, {:failed_connect, [{:to_address, _}, {inet, _, reason}]}}}
       when inet in [:inet, :inet6] and
              reason in [:ehostunreach, :enetunreach, :eprotonosupport, :nxdomain] ->
         :httpc.set_options(ipfamily: fallback(inet))
-        fetch_body!(to_string(url), false)
+        fetch_body!(url, false)
 
       other ->
         raise """
@@ -373,10 +319,10 @@ defmodule Tailwind do
         You can try again later and, if that does not work, you might:
 
           1. If behind a proxy, ensure your proxy is configured and that
-             your certificates are set via OTP ca certfile overide via SSL configuration.
+             your certificates are set via the cacerts_path configuration
 
           2. Manually download the executable from the URL above and
-             place it inside "_build/tailwind-#{configured_target()}"
+             place it inside "_build/tailwind-#{target()}"
 
           3. Install and use Tailwind from npmJS. See our module documentation
              to learn more: https://hexdocs.pm/tailwind
@@ -412,6 +358,10 @@ defmodule Tailwind do
     end
   end
 
+  defp cacertfile() do
+    Application.get_env(:tailwind, :cacerts_path) || CAStore.file_path()
+  end
+
   defp protocol_versions do
     if otp_version() < 25, do: [:"tlsv1.2"], else: [:"tlsv1.2", :"tlsv1.3"]
   end
@@ -423,6 +373,6 @@ defmodule Tailwind do
   defp get_url(base_url) do
     base_url
     |> String.replace("$version", configured_version())
-    |> String.replace("$target", configured_target())
+    |> String.replace("$target", target())
   end
 end

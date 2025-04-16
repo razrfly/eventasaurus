@@ -4,10 +4,12 @@ defmodule Phoenix.LiveView.HTMLFormatter do
 
   This is a `mix format` [plugin](https://hexdocs.pm/mix/main/Mix.Tasks.Format.html#module-plugins).
 
+  > Note: The HEEx HTML Formatter requires Elixir v1.13.4 or later.
+
   ## Setup
 
-  Add it as a plugin to your `.formatter.exs` file and make sure to put
-  the `heex` extension in the `inputs` option.
+  Add it as plugin to your `.formatter.exs` file and make sure to put
+  the`heex` extension in the `inputs` option.
 
   ```elixir
   [
@@ -48,24 +50,21 @@ defmodule Phoenix.LiveView.HTMLFormatter do
       ]
       ```
 
-    * `:migrate_eex_to_curly_interpolation` - Automatically migrate single expression
-      `<%= ... %>` EEx expression to the curly braces one. Defaults to true.
-
   ## Formatting
 
   This formatter tries to be as consistent as possible with the Elixir formatter.
 
   Given HTML like this:
 
-  ```heex
-    <section><h1>   <b>{@user.name}</b></h1></section>
+  ```eex
+    <section><h1>   <b><%= @user.name %></b></h1></section>
   ```
 
   It will be formatted as:
 
-  ```heex
+  ```eex
   <section>
-    <h1><b>{@user.name}</b></h1>
+    <h1><b><%= @user.name %></b></h1>
   </section>
   ```
 
@@ -79,10 +78,10 @@ defmodule Phoenix.LiveView.HTMLFormatter do
 
   It will also keep inline elements in their own lines if you intentionally write them this way:
 
-  ```heex
+  ```eex
   <section>
     <h1>
-      <b>{@user.name}</b>
+      <b><%= @user.name %></b>
     </h1>
   </section>
   ```
@@ -90,7 +89,7 @@ defmodule Phoenix.LiveView.HTMLFormatter do
   This formatter will place all attributes on their own lines when they do not all fit in the
   current line. Therefore this:
 
-  ```heex
+  ```eex
   <section id="user-section-id" class="sm:focus:block flex w-full p-3" phx-click="send-event">
     <p>Hi</p>
   </section>
@@ -98,7 +97,7 @@ defmodule Phoenix.LiveView.HTMLFormatter do
 
   Will be formatted to:
 
-  ```heex
+  ```eex
   <section
     id="user-section-id"
     class="sm:focus:block flex w-full p-3"
@@ -139,7 +138,7 @@ defmodule Phoenix.LiveView.HTMLFormatter do
   The formatter will keep intentional new lines. However, the formatter will
   always keep a maximum of one line break in case you have multiple ones:
 
-  ```heex
+  ```eex
   <p>
     text
 
@@ -150,7 +149,7 @@ defmodule Phoenix.LiveView.HTMLFormatter do
 
   Will be formatted to:
 
-  ```heex
+  ```eex
   <p>
     text
 
@@ -176,15 +175,22 @@ defmodule Phoenix.LiveView.HTMLFormatter do
 
   Therefore:
 
-  ```heex
+  ```eex
   <.textarea phx-no-format>My content</.textarea>
   ```
 
   Will be kept as is your code editor, but rendered as:
 
-  ```heex
+  ```html
   <textarea>My content</textarea>
   ```
+
+  ## Comments
+
+  Inline comments `<%# comment %>` are deprecated and the formatter will discard them
+  silently from templates. You must change them to the multi-line comment
+  `<%!-- comment --%>` on Elixir v1.14+ or introduce a space between `<%` and `#`,
+  such as `<% # comment %>`.
   """
 
   alias Phoenix.LiveView.HTMLAlgebra
@@ -219,33 +225,30 @@ defmodule Phoenix.LiveView.HTMLFormatter do
 
   @impl Mix.Tasks.Format
   def format(source, opts) do
-    if opts[:sigil] === :H and opts[:modifiers] === ~c"noformat" do
+    line_length = opts[:heex_line_length] || opts[:line_length] || @default_line_length
+    newlines = :binary.matches(source, ["\r\n", "\n"])
+
+    formatted =
       source
-    else
-      line_length = opts[:heex_line_length] || opts[:line_length] || @default_line_length
-      newlines = :binary.matches(source, ["\r\n", "\n"])
+      |> tokenize()
+      |> to_tree([], [], {source, newlines})
+      |> case do
+        {:ok, nodes} ->
+          nodes
+          |> HTMLAlgebra.build(opts)
+          |> Inspect.Algebra.format(line_length)
 
-      formatted =
-        source
-        |> tokenize()
-        |> to_tree([], [], {source, newlines})
-        |> case do
-          {:ok, nodes} ->
-            nodes
-            |> HTMLAlgebra.build(opts)
-            |> Inspect.Algebra.format(line_length)
+        {:error, line, column, message} ->
+          file = opts[:file] || "nofile"
+          raise ParseError, line: line, column: column, file: file, description: message
+      end
 
-          {:error, line, column, message} ->
-            file = Keyword.get(opts, :file, "nofile")
-            raise ParseError, line: line, column: column, file: file, description: message
-        end
+    # If the opening delimiter is a single character, such as ~H"...", or the formatted code is empty,
+    # do not add trailing newline.
+    newline = if match?(<<_>>, opts[:opening_delimiter]) or formatted == [], do: [], else: ?\n
 
-      # If the opening delimiter is a single character, such as ~H"...", or the formatted code is empty,
-      # do not add trailing newline.
-      newline = if match?(<<_>>, opts[:opening_delimiter]) or formatted == [], do: [], else: ?\n
-
-      IO.iodata_to_binary([formatted, newline])
-    end
+    # TODO: Remove IO.iodata_to_binary/1 call on Elixir v1.14+
+    IO.iodata_to_binary([formatted, newline])
   end
 
   # Tokenize contents using EEx.tokenize and Phoenix.Live.Tokenizer respectively.
@@ -274,29 +277,51 @@ defmodule Phoenix.LiveView.HTMLFormatter do
   #   {::close, :tag, "section", %{column: 1, line: 2}}
   # ]
   #
+  # EEx.tokenize/2 was introduced in Elixir 1.14.
+  # TODO: Remove this when we no longer support earlier versions.
   @eex_expr [:start_expr, :expr, :end_expr, :middle_expr]
+  if Code.ensure_loaded?(EEx) && function_exported?(EEx, :tokenize, 2) do
+    defp tokenize(source) do
+      {:ok, eex_nodes} = EEx.tokenize(source)
+      {tokens, cont} = Enum.reduce(eex_nodes, {[], :text}, &do_tokenize(&1, &2, source))
+      Tokenizer.finalize(tokens, "nofile", cont, source)
+    end
 
-  defp tokenize(source) do
-    {:ok, eex_nodes} = EEx.tokenize(source)
-    {tokens, cont} = Enum.reduce(eex_nodes, {[], {:text, :enabled}}, &do_tokenize(&1, &2, source))
-    Tokenizer.finalize(tokens, "nofile", cont, source)
-  end
+    defp do_tokenize({:text, text, meta}, {tokens, cont}, source) do
+      text = List.to_string(text)
+      meta = [line: meta.line, column: meta.column]
+      state = Tokenizer.init(0, "nofile", source, Phoenix.LiveView.HTMLEngine)
+      Tokenizer.tokenize(text, meta, tokens, cont, state)
+    end
 
-  defp do_tokenize({:text, text, meta}, {tokens, cont}, source) do
-    text = List.to_string(text)
-    meta = [line: meta.line, column: meta.column]
-    state = Tokenizer.init(0, "nofile", source, Phoenix.LiveView.HTMLEngine)
-    Tokenizer.tokenize(text, meta, tokens, cont, state)
-  end
+    defp do_tokenize({:comment, text, meta}, {tokens, cont}, _contents) do
+      {[{:eex_comment, List.to_string(text), meta} | tokens], cont}
+    end
 
-  defp do_tokenize({:comment, text, meta}, {tokens, cont}, _contents) do
-    {[{:eex_comment, List.to_string(text), meta} | tokens], cont}
-  end
+    defp do_tokenize({type, opt, expr, %{column: column, line: line}}, {tokens, cont}, _contents)
+         when type in @eex_expr do
+      meta = %{opt: opt, line: line, column: column}
+      {[{:eex, type, expr |> List.to_string() |> String.trim(), meta} | tokens], cont}
+    end
+  else
+    defp tokenize(source) do
+      {:ok, eex_nodes} = EEx.Tokenizer.tokenize(source, 1, 1, %{indentation: 0, trim: false})
+      {tokens, cont} = Enum.reduce(eex_nodes, {[], :text}, &do_tokenize(&1, &2, source))
+      Tokenizer.finalize(tokens, "nofile", cont, source)
+    end
 
-  defp do_tokenize({type, opt, expr, %{column: column, line: line}}, {tokens, cont}, _contents)
-       when type in @eex_expr do
-    meta = %{opt: opt, line: line, column: column}
-    {[{:eex, type, expr |> List.to_string() |> String.trim(), meta} | tokens], cont}
+    defp do_tokenize({:text, line, column, text}, {tokens, cont}, source) do
+      text = List.to_string(text)
+      meta = [line: line, column: column]
+      state = Tokenizer.init(0, "nofile", source, Phoenix.LiveView.HTMLEngine)
+      Tokenizer.tokenize(text, meta, tokens, cont, state)
+    end
+
+    defp do_tokenize({type, line, column, opt, expr}, {tokens, cont}, _contents)
+         when type in @eex_expr do
+      meta = %{opt: opt, line: line, column: column}
+      {[{:eex, type, expr |> List.to_string() |> String.trim(), meta} | tokens], cont}
+    end
   end
 
   defp do_tokenize(_node, acc, _contents) do
@@ -417,12 +442,7 @@ defmodule Phoenix.LiveView.HTMLFormatter do
          stack,
          source
        ) do
-    meta = %{
-      newlines_before_text: count_newlines_until_text(text, 0),
-      newlines_after_text: text |> String.reverse() |> count_newlines_until_text(0)
-    }
-
-    to_tree(tokens, [{:html_comment, [{:text, String.trim(text), meta}]} | buffer], stack, source)
+    to_tree(tokens, [{:html_comment, [{:text, String.trim(text), %{}}]} | buffer], stack, source)
   end
 
   defp to_tree([{:text, text, _meta} | tokens], buffer, stack, source) do
@@ -434,10 +454,6 @@ defmodule Phoenix.LiveView.HTMLFormatter do
       meta = %{newlines: count_newlines_until_text(text, 0)}
       to_tree(tokens, [{:text, text, meta} | buffer], stack, source)
     end
-  end
-
-  defp to_tree([{:body_expr, value, meta} | tokens], buffer, stack, source) do
-    to_tree(tokens, [{:body_expr, value, meta} | buffer], stack, source)
   end
 
   defp to_tree([{type, _name, attrs, %{closing: _} = meta} | tokens], buffer, stack, source)
@@ -567,7 +583,6 @@ defmodule Phoenix.LiveView.HTMLFormatter do
   defp head_may_not_have_whitespace?([{:text, text, _meta} | _]),
     do: String.trim_leading(text) != "" and :binary.last(text) not in ~c"\s\t"
 
-  defp head_may_not_have_whitespace?([{:body_expr, _, _} | _]), do: true
   defp head_may_not_have_whitespace?([{:eex, _, _} | _]), do: true
   defp head_may_not_have_whitespace?(_), do: false
 

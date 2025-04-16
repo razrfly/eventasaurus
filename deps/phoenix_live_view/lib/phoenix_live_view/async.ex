@@ -60,7 +60,14 @@ defmodule Phoenix.LiveView.Async do
       Macro.prewalk(func, fn
         {:socket, meta, _} ->
           warn_socket_access(op, fn msg ->
-            meta = Keyword.take(meta, [:line, :column]) ++ [line: env.line, file: env.file]
+            # TODO: Remove conditional once we require Elixir v1.14+
+            meta =
+              if Version.match?(System.version(), ">= 1.14.0") do
+                Keyword.take(meta, [:line, :column]) ++ [line: env.line, file: env.file]
+              else
+                Macro.Env.stacktrace(env)
+              end
+
             IO.warn(msg, meta)
           end)
 

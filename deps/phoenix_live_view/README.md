@@ -11,15 +11,12 @@ https://user-images.githubusercontent.com/576796/162234098-31b580fe-e424-47e6-b0
 
 <br />
 
-LiveView ships by default in new Phoenix applications. After you
-[install Elixir](https://elixir-lang.org/install.html) on your machine,
-you can create your first LiveView app in two steps:
+After you [install Elixir](https://elixir-lang.org/install.html)
+on your machine, you can create your first LiveView app in two
+steps:
 
     $ mix archive.install hex phx_new
     $ mix phx.new demo
-
-> If you have an older existing Phoenix app and you wish to add LiveView,
-> see [the previous installation guide](https://github.com/phoenixframework/phoenix_live_view/blob/v0.20.1/guides/introduction/installation.md).
 
 ## Feature highlights
 
@@ -62,29 +59,13 @@ Also follow these announcements from the Phoenix team on LiveView for more examp
 
   * [Build a real-time Twitter clone with LiveView](https://www.phoenixframework.org/blog/build-a-real-time-twitter-clone-in-15-minutes-with-live-view-and-phoenix-1-5)
 
-  * [Build a real-time Twitch clone with LiveView and Elixir WebRTC](https://www.youtube.com/watch?v=jziOb2Edfzk)
-
   * [Initial announcement](https://dockyard.com/blog/2018/12/12/phoenix-liveview-interactive-real-time-apps-no-need-to-write-javascript)
 
-## Component systems
+## Installation
 
-When you create a new Phoenix project, it comes with a minimal component system to power Phoenix generators.
-In case you want to enrich your developer experience, there are several component systems provided by the
-community at different stages of development:
-
-* [Bloom](https://github.com/chrisgreg/bloom): The opinionated, open-source extension to Phoenix Core Components
-
-* [Doggo](https://github.com/woylie/doggo): Headless UI components for Phoenix
-
-* [Petal Components](https://github.com/petalframework/petal_components): Phoenix + Live View HEEX Components
-
-* [PrimerLive](https://github.com/ArthurClemens/primer_live): An implementation of GitHub's Primer Design System using Phoenix LiveView
-
-* [SaladUI](https://github.com/bluzky/salad_ui): Phoenix Liveview component library inspired by shadcn UI
-
-* [Mishka Chelekom](https://github.com/mishka-group/mishka_chelekom): Phoenix + LiveView UI kit and HEEx components
-
-* [Fluxon UI](https://fluxonui.com): Elegant and accessible UI components for Phoenix LiveView
+LiveView is included by default in all new Phoenix v1.6+ applications and
+later. If you have an older existing Phoenix app and you wish to add
+LiveView, see [the previous installation guide](https://github.com/phoenixframework/phoenix_live_view/blob/v0.20.1/guides/introduction/installation.md).
 
 ## What makes LiveView unique?
 
@@ -144,7 +125,7 @@ Note: The `shim-keyboard-event-key` polyfill is also required for [MS Edge 12-18
 
 Note: The `event-submitter-polyfill` package is also required for [MS Edge 12-80 &amp; Safari &lt; 15.4](https://caniuse.com/mdn-api_submitevent_submitter).
 
-```javascript
+```
 // assets/js/app.js
 import "mdn-polyfills/Object.assign"
 import "mdn-polyfills/CustomEvent"
@@ -187,23 +168,28 @@ $ mix test
 
 Running all JavaScript tests:
 ```bash
-$ npm run setup
 $ npm run test
 ```
 
 Running the JavaScript unit tests:
 
 ```bash
-$ npm run setup
-$ npm run js:test
+$ cd assets
+$ npm install
+$ npm run test
 # to automatically run tests for files that have been changed
-$ npm run js:test.watch
+$ npm run test.watch
+```
+
+or simply:
+
+```bash
+$ npm run js:test
 ```
 
 Running the JavaScript end-to-end tests:
 
 ```bash
-$ npm run setup
 $ npm run e2e:test
 ```
 

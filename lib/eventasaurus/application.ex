@@ -9,7 +9,8 @@ defmodule Eventasaurus.Application do
   def start(_type, _args) do
     children = [
       EventasaurusWeb.Telemetry,
-      # Removing Eventasaurus.Repo since we're using Supabase instead
+      # Start Ecto repository (used alongside Supabase)
+      EventasaurusApp.Repo,
       {DNSCluster, query: Application.get_env(:eventasaurus, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails
