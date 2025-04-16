@@ -48,21 +48,28 @@ defmodule EventasaurusApp.Auth.Client do
   """
   def sign_in(email, password) do
     url = "#{get_url()}#{@auth_endpoint}/token?grant_type=password"
+    require Logger
 
     body = Jason.encode!(%{
       email: email,
       password: password
     })
 
+    Logger.debug("Signing in user #{email}")
+
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
-        {:ok, Jason.decode!(response_body)}
+        decoded = Jason.decode!(response_body)
+        Logger.debug("Auth successful, response: #{inspect(decoded)}")
+        {:ok, decoded}
 
       {:ok, %{status_code: code, body: response_body}} ->
         error = Jason.decode!(response_body)
+        Logger.error("Auth failed with status #{code}: #{inspect(error)}")
         {:error, %{status: code, message: error["message"] || "Authentication failed"}}
 
       {:error, error} ->
+        Logger.error("Auth request error: #{inspect(error)}")
         {:error, error}
     end
   end

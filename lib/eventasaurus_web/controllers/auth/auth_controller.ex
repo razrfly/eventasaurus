@@ -14,17 +14,42 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Process the login form submission.
   """
   def create_session(conn, %{"email" => email, "password" => password}) do
+    require Logger
+    Logger.debug("Attempting login for email: #{email}")
+
     case Auth.authenticate(email, password) do
       {:ok, auth_data} ->
-        {:ok, conn} = Auth.store_session(conn, auth_data)
+        Logger.debug("Authentication successful, auth_data: #{inspect(auth_data)}")
+
+        case Auth.store_session(conn, auth_data) do
+          {:ok, conn} ->
+            # Fetch current user for the session
+            user = Auth.get_current_user(conn)
+            Logger.debug("User data fetched: #{inspect(user)}")
+
+            conn
+            |> assign(:current_user, user)
+            |> put_flash(:info, "You have been logged in successfully.")
+            |> redirect(to: ~p"/dashboard")
+
+          {:error, reason} ->
+            Logger.error("Failed to store session: #{inspect(reason)}")
+            conn
+            |> put_flash(:error, "Error storing session data. Please contact support.")
+            |> render(:login)
+        end
+
+      {:error, reason} ->
+        Logger.error("Authentication failed: #{inspect(reason)}")
+        error_message = case reason do
+          %{message: message} when is_binary(message) -> message
+          %{status: 401} -> "Invalid email or password. Please try again."
+          %{status: 404} -> "User not found. Please check your email or create an account."
+          _ -> "An error occurred during login. Please try again."
+        end
 
         conn
-        |> put_flash(:info, "You have been logged in successfully.")
-        |> redirect(to: ~p"/")
-
-      {:error, _reason} ->
-        conn
-        |> put_flash(:error, "Invalid email or password. Please try again.")
+        |> put_flash(:error, error_message)
         |> render(:login)
     end
   end
@@ -40,16 +65,49 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Process the registration form submission.
   """
   def create_user(conn, %{"name" => name, "email" => email, "password" => password, "password_confirmation" => password_confirmation}) do
+    require Logger
+
     if password == password_confirmation do
       case Auth.register(email, password, name) do
-        {:ok, _user_data} ->
-          conn
-          |> put_flash(:info, "Your account has been created successfully. Please log in.")
-          |> redirect(to: ~p"/login")
+        {:ok, user_data} ->
+          Logger.debug("User registered successfully: #{inspect(user_data)}")
 
-        {:error, _reason} ->
+          # Automatically log the user in after registration
+          case Auth.authenticate(email, password) do
+            {:ok, auth_data} ->
+              case Auth.store_session(conn, auth_data) do
+                {:ok, conn} ->
+                  # Fetch current user for the session
+                  user = Auth.get_current_user(conn)
+
+                  conn
+                  |> assign(:current_user, user)
+                  |> put_flash(:info, "Your account has been created successfully and you're now logged in.")
+                  |> redirect(to: ~p"/dashboard")
+
+                {:error, _reason} ->
+                  # Registration was successful, but auto-login failed, so redirect to login page
+                  conn
+                  |> put_flash(:info, "Your account has been created successfully. Please log in.")
+                  |> redirect(to: ~p"/login")
+              end
+
+            {:error, _reason} ->
+              # Registration was successful, but we couldn't log in automatically
+              conn
+              |> put_flash(:info, "Your account has been created successfully. Please log in.")
+              |> redirect(to: ~p"/login")
+          end
+
+        {:error, reason} ->
+          Logger.error("Registration failed: #{inspect(reason)}")
+          error_message = case reason do
+            %{message: message} when is_binary(message) -> message
+            _ -> "There was an error creating your account. Please try again."
+          end
+
           conn
-          |> put_flash(:error, "There was an error creating your account. Please try again.")
+          |> put_flash(:error, error_message)
           |> render(:register)
       end
     else
@@ -151,7 +209,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
         conn
         |> put_flash(:info, message)
-        |> redirect(to: ~p"/")
+        |> redirect(to: ~p"/dashboard")
 
       _ ->
         # No tokens provided, just redirect to home
