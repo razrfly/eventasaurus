@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" class="[scrollbar-gutter:stable]">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title suffix=" · Eventasaurus">
+      <%= assigns[:page_title] || "Home" %>
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
+    </script>
+  </head>
+  <body class="bg-white antialiased">
+    <header class="px-4 sm:px-6 lg:px-8 bg-gray-800 text-white">
+      <div class="flex items-center justify-between py-3">
+        <div class="flex items-center gap-4">
+          <a href="/">
+            <img src="/images/logo.svg" alt="Eventasaurus Logo" class="h-8 w-auto" />
+          </a>
+          <p class="text-xl font-bold">Eventasaurus</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="/login" class="text-sm font-semibold hover:text-gray-300">
+            Log In
+          </a>
+          <a
+            href="/register"
+            class="rounded-lg bg-zinc-300 px-2 py-1 text-sm font-semibold text-gray-900 hover:bg-zinc-400"
+          >
+            Sign up
+          </a>
+        </div>
+      </div>
+    </header>
+    <%= @inner_content %>
+  </body>
+</html> 
