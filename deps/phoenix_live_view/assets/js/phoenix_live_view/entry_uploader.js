@@ -3,13 +3,11 @@ import {
 } from "./utils"
 
 export default class EntryUploader {
-  constructor(entry, config, liveSocket){
-    let {chunk_size, chunk_timeout} = config
+  constructor(entry, chunkSize, liveSocket){
     this.liveSocket = liveSocket
     this.entry = entry
     this.offset = 0
-    this.chunkSize = chunk_size
-    this.chunkTimeout = chunk_timeout
+    this.chunkSize = chunkSize
     this.chunkTimer = null
     this.errored = false
     this.uploadChannel = liveSocket.channel(`lvu:${entry.ref}`, {token: entry.metadata()})
@@ -48,7 +46,7 @@ export default class EntryUploader {
 
   pushChunk(chunk){
     if(!this.uploadChannel.isJoined()){ return }
-    this.uploadChannel.push("chunk", chunk, this.chunkTimeout)
+    this.uploadChannel.push("chunk", chunk)
       .receive("ok", () => {
         this.entry.progress((this.offset / this.entry.file.size) * 100)
         if(!this.isDone()){

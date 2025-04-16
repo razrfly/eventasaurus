@@ -1,15 +1,5 @@
 # CHANGELOG
 
-## v0.3.1 (2025-02-28)
-
-* Support correct target for Linux MUSL with Tailwind v3.
-
-## v0.3.0 (2025-02-26)
-
-* Support Tailwind v4+. This release assumes Tailwind v4 for new projects.
-
-Note: v0.3.0 dropped target code for handling Linux MUSL with Tailwind v3. Use v0.3.1+ instead.
-
 ## v0.2.4 (2024-10-18)
 
 * Add version check flag
