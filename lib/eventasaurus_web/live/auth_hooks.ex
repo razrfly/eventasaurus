@@ -38,9 +38,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     end
   end
 
-  @doc """
-  Internal function to assign the current user into the LiveView socket.
-  """
+  # Internal function to assign the current user into the LiveView socket.
   defp assign_current_user(session, socket) do
     assign_new(socket, :current_user, fn ->
       case session do
