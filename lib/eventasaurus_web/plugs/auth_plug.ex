@@ -21,8 +21,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   alias EventasaurusApp.Auth
   alias EventasaurusApp.Auth.Client
 
-  # How long before token expiry should we attempt to refresh (in seconds)
-  @refresh_window 300
+  # We'll use this in a future implementation for token expiry checks
+  # For now we can just remove it since it's not being used
+  # @refresh_window 300
 
   @doc """
   Fetches the current user from the session and assigns it to the connection.
