@@ -47,6 +47,7 @@ defmodule EventasaurusWeb.Router do
     get "/reset-password/:token", Auth.AuthController, :reset_password
     post "/reset-password", Auth.AuthController, :update_password
     get "/auth/callback", Auth.AuthController, :callback
+    post "/auth/callback", Auth.AuthController, :callback
   end
 
   # Protected routes that require authentication
