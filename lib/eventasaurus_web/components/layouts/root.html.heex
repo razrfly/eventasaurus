@@ -21,15 +21,27 @@
           </a>
         </div>
         <div class="flex items-center gap-4">
-          <a href="/login" class="text-sm font-semibold hover:text-gray-300">
-            Log In
-          </a>
-          <a
-            href="/register"
-            class="rounded-lg bg-zinc-300 px-2 py-1 text-sm font-semibold text-gray-900 hover:bg-zinc-400"
-          >
-            Sign up
-          </a>
+          <%= if @conn.assigns[:current_user] do %>
+            <span class="text-sm font-medium">
+              <%= @conn.assigns.current_user["email"] %>
+            </span>
+            <a
+              href="/logout"
+              class="rounded-lg bg-zinc-300 px-2 py-1 text-sm font-semibold text-gray-900 hover:bg-zinc-400"
+            >
+              Log out
+            </a>
+          <% else %>
+            <a href="/login" class="text-sm font-semibold hover:text-gray-300">
+              Log In
+            </a>
+            <a
+              href="/register"
+              class="rounded-lg bg-zinc-300 px-2 py-1 text-sm font-semibold text-gray-900 hover:bg-zinc-400"
+            >
+              Sign up
+            </a>
+          <% end %>
         </div>
       </div>
     </header>
