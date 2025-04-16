@@ -1,14 +1,14 @@
 defmodule Tailwind.MixProject do
   use Mix.Project
 
-  @version "0.3.1"
+  @version "0.2.4"
   @source_url "https://github.com/phoenixframework/tailwind"
 
   def project do
     [
       app: :tailwind,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.11",
       deps: deps(),
       description: "Mix tasks for installing and invoking tailwind",
       package: [
@@ -38,6 +38,7 @@ defmodule Tailwind.MixProject do
 
   defp deps do
     [
+      {:castore, ">= 0.0.0"},
       {:ex_doc, ">= 0.0.0", only: :docs}
     ]
   end
