@@ -12,8 +12,7 @@ import_config "supabase.exs"
 
 # Configure Eventasaurus main app to use Supabase (not Ecto)
 config :eventasaurus,
-  use_supabase: true,
-  ecto_repos: [EventasaurusApp.Repo]
+  use_supabase: true
 
 # Configures the endpoint
 config :eventasaurus, EventasaurusWeb.Endpoint,

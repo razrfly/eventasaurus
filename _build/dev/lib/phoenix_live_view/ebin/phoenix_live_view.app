@@ -29,6 +29,7 @@
           'Elixir.Phoenix.LiveView.Lifecycle',
           'Elixir.Phoenix.LiveView.LiveStream',
           'Elixir.Phoenix.LiveView.Logger','Elixir.Phoenix.LiveView.Plug',
+          'Elixir.Phoenix.LiveView.ReloadError',
           'Elixir.Phoenix.LiveView.Rendered',
           'Elixir.Phoenix.LiveView.Renderer','Elixir.Phoenix.LiveView.Route',
           'Elixir.Phoenix.LiveView.Router','Elixir.Phoenix.LiveView.Session',
@@ -61,5 +62,5 @@
      {description,
          "Rich, real-time user experiences with server-rendered HTML\n"},
      {registered,[]},
-     {vsn,"0.20.17"},
+     {vsn,"1.0.9"},
      {mod,{'Elixir.Phoenix.LiveView.Application',[]}}]}.

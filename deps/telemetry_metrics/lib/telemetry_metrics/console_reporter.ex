@@ -85,7 +85,7 @@ defmodule Telemetry.Metrics.ConsoleReporter do
       for %struct{} = metric <- metrics do
         header = """
 
-        Metric measurement: #{inspect(metric.measurement)} (#{metric(struct)})
+        Metric measurement: #{measurement_name(metric)} (#{metric(struct)})
         """
 
         [
@@ -100,7 +100,7 @@ defmodule Telemetry.Metrics.ConsoleReporter do
                   Measurement value missing (metric skipped)
                   """
 
-                not keep?(metric, metadata) ->
+                not keep?(metric, metadata, measurements) ->
                   """
                   Event dropped
                   """
@@ -133,8 +133,22 @@ defmodule Telemetry.Metrics.ConsoleReporter do
     IO.puts(device, [prelude | parts])
   end
 
-  defp keep?(%{keep: nil}, _metadata), do: true
-  defp keep?(metric, metadata), do: metric.keep.(metadata)
+  defp measurement_name(%{measurement: measurement}) when is_atom(measurement),
+    do: inspect(measurement)
+
+  defp measurement_name(%{measurement: fun, name: name}) when is_function(fun) do
+    measurement = List.last(name)
+
+    "#{inspect(measurement)} [via #{inspect(fun)}]"
+  end
+
+  defp keep?(metric, metadata, measurements) do
+    case metric do
+      %{keep: nil} -> true
+      %{keep: keep} when is_function(keep, 1) -> keep.(metadata)
+      %{keep: keep} when is_function(keep, 2) -> keep.(metadata, measurements)
+    end
+  end
 
   defp extract_measurement(metric, measurements, metadata) do
     case metric.measurement do

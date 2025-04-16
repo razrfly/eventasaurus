@@ -1,29 +1,10 @@
 defmodule EventasaurusApp.Auth.Client do
   @moduledoc """
-  Client for interacting with Supabase API directly using HTTPoison.
-  This replaces the dependency on the supabase/gotrue/postgrestex packages.
+  Client for interacting with Supabase authentication API.
   """
 
-  # Get Supabase configuration from application config
-  def get_config do
-    Application.get_env(:eventasaurus, :supabase)
-  end
-
-  def get_url do
-    get_config()[:url]
-  end
-
-  def get_api_key do
-    get_config()[:api_key]
-  end
-
-  def get_database_url do
-    get_config()[:database_url]
-  end
-
-  def get_auth_url do
-    "#{get_url()}/auth/v1"
-  end
+  # Define auth endpoint for Supabase
+  @auth_endpoint "/auth/v1"
 
   # Default HTTP request headers
   defp default_headers do
@@ -33,17 +14,13 @@ defmodule EventasaurusApp.Auth.Client do
     ]
   end
 
-  defp auth_headers(token) do
-    [{"Authorization", "Bearer #{token}"} | default_headers()]
-  end
-
   @doc """
   Sign up a new user with email and password.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
   def sign_up(email, password, name \\ nil) do
-    url = "#{get_auth_url()}/signup"
+    url = "#{get_url()}#{@auth_endpoint}/signup"
 
     body = Jason.encode!(%{
       email: email,
@@ -70,22 +47,29 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, auth_data} with tokens on success or {:error, reason} on failure.
   """
   def sign_in(email, password) do
-    url = "#{get_auth_url()}/token?grant_type=password"
+    url = "#{get_url()}#{@auth_endpoint}/token?grant_type=password"
+    require Logger
 
     body = Jason.encode!(%{
       email: email,
       password: password
     })
 
+    Logger.debug("Signing in user #{email}")
+
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
-        {:ok, Jason.decode!(response_body)}
+        decoded = Jason.decode!(response_body)
+        Logger.debug("Auth successful, response: #{inspect(decoded)}")
+        {:ok, decoded}
 
       {:ok, %{status_code: code, body: response_body}} ->
         error = Jason.decode!(response_body)
+        Logger.error("Auth failed with status #{code}: #{inspect(error)}")
         {:error, %{status: code, message: error["message"] || "Authentication failed"}}
 
       {:error, error} ->
+        Logger.error("Auth request error: #{inspect(error)}")
         {:error, error}
     end
   end
@@ -96,9 +80,13 @@ defmodule EventasaurusApp.Auth.Client do
   Returns :ok on success or {:error, reason} on failure.
   """
   def sign_out(token) do
-    url = "#{get_auth_url()}/logout"
+    url = "#{get_url()}#{@auth_endpoint}/logout"
 
-    case HTTPoison.post(url, "", auth_headers(token)) do
+    headers = [
+      {"Authorization", "Bearer #{token}"} | default_headers()
+    ]
+
+    case HTTPoison.post(url, "", headers) do
       {:ok, %{status_code: status}} when status in [200, 204] ->
         :ok
 
@@ -117,7 +105,7 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, %{email: email}} on success or {:error, reason} on failure.
   """
   def reset_password(email) do
-    url = "#{get_auth_url()}/recover"
+    url = "#{get_url()}#{@auth_endpoint}/recover"
 
     body = Jason.encode!(%{
       email: email
@@ -142,13 +130,17 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, %{}} on success or {:error, reason} on failure.
   """
   def update_password(token, new_password) do
-    url = "#{get_auth_url()}/user"
+    url = "#{get_url()}#{@auth_endpoint}/user"
+
+    headers = [
+      {"Authorization", "Bearer #{token}"} | default_headers()
+    ]
 
     body = Jason.encode!(%{
       password: new_password
     })
 
-    case HTTPoison.put(url, body, auth_headers(token)) do
+    case HTTPoison.put(url, body, headers) do
       {:ok, %{status_code: 200}} ->
         {:ok, %{}}
 
@@ -167,7 +159,7 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, tokens} on success or {:error, reason} on failure.
   """
   def refresh_token(refresh_token) do
-    url = "#{get_auth_url()}/token?grant_type=refresh_token"
+    url = "#{get_url()}#{@auth_endpoint}/token?grant_type=refresh_token"
 
     body = Jason.encode!(%{
       refresh_token: refresh_token
@@ -192,9 +184,13 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
   def get_user(token) do
-    url = "#{get_auth_url()}/user"
+    url = "#{get_url()}#{@auth_endpoint}/user"
 
-    case HTTPoison.get(url, auth_headers(token)) do
+    headers = [
+      {"Authorization", "Bearer #{token}"} | default_headers()
+    ]
+
+    case HTTPoison.get(url, headers) do
       {:ok, %{status_code: 200, body: response_body}} ->
         {:ok, Jason.decode!(response_body)}
 
@@ -205,5 +201,33 @@ defmodule EventasaurusApp.Auth.Client do
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  @doc """
+  Get the Supabase configuration.
+  """
+  def get_config do
+    Application.get_env(:eventasaurus, :supabase)
+  end
+
+  @doc """
+  Get Supabase URL from configuration.
+  """
+  def get_url do
+    get_config()[:url]
+  end
+
+  @doc """
+  Get Supabase API key from configuration.
+  """
+  def get_api_key do
+    get_config()[:api_key]
+  end
+
+  @doc """
+  Get Supabase database URL from configuration.
+  """
+  def get_database_url do
+    get_config()[:database_url]
   end
 end

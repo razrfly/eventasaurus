@@ -38,7 +38,7 @@ defmodule Phoenix.LiveView.Helpers do
     you are invoking live_patch/2 with a socket but a socket is not expected.
 
     If you want to live_patch/2 inside a LiveView, use push_patch/2 instead.
-    If you are inside a template, make the sure the first argument is a string.
+    If you are inside a template, make sure the first argument is a string.
     """
   end
 
@@ -63,7 +63,7 @@ defmodule Phoenix.LiveView.Helpers do
     you are invoking live_redirect/2 with a socket but a socket is not expected.
 
     If you want to live_redirect/2 inside a LiveView, use push_redirect/2 instead.
-    If you are inside a template, make the sure the first argument is a string.
+    If you are inside a template, make sure the first argument is a string.
     """
   end
 
@@ -90,7 +90,7 @@ defmodule Phoenix.LiveView.Helpers do
 
     assigns = %{opts: opts, content: block_or_text}
 
-    ~H|<a {@opts}><%= @content %></a>|
+    ~H|<a {@opts}>{@content}</a>|
   end
 
   @deprecated "Use <.live_title> instead"
@@ -99,7 +99,7 @@ defmodule Phoenix.LiveView.Helpers do
 
     ~H"""
     <Phoenix.Component.live_title prefix={@prefix} suffix={@suffix}>
-      <%= @title %>
+      {@title}
     </Phoenix.Component.live_title>
     """
   end

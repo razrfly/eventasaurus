@@ -3,6 +3,7 @@ import "phoenix_html";
 import {Socket} from "phoenix";
 import {LiveSocket} from "phoenix_live_view";
 import topbar from "../vendor/topbar";
+import SupabaseUploaders from "./supabase_uploader";
 
 // Define LiveView hooks here
 let Hooks = {};
@@ -11,7 +12,8 @@ let Hooks = {};
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
-  hooks: Hooks
+  hooks: Hooks,
+  uploaders: SupabaseUploaders  // Add Supabase uploaders for direct uploads
 });
 
 // Show progress bar on live navigation and form submits

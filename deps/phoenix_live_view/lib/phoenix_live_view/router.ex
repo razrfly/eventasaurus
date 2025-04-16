@@ -5,7 +5,7 @@ defmodule Phoenix.LiveView.Router do
 
   @cookie_key "__phoenix_flash__"
 
-  @doc """
+  @doc ~S"""
   Defines a LiveView route.
 
   A LiveView can be routed to by using the `live` macro with a path and
@@ -13,9 +13,10 @@ defmodule Phoenix.LiveView.Router do
 
       live "/thermostat", ThermostatLive
 
-  By default, you can generate a route to this LiveView by using the `live_path` helper:
+  To navigate to this route within your app, you can use `Phoenix.VerifiedRoutes`:
 
-      live_path(@socket, ThermostatLive)
+      push_navigate(socket, to: ~p"/thermostat")
+      push_patch(socket, to: ~p"/thermostat?page=#{page}")
 
   > #### HTTP requests {: .info}
   >
@@ -53,15 +54,15 @@ defmodule Phoenix.LiveView.Router do
   The current action will always be available inside the LiveView as
   the `@live_action` assign, that can be used to render a LiveComponent:
 
-      <%= if @live_action == :new do %>
-        <.live_component module={MyAppWeb.ArticleLive.FormComponent} id="form" />
-      <% end %>
+  ```heex
+  <.live_component :if={@live_action == :new} module={MyAppWeb.ArticleLive.FormComponent} id="form" />
+  ```
 
   Or can be used to show or hide parts of the template:
 
-      <%= if @live_action == :edit do %>
-        <%= render("form.html", user: @user) %>
-      <% end %>
+  ```heex
+  {if @live_action == :edit, do: render("form.html", user: @user)}
+  ```
 
   Note that `@live_action` will be `nil` if no action is given on the route definition.
 
@@ -105,13 +106,9 @@ defmodule Phoenix.LiveView.Router do
 
   """
   defmacro live(path, live_view, action \\ nil, opts \\ []) do
-    # TODO: Use Macro.expand_literals on Elixir v1.14.1+
-    live_view =
-      if Macro.quoted_literal?(live_view) do
-        Macro.prewalk(live_view, &expand_alias(&1, __CALLER__))
-      else
-        live_view
-      end
+    live_view = Macro.expand_literals(live_view, %{__CALLER__ | function: {:live, 4}})
+    action = Macro.expand_literals(action, %{__CALLER__ | function: {:live, 4}})
+    opts = Macro.expand_literals(opts, %{__CALLER__ | function: {:live, 4}})
 
     quote bind_quoted: binding() do
       {action, router_options} =
@@ -125,7 +122,7 @@ defmodule Phoenix.LiveView.Router do
   Defines a live session for live redirects within a group of live routes.
 
   `live_session/3` allow routes defined with `live/4` to support
-  `live_redirect` from the client with navigation purely over the existing
+  `navigate` redirects from the client with navigation purely over the existing
   websocket connection. This allows live routes defined in the router to
   mount a new root LiveView without additional HTTP requests to the server.
   For backwards compatibility reasons, all live routes defined outside
@@ -140,7 +137,7 @@ defmodule Phoenix.LiveView.Router do
   the `mount` callback. Authorization rules generally happen on `mount`
   (for instance, is the user allowed to see this page?) and also on
   `handle_event` (is the user allowed to delete this item?). Performing
-  authorization on mount is important because `live_redirect`s *do not go
+  authorization on mount is important because `navigate`s *do not go
   through the plug pipeline*.
 
   `live_session` can be used to draw boundaries between groups of LiveViews.
@@ -231,12 +228,7 @@ defmodule Phoenix.LiveView.Router do
   and be executed via `on_mount` hooks.
   """
   defmacro live_session(name, opts \\ [], do: block) do
-    opts =
-      if Macro.quoted_literal?(opts) do
-        Macro.prewalk(opts, &expand_alias(&1, __CALLER__))
-      else
-        opts
-      end
+    opts = Macro.expand_literals(opts, %{__CALLER__ | function: {:live_session, 3}})
 
     quote do
       unquote(__MODULE__).__live_session__(__MODULE__, unquote(opts), unquote(name))
@@ -245,17 +237,11 @@ defmodule Phoenix.LiveView.Router do
     end
   end
 
-  defp expand_alias({:__aliases__, _, _} = alias, env),
-    do: Macro.expand(alias, %{env | function: {:mount, 3}})
-
-  defp expand_alias(other, _env), do: other
-
   @doc false
   def __live_session__(module, opts, name) do
     Module.register_attribute(module, :phoenix_live_sessions, accumulate: true)
-    vsn = session_vsn(module)
 
-    unless is_atom(name) do
+    if not is_atom(name) do
       raise ArgumentError, """
       expected live_session name to be an atom, got: #{inspect(name)}
       """
@@ -277,7 +263,7 @@ defmodule Phoenix.LiveView.Router do
       """
     end
 
-    current = %{name: name, extra: extra, vsn: vsn}
+    current = %{name: name, extra: extra}
     Module.put_attribute(module, :phoenix_live_session_current, current)
 
     Module.put_attribute(module, :phoenix_live_sessions, name)
@@ -296,10 +282,6 @@ defmodule Phoenix.LiveView.Router do
         expected a map with string keys or an MFA tuple, got #{inspect(bad_session)}
         """
 
-      {:root_layout, {mod, template}}, acc when is_atom(mod) and is_binary(template) ->
-        template = Phoenix.LiveView.Utils.normalize_layout(template)
-        Map.put(acc, :root_layout, {mod, String.to_atom(template)})
-
       {:root_layout, {mod, template}}, acc when is_atom(mod) and is_atom(template) ->
         Map.put(acc, :root_layout, {mod, template})
 
@@ -312,10 +294,6 @@ defmodule Phoenix.LiveView.Router do
 
         expected a tuple with the view module and template atom name, got #{inspect(bad_layout)}
         """
-
-      {:layout, {mod, template}}, acc when is_atom(mod) and is_binary(template) ->
-        template = Phoenix.LiveView.Utils.normalize_layout(template)
-        Map.put(acc, :layout, {mod, template})
 
       {:layout, {mod, template}}, acc when is_atom(mod) and is_atom(template) ->
         Map.put(acc, :layout, {mod, template})
@@ -396,7 +374,9 @@ defmodule Phoenix.LiveView.Router do
       when is_atom(action) and is_list(opts) do
     live_session =
       Module.get_attribute(router, :phoenix_live_session_current) ||
-        %{name: :default, extra: %{}, vsn: session_vsn(router)}
+        %{name: :default, extra: %{}}
+
+    helpers = Module.get_attribute(router, :phoenix_helpers)
 
     live_view = Phoenix.Router.scoped_alias(router, live_view)
     {private, metadata, warn_on_verify, opts} = validate_live_opts!(opts)
@@ -406,13 +386,19 @@ defmodule Phoenix.LiveView.Router do
       |> Keyword.put(:router, router)
       |> Keyword.put(:action, action)
 
-    {as_helper, as_action} = inferred_as(live_view, opts[:as], action)
+    {as_helper, as_action} =
+      if helpers do
+        inferred_as(live_view, opts[:as], action)
+      else
+        {nil, action}
+      end
 
+    # TODO: Remove :log_module when we require Phoenix v1.8+
     metadata =
       metadata
       |> Map.put(:phoenix_live_view, {live_view, action, opts, live_session})
-      |> Map.put_new(:log_module, live_view)
-      |> Map.put_new(:log_function, :mount)
+      |> Map.put(:mfa, {live_view, :__live__, 0})
+      |> Map.put(:log_module, live_view)
 
     {as_action,
      alias: false,
@@ -501,14 +487,4 @@ defmodule Phoenix.LiveView.Router do
   end
 
   defp cookie_flash(%Plug.Conn{} = conn), do: {conn, nil}
-
-  defp session_vsn(module) do
-    if vsn = Module.get_attribute(module, :phoenix_session_vsn) do
-      vsn
-    else
-      vsn = System.system_time()
-      Module.put_attribute(module, :phoenix_session_vsn, vsn)
-      vsn
-    end
-  end
 end

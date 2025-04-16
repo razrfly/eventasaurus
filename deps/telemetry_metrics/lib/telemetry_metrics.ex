@@ -58,7 +58,6 @@ defmodule Telemetry.Metrics do
       By default the event name is all but the last segment of the metric name.
     * `:measurement` - the event measurement used as a source of a metric values.
       By default it is the last segment of the metric name. It can be:
-      * an arbitrary term
       * a key in the event's measurements map
       * an unary function accepting the whole measurements map and returning the
         actual value to be used.
@@ -69,10 +68,12 @@ defmodule Telemetry.Metrics do
     * `:tag_values` - a function that receives the metadata and returns a map with
       the tags as keys and their respective values. Defaults to returning the
       metadata itself.
-    * `:keep` - a predicate function that evaluates the metadata to conditionally
-      record a given event. `:keep` and `:drop` cannot be combined. Defaults to `nil`.
-    * `:drop` - a predicate function that evaluates the metadata to conditionally
-      skip recording a given event. `:keep` and `:drop` cannot be combined. Defaults to `nil`.
+    * `:keep` - a predicate function that evaluates the metadata and measurement
+      to conditionally record a given event. `:keep` and `:drop` cannot be
+      combined. Defaults to `nil`.
+    * `:drop` - a predicate function that evaluates the metadata and measurement
+      to conditionally skip recording a given event. `:keep` and `:drop` cannot
+      be combined. Defaults to `nil`.
     * `:description` - human-readable description of the metric. Might be used by
       reporters for documentation purposes. Defaults to `nil`.
     * `:unit` - an atom describing the unit of selected measurement, typically in
@@ -274,7 +275,7 @@ defmodule Telemetry.Metrics do
   documentation before relying on this functionality.
 
   The `keep` function should be evaluated by reporters _prior_ to `tag_values` using the
-  raw `:telemetry.medatadata()` values from the event.
+  raw `:telemetry.metadata()` values from the event.
 
   ## Reporters
 
@@ -409,8 +410,11 @@ defmodule Telemetry.Metrics do
   @type tag :: term()
   @type tags :: [tag()]
   @type tag_values :: (:telemetry.event_metadata() -> :telemetry.event_metadata())
-  @type keep :: (:telemetry.event_metadata() -> boolean())
-  @type drop :: (:telemetry.event_metadata() -> boolean())
+  @type predicate_fun ::
+          (:telemetry.event_metadata() -> boolean())
+          | (:telemetry.event_metadata(), :telemetry.event_measurements() -> boolean())
+  @type keep :: predicate_fun()
+  @type drop :: predicate_fun()
   @type description :: nil | String.t()
   @type unit :: atom()
   @type time_unit_conversion() :: {time_unit(), time_unit()}
@@ -615,11 +619,11 @@ defmodule Telemetry.Metrics do
   end
 
   defp validate_recording_rule_fun!(nil), do: nil
-  defp validate_recording_rule_fun!(fun) when is_function(fun, 1), do: fun
+  defp validate_recording_rule_fun!(fun) when is_function(fun, 1) or is_function(fun, 2), do: fun
 
   defp validate_recording_rule_fun!(term) do
     raise ArgumentError,
-          "expected recording rule to be a function accepting metadata, got #{inspect(term)}"
+          "expected recording rule to be a function accepting either metadata or metadata and measurements, got #{inspect(term)}"
   end
 
   defp validate_recording_rule_fun_options!(keep, drop) when is_nil(keep) or is_nil(drop), do: :ok
@@ -630,8 +634,9 @@ defmodule Telemetry.Metrics do
   end
 
   defp keep_fun(nil, nil), do: nil
-  defp keep_fun(nil, drop), do: fn meta -> not drop.(meta) end
   defp keep_fun(keep, nil), do: keep
+  defp keep_fun(nil, drop) when is_function(drop, 1), do: &(not drop.(&1))
+  defp keep_fun(nil, drop) when is_function(drop, 2), do: &(not drop.(&1, &2))
 
   @spec fill_in_default_metric_options([metric_option()]) :: [metric_option()]
   defp fill_in_default_metric_options(options) do
