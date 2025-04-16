@@ -16,8 +16,9 @@ defmodule EventasaurusWeb.Auth.AuthController do
   def create_session(conn, %{"email" => email, "password" => password}) do
     case Auth.authenticate(email, password) do
       {:ok, auth_data} ->
+        {:ok, conn} = Auth.store_session(conn, auth_data)
+
         conn
-        |> Auth.store_session(auth_data)
         |> put_flash(:info, "You have been logged in successfully.")
         |> redirect(to: ~p"/")
 

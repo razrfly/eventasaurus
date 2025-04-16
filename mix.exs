@@ -60,7 +60,8 @@ defmodule Eventasaurus.MixProject do
       {:plug_cowboy, "~> 2.6"},
       {:tesla, "~> 1.14"},
       {:hackney, "~> 1.18"},
-      {:cors_plug, "~> 3.0"}
+      {:cors_plug, "~> 3.0"},
+      {:httpoison, "~> 2.0"}
     ]
   end
 

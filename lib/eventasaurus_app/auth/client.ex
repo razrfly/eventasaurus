@@ -3,8 +3,16 @@ defmodule EventasaurusApp.Auth.Client do
   Client for interacting with Supabase authentication API.
   """
 
-  # Define auth endpoint for Supabase - will be used in actual implementation
-  # @auth_endpoint "/auth/v1"
+  # Define auth endpoint for Supabase
+  @auth_endpoint "/auth/v1"
+
+  # Default HTTP request headers
+  defp default_headers do
+    [
+      {"apikey", get_api_key()},
+      {"Content-Type", "application/json"}
+    ]
+  end
 
   @doc """
   Sign up a new user with email and password.
@@ -12,19 +20,25 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
   def sign_up(email, password, name \\ nil) do
-    # Using HTTPoison or Finch directly would be the better approach
-    # but for now we'll use a placeholder implementation
+    url = "#{get_url()}#{@auth_endpoint}/signup"
 
-    IO.puts("Would send signup request to Supabase with email: #{email}, password: #{String.slice(password, 0, 1)}***, name: #{name || "not provided"}")
-
-    # Simulate a successful response
-    {:ok, %{
-      id: "simulated-user-id",
+    body = Jason.encode!(%{
       email: email,
-      app_metadata: %{},
-      user_metadata: %{name: name},
-      created_at: DateTime.utc_now() |> DateTime.to_string()
-    }}
+      password: password,
+      data: %{name: name}
+    })
+
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        {:ok, Jason.decode!(response_body)}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Signup failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   @doc """
@@ -33,21 +47,24 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, auth_data} with tokens on success or {:error, reason} on failure.
   """
   def sign_in(email, password) do
-    # Using HTTPoison or Finch directly would be the better approach
-    # but for now we'll use a placeholder implementation
+    url = "#{get_url()}#{@auth_endpoint}/token?grant_type=password"
 
-    IO.puts("Would send signin request to Supabase with email: #{email} and password: #{String.slice(password, 0, 1)}***")
+    body = Jason.encode!(%{
+      email: email,
+      password: password
+    })
 
-    # Simulate a successful response
-    {:ok, %{
-      access_token: "simulated-jwt-token-#{System.unique_integer([:positive])}",
-      refresh_token: "simulated-refresh-token-#{System.unique_integer([:positive])}",
-      user: %{
-        id: "simulated-user-id",
-        email: email
-      },
-      expires_in: 3600
-    }}
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        {:ok, Jason.decode!(response_body)}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Authentication failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   @doc """
@@ -56,13 +73,23 @@ defmodule EventasaurusApp.Auth.Client do
   Returns :ok on success or {:error, reason} on failure.
   """
   def sign_out(token) do
-    # Using HTTPoison or Finch directly would be the better approach
-    # but for now we'll use a placeholder implementation
+    url = "#{get_url()}#{@auth_endpoint}/logout"
 
-    IO.puts("Would send signout request with token: #{String.slice(token, 0, 10)}...")
+    headers = [
+      {"Authorization", "Bearer #{token}"} | default_headers()
+    ]
 
-    # Simulate a successful response
-    :ok
+    case HTTPoison.post(url, "", headers) do
+      {:ok, %{status_code: status}} when status in [200, 204] ->
+        :ok
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Logout failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   @doc """
@@ -71,13 +98,23 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, %{email: email}} on success or {:error, reason} on failure.
   """
   def reset_password(email) do
-    # Using HTTPoison or Finch directly would be the better approach
-    # but for now we'll use a placeholder implementation
+    url = "#{get_url()}#{@auth_endpoint}/recover"
 
-    IO.puts("Would send password reset request for email: #{email}")
+    body = Jason.encode!(%{
+      email: email
+    })
 
-    # Simulate a successful response
-    {:ok, %{email: email}}
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: status}} when status in [200, 204] ->
+        {:ok, %{email: email}}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Password reset request failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   @doc """
@@ -86,13 +123,27 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, %{}} on success or {:error, reason} on failure.
   """
   def update_password(token, new_password) do
-    # Using HTTPoison or Finch directly would be the better approach
-    # but for now we'll use a placeholder implementation
+    url = "#{get_url()}#{@auth_endpoint}/user"
 
-    IO.puts("Would update password with token: #{String.slice(token, 0, 10)}... and new password: #{String.slice(new_password, 0, 1)}***")
+    headers = [
+      {"Authorization", "Bearer #{token}"} | default_headers()
+    ]
 
-    # Simulate a successful response
-    {:ok, %{}}
+    body = Jason.encode!(%{
+      password: new_password
+    })
+
+    case HTTPoison.put(url, body, headers) do
+      {:ok, %{status_code: 200}} ->
+        {:ok, %{}}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Password update failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   @doc """
@@ -101,17 +152,23 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, tokens} on success or {:error, reason} on failure.
   """
   def refresh_token(refresh_token) do
-    # Using HTTPoison or Finch directly would be the better approach
-    # but for now we'll use a placeholder implementation
+    url = "#{get_url()}#{@auth_endpoint}/token?grant_type=refresh_token"
 
-    IO.puts("Would send token refresh request for token: #{String.slice(refresh_token, 0, 10)}...")
+    body = Jason.encode!(%{
+      refresh_token: refresh_token
+    })
 
-    # Simulate a successful response
-    {:ok, %{
-      access_token: "simulated-new-jwt-token-#{System.unique_integer([:positive])}",
-      refresh_token: "simulated-new-refresh-token-#{System.unique_integer([:positive])}",
-      expires_in: 3600
-    }}
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        {:ok, Jason.decode!(response_body)}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Token refresh failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   @doc """
@@ -120,19 +177,23 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
   def get_user(token) do
-    # Using HTTPoison or Finch directly would be the better approach
-    # but for now we'll use a placeholder implementation
+    url = "#{get_url()}#{@auth_endpoint}/user"
 
-    IO.puts("Would send get user request with token: #{String.slice(token, 0, 10)}...")
+    headers = [
+      {"Authorization", "Bearer #{token}"} | default_headers()
+    ]
 
-    # Simulate a successful response
-    {:ok, %{
-      id: "simulated-user-id",
-      email: "user@example.com",
-      app_metadata: %{},
-      user_metadata: %{},
-      created_at: DateTime.utc_now() |> DateTime.to_string()
-    }}
+    case HTTPoison.get(url, headers) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        {:ok, Jason.decode!(response_body)}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Failed to get user data"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   @doc """
