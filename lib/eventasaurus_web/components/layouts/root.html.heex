@@ -19,18 +19,35 @@
             <img src="/images/logo.svg" alt="Eventasaurus Logo" class="h-8 w-auto" />
             <p class="text-xl font-bold">🦖 Eventasaurus</p>
           </a>
+          <%= if @conn.assigns[:current_user] do %>
+            <nav class="flex items-center gap-4 ml-6">
+              <a href="/dashboard" class="text-sm font-medium hover:text-gray-300">
+                Dashboard
+              </a>
+              <a href="/events/new" class="text-sm font-medium hover:text-gray-300">
+                Create Event
+              </a>
+            </nav>
+          <% end %>
         </div>
         <div class="flex items-center gap-4">
           <%= if @conn.assigns[:current_user] do %>
-            <span class="text-sm font-medium">
-              <%= @conn.assigns.current_user["email"] %>
-            </span>
-            <a
-              href="/logout"
-              class="rounded-lg bg-zinc-300 px-2 py-1 text-sm font-semibold text-gray-900 hover:bg-zinc-400"
-            >
-              Log out
-            </a>
+            <div class="relative group">
+              <button class="flex items-center text-sm font-medium hover:text-gray-300">
+                <span><%= @conn.assigns.current_user.email %></span>
+                <svg class="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+              </button>
+              <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 hidden group-hover:block">
+                <a href="/dashboard" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                  Dashboard
+                </a>
+                <a href="/logout" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                  Log out
+                </a>
+              </div>
+            </div>
           <% else %>
             <a href="/login" class="text-sm font-semibold hover:text-gray-300">
               Log In

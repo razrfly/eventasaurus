@@ -34,8 +34,8 @@ defmodule EventasaurusWeb.Router do
       pipe_through :browser
 
       get "/", PageController, :home
-      # Add public LiveView routes here
-      # live "/events/:slug", EventLive.Show
+      # Public event viewing
+      live "/events/:slug", EventLive.Show
     end
   end
 
@@ -44,9 +44,9 @@ defmodule EventasaurusWeb.Router do
     scope "/", EventasaurusWeb do
       pipe_through [:browser, :authenticated]
 
-      # Add authenticated LiveView routes here
-      # live "/events/new", EventLive.New
-      # live "/events/:id/edit", EventLive.Edit
+      # Event management routes - using /manage/events to avoid conflicts with public routes
+      live "/manage/events/new", EventLive.New
+      live "/manage/events/:id/edit", EventLive.Edit
     end
   end
 

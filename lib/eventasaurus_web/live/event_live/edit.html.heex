@@ -1,0 +1,210 @@
+<div class="max-w-4xl mx-auto py-8 px-4">
+  <h1 class="text-3xl font-bold mb-8">Edit Event</h1>
+
+  <.form
+    for={@changeset}
+    id="event-form"
+    phx-change="validate"
+    phx-submit="save"
+    class="space-y-8"
+  >
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="space-y-6">
+        <div>
+          <h2 class="text-xl font-semibold mb-4">Basic Information</h2>
+          
+          <div class="mb-4">
+            <.input field={@changeset[:title]} type="text" label="Event Title" required />
+          </div>
+          
+          <div class="mb-4">
+            <.input field={@changeset[:tagline]} type="text" label="Tagline" placeholder="A brief tagline for your event" />
+          </div>
+          
+          <div class="mb-4">
+            <.input field={@changeset[:description]} type="textarea" label="Description" required rows={5} />
+          </div>
+          
+          <div class="mb-4">
+            <.input
+              field={@changeset[:visibility]}
+              type="select"
+              label="Visibility"
+              options={[{"Public", "public"}, {"Private", "private"}]}
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-xl font-semibold mb-4">Date & Time</h2>
+          
+          <div class="mb-4">
+            <.input field={@changeset[:start_at]} type="datetime-local" label="Start Date & Time" required />
+          </div>
+          
+          <div class="mb-4">
+            <.input field={@changeset[:ends_at]} type="datetime-local" label="End Date & Time" required />
+          </div>
+          
+          <div class="mb-4">
+            <.input
+              field={@changeset[:timezone]}
+              type="select"
+              label="Timezone"
+              options={timezone_options()}
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <div>
+          <h2 class="text-xl font-semibold mb-4">Venue</h2>
+          
+          <div class="mb-4">
+            <.input
+              field={@changeset[:venue_id]}
+              type="select"
+              label="Select Venue"
+              options={[{"-- Select Venue --", ""} | Enum.map(@venues, &{&1.name, &1.id})]}
+            />
+          </div>
+          
+          <div class="mt-6">
+            <h3 class="text-lg font-medium mb-4">Or Create a New Venue</h3>
+            
+            <.form
+              for={@venue_changeset}
+              id="venue-form"
+              phx-change="validate_venue"
+              phx-submit="save_venue"
+              class="space-y-4"
+            >
+              <div class="mb-4">
+                <.input field={@venue_changeset[:name]} type="text" label="Venue Name" required />
+              </div>
+              
+              <div class="mb-4">
+                <.input field={@venue_changeset[:address]} type="text" label="Address" />
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <.input field={@venue_changeset[:city]} type="text" label="City" />
+                </div>
+                
+                <div>
+                  <.input field={@venue_changeset[:state]} type="text" label="State/Province" />
+                </div>
+              </div>
+              
+              <div class="mb-4">
+                <.input field={@venue_changeset[:country]} type="text" label="Country" />
+              </div>
+              
+              <div class="flex justify-end">
+                <.button type="submit" phx-disable-with="Creating...">Create Venue</.button>
+              </div>
+            </.form>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-xl font-semibold mb-4">Cover Image</h2>
+          
+          <div class="mb-6">
+            <div class="mb-4" phx-drop-target={@uploads.cover_image.ref}>
+              <.live_file_input upload={@uploads.cover_image} class="hidden" />
+              
+              <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50 transition"
+                id="image-dropzone"
+                phx-hook="ImageDropzone">
+                <%= if @uploaded_image_url do %>
+                  <div class="mb-4">
+                    <img src={@uploaded_image_url} class="max-h-64 mx-auto rounded" />
+                  </div>
+                  <button type="button" phx-click="reset_image" class="text-sm text-red-600 hover:text-red-800">
+                    Remove image
+                  </button>
+                <% else %>
+                  <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <div class="mt-2">
+                    <span class="font-medium text-gray-900">Drop image here, or click to select</span>
+                  </div>
+                  <div class="mt-1 text-sm text-gray-500">
+                    PNG, JPG, JPEG up to 5MB
+                  </div>
+                <% end %>
+              </div>
+            </div>
+            
+            <%= for entry <- @uploads.cover_image.entries do %>
+              <div class="mb-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="font-medium"><%= entry.client_name %></span>
+                    <span class="text-xs text-gray-500">(<%= trunc(entry.client_size / 1000) %> KB)</span>
+                  </div>
+                  
+                  <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref} class="text-red-500">
+                    &times;
+                  </button>
+                </div>
+                
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                  <div class="bg-blue-600 h-2.5 rounded-full" style={"width: #{entry.progress}%"}></div>
+                </div>
+                
+                <%= for err <- upload_errors(@uploads.cover_image, entry) do %>
+                  <div class="mt-1 text-sm text-red-500">
+                    <%= error_to_string(err) %>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+            
+            <%= if length(@uploads.cover_image.entries) > 0 do %>
+              <div class="mt-4 flex justify-center">
+                <.button type="button" phx-click="save_image" phx-disable-with="Uploading...">
+                  Upload Image
+                </.button>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex space-x-4 mt-8">
+      <%= live_redirect to: ~p"/events/#{@event.slug}", class: "inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" do %>
+        Cancel
+      <% end %>
+      
+      <.button type="submit" phx-disable-with="Saving..." class="bg-blue-600 hover:bg-blue-700">
+        Save Event
+      </.button>
+    </div>
+  </.form>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const hook = {
+      mounted() {
+        this.el.addEventListener("click", e => {
+          document.querySelector(`input[type="file"][phx-hook-id="${this.el.getAttribute("phx-hook-id")}"]`).click();
+        });
+      }
+    };
+    
+    window.addEventListener("phx:hook-add", e => {
+      if (e.detail.names && e.detail.names.includes("ImageDropzone")) {
+        window.LiveView.addHook("ImageDropzone", hook);
+      }
+    });
+  });
+</script> 

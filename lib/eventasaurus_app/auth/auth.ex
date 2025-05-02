@@ -123,8 +123,8 @@ defmodule EventasaurusApp.Auth do
   def get_current_user(conn) do
     # If we have an access token, try to get the user data
     with token when is_binary(token) <- get_session(conn, :access_token),
-         {:ok, user} <- Client.get_user(token) do
-      user
+         {:ok, user_data} <- Client.get_user(token) do
+      EventasaurusApp.Accounts.User.from_supabase(user_data)
     else
       _ -> nil
     end

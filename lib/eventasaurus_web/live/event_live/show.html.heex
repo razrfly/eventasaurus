@@ -1,0 +1,145 @@
+<div class="max-w-5xl mx-auto py-8 px-4">
+  <div class="mb-6">
+    <nav class="flex" aria-label="Breadcrumb">
+      <ol class="inline-flex items-center space-x-1 md:space-x-2">
+        <li class="inline-flex items-center">
+          <a href="/" class="text-gray-700 hover:text-blue-600">
+            <svg class="w-5 h-5 mr-2.5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+            </svg>
+            Home
+          </a>
+        </li>
+        <li>
+          <div class="flex items-center">
+            <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="ml-1 text-gray-400 md:ml-2">Events</span>
+          </div>
+        </li>
+        <li aria-current="page">
+          <div class="flex items-center">
+            <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="ml-1 text-gray-500 md:ml-2"><%= @event.title %></span>
+          </div>
+        </li>
+      </ol>
+    </nav>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+    <div class="md:col-span-2">
+      <div class="bg-white shadow rounded-lg overflow-hidden">
+        <%= if @event.cover_image_url do %>
+          <div class="w-full h-64 md:h-96 overflow-hidden">
+            <img src={@event.cover_image_url} class="w-full h-full object-cover" alt={@event.title} />
+          </div>
+        <% end %>
+        
+        <div class="p-6">
+          <h1 class="text-3xl font-bold mb-2"><%= @event.title %></h1>
+          
+          <%= if @event.tagline do %>
+            <p class="text-lg text-gray-600 mb-4"><%= @event.tagline %></p>
+          <% end %>
+          
+          <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-2">Description</h2>
+            <div class="prose max-w-none">
+              <%= @event.description %>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div>
+      <div class="bg-white shadow rounded-lg overflow-hidden mb-6">
+        <div class="p-6">
+          <h2 class="text-lg font-semibold mb-4">Event Details</h2>
+          
+          <div class="mb-4">
+            <div class="flex items-start">
+              <svg class="flex-shrink-0 w-5 h-5 text-gray-500 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+              <div>
+                <p class="font-medium">Starts:</p>
+                <p class="text-gray-700"><%= Calendar.strftime(@event.start_at, "%A, %B %d, %Y") %></p>
+                <p class="text-gray-700"><%= Calendar.strftime(@event.start_at, "%I:%M %p") %> (<%= @event.timezone %>)</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <div class="flex items-start">
+              <svg class="flex-shrink-0 w-5 h-5 text-gray-500 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <div>
+                <p class="font-medium">Ends:</p>
+                <p class="text-gray-700"><%= Calendar.strftime(@event.ends_at, "%A, %B %d, %Y") %></p>
+                <p class="text-gray-700"><%= Calendar.strftime(@event.ends_at, "%I:%M %p") %> (<%= @event.timezone %>)</p>
+              </div>
+            </div>
+          </div>
+          
+          <%= if @venue do %>
+            <div class="mb-4">
+              <div class="flex items-start">
+                <svg class="flex-shrink-0 w-5 h-5 text-gray-500 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <div>
+                  <p class="font-medium">Venue:</p>
+                  <p class="text-gray-900"><%= @venue.name %></p>
+                  <%= if @venue.address do %>
+                    <p class="text-gray-700"><%= @venue.address %></p>
+                  <% end %>
+                  <%= if @venue.city || @venue.state do %>
+                    <p class="text-gray-700">
+                      <%= if @venue.city, do: @venue.city %>
+                      <%= if @venue.city && @venue.state, do: ", " %>
+                      <%= if @venue.state, do: @venue.state %>
+                    </p>
+                  <% end %>
+                  <%= if @venue.country do %>
+                    <p class="text-gray-700"><%= @venue.country %></p>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          <% end %>
+          
+          <div class="mt-6">
+            <span class={[
+              "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+              @event.visibility == :public && "bg-green-100 text-green-800" || "bg-yellow-100 text-yellow-800"
+            ]}>
+              <%= String.capitalize(to_string(@event.visibility)) %>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <%= if @current_user do %>
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+          <div class="p-6">
+            <h2 class="text-lg font-semibold mb-4">Actions</h2>
+            
+            <%= live_redirect to: ~p"/manage/events/#{@event.id}/edit", class: "w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" do %>
+              <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+              </svg>
+              Edit Event
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div> 

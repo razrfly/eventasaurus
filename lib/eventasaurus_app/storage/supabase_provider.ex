@@ -1,6 +1,6 @@
 defmodule EventasaurusApp.Storage.SupabaseProvider do
   @moduledoc """
-  Storage provider implementation for Supabase Storage.
+  Storage provider implementation for Supabase.
 
   This provider integrates with Supabase's Storage service for file operations.
   """

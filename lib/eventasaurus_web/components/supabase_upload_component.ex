@@ -23,8 +23,13 @@ defmodule EventasaurusWeb.Components.SupabaseUploadComponent do
   end
 
   @impl true
-  def handle_event("validate", _params, socket) do
+  def handle_event("validate", %{"_target" => ["photo"]}, socket) do
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("reset", _params, socket) do
+    {:noreply, assign(socket, uploaded_url: nil)}
   end
 
   @impl true
@@ -103,11 +108,6 @@ defmodule EventasaurusWeb.Components.SupabaseUploadComponent do
       </form>
     </div>
     """
-  end
-
-  @impl true
-  def handle_event("reset", _params, socket) do
-    {:noreply, assign(socket, :uploaded_url, nil)}
   end
 
   # Helper to convert upload errors to user-friendly messages
