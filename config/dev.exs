@@ -7,6 +7,19 @@ import Config
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
 # Binding to loopback ipv4 address prevents access from other machines.
+
+# Set development-specific Supabase configuration
+# This overrides the main supabase.exs config for development
+config :eventasaurus, :supabase,
+  url: "http://localhost:54321",  # Local Supabase URL
+  api_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",  # Default anon key for local Supabase
+  database_url: "postgresql://postgres:postgres@localhost:54321/postgres",  # Local DB
+  auth: %{
+    site_url: "http://localhost:4000",
+    additional_redirect_urls: ["http://localhost:4000/auth/callback"],
+    auto_confirm_email: true
+  }
+
 config :eventasaurus, EventasaurusWeb.Endpoint,
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}, port: 4000],
