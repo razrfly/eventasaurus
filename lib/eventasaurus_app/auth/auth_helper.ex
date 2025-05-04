@@ -4,6 +4,7 @@ defmodule EventasaurusApp.Auth.AuthHelper do
   """
 
   alias EventasaurusApp.Auth.{Client, SupabaseSync}
+  require Logger
 
   @doc """
   Fetches the current user from Supabase using the access token,
@@ -21,7 +22,25 @@ defmodule EventasaurusApp.Auth.AuthHelper do
          {:ok, user} <- SupabaseSync.sync_user(supabase_user) do
       {:ok, user}
     else
-      {:error, reason} -> {:error, reason}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+          Enum.reduce(opts, msg, fn {key, value}, acc ->
+            String.replace(acc, "%{#{key}}", to_string(value))
+          end)
+        end)
+
+        Logger.error("User sync error: #{inspect(errors)}")
+        # Return the user anyway if we can extract it from the changeset
+        if changeset.valid? == false && changeset.data.id do
+          Logger.info("Returning existing user despite sync error")
+          {:ok, changeset.data}
+        else
+          {:error, changeset}
+        end
+
+      {:error, reason} ->
+        Logger.error("Authentication error: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 

@@ -39,6 +39,24 @@ defmodule EventasaurusWeb.Auth.AuthController do
             |> render(:login_template)
         end
 
+      # Special case for email already exists but with different Supabase ID
+      {:error, %Ecto.Changeset{errors: [email: {"has already been taken", _}]}} ->
+        Logger.error("Authentication failed: Email already exists with a different ID")
+        # Try to get the user by email and log them in directly
+        case EventasaurusApp.Accounts.get_user_by_email(email) do
+          nil ->
+            conn
+            |> put_flash(:error, "Authentication failed. Please try again.")
+            |> render(:login_template)
+
+          user ->
+            Logger.info("Found existing user with email #{email}, logging in directly")
+            conn
+            |> assign(:current_user, user)
+            |> put_flash(:info, "You have been logged in successfully.")
+            |> redirect(to: ~p"/dashboard")
+        end
+
       {:error, reason} ->
         Logger.error("Authentication failed: #{inspect(reason)}")
         error_message = case reason do
