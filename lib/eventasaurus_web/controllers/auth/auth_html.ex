@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.Auth.AuthHTML do
   use EventasaurusWeb, :html
 
-  embed_templates "auth_html/*"
+  embed_templates "auth_html/*", suffix: "_template"
 
   # Define the required flash attribute for the flash_messages function
   attr :flash, :map, required: true

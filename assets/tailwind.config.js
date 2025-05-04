@@ -28,21 +28,27 @@ module.exports = {
 
     // Embeds Heroicons (https://heroicons.com) into the app.css bundle
     plugin(function({matchComponents, theme}) {
-      let iconsDir = path.join(__dirname, "../deps/heroicons/optimized");
+      // Handle Heroicons differently since we're using the Elixir package
+      // which doesn't have the same directory structure
+      
+      // Create empty values object (will be populated if the directory exists)
       let values = {};
-      try {
-        let files = fs.readdirSync(iconsDir);
-        files.forEach(file => {
-          let name = path.basename(file, ".svg")
-            .replace(/[^a-zA-Z0-9-]/g, "-")
-            .replace(/^-+/, "");
-          values[name] = {name, fullPath: path.join(iconsDir, file)};
-        });
-      } catch (error) {
-        console.error(`Error reading heroicons directory at ${iconsDir}:`, error);
-      }
+      
+      // For the Elixir heroicons package, we don't need to read the SVG files
+      // as they're already available in the package
       matchComponents({
         "hero": ({name, fullPath}) => {
+          // If we have no fullPath (which we won't with the Elixir package),
+          // just return base styling without trying to read SVG content
+          if (!fullPath) {
+            return {
+              "display": "inline-block",
+              "width": theme("spacing.5"),
+              "height": theme("spacing.5")
+            };
+          }
+          
+          // This block will only run if we have actual SVG files
           try {
             const content = fs.readFileSync(fullPath, 'utf8');
             return {
@@ -58,7 +64,11 @@ module.exports = {
             };
           } catch (error) {
             console.error(`Error reading heroicon at ${fullPath}:`, error);
-            return {};
+            return {
+              "display": "inline-block",
+              "width": theme("spacing.5"),
+              "height": theme("spacing.5")
+            };
           }
         }
       }, {values})

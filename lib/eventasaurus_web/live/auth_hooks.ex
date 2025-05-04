@@ -8,11 +8,17 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   alias EventasaurusApp.Auth
 
   @doc """
-  Hook for setting current_user assign for all LiveViews.
+  Hooks for LiveView authentication.
 
-  This should be used as an on_mount hook in LiveViews:
+  Two hooks are provided:
+  - `:assign_current_user`: Assigns the current user but doesn't enforce authentication
+  - `:require_authenticated_user`: Requires authentication or redirects to login page
+
+  Usage examples:
   ```
   on_mount {EventasaurusWeb.Live.AuthHooks, :assign_current_user}
+  # or
+  on_mount {EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}
   ```
   """
   def on_mount(:assign_current_user, _params, session, socket) do
@@ -20,14 +26,6 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     {:cont, socket}
   end
 
-  @doc """
-  Hook for requiring authentication in LiveViews.
-
-  This should be used as an on_mount hook in LiveViews that require auth:
-  ```
-  on_mount {EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}
-  ```
-  """
   def on_mount(:require_authenticated_user, _params, session, socket) do
     socket = assign_current_user(session, socket)
 
