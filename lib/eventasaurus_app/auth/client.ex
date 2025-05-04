@@ -4,6 +4,8 @@ defmodule EventasaurusApp.Auth.Client do
   This replaces the dependency on the supabase/gotrue/postgrestex packages.
   """
 
+  require Logger
+
   # Get Supabase configuration from application config
   def get_config do
     Application.get_env(:eventasaurus, :supabase)
@@ -22,7 +24,9 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   def get_auth_url do
-    "#{get_url()}/auth/v1"
+    auth_url = "#{get_url()}/auth/v1"
+    Logger.debug("Using Supabase auth URL: #{auth_url}")
+    auth_url
   end
 
   # Default HTTP request headers
@@ -71,6 +75,7 @@ defmodule EventasaurusApp.Auth.Client do
   """
   def sign_in(email, password) do
     url = "#{get_auth_url()}/token?grant_type=password"
+    Logger.debug("Authenticating user #{email} with URL: #{url}")
 
     body = Jason.encode!(%{
       email: email,
@@ -79,13 +84,21 @@ defmodule EventasaurusApp.Auth.Client do
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
-        {:ok, Jason.decode!(response_body)}
+        response = Jason.decode!(response_body)
+        Logger.debug("Authentication successful")
+        {:ok, response}
 
       {:ok, %{status_code: code, body: response_body}} ->
         error = Jason.decode!(response_body)
+        Logger.error("Authentication failed with status #{code}: #{inspect(error)}")
         {:error, %{status: code, message: error["message"] || "Authentication failed"}}
 
+      {:error, %HTTPoison.Error{reason: :nxdomain} = _error} ->
+        Logger.error("DNS resolution failed for Supabase URL: #{get_url()}")
+        {:error, %{status: 503, message: "Authentication service unavailable, DNS resolution failed"}}
+
       {:error, error} ->
+        Logger.error("Authentication request failed: #{inspect(error)}")
         {:error, error}
     end
   end
