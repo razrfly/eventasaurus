@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the login form.
   """
   def login(conn, _params) do
-    render(conn, :login)
+    render(conn, :login_template)
   end
 
   @doc """
@@ -36,7 +36,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
             Logger.error("Failed to store session: #{inspect(reason)}")
             conn
             |> put_flash(:error, "Error storing session data. Please contact support.")
-            |> render(:login)
+            |> render(:login_template)
         end
 
       {:error, reason} ->
@@ -50,7 +50,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
         conn
         |> put_flash(:error, error_message)
-        |> render(:login)
+        |> render(:login_template)
     end
   end
 
@@ -58,7 +58,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the registration form.
   """
   def register(conn, _params) do
-    render(conn, :register)
+    render(conn, :register_template)
   end
 
   @doc """
@@ -108,12 +108,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           conn
           |> put_flash(:error, error_message)
-          |> render(:register)
+          |> render(:register_template)
       end
     else
       conn
       |> put_flash(:error, "Passwords do not match. Please try again.")
-      |> render(:register)
+      |> render(:register_template)
     end
   end
 
@@ -142,7 +142,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the forgot password form.
   """
   def forgot_password(conn, _params) do
-    render(conn, :forgot_password)
+    render(conn, :forgot_password_template)
   end
 
   @doc """
@@ -166,7 +166,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the reset password form.
   """
   def reset_password(conn, %{"token" => token}) do
-    render(conn, :reset_password, token: token)
+    render(conn, :reset_password_template, token: token)
   end
 
   @doc """
@@ -183,12 +183,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
         {:error, _reason} ->
           conn
           |> put_flash(:error, "There was an error resetting your password. Please try again.")
-          |> render(:reset_password, token: token)
+          |> render(:reset_password_template, token: token)
       end
     else
       conn
       |> put_flash(:error, "Passwords do not match. Please try again.")
-      |> render(:reset_password, token: token)
+      |> render(:reset_password_template, token: token)
     end
   end
 
