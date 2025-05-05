@@ -19,6 +19,25 @@
             <img src="/images/logo.svg" alt="Eventasaurus Logo" class="h-8 w-auto" />
             <p class="text-xl font-bold">🦖 Eventasaurus</p>
           </a>
+          <%= if @conn.assigns[:current_user] do %>
+            <nav class="ml-6">
+              <ul class="flex items-center gap-6">
+                <li>
+                  <a href="/dashboard" class="text-sm font-medium hover:text-gray-300">
+                    Dashboard
+                  </a>
+                </li>
+                <li>
+                  <a 
+                    href="/events/new" 
+                    class="text-sm font-medium bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg"
+                  >
+                    Create Event
+                  </a>
+                </li>
+              </ul>
+            </nav>
+          <% end %>
         </div>
         <div class="flex items-center gap-4">
           <%= if @conn.assigns[:current_user] do %>
