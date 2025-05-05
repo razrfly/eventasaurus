@@ -11,28 +11,22 @@
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
     
-    <!-- Load Google Maps API early to ensure it's available -->
+    <!-- Load Google Maps API with environment variable -->
     <script>
-      window.loadGoogleMapsAPI = function() {
-        if (!window.googleMapsLoaded && !window.googleMapsLoading) {
-          window.googleMapsLoading = true;
-          console.log("Loading Google Maps API...");
-          var script = document.createElement('script');
-          script.src = "https://maps.googleapis.com/maps/api/js?key=<%= System.get_env("GOOGLE_MAPS_API_KEY") %>&libraries=places";
-          script.async = true;
-          script.onload = function() {
-            window.googleMapsLoaded = true;
-            window.googleMapsLoading = false;
-            console.log("Google Maps API loaded successfully");
-          };
-          document.head.appendChild(script);
-        }
-      };
+      console.log("Loading Google Maps API directly from root layout...");
       
-      // Load API if we're on the events page
-      if (window.location.pathname.includes("/events")) {
-        window.loadGoogleMapsAPI();
+      // This function will be called when the Maps API loads
+      function initGoogleMaps() {
+        console.log("Google Maps API loaded");
+        
+        // Call any initialization hooks
+        if (typeof window.initGooglePlaces === 'function') {
+          window.initGooglePlaces();
+        }
       }
+    </script>
+    <script async defer
+      src={"https://maps.googleapis.com/maps/api/js?key=#{System.get_env("GOOGLE_MAPS_API_KEY")}&libraries=places&v=weekly&callback=initGoogleMaps"}>
     </script>
   </head>
   <body class="bg-white antialiased">
