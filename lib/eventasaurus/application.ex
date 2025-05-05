@@ -28,6 +28,15 @@ defmodule Eventasaurus.Application do
     api_key = System.get_env("GOOGLE_MAPS_API_KEY")
     IO.puts("DEBUG - Google Maps API key loaded: #{if api_key, do: "YES", else: "NO"}")
 
+    # Debug Supabase connection
+    db_config = Application.get_env(:eventasaurus, EventasaurusApp.Repo)
+    IO.puts("DEBUG - Database Connection Info:")
+    IO.puts("  Hostname: #{db_config[:hostname]}")
+    IO.puts("  Port: #{db_config[:port]}")
+    IO.puts("  Database: #{db_config[:database]}")
+    IO.puts("  Username: #{db_config[:username]}")
+    IO.puts("DEBUG - Using Supabase PostgreSQL: #{db_config[:port] == 54322}")
+
     children = [
       EventasaurusWeb.Telemetry,
       # Start Ecto repository (used alongside Supabase)
