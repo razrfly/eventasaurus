@@ -65,16 +65,27 @@ defmodule EventasaurusWeb.EventLive.New do
     # Process venue data for the database
     event_params = process_venue_data(event_params, socket)
 
-    # Create the event
-    case Events.create_event_with_organizer(event_params, socket.assigns.current_user) do
-      {:ok, event} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Event created successfully")
-         |> redirect(to: ~p"/events/#{event.id}")}
+    # Get the user as an Accounts.User struct
+    case ensure_user_struct(socket.assigns.current_user) do
+      {:ok, user} ->
+        # Create the event with the user struct
+        case Events.create_event_with_organizer(event_params, user) do
+          {:ok, event} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Event created successfully")
+             |> redirect(to: ~p"/dashboard")}
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, changeset: changeset)}
+          {:error, changeset} ->
+            {:noreply, assign(socket, changeset: changeset)}
+        end
+
+      {:error, reason} ->
+        IO.puts("ERROR: Failed to get user struct: #{inspect(reason)}")
+        {:noreply,
+          socket
+          |> put_flash(:error, "Could not create event: User account issue")
+          |> assign(changeset: Events.change_event(%Event{}, event_params))}
     end
   end
 
@@ -259,4 +270,30 @@ defmodule EventasaurusWeb.EventLive.New do
         {:ok, venue}
     end
   end
+
+  # Ensure we have a proper User struct for the current user
+  defp ensure_user_struct(nil), do: {:error, :no_user}
+  defp ensure_user_struct(%EventasaurusApp.Accounts.User{} = user), do: {:ok, user}
+  defp ensure_user_struct(%{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata}) do
+    # Try to find existing user by Supabase ID
+    case EventasaurusApp.Accounts.get_user_by_supabase_id(supabase_id) do
+      %EventasaurusApp.Accounts.User{} = user ->
+        {:ok, user}
+      nil ->
+        # Create new user if not found
+        name = user_metadata["name"] || email |> String.split("@") |> hd()
+
+        user_params = %{
+          email: email,
+          name: name,
+          supabase_id: supabase_id
+        }
+
+        case EventasaurusApp.Accounts.create_user(user_params) do
+          {:ok, user} -> {:ok, user}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+  defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 end
