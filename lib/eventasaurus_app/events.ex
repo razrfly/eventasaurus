@@ -23,6 +23,16 @@ defmodule EventasaurusApp.Events do
   def get_event!(id), do: Repo.get!(Event, id) |> Repo.preload([:venue, :users])
 
   @doc """
+  Gets a single event.
+
+  Returns nil if the Event does not exist.
+  """
+  def get_event(id), do: Repo.get(Event, id) |> maybe_preload()
+
+  defp maybe_preload(nil), do: nil
+  defp maybe_preload(event), do: Repo.preload(event, [:venue, :users])
+
+  @doc """
   Gets a single event by slug.
 
   Returns nil if the Event does not exist.

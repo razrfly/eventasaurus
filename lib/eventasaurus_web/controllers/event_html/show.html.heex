@@ -1,0 +1,95 @@
+<.header>
+  <%= @event.title %>
+  <:subtitle>
+    <span class="text-gray-600">
+      <%= case @event.visibility do %>
+        <% :public -> %>Public Event
+        <% :private -> %>Private Event
+        <% _ -> %>
+      <% end %>
+    </span>
+  </:subtitle>
+  <:actions>
+    <.link navigate="/dashboard" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md">
+      Back to Dashboard
+    </.link>
+  </:actions>
+</.header>
+
+<div class="max-w-3xl mx-auto mt-8">
+  <div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <%= if @event.cover_image_url && @event.cover_image_url != "" do %>
+      <img src={@event.cover_image_url} alt={@event.title} class="w-full h-48 object-cover object-center" />
+    <% else %>
+      <div class="w-full h-48 bg-gray-300 flex items-center justify-center">
+        <p class="text-gray-600">No Cover Image</p>
+      </div>
+    <% end %>
+
+    <div class="p-6">
+      <%= if @event.tagline && @event.tagline != "" do %>
+        <p class="text-lg text-gray-600 mb-4 italic"><%= @event.tagline %></p>
+      <% end %>
+
+      <div class="mb-6">
+        <h2 class="text-xl font-bold mb-2">Event Details</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p class="font-semibold">When</p>
+            <p>
+              <%= format_datetime(@event.start_at) %>
+              <%= if @event.ends_at do %>
+                - <%= format_datetime(@event.ends_at) %>
+              <% end %>
+            </p>
+            <p class="text-sm text-gray-600"><%= @event.timezone %></p>
+          </div>
+
+          <div>
+            <p class="font-semibold">Where</p>
+            <%= if @event.is_virtual do %>
+              <p>Virtual Event</p>
+              <%= if @event.virtual_venue_url do %>
+                <a href={@event.virtual_venue_url} target="_blank" class="text-blue-600 hover:underline">
+                  Join Event
+                </a>
+              <% end %>
+            <% else %>
+              <%= if @event.venue do %>
+                <p><%= @event.venue.name %></p>
+                <p><%= @event.venue.address %></p>
+                <p>
+                  <%= @event.venue.city %>
+                  <%= if @event.venue.state && @event.venue.state != "", do: ", #{@event.venue.state}" %>
+                  <%= if @event.venue.country && @event.venue.country != "", do: ", #{@event.venue.country}" %>
+                </p>
+              <% else %>
+                <p>Location details not available</p>
+              <% end %>
+            <% end %>
+          </div>
+        </div>
+      </div>
+
+      <%= if @event.description && @event.description != "" do %>
+        <div class="mb-6">
+          <h2 class="text-xl font-bold mb-2">Description</h2>
+          <div class="prose max-w-none">
+            <%= @event.description %>
+          </div>
+        </div>
+      <% end %>
+
+      <div class="border-t pt-4 mt-4">
+        <h2 class="text-xl font-bold mb-2">Organizers</h2>
+        <div class="flex flex-wrap gap-2">
+          <%= for user <- @event.users do %>
+            <div class="bg-gray-100 px-3 py-1 rounded-full text-sm">
+              <%= user.name || user.email %>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div> 
