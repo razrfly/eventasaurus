@@ -13,20 +13,38 @@
     
     <!-- Load Google Maps API with environment variable -->
     <script>
-      console.log("Loading Google Maps API directly from root layout...");
+      console.log("Setting up Google Maps API loader...");
       
-      // This function will be called when the Maps API loads
+      // Track loading state
+      window.googleMapsLoaded = false;
+      
+      // Error handler
+      function handleGoogleMapsError() {
+        console.error("Failed to load Google Maps API. Check your API key and network connection.");
+        window.googleMapsLoaded = false;
+      }
+      
+      // Success handler
       function initGoogleMaps() {
-        console.log("Google Maps API loaded");
+        console.log("Google Maps API loaded successfully");
+        window.googleMapsLoaded = true;
         
         // Call any initialization hooks
         if (typeof window.initGooglePlaces === 'function') {
-          window.initGooglePlaces();
+          console.log("Initializing Google Places components...");
+          try {
+            window.initGooglePlaces();
+          } catch (e) {
+            console.error("Error initializing Google Places:", e);
+          }
         }
       }
     </script>
-    <script async defer
-      src={"https://maps.googleapis.com/maps/api/js?key=#{System.get_env("GOOGLE_MAPS_API_KEY")}&libraries=places&v=weekly&callback=initGoogleMaps"}>
+    
+    <% maps_api_key = System.get_env("GOOGLE_MAPS_API_KEY") |> String.trim() %>
+    <script async
+      src={"https://maps.googleapis.com/maps/api/js?key=#{maps_api_key}&libraries=places&v=weekly&callback=initGoogleMaps"}
+      onerror="handleGoogleMapsError()">
     </script>
   </head>
   <body class="bg-white antialiased">
