@@ -45,7 +45,7 @@ defmodule EventasaurusWeb.Router do
       pipe_through [:browser, :authenticated]
 
       # Add authenticated LiveView routes here
-      # live "/events/new", EventLive.New
+      live "/events/new", EventLive.New
       # live "/events/:id/edit", EventLive.Edit
     end
   end

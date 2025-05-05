@@ -1,0 +1,169 @@
+<.header>
+  Create New Event
+  <:subtitle>Create your event in a few simple steps</:subtitle>
+</.header>
+
+<div class="max-w-3xl mx-auto mb-8">
+  <!-- Progress Bar/Steps -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between">
+      <%= for {step, index} <- Enum.with_index(@steps) do %>
+        <% 
+          current_index = Enum.find_index(@steps, fn s -> s == @current_step end)
+          is_current = step == @current_step
+          is_completed = index < current_index
+          # Calculate step status for styling
+          step_status = cond do
+            is_current -> "current"
+            is_completed -> "completed"
+            true -> "upcoming"
+          end
+        %>
+        <div class="relative flex flex-col items-center">
+          <button 
+            phx-click={if step_status in ["current", "completed"], do: JS.push("go_to_step", value: %{step: step})}
+            class={[
+              "w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm",
+              step_status == "completed" && "bg-green-500 text-white cursor-pointer hover:bg-green-600",
+              step_status == "current" && "bg-blue-500 text-white ring-4 ring-blue-200",
+              step_status == "upcoming" && "bg-gray-200 text-gray-400 cursor-not-allowed"
+            ]}
+          >
+            <%= if step_status == "completed" do %>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            <% else %>
+              <%= index + 1 %>
+            <% end %>
+          </button>
+          <span class={[
+            "mt-2 text-xs font-medium",
+            step_status == "completed" && "text-green-500",
+            step_status == "current" && "text-blue-500",
+            step_status == "upcoming" && "text-gray-400"
+          ]}>
+            <%= Phoenix.Naming.humanize(step) %>
+          </span>
+          <%= if index < length(@steps) - 1 do %>
+            <div class={[
+              "absolute top-5 left-10 h-0.5 w-full -translate-y-1/2",
+              step_status == "completed" && "bg-green-500",
+              step_status == "current" && "bg-gray-200",
+              step_status == "upcoming" && "bg-gray-200"
+            ]} style="width: calc(100% - 2.5rem); left: 2.5rem;"></div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <.form :let={f} for={@changeset} phx-change="validate" phx-submit={if @current_step == :confirmation, do: "submit", else: "next_step"}>
+    <!-- Form Content -->
+    <div class="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200">
+      <%= case @current_step do %>
+        <% :basic_info -> %>
+          <div>
+            <h2 class="text-xl font-bold mb-4">Basic Information</h2>
+            <div class="space-y-4">
+              <.input field={f[:title]} type="text" label="Event Title" required />
+              <.input field={f[:tagline]} type="text" label="Tagline" />
+              <.input field={f[:description]} type="textarea" label="Description" />
+              <.input field={f[:visibility]} type="select" label="Visibility" options={[{"Public", "public"}, {"Private", "private"}]} />
+            </div>
+          </div>
+        <% :date_time -> %>
+          <div>
+            <h2 class="text-xl font-bold mb-4">Date & Time</h2>
+            <div class="space-y-4">
+              <.input field={f[:start_at]} type="datetime-local" label="Start Date & Time" required />
+              <.input field={f[:ends_at]} type="datetime-local" label="End Date & Time" />
+              <.input field={f[:timezone]} type="select" label="Timezone" options={[
+                {"Pacific Time (PT)", "America/Los_Angeles"},
+                {"Mountain Time (MT)", "America/Denver"},
+                {"Central Time (CT)", "America/Chicago"},
+                {"Eastern Time (ET)", "America/New_York"},
+                {"UTC", "UTC"}
+              ]} />
+            </div>
+          </div>
+        <% :venue -> %>
+          <div>
+            <h2 class="text-xl font-bold mb-4">Venue</h2>
+            <div class="space-y-4">
+              <.input field={f[:venue_id]} type="select" label="Select Venue" options={Enum.map(@venues, fn venue -> {venue.name, venue.id} end)} prompt="Select a venue..." />
+              <div class="mt-4">
+                <p class="text-sm text-gray-600">Don't see your venue? <a href="#" class="text-blue-500 hover:underline">Create a new venue</a></p>
+              </div>
+            </div>
+          </div>
+        <% :details -> %>
+          <div>
+            <h2 class="text-xl font-bold mb-4">Details</h2>
+            <div class="space-y-4">
+              <.input field={f[:cover_image_url]} type="text" label="Cover Image URL" />
+              <.input field={f[:slug]} type="text" label="Event URL Slug" />
+              <p class="text-xs text-gray-500 mt-2">The slug will be used in your event URL. If left empty, it will be generated from the title.</p>
+            </div>
+          </div>
+        <% :confirmation -> %>
+          <div>
+            <h2 class="text-xl font-bold mb-4">Confirmation</h2>
+            <div class="space-y-4">
+              <p class="text-sm text-gray-600">Please review your event details before submitting.</p>
+              
+              <div class="border border-gray-200 rounded-md p-4 mb-4">
+                <h3 class="font-semibold mb-2">Basic Info</h3>
+                <p><strong>Title:</strong> <%= @form_data["title"] %></p>
+                <p><strong>Tagline:</strong> <%= @form_data["tagline"] %></p>
+                <p><strong>Visibility:</strong> <%= @form_data["visibility"] %></p>
+              </div>
+              
+              <div class="border border-gray-200 rounded-md p-4 mb-4">
+                <h3 class="font-semibold mb-2">Date & Time</h3>
+                <p><strong>Start:</strong> <%= @form_data["start_at"] %></p>
+                <p><strong>End:</strong> <%= @form_data["ends_at"] %></p>
+                <p><strong>Timezone:</strong> <%= @form_data["timezone"] %></p>
+              </div>
+              
+              <div class="border border-gray-200 rounded-md p-4">
+                <h3 class="font-semibold mb-2">Other Details</h3>
+                <p><strong>URL Slug:</strong> <%= @form_data["slug"] %></p>
+                <p><strong>Venue:</strong> <%= if venue = Enum.find(@venues, & &1.id == @form_data["venue_id"]), do: venue.name, else: "No venue selected" %></p>
+              </div>
+            </div>
+          </div>
+      <% end %>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="flex justify-between items-center">
+      <%= if @current_step != List.first(@steps) do %>
+        <button type="button" phx-click="prev_step" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Previous
+        </button>
+      <% else %>
+        <div></div> <!-- Spacer -->
+      <% end %>
+
+      <%= if @current_step == List.last(@steps) do %>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          Create Event
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+        </button>
+      <% else %>
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          Next
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      <% end %>
+    </div>
+  </.form>
+</div> 
