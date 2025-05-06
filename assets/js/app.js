@@ -7,6 +7,241 @@ import topbar from "../vendor/topbar";
 // Define LiveView hooks here
 let Hooks = {};
 
+// Input Sync Hook to ensure hidden fields stay in sync with LiveView state
+Hooks.InputSync = {
+  mounted() {
+    // This ensures the hidden input values are updated when the form is submitted
+    this.handleEvent("sync_inputs", ({ values }) => {
+      if (values && values[this.el.id]) {
+        this.el.value = values[this.el.id];
+      }
+    });
+  }
+};
+
+// Google Places Autocomplete Hook
+Hooks.GooglePlacesAutocomplete = {
+  mounted() {
+    console.log("GooglePlacesAutocomplete hook mounted");
+    this.inputEl = this.el;
+    this.mounted = true;
+    
+    // Check if Google Maps API is loaded and ready
+    if (window.google && google.maps && google.maps.places) {
+      console.log("Google Maps already loaded, initializing now");
+      setTimeout(() => this.initClassicAutocomplete(), 100); // Use classic API only for now
+    } else {
+      console.log("Google Maps not yet loaded, will initialize when ready");
+      // Add a global callback for when Google Maps loads
+      window.initGooglePlaces = () => {
+        if (this.mounted) {
+          setTimeout(() => this.initClassicAutocomplete(), 100);
+        }
+      };
+    }
+  },
+  
+  destroyed() {
+    // Mark as unmounted to prevent async operations after component is gone
+    this.mounted = false;
+    console.log("GooglePlacesAutocomplete hook destroyed");
+  },
+  
+  // Legacy approach using classic Autocomplete - but it works reliably
+  initClassicAutocomplete() {
+    if (!this.mounted) return;
+    
+    try {
+      console.log("Initializing classic Autocomplete API");
+      
+      // Create the autocomplete object
+      const options = {
+        types: ['establishment', 'geocode']
+      };
+      
+      const autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+      
+      // When a place is selected
+      autocomplete.addListener('place_changed', () => {
+        if (!this.mounted) return;
+        
+        console.group("Place selection process");
+        const place = autocomplete.getPlace();
+        console.log("Place selected:", place);
+        
+        if (!place.geometry) {
+          console.error("No place geometry received");
+          console.groupEnd();
+          return;
+        }
+        
+        // Get place details
+        const venueName = place.name || '';
+        const venueAddress = place.formatted_address || '';
+        let city = '', state = '', country = '';
+        
+        // Get address components
+        if (place.address_components) {
+          console.log("Processing address components:", place.address_components);
+          for (const component of place.address_components) {
+            if (component.types.includes('locality')) {
+              city = component.long_name;
+              console.log(`Found city: ${city}`);
+            } else if (component.types.includes('administrative_area_level_1')) {
+              state = component.long_name;
+              console.log(`Found state: ${state}`);
+            } else if (component.types.includes('country')) {
+              country = component.long_name;
+              console.log(`Found country: ${country}`);
+            }
+          }
+        }
+        
+        // Get coordinates
+        let lat = null, lng = null;
+        if (place.geometry && place.geometry.location) {
+          lat = place.geometry.location.lat();
+          lng = place.geometry.location.lng();
+          console.log(`Coordinates: ${lat}, ${lng}`);
+        }
+        
+        // Map field IDs to expected form data keys
+        const fieldMappings = {
+          'venue_name': venueName,
+          'venue_address': venueAddress,
+          'venue_city': city,
+          'venue_state': state,
+          'venue_country': country,
+          'venue_latitude': lat,
+          'venue_longitude': lng
+        };
+        
+        // Direct DOM updates for each field
+        console.log("Updating DOM fields...");
+        Object.entries(fieldMappings).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            this.directUpdateField(key, value);
+          }
+        });
+        
+        // Prepare data for LiveView
+        const venueData = {
+          name: venueName,
+          address: venueAddress,
+          city: city,
+          state: state,
+          country: country,
+          latitude: lat,
+          longitude: lng
+        };
+        
+        // Send to LiveView
+        console.log("Pushing venue data to LiveView:", venueData);
+        this.pushEvent('venue_selected', venueData);
+        
+        // Log all form fields for debugging
+        this.logFormFieldValues();
+        console.groupEnd();
+      });
+      
+      console.log("Classic Autocomplete initialized");
+    } catch (error) {
+      console.error("Error in Autocomplete initialization:", error);
+    }
+  },
+  
+  // Direct DOM update to ensure form fields are updated
+  directUpdateField(id, value) {
+    if (!this.mounted) return;
+    
+    console.group(`Updating field ${id}`);
+    
+    // Look for the element using direct ID
+    let field = document.getElementById(id);
+    console.log(`Field by ID ${id}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    
+    // If not found, try with venue_ instead of venue-
+    if (!field) {
+      const altId = id.replace('venue-', 'venue_');
+      field = document.getElementById(altId);
+      console.log(`Field by ID ${altId}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
+    
+    // If still not found, try the event[] prefixed version (for Phoenix forms)
+    if (!field) {
+      const selector = `[name="event[${id.replace('venue-', 'venue_')}]"]`;
+      field = document.querySelector(selector);
+      console.log(`Field by selector ${selector}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
+    
+    if (field) {
+      // Set the value directly
+      const oldValue = field.value;
+      field.value = value || '';
+      
+      // Log the update
+      console.log(`Updated value: "${oldValue}" -> "${value}"`);
+      
+      // Trigger input and change events to ensure form controllers detect the change
+      field.dispatchEvent(new Event('input', {bubbles: true}));
+      field.dispatchEvent(new Event('change', {bubbles: true}));
+      console.log("Events dispatched: input, change");
+    } else {
+      console.error(`Field ${id} not found in DOM`);
+    }
+    
+    console.groupEnd();
+  },
+  
+  // Debug helper to log all form field values
+  logFormFieldValues() {
+    console.group("Current form field values:");
+    
+    // Check all possible field name combinations
+    const fieldKeys = [
+      'venue_name', 'venue_address', 'venue_city', 'venue_state', 
+      'venue_country', 'venue_latitude', 'venue_longitude'
+    ];
+    
+    fieldKeys.forEach(key => {
+      // Check direct field ID
+      let val = null;
+      let foundElement = null;
+      
+      // Try by ID first
+      const directEl = document.getElementById(key);
+      if (directEl) {
+        foundElement = directEl;
+        val = directEl.value;
+      } 
+      
+      // Try with dashes instead of underscores
+      if (!foundElement) {
+        const dashKey = key.replace('_', '-');
+        const dashEl = document.getElementById(dashKey);
+        if (dashEl) {
+          foundElement = dashEl;
+          val = dashEl.value;
+        }
+      }
+      
+      // Try the event[] prefixed version
+      if (!foundElement) {
+        const selector = `[name="event[${key}]"]`;
+        const formEl = document.querySelector(selector);
+        if (formEl) {
+          foundElement = formEl;
+          val = formEl.value;
+        }
+      }
+      
+      console.log(`${key}: ${val !== null ? val : 'FIELD NOT FOUND'} ${foundElement ? '(✓)' : '(✗)'}`);
+    });
+    
+    console.groupEnd();
+  }
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {

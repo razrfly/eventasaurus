@@ -67,4 +67,13 @@ defmodule EventasaurusApp.Venues do
     from(v in Venue, where: ilike(v.name, ^"%#{name}%"))
     |> Repo.all()
   end
+
+  @doc """
+  Finds a venue by address.
+  Returns nil if no venue with the given address exists.
+  """
+  def find_venue_by_address(address) when is_binary(address) do
+    Repo.get_by(Venue, address: address)
+  end
+  def find_venue_by_address(_), do: nil
 end
