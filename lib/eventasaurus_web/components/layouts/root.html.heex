@@ -10,6 +10,42 @@
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
+    
+    <!-- Load Google Maps API with environment variable -->
+    <script>
+      console.log("Setting up Google Maps API loader...");
+      
+      // Track loading state
+      window.googleMapsLoaded = false;
+      
+      // Error handler
+      function handleGoogleMapsError() {
+        console.error("Failed to load Google Maps API. Check your API key and network connection.");
+        window.googleMapsLoaded = false;
+      }
+      
+      // Success handler
+      function initGoogleMaps() {
+        console.log("Google Maps API loaded successfully");
+        window.googleMapsLoaded = true;
+        
+        // Call any initialization hooks
+        if (typeof window.initGooglePlaces === 'function') {
+          console.log("Initializing Google Places components...");
+          try {
+            window.initGooglePlaces();
+          } catch (e) {
+            console.error("Error initializing Google Places:", e);
+          }
+        }
+      }
+    </script>
+    
+    <% maps_api_key = System.get_env("GOOGLE_MAPS_API_KEY") |> String.trim() %>
+    <script async defer
+      src={"https://maps.googleapis.com/maps/api/js?key=#{maps_api_key}&libraries=places&v=weekly&callback=initGoogleMaps"}
+      onerror="handleGoogleMapsError()">
+    </script>
   </head>
   <body class="bg-white antialiased">
     <header class="px-4 sm:px-6 lg:px-8 bg-gray-800 text-white">
