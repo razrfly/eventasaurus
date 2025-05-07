@@ -14,10 +14,60 @@
     
     <div class="mt-8">
       <h2 class="text-xl font-semibold mb-4">Your Events</h2>
-      <p class="text-gray-500">No events created yet. Start by creating your first event!</p>
-      
+      <%= if Enum.empty?(@upcoming_events) and Enum.empty?(@past_events) do %>
+        <p class="text-gray-500">No events created yet. Start by creating your first event!</p>
+      <% else %>
+        <%= if length(@upcoming_events) > 0 do %>
+          <h3 class="text-lg font-bold mt-6 mb-2">Upcoming Events</h3>
+          <.table id="upcoming-events" rows={@upcoming_events}>
+            <:col :let={event} label="Title">
+              <a href={"/events/" <> to_string(event.id)} class="text-blue-600 hover:underline">
+                <%= event.title %>
+              </a>
+            </:col>
+            <:col :let={event} label="Date & Time">
+              <%= EventasaurusWeb.EventHTML.format_datetime(event.start_at) %>
+              <%= if event.ends_at do %>
+                - <%= EventasaurusWeb.EventHTML.format_datetime(event.ends_at) %>
+              <% end %>
+              <span class="block text-xs text-gray-500"><%= event.timezone %></span>
+            </:col>
+            <:col :let={event} label="Venue">
+              <%= if event.venue_id == nil do %>
+                Virtual
+              <% else %>
+                <%= if event.venue, do: event.venue.name, else: "-" %>
+              <% end %>
+            </:col>
+          </.table>
+        <% end %>
+        <%= if length(@past_events) > 0 do %>
+          <h3 class="text-lg font-bold mt-8 mb-2">Past Events</h3>
+          <.table id="past-events" rows={@past_events}>
+            <:col :let={event} label="Title">
+              <a href={"/events/" <> to_string(event.id)} class="text-blue-600 hover:underline">
+                <%= event.title %>
+              </a>
+            </:col>
+            <:col :let={event} label="Date & Time">
+              <%= EventasaurusWeb.EventHTML.format_datetime(event.start_at) %>
+              <%= if event.ends_at do %>
+                - <%= EventasaurusWeb.EventHTML.format_datetime(event.ends_at) %>
+              <% end %>
+              <span class="block text-xs text-gray-500"><%= event.timezone %></span>
+            </:col>
+            <:col :let={event} label="Venue">
+              <%= if event.venue_id == nil do %>
+                Virtual
+              <% else %>
+                <%= if event.venue, do: event.venue.name, else: "-" %>
+              <% end %>
+            </:col>
+          </.table>
+        <% end %>
+      <% end %>
       <div class="mt-4">
-        <a href="#" class="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+        <a href="/events/new" class="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
           Create New Event
         </a>
       </div>
