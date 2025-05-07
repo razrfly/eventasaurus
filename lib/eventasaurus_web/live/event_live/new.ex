@@ -1,5 +1,8 @@
 defmodule EventasaurusWeb.EventLive.New do
   use EventasaurusWeb, :live_view
+
+  import EventasaurusWeb.EventComponents
+
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
