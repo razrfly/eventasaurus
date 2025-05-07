@@ -52,6 +52,7 @@ defmodule Eventasaurus.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:plug_cowboy, "~> 2.5"},
       {:heroicons, "~> 0.5.6"},
+      {:nanoid, "~> 2.1.0"},
 
       # HTTP client for API calls (used for Supabase integration)
       {:httpoison, "~> 2.0"},
