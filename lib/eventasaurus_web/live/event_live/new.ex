@@ -51,6 +51,9 @@ defmodule EventasaurusWeb.EventLive.New do
     IO.puts("\n======================== SUBMIT EVENT ========================")
     IO.inspect(event_params, label: "DEBUG - Submit event_params")
 
+    # Combine date and time fields if needed
+    event_params = combine_date_time_fields(event_params)
+
     # Include venue data from form_data as a fallback
     venue_data = %{
       "venue_name" => Map.get(socket.assigns.form_data, "venue_name", ""),
@@ -86,6 +89,8 @@ defmodule EventasaurusWeb.EventLive.New do
              |> redirect(to: ~p"/dashboard")}
 
           {:error, changeset} ->
+            IO.puts("DEBUG - Event creation error:")
+            IO.inspect(changeset.errors, label: "Validation errors")
             {:noreply, assign(socket, changeset: changeset)}
         end
 
@@ -305,4 +310,23 @@ defmodule EventasaurusWeb.EventLive.New do
     end
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
+
+  # Helper function to combine date and time fields
+  defp combine_date_time_fields(params) do
+    # Combine start date and time if start_at is empty
+    params = if params["start_at"] == "" && params["start_date"] && params["start_time"] do
+      Map.put(params, "start_at", "#{params["start_date"]}T#{params["start_time"]}:00")
+    else
+      params
+    end
+
+    # Combine end date and time if ends_at is empty
+    params = if params["ends_at"] == "" && params["ends_date"] && params["ends_time"] do
+      Map.put(params, "ends_at", "#{params["ends_date"]}T#{params["ends_time"]}:00")
+    else
+      params
+    end
+
+    params
+  end
 end
