@@ -34,6 +34,7 @@ defmodule EventasaurusWeb.Router do
 
       # Add authenticated LiveView routes here
       live "/events/new", EventLive.New
+      live "/events/:slug/edit", EventLive.Edit
       # live "/events/:id/edit", EventLive.Edit
     end
   end
