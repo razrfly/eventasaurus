@@ -19,6 +19,179 @@ Hooks.InputSync = {
   }
 };
 
+// Time Options Hook - Handles the time dropdown and combining date/time values
+Hooks.TimeOptionsHook = {
+  mounted() {
+    console.log("TimeOptionsHook mounted");
+    
+    // Get references to all related fields
+    this.startTimeSelect = document.getElementById("event_start_time");
+    this.endTimeSelect = document.getElementById("event_ends_time");
+    this.startDateInput = document.getElementById("event_start_date");
+    this.endDateInput = document.getElementById("event_ends_date");
+    this.startAtHidden = document.getElementById("event_start_at");
+    this.endsAtHidden = document.getElementById("event_ends_at");
+    
+    // Set current time as default (rounded to nearest 30 min)
+    this.setDefaultTime();
+    
+    // Add event listeners for form submission
+    const form = this.el.closest("form");
+    if (form) {
+      form.addEventListener("submit", this.handleSubmit.bind(this));
+    }
+    
+    // Add event listeners for date/time changes
+    if (this.startDateInput) {
+      this.startDateInput.addEventListener("change", (e) => {
+        // When start date changes, update end date to match
+        if (this.endDateInput) {
+          this.endDateInput.value = e.target.value;
+        }
+        this.updateCombinedDateTime();
+      });
+    }
+    
+    if (this.startTimeSelect) {
+      this.startTimeSelect.addEventListener("change", (e) => {
+        // When start time changes, update end time to be 1 hour later
+        if (this.endTimeSelect) {
+          const selectedTime = e.target.value;
+          if (selectedTime) {
+            const [hours, minutes] = selectedTime.split(':').map(Number);
+            // Add 1 hour
+            const endHours = (hours + 1) % 24;
+            const endTimeValue = `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+            this.endTimeSelect.value = endTimeValue;
+          }
+        }
+        this.updateCombinedDateTime();
+      });
+    }
+    
+    if (this.endDateInput) {
+      this.endDateInput.addEventListener("change", this.updateCombinedDateTime.bind(this));
+    }
+    
+    if (this.endTimeSelect) {
+      this.endTimeSelect.addEventListener("change", this.updateCombinedDateTime.bind(this));
+    }
+    
+    // Set initial values if editing an existing event
+    this.initializeFromExistingValues();
+  },
+  
+  setDefaultTime() {
+    if (!this.startTimeSelect) return;
+    
+    // Get current time
+    const now = new Date();
+    
+    // Round to nearest 30 minutes
+    const minutes = now.getMinutes();
+    const roundedMinutes = minutes < 30 ? 30 : 0;
+    const hours = minutes < 30 ? now.getHours() : (now.getHours() + 1) % 24;
+    
+    // Format the time value (HH:MM)
+    const timeValue = `${hours.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+    
+    // Set the selected time
+    this.startTimeSelect.value = timeValue;
+    
+    // Default end time to 1 hour after start time
+    if (this.endTimeSelect) {
+      const endHours = (hours + 1) % 24;
+      const endTimeValue = `${endHours.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+      this.endTimeSelect.value = endTimeValue;
+    }
+    
+    // Set end date to same as start date initially
+    if (this.startDateInput && this.startDateInput.value && this.endDateInput) {
+      this.endDateInput.value = this.startDateInput.value;
+    }
+    
+    // Update combined datetime fields
+    this.updateCombinedDateTime();
+  },
+  
+  handleSubmit(event) {
+    // Combine date and time fields
+    this.updateCombinedDateTime();
+  },
+  
+  updateCombinedDateTime() {
+    // Combine start date and time
+    if (this.startDateInput && this.startDateInput.value && 
+        this.startTimeSelect && this.startTimeSelect.value && 
+        this.startAtHidden) {
+      const startDate = this.startDateInput.value;
+      const startTime = this.startTimeSelect.value;
+      const startDateTime = `${startDate}T${startTime}`;
+      this.startAtHidden.value = startDateTime;
+    }
+    
+    // Combine end date and time
+    if (this.endDateInput && this.endDateInput.value && 
+        this.endTimeSelect && this.endTimeSelect.value && 
+        this.endsAtHidden) {
+      const endDate = this.endDateInput.value;
+      const endTime = this.endTimeSelect.value;
+      const endDateTime = `${endDate}T${endTime}`;
+      this.endsAtHidden.value = endDateTime;
+    }
+  },
+  
+  initializeFromExistingValues() {
+    // Check if we're editing an existing event
+    const initialStartAt = document.querySelector('input[name="event[start_at]"][value]');
+    const initialEndsAt = document.querySelector('input[name="event[ends_at]"][value]');
+    
+    if (initialStartAt && initialStartAt.value) {
+      // Parse the datetime and populate date and time fields
+      const startDateTime = new Date(initialStartAt.value);
+      if (!isNaN(startDateTime.getTime()) && this.startDateInput && this.startTimeSelect) {
+        // Format date as YYYY-MM-DD
+        const startDate = startDateTime.toISOString().split('T')[0];
+        this.startDateInput.value = startDate;
+        
+        // Format time as HH:MM
+        const hours = startDateTime.getHours().toString().padStart(2, '0');
+        const minutes = startDateTime.getMinutes().toString().padStart(2, '0');
+        this.startTimeSelect.value = `${hours}:${minutes}`;
+      }
+    }
+    
+    if (initialEndsAt && initialEndsAt.value) {
+      // Parse the datetime and populate date and time fields
+      const endsDateTime = new Date(initialEndsAt.value);
+      if (!isNaN(endsDateTime.getTime()) && this.endDateInput && this.endTimeSelect) {
+        // Format date as YYYY-MM-DD
+        const endDate = endsDateTime.toISOString().split('T')[0];
+        this.endDateInput.value = endDate;
+        
+        // Format time as HH:MM
+        const hours = endsDateTime.getHours().toString().padStart(2, '0');
+        const minutes = endsDateTime.getMinutes().toString().padStart(2, '0');
+        this.endTimeSelect.value = `${hours}:${minutes}`;
+      }
+    } else if (this.startDateInput && this.startDateInput.value && this.endDateInput) {
+      // If no end date/time, set end date to match start date
+      this.endDateInput.value = this.startDateInput.value;
+      
+      // And set end time to an hour after start time if possible
+      if (this.startTimeSelect && this.startTimeSelect.value && this.endTimeSelect) {
+        const [hours, minutes] = this.startTimeSelect.value.split(':').map(Number);
+        const endHours = (hours + 1) % 24;
+        const endTimeValue = `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        this.endTimeSelect.value = endTimeValue;
+      }
+    }
+    
+    // Update the combined fields
+    this.updateCombinedDateTime();
+  }
+};
+
 // Google Places Autocomplete Hook
 Hooks.GooglePlacesAutocomplete = {
   mounted() {
