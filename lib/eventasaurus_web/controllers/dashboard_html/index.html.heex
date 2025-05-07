@@ -21,7 +21,7 @@
           <h3 class="text-lg font-bold mt-6 mb-2">Upcoming Events</h3>
           <.table id="upcoming-events" rows={@upcoming_events}>
             <:col :let={event} label="Title">
-              <a href={"/events/" <> to_string(event.id)} class="text-blue-600 hover:underline">
+              <a href={"/events/" <> event.slug} class="text-blue-600 hover:underline">
                 <%= event.title %>
               </a>
             </:col>
@@ -45,7 +45,7 @@
           <h3 class="text-lg font-bold mt-8 mb-2">Past Events</h3>
           <.table id="past-events" rows={@past_events}>
             <:col :let={event} label="Title">
-              <a href={"/events/" <> to_string(event.id)} class="text-blue-600 hover:underline">
+              <a href={"/events/" <> event.slug} class="text-blue-600 hover:underline">
                 <%= event.title %>
               </a>
             </:col>

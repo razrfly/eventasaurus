@@ -10,9 +10,20 @@
     </span>
   </:subtitle>
   <:actions>
-    <.link navigate="/dashboard" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md">
-      Back to Dashboard
-    </.link>
+    <div class="flex space-x-2">
+      <.link navigate="/dashboard" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md">
+        Back to Dashboard
+      </.link>
+      
+      <%= if @conn.assigns[:current_user] && EventasaurusApp.Events.user_is_organizer?(@event, @conn.assigns.current_user) do %>
+        <.form for={%{}} action={"/events/#{@event.slug}"} method="post" data-confirm="Are you sure you want to delete this event? This cannot be undone.">
+          <input type="hidden" name="_method" value="delete">
+          <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md">
+            Delete Event
+          </button>
+        </.form>
+      <% end %>
+    </div>
   </:actions>
 </.header>
 
