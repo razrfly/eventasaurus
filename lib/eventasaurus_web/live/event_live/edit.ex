@@ -1,7 +1,9 @@
 defmodule EventasaurusWeb.EventLive.Edit do
   use EventasaurusWeb, :live_view
+
+  import EventasaurusWeb.EventComponents
+
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Venues
 
   @impl true
@@ -19,7 +21,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
           {:ok, user} ->
             # Check if user is an organizer of this event
             if Events.user_is_organizer?(event, user) do
-              # Create form_data from event
+              changeset = Events.change_event(event)
+
+              socket =
+                socket
+                |> assign(:event, event)
+                |> assign(:changeset, changeset)
+                |> assign(:venues, Venues.list_venues())
+                |> assign(:is_virtual, event.venue_id == nil)
+                |> assign(:selected_venue_name, if(event.venue, do: event.venue.name, else: nil))
+                |> assign(:selected_venue_address, if(event.venue, do: event.venue.address, else: nil))
+
+              # Create form_data from event with separated date and time
               form_data = %{
                 "title" => event.title,
                 "tagline" => event.tagline,
@@ -29,68 +42,53 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "timezone" => event.timezone,
                 "visibility" => Atom.to_string(event.visibility),
                 "cover_image_url" => event.cover_image_url,
-                "is_virtual" => event.venue_id == nil
+                "is_virtual" => event.venue_id == nil,
+                "virtual_venue_url" => event.virtual_venue_url
               }
 
-              # Extract date and time components for the separate fields
-              form_data = if event.start_at do
-                date = event.start_at |> DateTime.to_date() |> Date.to_iso8601()
-                time = event.start_at
-                      |> DateTime.to_time()
-                      |> Time.to_iso8601()
-                      |> String.slice(0, 5)  # Get HH:MM format
+              # Add venue data if available
+              form_data =
+                if event.venue do
+                  Map.merge(form_data, %{
+                    "venue_name" => event.venue.name,
+                    "venue_address" => event.venue.address,
+                    "venue_city" => event.venue.city,
+                    "venue_state" => event.venue.state,
+                    "venue_country" => event.venue.country,
+                    "venue_latitude" => event.venue.latitude,
+                    "venue_longitude" => event.venue.longitude
+                  })
+                else
+                  form_data
+                end
 
-                form_data
-                |> Map.put("start_date", date)
-                |> Map.put("start_time", time)
-              else
-                form_data
-              end
+                # Extract date and time components for the separate fields
+                form_data =
+                  cond do
+                    event.start_at && event.ends_at ->
+                      start_date = event.start_at |> DateTime.to_date() |> Date.to_iso8601()
+                      start_time = event.start_at |> DateTime.to_time() |> Time.to_iso8601(:extended) |> String.slice(0, 5)
 
-              # Extract end date and time if present
-              form_data = if event.ends_at do
-                date = event.ends_at |> DateTime.to_date() |> Date.to_iso8601()
-                time = event.ends_at
-                      |> DateTime.to_time()
-                      |> Time.to_iso8601()
-                      |> String.slice(0, 5)  # Get HH:MM format
+                      ends_date = event.ends_at |> DateTime.to_date() |> Date.to_iso8601()
+                      ends_time = event.ends_at |> DateTime.to_time() |> Time.to_iso8601(:extended) |> String.slice(0, 5)
 
-                form_data
-                |> Map.put("ends_date", date)
-                |> Map.put("ends_time", time)
-              else
-                form_data
-              end
+                      Map.merge(form_data, %{
+                        "start_date" => start_date,
+                        "start_time" => start_time,
+                        "ends_date" => ends_date,
+                        "ends_time" => ends_time
+                      })
 
-              # Include venue info if there's a venue
-              form_data = if event.venue do
-                venue = event.venue
-                form_data
-                |> Map.put("venue_id", venue.id)
-                |> Map.put("venue_name", venue.name)
-                |> Map.put("venue_address", venue.address)
-                |> Map.put("venue_city", venue.city)
-                |> Map.put("venue_state", venue.state)
-                |> Map.put("venue_country", venue.country)
-                |> Map.put("venue_latitude", venue.latitude)
-                |> Map.put("venue_longitude", venue.longitude)
-              else
-                form_data
-              end
+                    true ->
+                      # Default to today for dates if no dates are set
+                      today = Date.utc_today() |> Date.to_iso8601()
+                      Map.merge(form_data, %{
+                        "start_date" => today,
+                        "ends_date" => today
+                      })
+                  end
 
-              changeset = Events.change_event(event)
-
-              socket =
-                socket
-                |> assign(:event, event)
-                |> assign(:changeset, changeset)
-                |> assign(:form_data, form_data)
-                |> assign(:is_virtual, event.venue_id == nil)
-                |> assign(:selected_venue_name, if(event.venue, do: event.venue.name, else: nil))
-                |> assign(:selected_venue_address, if(event.venue, do: event.venue.address, else: nil))
-                |> assign(:venues, Venues.list_venues())
-
-              {:ok, socket}
+              {:ok, assign(socket, :form_data, form_data)}
             else
               {:ok,
                 socket
@@ -343,11 +341,11 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # Ensure we have a proper User struct for the current user
   defp ensure_user_struct(nil), do: {:error, :no_user}
-  defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
+  defp ensure_user_struct(%EventasaurusApp.Accounts.User{} = user), do: {:ok, user}
   defp ensure_user_struct(%{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata}) do
     # Try to find existing user by Supabase ID
-    case Accounts.get_user_by_supabase_id(supabase_id) do
-      %Accounts.User{} = user ->
+    case EventasaurusApp.Accounts.get_user_by_supabase_id(supabase_id) do
+      %EventasaurusApp.Accounts.User{} = user ->
         {:ok, user}
       nil ->
         # Create new user if not found
@@ -359,7 +357,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
           supabase_id: supabase_id
         }
 
-        case Accounts.create_user(user_params) do
+        case EventasaurusApp.Accounts.create_user(user_params) do
           {:ok, user} -> {:ok, user}
           {:error, reason} -> {:error, reason}
         end
