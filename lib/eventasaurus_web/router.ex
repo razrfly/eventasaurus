@@ -47,7 +47,7 @@ defmodule EventasaurusWeb.Router do
       get "/", PageController, :home
       # Add public LiveView routes here
       # live "/events/:slug", EventLive.Show
-      get "/events/:id", EventController, :show
+      get "/events/:slug", EventController, :show
     end
   end
 
@@ -75,6 +75,7 @@ defmodule EventasaurusWeb.Router do
 
     get "/logout", Auth.AuthController, :logout
     get "/dashboard", DashboardController, :index
+    delete "/events/:slug", EventController, :delete
     # Add other authenticated controller routes here
     # resources "/venues", VenueController
   end
