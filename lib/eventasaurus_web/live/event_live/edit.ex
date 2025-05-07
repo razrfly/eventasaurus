@@ -32,6 +32,36 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "is_virtual" => event.venue_id == nil
               }
 
+              # Extract date and time components for the separate fields
+              form_data = if event.start_at do
+                date = event.start_at |> DateTime.to_date() |> Date.to_iso8601()
+                time = event.start_at
+                      |> DateTime.to_time()
+                      |> Time.to_iso8601()
+                      |> String.slice(0, 5)  # Get HH:MM format
+
+                form_data
+                |> Map.put("start_date", date)
+                |> Map.put("start_time", time)
+              else
+                form_data
+              end
+
+              # Extract end date and time if present
+              form_data = if event.ends_at do
+                date = event.ends_at |> DateTime.to_date() |> Date.to_iso8601()
+                time = event.ends_at
+                      |> DateTime.to_time()
+                      |> Time.to_iso8601()
+                      |> String.slice(0, 5)  # Get HH:MM format
+
+                form_data
+                |> Map.put("ends_date", date)
+                |> Map.put("ends_time", time)
+              else
+                form_data
+              end
+
               # Include venue info if there's a venue
               form_data = if event.venue do
                 venue = event.venue

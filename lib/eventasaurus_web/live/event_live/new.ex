@@ -8,10 +8,16 @@ defmodule EventasaurusWeb.EventLive.New do
   def mount(_params, _session, socket) do
     changeset = Events.change_event(%Event{})
 
+    # Get current date in YYYY-MM-DD format
+    today = Date.utc_today() |> Date.to_iso8601()
+
     socket =
       socket
       |> assign(:changeset, changeset)
-      |> assign(:form_data, %{})
+      |> assign(:form_data, %{
+        "start_date" => today,
+        "ends_date" => today
+      })
       |> assign(:is_virtual, false)
       |> assign(:selected_venue_name, nil)
       |> assign(:selected_venue_address, nil)
