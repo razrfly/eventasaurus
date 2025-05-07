@@ -1,6 +1,7 @@
 defmodule EventasaurusApp.Events.Event do
   use Ecto.Schema
   import Ecto.Changeset
+  alias Nanoid, as: NanoID
 
   schema "events" do
     field :title, :string
@@ -49,14 +50,25 @@ defmodule EventasaurusApp.Events.Event do
   end
 
   defp maybe_generate_slug(changeset) do
-    case {get_field(changeset, :slug), get_field(changeset, :title)} do
-      {nil, title} when not is_nil(title) ->
-        # Generate a slug from the title if not provided
-        slug = title
-               |> String.downcase()
-               |> String.replace(~r/[^a-z0-9\s]/, "")
-               |> String.replace(~r/\s+/, "-")
-               |> String.trim("-")
+    case get_field(changeset, :slug) do
+      nil ->
+        # Generate a random slug - first try to use Nanoid (which should be in deps)
+        slug = try do
+          # Generate random slug with 10 characters using the specified alphabet
+          NanoID.generate(10, "0123456789abcdefghijklmnopqrstuvwxyz")
+        rescue
+          _ ->
+            # Fallback to a custom implementation if Nanoid is unavailable
+            alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+            1..10
+            |> Enum.map(fn _ ->
+              :rand.uniform(String.length(alphabet)) - 1
+              |> then(fn idx -> String.at(alphabet, idx) end)
+            end)
+            |> Enum.join("")
+        end
+
         put_change(changeset, :slug, slug)
       _ ->
         changeset
