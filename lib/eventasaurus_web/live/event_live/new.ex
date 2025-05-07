@@ -70,7 +70,7 @@ defmodule EventasaurusWeb.EventLive.New do
       {:ok, user} ->
         # Create the event with the user struct
         case Events.create_event_with_organizer(event_params, user) do
-          {:ok, event} ->
+          {:ok, _event} ->
             {:noreply,
              socket
              |> put_flash(:info, "Event created successfully")
