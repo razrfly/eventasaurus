@@ -112,7 +112,7 @@ defmodule EventasaurusWeb.EventComponents do
 
   def event_form(assigns) do
     ~H"""
-    <.form :let={f} for={@for} phx-change="validate" phx-submit="submit">
+    <.form :let={f} for={@for} phx-change="validate" phx-submit="submit" phx-hook="EventFormHook">
       <div class="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200">
         <!-- Basic Information -->
         <div class="mb-8">

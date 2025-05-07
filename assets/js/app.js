@@ -416,6 +416,55 @@ Hooks.GooglePlacesAutocomplete = {
   }
 };
 
+// New Event Form Hook to handle form submission
+Hooks.EventFormHook = {
+  mounted() {
+    console.log("EventFormHook mounted");
+    
+    this.el.addEventListener("submit", this.handleSubmit.bind(this));
+  },
+  
+  handleSubmit(event) {
+    console.log("Form is being submitted - combining date/time fields");
+    
+    // Get references to date and time inputs
+    const startDateInput = document.getElementById("event_start_date");
+    const startTimeInput = document.getElementById("event_start_time");
+    const endDateInput = document.getElementById("event_ends_date");
+    const endTimeInput = document.getElementById("event_ends_time");
+    
+    // Get references to hidden datetime fields
+    const startAtHidden = document.getElementById("event_start_at");
+    const endsAtHidden = document.getElementById("event_ends_at");
+    
+    // Combine start date and time
+    if (startDateInput && startDateInput.value && 
+        startTimeInput && startTimeInput.value && 
+        startAtHidden) {
+      startAtHidden.value = `${startDateInput.value}T${startTimeInput.value}:00`;
+      console.log(`Combined start datetime: ${startAtHidden.value}`);
+    } else {
+      console.error("Missing required start date/time fields:", {
+        startDate: startDateInput?.value,
+        startTime: startTimeInput?.value
+      });
+    }
+    
+    // Combine end date and time
+    if (endDateInput && endDateInput.value && 
+        endTimeInput && endTimeInput.value && 
+        endsAtHidden) {
+      endsAtHidden.value = `${endDateInput.value}T${endTimeInput.value}:00`;
+      console.log(`Combined end datetime: ${endsAtHidden.value}`);
+    } else {
+      console.error("Missing required end date/time fields:", {
+        endDate: endDateInput?.value,
+        endTime: endTimeInput?.value
+      });
+    }
+  }
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
