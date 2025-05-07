@@ -91,7 +91,7 @@ defmodule EventasaurusApp.Events do
     query = from e in Event,
             join: eu in EventUser, on: e.id == eu.event_id,
             where: eu.user_id == ^user.id,
-            preload: [:venue]
+            preload: [:venue, :users]
 
     Repo.all(query)
   end
