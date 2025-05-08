@@ -25,6 +25,7 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:selected_venue_name, nil)
       |> assign(:selected_venue_address, nil)
       |> assign(:venues, Venues.list_venues())
+      |> assign(:show_all_timezones, false)
 
     {:ok, socket}
   end
@@ -39,11 +40,45 @@ defmodule EventasaurusWeb.EventLive.New do
     # Update form_data with the validated params
     form_data = Map.merge(socket.assigns.form_data, params)
 
+    # Check if user wants to show all timezones
+    {form_data, show_all_timezones} =
+      if params["timezone"] == "__show_all__" do
+        {Map.put(form_data, "timezone", ""), true}
+      else
+        {form_data, socket.assigns.show_all_timezones}
+      end
+
     socket = socket
       |> assign(:changeset, changeset)
       |> assign(:form_data, form_data)
+      |> assign(:show_all_timezones, show_all_timezones)
 
     {:noreply, socket}
+  end
+
+  # Handle the timezone detection event from JavaScript hook
+  @impl true
+  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
+    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
+
+    # Only set the timezone if it's not already set in the form
+    if Map.get(socket.assigns.form_data, "timezone", "") == "" do
+      # Update form_data with the detected timezone
+      form_data = Map.put(socket.assigns.form_data, "timezone", timezone)
+
+      # Update the changeset with the new timezone
+      changeset =
+        %Event{}
+        |> Events.change_event(form_data)
+        |> Map.put(:action, :validate)
+
+      {:noreply,
+        socket
+        |> assign(:form_data, form_data)
+        |> assign(:changeset, changeset)}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
