@@ -140,22 +140,20 @@ defmodule EventasaurusWeb.TimezoneHelpers do
   defp asia_pacific_options do
     [
       "Asia/Tokyo",
-      "Asia/Shanghai",
+      "Asia/Shanghai", # Also Beijing
       "Asia/Singapore",
       "Asia/Seoul",
       "Australia/Sydney",
       "Australia/Melbourne",
       "Pacific/Auckland",
       "Asia/Dubai",
-      "Asia/Kolkata",
-      "Asia/Kolkata", # New Delhi
+      "Asia/Kolkata", # Also New Delhi
       "Asia/Bangkok",
       "Asia/Jakarta",
       "Asia/Kuala_Lumpur",
       "Asia/Manila",
       "Asia/Taipei",
       "Asia/Hong_Kong",
-      "Asia/Shanghai", # Beijing
       "Asia/Karachi"
     ]
     |> Enum.map(fn tz ->
