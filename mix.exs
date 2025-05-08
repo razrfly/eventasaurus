@@ -53,6 +53,7 @@ defmodule Eventasaurus.MixProject do
       {:plug_cowboy, "~> 2.5"},
       {:heroicons, "~> 0.5.6"},
       {:nanoid, "~> 2.1.0"},
+      {:time_zone_info, "~> 0.7.8"},
 
       # HTTP client for API calls (used for Supabase integration)
       {:httpoison, "~> 2.0"},
