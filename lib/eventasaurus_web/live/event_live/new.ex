@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.EventLive.New do
   use EventasaurusWeb, :live_view
 
   import EventasaurusWeb.EventComponents
+  import EventasaurusWeb.CoreComponents
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
@@ -26,6 +27,9 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:selected_venue_address, nil)
       |> assign(:venues, Venues.list_venues())
       |> assign(:show_all_timezones, false)
+      |> assign(:cover_image_url, nil)
+      |> assign(:unsplash_data, nil)
+      |> assign(:show_image_picker, false)
 
     {:ok, socket}
   end
@@ -161,6 +165,16 @@ defmodule EventasaurusWeb.EventLive.New do
       socket
       |> assign(:is_virtual, is_virtual)
       |> assign(:form_data, form_data)}
+  end
+
+  @impl true
+  def handle_event("open_image_picker", _params, socket) do
+    {:noreply, assign(socket, :show_image_picker, true)}
+  end
+
+  @impl true
+  def handle_event("close_image_picker", _params, socket) do
+    {:noreply, assign(socket, :show_image_picker, false)}
   end
 
   @impl true
@@ -363,5 +377,33 @@ defmodule EventasaurusWeb.EventLive.New do
     end
 
     params
+  end
+
+  @impl true
+  def handle_info({:image_selected, %{cover_image_url: url, unsplash_data: unsplash_data}}, socket) do
+    # Update the form_data with the selected image
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("cover_image_url", url)
+      |> Map.put("unsplash_data", unsplash_data)
+
+    # Update the changeset with the new image data
+    event_params = %{"cover_image_url" => url, "unsplash_data" => unsplash_data}
+    changeset =
+      %Event{}
+      |> Events.change_event(Map.merge(socket.assigns.form_data, event_params))
+      |> Map.put(:action, :validate)
+
+    {:noreply,
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:cover_image_url, url)
+      |> assign(:unsplash_data, unsplash_data)}
+  end
+
+  @impl true
+  def handle_info({:close_image_picker, _}, socket) do
+    {:noreply, assign(socket, :show_image_picker, false)}
   end
 end
