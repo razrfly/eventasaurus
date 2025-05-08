@@ -1,6 +1,7 @@
 defmodule EventasaurusWeb.EventComponents do
   use Phoenix.Component
   import EventasaurusWeb.CoreComponents
+  alias EventasaurusWeb.TimezoneHelpers
 
   @doc """
   Renders a time select dropdown with 30-minute increments.
@@ -86,6 +87,64 @@ defmodule EventasaurusWeb.EventComponents do
   end
 
   @doc """
+  Renders a timezone select component with all available timezones.
+
+  ## Examples
+      <.timezone_select
+        field={f[:timezone]}
+        selected={@selected_timezone}
+        id="event_timezone"
+        show_all={true}
+      />
+  """
+  attr :field, Phoenix.HTML.FormField
+  attr :id, :string, default: nil
+  attr :selected, :string, default: nil
+  attr :show_all, :boolean, default: false
+  attr :class, :string, default: nil
+  attr :required, :boolean, default: false
+  attr :rest, :global
+
+  def timezone_select(assigns) do
+    assigns = assign_new(assigns, :id, fn -> assigns.field.id end)
+
+    ~H"""
+    <div id="timezone-detector" phx-hook="TimezoneDetectionHook">
+      <select
+        id={@id}
+        name={@field.name}
+        class={["block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm", @class]}
+        required={@required}
+        {@rest}
+      >
+        <option value="">Select timezone</option>
+
+        <%= if @show_all do %>
+          <%= for {label, value} <- TimezoneHelpers.all_timezone_options() do %>
+            <option value={value} selected={@field.value == value || @selected == value}>
+              <%= label %>
+            </option>
+          <% end %>
+        <% else %>
+          <%= for {group_name, options} <- TimezoneHelpers.timezone_options() do %>
+            <optgroup label={group_name}>
+              <%= for {label, value} <- options do %>
+                <option value={value} selected={@field.value == value || @selected == value}>
+                  <%= label %>
+                </option>
+              <% end %>
+            </optgroup>
+          <% end %>
+          <optgroup label="Show all timezones">
+            <option value="__show_all__">Show all timezones...</option>
+          </optgroup>
+        <% end %>
+      </select>
+    </div>
+    """
+  end
+
+  @doc """
   Renders an event form that can be used for both new and edit views.
 
   ## Examples
@@ -109,6 +168,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :submit_label, :string, default: "Submit", doc: "the submit button label"
   attr :cancel_path, :string, default: nil, doc: "path to redirect on cancel (edit only)"
   attr :action, :atom, required: true, values: [:new, :edit], doc: "whether this is a new or edit form"
+  attr :show_all_timezones, :boolean, default: false, doc: "whether to show all timezones"
 
   def event_form(assigns) do
     ~H"""
@@ -170,13 +230,15 @@ defmodule EventasaurusWeb.EventComponents do
               </div>
             </div>
 
-            <.input field={f[:timezone]} type="select" label="Timezone" options={[
-              {"Pacific Time (PT)", "America/Los_Angeles"},
-              {"Mountain Time (MT)", "America/Denver"},
-              {"Central Time (CT)", "America/Chicago"},
-              {"Eastern Time (ET)", "America/New_York"},
-              {"UTC", "UTC"}
-            ]} />
+            <div class="form-group">
+              <label for={f[:timezone].id} class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+              <.timezone_select
+                field={f[:timezone]}
+                selected={Map.get(@form_data, "timezone", nil)}
+                show_all={@show_all_timezones}
+              />
+              <p class="mt-1 text-xs text-gray-500">Your local timezone will be auto-detected if available</p>
+            </div>
 
             <!-- Hidden fields to store the combined datetime values -->
             <input type="hidden" name="event[start_at]" id="event_start_at" />

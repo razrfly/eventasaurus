@@ -19,6 +19,22 @@ Hooks.InputSync = {
   }
 };
 
+// Timezone Detection Hook to detect the user's timezone
+Hooks.TimezoneDetectionHook = {
+  mounted() {
+    console.log("TimezoneDetectionHook mounted");
+    
+    // Get the user's timezone using Intl.DateTimeFormat
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.log("Detected user timezone:", timezone);
+    
+    // Send the timezone to the server
+    if (timezone) {
+      this.pushEvent("set_timezone", { timezone });
+    }
+  }
+};
+
 // Time Options Hook - Handles the time dropdown and combining date/time values
 Hooks.TimeOptionsHook = {
   mounted() {
