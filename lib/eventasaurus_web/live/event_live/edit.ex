@@ -4,119 +4,113 @@ defmodule EventasaurusWeb.EventLive.Edit do
   import EventasaurusWeb.EventComponents
 
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
 
   @impl true
-  def mount(%{"slug" => slug}, _session, socket) do
+  def mount(%{"id" => slug}, _session, socket) do
+    # Load the event and ensure user has access
     case Events.get_event_by_slug(slug) do
       nil ->
         {:ok,
           socket
           |> put_flash(:error, "Event not found")
-          |> redirect(to: ~p"/dashboard")}
+          |> redirect(to: "/dashboard")}
 
       event ->
-        # First ensure we have a proper User struct
-        case ensure_user_struct(socket.assigns.current_user) do
-          {:ok, user} ->
-            # Check if user is an organizer of this event
-            if Events.user_is_organizer?(event, user) do
-              changeset = Events.change_event(event)
+        # Check if current user is an organizer for this event
+        if socket.assigns[:current_user] && Events.user_is_organizer?(event, socket.assigns.current_user) do
+          # Convert the event to a changeset
+          changeset = Events.change_event(event)
 
-              socket =
-                socket
-                |> assign(:event, event)
-                |> assign(:changeset, changeset)
-                |> assign(:venues, Venues.list_venues())
-                |> assign(:is_virtual, event.venue_id == nil)
-                |> assign(:selected_venue_name, if(event.venue, do: event.venue.name, else: nil))
-                |> assign(:selected_venue_address, if(event.venue, do: event.venue.address, else: nil))
+          # Parse the datetime values into date and time components
+          {start_date, start_time} = parse_datetime(event.start_at)
+          {ends_date, ends_time} = parse_datetime(event.ends_at)
 
-              # Create form_data from event with separated date and time
-              form_data = %{
-                "title" => event.title,
-                "tagline" => event.tagline,
-                "description" => event.description,
-                "start_at" => event.start_at,
-                "ends_at" => event.ends_at,
-                "timezone" => event.timezone,
-                "visibility" => Atom.to_string(event.visibility),
-                "cover_image_url" => event.cover_image_url,
-                "is_virtual" => event.venue_id == nil,
-                "virtual_venue_url" => event.virtual_venue_url
-              }
+          # Check if this is a virtual event
+          is_virtual = event.venue_id == nil
 
-              # Add venue data if available
-              form_data =
-                if event.venue do
-                  Map.merge(form_data, %{
-                    "venue_name" => event.venue.name,
-                    "venue_address" => event.venue.address,
-                    "venue_city" => event.venue.city,
-                    "venue_state" => event.venue.state,
-                    "venue_country" => event.venue.country,
-                    "venue_latitude" => event.venue.latitude,
-                    "venue_longitude" => event.venue.longitude
-                  })
-                else
-                  form_data
-                end
+          # Prepare form data
+          form_data = %{
+            "start_date" => start_date,
+            "start_time" => start_time,
+            "ends_date" => ends_date,
+            "ends_time" => ends_time,
+            "timezone" => event.timezone,
+            "is_virtual" => is_virtual
+          }
 
-                # Extract date and time components for the separate fields
-                form_data =
-                  cond do
-                    event.start_at && event.ends_at ->
-                      start_date = event.start_at |> DateTime.to_date() |> Date.to_iso8601()
-                      start_time = event.start_at |> DateTime.to_time() |> Time.to_iso8601(:extended) |> String.slice(0, 5)
-
-                      ends_date = event.ends_at |> DateTime.to_date() |> Date.to_iso8601()
-                      ends_time = event.ends_at |> DateTime.to_time() |> Time.to_iso8601(:extended) |> String.slice(0, 5)
-
-                      Map.merge(form_data, %{
-                        "start_date" => start_date,
-                        "start_time" => start_time,
-                        "ends_date" => ends_date,
-                        "ends_time" => ends_time
-                      })
-
-                    true ->
-                      # Default to today for dates if no dates are set
-                      today = Date.utc_today() |> Date.to_iso8601()
-                      Map.merge(form_data, %{
-                        "start_date" => today,
-                        "ends_date" => today
-                      })
-                  end
-
-              {:ok, assign(socket, :form_data, form_data)}
+          # If there's a venue, include venue data
+          form_data =
+            if event.venue do
+              venue = event.venue
+              form_data
+              |> Map.put("venue_name", venue.name)
+              |> Map.put("venue_address", venue.address)
+              |> Map.put("venue_city", venue.city)
+              |> Map.put("venue_state", venue.state || "")
+              |> Map.put("venue_country", venue.country || "")
+              |> Map.put("venue_latitude", venue.latitude)
+              |> Map.put("venue_longitude", venue.longitude)
             else
-              {:ok,
-                socket
-                |> put_flash(:error, "You do not have permission to edit this event")
-                |> redirect(to: ~p"/events/#{slug}")}
+              form_data
             end
-          {:error, _} ->
-            {:ok,
-              socket
-              |> put_flash(:error, "Invalid user structure")
-              |> redirect(to: ~p"/dashboard")}
+
+          # Set up the socket with all required assigns
+          socket =
+            socket
+            |> assign(:event, event)
+            |> assign(:changeset, changeset)
+            |> assign(:form_data, form_data)
+            |> assign(:is_virtual, is_virtual)
+            |> assign(:selected_venue_name, Map.get(form_data, "venue_name"))
+            |> assign(:selected_venue_address, Map.get(form_data, "venue_address"))
+            |> assign(:venues, Venues.list_venues())
+            |> assign(:show_all_timezones, false)
+
+          {:ok, socket}
+        else
+          # User is not authorized to edit this event
+          {:ok,
+            socket
+            |> put_flash(:error, "You are not authorized to edit this event")
+            |> redirect(to: "/events/#{slug}")}
         end
     end
+  end
+
+  # Handle the timezone detection event from JavaScript hook
+  @impl true
+  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
+    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
+
+    # For edit view, we don't auto-set timezone because the event already has one
+    # But we log it for debugging purposes
+    {:noreply, socket}
   end
 
   @impl true
   def handle_event("validate", %{"event" => params}, socket) do
     changeset =
-      socket.assigns.event
+      %Event{}
       |> Events.change_event(params)
       |> Map.put(:action, :validate)
 
     # Update form_data with the validated params
     form_data = Map.merge(socket.assigns.form_data, params)
 
+    # Check if user wants to show all timezones
+    {form_data, show_all_timezones} =
+      if params["timezone"] == "__show_all__" do
+        {Map.put(form_data, "timezone", ""), true}
+      else
+        {form_data, socket.assigns.show_all_timezones}
+      end
+
     socket = socket
       |> assign(:changeset, changeset)
       |> assign(:form_data, form_data)
+      |> assign(:show_all_timezones, show_all_timezones)
 
     {:noreply, socket}
   end
@@ -364,4 +358,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
+
+  # Helper to parse a datetime into date and time strings
+  defp parse_datetime(nil), do: {nil, nil}
+  defp parse_datetime(datetime) do
+    date = datetime |> DateTime.to_date() |> Date.to_iso8601()
+    time = datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
+    {date, time}
+  end
 end
