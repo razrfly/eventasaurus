@@ -36,13 +36,13 @@
       <div class="relative">
         <img src={@event.cover_image_url} alt={@event.title} class="w-full h-60 sm:h-72 object-cover object-center" />
         <%= if @event.unsplash_data do %>
-          <div class="absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-tl">
+          <div class="absolute bottom-0 right-0 bg-black bg-opacity-75 text-white text-xs p-2 rounded-tl" aria-label="Photo attribution">
             Photo by 
-            <a href={@event.unsplash_data["photographer_url"]} target="_blank" class="underline hover:text-gray-200">
-              <%= @event.unsplash_data["photographer_name"] %>
+            <a href={@event.unsplash_data["photographer_url"] || "https://unsplash.com"} target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-200">
+              <%= @event.unsplash_data["photographer_name"] || "Unsplash photographer" %>
             </a> 
             on 
-            <a href="https://unsplash.com" target="_blank" class="underline hover:text-gray-200">Unsplash</a>
+            <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-200">Unsplash</a>
           </div>
         <% end %>
       </div>

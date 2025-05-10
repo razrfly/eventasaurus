@@ -3,6 +3,20 @@ defmodule EventasaurusApp.Events.Event do
   import Ecto.Changeset
   alias Nanoid, as: NanoID
 
+  @typedoc """
+  Unsplash image metadata structure:
+  - photographer_name: String - Name of the photographer
+  - photographer_url: String - URL to the photographer's Unsplash profile
+  - download_location: String - URL to track downloads
+  - unsplash_url: String - URL to the original image on Unsplash
+  """
+  @type unsplash_data :: %{
+    photographer_name: String.t(),
+    photographer_url: String.t(),
+    download_location: String.t(),
+    unsplash_url: String.t()
+  }
+
   schema "events" do
     field :title, :string
     field :tagline, :string
@@ -36,6 +50,22 @@ defmodule EventasaurusApp.Events.Event do
     |> foreign_key_constraint(:venue_id)
     |> unique_constraint(:slug)
     |> maybe_generate_slug()
+    |> validate_unsplash_data()
+  end
+
+  defp validate_unsplash_data(changeset) do
+    case get_change(changeset, :unsplash_data) do
+      nil -> changeset
+      unsplash_data when not is_map(unsplash_data) ->
+        add_error(changeset, :unsplash_data, "must be a map")
+      unsplash_data ->
+        required_keys = ["photographer_name", "photographer_url"]
+        if Enum.all?(required_keys, &Map.has_key?(unsplash_data, &1)) do
+          changeset
+        else
+          add_error(changeset, :unsplash_data, "missing required keys")
+        end
+    end
   end
 
   defp validate_slug(changeset) do

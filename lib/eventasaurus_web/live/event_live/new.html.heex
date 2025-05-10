@@ -25,14 +25,18 @@
   <div 
     id="image-picker-modal"
     class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" 
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="image-picker-title"
     phx-window-keydown="close_image_picker" 
     phx-key="escape"
+    tabindex="-1"
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col" phx-click-away="close_image_picker">
       <!-- Header -->
       <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-        <h2 class="text-xl font-bold">Choose a Cover Image</h2>
-        <button type="button" phx-click="close_image_picker" class="text-gray-500 hover:text-gray-700">
+        <h2 id="image-picker-title" class="text-xl font-bold">Choose a Cover Image</h2>
+        <button type="button" phx-click="close_image_picker" aria-label="Close image picker" class="text-gray-500 hover:text-gray-700">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
           </svg>
@@ -84,6 +88,10 @@
                   phx-click="select_image"
                   phx-value-id={image.id}
                   class="relative group cursor-pointer overflow-hidden rounded-md"
+                  tabindex="0"
+                  role="button"
+                  aria-label={"Select image by " <> (image.user.name || "Unsplash photographer")}
+                  phx-keydown="select_image"
                 >
                   <img
                     src={image.urls.small}
@@ -92,7 +100,7 @@
                   />
                   <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity duration-300"></div>
                   <div class="absolute bottom-0 left-0 right-0 p-2 text-white bg-gradient-to-t from-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <p class="text-xs truncate">Photo by <%= image.user.name %></p>
+                    <p class="text-xs truncate">Photo by <%= image.user.name || "Unsplash photographer" %></p>
                   </div>
                 </div>
               <% end %>
