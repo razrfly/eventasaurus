@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   use EventasaurusWeb, :live_view
 
   import EventasaurusWeb.EventComponents
+  import EventasaurusWeb.CoreComponents
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
@@ -37,7 +38,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
             "ends_date" => ends_date,
             "ends_time" => ends_time,
             "timezone" => event.timezone,
-            "is_virtual" => is_virtual
+            "is_virtual" => is_virtual,
+            "cover_image_url" => event.cover_image_url,
+            "unsplash_data" => event.unsplash_data
           }
 
           # If there's a venue, include venue data
@@ -67,6 +70,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
             |> assign(:selected_venue_address, Map.get(form_data, "venue_address"))
             |> assign(:venues, Venues.list_venues())
             |> assign(:show_all_timezones, false)
+            |> assign(:cover_image_url, event.cover_image_url)
+            |> assign(:unsplash_data, event.unsplash_data)
+            |> assign(:show_image_picker, false)
 
           {:ok, socket}
         else
@@ -193,6 +199,16 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket
       |> assign(:is_virtual, is_virtual)
       |> assign(:form_data, form_data)}
+  end
+
+  @impl true
+  def handle_event("open_image_picker", _params, socket) do
+    {:noreply, assign(socket, :show_image_picker, true)}
+  end
+
+  @impl true
+  def handle_event("close_image_picker", _params, socket) do
+    {:noreply, assign(socket, :show_image_picker, false)}
   end
 
   @impl true
@@ -365,5 +381,33 @@ defmodule EventasaurusWeb.EventLive.Edit do
     date = datetime |> DateTime.to_date() |> Date.to_iso8601()
     time = datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
     {date, time}
+  end
+
+  @impl true
+  def handle_info({:image_selected, %{cover_image_url: url, unsplash_data: unsplash_data}}, socket) do
+    # Update the form_data with the selected image
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("cover_image_url", url)
+      |> Map.put("unsplash_data", unsplash_data)
+
+    # Update the changeset with the new image data
+    event_params = %{"cover_image_url" => url, "unsplash_data" => unsplash_data}
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(event_params)
+      |> Map.put(:action, :validate)
+
+    {:noreply,
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:cover_image_url, url)
+      |> assign(:unsplash_data, unsplash_data)}
+  end
+
+  @impl true
+  def handle_info({:close_image_picker, _}, socket) do
+    {:noreply, assign(socket, :show_image_picker, false)}
   end
 end

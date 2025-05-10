@@ -13,6 +13,7 @@ defmodule EventasaurusApp.Events.Event do
     field :visibility, Ecto.Enum, values: [:public, :private], default: :public
     field :slug, :string
     field :cover_image_url, :string
+    field :unsplash_data, :map
 
     belongs_to :venue, EventasaurusApp.Venues.Venue
 
@@ -26,7 +27,7 @@ defmodule EventasaurusApp.Events.Event do
   def changeset(event, attrs) do
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
-                   :visibility, :slug, :cover_image_url, :venue_id])
+                   :visibility, :slug, :cover_image_url, :venue_id, :unsplash_data])
     |> validate_required([:title, :start_at, :timezone, :visibility])
     |> validate_length(:title, min: 3, max: 100)
     |> validate_length(:tagline, max: 255)
