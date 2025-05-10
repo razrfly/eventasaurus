@@ -187,7 +187,21 @@ defmodule EventasaurusWeb.EventComponents do
           <h2 class="text-xl font-bold mb-4">Cover Image</h2>
 
           <div class="space-y-4">
-            <%= if f[:cover_image_url].value do %>
+            <%= if is_nil(f[:cover_image_url].value) or f[:cover_image_url].value == "" do %>
+              <div class="mb-4">
+                <button
+                  type="button"
+                  phx-click={JS.push(@on_image_click)}
+                  class="w-full h-48 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors bg-gray-50"
+                >
+                  <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812-1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  </svg>
+                  <p class="mt-2 text-sm text-gray-600">Click to add a cover image</p>
+                </button>
+              </div>
+            <% else %>
               <div class="mb-4">
                 <div class="relative rounded-lg overflow-hidden h-48 bg-gray-100">
                   <img src={f[:cover_image_url].value} alt="Cover image" class="w-full h-full object-cover" />
@@ -213,26 +227,11 @@ defmodule EventasaurusWeb.EventComponents do
                   </div>
                 <% end %>
               </div>
-            <% else %>
-              <div class="mb-4">
-                <button
-                  type="button"
-                  phx-click={JS.push(@on_image_click)}
-                  class="w-full h-48 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors bg-gray-50"
-                >
-                  <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                  </svg>
-                  <p class="mt-2 text-sm text-gray-600">Click to add a cover image</p>
-                </button>
-              </div>
             <% end %>
 
             <%= hidden_input f, :cover_image_url %>
             <%= if @unsplash_data do %>
-              <%=
-                # Handle the case when unsplash_data is either a map or already a JSON string
+              <% 
                 encoded_data = cond do
                   is_map(@unsplash_data) -> Jason.encode!(@unsplash_data)
                   is_binary(@unsplash_data) -> @unsplash_data

@@ -12,6 +12,9 @@ dev-debug.log
 # Dependency directories
 node_modules/
 
+# Phoenix static assets (rebuild on Fly/CI)
+/priv/static/
+
 # Environment variables
 .env
 

@@ -43,6 +43,19 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("validate", %{"event" => params}, socket) do
+    require Logger
+    Logger.debug("[validate] incoming params: #{inspect(params)}")
+    # Always preserve cover_image_url if not present in params
+    cover_image_url =
+      params["cover_image_url"] || Map.get(socket.assigns.form_data, "cover_image_url") || socket.assigns.cover_image_url
+
+    params =
+      if cover_image_url do
+        Map.put(params, "cover_image_url", cover_image_url)
+      else
+        params
+      end
+
     changeset =
       %Event{}
       |> Events.change_event(params)
@@ -50,6 +63,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
     # Update form_data with the validated params
     form_data = Map.merge(socket.assigns.form_data, params)
+    Logger.debug("[validate] resulting form_data: #{inspect(form_data)}")
 
     # Check if user wants to show all timezones
     {form_data, show_all_timezones} =
