@@ -180,7 +180,7 @@ defmodule EventasaurusWeb.EventComponents do
     assigns = assign_new(assigns, :id, fn -> "event-form-#{if assigns.action == :new, do: "new", else: "edit"}" end)
 
     ~H"""
-    <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" phx-hook="EventFormHook">
+    <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit">
       <div class="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200">
         <!-- Cover Image -->
         <div class="mb-8">
@@ -261,44 +261,48 @@ defmodule EventasaurusWeb.EventComponents do
         <div class="mb-8">
           <h2 class="text-xl font-bold mb-4">Date & Time</h2>
           <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                <.date_input
-                  id="event_start_date"
-                  name="event[start_date]"
-                  value={Map.get(@form_data, "start_date", "")}
-                  required
-                />
+            <div phx-hook="DateTimeSync" id="date-time-sync-hook">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <.date_input
+                    id="event_start_date"
+                    name="event[start_date]"
+                    value={Map.get(@form_data, "start_date", "")}
+                    required
+                    data-role="start-date"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                  <.time_select
+                    id="event_start_time"
+                    name="event[start_time]"
+                    value={Map.get(@form_data, "start_time", "")}
+                    required
+                    data-role="start-time"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
-                <.time_select
-                  id="event_start_time"
-                  name="event[start_time]"
-                  value={Map.get(@form_data, "start_time", "")}
-                  required
-                  hook="TimeOptionsHook"
-                />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                <.date_input
-                  id="event_ends_date"
-                  name="event[ends_date]"
-                  value={Map.get(@form_data, "ends_date", "")}
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                <.time_select
-                  id="event_ends_time"
-                  name="event[ends_time]"
-                  value={Map.get(@form_data, "ends_time", "")}
-                />
+              <div class="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                  <.date_input
+                    id="event_ends_date"
+                    name="event[ends_date]"
+                    value={Map.get(@form_data, "ends_date", "")}
+                    data-role="end-date"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                  <.time_select
+                    id="event_ends_time"
+                    name="event[ends_time]"
+                    value={Map.get(@form_data, "ends_time", "")}
+                    data-role="end-time"
+                  />
+                </div>
               </div>
             </div>
 
