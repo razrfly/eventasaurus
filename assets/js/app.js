@@ -22,7 +22,7 @@ Hooks.InputSync = {
 // Timezone Detection Hook to detect the user's timezone
 Hooks.TimezoneDetectionHook = {
   mounted() {
-    console.log("TimezoneDetectionHook mounted");
+    console.log("TimezoneDetectionHook mounted on element:", this.el.id);
     
     // Get the user's timezone using Intl.DateTimeFormat
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -38,15 +38,26 @@ Hooks.TimezoneDetectionHook = {
 // Time Options Hook - Handles the time dropdown and combining date/time values
 Hooks.TimeOptionsHook = {
   mounted() {
-    console.log("TimeOptionsHook mounted");
+    console.log("TimeOptionsHook mounted on element:", this.el.id);
+    
+    // Determine form context (new or edit) from the element's ID or parent form
+    this.formType = this.el.closest('form')?.id.includes("new") ? "new" : "edit";
+    console.log(`Form context detected for TimeOptionsHook: ${this.formType}`);
     
     // Get references to all related fields
     this.startTimeSelect = document.getElementById("event_start_time");
     this.endTimeSelect = document.getElementById("event_ends_time");
     this.startDateInput = document.getElementById("event_start_date");
     this.endDateInput = document.getElementById("event_ends_date");
-    this.startAtHidden = document.getElementById("event_start_at");
-    this.endsAtHidden = document.getElementById("event_ends_at");
+    
+    // Get references with dynamic IDs for hidden fields
+    const suffix = this.formType;
+    this.startAtHidden = document.getElementById(`event_start_at_${suffix}`);
+    this.endsAtHidden = document.getElementById(`event_ends_at_${suffix}`);
+    
+    console.log(`Using dynamic IDs with suffix: ${suffix}`);
+    console.log(`Start at hidden field: ${this.startAtHidden ? "found" : "not found"}`);
+    console.log(`Ends at hidden field: ${this.endsAtHidden ? "found" : "not found"}`);
     
     // Check if all required elements are found
     if (!this.startTimeSelect || !this.endTimeSelect || !this.startDateInput || 
@@ -212,7 +223,7 @@ Hooks.TimeOptionsHook = {
 // Google Places Autocomplete Hook
 Hooks.GooglePlacesAutocomplete = {
   mounted() {
-    console.log("GooglePlacesAutocomplete hook mounted");
+    console.log("GooglePlacesAutocomplete hook mounted on element:", this.el.id);
     this.inputEl = this.el;
     this.mounted = true;
     
@@ -346,15 +357,32 @@ Hooks.GooglePlacesAutocomplete = {
     
     console.group(`Updating field ${id}`);
     
-    // Look for the element using direct ID
-    let field = document.getElementById(id);
-    console.log(`Field by ID ${id}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    // Determine form type by examining the input element's ID
+    const formType = this.inputEl.id.includes("new") ? "new" : "edit";
+    console.log(`Form context detected: ${formType}`);
+    
+    // Look for the element using direct ID with suffix
+    let field = document.getElementById(`${id}-${formType}`);
+    console.log(`Field by ID ${id}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    
+    // If not found, try without suffix
+    if (!field) {
+      field = document.getElementById(id);
+      console.log(`Field by ID ${id}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
     
     // If not found, try with venue_ instead of venue-
     if (!field) {
       const altId = id.replace('venue-', 'venue_');
       field = document.getElementById(altId);
       console.log(`Field by ID ${altId}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
+    
+    // If still not found, try with venue_ instead of venue- and the suffix
+    if (!field) {
+      const altId = id.replace('venue-', 'venue_');
+      field = document.getElementById(`${altId}-${formType}`);
+      console.log(`Field by ID ${altId}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
     }
     
     // If still not found, try the event[] prefixed version (for Phoenix forms)
@@ -437,21 +465,32 @@ Hooks.EventFormHook = {
   mounted() {
     console.log("EventFormHook mounted");
     
+    // Store form ID suffix (new or edit)
+    this.formType = this.el.id.includes("new") ? "new" : "edit";
+    console.log(`Form type detected: ${this.formType}`);
+    
     this.el.addEventListener("submit", this.handleSubmit.bind(this));
   },
   
   handleSubmit(event) {
     console.log("Form is being submitted - combining date/time fields");
     
-    // Get references to date and time inputs
+    // Use dynamic IDs based on form type (new or edit)
+    const suffix = this.formType;
+    
+    // Get references to date and time inputs 
     const startDateInput = document.getElementById("event_start_date");
     const startTimeInput = document.getElementById("event_start_time");
     const endDateInput = document.getElementById("event_ends_date");
     const endTimeInput = document.getElementById("event_ends_time");
     
-    // Get references to hidden datetime fields
-    const startAtHidden = document.getElementById("event_start_at");
-    const endsAtHidden = document.getElementById("event_ends_at");
+    // Get references to hidden datetime fields with dynamic IDs
+    const startAtHidden = document.getElementById(`event_start_at_${suffix}`);
+    const endsAtHidden = document.getElementById(`event_ends_at_${suffix}`);
+    
+    console.log(`Using dynamic IDs with suffix: ${suffix}`);
+    console.log(`Start at element: ${startAtHidden ? "found" : "not found"}`);
+    console.log(`Ends at element: ${endsAtHidden ? "found" : "not found"}`);
     
     // Combine start date and time
     if (startDateInput && startDateInput.value && 
@@ -462,7 +501,8 @@ Hooks.EventFormHook = {
     } else {
       console.error("Missing required start date/time fields:", {
         startDate: startDateInput?.value,
-        startTime: startTimeInput?.value
+        startTime: startTimeInput?.value,
+        startAtField: startAtHidden ? startAtHidden.id : "not found"
       });
     }
     
@@ -475,7 +515,8 @@ Hooks.EventFormHook = {
     } else {
       console.error("Missing required end date/time fields:", {
         endDate: endDateInput?.value,
-        endTime: endTimeInput?.value
+        endTime: endTimeInput?.value,
+        endsAtField: endsAtHidden ? endsAtHidden.id : "not found"
       });
     }
   }

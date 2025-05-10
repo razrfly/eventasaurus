@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
+  alias EventasaurusWeb.Services.UnsplashService
 
   @impl true
   def mount(_params, _session, socket) do
@@ -30,6 +31,12 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:cover_image_url, nil)
       |> assign(:unsplash_data, nil)
       |> assign(:show_image_picker, false)
+      |> assign(:search_query, "")
+      |> assign(:search_results, [])
+      |> assign(:loading, false)
+      |> assign(:error, nil)
+      |> assign(:page, 1)
+      |> assign(:per_page, 20)
 
     {:ok, socket}
   end
@@ -393,20 +400,23 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_info({:image_selected, %{cover_image_url: url, unsplash_data: unsplash_data}}, socket) do
-    # Update the form_data with the selected image
+    # We keep the raw unsplash_data in both places (not pre-encoded)
+    # The event_components.ex will handle the encoding when needed
     form_data =
       socket.assigns.form_data
       |> Map.put("cover_image_url", url)
-      # We'll keep the raw unsplash_data in the socket assigns
-      # but JSON encode it for the form field
-      |> Map.put("unsplash_data", Jason.encode!(unsplash_data))
+      |> Map.put("unsplash_data", unsplash_data)
 
-    # Update the changeset with the new image data
-    event_params = %{"cover_image_url" => url, "unsplash_data" => Jason.encode!(unsplash_data)}
+    # Update the changeset
     changeset =
       %Event{}
-      |> Events.change_event(Map.merge(socket.assigns.form_data, event_params))
+      |> Events.change_event(Map.put(socket.assigns.form_data, "cover_image_url", url))
       |> Map.put(:action, :validate)
+
+    # Debug
+    IO.puts("DEBUG - Image Selected:")
+    IO.inspect(url, label: "Cover image URL")
+    IO.inspect(unsplash_data, label: "Unsplash data")
 
     {:noreply,
       socket
@@ -420,5 +430,111 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_info({:close_image_picker, _}, socket) do
     {:noreply, assign(socket, :show_image_picker, false)}
+  end
+
+  # New handler for Unsplash search
+  @impl true
+  def handle_event("search_unsplash", %{"search_query" => query}, socket) when query == "" do
+    {:noreply,
+      socket
+      |> assign(:search_query, "")
+      |> assign(:search_results, [])
+      |> assign(:error, nil)
+    }
+  end
+
+  @impl true
+  def handle_event("search_unsplash", %{"search_query" => query}, socket) do
+    {:noreply,
+      socket
+      |> assign(:search_query, query)
+      |> assign(:loading, true)
+      |> assign(:page, 1)
+      |> do_search()
+    }
+  end
+
+  @impl true
+  def handle_event("load_more_images", _, socket) do
+    {:noreply,
+      socket
+      |> assign(:page, socket.assigns.page + 1)
+      |> assign(:loading, true)
+      |> do_search()
+    }
+  end
+
+  @impl true
+  def handle_event("select_image", %{"id" => id}, socket) do
+    case Enum.find(socket.assigns.search_results, &(&1.id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      image ->
+        # Track the download as per Unsplash API requirements - do this asynchronously
+        Task.start(fn ->
+          UnsplashService.track_download(image.download_location)
+        end)
+
+        # Create the unsplash_data map to be stored in the database
+        unsplash_data = %{
+          "photo_id" => image.id,
+          "url" => image.urls.regular,
+          "full_url" => image.urls.full,
+          "raw_url" => image.urls.raw,
+          "photographer_name" => image.user.name,
+          "photographer_username" => image.user.username,
+          "photographer_url" => image.user.profile_url,
+          "download_location" => image.download_location
+        }
+
+        # Update form_data with the Unsplash photo info
+        form_data =
+          socket.assigns.form_data
+          |> Map.put("cover_image_url", image.urls.regular)
+          |> Map.put("unsplash_data", unsplash_data)
+
+        # Update the changeset
+        changeset =
+          %Event{}
+          |> Events.change_event(form_data)
+          |> Map.put(:action, :validate)
+
+        {:noreply,
+          socket
+          |> assign(:form_data, form_data)
+          |> assign(:changeset, changeset)
+          |> assign(:cover_image_url, image.urls.regular)
+          |> assign(:unsplash_data, unsplash_data)
+          |> assign(:show_image_picker, false)}
+    end
+  end
+
+  # Helper function for searching Unsplash
+  defp do_search(socket) do
+    case UnsplashService.search_photos(
+      socket.assigns.search_query,
+      socket.assigns.page,
+      socket.assigns.per_page
+    ) do
+      {:ok, results} ->
+        # If this is page 1, replace results, otherwise append
+        updated_results =
+          if socket.assigns.page == 1 do
+            results
+          else
+            socket.assigns.search_results ++ results
+          end
+
+        socket
+        |> assign(:search_results, updated_results)
+        |> assign(:loading, false)
+        |> assign(:error, nil)
+
+      {:error, reason} ->
+        socket
+        |> assign(:loading, false)
+        |> assign(:error, "Error searching Unsplash: #{reason}")
+    end
   end
 end
