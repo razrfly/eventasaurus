@@ -123,6 +123,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("submit", %{"event" => event_params}, socket) do
+    # Parse the unsplash_data JSON string back to a map if it exists
+    event_params =
+      if event_params["unsplash_data"] && event_params["unsplash_data"] != "" do
+        unsplash_data =
+          event_params["unsplash_data"]
+          |> Jason.decode!()
+
+        Map.put(event_params, "unsplash_data", unsplash_data)
+      else
+        event_params
+      end
+
     # Include venue data from form_data as a fallback
     venue_data = %{
       "venue_name" => Map.get(socket.assigns.form_data, "venue_name", ""),
@@ -389,10 +401,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
     form_data =
       socket.assigns.form_data
       |> Map.put("cover_image_url", url)
-      |> Map.put("unsplash_data", unsplash_data)
+      # We'll keep the raw unsplash_data in the socket assigns
+      # but JSON encode it for the form field
+      |> Map.put("unsplash_data", Jason.encode!(unsplash_data))
 
     # Update the changeset with the new image data
-    event_params = %{"cover_image_url" => url, "unsplash_data" => unsplash_data}
+    event_params = %{"cover_image_url" => url, "unsplash_data" => Jason.encode!(unsplash_data)}
     changeset =
       socket.assigns.event
       |> Events.change_event(event_params)
@@ -403,7 +417,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
       |> assign(:cover_image_url, url)
-      |> assign(:unsplash_data, unsplash_data)}
+      |> assign(:unsplash_data, unsplash_data)
+      |> assign(:show_image_picker, false)}
   end
 
   @impl true
