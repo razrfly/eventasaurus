@@ -22,11 +22,11 @@ Hooks.InputSync = {
 // Timezone Detection Hook to detect the user's timezone
 Hooks.TimezoneDetectionHook = {
   mounted() {
-    console.log("TimezoneDetectionHook mounted on element:", this.el.id);
+    if (process.env.NODE_ENV !== 'production') console.log("TimezoneDetectionHook mounted on element:", this.el.id);
     
     // Get the user's timezone using Intl.DateTimeFormat
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    console.log("Detected user timezone:", timezone);
+    if (process.env.NODE_ENV !== 'production') console.log("Detected user timezone:", timezone);
     
     // Send the timezone to the server
     if (timezone) {
@@ -98,16 +98,16 @@ Hooks.DateTimeSync = {
 // Google Places Autocomplete Hook
 Hooks.GooglePlacesAutocomplete = {
   mounted() {
-    console.log("GooglePlacesAutocomplete hook mounted on element:", this.el.id);
+    if (process.env.NODE_ENV !== 'production') console.log("GooglePlacesAutocomplete hook mounted on element:", this.el.id);
     this.inputEl = this.el;
     this.mounted = true;
     
     // Check if Google Maps API is loaded and ready
     if (window.google && google.maps && google.maps.places) {
-      console.log("Google Maps already loaded, initializing now");
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps already loaded, initializing now");
       setTimeout(() => this.initClassicAutocomplete(), 100); // Use classic API only for now
     } else {
-      console.log("Google Maps not yet loaded, will initialize when ready");
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps not yet loaded, will initialize when ready");
       // Add a global callback for when Google Maps loads
       window.initGooglePlaces = () => {
         if (this.mounted) {
@@ -120,7 +120,7 @@ Hooks.GooglePlacesAutocomplete = {
   destroyed() {
     // Mark as unmounted to prevent async operations after component is gone
     this.mounted = false;
-    console.log("GooglePlacesAutocomplete hook destroyed");
+    if (process.env.NODE_ENV !== 'production') console.log("GooglePlacesAutocomplete hook destroyed");
   },
   
   // Legacy approach using classic Autocomplete - but it works reliably
@@ -128,7 +128,7 @@ Hooks.GooglePlacesAutocomplete = {
     if (!this.mounted) return;
     
     try {
-      console.log("Initializing classic Autocomplete API");
+      if (process.env.NODE_ENV !== 'production') console.log("Initializing classic Autocomplete API");
       
       // Create the autocomplete object
       const options = {
@@ -141,13 +141,13 @@ Hooks.GooglePlacesAutocomplete = {
       autocomplete.addListener('place_changed', () => {
         if (!this.mounted) return;
         
-        console.group("Place selection process");
+        if (process.env.NODE_ENV !== 'production') console.group("Place selection process");
         const place = autocomplete.getPlace();
-        console.log("Place selected:", place);
+        if (process.env.NODE_ENV !== 'production') console.log("Place selected:", place);
         
         if (!place.geometry) {
-          console.error("No place geometry received");
-          console.groupEnd();
+          if (process.env.NODE_ENV !== 'production') console.error("No place geometry received");
+          if (process.env.NODE_ENV !== 'production') console.groupEnd();
           return;
         }
         
@@ -158,17 +158,17 @@ Hooks.GooglePlacesAutocomplete = {
         
         // Get address components
         if (place.address_components) {
-          console.log("Processing address components:", place.address_components);
+          if (process.env.NODE_ENV !== 'production') console.log("Processing address components:", place.address_components);
           for (const component of place.address_components) {
             if (component.types.includes('locality')) {
               city = component.long_name;
-              console.log(`Found city: ${city}`);
+              if (process.env.NODE_ENV !== 'production') console.log(`Found city: ${city}`);
             } else if (component.types.includes('administrative_area_level_1')) {
               state = component.long_name;
-              console.log(`Found state: ${state}`);
+              if (process.env.NODE_ENV !== 'production') console.log(`Found state: ${state}`);
             } else if (component.types.includes('country')) {
               country = component.long_name;
-              console.log(`Found country: ${country}`);
+              if (process.env.NODE_ENV !== 'production') console.log(`Found country: ${country}`);
             }
           }
         }
@@ -178,7 +178,7 @@ Hooks.GooglePlacesAutocomplete = {
         if (place.geometry && place.geometry.location) {
           lat = place.geometry.location.lat();
           lng = place.geometry.location.lng();
-          console.log(`Coordinates: ${lat}, ${lng}`);
+          if (process.env.NODE_ENV !== 'production') console.log(`Coordinates: ${lat}, ${lng}`);
         }
         
         // Map field IDs to expected form data keys
@@ -193,7 +193,7 @@ Hooks.GooglePlacesAutocomplete = {
         };
         
         // Direct DOM updates for each field
-        console.log("Updating DOM fields...");
+        if (process.env.NODE_ENV !== 'production') console.log("Updating DOM fields...");
         Object.entries(fieldMappings).forEach(([key, value]) => {
           if (value !== null && value !== undefined) {
             this.directUpdateField(key, value);
@@ -212,17 +212,17 @@ Hooks.GooglePlacesAutocomplete = {
         };
         
         // Send to LiveView
-        console.log("Pushing venue data to LiveView:", venueData);
+        if (process.env.NODE_ENV !== 'production') console.log("Pushing venue data to LiveView:", venueData);
         this.pushEvent('venue_selected', venueData);
         
         // Log all form fields for debugging
         this.logFormFieldValues();
-        console.groupEnd();
+        if (process.env.NODE_ENV !== 'production') console.groupEnd();
       });
       
-      console.log("Classic Autocomplete initialized");
+      if (process.env.NODE_ENV !== 'production') console.log("Classic Autocomplete initialized");
     } catch (error) {
-      console.error("Error in Autocomplete initialization:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Error in Autocomplete initialization:", error);
     }
   },
   
@@ -230,41 +230,41 @@ Hooks.GooglePlacesAutocomplete = {
   directUpdateField(id, value) {
     if (!this.mounted) return;
     
-    console.group(`Updating field ${id}`);
+    if (process.env.NODE_ENV !== 'production') console.group(`Updating field ${id}`);
     
     // Determine form type by examining the input element's ID
     const formType = this.inputEl.id.includes("new") ? "new" : "edit";
-    console.log(`Form context detected: ${formType}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`Form context detected: ${formType}`);
     
     // Look for the element using direct ID with suffix
     let field = document.getElementById(`${id}-${formType}`);
-    console.log(`Field by ID ${id}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${id}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
     
     // If not found, try without suffix
     if (!field) {
       field = document.getElementById(id);
-      console.log(`Field by ID ${id}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${id}: ${field ? 'FOUND' : 'NOT FOUND'}`);
     }
     
     // If not found, try with venue_ instead of venue-
     if (!field) {
       const altId = id.replace('venue-', 'venue_');
       field = document.getElementById(altId);
-      console.log(`Field by ID ${altId}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${altId}: ${field ? 'FOUND' : 'NOT FOUND'}`);
     }
     
     // If still not found, try with venue_ instead of venue- and the suffix
     if (!field) {
       const altId = id.replace('venue-', 'venue_');
       field = document.getElementById(`${altId}-${formType}`);
-      console.log(`Field by ID ${altId}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${altId}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
     }
     
     // If still not found, try the event[] prefixed version (for Phoenix forms)
     if (!field) {
       const selector = `[name="event[${id.replace('venue-', 'venue_')}]"]`;
       field = document.querySelector(selector);
-      console.log(`Field by selector ${selector}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by selector ${selector}: ${field ? 'FOUND' : 'NOT FOUND'}`);
     }
     
     if (field) {
@@ -273,22 +273,22 @@ Hooks.GooglePlacesAutocomplete = {
       field.value = value || '';
       
       // Log the update
-      console.log(`Updated value: "${oldValue}" -> "${value}"`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Updated value: "${oldValue}" -> "${value}"`);
       
       // Trigger input and change events to ensure form controllers detect the change
       field.dispatchEvent(new Event('input', {bubbles: true}));
       field.dispatchEvent(new Event('change', {bubbles: true}));
-      console.log("Events dispatched: input, change");
+      if (process.env.NODE_ENV !== 'production') console.log("Events dispatched: input, change");
     } else {
-      console.error(`Field ${id} not found in DOM`);
+      if (process.env.NODE_ENV !== 'production') console.error(`Field ${id} not found in DOM`);
     }
     
-    console.groupEnd();
+    if (process.env.NODE_ENV !== 'production') console.groupEnd();
   },
   
   // Debug helper to log all form field values
   logFormFieldValues() {
-    console.group("Current form field values:");
+    if (process.env.NODE_ENV !== 'production') console.group("Current form field values:");
     
     // Check all possible field name combinations
     const fieldKeys = [
@@ -328,7 +328,7 @@ Hooks.GooglePlacesAutocomplete = {
         }
       }
     });
-    console.groupEnd();
+    if (process.env.NODE_ENV !== 'production') console.groupEnd();
   },
   
   // Combine end date and time
@@ -337,9 +337,9 @@ Hooks.GooglePlacesAutocomplete = {
         endTimeInput && endTimeInput.value && 
         endsAtHidden) {
       endsAtHidden.value = `${endDateInput.value}T${endTimeInput.value}:00`;
-      console.log(`Combined end datetime: ${endsAtHidden.value}`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Combined end datetime: ${endsAtHidden.value}`);
     } else {
-      console.error("Missing required end date/time fields:", {
+      if (process.env.NODE_ENV !== 'production') console.error("Missing required end date/time fields:", {
         endDate: endDateInput?.value,
       });
     }
