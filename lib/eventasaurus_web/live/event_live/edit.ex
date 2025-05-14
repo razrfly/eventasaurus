@@ -439,6 +439,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:search_query, "")
       |> assign(:search_results, [])
       |> assign(:error, nil)
+      |> assign(:page, 1)
+      |> assign(:loading, false)
     }
   end
 
@@ -471,7 +473,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
       image ->
         # Track the download as per Unsplash API requirements - do this asynchronously
-        Task.start(fn ->
+        Task.Supervisor.start_child(Eventasaurus.TaskSupervisor, fn ->
           UnsplashService.track_download(image.download_location)
         end)
 
