@@ -227,7 +227,11 @@ defmodule EventasaurusWeb.EventComponents do
             <% end %>
 
             <%= hidden_input f, :cover_image_url %>
-            <%= hidden_input f, :unsplash_data %>
+            <%= if @unsplash_data do %>
+              <%= hidden_input f, :unsplash_data, value: Jason.encode!(@unsplash_data) %>
+            <% else %>
+              <%= hidden_input f, :unsplash_data %>
+            <% end %>
           </div>
         </div>
 
