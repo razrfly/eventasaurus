@@ -8,7 +8,15 @@ defmodule EventasaurusWeb.Services.UnsplashService do
   Returns a list of photos that match the search query.
   """
   def search_photos(query, page \\ 1, per_page \\ 20) do
-    case get("/search/photos", %{query: query, page: page, per_page: per_page}) do
+    cond do
+      is_nil(query) or query == "" ->
+        {:error, "Search query cannot be empty"}
+      page < 1 ->
+        {:error, "Page must be a positive integer"}
+      per_page < 1 or per_page > 30 ->
+        {:error, "Per_page must be between 1 and 30"}
+      true ->
+        case get("/search/photos", %{query: query, page: page, per_page: per_page}) do
       {:ok, %{"results" => results}} ->
         processed_results =
           results
@@ -41,15 +49,20 @@ defmodule EventasaurusWeb.Services.UnsplashService do
         {:error, reason}
     end
   end
+end
 
   @doc """
   Triggers a download event for the given photo ID.
   This is required by Unsplash API terms whenever a photo is downloaded or used.
   """
   def track_download(download_location) do
-    case get(download_location, %{}) do
-      {:ok, _response} -> :ok
-      {:error, reason} -> {:error, reason}
+    if is_binary(download_location) and String.starts_with?(download_location, "https://api.unsplash.com/photos/") do
+      case get(download_location, %{}) do
+        {:ok, _response} -> :ok
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, "Invalid Unsplash download location URL"}
     end
   end
 
@@ -58,20 +71,21 @@ defmodule EventasaurusWeb.Services.UnsplashService do
   defp get(path, params) do
     url = build_url(path, params)
 
-    headers = [
-      {"Authorization", "Client-ID #{access_key()}"},
-      {"Accept-Version", "v1"}
-    ]
+    with {:ok, key} <- access_key() do
+      headers = [
+        {"Authorization", "Client-ID #{key}"},
+        {"Accept-Version", "v1"}
+      ]
+      case HTTPoison.get(url, headers, [timeout: 10_000, recv_timeout: 10_000]) do
+        {:ok, %HTTPoison.Response{status_code: code, body: body}} when code in 200..299 ->
+          {:ok, Jason.decode!(body)}
 
-    case HTTPoison.get(url, headers) do
-      {:ok, %HTTPoison.Response{status_code: code, body: body}} when code in 200..299 ->
-        {:ok, Jason.decode!(body)}
+        {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+          {:error, "Unsplash API error: #{code}, #{body}"}
 
-      {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
-        {:error, "Unsplash API error: #{code}, #{body}"}
-
-      {:error, %HTTPoison.Error{reason: reason}} ->
-        {:error, "HTTP error: #{inspect(reason)}"}
+        {:error, %HTTPoison.Error{reason: reason}} ->
+          {:error, "HTTP error: #{inspect(reason)}"}
+      end
     end
   end
 
@@ -92,6 +106,9 @@ defmodule EventasaurusWeb.Services.UnsplashService do
   end
 
   defp access_key do
-    System.get_env("UNSPLASH_ACCESS_KEY") || raise "UNSPLASH_ACCESS_KEY is not set in environment variables"
+    case System.get_env("UNSPLASH_ACCESS_KEY") do
+      nil -> {:error, "UNSPLASH_ACCESS_KEY is not set in environment variables"}
+      key -> {:ok, key}
+    end
   end
 end
