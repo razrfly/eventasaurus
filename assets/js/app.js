@@ -45,21 +45,51 @@ Hooks.DateTimeSync = {
 
     if (!startDate || !startTime || !endDate || !endTime) return;
 
-    const syncEndFields = () => {
-      const dateVal = startDate.value;
-      const timeVal = startTime.value;
-      if (!dateVal || !timeVal) return;
-      const start = new Date(`${dateVal}T${timeVal}`);
-      if (isNaN(start.getTime())) return;
-      // Add 1 hour
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
-      // Format YYYY-MM-DD and HH:MM
+    // Helper: round up to next 30-min interval
+    function getNextHalfHour(now) {
+      let mins = now.getMinutes();
+      let rounded = mins < 30 ? 30 : 0;
+      let hour = now.getHours() + (mins >= 30 ? 1 : 0);
+      return { hour: hour % 24, minute: rounded };
+    }
+
+    function setInitialTimes() {
+      const now = new Date();
+      const { hour, minute } = getNextHalfHour(now);
+
+      // Format to HH:MM
       const pad = n => n.toString().padStart(2, '0');
-      endDate.value = `${end.getFullYear()}-${pad(end.getMonth()+1)}-${pad(end.getDate())}`;
-      endTime.value = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
-      endDate.dispatchEvent(new Event('change', {bubbles:true}));
-      endTime.dispatchEvent(new Event('change', {bubbles:true}));
-    };
+      const startTimeVal = `${pad(hour)}:${pad(minute)}`;
+      startTime.value = startTimeVal;
+
+      // Set start date to today if empty
+      if (!startDate.value) {
+        startDate.value = now.toISOString().slice(0, 10);
+      }
+
+      // Set end date to match start date
+      endDate.value = startDate.value;
+
+      // Set end time to +1 hour
+      let endHour = (hour + 1) % 24;
+      endTime.value = `${pad(endHour)}:${pad(minute)}`;
+    }
+
+    // Sync end date/time when start changes
+    function syncEndFields() {
+      // Copy start date to end date
+      endDate.value = startDate.value;
+      endDate.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Parse start time
+      const [sHour, sMinute] = startTime.value.split(':').map(Number);
+      let endHour = (sHour + 1) % 24;
+      endTime.value = `${endHour.toString().padStart(2, '0')}:${sMinute.toString().padStart(2, '0')}`;
+    }
+
+    // On mount, set initial times if start time is empty
+    if (!startTime.value) setInitialTimes();
+
     startDate.addEventListener('change', syncEndFields);
     startTime.addEventListener('change', syncEndFields);
   }
@@ -295,8 +325,14 @@ Hooks.GooglePlacesAutocomplete = {
         if (formEl) {
           foundElement = formEl;
           val = formEl.value;
-    
-    // Combine end date and time
+        }
+      }
+    });
+    console.groupEnd();
+  },
+  
+  // Combine end date and time
+  combineEndDateTime(endDateInput, endTimeInput, endsAtHidden) {
     if (endDateInput && endDateInput.value && 
         endTimeInput && endTimeInput.value && 
         endsAtHidden) {
