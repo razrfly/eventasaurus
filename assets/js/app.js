@@ -35,188 +35,33 @@ Hooks.TimezoneDetectionHook = {
   }
 };
 
-// Time Options Hook - Handles the time dropdown and combining date/time values
-Hooks.TimeOptionsHook = {
+// DateTimeSync Hook - Keeps end date/time in sync with start date/time
+Hooks.DateTimeSync = {
   mounted() {
-    console.log("TimeOptionsHook mounted on element:", this.el.id);
-    
-    // Determine form context (new or edit) from the element's ID or parent form
-    this.formType = this.el.closest('form')?.id.includes("new") ? "new" : "edit";
-    console.log(`Form context detected for TimeOptionsHook: ${this.formType}`);
-    
-    // Get references to all related fields
-    this.startTimeSelect = document.getElementById("event_start_time");
-    this.endTimeSelect = document.getElementById("event_ends_time");
-    this.startDateInput = document.getElementById("event_start_date");
-    this.endDateInput = document.getElementById("event_ends_date");
-    
-    // Get references with dynamic IDs for hidden fields
-    const suffix = this.formType;
-    this.startAtHidden = document.getElementById(`event_start_at_${suffix}`);
-    this.endsAtHidden = document.getElementById(`event_ends_at_${suffix}`);
-    
-    console.log(`Using dynamic IDs with suffix: ${suffix}`);
-    console.log(`Start at hidden field: ${this.startAtHidden ? "found" : "not found"}`);
-    console.log(`Ends at hidden field: ${this.endsAtHidden ? "found" : "not found"}`);
-    
-    // Check if all required elements are found
-    if (!this.startTimeSelect || !this.endTimeSelect || !this.startDateInput || 
-        !this.endDateInput || !this.startAtHidden || !this.endsAtHidden) {
-      console.error("TimeOptionsHook: Not all required elements found", {
-        startTime: !!this.startTimeSelect,
-        endTime: !!this.endTimeSelect,
-        startDate: !!this.startDateInput,
-        endDate: !!this.endDateInput,
-        startAt: !!this.startAtHidden,
-        endsAt: !!this.endsAtHidden
-      });
-      return; // Don't proceed if elements are missing
-    }
+    const startDate = this.el.querySelector('[data-role="start-date"]');
+    const startTime = this.el.querySelector('[data-role="start-time"]');
+    const endDate = this.el.querySelector('[data-role="end-date"]');
+    const endTime = this.el.querySelector('[data-role="end-time"]');
 
-    // Set default times if not already set
-    this.setDefaultTime();
-    
-    // Add event listeners for changes to automatically update related fields
-    this.addEventListeners();
-    
-    // Perform initial combination of date and time values
-    this.combineDateTime();
-  },
+    if (!startDate || !startTime || !endDate || !endTime) return;
 
-  setDefaultTime() {
-    // Only set defaults if the fields don't already have values
-    if (!this.startTimeSelect.value) {
-      const now = new Date();
-      
-      // Round to nearest 30 minutes
-      const minutes = now.getMinutes();
-      const roundedMinutes = minutes < 30 ? 30 : 0;
-      const hoursAdjustment = minutes < 30 ? 0 : 1;
-      
-      now.setMinutes(roundedMinutes);
-      if (hoursAdjustment === 1) {
-        now.setHours(now.getHours() + hoursAdjustment);
-      }
-      
-      // Format the time for the select field (24-hour format)
-      const formattedStartTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      
-      // Set start time
-      this.setTimeValue(this.startTimeSelect, formattedStartTime);
-      
-      // Calculate end time (1 hour later)
-      const endTime = new Date(now);
-      endTime.setHours(endTime.getHours() + 1);
-      const formattedEndTime = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-      
-      // Set end time
-      this.setTimeValue(this.endTimeSelect, formattedEndTime);
-    }
-  },
-  
-  setTimeValue(selectElement, timeValue) {
-    if (!selectElement) return;
-    
-    // Find the option with this value
-    let found = false;
-    for (let i = 0; i < selectElement.options.length; i++) {
-      if (selectElement.options[i].value === timeValue) {
-        selectElement.selectedIndex = i;
-        found = true;
-        break;
-      }
-    }
-    
-    // If exact match not found, find the closest time
-    if (!found && selectElement.options.length > 0) {
-      let closestIndex = 1; // Skip the empty option
-      let closestDiff = Infinity;
-      
-      const targetMinutes = this.timeToMinutes(timeValue);
-      
-      for (let i = 1; i < selectElement.options.length; i++) {
-        const optionMinutes = this.timeToMinutes(selectElement.options[i].value);
-        const diff = Math.abs(optionMinutes - targetMinutes);
-        
-        if (diff < closestDiff) {
-          closestDiff = diff;
-          closestIndex = i;
-        }
-      }
-      
-      selectElement.selectedIndex = closestIndex;
-    }
-    
-    // Dispatch change event to notify other listeners
-    selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-  },
-  
-  timeToMinutes(timeString) {
-    if (!timeString) return 0;
-    
-    try {
-      const [hours, minutes] = timeString.split(':').map(Number);
-      return hours * 60 + minutes;
-    } catch (err) {
-      console.error("Error converting time to minutes:", err);
-      return 0;
-    }
-  },
-  
-  addEventListeners() {
-    // For start date, listen to both input and change events
-    const syncStartToEndDate = () => {
-      if (this.startDateInput && this.endDateInput) {
-        this.endDateInput.value = this.startDateInput.value;
-        
-        // Manually trigger change event on end date
-        this.endDateInput.dispatchEvent(new Event('change', { bubbles: true }));
-        this.combineDateTime();
-      }
+    const syncEndFields = () => {
+      const dateVal = startDate.value;
+      const timeVal = startTime.value;
+      if (!dateVal || !timeVal) return;
+      const start = new Date(`${dateVal}T${timeVal}`);
+      if (isNaN(start.getTime())) return;
+      // Add 1 hour
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      // Format YYYY-MM-DD and HH:MM
+      const pad = n => n.toString().padStart(2, '0');
+      endDate.value = `${end.getFullYear()}-${pad(end.getMonth()+1)}-${pad(end.getDate())}`;
+      endTime.value = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+      endDate.dispatchEvent(new Event('change', {bubbles:true}));
+      endTime.dispatchEvent(new Event('change', {bubbles:true}));
     };
-    
-    this.startDateInput.addEventListener('change', syncStartToEndDate);
-    this.startDateInput.addEventListener('input', syncStartToEndDate);
-    
-    // When start time changes, update end time to be 1 hour later
-    this.startTimeSelect.addEventListener('change', () => {
-      if (this.startTimeSelect.value && this.endTimeSelect) {
-        const startMinutes = this.timeToMinutes(this.startTimeSelect.value);
-        const endMinutes = startMinutes + 60; // Add 1 hour in minutes
-        
-        const hours = Math.floor(endMinutes / 60) % 24;
-        const minutes = endMinutes % 60;
-        
-        const formattedEndTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-        this.setTimeValue(this.endTimeSelect, formattedEndTime);
-      }
-      this.combineDateTime();
-    });
-    
-    // Update hidden fields when any date/time field changes
-    this.endDateInput.addEventListener('change', () => this.combineDateTime());
-    this.endTimeSelect.addEventListener('change', () => this.combineDateTime());
-  },
-  
-  combineDateTime() {
-    // Combine start date and time
-    if (this.startDateInput && this.startDateInput.value && 
-        this.startTimeSelect && this.startTimeSelect.value &&
-        this.startAtHidden) {
-      this.startAtHidden.value = `${this.startDateInput.value}T${this.startTimeSelect.value}:00`;
-    }
-    
-    // Combine end date and time
-    if (this.endDateInput && this.endDateInput.value && 
-        this.endTimeSelect && this.endTimeSelect.value &&
-        this.endsAtHidden) {
-      this.endsAtHidden.value = `${this.endDateInput.value}T${this.endTimeSelect.value}:00`;
-    }
-    
-    console.log('DateTime values combined:', {
-      start_at: this.startAtHidden?.value || 'not set',
-      ends_at: this.endsAtHidden?.value || 'not set'
-    });
+    startDate.addEventListener('change', syncEndFields);
+    startTime.addEventListener('change', syncEndFields);
   }
 };
 
@@ -450,61 +295,6 @@ Hooks.GooglePlacesAutocomplete = {
         if (formEl) {
           foundElement = formEl;
           val = formEl.value;
-        }
-      }
-      
-      console.log(`${key}: ${val !== null ? val : 'FIELD NOT FOUND'} ${foundElement ? '(✓)' : '(✗)'}`);
-    });
-    
-    console.groupEnd();
-  }
-};
-
-// New Event Form Hook to handle form submission
-Hooks.EventFormHook = {
-  mounted() {
-    console.log("EventFormHook mounted");
-    
-    // Store form ID suffix (new or edit)
-    this.formType = this.el.id.includes("new") ? "new" : "edit";
-    console.log(`Form type detected: ${this.formType}`);
-    
-    this.el.addEventListener("submit", this.handleSubmit.bind(this));
-  },
-  
-  handleSubmit(event) {
-    console.log("Form is being submitted - combining date/time fields");
-    
-    // Use dynamic IDs based on form type (new or edit)
-    const suffix = this.formType;
-    
-    // Get references to date and time inputs 
-    const startDateInput = document.getElementById("event_start_date");
-    const startTimeInput = document.getElementById("event_start_time");
-    const endDateInput = document.getElementById("event_ends_date");
-    const endTimeInput = document.getElementById("event_ends_time");
-    
-    // Get references to hidden datetime fields with dynamic IDs
-    const startAtHidden = document.getElementById(`event_start_at_${suffix}`);
-    const endsAtHidden = document.getElementById(`event_ends_at_${suffix}`);
-    
-    console.log(`Using dynamic IDs with suffix: ${suffix}`);
-    console.log(`Start at element: ${startAtHidden ? "found" : "not found"}`);
-    console.log(`Ends at element: ${endsAtHidden ? "found" : "not found"}`);
-    
-    // Combine start date and time
-    if (startDateInput && startDateInput.value && 
-        startTimeInput && startTimeInput.value && 
-        startAtHidden) {
-      startAtHidden.value = `${startDateInput.value}T${startTimeInput.value}:00`;
-      console.log(`Combined start datetime: ${startAtHidden.value}`);
-    } else {
-      console.error("Missing required start date/time fields:", {
-        startDate: startDateInput?.value,
-        startTime: startTimeInput?.value,
-        startAtField: startAtHidden ? startAtHidden.id : "not found"
-      });
-    }
     
     // Combine end date and time
     if (endDateInput && endDateInput.value && 
@@ -515,8 +305,6 @@ Hooks.EventFormHook = {
     } else {
       console.error("Missing required end date/time fields:", {
         endDate: endDateInput?.value,
-        endTime: endTimeInput?.value,
-        endsAtField: endsAtHidden ? endsAtHidden.id : "not found"
       });
     }
   }
