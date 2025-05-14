@@ -111,7 +111,7 @@ defmodule EventasaurusWeb.EventComponents do
     assigns = assign_new(assigns, :id, fn -> assigns.field.id end)
 
     ~H"""
-    <div id="timezone-detector" phx-hook="TimezoneDetectionHook">
+    <div id={"timezone-detector-#{@id}"} phx-hook="TimezoneDetectionHook">
       <select
         id={@id}
         name={@field.name}
@@ -174,10 +174,13 @@ defmodule EventasaurusWeb.EventComponents do
   attr :cover_image_url, :string, default: nil, doc: "the cover image URL"
   attr :unsplash_data, :map, default: nil, doc: "unsplash data for attribution"
   attr :on_image_click, :string, default: nil, doc: "event name to trigger when clicking on the image picker"
+  attr :id, :string, default: nil, doc: "unique id for the form element, required for hooks"
 
   def event_form(assigns) do
+    assigns = assign_new(assigns, :id, fn -> "event-form-#{if assigns.action == :new, do: "new", else: "edit"}" end)
+
     ~H"""
-    <.form :let={f} for={@for} phx-change="validate" phx-submit="submit" phx-hook="EventFormHook">
+    <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" phx-hook="EventFormHook">
       <div class="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200">
         <!-- Cover Image -->
         <div class="mb-8">
@@ -228,7 +231,15 @@ defmodule EventasaurusWeb.EventComponents do
 
             <%= hidden_input f, :cover_image_url %>
             <%= if @unsplash_data do %>
-              <%= hidden_input f, :unsplash_data, value: Jason.encode!(@unsplash_data) %>
+              <%=
+                # Handle the case when unsplash_data is either a map or already a JSON string
+                encoded_data = cond do
+                  is_map(@unsplash_data) -> Jason.encode!(@unsplash_data)
+                  is_binary(@unsplash_data) -> @unsplash_data
+                  true -> ""
+                end
+              %>
+              <%= hidden_input f, :unsplash_data, value: encoded_data %>
             <% else %>
               <%= hidden_input f, :unsplash_data %>
             <% end %>
@@ -302,8 +313,8 @@ defmodule EventasaurusWeb.EventComponents do
             </div>
 
             <!-- Hidden fields to store the combined datetime values -->
-            <input type="hidden" name="event[start_at]" id="event_start_at" />
-            <input type="hidden" name="event[ends_at]" id="event_ends_at" />
+            <input type="hidden" name="event[start_at]" id={"event_start_at_#{if @action == :new, do: "new", else: "edit"}"} />
+            <input type="hidden" name="event[ends_at]" id={"event_ends_at_#{if @action == :new, do: "new", else: "edit"}"} />
           </div>
         </div>
 
@@ -333,7 +344,7 @@ defmodule EventasaurusWeb.EventComponents do
                 <div id="venue-search-container" class="mt-1 relative">
                   <input
                     type="text"
-                    id="venue-search"
+                    id={"venue-search-#{if @action == :new, do: "new", else: "edit"}"}
                     placeholder="Start typing a venue or address..."
                     phx-hook="GooglePlacesAutocomplete"
                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
@@ -349,13 +360,13 @@ defmodule EventasaurusWeb.EventComponents do
 
               <!-- Hidden fields for venue data -->
               <div>
-                <input type="hidden" name="event[venue_name]" id="venue-name" value={Map.get(@form_data, "venue_name", "")} />
-                <input type="hidden" name="event[venue_address]" id="venue-address" value={Map.get(@form_data, "venue_address", "")} />
-                <input type="hidden" name="event[venue_city]" id="venue-city" value={Map.get(@form_data, "venue_city", "")} />
-                <input type="hidden" name="event[venue_state]" id="venue-state" value={Map.get(@form_data, "venue_state", "")} />
-                <input type="hidden" name="event[venue_country]" id="venue-country" value={Map.get(@form_data, "venue_country", "")} />
-                <input type="hidden" name="event[venue_latitude]" id="venue-lat" value={Map.get(@form_data, "venue_latitude", "")} />
-                <input type="hidden" name="event[venue_longitude]" id="venue-lng" value={Map.get(@form_data, "venue_longitude", "")} />
+                <input type="hidden" name="event[venue_name]" id={"venue-name-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_name", "")} />
+                <input type="hidden" name="event[venue_address]" id={"venue-address-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_address", "")} />
+                <input type="hidden" name="event[venue_city]" id={"venue-city-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_city", "")} />
+                <input type="hidden" name="event[venue_state]" id={"venue-state-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_state", "")} />
+                <input type="hidden" name="event[venue_country]" id={"venue-country-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_country", "")} />
+                <input type="hidden" name="event[venue_latitude]" id={"venue-lat-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_latitude", "")} />
+                <input type="hidden" name="event[venue_longitude]" id={"venue-lng-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_longitude", "")} />
               </div>
 
               <!-- Selected venue display -->
