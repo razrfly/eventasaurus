@@ -265,7 +265,7 @@ defmodule EventasaurusWeb.EventComponents do
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                   <.date_input
-                    id="event_start_date"
+                    id={"#{@id}-start_date"}
                     name="event[start_date]"
                     value={Map.get(@form_data, "start_date", "")}
                     required
@@ -275,7 +275,7 @@ defmodule EventasaurusWeb.EventComponents do
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
                   <.time_select
-                    id="event_start_time"
+                    id={"#{@id}-start_time"}
                     name="event[start_time]"
                     value={Map.get(@form_data, "start_time", "")}
                     required
@@ -287,7 +287,7 @@ defmodule EventasaurusWeb.EventComponents do
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                   <.date_input
-                    id="event_ends_date"
+                    id={"#{@id}-ends_date"}
                     name="event[ends_date]"
                     value={Map.get(@form_data, "ends_date", "")}
                     data-role="end-date"
@@ -296,7 +296,7 @@ defmodule EventasaurusWeb.EventComponents do
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
                   <.time_select
-                    id="event_ends_time"
+                    id={"#{@id}-ends_time"}
                     name="event[ends_time]"
                     value={Map.get(@form_data, "ends_time", "")}
                     data-role="end-time"
@@ -316,8 +316,8 @@ defmodule EventasaurusWeb.EventComponents do
             </div>
 
             <!-- Hidden fields to store the combined datetime values -->
-            <input type="hidden" name="event[start_at]" id={"event_start_at_#{if @action == :new, do: "new", else: "edit"}"} />
-            <input type="hidden" name="event[ends_at]" id={"event_ends_at_#{if @action == :new, do: "new", else: "edit"}"} />
+            <input type="hidden" name="event[start_at]" id={"#{@id}-start_at"} />
+            <input type="hidden" name="event[ends_at]" id={"#{@id}-ends_at"} />
           </div>
         </div>
 

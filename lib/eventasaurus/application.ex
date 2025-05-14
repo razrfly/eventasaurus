@@ -45,6 +45,8 @@ defmodule Eventasaurus.Application do
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Eventasaurus.Finch},
+      # Add a Task Supervisor for background jobs
+      {Task.Supervisor, name: Eventasaurus.TaskSupervisor},
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry
