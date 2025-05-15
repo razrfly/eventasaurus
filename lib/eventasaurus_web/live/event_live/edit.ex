@@ -21,73 +21,64 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
       event ->
         # Check if current user is an organizer for this event
-        if socket.assigns[:current_user] && Events.user_is_organizer?(event, socket.assigns.current_user) do
-          # Convert the event to a changeset
-          changeset = Events.change_event(event)
+        case ensure_user_struct(socket.assigns[:current_user]) do
+          {:ok, user} ->
+            if Events.user_is_organizer?(event, user) do
+              # Convert the event to a changeset
+              changeset = Events.change_event(event)
 
-          # Parse the datetime values into date and time components
-          {start_date, start_time} = parse_datetime(event.start_at)
-          {ends_date, ends_time} = parse_datetime(event.ends_at)
+              # Parse the datetime values into date and time components
+              {start_date, start_time} = parse_datetime(event.start_at)
+              {ends_date, ends_time} = parse_datetime(event.ends_at)
 
-          # Check if this is a virtual event
-          is_virtual = event.venue_id == nil
+              # Check if this is a virtual event
+              is_virtual = event.venue_id == nil
 
-          # Prepare form data
-          form_data = %{
-            "start_date" => start_date,
-            "start_time" => start_time,
-            "ends_date" => ends_date,
-            "ends_time" => ends_time,
-            "timezone" => event.timezone,
-            "is_virtual" => is_virtual,
-            "cover_image_url" => event.cover_image_url,
-            "unsplash_data" => event.unsplash_data
-          }
+              # Prepare form data
+              form_data = %{
+                "start_date" => start_date,
+                "start_time" => start_time,
+                "ends_date" => ends_date,
+                "ends_time" => ends_time,
+                "timezone" => event.timezone,
+                "is_virtual" => is_virtual,
+                "cover_image_url" => event.cover_image_url,
+                "unsplash_data" => event.unsplash_data
+              }
 
-          # If there's a venue, include venue data
-          form_data =
-            if event.venue do
-              venue = event.venue
-              form_data
-              |> Map.put("venue_name", venue.name)
-              |> Map.put("venue_address", venue.address)
-              |> Map.put("venue_city", venue.city)
-              |> Map.put("venue_state", venue.state || "")
-              |> Map.put("venue_country", venue.country || "")
-              |> Map.put("venue_latitude", venue.latitude)
-              |> Map.put("venue_longitude", venue.longitude)
+              # Set up the socket with all required assigns
+              socket =
+                socket
+                |> assign(:event, event)
+                |> assign(:changeset, changeset)
+                |> assign(:form_data, form_data)
+                |> assign(:is_virtual, is_virtual)
+                |> assign(:selected_venue_name, Map.get(form_data, "venue_name"))
+                |> assign(:selected_venue_address, Map.get(form_data, "venue_address"))
+                |> assign(:venues, Venues.list_venues())
+                |> assign(:show_all_timezones, false)
+                |> assign(:cover_image_url, event.cover_image_url)
+                |> assign(:unsplash_data, event.unsplash_data)
+                |> assign(:show_image_picker, false)
+                |> assign(:search_query, "")
+                |> assign(:search_results, [])
+                |> assign(:loading, false)
+                |> assign(:error, nil)
+                |> assign(:page, 1)
+                |> assign(:per_page, 20)
+
+              {:ok, socket}
             else
-              form_data
+              {:ok,
+                socket
+                |> put_flash(:error, "You are not authorized to edit this event")
+                |> redirect(to: "/events/#{slug}")}
             end
-
-          # Set up the socket with all required assigns
-          socket =
-            socket
-            |> assign(:event, event)
-            |> assign(:changeset, changeset)
-            |> assign(:form_data, form_data)
-            |> assign(:is_virtual, is_virtual)
-            |> assign(:selected_venue_name, Map.get(form_data, "venue_name"))
-            |> assign(:selected_venue_address, Map.get(form_data, "venue_address"))
-            |> assign(:venues, Venues.list_venues())
-            |> assign(:show_all_timezones, false)
-            |> assign(:cover_image_url, event.cover_image_url)
-            |> assign(:unsplash_data, event.unsplash_data)
-            |> assign(:show_image_picker, false)
-            |> assign(:search_query, "")
-            |> assign(:search_results, [])
-            |> assign(:loading, false)
-            |> assign(:error, nil)
-            |> assign(:page, 1)
-            |> assign(:per_page, 20)
-
-          {:ok, socket}
-        else
-          # User is not authorized to edit this event
-          {:ok,
-            socket
-            |> put_flash(:error, "You are not authorized to edit this event")
-            |> redirect(to: "/events/#{slug}")}
+          _ ->
+            {:ok,
+              socket
+              |> put_flash(:error, "Invalid user session")
+              |> redirect(to: "/dashboard")}
         end
     end
   end
