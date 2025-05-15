@@ -10,8 +10,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Services.UnsplashService
 
   @impl true
-  def mount(%{"slug" => slug}, session, socket), do: mount(%{"id" => slug}, session, socket)
-
   def mount(%{"id" => slug}, _session, socket) do
     # Load the event and ensure user has access
     case Events.get_event_by_slug(slug) do
@@ -22,29 +20,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
           |> redirect(to: "/dashboard")}
 
       event ->
-        # Ensure we always pass a %User{} struct to user_is_organizer?
-        user_struct =
-          case socket.assigns[:current_user] do
-            %EventasaurusApp.Accounts.User{} = user -> user
-            %{"id" => id} ->
-              case EventasaurusApp.Accounts.get_user_by_supabase_id(id) do
-                nil -> EventasaurusApp.Accounts.get_user(id)
-                user -> user
-              end
-            %{:supabase_id => id} ->
-              case EventasaurusApp.Accounts.get_user_by_supabase_id(id) do
-                nil -> nil
-                user -> user
-              end
-            %{"supabase_id" => id} ->
-              case EventasaurusApp.Accounts.get_user_by_supabase_id(id) do
-                nil -> nil
-                user -> user
-              end
-            _ -> nil
-          end
-
-        if user_struct && Events.user_is_organizer?(event, user_struct) do
+        # Check if current user is an organizer for this event
+        if socket.assigns[:current_user] && Events.user_is_organizer?(event, socket.assigns.current_user) do
           # Convert the event to a changeset
           changeset = Events.change_event(event)
 
