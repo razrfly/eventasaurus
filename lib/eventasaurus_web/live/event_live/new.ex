@@ -495,7 +495,7 @@ defmodule EventasaurusWeb.EventLive.New do
     cond do
       image && Map.has_key?(image, :download_location) ->
         # Unsplash image (atom keys)
-        Task.start(fn ->
+        Task.Supervisor.start_child(Eventasaurus.TaskSupervisor, fn ->
           UnsplashService.track_download(image[:download_location])
         end)
 

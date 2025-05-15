@@ -96,6 +96,7 @@
         role="button"
         aria-label={"Select image by " <> (image.user[:name] || "Unsplash photographer")}
         phx-keydown="select_image"
+phx-key="Enter,Space"
       >
         <img
           src={image[:urls][:small]}
@@ -128,6 +129,7 @@
         role="button"
         aria-label={"Select image: " <> display_name}
         phx-keydown="select_image"
+phx-key="Enter,Space"
       >
         <img
           src={item.type == :person && item.profile_path && ("https://image.tmdb.org/t/p/w500" <> item.profile_path) ||
