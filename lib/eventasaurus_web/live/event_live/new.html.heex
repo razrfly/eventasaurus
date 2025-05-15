@@ -81,62 +81,115 @@
             </div>
           <% end %>
 
-          <%= if length(@search_results) > 0 do %>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
-              <%= for image <- @search_results do %>
-                <div
-                  phx-click="select_image"
-                  phx-value-id={image.id}
-                  class="relative group cursor-pointer overflow-hidden rounded-md"
-                  tabindex="0"
-                  role="button"
-                  aria-label={"Select image by " <> (image.user.name || "Unsplash photographer")}
-                  phx-keydown="select_image"
-                >
-                  <img
-                    src={image.urls.small}
-                    alt={image.description || "Unsplash image"}
-                    class="w-full h-40 object-cover transform transition-transform duration-300 group-hover:scale-110"
-                  />
-                  <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity duration-300"></div>
-                  <div class="absolute bottom-0 left-0 right-0 p-2 text-white bg-gradient-to-t from-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <p class="text-xs truncate">Photo by <%= image.user.name || "Unsplash photographer" %></p>
-                  </div>
-                </div>
+          <% unsplash = @search_results[:unsplash] || [] %>
+<% tmdb = @search_results[:tmdb] || [] %>
+
+<%= if length(unsplash) > 0 do %>
+  <h3 class="text-lg font-bold mb-2">From Unsplash</h3>
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
+    <%= for image <- unsplash do %>
+      <div
+        phx-click="select_image"
+        phx-value-id={image.id}
+        class="relative group cursor-pointer overflow-hidden rounded-md"
+        tabindex="0"
+        role="button"
+        aria-label={"Select image by " <> (image.user.name || "Unsplash photographer")}
+        phx-keydown="select_image"
+      >
+        <img
+          src={image.urls.small}
+          alt={image.description || "Unsplash image"}
+          class="w-full h-40 object-cover transform transition-transform duration-300 group-hover:scale-110"
+        />
+        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity duration-300"></div>
+        <div class="absolute bottom-0 left-0 right-0 p-2 text-white bg-gradient-to-t from-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <p class="text-xs truncate">Photo by <%= image.user.name || "Unsplash photographer" %></p>
+        </div>
+      </div>
+    <% end %>
+  </div>
+<% end %>
+
+<%= if length(tmdb) > 0 do %>
+  <h3 class="text-lg font-bold mb-2 mt-6">From The Movie Database</h3>
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+    <%= for item <- tmdb do %>
+      <div class="bg-gray-50 p-4 rounded shadow flex flex-col items-center">
+        <%= if item.type == :movie do %>
+          <%= if item.poster_path do %>
+            <img src={"https://image.tmdb.org/t/p/w185" <> item.poster_path} alt={item.title} class="mb-2 rounded h-36 object-cover" />
+          <% end %>
+          <div class="text-center">
+            <div class="font-semibold"><%= item.title %></div>
+            <div class="text-xs text-gray-500 mb-1">Movie</div>
+            <div class="text-xs text-gray-700"><%= item.release_date %></div>
+            <div class="text-xs text-gray-600 mt-1"><%= item.overview %></div>
+          </div>
+        <% end %>
+        <%= if item.type == :tv do %>
+          <%= if item.poster_path do %>
+            <img src={"https://image.tmdb.org/t/p/w185" <> item.poster_path} alt={item.name} class="mb-2 rounded h-36 object-cover" />
+          <% end %>
+          <div class="text-center">
+            <div class="font-semibold"><%= item.name %></div>
+            <div class="text-xs text-gray-500 mb-1">TV Show</div>
+            <div class="text-xs text-gray-700"><%= item.first_air_date %></div>
+            <div class="text-xs text-gray-600 mt-1"><%= item.overview %></div>
+          </div>
+        <% end %>
+        <%= if item.type == :person do %>
+          <%= if item.profile_path do %>
+            <img src={"https://image.tmdb.org/t/p/w185" <> item.profile_path} alt={item.name} class="mb-2 rounded-full h-24 w-24 object-cover" />
+          <% end %>
+          <div class="text-center">
+            <div class="font-semibold"><%= item.name %></div>
+            <div class="text-xs text-gray-500 mb-1">Person</div>
+            <div class="text-xs text-gray-600 mt-1">
+              <%= for known <- (item.known_for || []) do %>
+                <span class="inline-block bg-gray-200 rounded px-2 py-1 text-xs mr-1 mb-1">
+                  <%= known["title"] || known["name"] %>
+                </span>
               <% end %>
             </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
 
-            <%= if @loading and @page > 1 do %>
-              <div class="flex justify-center my-6">
-                <div class="w-8 h-8 border-t-2 border-b-2 border-indigo-500 rounded-full animate-spin"></div>
-              </div>
-            <% else %>
-              <div class="flex justify-center mb-6">
-                <button
-                  phx-click="load_more_images"
-                  class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Load More
-                </button>
-              </div>
-            <% end %>
+          <%= if @loading and @page > 1 do %>
+            <div class="flex justify-center my-6">
+              <div class="w-8 h-8 border-t-2 border-b-2 border-indigo-500 rounded-full animate-spin"></div>
+            </div>
           <% else %>
-            <%= if @search_query == "" do %>
+            <div class="flex justify-center mb-6">
+              <button
+                phx-click="load_more_images"
+                class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Load More
+              </button>
+            </div>
+          <% end %>
+
+          <%= if @search_query == "" do %>
+            <div class="text-center py-12 text-gray-500">
+              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              </svg>
+              <p class="mt-2 text-sm">Search for images on Unsplash</p>
+            </div>
+          <% else %>
+            <%= if not @loading do %>
               <div class="text-center py-12 text-gray-500">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                </svg>
-                <p class="mt-2 text-sm">Search for images on Unsplash</p>
+                <p class="mt-2 text-sm">No results found for "<%= @search_query %>"</p>
               </div>
-            <% else %>
-              <%= if not @loading do %>
-                <div class="text-center py-12 text-gray-500">
-                  <p class="mt-2 text-sm">No results found for "<%= @search_query %>"</p>
-                </div>
-              <% end %>
             <% end %>
           <% end %>
+
         </div>
       </div>
       
@@ -152,4 +205,4 @@
       </div>
     </div>
   </div>
-<% end %> 
+<% end %>
