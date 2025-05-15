@@ -481,35 +481,40 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("select_image", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.search_results, &(&1.id == id)) do
-      nil ->
-        {:noreply, socket}
+    # Flatten all results (Unsplash and TMDb) into a single list
+    results =
+      socket.assigns.search_results
+      |> Map.values()
+      |> List.flatten()
 
-      image ->
-        # Track the download as per Unsplash API requirements - do this asynchronously
+    # Find the image by id, supporting both string and atom keys
+    image = Enum.find(results, fn img ->
+      (is_map(img) && (to_string(img[:id]) == id || img["id"] == id))
+    end)
+
+    cond do
+      image && Map.has_key?(image, :download_location) ->
+        # Unsplash image (atom keys)
         Task.start(fn ->
-          UnsplashService.track_download(image.download_location)
+          UnsplashService.track_download(image[:download_location])
         end)
 
-        # Create the unsplash_data map to be stored in the database
         unsplash_data = %{
-          "photo_id" => image.id,
-          "url" => image.urls.regular,
-          "full_url" => image.urls.full,
-          "raw_url" => image.urls.raw,
-          "photographer_name" => image.user.name,
-          "photographer_username" => image.user.username,
-          "photographer_url" => image.user.profile_url,
-          "download_location" => image.download_location
+          "photo_id" => image[:id],
+          "url" => image[:urls][:regular],
+          "full_url" => image[:urls][:full],
+          "raw_url" => image[:urls][:raw],
+          "photographer_name" => image[:user][:name],
+          "photographer_username" => image[:user][:username],
+          "photographer_url" => image[:user][:profile_url],
+          "download_location" => image[:download_location]
         }
 
-        # Update form_data with the Unsplash photo info
         form_data =
           socket.assigns.form_data
-          |> Map.put("cover_image_url", image.urls.regular)
+          |> Map.put("cover_image_url", image[:urls][:regular])
           |> Map.put("unsplash_data", unsplash_data)
 
-        # Update the changeset
         changeset =
           %Event{}
           |> Events.change_event(form_data)
@@ -519,10 +524,58 @@ defmodule EventasaurusWeb.EventLive.New do
           socket
           |> assign(:form_data, form_data)
           |> assign(:changeset, changeset)
-          |> assign(:cover_image_url, image.urls.regular)
+          |> assign(:cover_image_url, image[:urls][:regular])
           |> assign(:unsplash_data, unsplash_data)
-          |> assign(:show_image_picker, false)}
+          |> assign(:show_image_picker, false)
+        }
+
+      image && (image[:poster_path] || image[:profile_path]) ->
+        # TMDb image (atom keys)
+        image_url =
+          cond do
+            image[:poster_path] -> "https://image.tmdb.org/t/p/w500" <> image[:poster_path]
+            image[:profile_path] -> "https://image.tmdb.org/t/p/w500" <> image[:profile_path]
+            true -> nil
+          end
+
+        form_data =
+          socket.assigns.form_data
+          |> Map.put("cover_image_url", image_url)
+          |> Map.delete("unsplash_data")
+
+        changeset =
+          %Event{}
+          |> Events.change_event(form_data)
+          |> Map.put(:action, :validate)
+
+        {:noreply,
+          socket
+          |> assign(:form_data, form_data)
+          |> assign(:changeset, changeset)
+          |> assign(:cover_image_url, image_url)
+          |> assign(:unsplash_data, nil)
+          |> assign(:show_image_picker, false)
+        }
+
+      true ->
+        {:noreply, socket}
     end
+  end
+
+  # Handle select_image with missing id
+  @impl true
+  def handle_event("select_image", params, socket) do
+    require Logger
+    Logger.warn("[select_image] Missing id in params: #{inspect(params)}")
+    {:noreply, socket}
+  end
+
+  # Catch-all for unknown or malformed events
+  @impl true
+  def handle_event(event, params, socket) do
+    require Logger
+    Logger.error("[handle_event] Unmatched event: #{inspect(event)}, params: #{inspect(params)}")
+    {:noreply, socket}
   end
 
   # Helper function for searching Unsplash
