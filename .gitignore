@@ -13,7 +13,9 @@ dev-debug.log
 node_modules/
 
 # Phoenix static assets (rebuild on Fly/CI)
-/priv/static/
+priv/static/*
+!priv/static/images/
+!priv/static/images/**
 
 # Environment variables
 .env

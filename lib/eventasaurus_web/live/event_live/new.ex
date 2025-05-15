@@ -8,6 +8,7 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
   alias EventasaurusWeb.Services.UnsplashService
+  alias EventasaurusWeb.Services.SearchService
 
   @impl true
   def mount(_params, _session, socket) do
@@ -32,7 +33,7 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:unsplash_data, nil)
       |> assign(:show_image_picker, false)
       |> assign(:search_query, "")
-      |> assign(:search_results, [])
+      |> assign(:search_results, %{unsplash: [], tmdb: []})
       |> assign(:loading, false)
       |> assign(:error, nil)
       |> assign(:page, 1)
@@ -452,7 +453,7 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply,
       socket
       |> assign(:search_query, "")
-      |> assign(:search_results, [])
+      |> assign(:search_results, %{unsplash: [], tmdb: []})
       |> assign(:error, nil)
     }
   end
@@ -526,29 +527,35 @@ defmodule EventasaurusWeb.EventLive.New do
 
   # Helper function for searching Unsplash
   defp do_search(socket) do
-    case UnsplashService.search_photos(
+    # Use the unified search service
+    case SearchService.unified_search(
       socket.assigns.search_query,
-      socket.assigns.page,
-      socket.assigns.per_page
+      page: socket.assigns.page,
+      per_page: socket.assigns.per_page
     ) do
-      {:ok, results} ->
-        # If this is page 1, replace results, otherwise append
-        updated_results =
+      %{
+        unsplash: unsplash_results,
+        tmdb: tmdb_results
+      } ->
+        # If this is page 1, replace results, otherwise append for Unsplash; for TMDb, always replace
+        updated_unsplash =
           if socket.assigns.page == 1 do
-            results
+            unsplash_results
           else
-            socket.assigns.search_results ++ results
+            (socket.assigns.search_results[:unsplash] || []) ++ unsplash_results
           end
 
+        updated_tmdb = tmdb_results
+
         socket
-        |> assign(:search_results, updated_results)
+        |> assign(:search_results, %{unsplash: updated_unsplash, tmdb: updated_tmdb})
         |> assign(:loading, false)
         |> assign(:error, nil)
 
-      {:error, reason} ->
+      _ ->
         socket
         |> assign(:loading, false)
-        |> assign(:error, "Error searching Unsplash: #{reason}")
+        |> assign(:error, "Error searching APIs.")
     end
   end
 end

@@ -82,9 +82,11 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Other scopes may use custom stacks.
-  # scope "/api", EventasaurusWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", EventasaurusWeb do
+    pipe_through :api
+
+    get "/search/unified", SearchController, :unified
+  end
 
   # Enable Swoosh mailbox preview in development
   if Application.compile_env(:eventasaurus, :dev_routes) do
