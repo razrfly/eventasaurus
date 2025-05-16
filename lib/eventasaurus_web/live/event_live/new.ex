@@ -82,31 +82,6 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply, socket}
   end
 
-  # Handle the timezone detection event from JavaScript hook
-  @impl true
-  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
-    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
-
-    # Only set the timezone if it's not already set in the form
-    if Map.get(socket.assigns.form_data, "timezone", "") == "" do
-      # Update form_data with the detected timezone
-      form_data = Map.put(socket.assigns.form_data, "timezone", timezone)
-
-      # Update the changeset with the new timezone
-      changeset =
-        %Event{}
-        |> Events.change_event(form_data)
-        |> Map.put(:action, :validate)
-
-      {:noreply,
-        socket
-        |> assign(:form_data, form_data)
-        |> assign(:changeset, changeset)}
-    else
-      {:noreply, socket}
-    end
-  end
-
   @impl true
   def handle_event("submit", %{"event" => event_params}, socket) do
     IO.puts("\n======================== SUBMIT EVENT ========================")
@@ -119,6 +94,7 @@ defmodule EventasaurusWeb.EventLive.New do
           event_params["unsplash_data"]
           |> Jason.decode!()
 
+
         Map.put(event_params, "unsplash_data", unsplash_data)
       else
         event_params
@@ -126,6 +102,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
     # Combine date and time fields if needed
     event_params = combine_date_time_fields(event_params)
+
 
     # Include venue data from form_data as a fallback
     venue_data = %{
@@ -173,6 +150,32 @@ defmodule EventasaurusWeb.EventLive.New do
           socket
           |> put_flash(:error, "Could not create event: User account issue")
           |> assign(changeset: Events.change_event(%Event{}, event_params))}
+    end
+  end
+
+  @impl true
+  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
+    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
+
+    # Only set the timezone if it's not already set in the form
+    if Map.get(socket.assigns.form_data, "timezone", "") == "" do
+      # Update form_data with the detected timezone
+      form_data = Map.put(socket.assigns.form_data, "timezone", timezone)
+
+
+      # Update the changeset with the new timezone
+      changeset =
+        %Event{}
+        |> Events.change_event(form_data)
+        |> Map.put(:action, :validate)
+
+
+      {:noreply,
+        socket
+        |> assign(:form_data, form_data)
+        |> assign(:changeset, changeset)}
+    else
+      {:noreply, socket}
     end
   end
 
@@ -447,7 +450,18 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply, assign(socket, :show_image_picker, false)}
   end
 
-  # New handler for Unsplash search
+  # ========== Handle Event Implementations ==========
+
+  @impl true
+  def handle_event("load_more_images", _, socket) do
+    {:noreply,
+      socket
+      |> assign(:page, socket.assigns.page + 1)
+      |> assign(:loading, true)
+      |> do_search()
+    }
+  end
+
   @impl true
   def handle_event("search_unsplash", %{"search_query" => query}, socket) when query == "" do
     {:noreply,
@@ -455,6 +469,8 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:search_query, "")
       |> assign(:search_results, %{unsplash: [], tmdb: []})
       |> assign(:error, nil)
+      |> assign(:page, 1)
+      |> assign(:loading, false)
     }
   end
 
@@ -465,16 +481,6 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:search_query, query)
       |> assign(:loading, true)
       |> assign(:page, 1)
-      |> do_search()
-    }
-  end
-
-  @impl true
-  def handle_event("load_more_images", _, socket) do
-    {:noreply,
-      socket
-      |> assign(:page, socket.assigns.page + 1)
-      |> assign(:loading, true)
       |> do_search()
     }
   end
@@ -566,7 +572,7 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_event("select_image", params, socket) do
     require Logger
-    Logger.warn("[select_image] Missing id in params: #{inspect(params)}")
+    Logger.warning("[select_image] Missing id in params: #{inspect(params)}")
     {:noreply, socket}
   end
 
