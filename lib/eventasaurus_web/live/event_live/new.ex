@@ -30,7 +30,7 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:venues, Venues.list_venues())
       |> assign(:show_all_timezones, false)
       |> assign(:cover_image_url, nil)
-      |> assign(:unsplash_data, nil)
+      |> assign(:external_image_data, nil)
       |> assign(:show_image_picker, false)
       |> assign(:search_query, "")
       |> assign(:search_results, %{unsplash: [], tmdb: []})
@@ -89,13 +89,12 @@ defmodule EventasaurusWeb.EventLive.New do
 
     # Parse the unsplash_data JSON string back to a map if it exists
     event_params =
-      if event_params["unsplash_data"] && event_params["unsplash_data"] != "" do
-        unsplash_data =
-          event_params["unsplash_data"]
+      if event_params["external_image_data"] && event_params["external_image_data"] != "" and is_binary(event_params["external_image_data"]) do
+        external_image_data =
+          event_params["external_image_data"]
           |> Jason.decode!()
 
-
-        Map.put(event_params, "unsplash_data", unsplash_data)
+        Map.put(event_params, "external_image_data", external_image_data)
       else
         event_params
       end
@@ -417,31 +416,43 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_info({:image_selected, %{cover_image_url: url, unsplash_data: unsplash_data}}, socket) do
-    # We keep the raw unsplash_data in both places (not pre-encoded)
-    # The event_components.ex will handle the encoding when needed
+  def handle_event("image_selected", %{"cover_image_url" => url} = params, socket) do
+    require Logger
+    Logger.debug("[handle_event :image_selected] url: #{inspect(url)}, params: #{inspect(params)}")
+
+    {external_image_data, source} =
+      cond do
+        Map.has_key?(params, "unsplash_data") ->
+          data = params["unsplash_data"]
+          data = Map.put(data, "source", "unsplash")
+          {data, "unsplash"}
+        Map.has_key?(params, "tmdb_data") ->
+          data = params["tmdb_data"]
+          data = Map.put(data, "source", "tmdb")
+          {data, "tmdb"}
+        true ->
+          {nil, nil}
+      end
+
     form_data =
       socket.assigns.form_data
-      |> Map.put("cover_image_url", url)
-      |> Map.put("unsplash_data", unsplash_data)
+      |> Map.put("external_image_data", external_image_data)
 
-    # Update the changeset
     changeset =
       %Event{}
       |> Events.change_event(Map.put(socket.assigns.form_data, "cover_image_url", url))
       |> Map.put(:action, :validate)
 
-    # Debug
     IO.puts("DEBUG - Image Selected:")
     IO.inspect(url, label: "Cover image URL")
-    IO.inspect(unsplash_data, label: "Unsplash data")
+    IO.inspect(external_image_data, label: "External image data")
 
     {:noreply,
       socket
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
-      |> assign(:cover_image_url, url)
-      |> assign(:unsplash_data, unsplash_data)
+      |> assign(:cover_image_url, nil)
+      |> assign(:external_image_data, external_image_data)
       |> assign(:show_image_picker, false)}
   end
 
@@ -487,6 +498,8 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("select_image", %{"id" => id}, socket) do
+    require Logger
+    Logger.debug("[select_image] phx-click triggered with id: #{inspect(id)}. search_results: #{inspect(socket.assigns.search_results)}")
     # Flatten all results (Unsplash and TMDb) into a single list
     results =
       socket.assigns.search_results
@@ -499,27 +512,29 @@ defmodule EventasaurusWeb.EventLive.New do
     end)
 
     cond do
-      image && Map.has_key?(image, :download_location) ->
-        # Unsplash image (atom keys)
+      image && (Map.has_key?(image, :download_location) or Map.has_key?(image, "download_location")) ->
+        # Unsplash image (atom or string keys)
+        download_location = image[:download_location] || image["download_location"]
+        user = image[:user] || image["user"] || %{}
         Task.Supervisor.start_child(Eventasaurus.TaskSupervisor, fn ->
-          UnsplashService.track_download(image[:download_location])
+          UnsplashService.track_download(download_location)
         end)
 
         unsplash_data = %{
-          "photo_id" => image[:id],
-          "url" => image[:urls][:regular],
-          "full_url" => image[:urls][:full],
-          "raw_url" => image[:urls][:raw],
-          "photographer_name" => image[:user][:name],
-          "photographer_username" => image[:user][:username],
-          "photographer_url" => image[:user][:profile_url],
-          "download_location" => image[:download_location]
+          "source" => "unsplash",
+          "photo_id" => image[:id] || image["id"],
+          "url" => get_in(image, [:urls, :regular]) || get_in(image, ["urls", "regular"]),
+          "full_url" => get_in(image, [:urls, :full]) || get_in(image, ["urls", "full"]),
+          "raw_url" => get_in(image, [:urls, :raw]) || get_in(image, ["urls", "raw"]),
+          "photographer_name" => user[:name] || user["name"],
+          "photographer_username" => user[:username] || user["username"],
+          "photographer_url" => user[:profile_url] || user["profile_url"],
+          "download_location" => download_location
         }
 
         form_data =
           socket.assigns.form_data
-          |> Map.put("cover_image_url", image[:urls][:regular])
-          |> Map.put("unsplash_data", unsplash_data)
+          |> Map.put("external_image_data", unsplash_data)
 
         changeset =
           %Event{}
@@ -530,24 +545,24 @@ defmodule EventasaurusWeb.EventLive.New do
           socket
           |> assign(:form_data, form_data)
           |> assign(:changeset, changeset)
-          |> assign(:cover_image_url, image[:urls][:regular])
-          |> assign(:unsplash_data, unsplash_data)
+          |> assign(:cover_image_url, nil)
+          |> assign(:external_image_data, unsplash_data)
           |> assign(:show_image_picker, false)
         }
 
-      image && (image[:poster_path] || image[:profile_path]) ->
-        # TMDb image (atom keys)
-        image_url =
-          cond do
-            image[:poster_path] -> "https://image.tmdb.org/t/p/w500" <> image[:poster_path]
-            image[:profile_path] -> "https://image.tmdb.org/t/p/w500" <> image[:profile_path]
-            true -> nil
-          end
-
+      image && (image[:poster_path] || image["poster_path"] || image[:profile_path] || image["profile_path"]) ->
+        # TMDb image (atom or string keys)
+        poster_path = image[:poster_path] || image["poster_path"] || image[:profile_path] || image["profile_path"]
+        image_url = poster_path && ("https://image.tmdb.org/t/p/w500" <> poster_path)
+        external_image_data = %{
+          "source" => "tmdb",
+          "poster_path" => poster_path,
+          "url" => image_url,
+          "attribution" => nil
+        }
         form_data =
           socket.assigns.form_data
-          |> Map.put("cover_image_url", image_url)
-          |> Map.delete("unsplash_data")
+          |> Map.put("external_image_data", external_image_data)
 
         changeset =
           %Event{}
@@ -558,8 +573,8 @@ defmodule EventasaurusWeb.EventLive.New do
           socket
           |> assign(:form_data, form_data)
           |> assign(:changeset, changeset)
-          |> assign(:cover_image_url, image_url)
-          |> assign(:unsplash_data, nil)
+          |> assign(:cover_image_url, nil)
+          |> assign(:external_image_data, external_image_data)
           |> assign(:show_image_picker, false)
         }
 

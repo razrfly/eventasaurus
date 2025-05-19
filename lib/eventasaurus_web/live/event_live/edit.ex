@@ -58,7 +58,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 |> assign(:venues, Venues.list_venues())
                 |> assign(:show_all_timezones, false)
                 |> assign(:cover_image_url, event.cover_image_url)
-                |> assign(:unsplash_data, event.unsplash_data)
+                |> assign(:external_image_data, event.external_image_data)
                 |> assign(:show_image_picker, false)
                 |> assign(:search_query, "")
                 |> assign(:search_results, [])
@@ -123,12 +123,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
   def handle_event("submit", %{"event" => event_params}, socket) do
     # Parse the unsplash_data JSON string back to a map if it exists
     event_params =
-      if event_params["unsplash_data"] && event_params["unsplash_data"] != "" do
-        unsplash_data =
-          event_params["unsplash_data"]
+      if event_params["external_image_data"] && event_params["external_image_data"] != "" and is_binary(event_params["external_image_data"]) do
+        external_image_data =
+          event_params["external_image_data"]
           |> Jason.decode!()
 
-        Map.put(event_params, "unsplash_data", unsplash_data)
+        Map.put(event_params, "external_image_data", external_image_data)
       else
         event_params
       end
@@ -400,8 +400,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     form_data =
       socket.assigns.form_data
-      |> Map.put("cover_image_url", url)
-      |> Map.put("unsplash_data", unsplash_data)
+      |> Map.put("external_image_data", unsplash_data)
 
     changeset =
       socket.assigns.event
@@ -412,8 +411,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
-      |> assign(:cover_image_url, url)
-      |> assign(:unsplash_data, unsplash_data)
+      |> assign(:cover_image_url, nil)
+      |> assign(:external_image_data, unsplash_data)
       |> assign(:show_image_picker, false)}
   end
 
@@ -471,6 +470,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
         # Create the unsplash_data map to be stored in the database
         unsplash_data = %{
+          "source" => "unsplash",
           "photo_id" => image.id,
           "url" => image.urls.regular,
           "full_url" => image.urls.full,
@@ -484,8 +484,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         # Update form_data with the Unsplash photo info
         form_data =
           socket.assigns.form_data
-          |> Map.put("cover_image_url", image.urls.regular)
-          |> Map.put("unsplash_data", unsplash_data)
+          |> Map.put("external_image_data", unsplash_data)
 
         # Update the changeset
         changeset =
@@ -497,9 +496,11 @@ defmodule EventasaurusWeb.EventLive.Edit do
           socket
           |> assign(:form_data, form_data)
           |> assign(:changeset, changeset)
-          |> assign(:cover_image_url, image.urls.regular)
-          |> assign(:unsplash_data, unsplash_data)
-          |> assign(:show_image_picker, false)}
+          |> assign(:cover_image_url, nil)
+          |> assign(:external_image_data, unsplash_data)
+          |> assign(:show_image_picker, false)
+        }
+
     end
   end
 
