@@ -422,13 +422,24 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, assign(socket, :show_image_picker, false)}
   end
 
-  # New handlers for Unsplash search
+  # ========== Handle Event Implementations ==========
+
+  @impl true
+  def handle_event("load_more_images", _, socket) do
+    {:noreply,
+      socket
+      |> assign(:page, socket.assigns.page + 1)
+      |> assign(:loading, true)
+      |> do_search()
+    }
+  end
+
   @impl true
   def handle_event("search_unsplash", %{"search_query" => query}, socket) when query == "" do
     {:noreply,
       socket
       |> assign(:search_query, "")
-      |> assign(:search_results, [])
+      |> assign(:search_results, %{unsplash: [], tmdb: []})
       |> assign(:error, nil)
       |> assign(:page, 1)
       |> assign(:loading, false)
@@ -442,16 +453,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:search_query, query)
       |> assign(:loading, true)
       |> assign(:page, 1)
-      |> do_search()
-    }
-  end
-
-  @impl true
-  def handle_event("load_more_images", _, socket) do
-    {:noreply,
-      socket
-      |> assign(:page, socket.assigns.page + 1)
-      |> assign(:loading, true)
       |> do_search()
     }
   end
