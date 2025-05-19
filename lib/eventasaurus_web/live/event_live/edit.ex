@@ -83,16 +83,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
-  # Handle the timezone detection event from JavaScript hook
-  @impl true
-  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
-    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
-
-    # For edit view, we don't auto-set timezone because the event already has one
-    # But we log it for debugging purposes
-    {:noreply, socket}
-  end
-
+  # ========== Form and Validation ==========
   @impl true
   def handle_event("validate", %{"event" => params}, socket) do
     changeset =
@@ -261,6 +252,95 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # Backward compatibility for older place_selected events
   @impl true
+  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
+    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
+    # For edit view, we don't auto-set timezone because the event already has one
+    # But we log it for debugging purposes
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("load_more_images", _, socket) do
+    {:noreply,
+      socket
+      |> assign(:page, socket.assigns.page + 1)
+      |> assign(:loading, true)
+      |> do_search()
+    }
+  end
+
+  @impl true
+  def handle_event("search_unsplash", %{"search_query" => query}, socket) when query == "" do
+    {:noreply,
+      socket
+      |> assign(:search_query, "")
+      |> assign(:search_results, %{unsplash: [], tmdb: []})
+      |> assign(:error, nil)
+      |> assign(:page, 1)
+      |> assign(:loading, false)
+    }
+  end
+
+  @impl true
+  def handle_event("search_unsplash", %{"search_query" => query}, socket) do
+    {:noreply,
+      socket
+      |> assign(:search_query, query)
+      |> assign(:loading, true)
+      |> assign(:page, 1)
+      |> do_search()
+    }
+  end
+
+  @impl true
+  def handle_event("select_image", %{"id" => id}, socket) do
+    case Enum.find(socket.assigns.search_results, &(&1.id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      image ->
+        # Track the download as per Unsplash API requirements - do this asynchronously
+        Task.Supervisor.start_child(Eventasaurus.TaskSupervisor, fn ->
+          UnsplashService.track_download(image.download_location)
+        end)
+
+        # Create the unsplash_data map to be stored in the database
+        unsplash_data = %{
+          "source" => "unsplash",
+          "photo_id" => image.id,
+          "url" => image.urls.regular,
+          "full_url" => image.urls.full,
+          "raw_url" => image.urls.raw,
+          "photographer_name" => image.user.name,
+          "photographer_username" => image.user.username,
+          "photographer_url" => image.user.profile_url,
+          "download_location" => image.download_location
+        }
+
+        # Update form_data with the Unsplash photo info
+        form_data =
+          socket.assigns.form_data
+          |> Map.put("external_image_data", unsplash_data)
+
+        # Update the changeset
+        changeset =
+          socket.assigns.event
+          |> Events.change_event(form_data)
+          |> Map.put(:action, :validate)
+
+
+        {:noreply,
+          socket
+          |> assign(:form_data, form_data)
+          |> assign(:changeset, changeset)
+          |> assign(:cover_image_url, nil)
+          |> assign(:external_image_data, unsplash_data)
+          |> assign(:show_image_picker, false)
+        }
+    end
+  end
+
+  @impl true
   def handle_event("place_selected", %{"details" => place_details}, socket) do
     # Extract data from place_details, handling potential structure issues
     name = Map.get(place_details, "name", "")
@@ -421,88 +501,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, assign(socket, :show_image_picker, false)}
   end
 
-  # ========== Handle Event Implementations ==========
-
-  @impl true
-  def handle_event("load_more_images", _, socket) do
-    {:noreply,
-      socket
-      |> assign(:page, socket.assigns.page + 1)
-      |> assign(:loading, true)
-      |> do_search()
-    }
-  end
-
-  @impl true
-  def handle_event("search_unsplash", %{"search_query" => query}, socket) when query == "" do
-    {:noreply,
-      socket
-      |> assign(:search_query, "")
-      |> assign(:search_results, %{unsplash: [], tmdb: []})
-      |> assign(:error, nil)
-      |> assign(:page, 1)
-      |> assign(:loading, false)
-    }
-  end
-
-  @impl true
-  def handle_event("search_unsplash", %{"search_query" => query}, socket) do
-    {:noreply,
-      socket
-      |> assign(:search_query, query)
-      |> assign(:loading, true)
-      |> assign(:page, 1)
-      |> do_search()
-    }
-  end
-
-  @impl true
-  def handle_event("select_image", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.search_results, &(&1.id == id)) do
-      nil ->
-        {:noreply, socket}
-
-      image ->
-        # Track the download as per Unsplash API requirements - do this asynchronously
-        Task.Supervisor.start_child(Eventasaurus.TaskSupervisor, fn ->
-          UnsplashService.track_download(image.download_location)
-        end)
-
-        # Create the unsplash_data map to be stored in the database
-        unsplash_data = %{
-          "source" => "unsplash",
-          "photo_id" => image.id,
-          "url" => image.urls.regular,
-          "full_url" => image.urls.full,
-          "raw_url" => image.urls.raw,
-          "photographer_name" => image.user.name,
-          "photographer_username" => image.user.username,
-          "photographer_url" => image.user.profile_url,
-          "download_location" => image.download_location
-        }
-
-        # Update form_data with the Unsplash photo info
-        form_data =
-          socket.assigns.form_data
-          |> Map.put("external_image_data", unsplash_data)
-
-        # Update the changeset
-        changeset =
-          socket.assigns.event
-          |> Events.change_event(form_data)
-          |> Map.put(:action, :validate)
-
-        {:noreply,
-          socket
-          |> assign(:form_data, form_data)
-          |> assign(:changeset, changeset)
-          |> assign(:cover_image_url, nil)
-          |> assign(:external_image_data, unsplash_data)
-          |> assign(:show_image_picker, false)
-        }
-
-    end
-  end
 
   # Helper function for searching Unsplash
   defp do_search(socket) do
