@@ -214,24 +214,19 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("venue_selected", venue_data, socket) do
-    # Extract data from venue_data with proper defaults
-    name = Map.get(venue_data, "name", "") || ""
-    address = Map.get(venue_data, "address", "") || ""
-    city = Map.get(venue_data, "city", "") || ""
-    state = Map.get(venue_data, "state", "") || ""
-    country = Map.get(venue_data, "country", "") || ""
-    latitude = Map.get(venue_data, "latitude") || nil
-    longitude = Map.get(venue_data, "longitude") || nil
-
-    # Update the form_data with the selected venue
-    form_data = socket.assigns.form_data
-    |> Map.put("venue_name", name)
-    |> Map.put("venue_address", address)
-    |> Map.put("venue_city", city)
-    |> Map.put("venue_state", state)
-    |> Map.put("venue_country", country)
-    |> Map.put("venue_latitude", latitude)
-    |> Map.put("venue_longitude", longitude)
+    # Extract venue data with defaults
+    venue_name = Map.get(venue_data, "name", "")
+    venue_address = Map.get(venue_data, "address", "")
+    
+    # Update form data with venue information while preserving existing data
+    form_data = (socket.assigns.form_data || %{})
+    |> Map.put("venue_name", venue_name)
+    |> Map.put("venue_address", venue_address)
+    |> Map.put("venue_city", Map.get(venue_data, "city", ""))
+    |> Map.put("venue_state", Map.get(venue_data, "state", ""))
+    |> Map.put("venue_country", Map.get(venue_data, "country", ""))
+    |> Map.put("venue_latitude", Map.get(venue_data, "latitude"))
+    |> Map.put("venue_longitude", Map.get(venue_data, "longitude"))
     |> Map.put("is_virtual", false)
 
     # Update the socket with full information and the changeset
@@ -243,8 +238,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
     socket = socket
     |> assign(:form_data, form_data)
     |> assign(:changeset, changeset)
-    |> assign(:selected_venue_name, name)
-    |> assign(:selected_venue_address, address)
+    |> assign(:selected_venue_name, venue_name)
+    |> assign(:selected_venue_address, venue_address)
     |> assign(:is_virtual, false)
 
     {:noreply, socket}

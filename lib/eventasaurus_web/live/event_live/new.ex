@@ -188,20 +188,20 @@ defmodule EventasaurusWeb.EventLive.New do
     IO.puts("\n======================== VENUE SELECTED ========================")
     IO.inspect(venue_data, label: "DEBUG - Received venue data")
 
-    # Extract data from venue_data with proper defaults
-    name = Map.get(venue_data, "name", "")
-    address = Map.get(venue_data, "address", "")
-
-    # Update the form data with venue information
-    form_data = %{
-      "venue_name" => name,
-      "venue_address" => address,
-      "venue_city" => Map.get(venue_data, "city", ""),
-      "venue_state" => Map.get(venue_data, "state", ""),
-      "venue_country" => Map.get(venue_data, "country", ""),
-      "venue_latitude" => Map.get(venue_data, "latitude"),
-      "venue_longitude" => Map.get(venue_data, "longitude")
-    }
+    # Extract venue data with defaults
+    venue_name = Map.get(venue_data, "name", "")
+    venue_address = Map.get(venue_data, "address", "")
+    
+    # Update form data with venue information while preserving existing data
+    form_data = (socket.assigns.form_data || %{})
+    |> Map.put("venue_name", venue_name)
+    |> Map.put("venue_address", venue_address)
+    |> Map.put("venue_city", Map.get(venue_data, "city", ""))
+    |> Map.put("venue_state", Map.get(venue_data, "state", ""))
+    |> Map.put("venue_country", Map.get(venue_data, "country", ""))
+    |> Map.put("venue_latitude", Map.get(venue_data, "latitude"))
+    |> Map.put("venue_longitude", Map.get(venue_data, "longitude"))
+    |> Map.put("is_virtual", false)
 
     # Update the changeset
     changeset =
@@ -214,8 +214,8 @@ defmodule EventasaurusWeb.EventLive.New do
       socket
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
-      |> assign(:selected_venue_name, name)
-      |> assign(:selected_venue_address, address)
+      |> assign(:selected_venue_name, venue_name)
+      |> assign(:selected_venue_address, venue_address)
       |> assign(:is_virtual, false)
 
     {:noreply, socket}
