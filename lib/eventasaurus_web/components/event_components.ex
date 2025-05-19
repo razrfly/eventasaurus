@@ -172,7 +172,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :action, :atom, required: true, values: [:new, :edit], doc: "whether this is a new or edit form"
   attr :show_all_timezones, :boolean, default: false, doc: "whether to show all timezones"
   attr :cover_image_url, :string, default: nil, doc: "the cover image URL"
-  attr :unsplash_data, :map, default: nil, doc: "unsplash data for attribution"
+  attr :external_image_data, :map, default: nil, doc: "external image data for Unsplash/TMDB attribution"
   attr :on_image_click, :string, default: nil, doc: "event name to trigger when clicking on the image picker"
   attr :id, :string, default: nil, doc: "unique id for the form element, required for hooks"
 
@@ -217,30 +217,24 @@ defmodule EventasaurusWeb.EventComponents do
                   </div>
                 </div>
 
-                <%= if @unsplash_data do %>
+                <%= if @external_image_data do %>
                   <div class="mt-2 text-xs text-gray-500">
-                    Photo by
-                    <a href={@unsplash_data["photographer_url"]} target="_blank" class="underline">
-                      <%= @unsplash_data["photographer_name"] %>
-                    </a>
-                    on <a href="https://unsplash.com" target="_blank" class="underline">Unsplash</a>
+                    <%= if @external_image_data["source"] == "unsplash" && @external_image_data["photographer_name"] do %>
+                      Photo by <a href={@external_image_data["photographer_url"]} target="_blank" rel="noopener noreferrer" class="underline"><%= @external_image_data["photographer_name"] %></a> on <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" class="underline">Unsplash</a>
+                    <% end %>
+                    <%= if @external_image_data["source"] == "tmdb" && @external_image_data["url"] do %>
+                      Image from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" class="underline">TMDB</a>
+                    <% end %>
                   </div>
                 <% end %>
               </div>
             <% end %>
 
             <%= hidden_input f, :cover_image_url %>
-            <%= if @unsplash_data do %>
-              <% 
-                encoded_data = cond do
-                  is_map(@unsplash_data) -> Jason.encode!(@unsplash_data)
-                  is_binary(@unsplash_data) -> @unsplash_data
-                  true -> ""
-                end
-              %>
-              <%= hidden_input f, :unsplash_data, value: encoded_data %>
-            <% else %>
-              <%= hidden_input f, :unsplash_data %>
+            <%= if @external_image_data do %>
+              <% encoded_data =
+                if is_map(@external_image_data), do: Jason.encode!(@external_image_data), else: @external_image_data || "" %>
+              <%= hidden_input f, :external_image_data, value: encoded_data %>
             <% end %>
           </div>
         </div>

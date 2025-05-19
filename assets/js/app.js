@@ -7,6 +7,24 @@ import topbar from "../vendor/topbar";
 // Define LiveView hooks here
 let Hooks = {};
 
+// ImagePicker hook for pushing image_selected event
+Hooks.ImagePicker = {
+  mounted() {
+    this.el.addEventListener("click", (e) => {
+      const imageData = this.el.dataset.image;
+      if (imageData) {
+        let data;
+        try {
+          data = JSON.parse(imageData);
+        } catch (err) {
+          data = imageData;
+        }
+        this.pushEvent("image_selected", data);
+      }
+    });
+  }
+};
+
 // Input Sync Hook to ensure hidden fields stay in sync with LiveView state
 Hooks.InputSync = {
   mounted() {
