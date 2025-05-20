@@ -315,7 +315,7 @@ defmodule EventasaurusWeb.EventLive.New do
   def handle_event("image_uploaded", %{"publicUrl" => image_url, "path" => path}, socket) do
     require Logger
     Logger.debug("[handle_event :image_uploaded] Image uploaded successfully: #{inspect(image_url)}")
-    
+
     # Create external_image_data for the uploaded image
     external_image_data = %{
       "source" => "upload",
@@ -323,16 +323,16 @@ defmodule EventasaurusWeb.EventLive.New do
       "path" => path,
       "uploaded_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
-    
+
     # Update the form with the new image URL and external data
-    form_data = 
+    form_data =
       socket.assigns.form_data
       |> Map.put("cover_image_url", image_url)
       |> Map.put("external_image_data", external_image_data)
 
     changeset =
-      %Event{}
-      |> Events.change_event(form_data)
+      %EventasaurusApp.Events.Event{}
+      |> EventasaurusApp.Events.change_event(form_data)
       |> Map.put(:action, :validate)
 
     socket =
@@ -343,7 +343,7 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:changeset, changeset)
       |> assign(:show_image_picker, false)
       |> put_flash(:info, "Image uploaded successfully!")
-    
+
     {:noreply, socket}
   end
 
