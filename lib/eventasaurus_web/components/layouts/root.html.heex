@@ -47,7 +47,12 @@
       onerror="handleGoogleMapsError()">
     </script>
   </head>
-  <body class="bg-white antialiased">
+  <body class="bg-white antialiased"
+  data-supabase-url-local={System.get_env("SUPABASE_URL_LOCAL")}
+  data-supabase-api-key-local={System.get_env("SUPABASE_API_KEY_LOCAL")}
+  data-supabase-url={System.get_env("SUPABASE_URL")}
+  data-supabase-api-key={System.get_env("SUPABASE_API_KEY")}
+>
     <header class="px-4 sm:px-6 lg:px-8 bg-gray-800 text-white">
       <div class="flex items-center justify-between py-3">
         <div class="flex items-center gap-4">
