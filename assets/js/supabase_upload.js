@@ -3,12 +3,15 @@
 import { createClient } from '@supabase/supabase-js';
 
 // To switch between local and production, adjust SUPABASE_URL only. The anon key is the same for both.
-const SUPABASE_URL = 'http://localhost:54321'; // Use 'https://tgbvtzyjzdyquoxnbybt.supabase.co' for production
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+const SUPABASE_URL = document.body.dataset.supabaseUrl;
+const SUPABASE_API_KEY = document.body.dataset.supabaseApiKey;
 const BUCKET = 'event-images';
 
-// Create the Supabase client ONCE at module scope
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (!SUPABASE_URL || !SUPABASE_API_KEY) {
+  throw new Error("Supabase credentials are missing. Make sure your layout injects them as data attributes from .env/.env.local.");
+}
+
+
 
 const SupabaseImageUpload = {
   async mounted() {
@@ -25,10 +28,19 @@ const SupabaseImageUpload = {
     }
 
     try {
-      // Set the access token on the existing Supabase client
-      await supabase.auth.setSession({ access_token: accessToken, refresh_token: null });
+      // Initialize Supabase client for this hook instance
+      this.supabase = createClient(SUPABASE_URL, SUPABASE_API_KEY, {
+        global: {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        }
+      });
+      // We'll use the access token directly in the fetch headers instead of relying on the Supabase client's auth
+      
       // Set up the file input change handler
       this.el.addEventListener('change', this.handleFileUpload.bind(this));
+      
     } catch (error) {
       console.error("[Supabase Upload] Initialization error:", error);
       this.pushEvent('image_upload_error', { 
@@ -68,35 +80,22 @@ const SupabaseImageUpload = {
     console.log(`[Supabase Upload] Starting upload of ${file.name} as ${filePath}`);
     
     try {
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', file);
+      // Upload file using Supabase SDK (best practice)
+      const { data, error } = await this.supabase.storage.from(BUCKET).upload(filePath, file, {
+        upsert: false
+      });
       
-      // Build the upload URL
-      const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${filePath}`;
-      console.log('[Supabase Upload] Upload URL:', uploadUrl);
-      
-      // Make the upload request with better error handling
-      let response;
-      try {
-        response = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'x-upsert': 'false'
-          },
-          body: formData
+      if (error) {
+        console.error('[Supabase Upload] Upload error:', error);
+        this.pushEvent('image_upload_error', {
+          error: error.message || 'Unknown error during upload.'
         });
-      } catch (networkError) {
-        console.error('[Supabase Upload] Network error during upload:', networkError);
-        throw {
-          ...networkError,
-          isNetworkError: true,
-          message: 'Network error during upload. Please check your connection.'
-        };
+        return;
       }
       
-      // Log the response status and headers for debugging
+      console.log('[Supabase Upload] Upload successful:', data);
+      // Continue with your success logic here (e.g., emit event with file path, etc.)
+
       console.log('[Supabase Upload] Response status:', response.status);
       console.log('[Supabase Upload] Response headers:', Object.fromEntries(response.headers.entries()));
       
