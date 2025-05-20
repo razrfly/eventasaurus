@@ -5,6 +5,7 @@ import {LiveSocket} from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 
 // Define LiveView hooks here
+import SupabaseImageUpload from "./supabase_upload";
 let Hooks = {};
 
 // ImagePicker hook for pushing image_selected event
@@ -52,6 +53,9 @@ Hooks.TimezoneDetectionHook = {
     }
   }
 };
+
+// Supabase image upload hook for file input
+Hooks.SupabaseImageUpload = SupabaseImageUpload;
 
 // DateTimeSync Hook - Keeps end date/time in sync with start date/time
 Hooks.DateTimeSync = {
