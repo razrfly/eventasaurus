@@ -3,8 +3,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // To switch between local and production, adjust SUPABASE_URL only. The anon key is the same for both.
-const SUPABASE_URL = document.body.dataset.supabaseUrl;
-const SUPABASE_API_KEY = document.body.dataset.supabaseApiKey;
+const SUPABASE_URL = document.body.dataset.supabaseUrlLocal || document.body.dataset.supabaseUrl;
+const SUPABASE_API_KEY = document.body.dataset.supabaseApiKeyLocal || document.body.dataset.supabaseApiKey;
 const BUCKET = 'event-images';
 
 if (!SUPABASE_URL || !SUPABASE_API_KEY) {
@@ -93,42 +93,16 @@ const SupabaseImageUpload = {
         return;
       }
       
-      console.log('[Supabase Upload] Upload successful:', data);
-      // Continue with your success logic here (e.g., emit event with file path, etc.)
-
-      console.log('[Supabase Upload] Response status:', response.status);
-      console.log('[Supabase Upload] Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      // Handle non-OK responses
-      if (!response.ok) {
-        let errorMessage = `Upload failed with status ${response.status}`;
-        try {
-          const errorData = await response.json();
-          console.error('[Supabase Upload] Error details:', errorData);
-          errorMessage = errorData.error_description || errorData.message || errorMessage;
-        } catch (e) {
-          const text = await response.text();
-          console.error('[Supabase Upload] Error response text:', text);
-        }
-        throw new Error(errorMessage);
-      }
-      
-      // Parse successful response
-      const data = await response.json().catch(e => {
-        console.warn('[Supabase Upload] Failed to parse JSON response:', e);
-        return null;
-      });
-      
       if (!data) {
         throw new Error('Received empty response from server');
       }
       
       console.log('[Supabase Upload] Upload successful:', data);
-      
       // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
+      const { data: publicUrlData } = this.supabase.storage
         .from(BUCKET)
         .getPublicUrl(filePath);
+      const publicUrl = publicUrlData?.publicUrl || null;
       
       this.pushEvent('image_uploaded', { 
         path: filePath,
