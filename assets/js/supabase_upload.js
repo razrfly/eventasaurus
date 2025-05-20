@@ -7,8 +7,8 @@ const SUPABASE_URL = 'http://localhost:54321'; // Use 'https://tgbvtzyjzdyquoxnb
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 const BUCKET = 'event-images';
 
-// Create a single Supabase client for interacting with your database
-let supabase;
+// Create the Supabase client ONCE at module scope
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const SupabaseImageUpload = {
   async mounted() {
@@ -25,19 +25,10 @@ const SupabaseImageUpload = {
     }
 
     try {
-      // Initialize Supabase with the access token
-      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        }
-      });
-      // We'll use the access token directly in the fetch headers instead of relying on the Supabase client's auth
-      
+      // Set the access token on the existing Supabase client
+      await supabase.auth.setSession({ access_token: accessToken, refresh_token: null });
       // Set up the file input change handler
       this.el.addEventListener('change', this.handleFileUpload.bind(this));
-      
     } catch (error) {
       console.error("[Supabase Upload] Initialization error:", error);
       this.pushEvent('image_upload_error', { 
