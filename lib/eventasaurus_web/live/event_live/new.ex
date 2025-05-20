@@ -11,13 +11,16 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusWeb.Services.SearchService
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
+    # current_user is already assigned by the on_mount hook
+    supabase_access_token = Map.get(session, "access_token")
+
     changeset = Events.change_event(%Event{})
-    # Get current date in YYYY-MM-DD format
     today = Date.utc_today() |> Date.to_iso8601()
 
     socket =
       socket
+      |> assign(:supabase_access_token, supabase_access_token)
       |> assign(:changeset, changeset)
       |> assign(:form_data, %{
         "start_date" => today,
@@ -37,6 +40,7 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:error, nil)
       |> assign(:page, 1)
       |> assign(:per_page, 20)
+      |> assign_new(:image_tab, fn -> "unsplash" end)
 
     {:ok, socket}
   end
@@ -184,6 +188,16 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
+  def handle_event("set_image_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, :image_tab, tab)}
+  end
+
+  @impl true
+  def handle_event("image_upload_error", %{"error" => error}, socket) do
+    {:noreply, assign(socket, :error, "Image upload failed: #{error}")}
+  end
+
+  @impl true
   def handle_event("venue_selected", venue_data, socket) do
     IO.puts("\n======================== VENUE SELECTED ========================")
     IO.inspect(venue_data, label: "DEBUG - Received venue data")
@@ -191,7 +205,7 @@ defmodule EventasaurusWeb.EventLive.New do
     # Extract venue data with defaults
     venue_name = Map.get(venue_data, "name", "")
     venue_address = Map.get(venue_data, "address", "")
-    
+
     # Update form data with venue information while preserving existing data
     form_data = (socket.assigns.form_data || %{})
     |> Map.put("venue_name", venue_name)
@@ -298,6 +312,42 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
+  def handle_event("image_uploaded", %{"publicUrl" => image_url, "path" => path}, socket) do
+    require Logger
+    Logger.debug("[handle_event :image_uploaded] Image uploaded successfully: #{inspect(image_url)}")
+    
+    # Create external_image_data for the uploaded image
+    external_image_data = %{
+      "source" => "upload",
+      "url" => image_url,
+      "path" => path,
+      "uploaded_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+    }
+    
+    # Update the form with the new image URL and external data
+    form_data = 
+      socket.assigns.form_data
+      |> Map.put("cover_image_url", image_url)
+      |> Map.put("external_image_data", external_image_data)
+
+    changeset =
+      %Event{}
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:cover_image_url, image_url)
+      |> assign(:form_data, form_data)
+      |> assign(:external_image_data, external_image_data)
+      |> assign(:changeset, changeset)
+      |> assign(:show_image_picker, false)
+      |> put_flash(:info, "Image uploaded successfully!")
+    
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("select_image", %{"id" => id}, socket) do
     require Logger
     Logger.debug("[handle_event :select_image] id: #{inspect(id)}")
@@ -396,7 +446,7 @@ defmodule EventasaurusWeb.EventLive.New do
     Logger.warning("[select_image] Missing id in params: #{inspect(params)}")
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("image_selected", %{"cover_image_url" => url} = params, socket) do
     require Logger
@@ -494,7 +544,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("open_image_picker", _params, socket) do
-    {:noreply, assign(socket, :show_image_picker, true)}
+    {:noreply, assign(socket, show_image_picker: true, image_tab: "unsplash")}
   end
 
   @impl true
