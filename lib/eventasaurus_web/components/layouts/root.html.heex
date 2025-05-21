@@ -47,12 +47,18 @@
       onerror="handleGoogleMapsError()">
     </script>
   </head>
+<%
+  {supabase_url, supabase_api_key} =
+    if Mix.env() == :dev do
+      {System.get_env("SUPABASE_URL_LOCAL"), System.get_env("SUPABASE_API_KEY_LOCAL")}
+    else
+      {System.get_env("SUPABASE_URL"), System.get_env("SUPABASE_API_KEY")}
+    end
+%>
   <body class="bg-white antialiased"
-  data-supabase-url-local={System.get_env("SUPABASE_URL_LOCAL")}
-  data-supabase-api-key-local={System.get_env("SUPABASE_API_KEY_LOCAL")}
-  data-supabase-url={System.get_env("SUPABASE_URL")}
-  data-supabase-api-key={System.get_env("SUPABASE_API_KEY")}
->
+    data-supabase-url={supabase_url}
+    data-supabase-api-key={supabase_api_key}
+  >
     <header class="px-4 sm:px-6 lg:px-8 bg-gray-800 text-white">
       <div class="flex items-center justify-between py-3">
         <div class="flex items-center gap-4">

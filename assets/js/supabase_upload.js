@@ -2,13 +2,13 @@
 // This hook enables uploading images to Supabase Storage from the image picker modal
 import { createClient } from '@supabase/supabase-js';
 
-// To switch between local and production, adjust SUPABASE_URL only. The anon key is the same for both.
-const SUPABASE_URL = document.body.dataset.supabaseUrlLocal || document.body.dataset.supabaseUrl;
-const SUPABASE_API_KEY = document.body.dataset.supabaseApiKeyLocal || document.body.dataset.supabaseApiKey;
+// Always read Supabase credentials from <body> data attributes, set by the layout for the current environment
+const SUPABASE_URL = document.body.dataset.supabaseUrl;
+const SUPABASE_API_KEY = document.body.dataset.supabaseApiKey;
 const BUCKET = 'event-images';
 
 if (!SUPABASE_URL || !SUPABASE_API_KEY) {
-  throw new Error("Supabase credentials are missing. Make sure your layout injects them as data attributes from .env/.env.local.");
+  throw new Error("Supabase credentials are missing. Make sure your layout injects them as data attributes for this environment.");
 }
 
 
