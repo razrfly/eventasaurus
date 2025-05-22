@@ -82,9 +82,9 @@
             </div>
           <% end %>
 
-          <%= if length(@search_results) > 0 do %>
+          <%= if @search_results[:unsplash] && length(@search_results[:unsplash]) > 0 do %>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
-              <%= for image <- @search_results do %>
+              <%= for image <- @search_results[:unsplash] do %>
                 <div
                   phx-click="select_image"
                   phx-value-id={image.id}
