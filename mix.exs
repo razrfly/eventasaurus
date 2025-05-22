@@ -57,6 +57,7 @@ defmodule Eventasaurus.MixProject do
       {:heroicons, "~> 0.5.6"},
       {:nanoid, "~> 2.1.0"},
       {:time_zone_info, "~> 0.7.8"},
+      {:earmark, "~> 1.4"},
 
       # HTTP client for API calls (used for Supabase integration)
       {:httpoison, "~> 2.0"},
@@ -77,10 +78,11 @@ defmodule Eventasaurus.MixProject do
       setup: ["deps.get", "assets.setup", "assets.build"],
       test: ["test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus"],
+      "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus", "copy_assets"],
       "assets.deploy": [
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
+        "copy_assets",
         "phx.digest"
       ]
     ]
