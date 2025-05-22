@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" class="public-event-page">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title suffix=" · Eventasaurus">
+      <%= assigns[:page_title] || "Event" %>
+    </.live_title>
+    
+    <!-- Preload and preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Google Fonts: Inter for clean typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Open Graph meta tags for social sharing -->
+    <%= if assigns[:og_meta] do %>
+      <%= for {property, content} <- @og_meta do %>
+        <meta property={property} content={content} />
+      <% end %>
+    <% end %>
+
+    <!-- Event schema.org markup for better SEO -->
+    <%= if assigns[:event_schema_json] do %>
+      <script type="application/ld+json">
+        <%= @event_schema_json %>
+      </script>
+    <% end %>
+    
+    <!-- Main app CSS from Phoenix -->
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    
+    <!-- Custom CSS for public pages -->
+    <link phx-track-static rel="stylesheet" href={~p"/assets/public.css"} />
+    
+    <!-- Main app JavaScript from Phoenix -->
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
+    </script>
+  </head>
+  <body class="public-event-page-body">
+    <.flash_group flash={@flash} />
+    <div class="public-event-page">
+      <!-- Top navigation bar -->
+      <header class="public-header">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+          <a href="/" class="logo-link">
+            <h1 class="text-xl font-bold">Eventasaurus</h1>
+          </a>
+          
+          <nav>
+            <ul class="flex gap-6">
+              <li><a href="/events" class="text-sm font-medium hover:text-black transition-colors">Browse Events</a></li>
+              <li><a href="/create" class="text-sm font-medium hover:text-black transition-colors">Create Event</a></li>
+              <%= if assigns[:current_user] do %>
+                <li><a href="/dashboard" class="text-sm font-medium hover:text-black transition-colors">Dashboard</a></li>
+              <% else %>
+                <li><a href="/login" class="text-sm font-medium hover:text-black transition-colors">Login</a></li>
+              <% end %>
+            </ul>
+          </nav>
+        </div>
+      </header>
+
+      <!-- Main content area -->
+      <main>
+        <%= @inner_content %>
+      </main>
+
+      <!-- Footer -->
+      <footer class="public-footer">
+        <div class="container mx-auto px-4 py-8">
+          <div class="border-t border-gray-200 pt-8 mt-8 grid md:grid-cols-3 gap-8">
+            <div>
+              <h3 class="font-medium mb-4">Eventasaurus</h3>
+              <p class="text-sm text-gray-600">
+                Create and share beautiful event pages in minutes.
+              </p>
+            </div>
+            
+            <div>
+              <h3 class="font-medium mb-4">Resources</h3>
+              <ul class="space-y-2">
+                <li><a href="/help" class="text-sm hover:text-black transition-colors">Help Center</a></li>
+                <li><a href="/pricing" class="text-sm hover:text-black transition-colors">Pricing</a></li>
+                <li><a href="/privacy" class="text-sm hover:text-black transition-colors">Privacy Policy</a></li>
+                <li><a href="/terms" class="text-sm hover:text-black transition-colors">Terms of Service</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 class="font-medium mb-4">Connect</h3>
+              <ul class="space-y-2">
+                <li><a href="/contact" class="text-sm hover:text-black transition-colors">Contact Us</a></li>
+                <li><a href="https://twitter.com/eventasaurus" class="text-sm hover:text-black transition-colors">Twitter</a></li>
+                <li><a href="https://github.com/eventasaurus" class="text-sm hover:text-black transition-colors">GitHub</a></li>
+              </ul>
+            </div>
+          </div>
+          
+          <div class="text-center mt-12">
+            <p class="text-sm text-gray-600">&copy; <%= DateTime.utc_now().year %> Eventasaurus. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html> 

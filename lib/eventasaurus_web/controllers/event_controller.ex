@@ -2,7 +2,9 @@ defmodule EventasaurusWeb.EventController do
   use EventasaurusWeb, :controller
   alias EventasaurusApp.Events
   alias EventasaurusApp.Accounts
+  alias EventasaurusApp.Venues
 
+  # Internal event view action (for /events/:slug)
   def show(conn, %{"slug" => slug}) do
     case Events.get_event_by_slug(slug) do
       nil ->
@@ -11,7 +13,29 @@ defmodule EventasaurusWeb.EventController do
         |> redirect(to: ~p"/")
 
       event ->
-        render(conn, :show, event: event, conn: conn)
+        # Load venue and organizers for the event
+        venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
+        organizers = Events.list_event_organizers(event)
+
+        conn
+        |> assign(:venue, venue)
+        |> assign(:organizers, organizers)
+        |> render(:show, event: event, conn: conn)
+    end
+  end
+
+  # Attendees management (stub for now)
+  def attendees(conn, %{"slug" => slug}) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_flash(:error, "Event not found")
+        |> redirect(to: ~p"/")
+
+      event ->
+        conn
+        |> put_flash(:info, "Attendee management is coming soon")
+        |> redirect(to: ~p"/events/#{event.slug}")
     end
   end
 
@@ -31,7 +55,7 @@ defmodule EventasaurusWeb.EventController do
         else
           conn
           |> put_flash(:error, "You don't have permission to delete this event")
-          |> redirect(to: ~p"/events/#{event.slug}")
+          |> redirect(to: ~p"/#{event.slug}")
         end
 
       {:error, _} ->
