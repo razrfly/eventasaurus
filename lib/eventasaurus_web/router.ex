@@ -27,34 +27,7 @@ defmodule EventasaurusWeb.Router do
     plug :redirect_if_user_is_authenticated
   end
 
-  # LiveView session for authenticated routes - moved this before default session
-  live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
-    scope "/", EventasaurusWeb do
-      pipe_through [:browser, :authenticated]
-
-      # Add authenticated LiveView routes here
-      live "/events/new", EventLive.New
-      live "/events/:slug/edit", EventLive.Edit
-      # live "/events/:id/edit", EventLive.Edit
-    end
-  end
-
-  # LiveView session configuration
-  live_session :default, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user}] do
-    # Public routes
-    scope "/", EventasaurusWeb do
-      pipe_through :browser
-
-      get "/", PageController, :home
-      # Add public LiveView routes here
-      # live "/events/:slug", EventLive.Show
-      get "/events/:slug", EventController, :show
-    end
-  end
-
-  # Regular controller routes that don't need LiveView sessions
-
-  # Authentication routes
+  # Authentication routes - placing these BEFORE the catch-all public routes
   scope "/", EventasaurusWeb do
     pipe_through [:browser, :redirect_if_authenticated]
 
@@ -76,9 +49,43 @@ defmodule EventasaurusWeb.Router do
 
     get "/logout", Auth.AuthController, :logout
     get "/dashboard", DashboardController, :index
+
+    # Internal event management routes with EventController
+    get "/events/:slug", EventController, :show
     delete "/events/:slug", EventController, :delete
+    get "/events/:slug/attendees", EventController, :attendees
+
     # Add other authenticated controller routes here
     # resources "/venues", VenueController
+  end
+
+  # LiveView session for authenticated routes - moved this before default session
+  live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    scope "/", EventasaurusWeb do
+      pipe_through [:browser, :authenticated]
+
+      # Add authenticated LiveView routes here
+      live "/events/new", EventLive.New
+      live "/events/:slug/edit", EventLive.Edit
+      # live "/events/:id/edit", EventLive.Edit
+    end
+  end
+
+  # LiveView session configuration
+  live_session :default, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user}] do
+    # Public routes
+    scope "/", EventasaurusWeb do
+      pipe_through :browser
+
+      get "/", PageController, :home
+      # Add public LiveView routes here
+      # live "/events/:slug", EventLive.Show
+
+      # Direct event access via slug as per PRD spec
+      # This catch-all route should be last, after all other specific routes
+      # Add a constraint to prevent capturing reserved paths
+      get "/:slug", PublicEventController, :show, as: :public_event
+    end
   end
 
   # Other scopes may use custom stacks.
