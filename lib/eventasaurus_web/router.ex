@@ -43,6 +43,17 @@ defmodule EventasaurusWeb.Router do
     post "/auth/callback", Auth.AuthController, :callback
   end
 
+  # LiveView session for authenticated routes - MUST come BEFORE regular routes
+  live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    scope "/", EventasaurusWeb do
+      pipe_through [:browser, :authenticated]
+
+      # Add authenticated LiveView routes here
+      live "/events/new", EventLive.New
+      live "/events/:slug/edit", EventLive.Edit
+    end
+  end
+
   # Protected routes that require authentication
   scope "/", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
@@ -57,18 +68,6 @@ defmodule EventasaurusWeb.Router do
 
     # Add other authenticated controller routes here
     # resources "/venues", VenueController
-  end
-
-  # LiveView session for authenticated routes - moved this before default session
-  live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
-    scope "/", EventasaurusWeb do
-      pipe_through [:browser, :authenticated]
-
-      # Add authenticated LiveView routes here
-      live "/events/new", EventLive.New
-      live "/events/:slug/edit", EventLive.Edit
-      # live "/events/:id/edit", EventLive.Edit
-    end
   end
 
   # LiveView session configuration
