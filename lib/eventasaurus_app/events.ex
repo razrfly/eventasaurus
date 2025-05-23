@@ -7,6 +7,7 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
   alias EventasaurusApp.Accounts.User
+  require Logger
 
   @doc """
   Returns the list of events.
@@ -263,50 +264,59 @@ defmodule EventasaurusApp.Events do
     alias EventasaurusApp.Auth.SupabaseSync
     alias EventasaurusApp.Accounts
 
-    IO.puts("=== Registration Debug ===")
-    IO.puts("Event ID: #{event_id}")
-    IO.puts("Name: #{name}")
-    IO.puts("Email: #{email}")
+    Logger.debug("Starting user registration process", %{
+      event_id: event_id,
+      name: name,
+      email_domain: email |> String.split("@") |> List.last()
+    })
 
     Repo.transaction(fn ->
       event = get_event!(event_id)
-      IO.puts("Found event: #{event.title}")
+      Logger.debug("Event found for registration", %{event_title: event.title, event_id: event.id})
 
       # Check if user exists in our local database first
       existing_user = Accounts.get_user_by_email(email)
-      IO.inspect(existing_user, label: "Existing user")
+
+      if existing_user do
+        Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
+      else
+        Logger.debug("No existing user found in local database")
+      end
 
       user = case existing_user do
         nil ->
           # User doesn't exist locally, check Supabase and create if needed
-          IO.puts("User doesn't exist locally, creating in Supabase")
+          Logger.info("User not found locally, attempting Supabase user creation/lookup")
           case create_or_find_supabase_user(email, name) do
             {:ok, supabase_user} ->
-              IO.puts("Successfully created/found user in Supabase")
+              Logger.info("Successfully created/found user in Supabase")
               # Sync with local database
               case SupabaseSync.sync_user(supabase_user) do
                 {:ok, user} ->
-                  IO.puts("Successfully synced user to local database")
+                  Logger.info("Successfully synced user to local database", %{user_id: user.id})
                   user
                 {:error, reason} ->
-                  IO.inspect(reason, label: "Error syncing user")
+                  Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
                   Repo.rollback(reason)
               end
             {:error, reason} ->
-              IO.inspect(reason, label: "Error creating user in Supabase")
+              Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
               Repo.rollback(reason)
           end
 
         user ->
           # User exists locally
-          IO.puts("User exists locally: #{user.email}")
+          Logger.debug("Using existing local user", %{user_id: user.id})
           user
       end
 
       # Check if user is already registered for this event
       case get_event_participant_by_event_and_user(event, user) do
         nil ->
-          IO.puts("User not registered yet, creating participant record")
+          Logger.debug("User not yet registered for event, creating participant record", %{
+            user_id: user.id,
+            event_id: event.id
+          })
           # User not registered, create participant record
           participant_attrs = %{
             event_id: event.id,
@@ -322,67 +332,78 @@ defmodule EventasaurusApp.Events do
 
           case create_event_participant(participant_attrs) do
             {:ok, participant} ->
-              IO.puts("Successfully created participant")
+              Logger.info("Successfully created event participant", %{
+                participant_id: participant.id,
+                user_id: user.id,
+                event_id: event.id
+              })
               if existing_user do
                 {:existing_user_registered, participant}
               else
                 {:new_registration, participant}
               end
             {:error, reason} ->
-              IO.inspect(reason, label: "Error creating participant")
+              Logger.error("Failed to create event participant", %{reason: inspect(reason)})
               Repo.rollback(reason)
           end
 
         _participant ->
-          IO.puts("User already registered")
+          Logger.info("User already registered for event", %{user_id: user.id, event_id: event.id})
           Repo.rollback(:already_registered)
       end
     end)
     |> case do
       {:ok, result} ->
-        IO.puts("Transaction successful")
+        Logger.info("Registration transaction completed successfully", %{
+          result_type: elem(result, 0),
+          participant_id: elem(result, 1).id
+        })
         {:ok, elem(result, 0), elem(result, 1)}
       {:error, reason} ->
-        IO.inspect(reason, label: "Transaction failed")
+        Logger.warning("Registration transaction failed", %{reason: inspect(reason)})
         {:error, reason}
     end
   end
 
   defp create_or_find_supabase_user(email, name) do
     alias EventasaurusApp.Auth.Client
+    require Logger
 
-    IO.puts("=== create_or_find_supabase_user Debug ===")
-    IO.puts("Looking for email: #{email}")
-    IO.puts("Name: #{name}")
+    Logger.debug("Starting Supabase user lookup/creation", %{
+      email_domain: email |> String.split("@") |> List.last(),
+      name: name
+    })
 
     # First check if user exists in Supabase
     case Client.admin_get_user_by_email(email) do
       {:ok, nil} ->
         # User doesn't exist, create them
-        IO.puts("User doesn't exist in Supabase, creating new user")
+        Logger.info("User not found in Supabase, creating new user")
         temp_password = generate_temporary_password()
         user_metadata = %{name: name}
 
         case Client.admin_create_user(email, temp_password, user_metadata) do
           {:ok, supabase_user} ->
-            IO.puts("Successfully created user in Supabase:")
-            IO.inspect(supabase_user, label: "New Supabase user")
+            Logger.info("Successfully created user in Supabase", %{
+              supabase_user_id: supabase_user["id"],
+              email_domain: email |> String.split("@") |> List.last()
+            })
             {:ok, supabase_user}
           {:error, reason} ->
-            IO.puts("Failed to create user in Supabase:")
-            IO.inspect(reason, label: "Error")
+            Logger.error("Failed to create user in Supabase", %{reason: inspect(reason)})
             {:error, reason}
         end
 
       {:ok, supabase_user} ->
         # User exists in Supabase
-        IO.puts("User already exists in Supabase:")
-        IO.inspect(supabase_user, label: "Existing Supabase user")
+        Logger.debug("User already exists in Supabase", %{
+          supabase_user_id: supabase_user["id"],
+          email_domain: email |> String.split("@") |> List.last()
+        })
         {:ok, supabase_user}
 
       {:error, reason} ->
-        IO.puts("Error checking for user in Supabase:")
-        IO.inspect(reason, label: "Error")
+        Logger.error("Error checking for user in Supabase", %{reason: inspect(reason)})
         {:error, reason}
     end
   end
