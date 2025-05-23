@@ -219,4 +219,112 @@ defmodule EventasaurusApp.Auth.Client do
         {:error, error}
     end
   end
+
+  # Admin API functions for programmatic user creation
+
+  defp admin_headers do
+    service_role_key = if Mix.env() == :dev do
+      System.get_env("SUPABASE_SERVICE_ROLE_KEY_LOCAL") ||
+      System.get_env("SUPABASE_API_SECRET") ||
+      System.get_env("SUPABASE_SERVICE_ROLE_KEY") ||
+      get_api_key()
+    else
+      System.get_env("SUPABASE_API_SECRET") ||
+      System.get_env("SUPABASE_SERVICE_ROLE_KEY") ||
+      get_api_key()
+    end
+
+    [
+      {"apikey", service_role_key},
+      {"Authorization", "Bearer #{service_role_key}"},
+      {"Content-Type", "application/json"}
+    ]
+  end
+
+  @doc """
+  Create a user using admin API (bypasses email confirmation if configured).
+
+  This requires a service role key and is used for programmatic user creation
+  where we want to bypass the normal signup flow.
+
+  Returns {:ok, user_data} on success or {:error, reason} on failure.
+  """
+  def admin_create_user(email, password, user_metadata \\ %{}) do
+    url = "#{get_auth_url()}/admin/users"
+
+    body = Jason.encode!(%{
+      email: email,
+      password: password,
+      user_metadata: user_metadata,
+      email_confirm: true  # This bypasses email confirmation
+    })
+
+    case HTTPoison.post(url, body, admin_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        {:ok, Jason.decode!(response_body)}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "User creation failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Update a user using admin API.
+
+  Returns {:ok, user_data} on success or {:error, reason} on failure.
+  """
+  def admin_update_user(user_id, attrs) do
+    url = "#{get_auth_url()}/admin/users/#{user_id}"
+
+    body = Jason.encode!(attrs)
+
+    case HTTPoison.put(url, body, admin_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        {:ok, Jason.decode!(response_body)}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "User update failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Get a user by email using admin API.
+
+  Returns {:ok, user_data} on success or {:error, reason} on failure.
+  """
+  def admin_get_user_by_email(email) do
+    # Local Supabase has a bug where email query returns all users
+    # So we get all users and filter by email manually
+    url = "#{get_auth_url()}/admin/users"
+
+    case HTTPoison.get(url, admin_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        case response["users"] do
+          users when is_list(users) ->
+            # Filter by exact email match
+            matching_user = Enum.find(users, fn user ->
+              user["email"] == email
+            end)
+            {:ok, matching_user}
+          _ ->
+            {:ok, nil}
+        end
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "Failed to get user"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
 end

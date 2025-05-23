@@ -32,7 +32,7 @@ defmodule EventasaurusWeb.Router do
     pipe_through [:browser, :redirect_if_authenticated]
 
     get "/login", Auth.AuthController, :login
-    post "/login", Auth.AuthController, :create_session
+    post "/login", Auth.AuthController, :authenticate
     get "/register", Auth.AuthController, :register
     post "/register", Auth.AuthController, :create_user
     get "/forgot-password", Auth.AuthController, :forgot_password
@@ -79,11 +79,19 @@ defmodule EventasaurusWeb.Router do
       get "/", PageController, :home
       # Add public LiveView routes here
       # live "/events/:slug", EventLive.Show
+    end
+  end
 
-      # Direct event access via slug as per PRD spec
-      # This catch-all route should be last, after all other specific routes
-      # Add a constraint to prevent capturing reserved paths
-      get "/:slug", PublicEventController, :show, as: :public_event
+  # Public event routes (uses public layout)
+  live_session :public,
+    layout: {EventasaurusWeb.Layouts, :public},
+    root_layout: {EventasaurusWeb.Layouts, :public_root},
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user}] do
+    scope "/", EventasaurusWeb do
+      pipe_through :browser
+
+      # Public event page with embedded registration (catch-all route should be last)
+      live "/:slug", PublicEventLive
     end
   end
 
