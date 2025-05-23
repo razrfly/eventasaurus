@@ -4,11 +4,10 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Venues
   alias EventasaurusWeb.EventRegistrationComponent
-
-  @reserved_slugs ~w(login register logout dashboard help pricing privacy terms contact)
+  alias EventasaurusWeb.ReservedSlugs
 
   def mount(%{"slug" => slug}, _session, socket) do
-    if slug in @reserved_slugs do
+    if ReservedSlugs.reserved?(slug) do
       {:ok,
        socket
        |> put_flash(:error, "Event not found")
