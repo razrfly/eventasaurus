@@ -2,4 +2,280 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Eventasaurus Theming System - Inlined for proper compilation */
+
+/* Base theme foundation with CSS custom properties */
+:root {
+  /* Default theme variables (minimal theme) */
+  --color-primary: #000000;
+  --color-secondary: #333333;
+  --color-accent: #0066cc;
+  --color-background: #ffffff;
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+  --color-border: #e5e7eb;
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 600;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 8px;
+  --border-radius-large: 12px;
+  --shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-style-large: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  /* Component specific */
+  --button-border-radius: 8px;
+  --card-border-radius: 12px;
+  --input-border-radius: 6px;
+}
+
+/* Theme container styles */
+.theme-container {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: all 0.3s ease;
+}
+
+/* Theme buttons */
+.theme-container .theme-button-primary {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--button-border-radius);
+  box-shadow: var(--shadow-style);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-container .theme-button-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-style-large);
+}
+
+.theme-container .theme-button-secondary {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 2px solid var(--color-border);
+  padding: 10px 22px;
+  border-radius: var(--button-border-radius);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-container .theme-button-secondary:hover {
+  background-color: var(--color-border);
+}
+
+/* Theme cards */
+.theme-container .theme-card {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-border-radius);
+  box-shadow: var(--shadow-style);
+  transition: all 0.2s ease;
+}
+
+.theme-container .theme-card:hover {
+  box-shadow: var(--shadow-style-large);
+}
+
+/* MINIMAL THEME */
+.theme-minimal {
+  --color-primary: #000000;
+  --color-secondary: #333333;
+  --color-accent: #0066cc;
+  --color-background: #ffffff;
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+  --color-border: #e5e7eb;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --border-radius: 8px;
+  --shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* COSMIC THEME */
+.theme-cosmic {
+  --color-primary: #4c1d95; /* Purple 900 */
+  --color-secondary: #1e1b4b; /* Indigo 900 */
+  --color-accent: #06b6d4; /* Cyan 500 */
+  --color-background: #0f0f23; /* Dark blue-black */
+  --color-text: #e0e7ff; /* Indigo 200 */
+  --color-text-secondary: #a5b4fc; /* Indigo 300 */
+  --color-border: #312e81; /* Indigo 800 */
+  --font-family: 'Space Grotesk', 'Inter', sans-serif;
+  --border-radius: 12px;
+  --shadow-style: 0 8px 32px rgba(79, 70, 229, 0.4);
+  background: linear-gradient(135deg, #0f0f23 0%, #1e1b4b 100%);
+}
+
+.theme-cosmic .theme-card {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+  border: 1px solid rgba(165, 180, 252, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.theme-cosmic .theme-button-primary {
+  background: linear-gradient(135deg, #4c1d95 0%, #6366f1 100%);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+}
+
+/* VELOCITY THEME */
+.theme-velocity {
+  --color-primary: #dc2626; /* Red 600 */
+  --color-secondary: #ea580c; /* Orange 600 */
+  --color-accent: #eab308; /* Yellow 500 */
+  --color-background: #1a1a1a;
+  --color-text: #ffffff;
+  --color-text-secondary: #d1d5db;
+  --color-border: #374151;
+  --font-family: 'Montserrat', sans-serif;
+  --border-radius: 4px;
+  --shadow-style: 0 4px 20px rgba(220, 38, 38, 0.3);
+  background: linear-gradient(45deg, #1a1a1a 0%, #2d1b69 100%);
+}
+
+.theme-velocity .theme-card {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.1) 0%, rgba(234, 88, 12, 0.1) 100%);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  transform: perspective(1000px) rotateX(2deg);
+}
+
+.theme-velocity .theme-button-primary {
+  background: linear-gradient(45deg, #dc2626 0%, #ea580c 50%, #eab308 100%);
+  transform: skew(-5deg);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* RETRO THEME */
+.theme-retro {
+  --color-primary: #92400e; /* Amber 700 */
+  --color-secondary: #b91c1c; /* Red 700 */
+  --color-accent: #dc2626; /* Red 600 */
+  --color-background: #fef3c7; /* Amber 100 */
+  --color-text: #451a03; /* Amber 900 */
+  --color-text-secondary: #92400e; /* Amber 700 */
+  --color-border: #f59e0b; /* Amber 500 */
+  --font-family: 'Georgia', serif;
+  --border-radius: 0px;
+  --shadow-style: 4px 4px 0px rgba(146, 64, 14, 0.8);
+}
+
+.theme-retro .theme-card {
+  background: linear-gradient(45deg, #fef3c7 0%, #fde68a 100%);
+  border: 3px solid #92400e;
+  box-shadow: 6px 6px 0px rgba(146, 64, 14, 0.6);
+}
+
+.theme-retro .theme-button-primary {
+  border: 3px solid #451a03;
+  box-shadow: 4px 4px 0px rgba(69, 26, 3, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* CELEBRATION THEME */
+.theme-celebration {
+  --color-primary: #ec4899; /* Pink 500 */
+  --color-secondary: #8b5cf6; /* Violet 500 */
+  --color-accent: #06b6d4; /* Cyan 500 */
+  --color-background: #fdf2f8; /* Pink 50 */
+  --color-text: #831843; /* Pink 900 */
+  --color-text-secondary: #be185d; /* Pink 700 */
+  --color-border: #f9a8d4; /* Pink 300 */
+  --font-family: 'Poppins', sans-serif;
+  --border-radius: 20px;
+  --shadow-style: 0 8px 32px rgba(236, 72, 153, 0.25);
+  background: linear-gradient(135deg, #fdf2f8 0%, #f3e8ff 100%);
+}
+
+.theme-celebration .theme-card {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  animation: celebrationFloat 3s ease-in-out infinite;
+}
+
+@keyframes celebrationFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+}
+
+.theme-celebration .theme-button-primary {
+  background: linear-gradient(45deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%);
+  animation: celebrationPulse 2s ease-in-out infinite;
+}
+
+@keyframes celebrationPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* NATURE THEME */
+.theme-nature {
+  --color-primary: #059669; /* Emerald 600 */
+  --color-secondary: #065f46; /* Emerald 800 */
+  --color-accent: #d97706; /* Amber 600 */
+  --color-background: #f0fdf4; /* Green 50 */
+  --color-text: #064e3b; /* Emerald 900 */
+  --color-text-secondary: #047857; /* Emerald 700 */
+  --color-border: #bbf7d0; /* Green 200 */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --border-radius: 10px;
+  --shadow-style: 0 2px 8px rgba(5, 150, 105, 0.15);
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+}
+
+.theme-nature .theme-card {
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border: 1px solid rgba(187, 247, 208, 0.8);
+}
+
+.theme-nature .theme-button-primary {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.3);
+}
+
+/* PROFESSIONAL THEME */
+.theme-professional {
+  --color-primary: #1e40af; /* Blue 700 */
+  --color-secondary: #374151; /* Gray 700 */
+  --color-accent: #dc2626; /* Red 600 */
+  --color-background: #f8fafc; /* Slate 50 */
+  --color-text: #1e293b; /* Slate 800 */
+  --color-text-secondary: #64748b; /* Slate 500 */
+  --color-border: #e2e8f0; /* Slate 200 */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --border-radius: 6px;
+  --shadow-style: 0 1px 3px rgba(30, 64, 175, 0.1);
+}
+
+.theme-professional .theme-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.theme-professional .theme-button-primary {
+  background: #1e40af;
+  border: 1px solid #1d4ed8;
+  box-shadow: 0 1px 2px rgba(30, 64, 175, 0.1);
+}
+
 /* Custom CSS can go here */ 
