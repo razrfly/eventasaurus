@@ -24,28 +24,44 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
     supabase_id = supabase_user["id"]
     email = supabase_user["email"]
 
+    IO.puts("=== SupabaseSync.sync_user Debug ===")
+    IO.puts("Supabase ID: #{supabase_id}")
+    IO.puts("Email: #{email}")
+
     if is_nil(supabase_id) or is_nil(email) do
       {:error, %{message: "Invalid Supabase user data: missing ID or email"}}
     else
       # First try to find by Supabase ID
       case Accounts.get_user_by_supabase_id(supabase_id) do
         nil ->
+          IO.puts("No user found by Supabase ID, checking by email")
           # If not found by ID, try to find by email
           case Accounts.get_user_by_email(email) do
             nil ->
               # User doesn't exist by ID or email, create new
-              create_user_from_supabase(supabase_user)
+              IO.puts("No user found by email either, creating new user")
+              result = create_user_from_supabase(supabase_user)
+              IO.inspect(result, label: "Create user result")
+              result
 
             existing_user ->
               # User exists with same email but different Supabase ID
               # Update the user and set their supabase_id
+              IO.puts("User exists with email #{email} but different Supabase ID. Updating supabase_id.")
+              IO.inspect(existing_user, label: "Existing user found by email")
               Logger.info("User exists with email #{email} but different Supabase ID. Updating supabase_id.")
-              update_user_from_supabase(existing_user, supabase_user, true)
+              result = update_user_from_supabase(existing_user, supabase_user, true)
+              IO.inspect(result, label: "Update user result")
+              result
           end
 
         user ->
           # User found by Supabase ID, just update
-          update_user_from_supabase(user, supabase_user)
+          IO.puts("User found by Supabase ID, updating")
+          IO.inspect(user, label: "Existing user found by Supabase ID")
+          result = update_user_from_supabase(user, supabase_user)
+          IO.inspect(result, label: "Update user result")
+          result
       end
     end
   end

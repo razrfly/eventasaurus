@@ -223,15 +223,21 @@ defmodule EventasaurusApp.Auth.Client do
   # Admin API functions for programmatic user creation
 
   defp admin_headers do
-    service_role_key = if Mix.env() == :dev do
+    # Use runtime environment detection instead of compile-time Mix.env()
+    runtime_env = System.get_env("MIX_ENV") || "dev"
+
+    service_role_key = if runtime_env == "dev" do
       System.get_env("SUPABASE_SERVICE_ROLE_KEY_LOCAL") ||
       System.get_env("SUPABASE_API_SECRET") ||
-      System.get_env("SUPABASE_SERVICE_ROLE_KEY") ||
-      get_api_key()
+      System.get_env("SUPABASE_SERVICE_ROLE_KEY")
     else
       System.get_env("SUPABASE_API_SECRET") ||
-      System.get_env("SUPABASE_SERVICE_ROLE_KEY") ||
-      get_api_key()
+      System.get_env("SUPABASE_SERVICE_ROLE_KEY")
+    end
+
+    # Fail fast if no service role key is available - don't fall back to regular API key for security
+    if is_nil(service_role_key) do
+      raise "No service role key found. Please set SUPABASE_SERVICE_ROLE_KEY_LOCAL (dev) or SUPABASE_API_SECRET/SUPABASE_SERVICE_ROLE_KEY (prod) environment variables."
     end
 
     [
@@ -301,29 +307,46 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
   def admin_get_user_by_email(email) do
-    # Local Supabase has a bug where email query returns all users
-    # So we get all users and filter by email manually
+    # Fetch all users and manually filter by email due to local Supabase bug
+    # where email parameter returns admin user for any query
     url = "#{get_auth_url()}/admin/users"
+
+    Logger.debug("admin_get_user_by_email: Searching for email #{email}")
+    Logger.debug("admin_get_user_by_email: Using URL #{url}")
 
     case HTTPoison.get(url, admin_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         response = Jason.decode!(response_body)
+        Logger.debug("admin_get_user_by_email: Full response: #{inspect(response)}")
+
         case response["users"] do
           users when is_list(users) ->
-            # Filter by exact email match
+            Logger.debug("admin_get_user_by_email: Got #{length(users)} users, manually filtering")
+            # Manually filter by exact email match
             matching_user = Enum.find(users, fn user ->
+              Logger.debug("admin_get_user_by_email: Comparing #{user["email"]} with #{email}")
               user["email"] == email
             end)
+
+            if matching_user do
+              Logger.debug("admin_get_user_by_email: Found matching user: #{matching_user["email"]}")
+            else
+              Logger.debug("admin_get_user_by_email: No matching user found after manual filtering")
+            end
+
             {:ok, matching_user}
           _ ->
-            {:ok, nil}
+            Logger.debug("admin_get_user_by_email: Unexpected response format")
+            {:ok, nil}            # Unexpected response format
         end
 
       {:ok, %{status_code: code, body: response_body}} ->
         error = Jason.decode!(response_body)
+        Logger.error("admin_get_user_by_email: HTTP error #{code}: #{inspect(error)}")
         {:error, %{status: code, message: error["message"] || "Failed to get user"}}
 
       {:error, error} ->
+        Logger.error("admin_get_user_by_email: Request error: #{inspect(error)}")
         {:error, error}
     end
   end
