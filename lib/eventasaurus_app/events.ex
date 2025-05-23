@@ -351,25 +351,38 @@ defmodule EventasaurusApp.Events do
   defp create_or_find_supabase_user(email, name) do
     alias EventasaurusApp.Auth.Client
 
+    IO.puts("=== create_or_find_supabase_user Debug ===")
+    IO.puts("Looking for email: #{email}")
+    IO.puts("Name: #{name}")
+
     # First check if user exists in Supabase
     case Client.admin_get_user_by_email(email) do
       {:ok, nil} ->
         # User doesn't exist, create them
+        IO.puts("User doesn't exist in Supabase, creating new user")
         temp_password = generate_temporary_password()
         user_metadata = %{name: name}
 
         case Client.admin_create_user(email, temp_password, user_metadata) do
           {:ok, supabase_user} ->
+            IO.puts("Successfully created user in Supabase:")
+            IO.inspect(supabase_user, label: "New Supabase user")
             {:ok, supabase_user}
           {:error, reason} ->
+            IO.puts("Failed to create user in Supabase:")
+            IO.inspect(reason, label: "Error")
             {:error, reason}
         end
 
       {:ok, supabase_user} ->
         # User exists in Supabase
+        IO.puts("User already exists in Supabase:")
+        IO.inspect(supabase_user, label: "Existing Supabase user")
         {:ok, supabase_user}
 
       {:error, reason} ->
+        IO.puts("Error checking for user in Supabase:")
+        IO.inspect(reason, label: "Error")
         {:error, reason}
     end
   end
