@@ -39,7 +39,36 @@
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
   </head>
-  <body class="public-event-page-body">
+<%
+  {supabase_url, supabase_api_key} =
+    if Mix.env() == :dev do
+      {System.get_env("SUPABASE_URL_LOCAL"), System.get_env("SUPABASE_API_KEY_LOCAL")}
+    else
+      {System.get_env("SUPABASE_URL"), System.get_env("SUPABASE_API_KEY")}
+    end
+%>
+  <body class="public-event-page-body"
+    data-supabase-url={supabase_url}
+    data-supabase-api-key={supabase_api_key}
+  >
     <%= @inner_content %>
+    <script>
+      // Handle browser extension errors gracefully
+      window.addEventListener('error', function(e) {
+        // Suppress common browser extension errors
+        if (e.message && e.message.includes('message channel closed')) {
+          e.preventDefault();
+          return false;
+        }
+      });
+      
+      // Handle unhandled promise rejections (common with extensions)
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && e.reason.message && e.reason.message.includes('message channel closed')) {
+          e.preventDefault();
+          return false;
+        }
+      });
+    </script>
   </body>
 </html> 
