@@ -1,0 +1,73 @@
+/* Cosmic theme - Space-inspired with deep colors and glowing effects */
+.theme-cosmic {
+  --color-primary: #6366f1; /* Indigo */
+  --color-secondary: #8b5cf6; /* Purple */
+  --color-accent: #06b6d4; /* Cyan */
+  --color-background: #0f172a; /* Dark slate */
+  --color-text: #f8fafc; /* White */
+  --color-text-secondary: #cbd5e1; /* Light slate */
+  --color-border: #334155; /* Slate */
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 700;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 12px;
+  --border-radius-large: 16px;
+  --shadow-style: 0 4px 12px rgba(99, 102, 241, 0.25);
+  --shadow-style-large: 0 8px 32px rgba(99, 102, 241, 0.35);
+  
+  /* Component specific */
+  --button-border-radius: 12px;
+  --card-border-radius: 16px;
+  --input-border-radius: 8px;
+}
+
+/* Cosmic theme specific styles */
+.theme-cosmic .theme-container {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.theme-cosmic .btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+}
+
+.theme-cosmic .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.5);
+}
+
+.theme-cosmic .btn-secondary {
+  background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+}
+
+.theme-cosmic .card {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.theme-cosmic .card:hover {
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3);
+}
+
+.theme-cosmic .event-title {
+  background: linear-gradient(135deg, #f8fafc 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
+}
+
+.theme-cosmic .event-date-badge {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+} 

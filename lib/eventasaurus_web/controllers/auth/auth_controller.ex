@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Process the login form submission.
   """
-  def create_session(conn, %{"email" => email, "password" => password}) do
+  def authenticate(conn, %{"email" => email, "password" => password}) do
     require Logger
     Logger.debug("Attempting login for email: #{email}")
 

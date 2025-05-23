@@ -7,6 +7,7 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusApp.Themes
   require Logger
 
   @doc """
@@ -415,5 +416,61 @@ defmodule EventasaurusApp.Events do
     |> String.replace(~r/[^a-zA-Z0-9]/, "")
     |> String.slice(0, 12)
     |> Kernel.<>("!")
+  end
+
+  # Theme Management Functions
+
+  @doc """
+  Updates an event's theme.
+
+  ## Examples
+
+      iex> update_event_theme(event, :cosmic)
+      {:ok, %Event{}}
+
+      iex> update_event_theme(event, :invalid)
+      {:error, "Invalid theme"}
+  """
+  def update_event_theme(%Event{} = event, theme) when is_atom(theme) do
+    if Themes.valid_theme?(theme) do
+      event
+      |> Event.changeset(%{theme: theme})
+      |> Repo.update()
+    else
+      {:error, "Invalid theme"}
+    end
+  end
+
+  @doc """
+  Updates an event's theme customizations.
+  """
+  def update_event_theme_customizations(%Event{} = event, customizations) when is_map(customizations) do
+    case Themes.validate_customizations(customizations) do
+      {:ok, valid_customizations} ->
+        merged_customizations = Themes.merge_customizations(event.theme, valid_customizations)
+
+        event
+        |> Event.changeset(%{theme_customizations: merged_customizations})
+        |> Repo.update()
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Resets an event's theme customizations to default.
+
+  ## Examples
+
+      iex> reset_event_theme_customizations(event)
+      {:ok, %Event{}}
+  """
+  def reset_event_theme_customizations(%Event{} = event) do
+    default_customizations = Themes.get_default_customizations(event.theme)
+
+    event
+    |> Event.changeset(%{theme_customizations: default_customizations})
+    |> Repo.update()
   end
 end

@@ -1,0 +1,52 @@
+/* Minimal theme - Clean, simple, and elegant */
+.theme-minimal {
+  --color-primary: #000000;
+  --color-secondary: #333333;
+  --color-accent: #0066cc;
+  --color-background: #ffffff;
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+  --color-border: #e5e7eb;
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 600;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 8px;
+  --border-radius-large: 12px;
+  --shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-style-large: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  /* Component specific */
+  --button-border-radius: 8px;
+  --card-border-radius: 12px;
+  --input-border-radius: 6px;
+}
+
+/* Minimal theme specific styles */
+.theme-minimal .theme-container {
+  /* Clean, minimal look with subtle shadows */
+}
+
+.theme-minimal .btn-primary {
+  /* Sharp, clean button design */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.theme-minimal .btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.theme-minimal .card {
+  /* Clean card design with minimal borders */
+  border: 1px solid #f0f0f0;
+}
+
+.theme-minimal .event-title {
+  /* Clean typography */
+  letter-spacing: -0.025em;
+} 
