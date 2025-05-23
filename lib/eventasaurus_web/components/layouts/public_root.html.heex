@@ -39,17 +39,10 @@
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
   </head>
-<%
-  {supabase_url, supabase_api_key} =
-    if Mix.env() == :dev do
-      {System.get_env("SUPABASE_URL_LOCAL"), System.get_env("SUPABASE_API_KEY_LOCAL")}
-    else
-      {System.get_env("SUPABASE_URL"), System.get_env("SUPABASE_API_KEY")}
-    end
-%>
+
   <body class="public-event-page-body"
-    data-supabase-url={supabase_url}
-    data-supabase-api-key={supabase_api_key}
+    data-supabase-url={supabase_url()}
+    data-supabase-api-key={supabase_api_key()}
   >
     <%= @inner_content %>
     <script>
