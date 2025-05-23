@@ -90,6 +90,9 @@ defmodule EventasaurusWeb do
       # Core UI components
       import EventasaurusWeb.CoreComponents
 
+      # Custom helpers
+      import EventasaurusWeb.Helpers.SupabaseHelper
+
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS
 
