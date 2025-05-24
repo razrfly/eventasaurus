@@ -12,8 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     
-    <!-- Google Fonts: Inter for clean typography -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Extended set for theming system -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Georgia:wght@400;700&display=swap" rel="stylesheet">
     
     <!-- Open Graph meta tags for social sharing -->
     <%= if assigns[:og_meta] do %>
@@ -29,7 +29,7 @@
       </script>
     <% end %>
     
-    <!-- Main app CSS from Phoenix -->
+    <!-- Main app CSS from Phoenix (now includes themes) -->
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     
     <!-- Custom CSS for public pages -->

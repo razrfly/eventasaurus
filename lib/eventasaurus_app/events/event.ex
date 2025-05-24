@@ -17,6 +17,12 @@ defmodule EventasaurusApp.Events.Event do
     field :cover_image_url, :string # for user uploads
     field :external_image_data, :map # for Unsplash/TMDB images
 
+    # Theme fields for the theming system
+    field :theme, Ecto.Enum,
+      values: [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional],
+      default: :minimal
+    field :theme_customizations, :map, default: %{}
+
     belongs_to :venue, EventasaurusApp.Venues.Venue
 
     many_to_many :users, EventasaurusApp.Accounts.User,
@@ -29,7 +35,8 @@ defmodule EventasaurusApp.Events.Event do
   def changeset(event, attrs) do
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
-                   :visibility, :slug, :cover_image_url, :venue_id, :external_image_data])
+                   :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
+                   :theme, :theme_customizations])
     |> validate_required([:title, :start_at, :timezone, :visibility])
     |> validate_length(:title, min: 3, max: 100)
     |> validate_length(:tagline, max: 255)
