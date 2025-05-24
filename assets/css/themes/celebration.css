@@ -103,10 +103,17 @@
 }
 
 .theme-celebration .card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(253, 242, 248, 0.9) 100%);
+  /* Fallback for browsers without backdrop-filter */
+  background: rgba(249, 168, 212, 0.8);
   border: 2px solid #f9a8d4;
-  backdrop-filter: blur(10px);
   transition: all 0.3s ease;
+}
+
+@supports (backdrop-filter: blur(10px)) {
+  .theme-celebration .card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(253, 242, 248, 0.9) 100%);
+    backdrop-filter: blur(10px);
+  }
 }
 
 .theme-celebration .card:hover {
