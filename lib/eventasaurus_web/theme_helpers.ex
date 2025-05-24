@@ -1,6 +1,23 @@
 defmodule EventasaurusWeb.ThemeHelpers do
   @moduledoc """
   Helper functions for theme-related operations in templates.
+
+  ## CSS Sanitization
+
+  This module includes intelligent CSS sanitization that supports legitimate CSS functions
+  while preventing injection attacks. Supported features include:
+
+  - **Colors:** hex (#fff), rgba(), hsl(), hsla(), rgb()
+  - **Functions:** calc(), url(), var()
+  - **Gradients:** linear-gradient(), radial-gradient(), conic-gradient()
+  - **Units:** px, em, rem, %, vh, vw, deg, etc.
+  - **Keywords:** auto, inherit, initial, unset, none, etc.
+
+  ### Security Features:
+  - Removes dangerous injection patterns (expression(), javascript:, @import)
+  - Blocks CSS comments and escape sequences
+  - Prevents HTML/script tag injection
+  - Validates CSS function syntax before allowing advanced features
   """
 
   import Phoenix.HTML.Tag
@@ -99,18 +116,70 @@ defmodule EventasaurusWeb.ThemeHelpers do
     |> String.replace(~r/[^a-zA-Z0-9\-]/, "")
   end
 
+  # Sanitizes CSS values while preserving legitimate CSS function syntax
   defp sanitize_css_value(value) do
-    # Escape potentially dangerous characters
-    value
+    sanitized = value
     |> to_string()
-    |> String.replace(";", "")
-    |> String.replace("}", "")
-    |> String.replace("{", "")
-    |> String.replace("/*", "")
-    |> String.replace("*/", "")
-    |> String.replace("</", "")
-    |> String.replace("<", "")
-    |> String.replace(">", "")
+    |> String.trim()
+
+    # Early return for empty values
+    if sanitized == "", do: sanitized, else: do_sanitize_css_value(sanitized)
+  end
+
+  defp do_sanitize_css_value(value) do
+    # Remove dangerous injection patterns first
+    value = value
+    |> String.replace(~r/\/\*.*?\*\//s, "") # Remove CSS comments
+    |> String.replace(~r/\\[0-9a-fA-F]{1,6}\s?/, "") # Remove CSS escape sequences
+    |> String.replace(~r/expression\s*\(/, "") # Remove IE expression()
+    |> String.replace(~r/javascript\s*:/, "") # Remove javascript: protocol
+    |> String.replace(~r/@import/i, "") # Remove @import rules
+    |> String.replace(~r/behavior\s*:/i, "") # Remove IE behavior
+    |> String.replace("</", "") # Prevent HTML closing tags
+    |> String.replace("<script", "") # Prevent script tags
+    |> String.replace("</script", "") # Prevent script closing tags
+
+    # Check if this looks like a valid CSS function
+    if is_valid_css_function?(value) do
+      # For valid CSS functions, only remove the most dangerous characters
+      value
+      |> String.replace(";", "") # Remove statement separators
+      |> String.replace("}", "") # Remove block closers (but allow in strings)
+      |> String.replace("{", "") # Remove block openers
+    else
+      # For simple values, be more restrictive
+      value
+      |> String.replace(~r/[;{}]/, "") # Remove CSS structural characters
+      |> String.replace(~r/[<>]/, "") # Remove HTML-like characters
+    end
+  end
+
+  # Check if a value looks like a legitimate CSS function
+  defp is_valid_css_function?(value) do
+    # List of safe CSS functions we want to support
+    safe_functions = [
+      ~r/^calc\s*\([^)]*\)$/,
+      ~r/^rgba?\s*\([^)]*\)$/,
+      ~r/^hsla?\s*\([^)]*\)$/,
+      ~r/^var\s*\(--[a-zA-Z0-9\-]+\)$/,
+      ~r/^url\s*\(['"]?[^'"()]*['"]?\)$/,
+      ~r/^linear-gradient\s*\([^)]*\)$/,
+      ~r/^radial-gradient\s*\([^)]*\)$/,
+      ~r/^repeat-linear-gradient\s*\([^)]*\)$/,
+      ~r/^repeat-radial-gradient\s*\([^)]*\)$/,
+      ~r/^conic-gradient\s*\([^)]*\)$/
+    ]
+
+    # Also allow simple values (colors, units, keywords)
+    simple_patterns = [
+      ~r/^#[0-9a-fA-F]{3,8}$/, # Hex colors
+      ~r/^[0-9]*\.?[0-9]+(px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|deg|rad|grad|turn|s|ms)$/, # Units
+      ~r/^(auto|inherit|initial|unset|none|normal|bold|italic|left|center|right|block|inline|flex|grid|absolute|relative|fixed|static|sticky|visible|hidden|transparent)$/ # Keywords
+    ]
+
+    # Check against safe function patterns
+    Enum.any?(safe_functions, fn pattern -> String.match?(value, pattern) end) ||
+    Enum.any?(simple_patterns, fn pattern -> String.match?(value, pattern) end)
   end
 
   defp sanitize_and_normalize_color(value) do
