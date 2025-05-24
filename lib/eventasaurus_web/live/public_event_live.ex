@@ -64,32 +64,19 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   # Generate CSS custom properties from theme customizations
   defp generate_css_variables(theme, customizations) do
-    # Merge default theme customizations with user customizations
-    merged = Themes.merge_customizations(theme, customizations)
+    # Validate customizations first to prevent injection
+    case Themes.validate_customizations(customizations || %{}) do
+      {:ok, validated_customizations} ->
+        # Merge default theme customizations with validated user customizations
+        merged = Themes.merge_customizations(theme, validated_customizations)
 
-    # Generate CSS variables string
-    variables = []
+        # Use the sanitized function from ThemeHelpers
+        EventasaurusWeb.ThemeHelpers.theme_css_variables(merged)
 
-    # Add color variables
-    colors = Map.get(merged, "colors", %{})
-    variables = Enum.reduce(colors, variables, fn {key, value}, acc ->
-      ["--color-#{String.replace(key, "_", "-")}: #{value};" | acc]
-    end)
-
-    # Add typography variables
-    typography = Map.get(merged, "typography", %{})
-    variables = Enum.reduce(typography, variables, fn {key, value}, acc ->
-      ["--#{String.replace(key, "_", "-")}: #{value};" | acc]
-    end)
-
-    # Add layout variables
-    layout = Map.get(merged, "layout", %{})
-    variables = Enum.reduce(layout, variables, fn {key, value}, acc ->
-      ["--#{String.replace(key, "_", "-")}: #{value};" | acc]
-    end)
-
-    # Join all variables
-    Enum.join(variables, " ")
+      {:error, _} ->
+        # Fall back to default theme only if validation fails
+        EventasaurusWeb.ThemeHelpers.theme_css_variables(%{})
+    end
   end
 
   def handle_event("show_registration_modal", _params, socket) do
