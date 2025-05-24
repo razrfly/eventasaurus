@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.ThemeHelpers do
   """
 
   import Phoenix.HTML.Tag
+  alias EventasaurusApp.Themes
 
   @doc """
   Returns the theme CSS link tags based on the current theme.
@@ -29,7 +30,7 @@ defmodule EventasaurusWeb.ThemeHelpers do
   This is useful for admin interfaces or theme preview functionality.
   """
   def all_theme_css_links do
-    themes = [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
+    themes = Themes.valid_themes()
 
     # Always include base theme CSS first
     base_css = tag(:link, rel: "stylesheet", href: "/assets/themes/base.css")
@@ -52,19 +53,25 @@ defmodule EventasaurusWeb.ThemeHelpers do
     # Add color variables
     colors = Map.get(customizations, "colors", %{})
     variables = Enum.reduce(colors, variables, fn {key, value}, acc ->
-      ["--color-#{String.replace(key, "_", "-")}: #{value};" | acc]
+      sanitized_key = sanitize_css_identifier(key)
+      sanitized_value = sanitize_and_normalize_color(value)
+      ["--color-#{sanitized_key}: #{sanitized_value};" | acc]
     end)
 
     # Add typography variables
     typography = Map.get(customizations, "typography", %{})
     variables = Enum.reduce(typography, variables, fn {key, value}, acc ->
-      ["--#{String.replace(key, "_", "-")}: #{value};" | acc]
+      sanitized_key = sanitize_css_identifier(key)
+      sanitized_value = sanitize_css_value(value)
+      ["--#{sanitized_key}: #{sanitized_value};" | acc]
     end)
 
     # Add layout variables
     layout = Map.get(customizations, "layout", %{})
     variables = Enum.reduce(layout, variables, fn {key, value}, acc ->
-      ["--#{String.replace(key, "_", "-")}: #{value};" | acc]
+      sanitized_key = sanitize_css_identifier(key)
+      sanitized_value = sanitize_css_value(value)
+      ["--#{sanitized_key}: #{sanitized_value};" | acc]
     end)
 
     # Join all variables
@@ -72,6 +79,49 @@ defmodule EventasaurusWeb.ThemeHelpers do
   end
 
   def theme_css_variables(_), do: ""
+
+  # Private helper functions for CSS sanitization
+
+  defp sanitize_css_identifier(identifier) do
+    # Remove any characters that aren't alphanumeric, dash, or underscore
+    identifier
+    |> to_string()
+    |> String.replace("_", "-")
+    |> String.replace(~r/[^a-zA-Z0-9\-]/, "")
+  end
+
+  defp sanitize_css_value(value) do
+    # Escape potentially dangerous characters
+    value
+    |> to_string()
+    |> String.replace(";", "")
+    |> String.replace("}", "")
+    |> String.replace("{", "")
+    |> String.replace("/*", "")
+    |> String.replace("*/", "")
+    |> String.replace("</", "")
+    |> String.replace("<", "")
+    |> String.replace(">", "")
+  end
+
+  defp sanitize_and_normalize_color(value) do
+    sanitized = sanitize_css_value(value)
+
+    # Normalize hex colors - add # if missing
+    cond do
+      # Already has # prefix
+      String.match?(sanitized, ~r/^#[0-9a-fA-F]{3,6}$/) ->
+        sanitized
+
+      # Valid hex without # prefix
+      String.match?(sanitized, ~r/^[0-9a-fA-F]{3,6}$/) ->
+        "#" <> sanitized
+
+      # Other color formats (rgba, hsl, named colors, etc.)
+      true ->
+        sanitized
+    end
+  end
 
   @doc """
   Returns the appropriate theme class for an element based on the theme.

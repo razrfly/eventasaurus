@@ -28,8 +28,12 @@
 
 /* Apply theme system to all themed containers */
 .theme-container {
-  /* Inherit the theme system transitions */
-  @extend .theme-system;
+  /* Apply the same transitions as theme-system */
+  transition: 
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 /* Theme-aware responsive utilities */
