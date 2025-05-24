@@ -1,0 +1,117 @@
+defmodule EventasaurusWeb.ThemeHelpers do
+  @moduledoc """
+  Helper functions for theme-related operations in templates.
+  """
+
+  import Phoenix.HTML.Tag
+
+  @doc """
+  Returns the theme CSS link tags based on the current theme.
+  Only loads the base CSS and the specific theme CSS to optimize performance.
+  """
+  def theme_css_links(conn_or_socket) do
+    theme = case conn_or_socket.assigns do
+      %{theme: theme} when not is_nil(theme) -> theme
+      _ -> :minimal # Default theme
+    end
+
+    # Always include base theme CSS
+    base_css = tag(:link, rel: "stylesheet", href: "/assets/themes/base.css")
+
+    # Include specific theme CSS
+    theme_css = tag(:link, rel: "stylesheet", href: "/assets/themes/#{theme}.css")
+
+    [base_css, theme_css]
+  end
+
+  @doc """
+  Returns all theme CSS links for cases where we need to load all themes.
+  This is useful for admin interfaces or theme preview functionality.
+  """
+  def all_theme_css_links do
+    themes = [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
+
+    # Always include base theme CSS first
+    base_css = tag(:link, rel: "stylesheet", href: "/assets/themes/base.css")
+
+    # Include all theme CSS files
+    theme_css_links = Enum.map(themes, fn theme ->
+      tag(:link, rel: "stylesheet", href: "/assets/themes/#{theme}.css")
+    end)
+
+    [base_css | theme_css_links]
+  end
+
+  @doc """
+  Generates inline CSS variables for theme customizations.
+  This is used when we need to apply custom theme variables directly to elements.
+  """
+  def theme_css_variables(customizations) when is_map(customizations) do
+    variables = []
+
+    # Add color variables
+    colors = Map.get(customizations, "colors", %{})
+    variables = Enum.reduce(colors, variables, fn {key, value}, acc ->
+      ["--color-#{String.replace(key, "_", "-")}: #{value};" | acc]
+    end)
+
+    # Add typography variables
+    typography = Map.get(customizations, "typography", %{})
+    variables = Enum.reduce(typography, variables, fn {key, value}, acc ->
+      ["--#{String.replace(key, "_", "-")}: #{value};" | acc]
+    end)
+
+    # Add layout variables
+    layout = Map.get(customizations, "layout", %{})
+    variables = Enum.reduce(layout, variables, fn {key, value}, acc ->
+      ["--#{String.replace(key, "_", "-")}: #{value};" | acc]
+    end)
+
+    # Join all variables
+    Enum.join(variables, " ")
+  end
+
+  def theme_css_variables(_), do: ""
+
+  @doc """
+  Returns the appropriate theme class for an element based on the theme.
+  """
+  def theme_class(theme) when is_atom(theme) do
+    "theme-#{theme}"
+  end
+
+  def theme_class(theme) when is_binary(theme) do
+    try do
+      theme_atom = String.to_existing_atom(theme)
+      "theme-#{theme_atom}"
+    rescue
+      ArgumentError -> "theme-minimal"
+    end
+  end
+
+  def theme_class(_), do: "theme-minimal"
+
+  @doc """
+  Returns font links for themes that require external fonts.
+  """
+  def theme_font_links do
+    # Google Fonts for various themes
+    preconnect1 = tag(:link, [
+      rel: "preconnect",
+      href: "https://fonts.googleapis.com"
+    ])
+
+    preconnect2 = tag(:link, [
+      rel: "preconnect",
+      href: "https://fonts.gstatic.com",
+      crossorigin: true
+    ])
+
+    font_link = tag(:link, [
+      rel: "stylesheet",
+      href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Georgia:wght@400;700&display=swap"
+    ])
+
+    Phoenix.HTML.raw("#{preconnect1}#{preconnect2}#{font_link}")
+  end
+end

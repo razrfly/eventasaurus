@@ -1,0 +1,184 @@
+<context>
+
+# Overview  
+This is a foundational version of a modern event creation and sharing platform. It allows users (event organizers) to log in, create a basic event with a cover image, set a date and time, assign a venue, and generate a public event page that can be shared with others. It targets individual organizers or small teams who want a quick and lightweight tool for setting up simple events and collecting RSVPs in future versions.
+
+The product is valuable because it strips away unnecessary complexity and makes it effortless to go from an idea to a live event page in minutes. It is also architected to expand over time into more collaborative and decision-driven scheduling tools.
+
+# Core Features  
+
+### 1. User Authentication (Organizer Login)  
+- **What it does**: Allows organizers to sign up and log in using Supabase authentication.  
+- **Why it's important**: Event creation should be gated to authorized users.  
+- **How it works**: Supabase handles email/password signups; login tokens persist across sessions.
+
+### 2. Event Creation  
+- **What it does**: Allows organizers to create and manage events.  
+- **Why it's important**: This is the core data object for the platform.  
+- **How it works**: After logging in, users fill out a form with title, description, start/end times, timezone, visibility setting, and upload a cover image.
+
+### 3. Venue Assignment  
+- **What it does**: Lets users attach a physical or virtual location to an event.  
+- **Why it's important**: Location matters for most events, and keeping it in a dedicated model allows reuse and expansion later (e.g., maps, proximity search).  
+- **How it works**: The user can either select a venue or add a new one when creating the event.
+
+### 4. Public Event Page  
+- **What it does**: Generates a URL that anyone can visit to see the event details.  
+- **Why it's important**: This is the shareable artifact for organizers.  
+- **How it works**: Uses a unique slug in the URL to display the event's title, time, venue, description, and cover image.
+
+### 5. Multi-Organizer Support  
+- **What it does**: Allows multiple users to collaborate on managing an event.  
+- **Why it's important**: Some events are organized by teams.  
+- **How it works**: Events are associated with users through a join table, allowing more than one organizer per event without enforcing roles at this stage.
+
+</context>
+
+<PRD>
+
+# Technical Architecture  
+
+### System Components  
+- **Phoenix (LiveView)**: Core application framework  
+- **Supabase**: Handles authentication, file storage (images), and provides a managed Postgres backend  
+- **Frontend**: LiveView templates for real-time rendering and interactivity  
+- **Storage**: Supabase Storage for user-uploaded event images  
+
+---
+
+### Data Models  
+
+#### users  
+- `id` (integer PK)  
+- `email`  
+- `name`  
+- `inserted_at / updated_at`
+
+#### venues  
+- `id`  
+- `name`  
+- `address`  
+- `city`  
+- `state`  
+- `country`  
+- `latitude`  
+- `longitude`  
+- `inserted_at / updated_at`
+
+#### events  
+- `id`  
+- `venue_id` (FK → venues)  
+- `title`  
+- `tagline`  
+- `description`  
+- `start_at` (UTC datetime)  
+- `ends_at` (UTC datetime)  
+- `timezone` (IANA timezone string)  
+- `visibility` (enum: `public`, `private`)  
+- `slug` (unique string for URL)  
+- `cover_image_url`  
+- `inserted_at / updated_at`
+
+#### event_users  
+- `id`  
+- `event_id` (FK → events)  
+- `user_id` (FK → users)  
+- `role` (optional – for future use)  
+- `inserted_at / updated_at`
+
+---
+
+### APIs and Integrations  
+- **Supabase Auth**: User management  
+- **Supabase Storage**: Uploading and retrieving event images  
+- **Slugify Utility**: For generating URL slugs  
+
+---
+
+### Infrastructure Requirements  
+- Supabase project with enabled auth and storage  
+- Phoenix app with basic LiveView setup  
+- Deployment target (Fly.io or similar) – not required for this PRD
+
+---
+
+# Development Roadmap  
+
+### Phase 1: MVP (This PRD)  
+- User login and signup (Supabase)  
+- Create event with required fields  
+- Upload and display image (Supabase Storage)  
+- Create/assign a venue  
+- Generate and render public event page (`/events/:slug`)  
+- Associate one or more organizers with an event (via `event_users`)
+
+---
+
+### Phase 2: RSVP Layer  
+- Let attendees add their name/email without creating an account  
+- Store basic attendee data  
+- Display total attending count
+
+---
+
+### Phase 3: Collaborative Date Selection (Post-MVP)  
+- Event creation without fixed date  
+- Attendees suggest preferred dates and availability  
+- Organizers finalize a date based on preferences
+
+---
+
+### Phase 4: Notifications and Customization  
+- Email confirmation and reminders  
+- Custom event branding and themes  
+
+---
+
+# Logical Dependency Chain  
+
+### Foundation First  
+1. Set up Supabase auth and storage  
+2. Define core database schema (`users`, `venues`, `events`, `event_users`)  
+3. Build organizer login & dashboard  
+4. Create event form and image upload  
+5. Build public event display via slug  
+
+---
+
+### Minimal Usable Front-End  
+- The goal is to reach a functioning public event page with admin login and event creation as fast as possible.  
+- RSVP and voting flows can come after the public page and base creation is complete.
+
+---
+
+### Atomic & Extendable  
+- Event model is designed to grow (add state machine, ticketing, decision models, etc.)  
+- Venue model allows for geolocation later  
+- Use enums and explicit foreign keys to prevent migrations later  
+
+---
+
+# Risks and Mitigations  
+
+### Risk: Supabase auth or storage changes  
+- **Mitigation**: Keep auth/storages modular; wrap them in service modules for future swapping  
+
+### Risk: MVP tries to do too much  
+- **Mitigation**: Start with only required fields for event + organizer login + public view  
+- Define a true MVP (as above), and isolate all new functionality in Phase 2+
+
+### Risk: Complex event logic too early  
+- **Mitigation**: Use `start_at` and `ends_at` now, and introduce more scheduling logic only after the MVP works  
+
+---
+
+# Appendix  
+
+- **Luma API Reference**: [https://docs.lu.ma/reference/get_public-v1-event-get](https://docs.lu.ma/reference/get_public-v1-event-get)
+- **Tickstarter Reference**: [https://github.com/razrfly/tickstarter]
+- **Festevent Reference**: [https://github.com/razrfly/festevent]
+- **Timezone Guide**: [List of IANA time zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)  
+- **Slug Utility**: Phoenix’s `slugify` helper or `Slugger` library  
+- **Future Work Reference**: Social choice algorithms, event state machines, RSVP logic, preference voting
+
+</PRD>
