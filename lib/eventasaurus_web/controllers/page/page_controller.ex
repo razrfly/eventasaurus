@@ -6,4 +6,16 @@ defmodule EventasaurusWeb.PageController do
     # so skip using the default app layout.
     render(conn, :home, layout: false)
   end
+
+  def index(conn, _params) do
+    render(conn, :index)
+  end
+
+  def about(conn, _params) do
+    render(conn, :about)
+  end
+
+  def whats_new(conn, _params) do
+    render(conn, :whats_new)
+  end
 end

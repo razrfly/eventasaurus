@@ -1,0 +1,151 @@
+<div class="overflow-hidden">
+  <%!-- Hero Section --%>
+  <.hero_section class="pb-16 pt-8 sm:pb-24 sm:pt-16">
+
+    <%!-- Hero Content --%>
+    <div class="pt-8 pb-16 sm:pt-16 sm:pb-24 md:pt-24 md:pb-32">
+      <.heading as="h1" class="font-display text-6xl/[0.9] font-medium tracking-tight text-balance text-gray-950 sm:text-8xl/[0.8] md:text-9xl/[0.8]">
+        Effortless group event planning, finally done right
+      </.heading>
+      <p class="mt-8 max-w-lg text-xl/7 font-medium text-gray-950/75 sm:text-2xl/8">
+        Stop the endless back-and-forth. Let your group find the perfect date and time together, 
+        without the chaos of traditional planning.
+      </p>
+      <div class="mt-12 flex flex-col gap-x-6 gap-y-4 sm:flex-row">
+        <.radiant_button href="/register">Create Your First Event</.radiant_button>
+        <.radiant_button variant="secondary" href="/about">See How It Works</.radiant_button>
+      </div>
+    </div>
+  </.hero_section>
+
+  <main>
+    <%!-- Logo Cloud --%>
+    <.section class="py-16">
+      <.subheading class="text-center mb-8">Trusted by teams at</.subheading>
+      <div class="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-6">
+        <.logo_placeholder name="Startup Inc" />
+        <.logo_placeholder name="Tech Corp" />
+        <.logo_placeholder name="Design Co" />
+        <.logo_placeholder name="Dev Team" />
+        <.logo_placeholder name="Marketing Hub" />
+        <.logo_placeholder name="Creative Studio" />
+      </div>
+    </.section>
+
+    <%!-- Features Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading>Features</.subheading>
+        <.heading as="h2" class="mt-2 max-w-3xl mx-auto">
+          Everything you need for perfect event planning
+        </.heading>
+      </div>
+
+      <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <.feature_card 
+          title="Poll the best date"
+          description="Create date polls that let everyone vote on their availability. No more endless email chains trying to find when everyone is free."
+          icon="📅"
+        />
+        <.feature_card 
+          title="Gauge interest before planning"
+          description="Test the waters with interest polls before you invest time in planning. Make sure people actually want to attend."
+          icon="🎯"
+        />
+        <.feature_card 
+          title="Let attendees vote, not just RSVP"
+          description="Move beyond simple yes/no responses. Get meaningful input from your group to make better decisions together."
+          icon="🗳️"
+        />
+        <.feature_card 
+          title="No accounts required to join"
+          description="Your attendees can participate instantly without creating accounts or downloading apps. Share a link and you're done."
+          icon="⚡"
+        />
+      </div>
+    </.section>
+
+    <%!-- How It Works Section --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading>How It Works</.subheading>
+        <.heading as="h2" class="mt-2 max-w-3xl mx-auto">
+          From idea to scheduled event in minutes
+        </.heading>
+      </div>
+
+      <div class="grid grid-cols-1 gap-12 lg:grid-cols-3">
+        <div class="text-center">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-6">
+            <span class="text-2xl">1️⃣</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Create Your Event</h3>
+          <p class="text-gray-600">
+            Set up your event with multiple date options and let people know what you're planning.
+          </p>
+        </div>
+        <div class="text-center">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
+            <span class="text-2xl">2️⃣</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Share and Collect Votes</h3>
+          <p class="text-gray-600">
+            Send the link to your group. They can vote on dates and express interest without signing up.
+          </p>
+        </div>
+        <div class="text-center">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-6">
+            <span class="text-2xl">3️⃣</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Finalize and Go</h3>
+          <p class="text-gray-600">
+            See the results, pick the winning date, and notify everyone. Your event is ready!
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Testimonials Section --%>
+    <.section background="gray" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading>Testimonials</.subheading>
+        <.heading as="h2" class="mt-2 max-w-3xl mx-auto">
+          Loved by event organizers everywhere
+        </.heading>
+      </div>
+
+      <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <.testimonial_card 
+          quote="Finally, a tool that actually makes group planning easier instead of more complicated. We planned our team retreat in 10 minutes instead of 10 emails."
+          author="Sarah Johnson"
+          title="Team Lead"
+          company="TechCorp"
+        />
+        <.testimonial_card 
+          quote="The ability to gauge interest before committing to planning saved us so much time. We discovered our original idea wasn't popular before we wasted time on it."
+          author="Mike Chen"
+          title="Event Coordinator"
+          company="Startup Inc"
+        />
+      </div>
+    </.section>
+
+    <%!-- Final CTA Section --%>
+    <.section class="py-24">
+      <div class="text-center">
+        <.heading as="h2" class="mb-6">
+          Ready to simplify your group planning?
+        </.heading>
+        <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+          Join thousands of organizers who've discovered the joy of stress-free event planning.
+        </p>
+        <.radiant_button href="/register" class="text-lg px-8 py-3">
+          Start planning now – it's free!
+        </.radiant_button>
+        <p class="mt-4 text-sm text-gray-500">
+          No credit card required. Set up your first event in under 2 minutes.
+        </p>
+      </div>
+    </.section>
+  </main>
+</div> 
