@@ -76,7 +76,10 @@ defmodule EventasaurusWeb.Router do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
-      get "/", PageController, :home
+      get "/", PageController, :index
+      get "/home", PageController, :home
+      get "/about", PageController, :about
+      get "/whats-new", PageController, :whats_new
       # Add public LiveView routes here
       # live "/events/:slug", EventLive.Show
     end

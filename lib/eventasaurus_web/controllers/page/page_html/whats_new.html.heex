@@ -1,0 +1,225 @@
+<div class="overflow-hidden">
+
+
+  <main>
+    <%!-- Hero Section --%>
+    <.section class="py-16 sm:py-24">
+      <div class="text-center mb-16">
+        <.subheading>Product Updates</.subheading>
+        <.heading as="h1" class="mb-6 mt-2">
+          What's New in Eventasaurus
+        </.heading>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          We're constantly improving Eventasaurus to make group event planning even easier. 
+          Here are the latest features and enhancements we've shipped.
+        </p>
+      </div>
+    </.section>
+
+    <%!-- Release Notes Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="max-w-4xl mx-auto">
+        
+        <%!-- Latest Release --%>
+        <div class="mb-16">
+          <div class="flex items-center mb-6">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 mr-4">
+              Latest
+            </span>
+            <span class="text-sm text-gray-500">Released January 15, 2024</span>
+          </div>
+          
+          <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm mb-8">
+            <h2 class="text-3xl font-semibold text-gray-900 mb-4">Suggested Dates</h2>
+            <p class="text-lg text-gray-600 mb-6">
+              Let attendees propose new dates to help find the perfect time. Now your group can suggest 
+              alternatives if none of your original options work for everyone.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-2">How it works:</h4>
+                <ul class="space-y-2 text-gray-600">
+                  <li class="flex items-start space-x-2">
+                    <span class="text-green-500 mt-1">•</span>
+                    <span>Attendees can suggest new dates while voting</span>
+                  </li>
+                  <li class="flex items-start space-x-2">
+                    <span class="text-green-500 mt-1">•</span>
+                    <span>Suggestions appear alongside original options</span>
+                  </li>
+                  <li class="flex items-start space-x-2">
+                    <span class="text-green-500 mt-1">•</span>
+                    <span>Everyone can vote on suggested dates too</span>
+                  </li>
+                </ul>
+              </div>
+              <div class="bg-gray-50 rounded-lg p-4">
+                <div class="text-sm text-gray-500 mb-2">Example suggestion</div>
+                <div class="bg-white rounded border p-3">
+                  <div class="font-medium text-gray-900">March 15th, 7:00 PM</div>
+                  <div class="text-sm text-gray-600">Suggested by Sarah</div>
+                  <div class="text-sm text-blue-600 mt-1">"This works better for our remote team"</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+              <.radiant_button href="/register" variant="secondary">Try It Now</.radiant_button>
+              <a href="#" class="text-sm text-gray-600 hover:text-gray-950">Learn more →</a>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Previous Release --%>
+        <div class="mb-16">
+          <div class="flex items-center mb-6">
+            <span class="text-sm text-gray-500">Released December 8, 2023</span>
+          </div>
+          
+          <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm mb-8">
+            <h2 class="text-3xl font-semibold text-gray-900 mb-4">Anonymous Voting</h2>
+            <p class="text-lg text-gray-600 mb-6">
+              Gauge real sentiment without social pressure. Perfect for sensitive decisions where 
+              you want honest feedback without anyone feeling influenced by others' choices.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <div class="text-2xl mb-2">🎭</div>
+                <h4 class="font-semibold text-gray-900 mb-1">Anonymous Mode</h4>
+                <p class="text-sm text-gray-600">Votes are hidden until you reveal results</p>
+              </div>
+              <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <div class="text-2xl mb-2">📊</div>
+                <h4 class="font-semibold text-gray-900 mb-1">Real Insights</h4>
+                <p class="text-sm text-gray-600">Get honest feedback without peer pressure</p>
+              </div>
+              <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <div class="text-2xl mb-2">🔓</div>
+                <h4 class="font-semibold text-gray-900 mb-1">When You're Ready</h4>
+                <p class="text-sm text-gray-600">Reveal results when voting closes</p>
+              </div>
+            </div>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div class="flex items-start space-x-3">
+                <div class="text-blue-500 mt-1">💡</div>
+                <div>
+                  <div class="font-medium text-blue-900 mb-1">Great for:</div>
+                  <div class="text-sm text-blue-700">Salary discussions, controversial topics, or any time you want unbiased input</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Earlier Release --%>
+        <div class="mb-16">
+          <div class="flex items-center mb-6">
+            <span class="text-sm text-gray-500">Released November 22, 2023</span>
+          </div>
+          
+          <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm mb-8">
+            <h2 class="text-3xl font-semibold text-gray-900 mb-4">Smart Finalization</h2>
+            <p class="text-lg text-gray-600 mb-6">
+              We recommend the best time based on votes and availability. Our algorithm considers 
+              not just vote counts, but also response quality and participant preferences.
+            </p>
+            
+            <div class="space-y-4 mb-6">
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-purple-600 text-sm">✓</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Intelligent Scoring</h4>
+                  <p class="text-gray-600">Weighs strong preferences more than casual votes</p>
+                </div>
+              </div>
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-purple-600 text-sm">✓</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Conflict Resolution</h4>
+                  <p class="text-gray-600">Suggests alternatives when results are close</p>
+                </div>
+              </div>
+              <div class="flex items-start space-x-3">
+                <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mt-0.5">
+                  <span class="text-purple-600 text-sm">✓</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">One-Click Approval</h4>
+                  <p class="text-gray-600">Accept our recommendation or pick manually</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </.section>
+
+    <%!-- Coming Soon Section --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading>Coming Soon</.subheading>
+        <.heading as="h2" class="mt-2">
+          What's next for Eventasaurus
+        </.heading>
+        <p class="mt-6 text-lg text-gray-600 max-w-3xl mx-auto">
+          We're always working on new ways to make event planning even smoother. 
+          Here's a sneak peek at what we're building next.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div class="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+          <div class="text-2xl mb-4">📱</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">Mobile App</h3>
+          <p class="text-gray-600 mb-4">Native iOS and Android apps for planning on the go</p>
+          <span class="text-sm font-medium text-blue-600">Q2 2024</span>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+          <div class="text-2xl mb-4">🔗</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">Calendar Integration</h3>
+          <p class="text-gray-600 mb-4">Sync with Google Calendar, Outlook, and Apple Calendar</p>
+          <span class="text-sm font-medium text-blue-600">Q2 2024</span>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+          <div class="text-2xl mb-4">🤖</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">AI Scheduling</h3>
+          <p class="text-gray-600 mb-4">Let AI suggest optimal times based on your group's patterns</p>
+          <span class="text-sm font-medium text-blue-600">Q3 2024</span>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Newsletter Section --%>
+    <.section background="gray" class="py-24">
+      <div class="text-center">
+        <.heading as="h2" class="mb-6">
+          Stay in the loop
+        </.heading>
+        <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+          Get notified when we ship new features and improvements. No spam, just product updates.
+        </p>
+        <div class="max-w-md mx-auto flex space-x-4">
+          <input 
+            type="email" 
+            placeholder="Enter your email" 
+            class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          />
+          <.radiant_button>Subscribe</.radiant_button>
+        </div>
+        <p class="mt-4 text-sm text-gray-500">
+          We'll send you a monthly digest of new features and improvements.
+        </p>
+      </div>
+    </.section>
+  </main>
+</div> 
