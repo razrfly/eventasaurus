@@ -65,6 +65,22 @@ defmodule EventasaurusApp.EventsTest do
       assert {:error, :already_registered} = Events.one_click_register(event, user)
     end
 
+    test "one_click_register/2 reactivates cancelled registration" do
+      event = event_fixture()
+      user = user_fixture()
+
+      {:ok, _participant} = Events.create_event_participant(%{
+        event_id: event.id,
+        user_id: user.id,
+        role: :invitee,
+        status: :cancelled
+      })
+
+      assert {:ok, participant} = Events.one_click_register(event, user)
+      assert participant.status == :pending
+      assert participant.metadata[:reregistered_at]
+    end
+
     test "cancel_user_registration/2 cancels existing registration" do
       event = event_fixture()
       user = user_fixture()
