@@ -85,11 +85,9 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
-  # Public event routes (uses public layout)
+  # Public event routes (now uses main Radiant layout with theme support)
   live_session :public,
-    layout: {EventasaurusWeb.Layouts, :public},
-    root_layout: {EventasaurusWeb.Layouts, :public_root},
-    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user}] do
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user_and_theme}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 

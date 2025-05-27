@@ -145,23 +145,13 @@ defmodule EventasaurusWeb.ThemeHelpers do
   Returns font links for themes that require external fonts.
   """
   def theme_font_links do
-    # Google Fonts for various themes
-    preconnect1 = tag(:link, [
-      rel: "preconnect",
-      href: "https://fonts.googleapis.com"
-    ])
+    # Google Fonts for various themes - return as raw HTML string
+    html = """
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Georgia:wght@400;700&display=swap">
+    """
 
-    preconnect2 = tag(:link, [
-      rel: "preconnect",
-      href: "https://fonts.gstatic.com",
-      crossorigin: true
-    ])
-
-    font_link = tag(:link, [
-      rel: "stylesheet",
-      href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Georgia:wght@400;700&display=swap"
-    ])
-
-    Phoenix.HTML.raw("#{preconnect1}#{preconnect2}#{font_link}")
+    Phoenix.HTML.raw(html)
   end
 end
