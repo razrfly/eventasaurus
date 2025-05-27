@@ -149,7 +149,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
               <h2 class="text-xl font-semibold mb-4 text-gray-900">About This Event</h2>
               <div class="prose max-w-none text-gray-700">
-                <%= Phoenix.HTML.raw(Earmark.as_html!(@event.description || "")) %>
+                <%= Phoenix.HTML.raw(Earmark.as_html!(@event.description)) %>
               </div>
             </div>
           <% else %>
