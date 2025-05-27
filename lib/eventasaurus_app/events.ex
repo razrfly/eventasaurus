@@ -7,6 +7,7 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Themes
   require Logger
 
@@ -363,6 +364,116 @@ defmodule EventasaurusApp.Events do
       {:error, reason} ->
         Logger.warning("Registration transaction failed", %{reason: inspect(reason)})
         {:error, reason}
+    end
+  end
+
+  @doc """
+  Get registration status for a user and event.
+  Returns one of: :not_registered, :registered, :cancelled, :organizer
+  """
+  def get_user_registration_status(%Event{} = event, user) do
+    # Handle both User structs and Supabase user data
+    local_user = case user do
+      %User{} = u -> u
+      %{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata} ->
+        # Try to find or create local user
+        case Accounts.get_user_by_supabase_id(supabase_id) do
+          %User{} = u -> u
+          nil ->
+            # Create new user if not found
+            name = user_metadata["name"] || email |> String.split("@") |> hd()
+            user_params = %{
+              email: email,
+              name: name,
+              supabase_id: supabase_id
+            }
+            case Accounts.create_user(user_params) do
+              {:ok, u} -> u
+              {:error, _} -> nil
+            end
+        end
+      _ -> nil
+    end
+
+    case local_user do
+      nil -> :not_registered
+      user ->
+        # First check if user is an organizer/admin
+        if user_is_organizer?(event, user) do
+          :organizer
+        else
+          # Check participant status
+          case get_event_participant_by_event_and_user(event, user) do
+            nil -> :not_registered
+            %{status: :cancelled} -> :cancelled
+            %{status: _} -> :registered
+          end
+        end
+    end
+  end
+
+  @doc """
+  Cancel a user's registration for an event.
+  """
+  def cancel_user_registration(%Event{} = event, %User{} = user) do
+    case get_event_participant_by_event_and_user(event, user) do
+      nil -> {:error, :not_registered}
+      participant ->
+        update_event_participant(participant, %{status: :cancelled})
+    end
+  end
+
+  @doc """
+  Re-register a user for an event (for previously cancelled registrations).
+  """
+  def reregister_user_for_event(%Event{} = event, %User{} = user) do
+    case get_event_participant_by_event_and_user(event, user) do
+      nil ->
+        # Create new registration
+        create_event_participant(%{
+          event_id: event.id,
+          user_id: user.id,
+          role: :invitee,
+          status: :pending,
+          source: "re_registration",
+          metadata: %{registration_date: DateTime.utc_now()}
+        })
+
+      %{status: :cancelled} = participant ->
+        # Reactivate cancelled registration
+        update_event_participant(participant, %{
+          status: :pending,
+          metadata: Map.put(participant.metadata || %{}, :reregistered_at, DateTime.utc_now())
+        })
+
+      _participant ->
+        {:error, :already_registered}
+    end
+  end
+
+  @doc """
+  One-click registration for authenticated users.
+  """
+  def one_click_register(%Event{} = event, %User{} = user) do
+    case get_user_registration_status(event, user) do
+      :not_registered ->
+        create_event_participant(%{
+          event_id: event.id,
+          user_id: user.id,
+          role: :invitee,
+          status: :pending,
+          source: "one_click_registration",
+          metadata: %{registration_date: DateTime.utc_now()}
+        })
+
+      :cancelled ->
+        reregister_user_for_event(event, user)
+
+      :registered ->
+        {:error, :already_registered}
+
+      :organizer ->
+        {:error, :organizer_cannot_register}
     end
   end
 
