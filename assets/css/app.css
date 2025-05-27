@@ -103,19 +103,10 @@
   box-shadow: var(--shadow-style-large);
 }
 
-/* MINIMAL THEME - Clean and static */
+/* MINIMAL THEME - Uses default Radiant styling (no overrides) */
 .theme-minimal {
-  --color-primary: #000000;
-  --color-secondary: #333333;
-  --color-accent: #0066cc;
-  --color-background: #ffffff;
-  --color-text: #000000;
-  --color-text-secondary: #666666;
-  --color-border: #e5e7eb;
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --border-radius: 8px;
-  --shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+  /* Minimal theme intentionally has no styling - uses Radiant defaults */
+  --theme-applied: true;
 }
 
 /* COSMIC THEME - Space-like with swirling galaxies (ANIMATED) */

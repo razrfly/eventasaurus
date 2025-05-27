@@ -8,6 +8,16 @@
       <%= assigns[:page_title] || "Home" %>
     </.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    
+    <!-- Theme CSS files -->
+    <link phx-track-static rel="stylesheet" href={~p"/assets/themes/base.css"} />
+    <%= if assigns[:theme] && assigns[:theme] != :minimal do %>
+      <link phx-track-static rel="stylesheet" href={"/assets/themes/#{assigns[:theme]}.css"} />
+    <% end %>
+    
+    <!-- Theme font links -->
+    <%= EventasaurusWeb.ThemeHelpers.theme_font_links() %>
+    
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
     
@@ -55,7 +65,11 @@
       {System.get_env("SUPABASE_URL"), System.get_env("SUPABASE_API_KEY")}
     end
 %>
-  <body class="bg-white antialiased overflow-x-hidden"
+  <body class={[
+      "bg-white antialiased overflow-x-hidden",
+      assigns[:theme_class] && assigns[:theme_class]
+    ]}
+    style={assigns[:css_variables] && assigns[:css_variables]}
     data-supabase-url={supabase_url}
     data-supabase-api-key={supabase_api_key}
   >

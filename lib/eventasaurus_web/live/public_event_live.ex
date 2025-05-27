@@ -3,7 +3,6 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Venues
-  alias EventasaurusApp.Themes
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.ReservedSlugs
 
@@ -28,25 +27,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
           organizers = Events.list_event_organizers(event)
 
-          # Get theme and customizations
-          theme = try do
-            case event.theme do
-              theme when is_atom(theme) -> theme
-              theme when is_binary(theme) -> String.to_existing_atom(theme)
-              nil -> :minimal
-            end
-          rescue
-            ArgumentError -> :minimal
-          end
-
-          theme_customizations = event.theme_customizations || %{}
-
-          # Get CSS class for the theme
-          theme_class = Themes.get_theme_css_class(theme)
-
-          # Generate CSS variables for customizations
-          css_variables = generate_css_variables(theme, theme_customizations)
-
+          # Theme is now handled by AuthHooks, just assign event data
           {:ok,
            socket
            |> assign(:event, event)
@@ -54,30 +35,12 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:organizers, organizers)
            |> assign(:show_registration_modal, false)
            |> assign(:page_title, event.title)
-           |> assign(:theme, theme)
-           |> assign(:theme_class, theme_class)
-           |> assign(:css_variables, css_variables)
           }
       end
     end
   end
 
-  # Generate CSS custom properties from theme customizations
-  defp generate_css_variables(theme, customizations) do
-    # Validate customizations first to prevent injection
-    case Themes.validate_customizations(customizations || %{}) do
-      {:ok, validated_customizations} ->
-        # Merge default theme customizations with validated user customizations
-        merged = Themes.merge_customizations(theme, validated_customizations)
 
-        # Use the sanitized function from ThemeHelpers
-        EventasaurusWeb.ThemeHelpers.theme_css_variables(merged)
-
-      {:error, _} ->
-        # Fall back to default theme only if validation fails
-        EventasaurusWeb.ThemeHelpers.theme_css_variables(%{})
-    end
-  end
 
   def handle_event("show_registration_modal", _params, socket) do
     {:noreply, assign(socket, :show_registration_modal, true)}
@@ -126,7 +89,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   def render(assigns) do
     ~H"""
     <!-- Public Event Show Page with dynamic theming -->
-    <div class={["theme-container", @theme_class]} style={@css_variables}>
+    <div class="theme-container">
       <div class="public-event-container py-10 lg:py-16">
         <div class="public-event-layout">
           <div class="event-details-section">
