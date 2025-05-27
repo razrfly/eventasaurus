@@ -7,6 +7,16 @@ config :eventasaurus, EventasaurusWeb.Endpoint,
   secret_key_base: "Lhh9Ga/AhSUhDIFHhhxkIeO7VTsCs8VRMH+vEZm8ygOO1qyrat2inn/8vdVRxRIm",
   server: false
 
+# Configure the database for testing
+config :eventasaurus, EventasaurusApp.Repo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "127.0.0.1",
+  port: 54322,
+  database: "postgres_test",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 10
+
 # In test we don't send emails
 config :eventasaurus, Eventasaurus.Mailer, adapter: Swoosh.Adapters.Test
 
