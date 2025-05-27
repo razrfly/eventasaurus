@@ -375,28 +375,24 @@ defmodule EventasaurusApp.Events do
     # Handle both User structs and Supabase user data
     local_user = case user do
       %User{} = u -> u
-      %{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata} ->
-        # Try to find or create local user
-        case Accounts.get_user_by_supabase_id(supabase_id) do
-          %User{} = u -> u
-          nil ->
-            # Create new user if not found
-            name = user_metadata["name"] || email |> String.split("@") |> hd()
-            user_params = %{
-              email: email,
-              name: name,
-              supabase_id: supabase_id
-            }
-            case Accounts.create_user(user_params) do
-              {:ok, u} -> u
-              {:error, _} -> nil
-            end
+      %{"id" => _supabase_id} = supabase_user ->
+        # Use shared function to find or create user
+        case Accounts.find_or_create_from_supabase(supabase_user) do
+          {:ok, user} -> user
+          {:error, reason} ->
+            require Logger
+            Logger.error("Failed to create user for registration status check", %{
+              reason: inspect(reason),
+              supabase_id: supabase_user["id"]
+            })
+            :error
         end
       _ -> nil
     end
 
     case local_user do
       nil -> :not_registered
+      :error -> :error
       user ->
         # First check if user is an organizer/admin
         if user_is_organizer?(event, user) do
