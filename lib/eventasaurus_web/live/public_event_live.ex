@@ -45,6 +45,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:registration_status, registration_status)
            |> assign(:local_user, local_user)
            |> assign(:show_registration_modal, false)
+           |> assign(:just_registered, false)
            |> assign(:page_title, event.title)
           }
       end
@@ -63,6 +64,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             {:noreply,
              socket
              |> assign(:registration_status, :registered)
+             |> assign(:just_registered, false)  # Existing users don't need email verification
              |> put_flash(:info, "You're now registered for #{socket.assigns.event.title}!")
             }
 
@@ -101,6 +103,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             {:noreply,
              socket
              |> assign(:registration_status, :cancelled)
+             |> assign(:just_registered, false)
              |> put_flash(:info, "Your registration has been cancelled.")
             }
 
@@ -133,6 +136,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             {:noreply,
              socket
              |> assign(:registration_status, :registered)
+             |> assign(:just_registered, false)  # Existing users don't need email verification
              |> put_flash(:info, "Welcome back! You're now registered for #{socket.assigns.event.title}.")
             }
 
@@ -155,7 +159,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, assign(socket, :show_registration_modal, false)}
   end
 
-  def handle_info({:registration_success, type, _name, _email}, socket) do
+  def handle_info({:registration_success, type, _name, email}, socket) do
     message = case type do
       :new_registration ->
         "Welcome! You're now registered for #{socket.assigns.event.title}. Check your email for account verification instructions."
@@ -163,8 +167,30 @@ defmodule EventasaurusWeb.PublicEventLive do
         "Great! You're now registered for #{socket.assigns.event.title}."
     end
 
+    # Update the user's registration status and local user info
+    # Only set just_registered for new registrations (not existing users)
+    updated_socket = case ensure_user_struct(socket.assigns.current_user) do
+      {:ok, user} ->
+        socket
+        |> assign(:registration_status, :registered)
+        |> assign(:local_user, user)
+        |> assign(:just_registered, type == :new_registration)
+
+      {:error, _} ->
+        # For new users who just registered, try to find them by email
+        case EventasaurusApp.Accounts.get_user_by_email(email) do
+          nil ->
+            socket
+          user ->
+            socket
+            |> assign(:registration_status, :registered)
+            |> assign(:local_user, user)
+            |> assign(:just_registered, true)  # This is always a new registration
+        end
+    end
+
     {:noreply,
-     socket
+     updated_socket
      |> assign(:show_registration_modal, false)
      |> put_flash(:info, message)
     }
@@ -343,6 +369,30 @@ defmodule EventasaurusWeb.PublicEventLive do
                       Share
                     </button>
                   </div>
+
+                  <%= if @just_registered do %>
+                    <!-- Email verification notice for newly registered users only -->
+                    <div class="border-t border-gray-200 pt-4 mt-4 mb-4">
+                      <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div class="flex items-center justify-center mb-2">
+                          <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        </div>
+                        <p class="text-sm text-blue-800 text-center mb-3">
+                          Please verify your email to manage your registration and see more event details.
+                        </p>
+                        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200 flex items-center justify-center gap-2">
+                          Verify Email
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  <% end %>
 
                   <button
                     phx-click="cancel_registration"
