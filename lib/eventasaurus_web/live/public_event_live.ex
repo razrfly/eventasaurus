@@ -396,8 +396,8 @@ defmodule EventasaurusWeb.PublicEventLive do
 
                   <button
                     phx-click="cancel_registration"
+                    phx-confirm="Are you sure you want to cancel your registration?"
                     class="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-                    data-confirm="Are you sure you want to cancel your registration?"
                   >
                     Can't attend? Cancel registration
                   </button>
@@ -526,26 +526,9 @@ defmodule EventasaurusWeb.PublicEventLive do
   # Ensure we have a proper User struct for the current user
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-  defp ensure_user_struct(%{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata}) do
-    # Try to find existing user by Supabase ID
-    case Accounts.get_user_by_supabase_id(supabase_id) do
-      %Accounts.User{} = user ->
-        {:ok, user}
-      nil ->
-        # Create new user if not found
-        name = user_metadata["name"] || email |> String.split("@") |> hd()
-
-        user_params = %{
-          email: email,
-          name: name,
-          supabase_id: supabase_id
-        }
-
-        case Accounts.create_user(user_params) do
-          {:ok, user} -> {:ok, user}
-          {:error, reason} -> {:error, reason}
-        end
-    end
+  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
+    # Use shared function to find or create user
+    Accounts.find_or_create_from_supabase(supabase_user)
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 end
