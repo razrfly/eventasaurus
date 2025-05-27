@@ -73,4 +73,35 @@ defmodule EventasaurusApp.Accounts do
   def change_user(%User{} = user, attrs \\ %{}) do
     User.changeset(user, attrs)
   end
+
+  @doc """
+  Finds or creates a user from Supabase user data.
+  Returns {:ok, user} or {:error, reason}.
+  """
+  def find_or_create_from_supabase(%{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata}) do
+    case get_user_by_supabase_id(supabase_id) do
+      %User{} = user ->
+        {:ok, user}
+      nil ->
+        name = user_metadata["name"] || extract_name_from_email(email)
+        user_params = %{
+          email: email,
+          name: name,
+          supabase_id: supabase_id
+        }
+        create_user(user_params)
+    end
+  end
+
+  def find_or_create_from_supabase(_), do: {:error, :invalid_supabase_data}
+
+  # Helper function to extract name from email consistently
+  defp extract_name_from_email(email) when is_binary(email) do
+    email
+    |> String.split("@")
+    |> List.first()
+    |> String.capitalize()
+  end
+
+  defp extract_name_from_email(_), do: "User"
 end
