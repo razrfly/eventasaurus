@@ -8,6 +8,11 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.ReservedSlugs
 
   def mount(%{"slug" => slug}, _session, socket) do
+    IO.puts("=== MOUNT FUNCTION CALLED ===")
+    IO.puts("current_user: #{inspect(socket.assigns.current_user)}")
+    require Logger
+    Logger.debug("PublicEventLive.mount called with current_user: #{inspect(socket.assigns.current_user)}")
+
     if ReservedSlugs.reserved?(slug) do
       {:ok,
        socket
@@ -29,10 +34,15 @@ defmodule EventasaurusWeb.PublicEventLive do
           organizers = Events.list_event_organizers(event)
 
           # Determine registration status if user is authenticated
+          Logger.debug("PublicEventLive.mount - current_user: #{inspect(socket.assigns.current_user)}")
           {registration_status, local_user} = case ensure_user_struct(socket.assigns.current_user) do
             {:ok, user} ->
-              {Events.get_user_registration_status(event, user), user}
-            {:error, _} ->
+              Logger.debug("PublicEventLive.mount - user found: #{inspect(user)}")
+              status = Events.get_user_registration_status(event, user)
+              Logger.debug("PublicEventLive.mount - registration status: #{inspect(status)}")
+              {status, user}
+            {:error, reason} ->
+              Logger.debug("PublicEventLive.mount - no user found, reason: #{inspect(reason)}")
               {:not_authenticated, nil}
           end
 

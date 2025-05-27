@@ -50,7 +50,9 @@ defmodule EventasaurusApp.Auth.AuthHelper do
   Fetches the Supabase user data using the access token.
   """
   def fetch_supabase_user(access_token) do
-    Client.get_user(access_token)
+    # Use configurable auth client for testing
+    auth_client = Application.get_env(:eventasaurus, :auth_client, Client)
+    auth_client.get_user(access_token)
   end
 
   @doc """
