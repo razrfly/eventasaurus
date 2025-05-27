@@ -415,7 +415,8 @@ defmodule EventasaurusApp.Events do
     case get_event_participant_by_event_and_user(event, user) do
       nil -> {:error, :not_registered}
       participant ->
-        update_event_participant(participant, %{status: :cancelled})
+        updated_metadata = Map.put(participant.metadata || %{}, :cancelled_at, DateTime.utc_now())
+        update_event_participant(participant, %{status: :cancelled, metadata: updated_metadata})
     end
   end
 
