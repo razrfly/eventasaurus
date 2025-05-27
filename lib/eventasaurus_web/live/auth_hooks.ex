@@ -8,6 +8,11 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
   require Logger
 
+  @default_theme %{
+    primary_color: "#3B82F6",
+    secondary_color: "#1E40AF",
+    accent_color: "#F59E0B"
+  }
 
   @doc """
   Hooks for LiveView authentication.
@@ -84,17 +89,21 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
         case EventasaurusApp.Events.get_event_by_slug(slug) do
           nil ->
+            require Logger
+            Logger.debug("No event found for slug: #{inspect(slug)}")
             socket
 
           event ->
             assign(socket, :event_theme, %{
-              primary_color: event.primary_color || "#3B82F6",
-              secondary_color: event.secondary_color || "#1E40AF",
-              accent_color: event.accent_color || "#F59E0B"
+              primary_color: event.primary_color || @default_theme.primary_color,
+              secondary_color: event.secondary_color || @default_theme.secondary_color,
+              accent_color: event.accent_color || @default_theme.accent_color
             })
         end
 
       _ ->
+        require Logger
+        Logger.debug("No live_socket_path in session")
         socket
     end
   end
