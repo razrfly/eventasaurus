@@ -254,7 +254,7 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert render(view) =~ "One-Click Register"
 
       # Try to cancel (this would be an edge case)
-      view |> element("button", "cancel_registration") |> render_click()
+      view |> element("button", "Cancel registration") |> render_click()
 
       assert render(view) =~ "You're not registered for this event"
     end
