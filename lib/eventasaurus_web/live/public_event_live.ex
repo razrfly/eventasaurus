@@ -294,13 +294,23 @@ defmodule EventasaurusWeb.PublicEventLive do
           <div class="border-t border-gray-200 pt-8 mt-8">
             <h3 class="text-lg font-semibold mb-4 text-gray-900">Hosted by</h3>
             <div class="flex items-center space-x-3">
-              <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-lg font-semibold text-gray-600 border border-gray-200">
-                <%= String.first(hd(@event.users).name || "?") %>
-              </div>
-              <div>
-                <div class="font-medium text-gray-900"><%= hd(@event.users).name %></div>
-                <a href="#" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View other events</a>
-              </div>
+              <%= if @event.users != [] do %>
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-lg font-semibold text-gray-600 border border-gray-200">
+                  <%= String.first(hd(@event.users).name || "?") %>
+                </div>
+                <div>
+                  <div class="font-medium text-gray-900"><%= hd(@event.users).name %></div>
+                  <a href="#" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View other events</a>
+                </div>
+              <% else %>
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-lg font-semibold text-gray-600 border border-gray-200">
+                  ?
+                </div>
+                <div>
+                  <div class="font-medium text-gray-900">Event Organizer</div>
+                  <a href="#" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View other events</a>
+                </div>
+              <% end %>
             </div>
           </div>
         </div>
