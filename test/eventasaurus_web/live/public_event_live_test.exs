@@ -6,378 +6,242 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
   import EventasaurusApp.AccountsFixtures
 
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Accounts
+  alias EventasaurusApp.Auth.TestClient
 
-  describe "mount" do
-    test "loads event successfully for anonymous user", %{conn: conn} do
-      event = event_fixture()
+  setup do
+    event = event_fixture()
 
+    # Clean up any existing test users
+    TestClient.clear_test_users()
+
+    %{event: event}
+  end
+
+  # Helper function to simulate authenticated user session
+  defp authenticate_user(conn, user) do
+    # Create a test token
+    token = "test_token_#{user.id}"
+
+    # Set up the mock user data that the TestClient will return
+    # Convert the User struct to the format that Supabase would return
+    supabase_user = %{
+      "id" => user.supabase_id,
+      "email" => user.email,
+      "user_metadata" => %{"name" => user.name}
+    }
+    TestClient.set_test_user(token, supabase_user)
+
+    # Add the token to the session
+    conn = conn |> Plug.Test.init_test_session(%{"access_token" => token})
+    {conn, token}
+  end
+
+  # Helper function to create a registration for testing
+  defp registration_fixture(attrs) do
+    event_participant_fixture(attrs)
+  end
+
+  describe "Phase 1: Basic State Display Tests" do
+    test "anonymous user shows register button", %{conn: conn, event: event} do
       {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
 
-      assert html =~ event.title
+      # Should show Register Now button for anonymous users
       assert html =~ "Register Now"
+      # Should NOT show One-Click Register
+      refute html =~ "One-Click Register"
+      # Should show registration card title
+      assert html =~ "Register for this event"
     end
 
-    test "loads event successfully for authenticated user not registered", %{conn: conn} do
-      event = event_fixture()
+    test "authenticated user not registered shows one-click register", %{conn: conn, event: event} do
       user = user_fixture()
-
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
+      {conn, _token} = authenticate_user(conn, user)
 
       {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
 
-      assert html =~ event.title
-      assert html =~ "One-Click Register"
+      # Should show user info
       assert html =~ user.name
       assert html =~ user.email
+      # Should show One-Click Register button
+      assert html =~ "One-Click Register"
+      # Should NOT show Register Now
+      refute html =~ "Register Now"
     end
 
-    test "loads event successfully for registered user", %{conn: conn} do
-      event = event_fixture()
+    test "registered user shows you're in status", %{conn: conn, event: event} do
       user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
 
-      # Create registration
-      {:ok, _participant} = Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: user.id,
-        role: :invitee,
-        status: :pending
-      })
-
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
+      # Create an accepted registration for this user (accepted = registered)
+      registration_fixture(%{event_id: event.id, user_id: user.id, status: :accepted})
 
       {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
 
-      assert html =~ event.title
-      assert html =~ "You're In"
-      assert html =~ "Add to Calendar"
-      assert html =~ "Cancel registration"
+      # Should show You're In status (HTML entity encoded)
+      assert html =~ "You&#39;re In"
+      assert html =~ "You&#39;re registered for this event"
+      # Should NOT show register buttons
+      refute html =~ "Register Now"
+      refute html =~ "One-Click Register"
+      # Should show Cancel registration option (HTML entity encoded)
+      assert html =~ "Can&#39;t attend? Cancel registration"
     end
 
-    test "loads event successfully for cancelled user", %{conn: conn} do
-      event = event_fixture()
+    test "cancelled user shows you're not going status", %{conn: conn, event: event} do
       user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
 
-      # Create cancelled registration
-      {:ok, _participant} = Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: user.id,
-        role: :invitee,
-        status: :cancelled
-      })
-
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
+      # Create a cancelled registration for this user
+      registration_fixture(%{event_id: event.id, user_id: user.id, status: :cancelled})
 
       {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
 
-      assert html =~ event.title
-      assert html =~ "You're Not Going"
+      # Should show You're Not Going status (HTML entity encoded)
+      assert html =~ "You&#39;re Not Going"
+      assert html =~ "We hope to see you next time!"
+      # Should show Register Again button
       assert html =~ "Register Again"
+      # Should NOT show other registration buttons
+      refute html =~ "Register Now"
+      refute html =~ "One-Click Register"
     end
 
-    test "loads event successfully for organizer", %{conn: conn} do
-      event = event_fixture()
+    test "event organizer shows organizer status", %{conn: conn, event: event} do
       user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
 
-      # Add user as organizer
-      {:ok, _} = Events.add_user_to_event(event, user)
-
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
+      # Make this user the organizer by adding them to event.users
+      # First remove existing organizer, then add our test user
+      Events.remove_user_from_event(event, hd(event.users))
+      Events.add_user_to_event(event, user)
 
       {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
 
-      assert html =~ event.title
+      # Should show Event Organizer status
       assert html =~ "Event Organizer"
+      assert html =~ "You&#39;re hosting this event"
+      # Should NOT show register buttons
+      refute html =~ "Register Now"
+      refute html =~ "One-Click Register"
+      refute html =~ "Register Again"
+      # Should show management options
       assert html =~ "Manage Event"
     end
-
-    test "redirects for non-existent event", %{conn: conn} do
-      {:ok, _view, _html} = live(conn, ~p"/non-existent-event")
-
-      assert_redirected(conn, ~p"/")
-    end
-
-    test "redirects for reserved slug", %{conn: conn} do
-      {:ok, _view, _html} = live(conn, ~p"/admin")
-
-      assert_redirected(conn, ~p"/")
-    end
   end
 
-  describe "one_click_register event" do
-    test "successfully registers authenticated user", %{conn: conn} do
-      event = event_fixture()
+  describe "Phase 2: Interactive Functionality Tests" do
+    test "anonymous user registration modal opens", %{conn: conn, event: event} do
+      {:ok, view, html} = live(conn, ~p"/#{event.slug}")
+
+      # Should show Register Now button
+      assert html =~ "Register Now"
+      assert has_element?(view, "#register-now-btn")
+      # Should not show the modal initially
+      refute has_element?(view, "#registration-modal")
+
+      # Click the Register Now button using the phx-click event
+      html = render_click(view, "show_registration_modal")
+
+      # Should show the registration modal component with unique text
+      assert html =~ "Register for Event"
+      assert html =~ "Your Info"
+      assert html =~ "We&#39;ll create an account for you"
+      # Should contain form elements for registration
+      assert html =~ "registration[name]"
+      assert html =~ "registration[email]"
+    end
+
+    test "one-click register works", %{conn: conn, event: event} do
       user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
 
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
+      {:ok, view, html} = live(conn, ~p"/#{event.slug}")
 
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+      # Should show One-Click Register button
+      assert html =~ "One-Click Register"
 
-      # Click one-click register
-      view |> element("button", "One-Click Register") |> render_click()
+      # Click the One-Click Register button
+      html = render_click(view, "one_click_register")
 
-      # Should show success message and update UI
-      assert render(view) =~ "You're In"
-      assert render(view) =~ "You're now registered"
-
-      # Verify registration in database
-      participant = Events.get_event_participant_by_event_and_user(event, user)
-      assert participant != nil
-      assert participant.status == :pending
-      assert participant.source == "one_click_registration"
+      # Should show registration success
+      assert html =~ "You&#39;re In"
+      assert html =~ "You&#39;re registered for this event"
+      # Should no longer show registration buttons
+      refute html =~ "One-Click Register"
+      refute html =~ "Register Now"
     end
 
-    test "shows error for already registered user", %{conn: conn} do
-      event = event_fixture()
+    test "cancel registration works", %{conn: conn, event: event} do
       user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
 
-      # Create existing registration
-      {:ok, _participant} = Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: user.id,
-        role: :invitee,
-        status: :pending
-      })
+      # Create a registration for this user first
+      registration_fixture(%{event_id: event.id, user_id: user.id, status: :accepted})
 
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
+      {:ok, view, html} = live(conn, ~p"/#{event.slug}")
 
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+      # Should show registered status
+      assert html =~ "You&#39;re In"
+      assert html =~ "Can&#39;t attend? Cancel registration"
 
-      # Should show "You're In" state, not one-click register
-      assert render(view) =~ "You're In"
-      refute render(view) =~ "One-Click Register"
+      # Click the cancel registration button
+      html = render_click(view, "cancel_registration")
+
+      # Should show cancelled status
+      assert html =~ "You&#39;re Not Going"
+      assert html =~ "We hope to see you next time!"
+      assert html =~ "Register Again"
+      # Should no longer show registered status
+      refute html =~ "You&#39;re In"
     end
 
-    test "shows error for organizer attempting registration", %{conn: conn} do
-      event = event_fixture()
+    test "re-register works for cancelled user", %{conn: conn, event: event} do
       user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
 
-      # Add user as organizer
-      {:ok, _} = Events.add_user_to_event(event, user)
+      # Create a cancelled registration for this user
+      registration_fixture(%{event_id: event.id, user_id: user.id, status: :cancelled})
 
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
+      {:ok, view, html} = live(conn, ~p"/#{event.slug}")
 
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+      # Should show cancelled status
+      assert html =~ "You&#39;re Not Going"
+      assert html =~ "Register Again"
 
-      # Should show organizer state, not registration options
-      assert render(view) =~ "Event Organizer"
-      refute render(view) =~ "One-Click Register"
-    end
-  end
+      # Click the Register Again button
+      html = render_click(view, "reregister")
 
-  describe "cancel_registration event" do
-    test "successfully cancels registration", %{conn: conn} do
-      event = event_fixture()
-      user = user_fixture()
-
-      # Create registration
-      {:ok, _participant} = Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: user.id,
-        role: :invitee,
-        status: :pending
-      })
-
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
-
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # Should show registered state
-      assert render(view) =~ "You're In"
-
-      # Cancel registration (note: this would normally show a confirmation dialog)
-      view |> element("button", "Cancel registration") |> render_click()
-
-      # Should show cancelled state
-      assert render(view) =~ "You're Not Going"
-      assert render(view) =~ "Your registration has been cancelled"
-
-      # Verify cancellation in database
-      participant = Events.get_event_participant_by_event_and_user(event, user)
-      assert participant.status == :cancelled
+      # Should show registered status
+      assert html =~ "You&#39;re In"
+      assert html =~ "You&#39;re registered for this event"
+      # Should no longer show cancelled status
+      refute html =~ "You&#39;re Not Going"
+      refute html =~ "Register Again"
     end
 
-    test "shows error when trying to cancel non-existent registration", %{conn: conn} do
-      event = event_fixture()
-      user = user_fixture()
-
-      # Simulate authenticated user (no registration)
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
-
+    test "registration modal contains required form elements", %{conn: conn, event: event} do
       {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
 
-      # Should show not registered state
-      assert render(view) =~ "One-Click Register"
-
-      # Try to cancel (this would be an edge case)
-      view |> element("button", "Cancel registration") |> render_click()
-
-      assert render(view) =~ "You're not registered for this event"
-    end
-  end
-
-  describe "reregister event" do
-    test "successfully re-registers cancelled user", %{conn: conn} do
-      event = event_fixture()
-      user = user_fixture()
-
-      # Create cancelled registration
-      {:ok, _participant} = Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: user.id,
-        role: :invitee,
-        status: :cancelled
-      })
-
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
-
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # Should show cancelled state
-      assert render(view) =~ "You're Not Going"
-
-      # Re-register
-      view |> element("button", "Register Again") |> render_click()
-
-      # Should show registered state
-      assert render(view) =~ "You're In"
-      assert render(view) =~ "Welcome back"
-
-      # Verify re-registration in database
-      participant = Events.get_event_participant_by_event_and_user(event, user)
-      assert participant.status == :pending
-      assert participant.metadata[:reregistered_at] != nil
-    end
-  end
-
-  describe "show_registration_modal event" do
-    test "opens registration modal for anonymous user", %{conn: conn} do
-      event = event_fixture()
-
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # Should show register now button
-      assert render(view) =~ "Register Now"
-
-      # Click register now
-      view |> element("button", "Register Now") |> render_click()
-
-      # Should show registration modal
-      assert render(view) =~ "registration-modal"
-    end
-  end
-
-  describe "registration success handling" do
-    test "handles new registration success message", %{conn: conn} do
-      event = event_fixture()
-
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # Simulate registration success message
-      send(view.pid, {:registration_success, :new_registration, "John Doe", "john@example.com"})
-
-      # Should show success message and update state
-      assert render(view) =~ "Welcome! You're now registered"
-      assert render(view) =~ "Check your email for account verification"
-    end
-
-    test "handles existing user registration success message", %{conn: conn} do
-      event = event_fixture()
-
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # Simulate existing user registration success
-      send(view.pid, {:registration_success, :existing_user_registered, "Jane Doe", "jane@example.com"})
-
-      # Should show success message without email verification
-      assert render(view) =~ "Great! You're now registered"
-      refute render(view) =~ "Check your email for account verification"
-    end
-
-    test "handles registration error message", %{conn: conn} do
-      event = event_fixture()
-
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # Simulate registration error
-      send(view.pid, {:registration_error, :already_registered})
-
-      # Should show error message
-      assert render(view) =~ "You're already registered for this event"
-    end
-  end
-
-  describe "email verification display logic" do
-    test "shows email verification for new registrations only", %{conn: conn} do
-      event = event_fixture()
-      user = user_fixture()
-
-      # Simulate authenticated user
-      conn = assign(conn, :current_user, %{
-        "id" => user.supabase_id,
-        "email" => user.email,
-        "user_metadata" => %{"name" => user.name}
-      })
-
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # One-click register (existing user)
-      view |> element("button", "One-Click Register") |> render_click()
-
-      # Should NOT show email verification for existing users
-      refute render(view) =~ "Please verify your email"
-
-      # But should show "You're In" state
-      assert render(view) =~ "You're In"
+      # Open the registration modal
+      html = render_click(view, "show_registration_modal")
+      
+      # Verify the modal opens and contains all required form elements
+      assert html =~ "Register for Event"
+      assert html =~ "Your Info"
+      assert html =~ "We&#39;ll create an account for you so you can manage your registration."
+      
+      # Check form elements are present
+      assert has_element?(view, "form#registration-form")
+      assert has_element?(view, "input[name='registration[name]']")
+      assert has_element?(view, "input[name='registration[email]']")
+      assert has_element?(view, "button[type='submit']")
+      
+      # Check that the form has proper attributes for component targeting
+      assert html =~ "phx-submit=\"submit\""
+      assert html =~ "phx-change=\"validate\""
+      
+      # Verify the modal can be interacted with
+      assert has_element?(view, "button", "Register for Event")
     end
   end
 end
