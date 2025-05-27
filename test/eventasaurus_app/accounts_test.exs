@@ -2,6 +2,7 @@ defmodule EventasaurusApp.AccountsTest do
   use EventasaurusApp.DataCase
 
   alias EventasaurusApp.Accounts
+  import EventasaurusApp.AccountsFixtures
 
   describe "users" do
     test "get_user_by_email/1 returns user when email exists" do
@@ -127,17 +128,5 @@ defmodule EventasaurusApp.AccountsTest do
     end
   end
 
-  # Helper function for creating test data
-  defp user_fixture(attrs \\ %{}) do
-    {:ok, user} =
-      attrs
-      |> Enum.into(%{
-        email: "test#{System.unique_integer([:positive])}@example.com",
-        name: "Test User",
-        supabase_id: "test-supabase-id-#{System.unique_integer([:positive])}"
-      })
-      |> Accounts.create_user()
 
-    user
-  end
 end
