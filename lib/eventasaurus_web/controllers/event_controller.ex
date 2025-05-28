@@ -13,6 +13,19 @@ defmodule EventasaurusWeb.EventController do
         |> redirect(to: ~p"/")
 
       event ->
+        # Get the current user if authenticated
+        user = case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} -> user
+          {:error, _} -> nil
+        end
+
+        # Get registration status if user is authenticated
+        registration_status = if user do
+          Events.get_user_registration_status(event, user)
+        else
+          :not_authenticated
+        end
+
         # Load venue and organizers for the event
         venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
         organizers = Events.list_event_organizers(event)
@@ -20,7 +33,7 @@ defmodule EventasaurusWeb.EventController do
         conn
         |> assign(:venue, venue)
         |> assign(:organizers, organizers)
-        |> render(:show, event: event, conn: conn)
+        |> render(:show, event: event, user: user, registration_status: registration_status)
     end
   end
 
@@ -33,61 +46,66 @@ defmodule EventasaurusWeb.EventController do
         |> redirect(to: ~p"/")
 
       event ->
-        conn
-        |> put_flash(:info, "Attendee management is coming soon")
-        |> redirect(to: ~p"/events/#{event.slug}")
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            if Events.user_can_manage_event?(user, event) do
+              attendees = Events.list_event_participants(event)
+              render(conn, :attendees, event: event, attendees: attendees)
+            else
+              conn
+              |> put_flash(:error, "You don't have permission to view attendees")
+              |> redirect(to: ~p"/#{event.slug}")
+            end
+
+          {:error, _} ->
+            conn
+            |> put_flash(:error, "You must be logged in to view attendees")
+            |> redirect(to: ~p"/auth/login")
+        end
     end
   end
 
   def delete(conn, %{"slug" => slug}) do
-    event = Events.get_event_by_slug!(slug)
-
-    # First ensure we have a proper User struct
-    case ensure_user_struct(conn.assigns.current_user) do
-      {:ok, user} ->
-        # Verify user is an organizer for this event
-        if Events.user_is_organizer?(event, user) do
-          {:ok, _} = Events.delete_event(event)
-
-          conn
-          |> put_flash(:info, "Event successfully deleted")
-          |> redirect(to: ~p"/dashboard")
-        else
-          conn
-          |> put_flash(:error, "You don't have permission to delete this event")
-          |> redirect(to: ~p"/#{event.slug}")
-        end
-
-      {:error, _} ->
+    case Events.get_event_by_slug(slug) do
+      nil ->
         conn
-        |> put_flash(:error, "Invalid user session")
+        |> put_flash(:error, "Event not found")
         |> redirect(to: ~p"/dashboard")
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            if Events.user_can_manage_event?(user, event) do
+              case Events.delete_event(event) do
+                {:ok, _} ->
+                  conn
+                  |> put_flash(:info, "Event deleted successfully")
+                  |> redirect(to: ~p"/dashboard")
+
+                {:error, _} ->
+                  conn
+                  |> put_flash(:error, "Unable to delete event")
+                  |> redirect(to: ~p"/dashboard")
+              end
+            else
+              conn
+              |> put_flash(:error, "You don't have permission to delete this event")
+              |> redirect(to: ~p"/dashboard")
+            end
+
+          {:error, _} ->
+            conn
+            |> put_flash(:error, "You must be logged in to delete events")
+            |> redirect(to: ~p"/auth/login")
+        end
     end
   end
 
-  # Ensure we have a proper User struct for the current user
+  # Helper function to ensure we have a proper User struct
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-  defp ensure_user_struct(%{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata}) do
-    # Try to find existing user by Supabase ID
-    case Accounts.get_user_by_supabase_id(supabase_id) do
-      %Accounts.User{} = user ->
-        {:ok, user}
-      nil ->
-        # Create new user if not found
-        name = user_metadata["name"] || email |> String.split("@") |> hd()
-
-        user_params = %{
-          email: email,
-          name: name,
-          supabase_id: supabase_id
-        }
-
-        case Accounts.create_user(user_params) do
-          {:ok, user} -> {:ok, user}
-          {:error, reason} -> {:error, reason}
-        end
-    end
+  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
+    Accounts.find_or_create_from_supabase(supabase_user)
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 end

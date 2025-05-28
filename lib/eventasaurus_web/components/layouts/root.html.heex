@@ -80,7 +80,7 @@
             <a href="/" class="flex items-center gap-2 text-2xl font-bold text-gray-950">
               🦖 Eventasaurus
             </a>
-            <%= if @conn.assigns[:current_user] do %>
+            <%= if @conn.assigns[:auth_user] do %>
               <div class="hidden lg:flex items-center space-x-6">
                 <a href="/dashboard" class="text-sm font-medium text-gray-600 hover:text-gray-950">
                   Dashboard
@@ -101,38 +101,29 @@
           </div>
           
           <div class="flex items-center space-x-4">
-            <%= if @conn.assigns[:current_user] do %>
-              <!-- Mobile menu button for authenticated users -->
-              <button 
-                type="button" 
-                class="lg:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-                aria-expanded="false"
-              >
-                <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              
-              <!-- User info and actions -->
-              <div class="hidden sm:flex items-center space-x-4">
-                <span class="text-sm font-medium text-gray-600">
-                  <%= @conn.assigns.current_user.email %>
-                </span>
-                <.radiant_button href="/events/new" variant="primary" class="px-3 py-1.5 text-sm">
-                  Create Event
-                </.radiant_button>
-                <a
-                  href="/logout"
-                  class="text-sm font-medium text-gray-600 hover:text-gray-950"
-                >
-                  Log out
-                </a>
-              </div>
+            <%= if @conn.assigns[:auth_user] do %>
+              <!-- Authenticated user UI -->
+              <span class="text-sm text-gray-600">
+                <%= cond do %>
+                  <% @conn.assigns[:user] && Map.get(@conn.assigns[:user], :email) -> %>
+                    <%= @conn.assigns[:user].email %>
+                  <% @conn.assigns[:auth_user] && is_map(@conn.assigns[:auth_user]) -> %>
+                    <%= @conn.assigns[:auth_user]["email"] %>
+                  <% true -> %>
+                    User
+                <% end %>
+              </span>
+              <a href="/auth/logout" class="text-sm font-medium text-gray-600 hover:text-gray-950">
+                Log out
+              </a>
             <% else %>
+              <!-- Anonymous user UI -->
               <a href="/login" class="text-sm font-medium text-gray-600 hover:text-gray-950">
                 Sign In
               </a>
-              <.radiant_button href="/register">Get Started</.radiant_button>
+              <a href="/register" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 shadow-md text-base font-medium whitespace-nowrap text-white hover:bg-gray-800">
+                Get Started
+              </a>
             <% end %>
           </div>
         </nav>

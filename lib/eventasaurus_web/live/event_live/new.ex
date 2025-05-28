@@ -4,45 +4,55 @@ defmodule EventasaurusWeb.EventLive.New do
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.CoreComponents
 
-  alias EventasaurusApp.Events
+  alias EventasaurusApp.{Accounts, Events}
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
-  alias EventasaurusWeb.Services.UnsplashService
   alias EventasaurusWeb.Services.SearchService
 
   @impl true
-  def mount(_params, session, socket) do
-    # current_user is already assigned by the on_mount hook
-    supabase_access_token = Map.get(session, "access_token")
+  def mount(_params, _session, socket) do
+    # auth_user is already assigned by the on_mount hook
+    # Ensure we have a proper User struct for creating events
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:ok, user} ->
+        changeset = Events.change_event(%Event{})
+        today = Date.utc_today() |> Date.to_iso8601()
+        venues = Venues.list_venues()
 
-    changeset = Events.change_event(%Event{})
-    today = Date.utc_today() |> Date.to_iso8601()
+        socket =
+          socket
+          |> assign(:form, to_form(changeset))
+          |> assign(:venues, venues)
+          |> assign(:user, user)
+          |> assign(:changeset, changeset)
+          |> assign(:form_data, %{
+            "start_date" => today,
+            "ends_date" => today
+          })
+          |> assign(:is_virtual, false)
+          |> assign(:selected_venue_name, nil)
+          |> assign(:selected_venue_address, nil)
+          |> assign(:show_all_timezones, false)
+          |> assign(:cover_image_url, nil)
+          |> assign(:external_image_data, nil)
+          |> assign(:show_image_picker, false)
+          |> assign(:search_query, "")
+          |> assign(:search_results, %{unsplash: [], tmdb: []})
+          |> assign(:loading, false)
+          |> assign(:error, nil)
+          |> assign(:page, 1)
+          |> assign(:per_page, 20)
+          |> assign_new(:image_tab, fn -> "unsplash" end)
 
-    socket =
-      socket
-      |> assign(:supabase_access_token, supabase_access_token)
-      |> assign(:changeset, changeset)
-      |> assign(:form_data, %{
-        "start_date" => today,
-        "ends_date" => today
-      })
-      |> assign(:is_virtual, false)
-      |> assign(:selected_venue_name, nil)
-      |> assign(:selected_venue_address, nil)
-      |> assign(:venues, Venues.list_venues())
-      |> assign(:show_all_timezones, false)
-      |> assign(:cover_image_url, nil)
-      |> assign(:external_image_data, nil)
-      |> assign(:show_image_picker, false)
-      |> assign(:search_query, "")
-      |> assign(:search_results, %{unsplash: [], tmdb: []})
-      |> assign(:loading, false)
-      |> assign(:error, nil)
-      |> assign(:page, 1)
-      |> assign(:per_page, 20)
-      |> assign_new(:image_tab, fn -> "unsplash" end)
+        {:ok, socket}
 
-    {:ok, socket}
+      {:error, _} ->
+        {:ok,
+         socket
+         |> put_flash(:error, "You must be logged in to create events")
+         |> redirect(to: ~p"/auth/login")
+        }
+    end
   end
 
   # ========== Handle Info Implementations ==========
@@ -54,33 +64,33 @@ defmodule EventasaurusWeb.EventLive.New do
   # ========== Handle Event Implementations ==========
 
   @impl true
-  def handle_event("validate", %{"event" => params}, socket) do
+  def handle_event("validate", %{"event" => event_params}, socket) do
     require Logger
-    Logger.debug("[validate] incoming params: #{inspect(params)}")
+    Logger.debug("[validate] incoming params: #{inspect(event_params)}")
     # Always preserve cover_image_url if not present in params
     cover_image_url =
-      params["cover_image_url"] || Map.get(socket.assigns.form_data, "cover_image_url") ||
+      event_params["cover_image_url"] || Map.get(socket.assigns.form_data, "cover_image_url") ||
         socket.assigns.cover_image_url
 
-    params =
+    event_params =
       if cover_image_url do
-        Map.put(params, "cover_image_url", cover_image_url)
+        Map.put(event_params, "cover_image_url", cover_image_url)
       else
-        params
+        event_params
       end
 
     changeset =
       %Event{}
-      |> Events.change_event(params)
+      |> Events.change_event(event_params)
       |> Map.put(:action, :validate)
 
     # Update form_data with the validated params
-    form_data = Map.merge(socket.assigns.form_data, params)
+    form_data = Map.merge(socket.assigns.form_data, event_params)
     Logger.debug("[validate] resulting form_data: #{inspect(form_data)}")
 
     # Check if user wants to show all timezones
     {form_data, show_all_timezones} =
-      if params["timezone"] == "__show_all__" do
+      if event_params["timezone"] == "__show_all__" do
         {Map.put(form_data, "timezone", ""), true}
       else
         {form_data, socket.assigns.show_all_timezones}
@@ -92,78 +102,80 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:form_data, form_data)
       |> assign(:show_all_timezones, show_all_timezones)
 
-    {:noreply, socket}
+    {:noreply, assign(socket, form: to_form(changeset))}
   end
 
   @impl true
-  def handle_event("submit", %{"event" => event_params}, socket) do
-    IO.puts("\n======================== SUBMIT EVENT ========================")
-    IO.inspect(event_params, label: "DEBUG - Submit event_params")
-
-    # Parse the unsplash_data JSON string back to a map if it exists
-    event_params =
-      if (event_params["external_image_data"] && event_params["external_image_data"] != "") and
-           is_binary(event_params["external_image_data"]) do
-        external_image_data =
-          event_params["external_image_data"]
-          |> Jason.decode!()
-
-        Map.put(event_params, "external_image_data", external_image_data)
-      else
-        event_params
-      end
-
-    # Combine date and time fields if needed
-    event_params = combine_date_time_fields(event_params)
-
-    # Include venue data from form_data as a fallback
-    venue_data = %{
-      "venue_name" => Map.get(socket.assigns.form_data, "venue_name", ""),
-      "venue_address" => Map.get(socket.assigns.form_data, "venue_address", ""),
-      "venue_city" => Map.get(socket.assigns.form_data, "venue_city", ""),
-      "venue_state" => Map.get(socket.assigns.form_data, "venue_state", ""),
-      "venue_country" => Map.get(socket.assigns.form_data, "venue_country", ""),
-      "venue_latitude" => Map.get(socket.assigns.form_data, "venue_latitude"),
-      "venue_longitude" => Map.get(socket.assigns.form_data, "venue_longitude")
-    }
-
-    # Ensure venue data is properly included
-    event_params =
-      if Map.get(event_params, "venue_name", "") == "" && venue_data["venue_name"] != "" do
-        IO.puts("DEBUG - Including venue data from form_data")
-        Map.merge(event_params, venue_data)
-      else
-        event_params
-      end
-
-    # Process venue data for the database
-    event_params = process_venue_data(event_params, socket)
-
-    # Get the user as an Accounts.User struct
-    case ensure_user_struct(socket.assigns.current_user) do
-      {:ok, user} ->
-        # Create the event with the user struct
-        case Events.create_event_with_organizer(event_params, user) do
-          {:ok, _event} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Event created successfully")
-             |> redirect(to: ~p"/dashboard")}
-
-          {:error, changeset} ->
-            IO.puts("DEBUG - Event creation error:")
-            IO.inspect(changeset.errors, label: "Validation errors")
-            {:noreply, assign(socket, changeset: changeset)}
-        end
-
-      {:error, reason} ->
-        IO.puts("ERROR: Failed to get user struct: #{inspect(reason)}")
-
+  def handle_event("save", %{"event" => event_params}, socket) do
+    case Events.create_event_with_organizer(event_params, socket.assigns.user) do
+      {:ok, event} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Could not create event: User account issue")
-         |> assign(changeset: Events.change_event(%Event{}, event_params))}
+         |> put_flash(:info, "Event created successfully")
+         |> redirect(to: ~p"/events/#{event.slug}/edit")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, form: to_form(changeset))}
     end
+  end
+
+  @impl true
+  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
+    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
+
+    # Only set the timezone if it's not already set in the form
+    if Map.get(socket.assigns.form_data, "timezone", "") == "" do
+      # Update form_data with the detected timezone
+      form_data = Map.put(socket.assigns.form_data, "timezone", timezone)
+
+      # Update the changeset with the new timezone
+      changeset =
+        %Event{}
+        |> Events.change_event(form_data)
+        |> Map.put(:action, :validate)
+
+      {:noreply,
+       socket
+       |> assign(:form_data, form_data)
+       |> assign(:changeset, changeset)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_virtual", _params, socket) do
+    is_virtual = !socket.assigns.is_virtual
+
+    # Reset selected venue if toggling to virtual
+    socket =
+      if is_virtual do
+        socket
+        |> assign(:selected_venue_name, nil)
+        |> assign(:selected_venue_address, nil)
+      else
+        socket
+      end
+
+    # Update form_data to reflect this change
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("is_virtual", is_virtual)
+
+    {:noreply,
+     socket
+     |> assign(:is_virtual, is_virtual)
+     |> assign(:form_data, form_data)}
+  end
+
+  @impl true
+  def handle_event("open_image_picker", _params, socket) do
+    {:noreply, assign(socket, show_image_picker: true, image_tab: "unsplash")}
+  end
+
+  @impl true
+  def handle_event("close_image_picker", _params, socket) do
+    {:noreply, assign(socket, :show_image_picker, false)}
   end
 
   @impl true
@@ -357,86 +369,80 @@ defmodule EventasaurusWeb.EventLive.New do
       socket.assigns.search_results
       |> Map.values()
       |> List.flatten()
-      |> Enum.find(fn img -> img.id == id end)
+      |> Enum.find(fn img ->
+        (img[:id] || img["id"]) == id
+      end)
 
-    cond do
-      image &&
-          (Map.has_key?(image, :download_location) or Map.has_key?(image, "download_location")) ->
-        # Unsplash image (atom or string keys)
-        download_location = image[:download_location] || image["download_location"]
-        user = image[:user] || image["user"] || %{}
-
-        Task.Supervisor.start_child(Eventasaurus.TaskSupervisor, fn ->
-          UnsplashService.track_download(download_location)
-        end)
-
-        unsplash_data = %{
-          "source" => "unsplash",
-          "photo_id" => image[:id] || image["id"],
-          "url" => get_in(image, [:urls, :regular]) || get_in(image, ["urls", "regular"]),
-          "full_url" => get_in(image, [:urls, :full]) || get_in(image, ["urls", "full"]),
-          "raw_url" => get_in(image, [:urls, :raw]) || get_in(image, ["urls", "raw"]),
-          "photographer_name" => user[:name] || user["name"],
-          "photographer_username" => user[:username] || user["username"],
-          "photographer_url" => user[:profile_url] || user["profile_url"],
-          "download_location" => download_location
-        }
-
-        form_data =
-          socket.assigns.form_data
-          |> Map.put("external_image_data", unsplash_data)
-
-        changeset =
-          %Event{}
-          |> Events.change_event(form_data)
-          |> Map.put(:action, :validate)
-
-        {:noreply,
-         socket
-         |> assign(:form_data, form_data)
-         |> assign(:changeset, changeset)
-         |> assign(:cover_image_url, nil)
-         |> assign(:external_image_data, unsplash_data)
-         |> assign(:show_image_picker, false)}
-
-      image &&
-          (image[:poster_path] || image["poster_path"] || image[:profile_path] ||
-             image["profile_path"]) ->
-        # TMDb image (atom or string keys)
-        poster_path =
-          image[:poster_path] || image["poster_path"] || image[:profile_path] ||
-            image["profile_path"]
-
-        image_url = poster_path && "https://image.tmdb.org/t/p/w500" <> poster_path
-
-        tmdb_data = %{
-          "source" => "tmdb",
-          "id" => image[:id] || image["id"],
-          "url" => image_url,
-          "title" => image[:title] || image["title"] || image[:name] || image["name"],
-          "media_type" => image[:media_type] || image["media_type"] || "movie"
-        }
-
-        form_data =
-          socket.assigns.form_data
-          |> Map.put("external_image_data", tmdb_data)
-
-        changeset =
-          %Event{}
-          |> Events.change_event(form_data)
-          |> Map.put(:action, :validate)
-
-        {:noreply,
-         socket
-         |> assign(:form_data, form_data)
-         |> assign(:changeset, changeset)
-         |> assign(:cover_image_url, image_url)
-         |> assign(:external_image_data, tmdb_data)
-         |> assign(:show_image_picker, false)}
-
-      true ->
+    case image do
+      nil ->
         Logger.error("Image with id #{id} not found in search results")
         {:noreply, socket}
+
+      image when is_map(image) ->
+        # Handle Unsplash images
+        if image[:urls] || image["urls"] do
+          urls = image[:urls] || image["urls"]
+          image_url = urls[:regular] || urls["regular"]
+
+          unsplash_data = %{
+            "source" => "unsplash",
+            "id" => image[:id] || image["id"],
+            "url" => image_url,
+            "description" => image[:description] || image["description"] || image[:alt_description] || image["alt_description"],
+            "photographer" => get_in(image, [:user, :name]) || get_in(image, ["user", "name"]),
+            "photographer_url" => get_in(image, [:user, :links, :html]) || get_in(image, ["user", "links", "html"])
+          }
+
+          form_data =
+            socket.assigns.form_data
+            |> Map.put("external_image_data", unsplash_data)
+
+          changeset =
+            %Event{}
+            |> Events.change_event(form_data)
+            |> Map.put(:action, :validate)
+
+          {:noreply,
+           socket
+           |> assign(:form_data, form_data)
+           |> assign(:changeset, changeset)
+           |> assign(:cover_image_url, image_url)
+           |> assign(:external_image_data, unsplash_data)
+           |> assign(:show_image_picker, false)}
+
+        # Handle TMDb images
+        else
+          poster_path =
+            image[:poster_path] || image["poster_path"] || image[:profile_path] ||
+              image["profile_path"]
+
+          image_url = poster_path && "https://image.tmdb.org/t/p/w500" <> poster_path
+
+          tmdb_data = %{
+            "source" => "tmdb",
+            "id" => image[:id] || image["id"],
+            "url" => image_url,
+            "title" => image[:title] || image["title"] || image[:name] || image["name"],
+            "media_type" => image[:media_type] || image["media_type"] || "movie"
+          }
+
+          form_data =
+            socket.assigns.form_data
+            |> Map.put("external_image_data", tmdb_data)
+
+          changeset =
+            %Event{}
+            |> Events.change_event(form_data)
+            |> Map.put(:action, :validate)
+
+          {:noreply,
+           socket
+           |> assign(:form_data, form_data)
+           |> assign(:changeset, changeset)
+           |> assign(:cover_image_url, image_url)
+           |> assign(:external_image_data, tmdb_data)
+           |> assign(:show_image_picker, false)}
+        end
     end
   end
 
@@ -493,178 +499,24 @@ defmodule EventasaurusWeb.EventLive.New do
      |> assign(:show_image_picker, false)}
   end
 
-  @impl true
-  def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
-    IO.puts("DEBUG - Browser detected timezone: #{timezone}")
-
-    # Only set the timezone if it's not already set in the form
-    if Map.get(socket.assigns.form_data, "timezone", "") == "" do
-      # Update form_data with the detected timezone
-      form_data = Map.put(socket.assigns.form_data, "timezone", timezone)
-
-      # Update the changeset with the new timezone
-      changeset =
-        %Event{}
-        |> Events.change_event(form_data)
-        |> Map.put(:action, :validate)
-
-      {:noreply,
-       socket
-       |> assign(:form_data, form_data)
-       |> assign(:changeset, changeset)}
-    else
-      {:noreply, socket}
-    end
+  # Helper function to ensure we have a proper User struct
+  defp ensure_user_struct(nil), do: {:error, :no_user}
+  defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
+  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
+    Accounts.find_or_create_from_supabase(supabase_user)
   end
-
-  @impl true
-  def handle_event("toggle_virtual", _params, socket) do
-    is_virtual = !socket.assigns.is_virtual
-
-    # Reset selected venue if toggling to virtual
-    socket =
-      if is_virtual do
-        socket
-        |> assign(:selected_venue_name, nil)
-        |> assign(:selected_venue_address, nil)
-      else
-        socket
-      end
-
-    # Update form_data to reflect this change
-    form_data =
-      socket.assigns.form_data
-      |> Map.put("is_virtual", is_virtual)
-
-    {:noreply,
-     socket
-     |> assign(:is_virtual, is_virtual)
-     |> assign(:form_data, form_data)}
-  end
-
-  @impl true
-  def handle_event("open_image_picker", _params, socket) do
-    {:noreply, assign(socket, show_image_picker: true, image_tab: "unsplash")}
-  end
-
-  @impl true
-  def handle_event("close_image_picker", _params, socket) do
-    {:noreply, assign(socket, :show_image_picker, false)}
-  end
+  defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   # Helper to extract address components
   defp get_address_component(components, type) do
-    component =
-      Enum.find(components, fn comp ->
-        comp["types"] && Enum.member?(comp["types"], type)
-      end)
+    component = Enum.find(components, fn comp ->
+      comp["types"] && Enum.member?(comp["types"], type)
+    end)
 
     if component, do: component["long_name"], else: ""
   end
 
-  # Process venue data before saving
-  defp process_venue_data(params, _socket) do
-    is_virtual = Map.get(params, "is_virtual", "false") == "true"
-
-    if is_virtual do
-      # For virtual venues, mark it as virtual in the system
-      Map.put(params, "is_virtual", true)
-    else
-      # Create or find venue and link it to the event
-      venue_params = %{
-        name: Map.get(params, "venue_name", ""),
-        address: Map.get(params, "venue_address", ""),
-        city: Map.get(params, "venue_city", ""),
-        state: Map.get(params, "venue_state", ""),
-        country: Map.get(params, "venue_country", ""),
-        latitude: Map.get(params, "venue_latitude"),
-        longitude: Map.get(params, "venue_longitude")
-      }
-
-      # Only create venue if we have sufficient data
-      if venue_params.name != "" && venue_params.address != "" do
-        case create_or_find_venue(venue_params) do
-          {:ok, venue} ->
-            Map.put(params, "venue_id", venue.id)
-
-          _ ->
-            params
-        end
-      else
-        params
-      end
-    end
-  end
-
-  # Create or find an existing venue
-  defp create_or_find_venue(venue_params) do
-    # First try to find an existing venue with the same address
-    case Venues.find_venue_by_address(venue_params.address) do
-      nil ->
-        # If not found, create a new venue
-        Venues.create_venue(venue_params)
-
-      venue ->
-        # If found, return the existing venue
-        {:ok, venue}
-    end
-  end
-
-  # Ensure we have a proper User struct for the current user
-  defp ensure_user_struct(nil), do: {:error, :no_user}
-  defp ensure_user_struct(%EventasaurusApp.Accounts.User{} = user), do: {:ok, user}
-
-  defp ensure_user_struct(%{
-         "id" => supabase_id,
-         "email" => email,
-         "user_metadata" => user_metadata
-       }) do
-    # Try to find existing user by Supabase ID
-    case EventasaurusApp.Accounts.get_user_by_supabase_id(supabase_id) do
-      %EventasaurusApp.Accounts.User{} = user ->
-        {:ok, user}
-
-      nil ->
-        # Create new user if not found
-        name = user_metadata["name"] || email |> String.split("@") |> hd()
-
-        user_params = %{
-          email: email,
-          name: name,
-          supabase_id: supabase_id
-        }
-
-        case EventasaurusApp.Accounts.create_user(user_params) do
-          {:ok, user} -> {:ok, user}
-          {:error, reason} -> {:error, reason}
-        end
-    end
-  end
-
-  defp ensure_user_struct(_), do: {:error, :invalid_user_data}
-
-  # Helper function to combine date and time fields
-  defp combine_date_time_fields(params) do
-    # Combine start date and time if start_at is empty
-    params =
-      if params["start_at"] == "" && params["start_date"] && params["start_time"] do
-        Map.put(params, "start_at", "#{params["start_date"]}T#{params["start_time"]}:00")
-      else
-        params
-      end
-
-    # Combine end date and time if ends_at is empty
-    params =
-      if params["ends_at"] == "" && params["ends_date"] && params["ends_time"] do
-        Map.put(params, "ends_at", "#{params["ends_date"]}T#{params["ends_time"]}:00")
-      else
-        params
-      end
-
-    params
-  end
-
-  # Helper function for searching Unsplash
+  # Helper function for searching
   defp do_search(socket) do
     # Use the unified search service
     case SearchService.unified_search(
