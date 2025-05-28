@@ -113,10 +113,12 @@ defmodule EventasaurusWeb.Live.AuthHooks do
         case token do
           "test_token_" <> _id ->
             # In test environment, extract user ID from test token
-            user_id = String.replace(token, "test_token_", "") |> String.to_integer()
-            case Accounts.get_user(user_id) do
-              nil -> nil
-              user -> user
+            with id_str <- String.replace(token, "test_token_", ""),
+                 {user_id, ""} <- Integer.parse(id_str),
+                 %Accounts.User{} = user <- Accounts.get_user(user_id) do
+              user
+            else
+              _ -> nil
             end
           _ ->
             # In real environment, use the AuthHelper directly with the token

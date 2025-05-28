@@ -52,7 +52,7 @@ Always use this pattern in LiveViews:
 ```elixir
 def mount(_params, _session, socket) do
   {registration_status, user} = case ensure_user_struct(socket.assigns.auth_user) do
-    {:ok, user} -> {determine_status(event, user), user}
+    {:ok, user} -> {:authenticated, user}
     {:error, _} -> {:not_authenticated, nil}
   end
   
