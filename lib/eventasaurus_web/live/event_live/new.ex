@@ -107,7 +107,20 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("save", %{"event" => event_params}, socket) do
+  def handle_event("submit", %{"event" => event_params}, socket) do
+    # Decode external_image_data if it's a JSON string
+    event_params =
+      case Map.get(event_params, "external_image_data") do
+        nil -> event_params
+        "" -> Map.put(event_params, "external_image_data", nil)
+        json_string when is_binary(json_string) ->
+          case Jason.decode(json_string) do
+            {:ok, decoded_data} -> Map.put(event_params, "external_image_data", decoded_data)
+            {:error, _} -> Map.put(event_params, "external_image_data", nil)
+          end
+        data when is_map(data) -> event_params
+      end
+
     case Events.create_event_with_organizer(event_params, socket.assigns.user) do
       {:ok, event} ->
         {:noreply,
