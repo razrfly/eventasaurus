@@ -94,6 +94,37 @@ defmodule EventasaurusApp.Auth do
     Client.update_password(token, new_password)
   end
 
+  @doc """
+  Signs up a new user with email, password, and additional metadata.
+
+  This is an alias for register/3 but matches the naming convention
+  used in the controllers.
+  """
+  def sign_up_with_email_and_password(email, password, metadata \\ %{}) do
+    name = Map.get(metadata, :name, "")
+    register(email, password, name)
+  end
+
+  @doc """
+  Updates a user's password using a reset token.
+
+  This is an alias for reset_password/2 but matches the naming convention
+  used in the controllers.
+  """
+  def update_user_password(token, new_password) do
+    reset_password(token, new_password)
+  end
+
+  @doc """
+  Signs in a user with email and password.
+
+  This is an alias for authenticate/2 but matches the naming convention
+  used in the controllers.
+  """
+  def sign_in_with_email_and_password(email, password) do
+    authenticate(email, password)
+  end
+
   # Helper function to extract the token from different formats
   defp extract_token(auth_data) do
     cond do

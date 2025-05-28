@@ -32,20 +32,20 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
           Sign in to account
           <:subtitle>
             Don't have an account?
-            <.link navigate={~p"/register"} class="font-semibold text-brand hover:underline">
+            <.link navigate={~p"/auth/register"} class="font-semibold text-brand hover:underline">
               Sign up
             </.link>
             for an account now.
           </:subtitle>
         </.header>
 
-        <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/login"}>
+        <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/auth/login"}>
           <.input field={f[:email]} type="email" label="Email" required />
           <.input field={f[:password]} type="password" label="Password" required />
 
           <:actions :let={f}>
             <.input field={f[:remember_me]} type="checkbox" label="Keep me logged in" />
-            <.link href={~p"/reset-password"} class="text-sm font-semibold">
+            <.link href={~p"/auth/forgot-password"} class="text-sm font-semibold">
               Forgot your password?
             </.link>
           </:actions>
@@ -69,14 +69,14 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
         Register for an account
         <:subtitle>
           Already have an account?
-          <.link navigate={~p"/login"} class="font-semibold text-brand hover:underline">
+          <.link navigate={~p"/auth/login"} class="font-semibold text-brand hover:underline">
             Sign in
           </.link>
           to your account now.
         </:subtitle>
       </.header>
 
-      <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/register"}>
+      <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/auth/register"}>
         <.input field={f[:name]} type="text" label="Name" required />
         <.input field={f[:email]} type="email" label="Email" required />
         <.input field={f[:password]} type="password" label="Password" required />
@@ -102,7 +102,7 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
         <:subtitle>We'll send a password reset link to your inbox</:subtitle>
       </.header>
 
-      <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/reset-password"}>
+      <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/auth/forgot-password"}>
         <.input field={f[:email]} type="email" label="Email" required />
 
         <:actions>
@@ -111,7 +111,7 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
           </.button>
         </:actions>
         <:actions>
-          <.link href={~p"/login"} class="text-sm font-semibold">
+          <.link href={~p"/auth/login"} class="text-sm font-semibold">
             <span aria-hidden="true">&larr;</span> Back to sign in
           </.link>
         </:actions>
@@ -129,7 +129,7 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
         Reset Password
       </.header>
 
-      <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/reset-password/#{@token}"}>
+      <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/auth/reset-password"}>
         <.input field={f[:password]} type="password" label="New password" required />
         <.input field={f[:password_confirmation]} type="password" label="Confirm new password" required />
         <:actions>

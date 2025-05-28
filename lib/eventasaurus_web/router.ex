@@ -10,7 +10,8 @@ defmodule EventasaurusWeb.Router do
     plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug :fetch_current_user
+    plug :fetch_auth_user
+    plug :assign_user_struct
   end
 
   pipeline :api do
@@ -28,7 +29,7 @@ defmodule EventasaurusWeb.Router do
   end
 
   # Authentication routes - placing these BEFORE the catch-all public routes
-  scope "/", EventasaurusWeb do
+  scope "/auth", EventasaurusWeb do
     pipe_through [:browser, :redirect_if_authenticated]
 
     get "/login", Auth.AuthController, :login
@@ -36,19 +37,25 @@ defmodule EventasaurusWeb.Router do
     get "/register", Auth.AuthController, :register
     post "/register", Auth.AuthController, :create_user
     get "/forgot-password", Auth.AuthController, :forgot_password
-    post "/request-password-reset", Auth.AuthController, :request_password_reset
-    get "/reset-password/:token", Auth.AuthController, :reset_password
+    post "/forgot-password", Auth.AuthController, :request_password_reset
+    get "/reset-password", Auth.AuthController, :reset_password
     post "/reset-password", Auth.AuthController, :update_password
-    get "/auth/callback", Auth.AuthController, :callback
-    post "/auth/callback", Auth.AuthController, :callback
   end
 
-  # LiveView session for authenticated routes - MUST come BEFORE regular routes
+  # Auth callback and logout (no redirect needed)
+  scope "/auth", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/callback", Auth.AuthController, :callback
+    get "/logout", Auth.AuthController, :logout
+    post "/logout", Auth.AuthController, :logout
+  end
+
+  # LiveView session for authenticated routes
   live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
     scope "/", EventasaurusWeb do
       pipe_through [:browser, :authenticated]
 
-      # Add authenticated LiveView routes here
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
     end
@@ -58,36 +65,35 @@ defmodule EventasaurusWeb.Router do
   scope "/", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
 
-    get "/logout", Auth.AuthController, :logout
     get "/dashboard", DashboardController, :index
-
-    # Internal event management routes with EventController
-    get "/events/:slug", EventController, :show
-    delete "/events/:slug", EventController, :delete
-    get "/events/:slug/attendees", EventController, :attendees
-
-    # Add other authenticated controller routes here
-    # resources "/venues", VenueController
   end
 
-  # LiveView session configuration
-  live_session :default, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user}] do
-    # Public routes
+  # Event routes (both public and protected)
+  scope "/events", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/:slug", EventController, :show
+    get "/:slug/attendees", EventController, :attendees
+  end
+
+  # Public routes with auth user assignment
+  live_session :default, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
-      get "/", PageController, :index
-      get "/home", PageController, :home
+      get "/", PageController, :home
       get "/about", PageController, :about
       get "/whats-new", PageController, :whats_new
-      # Add public LiveView routes here
-      # live "/events/:slug", EventLive.Show
+
+      # Direct routes for common auth paths (redirect to proper auth routes)
+      get "/login", PageController, :redirect_to_auth_login
+      get "/register", PageController, :redirect_to_auth_register
     end
   end
 
-  # Public event routes (now uses main Radiant layout with theme support)
+  # Public event routes (with theme support)
   live_session :public,
-    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_current_user_and_theme}] do
+    on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
