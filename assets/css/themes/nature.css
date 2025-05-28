@@ -9,8 +9,8 @@
   --color-border: #bbf7d0; /* Green 200 */
   
   /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family: 'Merriweather', 'Georgia', 'Times New Roman', serif;
+  --font-family-heading: 'Merriweather', 'Georgia', 'Times New Roman', serif;
   --heading-weight: 600;
   --body-size: 16px;
   --body-weight: 400;

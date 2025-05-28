@@ -9,8 +9,8 @@
   --color-border: #fbbf24; /* Amber 400 */
   
   /* Typography */
-  --font-family: 'Georgia', 'Times New Roman', serif;
-  --font-family-heading: 'Georgia', 'Times New Roman', serif;
+  --font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+  --font-family-heading: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
   --heading-weight: 700;
   --body-size: 17px;
   --body-weight: 400;
@@ -95,7 +95,7 @@
 }
 
 .theme-retro .event-title {
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
   font-weight: 700;
   text-shadow: 2px 2px 0px rgba(217, 119, 6, 0.3);
   color: #451a03;
@@ -106,7 +106,7 @@
   background: #fed7aa; /* Orange 200 */
   border: 3px solid #ea580c; /* Orange 600 */
   box-shadow: 4px 4px 0px #c2410c; /* Orange 700 */
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
   font-weight: 700;
 }
 
@@ -114,7 +114,7 @@
   background: #fde68a;
   border: 3px solid #f59e0b;
   box-shadow: inset 2px 2px 4px rgba(217, 119, 6, 0.2);
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
 }
 
 .theme-retro .form-input:focus {

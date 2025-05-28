@@ -9,8 +9,8 @@
   --color-border: #e5e5e5; /* Neutral 200 */
   
   /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family: 'Rajdhani', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Rajdhani', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --heading-weight: 800;
   --body-size: 16px;
   --body-weight: 400;

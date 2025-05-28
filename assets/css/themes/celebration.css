@@ -9,9 +9,9 @@
   --color-border: #f9a8d4; /* Pink 300 */
   
   /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --heading-weight: 700;
+  --font-family: 'Fredoka', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Fredoka', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 600;
   --body-size: 16px;
   --body-weight: 400;
   
