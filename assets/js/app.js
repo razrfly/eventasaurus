@@ -54,9 +54,6 @@ Hooks.TimezoneDetectionHook = {
   }
 };
 
-// Supabase image upload hook for file input
-Hooks.SupabaseImageUpload = SupabaseImageUpload;
-
 // DateTimeSync Hook - Keeps end date/time in sync with start date/time
 Hooks.DateTimeSync = {
   mounted() {
@@ -367,6 +364,9 @@ Hooks.GooglePlacesAutocomplete = {
     }
   }
 };
+
+// Supabase image upload hook for file input
+Hooks.SupabaseImageUpload = SupabaseImageUpload;
 
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");

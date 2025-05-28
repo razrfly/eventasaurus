@@ -1,43 +1,104 @@
 <.flash_group flash={@flash} />
 
 <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
-  <div class="sm:mx-auto sm:w-full sm:max-w-sm">
-    <h2 class="mt-6 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
-      Create your account
+  <div class="sm:mx-auto sm:w-full sm:max-w-md">
+    <h2 class="mt-6 text-center text-3xl font-bold leading-9 tracking-tight text-gray-900">
+      Join Eventasaurus
     </h2>
+    <p class="mt-2 text-center text-sm text-gray-600">
+      Create your account to get started
+    </p>
   </div>
 
-  <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-    <.form :let={f} for={%{}} action={~p"/register"} method="post" class="space-y-6">
-      <div>
-        <.input field={f[:name]} type="text" label="Full name" required />
-      </div>
+  <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-md">
+    <div class="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl shadow-xl px-8 py-10">
+      <.form :let={f} for={%{}} action={~p"/register"} method="post" class="space-y-6">
+        <div>
+          <label for={f[:name].id} class="block text-sm font-semibold leading-6 text-gray-900">
+            Full name
+          </label>
+          <input
+            type="text"
+            name={f[:name].name}
+            id={f[:name].id}
+            required
+            class="mt-2 block w-full rounded-xl border-0 bg-white/50 px-4 py-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 backdrop-blur-sm"
+            placeholder="Enter your full name"
+          />
+        </div>
 
-      <div>
-        <.input field={f[:email]} type="email" label="Email address" required />
-      </div>
+        <div>
+          <label for={f[:email].id} class="block text-sm font-semibold leading-6 text-gray-900">
+            Email address
+          </label>
+          <input
+            type="email"
+            name={f[:email].name}
+            id={f[:email].id}
+            required
+            class="mt-2 block w-full rounded-xl border-0 bg-white/50 px-4 py-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 backdrop-blur-sm"
+            placeholder="Enter your email"
+          />
+        </div>
 
-      <div>
-        <.input field={f[:password]} type="password" label="Password" required />
-        <p class="mt-1 text-sm text-gray-500">Password must be at least 8 characters</p>
-      </div>
+        <div>
+          <label for={f[:password].id} class="block text-sm font-semibold leading-6 text-gray-900">
+            Password
+          </label>
+          <input
+            type="password"
+            name={f[:password].name}
+            id={f[:password].id}
+            required
+            class="mt-2 block w-full rounded-xl border-0 bg-white/50 px-4 py-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 backdrop-blur-sm"
+            placeholder="Create a secure password"
+          />
+          <p class="mt-2 text-sm text-gray-600">Password must be at least 8 characters</p>
+        </div>
 
-      <div>
-        <.input field={f[:password_confirmation]} type="password" label="Confirm password" required />
-      </div>
+        <div>
+          <label for={f[:password_confirmation].id} class="block text-sm font-semibold leading-6 text-gray-900">
+            Confirm password
+          </label>
+          <input
+            type="password"
+            name={f[:password_confirmation].name}
+            id={f[:password_confirmation].id}
+            required
+            class="mt-2 block w-full rounded-xl border-0 bg-white/50 px-4 py-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 backdrop-blur-sm"
+            placeholder="Confirm your password"
+          />
+        </div>
 
-      <div>
-        <.button type="submit" class="w-full">
-          Create account
-        </.button>
-      </div>
-    </.form>
+        <div class="pt-2">
+          <button
+            type="submit"
+            class="flex w-full justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5"
+          >
+            Create account
+          </button>
+        </div>
+      </.form>
 
-    <p class="mt-10 text-center text-sm text-gray-500">
-      Already have an account?
-      <a href={~p"/login"} class="font-semibold leading-6 text-indigo-600 hover:text-indigo-500">
-        Sign in
-      </a>
-    </p>
+      <div class="mt-8">
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-gray-300/50"></div>
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="bg-white/60 px-4 text-gray-500 backdrop-blur-sm">Already have an account?</span>
+          </div>
+        </div>
+
+        <div class="mt-6">
+          <a
+            href={~p"/login"}
+            class="flex w-full justify-center rounded-xl border border-gray-300/50 bg-white/30 px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 transition-all duration-200 backdrop-blur-sm"
+          >
+            Sign in instead
+          </a>
+        </div>
+      </div>
+    </div>
   </div>
 </div> 
