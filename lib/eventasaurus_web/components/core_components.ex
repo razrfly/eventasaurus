@@ -672,10 +672,12 @@ defmodule EventasaurusWeb.CoreComponents do
       <.logo />
       <.logo class="text-3xl" />
       <.logo href="/dashboard" />
+      <.logo theme={:cosmic} />
   """
   attr :class, :string, default: "text-2xl"
   attr :href, :string, default: "/"
-  attr :text_color, :string, default: "text-gray-950"
+  attr :text_color, :string, default: nil
+  attr :theme, :atom, default: nil
 
   def logo(assigns) do
     # Calculate emoji size (20% bigger than text)
@@ -692,23 +694,28 @@ defmodule EventasaurusWeb.CoreComponents do
       "text-6xl" => "text-7xl"
     }
 
-    emoji_class = Map.get(size_map, assigns.class, assigns.class)
+    emoji_size = Map.get(size_map, assigns.class, "text-3xl")
 
-    assigns = assign(assigns, :emoji_class, emoji_class)
+    # Determine text color based on theme or explicit text_color
+    text_color = cond do
+      assigns.text_color -> assigns.text_color
+      assigns.theme && EventasaurusWeb.ThemeHelpers.dark_theme?(assigns.theme) -> "text-white"
+      true -> "text-gray-900 dark:text-white"
+    end
+
+    # Choose dinosaur emoji based on theme
+    dinosaur_emoji = if assigns.theme && EventasaurusWeb.ThemeHelpers.dark_theme?(assigns.theme) do
+      "🦕"  # Sauropod for dark themes (cosmic)
+    else
+      "🦖"  # T-Rex for light themes
+    end
+
+    assigns = assign(assigns, emoji_size: emoji_size, computed_text_color: text_color, dinosaur_emoji: dinosaur_emoji)
 
     ~H"""
-    <a href={@href} class="flex items-center gap-2 group">
-      <span class={@emoji_class}>🦖</span>
-      <span
-        class={[
-          @class,
-          "font-bold transition-all duration-300",
-          "group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:via-pink-500 group-hover:to-red-500",
-          "group-hover:bg-clip-text group-hover:text-transparent",
-          @text_color
-        ]}
-        style="font-family: 'Knewave', cursive;"
-      >
+    <a href={@href} class="flex items-center space-x-2 group">
+      <span class={[@emoji_size, "transition-transform group-hover:scale-110"]}><%= @dinosaur_emoji %></span>
+      <span class={[@class, @computed_text_color, "font-knewave font-bold tracking-wide transition-colors group-hover:opacity-80"]}>
         Eventasaurus
       </span>
     </a>
