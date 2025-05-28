@@ -80,7 +80,7 @@
             <a href="/" class="flex items-center gap-2 text-2xl font-bold text-gray-950">
               🦖 Eventasaurus
             </a>
-            <%= if @conn.assigns[:auth_user] do %>
+            <%= if @conn.assigns[:user] do %>
               <div class="hidden lg:flex items-center space-x-6">
                 <a href="/dashboard" class="text-sm font-medium text-gray-600 hover:text-gray-950">
                   Dashboard
@@ -101,17 +101,10 @@
           </div>
           
           <div class="flex items-center space-x-4">
-            <%= if @conn.assigns[:auth_user] do %>
+            <%= if @conn.assigns[:user] do %>
               <!-- Authenticated user UI -->
               <span class="text-sm text-gray-600">
-                <%= cond do %>
-                  <% @conn.assigns[:user] && Map.get(@conn.assigns[:user], :email) -> %>
-                    <%= @conn.assigns[:user].email %>
-                  <% @conn.assigns[:auth_user] && is_map(@conn.assigns[:auth_user]) -> %>
-                    <%= @conn.assigns[:auth_user]["email"] %>
-                  <% true -> %>
-                    User
-                <% end %>
+                <%= @conn.assigns[:user].email %>
               </span>
               <a href="/auth/logout" class="text-sm font-medium text-gray-600 hover:text-gray-950">
                 Log out
