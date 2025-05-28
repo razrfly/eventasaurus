@@ -94,19 +94,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # ========== Form and Validation ==========
 
-  defp save_event(socket, event_params) do
-    event = socket.assigns.event
-
-    case Events.update_event(event, event_params) do
-      {:ok, event} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Event updated successfully")
-         |> redirect(to: ~p"/events/#{event.slug}")}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign(socket, form: to_form(changeset))}
-    end
+  defp save_event(socket, event, event_params) do
+    Events.update_event(event, event_params)
   end
 
   @impl true
@@ -120,8 +109,30 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
-  def handle_event("save", %{"event" => event_params}, socket) do
-    save_event(socket, event_params)
+  def handle_event("submit", %{"event" => event_params}, socket) do
+    # Decode external_image_data if it's a JSON string
+    event_params =
+      case Map.get(event_params, "external_image_data") do
+        nil -> event_params
+        "" -> Map.put(event_params, "external_image_data", nil)
+        json_string when is_binary(json_string) ->
+          case Jason.decode(json_string) do
+            {:ok, decoded_data} -> Map.put(event_params, "external_image_data", decoded_data)
+            {:error, _} -> Map.put(event_params, "external_image_data", nil)
+          end
+        data when is_map(data) -> event_params
+      end
+
+    case save_event(socket, socket.assigns.event, event_params) do
+      {:ok, event} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Event updated successfully")
+         |> redirect(to: ~p"/events/#{event.slug}")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, changeset: changeset)}
+    end
   end
 
   @impl true

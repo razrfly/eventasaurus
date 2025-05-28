@@ -1,0 +1,124 @@
+# Eventasaurus Radiant-Inspired Design Enhancement PRD
+
+## Project Overview
+Enhance Eventasaurus with sophisticated design elements inspired by the Radiant Tailwind CSS template while preserving Phoenix best practices and existing functionality. This is a visual enhancement project focused on improving the user interface without changing core functionality.
+
+## Technical Stack
+- Phoenix/Elixir framework (existing)
+- Tailwind CSS for styling
+- Phoenix LiveView components
+- HEEx templates
+- Existing authentication system (Supabase)
+- Existing theme system integration
+
+## Core Requirements
+
+### 1. Background Gradient System
+Create a sophisticated gradient background system similar to Radiant's approach:
+- Implement positioned gradient blobs for ambient lighting effects
+- Support multiple gradient themes (default dinosaur theme: green/yellow/pink)
+- Create reusable Phoenix components for gradient application
+- Ensure gradients work seamlessly with existing navbar transparency
+- Maintain white background with gradient overlays (not full-screen gradients)
+
+### 2. Enhanced Navbar Integration
+Improve navbar to work elegantly over gradient backgrounds:
+- Implement glassmorphism effects with backdrop blur
+- Maintain transparency when over gradients
+- Preserve existing authentication functionality
+- Ensure proper contrast and readability
+- Keep responsive behavior intact
+
+### 3. Authentication Form Enhancement
+Modernize login and registration forms with Radiant-inspired styling:
+- Implement centered card layouts with rounded corners and shadows
+- Add sophisticated input field styling with enhanced focus states
+- Apply gradient backgrounds behind forms
+- Maintain all existing form functionality and validation
+- Preserve CSRF protection and security features
+
+### 4. Page Layout Structure Updates
+Update public page layouts to support the new gradient system:
+- Apply gradient backgrounds to main public pages (home, about, what's new)
+- Implement proper container structure with overflow handling
+- Ensure responsive design across all device sizes
+- Maintain existing theme system compatibility
+
+### 5. Component Architecture
+Create reusable components for the gradient system:
+- `gradient/1` component for direct gradient application
+- `gradient_background/1` component for ambient background effects
+- Support for multiple theme variations
+- Integration with existing Phoenix component patterns
+
+## Specific Implementation Details
+
+### Gradient Specifications
+- Primary gradient: `bg-gradient-to-br from-yellow-100 via-pink-300 to-purple-500`
+- Positioning: Absolute positioned blobs with blur effects
+- Responsive: Different positioning for mobile vs desktop
+- Opacity: 60% for ambient lighting effect
+
+### Theme Variations
+Support multiple gradient themes:
+- Default (Dinosaur): Green, yellow, pink harmony
+- Forest: Emerald and teal colors  
+- Sunset: Orange, pink, and purple
+- Ocean: Blues, cyans, and teals
+- Cosmic: Purples, pinks, and indigo
+- Minimal: Subtle grays for professional look
+
+### Navbar Enhancements
+- Background: `bg-white/80 backdrop-blur-md`
+- Border: `border-white/20`
+- Text colors: `gray-700` for better contrast
+- Maintain existing navigation structure
+
+### Form Styling
+- Container: `max-w-md rounded-xl bg-white shadow-md ring-1 ring-black/5`
+- Layout: `min-h-dvh flex items-center justify-center`
+- Input styling: Enhanced focus states with outline styling
+- Background: Gradient ambient lighting behind forms
+
+## Pages to Update
+1. Home page (/) - Apply default gradient theme
+2. About page (/about) - Apply default gradient theme  
+3. What's New page (/whats-new) - Apply default gradient theme
+4. Components showcase page (/components) - Demonstrate all gradient themes
+5. Authentication pages (/auth/login, /auth/register) - Enhanced form styling
+6. Index page (/index) - Apply default gradient theme
+
+## Technical Constraints
+- Must preserve all existing Phoenix functionality
+- Cannot break authentication system
+- Must maintain theme system compatibility
+- Should not impact page load performance
+- Must work across all supported browsers
+- Must maintain accessibility standards
+
+## Success Criteria
+1. Gradient backgrounds render correctly on all target pages
+2. Navbar transparency works seamlessly over gradients
+3. Authentication forms have modern, card-based layouts
+4. All existing functionality remains intact
+5. Responsive design works across device sizes
+6. Performance remains acceptable
+7. Accessibility standards are maintained
+
+## Out of Scope
+- Major functional changes to authentication
+- Complete redesign of existing components beyond styling
+- Changes to Phoenix routing or controllers
+- Database schema modifications
+- Addition of new JavaScript dependencies
+- Modification of core business logic
+
+## Implementation Phases
+1. Create base gradient components and test in isolation
+2. Implement background gradient system in root layout
+3. Update navbar for gradient compatibility
+4. Enhance authentication form styling
+5. Apply gradients to all main public pages
+6. Final testing and polish
+
+This enhancement will give Eventasaurus a modern, sophisticated visual appearance while maintaining its robust Phoenix architecture and functionality. 

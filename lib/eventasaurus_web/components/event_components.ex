@@ -14,7 +14,6 @@ defmodule EventasaurusWeb.EventComponents do
         name="event[start_time]"
         value={@start_time}
         required={true}
-        hook="TimeOptionsHook"
       />
   """
   attr :id, :string, required: true
@@ -236,10 +235,6 @@ defmodule EventasaurusWeb.EventComponents do
                 if is_map(@external_image_data), do: Jason.encode!(@external_image_data), else: @external_image_data || "" %>
               <%= hidden_input f, :external_image_data, value: encoded_data %>
             <% end %>
-
-            <!-- Hidden field to store external image data as JSON -->
-            <input type="hidden" name="event[external_image_data]" id="external_image_data"
-                   value={if @external_image_data, do: Jason.encode!(@external_image_data), else: ""} />
           </div>
         </div>
 
@@ -356,8 +351,18 @@ defmodule EventasaurusWeb.EventComponents do
             </div>
 
             <!-- Hidden fields to store the combined datetime values -->
-            <input type="hidden" name="event[start_at]" id={"#{@id}-start_at"} />
-            <input type="hidden" name="event[ends_at]" id={"#{@id}-ends_at"} />
+            <input
+              type="hidden"
+              name="event[start_at]"
+              id={"#{@id}-start_at"}
+              value={format_datetime_for_input(@event, :start_at)}
+            />
+            <input
+              type="hidden"
+              name="event[ends_at]"
+              id={"#{@id}-ends_at"}
+              value={format_datetime_for_input(@event, :ends_at)}
+            />
           </div>
         </div>
 
@@ -503,4 +508,15 @@ defmodule EventasaurusWeb.EventComponents do
     </.form>
     """
   end
+
+  # Helper function to format datetime for hidden input fields
+  defp format_datetime_for_input(event, field) when is_map(event) do
+    case Map.get(event, field) do
+      %DateTime{} = datetime -> DateTime.to_iso8601(datetime)
+      nil -> ""
+      _ -> ""
+    end
+  end
+
+  defp format_datetime_for_input(_, _), do: ""
 end
