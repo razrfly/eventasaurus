@@ -19,6 +19,10 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :whats_new)
   end
 
+  def components(conn, _params) do
+    render(conn, :components)
+  end
+
   def redirect_to_auth_login(conn, _params) do
     redirect(conn, to: ~p"/auth/login")
   end
