@@ -1,0 +1,148 @@
+/* Celebration theme - Bright, festive, and party-ready */
+.theme-celebration {
+  --color-primary: #ec4899; /* Pink 500 */
+  --color-secondary: #8b5cf6; /* Purple 500 */
+  --color-accent: #06b6d4; /* Cyan 500 */
+  --color-background: #fdf2f8; /* Pink 50 */
+  --color-text: #831843; /* Pink 900 */
+  --color-text-secondary: #be185d; /* Pink 700 */
+  --color-border: #f9a8d4; /* Pink 300 */
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 700;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 16px;
+  --border-radius-large: 24px;
+  --shadow-style: 0 4px 16px rgba(236, 72, 153, 0.25);
+  --shadow-style-large: 0 8px 32px rgba(236, 72, 153, 0.35);
+  
+  /* Component specific */
+  --button-border-radius: 16px;
+  --card-border-radius: 24px;
+  --input-border-radius: 12px;
+}
+
+/* Celebration theme specific styles with animation */
+.theme-celebration .theme-container {
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
+    #fdf2f8;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-celebration .theme-container::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle, #ec4899 2px, transparent 2px),
+    radial-gradient(circle, #8b5cf6 1px, transparent 1px),
+    radial-gradient(circle, #06b6d4 1px, transparent 1px);
+  background-size: 50px 50px, 30px 30px, 40px 40px;
+  background-position: 0 0, 15px 15px, 25px 5px;
+  opacity: 0.1;
+  z-index: -1;
+  animation: float 20s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+.theme-celebration .btn-primary {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  border: none;
+  position: relative;
+  overflow: hidden;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(236, 72, 153, 0.4); }
+  50% { box-shadow: 0 8px 32px rgba(236, 72, 153, 0.6); }
+}
+
+.theme-celebration .btn-primary::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: rotate(45deg);
+  transition: all 0.6s;
+  opacity: 0;
+}
+
+.theme-celebration .btn-primary:hover::before {
+  animation: shimmer 0.6s ease-in-out;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); opacity: 0; }
+}
+
+.theme-celebration .btn-secondary {
+  background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+  animation: pulse 2s infinite 0.5s;
+}
+
+.theme-celebration .card {
+  /* Fallback for browsers without backdrop-filter */
+  background: rgba(249, 168, 212, 0.8);
+  border: 2px solid #f9a8d4;
+  transition: all 0.3s ease;
+}
+
+@supports (backdrop-filter: blur(10px)) {
+  .theme-celebration .card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(253, 242, 248, 0.9) 100%);
+    backdrop-filter: blur(10px);
+  }
+}
+
+.theme-celebration .card:hover {
+  transform: translateY(-5px) rotate(1deg);
+  box-shadow: 0 12px 40px rgba(236, 72, 153, 0.3);
+  border-color: #ec4899;
+}
+
+.theme-celebration .event-title {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbow 3s ease-in-out infinite;
+}
+
+@keyframes rainbow {
+  0%, 100% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(20deg); }
+}
+
+.theme-celebration .event-date-badge {
+  background: linear-gradient(135deg, #ffffff 0%, #fdf2f8 100%);
+  border: 2px solid #ec4899;
+  box-shadow: 0 4px 16px rgba(236, 72, 153, 0.3);
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+} 

@@ -109,34 +109,113 @@
   --theme-applied: true;
 }
 
-/* COSMIC THEME - Space-like with swirling galaxies (ANIMATED) */
+/* COSMIC THEME - Space-like with animated starfield and enhanced styling */
 .theme-cosmic {
-  --color-primary: #4c1d95;
-  --color-secondary: #1e1b4b;
-  --color-accent: #06b6d4;
-  --color-background: #0f0f23;
-  --color-text: #e0e7ff;
-  --color-text-secondary: #a5b4fc;
-  --color-border: #312e81;
-  --font-family: 'Space Grotesk', 'Inter', sans-serif;
+  --color-primary: #6366f1; /* Indigo */
+  --color-secondary: #8b5cf6; /* Purple */
+  --color-accent: #06b6d4; /* Cyan */
+  --color-background: #0a0a0f; /* Deeper dark */
+  --color-text: #f8fafc; /* White */
+  --color-text-secondary: #cbd5e1; /* Light slate */
+  --color-border: #334155; /* Slate */
+  
+  /* Typography - Space-like font */
+  --font-family: 'Orbitron', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Orbitron', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 700;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
   --border-radius: 12px;
-  --shadow-style: 0 8px 32px rgba(79, 70, 229, 0.4);
-  background: linear-gradient(135deg, #0f0f23 0%, #1e1b4b 100%);
+  --border-radius-large: 16px;
+  --shadow-style: 0 4px 12px rgba(99, 102, 241, 0.25);
+  --shadow-style-large: 0 8px 32px rgba(99, 102, 241, 0.35);
+  
+  /* Component specific */
+  --button-border-radius: 12px;
+  --card-border-radius: 16px;
+  --input-border-radius: 8px;
+  
+  background: #0a0a0f;
+  color: #f8fafc;
+  position: relative;
+  overflow-x: hidden;
 }
 
+/* Apply Orbitron font to the entire cosmic theme */
+.theme-cosmic,
+.theme-cosmic * {
+  font-family: 'Orbitron', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* Animated starfield background */
 .theme-cosmic::before {
   content: '';
-  position: absolute;
-  top: -20%;
-  left: -20%;
-  width: 140%;
-  height: 140%;
-  background: radial-gradient(ellipse at 25% 25%, rgba(99, 102, 241, 0.6) 0%, transparent 50%), 
-              radial-gradient(ellipse at 75% 75%, rgba(139, 92, 246, 0.4) 0%, transparent 50%),
-              linear-gradient(45deg, rgba(79, 70, 229, 0.2) 0%, transparent 100%);
-  animation: cosmicSwirl 20s linear infinite;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 200%;
+  background-image: 
+    radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 160px 30px, #ddd, transparent);
+  background-repeat: repeat;
+  background-size: 200px 100px;
+  animation: cosmicStars 20s linear infinite;
   z-index: -1;
-  border-radius: 50%;
+  opacity: 0.6;
+}
+
+/* Moving stars animation */
+@keyframes cosmicStars {
+  from { transform: translateX(0) translateY(0); }
+  to { transform: translateX(-200px) translateY(-100px); }
+}
+
+/* Force all text to be white/light in cosmic theme */
+.theme-cosmic * {
+  color: #f8fafc !important;
+}
+
+/* Specific text color overrides for gray text classes */
+.theme-cosmic .text-gray-500,
+.theme-cosmic .text-gray-600,
+.theme-cosmic .text-gray-700,
+.theme-cosmic .text-gray-800,
+.theme-cosmic .text-gray-900 {
+  color: #e2e8f0 !important;
+}
+
+/* Make all white background cards 75% transparent */
+.theme-cosmic .bg-white {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Ensure text in cards is still readable */
+.theme-cosmic .bg-white * {
+  color: #f8fafc !important;
+}
+
+/* Date and time text specifically */
+.theme-cosmic .text-lg,
+.theme-cosmic .text-sm,
+.theme-cosmic .text-base {
+  color: #f8fafc !important;
+}
+
+/* Links should be cyan */
+.theme-cosmic a {
+  color: #06b6d4 !important;
+}
+
+.theme-cosmic a:hover {
+  color: #67e8f9 !important;
 }
 
 .theme-cosmic::after {
@@ -151,13 +230,6 @@
   animation: cosmicPulse 12s ease-in-out infinite reverse;
   z-index: -1;
   border-radius: 50%;
-}
-
-@keyframes cosmicSwirl {
-  0% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
-  33% { transform: translate(-8%, 4%) rotate(120deg) scale(1.1); }
-  66% { transform: translate(4%, -6%) rotate(240deg) scale(0.9); }
-  100% { transform: translate(0%, 0%) rotate(360deg) scale(1); }
 }
 
 @keyframes cosmicPulse {
