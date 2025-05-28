@@ -715,7 +715,13 @@ defmodule EventasaurusWeb.CoreComponents do
     ~H"""
     <a href={@href} class="flex items-center space-x-2 group">
       <span class={[@emoji_size, "transition-transform group-hover:scale-110"]}><%= @dinosaur_emoji %></span>
-      <span class={[@class, @computed_text_color, "font-knewave font-bold tracking-wide transition-colors group-hover:opacity-80"]}>
+      <span class={[
+        @class,
+        "font-knewave font-bold tracking-wide transition-all duration-300",
+        "group-hover:bg-gradient-to-r group-hover:from-green-500 group-hover:via-yellow-500 group-hover:to-pink-500",
+        "group-hover:bg-clip-text group-hover:text-transparent",
+        @computed_text_color
+      ]}>
         Eventasaurus
       </span>
     </a>
