@@ -34,8 +34,8 @@
   --input-border-radius: 6px;
 }
 
-/* Theme container styles */
-.theme-container {
+/* Theme body styles - applies to any themed body */
+body[class*="theme-"] {
   position: relative;
   background-color: var(--color-background);
   color: var(--color-text);
@@ -50,7 +50,7 @@
 }
 
 /* Theme buttons */
-.theme-container .theme-button-primary {
+body[class*="theme-"] .theme-button-primary {
   background-color: var(--color-primary);
   color: white;
   border: none;
@@ -65,12 +65,12 @@
   z-index: 10;
 }
 
-.theme-container .theme-button-primary:hover {
+body[class*="theme-"] .theme-button-primary:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-style-large);
 }
 
-.theme-container .theme-button-secondary {
+body[class*="theme-"] .theme-button-secondary {
   background-color: transparent;
   color: var(--color-primary);
   border: 2px solid var(--color-border);
@@ -84,12 +84,12 @@
   z-index: 10;
 }
 
-.theme-container .theme-button-secondary:hover {
+body[class*="theme-"] .theme-button-secondary:hover {
   background-color: var(--color-border);
 }
 
 /* Theme cards */
-.theme-container .theme-card {
+body[class*="theme-"] .theme-card {
   background-color: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: var(--card-border-radius);
@@ -99,7 +99,7 @@
   z-index: 5;
 }
 
-.theme-container .theme-card:hover {
+body[class*="theme-"] .theme-card:hover {
   box-shadow: var(--shadow-style-large);
 }
 
