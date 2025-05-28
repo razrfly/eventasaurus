@@ -3,10 +3,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.CoreComponents
+  import EventasaurusWeb.LiveHelpers
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Venues
-  alias EventasaurusApp.Accounts
   alias EventasaurusWeb.Services.UnsplashService
   alias EventasaurusWeb.Services.SearchService
 
@@ -369,15 +369,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, socket}
   end
 
-  # Helper function to ensure we have a proper User struct
-  defp ensure_user_struct(nil), do: {:error, :no_user}
-  defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
-    Accounts.find_or_create_from_supabase(supabase_user)
-  end
-  defp ensure_user_struct(_), do: {:error, :invalid_user_data}
-
-  # Helper to extract address components
+  # Helper function to extract address components
   defp get_address_component(components, type) do
     component = Enum.find(components, fn comp ->
       comp["types"] && Enum.member?(comp["types"], type)
@@ -431,7 +423,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     changeset =
       socket.assigns.event
-      |> Events.change_event(Map.put(socket.assigns.form_data, "cover_image_url", url))
+      |> Events.change_event(Map.put(form_data, "cover_image_url", url))
       |> Map.put(:action, :validate)
 
     {:noreply,

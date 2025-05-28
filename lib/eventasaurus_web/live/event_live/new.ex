@@ -3,8 +3,9 @@ defmodule EventasaurusWeb.EventLive.New do
 
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.CoreComponents
+  import EventasaurusWeb.LiveHelpers
 
-  alias EventasaurusApp.{Accounts, Events}
+  alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
   alias EventasaurusWeb.Services.SearchService
@@ -499,23 +500,6 @@ defmodule EventasaurusWeb.EventLive.New do
      |> assign(:show_image_picker, false)}
   end
 
-  # Helper function to ensure we have a proper User struct
-  defp ensure_user_struct(nil), do: {:error, :no_user}
-  defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
-    Accounts.find_or_create_from_supabase(supabase_user)
-  end
-  defp ensure_user_struct(_), do: {:error, :invalid_user_data}
-
-  # Helper to extract address components
-  defp get_address_component(components, type) do
-    component = Enum.find(components, fn comp ->
-      comp["types"] && Enum.member?(comp["types"], type)
-    end)
-
-    if component, do: component["long_name"], else: ""
-  end
-
   # Helper function for searching
   defp do_search(socket) do
     # Use the unified search service
@@ -548,5 +532,14 @@ defmodule EventasaurusWeb.EventLive.New do
         |> assign(:loading, false)
         |> assign(:error, "Error searching APIs.")
     end
+  end
+
+  # Helper to extract address components
+  defp get_address_component(components, type) do
+    component = Enum.find(components, fn comp ->
+      comp["types"] && Enum.member?(comp["types"], type)
+    end)
+
+    if component, do: component["long_name"], else: ""
   end
 end
