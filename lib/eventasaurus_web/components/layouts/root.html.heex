@@ -17,6 +17,11 @@
     <!-- Theme font links -->
     <%= EventasaurusWeb.ThemeHelpers.theme_font_links() %>
     
+    <!-- Google Fonts - Knewave for logo -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Knewave&display=swap" rel="stylesheet">
+    
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
     
@@ -84,9 +89,7 @@
       <.container class="py-4">
         <nav class="flex items-center justify-between">
           <div class="flex items-center space-x-8">
-            <a href="/" class="flex items-center gap-2 text-2xl font-bold text-gray-950">
-              🦖 Eventasaurus
-            </a>
+            <.logo />
             <%= if @conn.assigns[:user] do %>
               <div class="hidden lg:flex items-center space-x-6">
                 <a href="/dashboard" class="text-sm font-medium text-gray-700 hover:text-gray-950">
@@ -137,10 +140,7 @@
       <.container class="py-16">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div class="lg:col-span-2">
-            <div class="flex items-center gap-2 mb-6">
-              <span class="text-2xl">🦖</span>
-              <span class="text-xl font-bold">Eventasaurus</span>
-            </div>
+            <.logo class="text-xl" text_color="text-white" href="/" />
             <p class="text-gray-400 max-w-md mb-6">
               Effortless group event planning, finally done right. Stop the endless back-and-forth and let your group find the perfect date together.
             </p>
