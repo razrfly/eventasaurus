@@ -1,186 +1,275 @@
 <div class="overflow-hidden">
-
-
   <main>
     <%!-- Hero Section --%>
-    <.section class="py-16 sm:py-24">
+    <.section class="py-24 sm:py-32">
       <div class="text-center mb-16">
-        <.heading as="h1" class="mb-6">
-          About Eventasaurus
+        <.heading as="h1" class="mb-8 text-5xl sm:text-6xl lg:text-7xl font-bold">
+          <span class="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent">
+            Events Are the Future of Social.
+          </span>
         </.heading>
-        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
-          We believe event planning shouldn't be chaos. That's why we built a simple, 
-          powerful tool that brings groups together without the usual headaches.
+        <p class="text-xl sm:text-2xl text-gray-600 max-w-4xl mx-auto leading-relaxed">
+          We believe the most meaningful connections don't happen in feeds, they happen in person.
         </p>
       </div>
     </.section>
 
-    <%!-- Mission Section --%>
+    <%!-- Narrative Section with Image --%>
     <.section background="gradient" class="py-24">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
         <div>
-          <.subheading class="mb-4">Our Mission</.subheading>
-          <.heading as="h2" class="mb-6">
-            Making group decisions effortless
+          <.subheading class="mb-6 text-blue-600">Our Philosophy</.subheading>
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+            Real connections in a digital world
           </.heading>
-          <div class="space-y-6 text-lg text-gray-600">
+          <div class="space-y-6 text-lg text-gray-600 leading-relaxed">
             <p>
-              We've all been there. You want to organize a group event, but finding a date 
-              that works for everyone turns into an endless email chain. People stop responding. 
-              Dates get missed. The event never happens.
+              In a time when 'social' media means endless scrolling, algorithmic manipulation, 
+              and — increasingly — AI pretending to be your friend, we're choosing a different path. 
+              One grounded in the oldest and most enduring form of human connection: 
+              <em class="text-gray-800 font-medium">gathering together.</em>
             </p>
             <p>
-              Eventasaurus was born from this frustration. We wanted to create something that 
-              actually makes group planning easier, not harder. No complex features you'll never use. 
-              No forced sign-ups for your friends. Just a simple way to find the perfect time for everyone.
-            </p>
-            <p>
-              Today, thousands of organizers use Eventasaurus to plan everything from casual dinner 
-              parties to company retreats. Because when planning is easy, more great events happen.
+              While companies like Meta pour billions into virtual worlds to <em>simulate</em> social life — 
+              and now, as Axios reports, develop AI companions to replace real friends — we're building 
+              tools that help people meet, talk, dance, debate, listen, laugh, and build memories 
+              <strong class="text-gray-800">offline</strong>. In the real world. With real people.
             </p>
           </div>
         </div>
-        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-          <h3 class="text-xl font-semibold text-gray-900 mb-6">Why We Built This</h3>
-          <div class="space-y-4">
-            <div class="flex items-start space-x-3">
-              <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                <span class="text-green-600 text-sm">✓</span>
-              </div>
-              <p class="text-gray-600">Frustrated by endless back-and-forth emails</p>
-            </div>
-            <div class="flex items-start space-x-3">
-              <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                <span class="text-green-600 text-sm">✓</span>
-              </div>
-              <p class="text-gray-600">Wanted something that actually saves time</p>
-            </div>
-            <div class="flex items-start space-x-3">
-              <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                <span class="text-green-600 text-sm">✓</span>
-              </div>
-              <p class="text-gray-600">Believed planning should bring people together</p>
-            </div>
-            <div class="flex items-start space-x-3">
-              <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                <span class="text-green-600 text-sm">✓</span>
-              </div>
-              <p class="text-gray-600">No one should need an account just to vote</p>
-            </div>
-          </div>
+        <div class="relative">
+          <img 
+            src="https://via.placeholder.com/600x400/f3f4f6/6b7280?text=People+Gathering" 
+            alt="People gathering together at an event" 
+            class="rounded-2xl shadow-xl border border-gray-200"
+          />
+          <div class="absolute inset-0 rounded-2xl bg-gradient-to-t from-black/20 to-transparent"></div>
         </div>
       </div>
     </.section>
 
-    <%!-- Team Section --%>
+    <%!-- Core Values Section --%>
     <.section class="py-24">
       <div class="text-center mb-16">
-        <.subheading>Our Team</.subheading>
-        <.heading as="h2" class="mt-2">
-          The people behind Eventasaurus
+        <.subheading class="mb-4 text-blue-600">What We Stand For</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl sm:text-4xl">
+          Our core beliefs
         </.heading>
-        <p class="mt-6 text-lg text-gray-600 max-w-3xl mx-auto">
-          We're a small but passionate team of developers and designers who love making 
-          technology that actually improves people's lives.
+        <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+          These principles guide everything we build and every decision we make.
         </p>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-        <div class="text-center">
-          <div class="w-24 h-24 bg-gray-300 rounded-full mx-auto mb-4 flex items-center justify-center">
-            <span class="text-2xl font-medium text-gray-600">AS</span>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <%!-- Mission Card --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🎯</span>
           </div>
-          <h3 class="text-xl font-semibold text-gray-900">Alex Smith</h3>
-          <p class="text-gray-600 mb-2">Co-founder & CEO</p>
-          <p class="text-sm text-gray-500">
-            Former event coordinator who got tired of spreadsheets and started coding.
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Our Mission</h3>
+          <p class="text-gray-600 leading-relaxed">
+            To make organizing, attending, and discovering real-world events effortless — 
+            so that genuine human connection becomes the norm again, not the nostalgic exception.
           </p>
         </div>
 
-        <div class="text-center">
-          <div class="w-24 h-24 bg-gray-300 rounded-full mx-auto mb-4 flex items-center justify-center">
-            <span class="text-2xl font-medium text-gray-600">JD</span>
+        <%!-- Belief Card --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full mb-6">
+            <span class="text-3xl text-white">💡</span>
           </div>
-          <h3 class="text-xl font-semibold text-gray-900">Jordan Davis</h3>
-          <p class="text-gray-600 mb-2">Co-founder & CTO</p>
-          <p class="text-sm text-gray-500">
-            Full-stack developer with a passion for elegant, user-friendly interfaces.
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Our Belief</h3>
+          <p class="text-gray-600 leading-relaxed">
+            That events — shared experiences in physical spaces — are the true future of social media. 
+            Because avatars and AI companions can't replace eye contact. Or a joke that lands. Or the energy in a room.
           </p>
         </div>
 
-        <div class="text-center">
-          <div class="w-24 h-24 bg-gray-300 rounded-full mx-auto mb-4 flex items-center justify-center">
-            <span class="text-2xl font-medium text-gray-600">MC</span>
+        <%!-- Hope Card --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full mb-6">
+            <span class="text-3xl text-white">✨</span>
           </div>
-          <h3 class="text-xl font-semibold text-gray-900">Morgan Chen</h3>
-          <p class="text-gray-600 mb-2">Lead Designer</p>
-          <p class="text-sm text-gray-500">
-            UX designer focused on making complex things feel simple and intuitive.
-          </p>
-        </div>
-      </div>
-    </.section>
-
-    <%!-- Values Section --%>
-    <.section background="gray" class="py-24">
-      <div class="text-center mb-16">
-        <.subheading>Our Values</.subheading>
-        <.heading as="h2" class="mt-2">
-          What drives us every day
-        </.heading>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <div class="text-center">
-          <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-6">
-            <span class="text-3xl">🎯</span>
-          </div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-4">Simplicity First</h3>
-          <p class="text-gray-600">
-            We believe the best tools are the ones you don't have to think about. 
-            They just work, exactly how you'd expect them to.
-          </p>
-        </div>
-
-        <div class="text-center">
-          <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
-            <span class="text-3xl">🤝</span>
-          </div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-4">Accessibility</h3>
-          <p class="text-gray-600">
-            Everyone should be able to participate, regardless of their tech comfort level 
-            or whether they have an account.
-          </p>
-        </div>
-
-        <div class="text-center">
-          <div class="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-6">
-            <span class="text-3xl">⚡</span>
-          </div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-4">Speed</h3>
-          <p class="text-gray-600">
-            Time is precious. Our tools should save you time, not consume it with 
-            unnecessary complexity or setup.
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Our Hope</h3>
+          <p class="text-gray-600 leading-relaxed">
+            That by making it easier to say <em>yes</em> to a night out, a new idea, or a spontaneous meetup, 
+            we can help rebuild what's quietly been lost: the joy of showing up.
           </p>
         </div>
       </div>
     </.section>
 
-    <%!-- CTA Section --%>
-    <.section class="py-24">
+    <%!-- Image Break Section --%>
+    <.section background="gray" class="py-16">
       <div class="text-center">
-        <.heading as="h2" class="mb-6">
-          Ready to try it yourself?
+        <img 
+          src="https://via.placeholder.com/800x300/f9fafb/6b7280?text=Events+Bring+People+Together" 
+          alt="Community gathering" 
+          class="rounded-2xl shadow-lg mx-auto border border-gray-200"
+        />
+      </div>
+    </.section>
+
+    <%!-- How We're Different Section --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-blue-600">The Alternative</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          While others build virtual worlds, we build real connections
         </.heading>
-        <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-          See why thousands of organizers have switched to Eventasaurus for their group planning needs.
-        </p>
-        <.radiant_button href="/register" class="text-lg px-8 py-3">
-          Create Your First Event
-        </.radiant_button>
-        <p class="mt-4 text-sm text-gray-500">
-          Free to use. No credit card required.
-        </p>
+      </div>
+
+      <div class="max-w-6xl mx-auto">
+        <%!-- Header Row --%>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+          <div class="text-center">
+            <h3 class="text-2xl font-bold text-green-700 mb-2">We Build</h3>
+          </div>
+          <div class="text-center">
+            <h3 class="text-2xl font-bold text-red-700 mb-2">They Build</h3>
+          </div>
+        </div>
+
+        <%!-- Comparison Rows --%>
+        <div class="space-y-8">
+          <%!-- Row 1: People-first events vs AI friends --%>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-green-600 text-sm font-bold">✓</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">People-first events</h4>
+                <p class="text-gray-600">We help humans find each other and share time, space, and meaning.</p>
+              </div>
+            </div>
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-red-600 text-sm font-bold">✗</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">AI "friends"</h4>
+                <p class="text-gray-600">Mark Zuckerberg says you'll soon talk to bots instead of people — your new companion is trained on your data. <em class="text-gray-500">Axios, 2025</em></p>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Row 2: Offline by design vs VR headsets --%>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-green-600 text-sm font-bold">✓</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Offline by design</h4>
+                <p class="text-gray-600">Our tools end with a gathering — not another endless tap.</p>
+              </div>
+            </div>
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-red-600 text-sm font-bold">✗</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Billions on VR headsets</h4>
+                <p class="text-gray-600">Meta continues to invest in artificial worlds to replace your real one.</p>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Row 3: Serotonin vs Feeds --%>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-green-600 text-sm font-bold">✓</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Serotonin, not surveillance</h4>
+                <p class="text-gray-600">We foster joy and spontaneity, not dopamine traps.</p>
+              </div>
+            </div>
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-red-600 text-sm font-bold">✗</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Feeds linked to anxiety & depression</h4>
+                <p class="text-gray-600">Instagram's impact on mental health — especially among teens — is well-documented. The scroll comes at a cost.</p>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Row 4: Privacy vs Surveillance --%>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-green-600 text-sm font-bold">✓</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Privacy by default</h4>
+                <p class="text-gray-600">No ads. No behavioral tracking. Your presence is yours alone.</p>
+              </div>
+            </div>
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-red-600 text-sm font-bold">✗</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Surveillance capitalism</h4>
+                <p class="text-gray-600">Every click, message, and hesitation is monetized. You're not the user — you're the product.</p>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Row 5: Technology that steps aside vs inserts itself --%>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-green-600 text-sm font-bold">✓</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Technology that steps aside</h4>
+                <p class="text-gray-600">Once the event begins, we fade into the background.</p>
+              </div>
+            </div>
+            <div class="flex items-start space-x-4">
+              <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                <span class="text-red-600 text-sm font-bold">✗</span>
+              </div>
+              <div>
+                <h4 class="font-semibold text-gray-900 mb-1">Technology that inserts itself</h4>
+                <p class="text-gray-600">Smart glasses, forced filters, and "co-presence" gimmicks that never quite feel real.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Closing CTA Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center">
+        <div class="max-w-4xl mx-auto">
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl lg:text-5xl">
+            <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+              Join us in building the future of social
+            </span>
+          </.heading>
+          <p class="text-xl text-gray-600 mb-8 leading-relaxed">
+            Where "social media" means helping people actually meet, connect, and create memories together. 
+            Because the best conversations happen face-to-face, and the best memories are made in person.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <.radiant_button href="/register" class="text-lg px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              Start Creating Events
+            </.radiant_button>
+            <.radiant_button href="/events" variant="outline" class="text-lg px-8 py-4">
+              Discover Events Near You
+            </.radiant_button>
+          </div>
+          <p class="mt-6 text-sm text-gray-500">
+            Free to use. No credit card required. Real connections included.
+          </p>
+        </div>
       </div>
     </.section>
   </main>
