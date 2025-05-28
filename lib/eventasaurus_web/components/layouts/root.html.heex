@@ -70,7 +70,7 @@
     end
 %>
   <body class={[
-      "bg-white antialiased overflow-x-hidden",
+      "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
       assigns[:theme_class] && assigns[:theme_class]
     ]}
     style={assigns[:css_variables] && assigns[:css_variables]}
@@ -133,7 +133,10 @@
       </.container>
     </header>
 
-    <%= @inner_content %>
+    <!-- Main content wrapper that grows to fill available space -->
+    <main class="flex-grow">
+      <%= @inner_content %>
+    </main>
 
     <!-- Radiant-style Footer -->
     <footer class="bg-gray-950 text-white mt-24">
