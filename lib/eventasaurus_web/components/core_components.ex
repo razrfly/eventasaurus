@@ -665,6 +665,56 @@ defmodule EventasaurusWeb.CoreComponents do
   end
 
   @doc """
+  Renders the Eventasaurus logo with the Knewave font.
+
+  ## Examples
+
+      <.logo />
+      <.logo class="text-3xl" />
+      <.logo href="/dashboard" />
+  """
+  attr :class, :string, default: "text-2xl"
+  attr :href, :string, default: "/"
+  attr :text_color, :string, default: "text-gray-950"
+
+  def logo(assigns) do
+    # Calculate emoji size (20% bigger than text)
+    emoji_class = case assigns.class do
+      "text-xs" -> "text-sm"
+      "text-sm" -> "text-base"
+      "text-base" -> "text-lg"
+      "text-lg" -> "text-xl"
+      "text-xl" -> "text-2xl"
+      "text-2xl" -> "text-3xl"
+      "text-3xl" -> "text-4xl"
+      "text-4xl" -> "text-5xl"
+      "text-5xl" -> "text-6xl"
+      "text-6xl" -> "text-7xl"
+      _ -> "text-3xl"  # Default fallback
+    end
+
+    assigns = assign(assigns, :emoji_class, emoji_class)
+
+    ~H"""
+    <a href={@href} class="flex items-center gap-2 group">
+      <span class={@emoji_class}>🦖</span>
+      <span
+        class={[
+          @class,
+          "font-bold transition-all duration-300",
+          "group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:via-pink-500 group-hover:to-red-500",
+          "group-hover:bg-clip-text group-hover:text-transparent",
+          @text_color
+        ]}
+        style="font-family: 'Knewave', cursive;"
+      >
+        Eventasaurus
+      </span>
+    </a>
+    """
+  end
+
+  @doc """
   Translates an error message using gettext.
   """
   def translate_error({msg, opts}) do
