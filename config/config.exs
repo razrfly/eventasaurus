@@ -60,14 +60,6 @@ config :tailwind,
     cd: Path.expand("../assets", __DIR__)
   ]
 
-# Configure public.css for manual copying
-config :eventasaurus, :asset_paths, [
-  %{
-    source: Path.expand("../assets/css/public.css", __DIR__),
-    destination: Path.expand("../priv/static/assets/public.css", __DIR__)
-  }
-]
-
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",

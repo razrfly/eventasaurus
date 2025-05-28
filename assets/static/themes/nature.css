@@ -1,0 +1,135 @@
+/* Nature theme - Earthy, organic, and calming */
+.theme-nature {
+  --color-primary: #059669; /* Emerald 600 */
+  --color-secondary: #065f46; /* Emerald 800 */
+  --color-accent: #d97706; /* Amber 600 */
+  --color-background: #f0fdf4; /* Green 50 */
+  --color-text: #064e3b; /* Emerald 900 */
+  --color-text-secondary: #047857; /* Emerald 700 */
+  --color-border: #bbf7d0; /* Green 200 */
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 600;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 10px;
+  --border-radius-large: 16px;
+  --shadow-style: 0 2px 8px rgba(5, 150, 105, 0.15);
+  --shadow-style-large: 0 8px 24px rgba(5, 150, 105, 0.25);
+  
+  /* Component specific */
+  --button-border-radius: 10px;
+  --card-border-radius: 16px;
+  --input-border-radius: 8px;
+}
+
+/* Nature theme specific styles */
+.theme-nature .theme-container {
+  background: 
+    radial-gradient(circle at 30% 20%, rgba(5, 150, 105, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, rgba(217, 119, 6, 0.06) 0%, transparent 50%),
+    #f0fdf4;
+  position: relative;
+}
+
+.theme-nature .theme-container::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23059669' fill-opacity='0.03'%3E%3Cpath d='M20 20c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10 0c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z'/%3E%3C/g%3E%3C/svg%3E");
+  z-index: -1;
+  opacity: 0.3;
+}
+
+.theme-nature .btn-primary {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+  transition: all 0.3s ease;
+}
+
+.theme-nature .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(5, 150, 105, 0.4);
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+}
+
+.theme-nature .btn-secondary {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+}
+
+.theme-nature .btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(217, 119, 6, 0.4);
+}
+
+.theme-nature .card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #bbf7d0;
+  backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.theme-nature .card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(5, 150, 105, 0.2);
+  border-color: #a7f3d0;
+}
+
+.theme-nature .event-title {
+  color: #064e3b;
+  text-shadow: 0 2px 4px rgba(5, 150, 105, 0.1);
+  position: relative;
+}
+
+.theme-nature .event-title::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #059669, #d97706);
+  border-radius: 2px;
+}
+
+.theme-nature .event-date-badge {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  border: 2px solid #059669;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+}
+
+.theme-nature .form-input {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #bbf7d0;
+  transition: all 0.3s ease;
+}
+
+.theme-nature .form-input:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+  background: #ffffff;
+}
+
+/* Nature-specific decorative elements */
+.theme-nature .accent-leaf {
+  position: relative;
+}
+
+.theme-nature .accent-leaf::before {
+  content: '🌿';
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  opacity: 0.6;
+} 

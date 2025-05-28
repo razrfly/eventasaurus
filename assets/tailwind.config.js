@@ -11,6 +11,7 @@ module.exports = {
     "../lib/*_web.ex",
     "../lib/*_web/**/*.*ex"
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -18,6 +19,7 @@ module.exports = {
       },
       fontFamily: {
         'knewave': ['Knewave', 'cursive'],
+        'orbitron': ['Orbitron', 'monospace'],
       }
     },
   },
