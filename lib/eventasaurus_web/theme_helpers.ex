@@ -170,4 +170,66 @@ defmodule EventasaurusWeb.ThemeHelpers do
       """)
     end)
   end
+
+  @doc """
+  Returns the Google Fonts link for a specific theme
+  """
+  def theme_font_link(:minimal), do: ""
+  def theme_font_link(:cosmic), do: ~s(<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">)
+  def theme_font_link(:velocity), do: ~s(<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">)
+  def theme_font_link(:retro), do: ~s(<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">)
+  def theme_font_link(:celebration), do: ~s(<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">)
+  def theme_font_link(:nature), do: ~s(<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap" rel="stylesheet">)
+  def theme_font_link(:professional), do: ~s(<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">)
+  def theme_font_link(_), do: ""
+
+  @doc """
+  Determines if a theme should use dark mode navbar styling
+  """
+  def dark_theme?(theme) when theme in [:cosmic], do: true
+  def dark_theme?(_theme), do: false
+
+  @doc """
+  Returns appropriate navbar background classes based on theme
+  """
+  def navbar_bg_classes(theme) do
+    if dark_theme?(theme) do
+      "bg-gray-900 shadow-lg"
+    else
+      "bg-white shadow-sm"
+    end
+  end
+
+  @doc """
+  Returns appropriate navbar text classes based on theme
+  """
+  def navbar_text_classes(theme) do
+    if dark_theme?(theme) do
+      "text-gray-100"
+    else
+      "text-gray-700"
+    end
+  end
+
+  @doc """
+  Returns appropriate navbar link classes based on theme
+  """
+  def navbar_link_classes(theme) do
+    if dark_theme?(theme) do
+      "text-gray-100 hover:text-white"
+    else
+      "text-gray-700 hover:text-gray-900"
+    end
+  end
+
+  @doc """
+  Returns appropriate navbar border classes based on theme
+  """
+  def navbar_border_classes(theme) do
+    if dark_theme?(theme) do
+      "border-gray-700"
+    else
+      "border-gray-200"
+    end
+  end
 end
