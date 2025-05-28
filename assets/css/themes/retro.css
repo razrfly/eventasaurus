@@ -8,34 +8,57 @@
   --color-text-secondary: #92400e; /* Amber 700 */
   --color-border: #fbbf24; /* Amber 400 */
   
-  /* Typography */
-  --font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
-  --font-family-heading: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
-  --heading-weight: 700;
-  --body-size: 17px;
-  --body-weight: 400;
-  
   /* Spacing and layout */
   --border-radius: 4px;
   --border-radius-large: 8px;
   --shadow-style: 4px 4px 8px rgba(217, 119, 6, 0.3);
-  --shadow-style-large: 8px 8px 16px rgba(217, 119, 6, 0.4);
+  --shadow-style-large: 6px 6px 12px rgba(217, 119, 6, 0.4);
   
-  /* Component specific */
-  --button-border-radius: 4px;
-  --card-border-radius: 8px;
-  --input-border-radius: 4px;
+  /* Apply retro theme colors to entire page */
+  background-color: var(--color-background);
+  color: var(--color-text);
 }
 
-/* Retro theme specific styles */
-.theme-retro .theme-container {
+/* Only scope fonts to theme-content */
+.theme-retro .theme-content {
+  font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+}
+
+.theme-retro .theme-content h1,
+.theme-retro .theme-content h2,
+.theme-retro .theme-content h3,
+.theme-retro .theme-content h4,
+.theme-retro .theme-content h5,
+.theme-retro .theme-content h6 {
+  font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+  font-weight: 700;
+}
+
+/* Retro-specific styling for content area */
+.theme-retro .theme-content {
+  position: relative;
+}
+
+.theme-retro .theme-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: 
-    radial-gradient(circle at 25% 25%, rgba(217, 119, 6, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(220, 38, 38, 0.1) 0%, transparent 50%),
-    #fef3c7;
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(217, 119, 6, 0.05) 2px,
+      rgba(217, 119, 6, 0.05) 4px
+    );
+  pointer-events: none;
+  z-index: -1;
 }
 
-.theme-retro .btn-primary {
+.theme-retro .theme-content .btn-primary {
   background: #d97706;
   border: 3px solid #92400e;
   box-shadow: 4px 4px 0px #92400e;
@@ -45,17 +68,17 @@
   transition: all 0.2s ease;
 }
 
-.theme-retro .btn-primary:hover {
+.theme-retro .theme-content .btn-primary:hover {
   transform: translate(-2px, -2px);
   box-shadow: 6px 6px 0px #92400e;
 }
 
-.theme-retro .btn-primary:active {
+.theme-retro .theme-content .btn-primary:active {
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0px #92400e;
 }
 
-.theme-retro .btn-secondary {
+.theme-retro .theme-content .btn-secondary {
   background: #dc2626;
   border: 3px solid #991b1b;
   box-shadow: 4px 4px 0px #991b1b;
@@ -64,14 +87,14 @@
   letter-spacing: 0.05em;
 }
 
-.theme-retro .card {
+.theme-retro .theme-content .card {
   background: #fde68a; /* Amber 200 */
   border: 3px solid #f59e0b; /* Amber 500 */
   box-shadow: 6px 6px 0px #d97706;
   position: relative;
 }
 
-.theme-retro .card::before {
+.theme-retro .theme-content .card::before {
   content: '';
   position: absolute;
   top: -3px;
@@ -89,12 +112,12 @@
   border-radius: inherit;
 }
 
-.theme-retro .card:hover {
+.theme-retro .theme-content .card:hover {
   transform: translate(-2px, -2px);
   box-shadow: 8px 8px 0px #d97706;
 }
 
-.theme-retro .event-title {
+.theme-retro .theme-content .event-title {
   font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
   font-weight: 700;
   text-shadow: 2px 2px 0px rgba(217, 119, 6, 0.3);
@@ -102,7 +125,7 @@
   letter-spacing: -0.02em;
 }
 
-.theme-retro .event-date-badge {
+.theme-retro .theme-content .event-date-badge {
   background: #fed7aa; /* Orange 200 */
   border: 3px solid #ea580c; /* Orange 600 */
   box-shadow: 4px 4px 0px #c2410c; /* Orange 700 */
@@ -110,14 +133,14 @@
   font-weight: 700;
 }
 
-.theme-retro .form-input {
+.theme-retro .theme-content .form-input {
   background: #fde68a;
   border: 3px solid #f59e0b;
   box-shadow: inset 2px 2px 4px rgba(217, 119, 6, 0.2);
   font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
 }
 
-.theme-retro .form-input:focus {
+.theme-retro .theme-content .form-input:focus {
   border-color: #d97706;
   box-shadow: inset 2px 2px 4px rgba(217, 119, 6, 0.3), 0 0 0 3px rgba(217, 119, 6, 0.2);
 } 

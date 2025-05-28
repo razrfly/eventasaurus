@@ -8,27 +8,34 @@
   --color-text-secondary: #be185d; /* Pink 700 */
   --color-border: #f9a8d4; /* Pink 300 */
   
-  /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --heading-weight: 700;
-  --body-size: 16px;
-  --body-weight: 400;
-  
   /* Spacing and layout */
   --border-radius: 16px;
   --border-radius-large: 24px;
-  --shadow-style: 0 4px 16px rgba(236, 72, 153, 0.25);
-  --shadow-style-large: 0 8px 32px rgba(236, 72, 153, 0.35);
+  --shadow-style: 0 4px 16px rgba(236, 72, 153, 0.2);
+  --shadow-style-large: 0 8px 32px rgba(236, 72, 153, 0.3);
   
-  /* Component specific */
-  --button-border-radius: 16px;
-  --card-border-radius: 24px;
-  --input-border-radius: 12px;
+  /* Apply celebration theme colors to entire page */
+  background-color: var(--color-background);
+  color: var(--color-text);
 }
 
-/* Celebration theme specific styles with animation */
-.theme-celebration .theme-container {
+/* Only scope fonts to theme-content */
+.theme-celebration .theme-content {
+  font-family: 'Fredoka', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.theme-celebration .theme-content h1,
+.theme-celebration .theme-content h2,
+.theme-celebration .theme-content h3,
+.theme-celebration .theme-content h4,
+.theme-celebration .theme-content h5,
+.theme-celebration .theme-content h6 {
+  font-family: 'Fredoka', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 600;
+}
+
+/* Celebration theme specific styles with animation - SCOPED TO CONTENT ONLY */
+.theme-celebration .theme-content {
   background: 
     radial-gradient(circle at 20% 80%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
@@ -38,7 +45,7 @@
   overflow: hidden;
 }
 
-.theme-celebration .theme-container::before {
+.theme-celebration .theme-content::before {
   content: '';
   position: fixed;
   top: 0;
@@ -61,7 +68,7 @@
   50% { transform: translateY(-10px) rotate(1deg); }
 }
 
-.theme-celebration .btn-primary {
+.theme-celebration .theme-content .btn-primary {
   background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
   border: none;
   position: relative;
@@ -74,7 +81,7 @@
   50% { box-shadow: 0 8px 32px rgba(236, 72, 153, 0.6); }
 }
 
-.theme-celebration .btn-primary::before {
+.theme-celebration .theme-content .btn-primary::before {
   content: '';
   position: absolute;
   top: -50%;
@@ -87,7 +94,7 @@
   opacity: 0;
 }
 
-.theme-celebration .btn-primary:hover::before {
+.theme-celebration .theme-content .btn-primary:hover::before {
   animation: shimmer 0.6s ease-in-out;
 }
 
@@ -97,12 +104,12 @@
   100% { transform: translateX(100%) translateY(100%) rotate(45deg); opacity: 0; }
 }
 
-.theme-celebration .btn-secondary {
+.theme-celebration .theme-content .btn-secondary {
   background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
   animation: pulse 2s infinite 0.5s;
 }
 
-.theme-celebration .card {
+.theme-celebration .theme-content .card {
   /* Fallback for browsers without backdrop-filter */
   background: rgba(249, 168, 212, 0.8);
   border: 2px solid #f9a8d4;
@@ -110,19 +117,19 @@
 }
 
 @supports (backdrop-filter: blur(10px)) {
-  .theme-celebration .card {
+  .theme-celebration .theme-content .card {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(253, 242, 248, 0.9) 100%);
     backdrop-filter: blur(10px);
   }
 }
 
-.theme-celebration .card:hover {
+.theme-celebration .theme-content .card:hover {
   transform: translateY(-5px) rotate(1deg);
   box-shadow: 0 12px 40px rgba(236, 72, 153, 0.3);
   border-color: #ec4899;
 }
 
-.theme-celebration .event-title {
+.theme-celebration .theme-content .event-title {
   background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -135,7 +142,7 @@
   50% { filter: hue-rotate(20deg); }
 }
 
-.theme-celebration .event-date-badge {
+.theme-celebration .theme-content .event-date-badge {
   background: linear-gradient(135deg, #ffffff 0%, #fdf2f8 100%);
   border: 2px solid #ec4899;
   box-shadow: 0 4px 16px rgba(236, 72, 153, 0.3);

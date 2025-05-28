@@ -211,7 +211,7 @@ defmodule EventasaurusApp.ThemesTest do
 
     test "cosmic theme is applied to event page" do
       # Make HTTP request to a cosmic-themed event page
-      case HTTPoison.get("http://localhost:4000/tnhtg2b4fz") do
+      case HTTPoison.get("http://localhost:4000/uvc8c351mr") do
         {:ok, %HTTPoison.Response{status_code: 200, body: html_content}} ->
           # Check that the page has cosmic theme class
           assert String.contains?(html_content, "theme-cosmic"),

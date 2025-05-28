@@ -8,27 +8,34 @@
   --color-text-secondary: #047857; /* Emerald 700 */
   --color-border: #bbf7d0; /* Green 200 */
   
-  /* Typography */
-  --font-family: 'Merriweather', 'Georgia', 'Times New Roman', serif;
-  --font-family-heading: 'Merriweather', 'Georgia', 'Times New Roman', serif;
-  --heading-weight: 600;
-  --body-size: 16px;
-  --body-weight: 400;
-  
   /* Spacing and layout */
   --border-radius: 10px;
   --border-radius-large: 16px;
   --shadow-style: 0 2px 8px rgba(5, 150, 105, 0.15);
-  --shadow-style-large: 0 8px 24px rgba(5, 150, 105, 0.25);
+  --shadow-style-large: 0 4px 16px rgba(5, 150, 105, 0.2);
   
-  /* Component specific */
-  --button-border-radius: 10px;
-  --card-border-radius: 16px;
-  --input-border-radius: 8px;
+  /* Apply nature theme colors to entire page */
+  background-color: var(--color-background);
+  color: var(--color-text);
 }
 
-/* Nature theme specific styles */
-.theme-nature .theme-container {
+/* Only scope fonts to theme-content */
+.theme-nature .theme-content {
+  font-family: 'Merriweather', 'Georgia', 'Times New Roman', serif;
+}
+
+.theme-nature .theme-content h1,
+.theme-nature .theme-content h2,
+.theme-nature .theme-content h3,
+.theme-nature .theme-content h4,
+.theme-nature .theme-content h5,
+.theme-nature .theme-content h6 {
+  font-family: 'Merriweather', 'Georgia', 'Times New Roman', serif;
+  font-weight: 600;
+}
+
+/* Nature theme specific styles - SCOPED TO CONTENT ONLY */
+.theme-nature .theme-content {
   background: 
     radial-gradient(circle at 30% 20%, rgba(5, 150, 105, 0.08) 0%, transparent 50%),
     radial-gradient(circle at 70% 80%, rgba(217, 119, 6, 0.06) 0%, transparent 50%),
@@ -36,7 +43,7 @@
   position: relative;
 }
 
-.theme-nature .theme-container::before {
+.theme-nature .theme-content::before {
   content: '';
   position: fixed;
   top: 0;
@@ -49,48 +56,48 @@
   opacity: 0.3;
 }
 
-.theme-nature .btn-primary {
+.theme-nature .theme-content .btn-primary {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
   transition: all 0.3s ease;
 }
 
-.theme-nature .btn-primary:hover {
+.theme-nature .theme-content .btn-primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(5, 150, 105, 0.4);
   background: linear-gradient(135deg, #047857 0%, #065f46 100%);
 }
 
-.theme-nature .btn-secondary {
+.theme-nature .theme-content .btn-secondary {
   background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
   box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
 }
 
-.theme-nature .btn-secondary:hover {
+.theme-nature .theme-content .btn-secondary:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(217, 119, 6, 0.4);
 }
 
-.theme-nature .card {
+.theme-nature .theme-content .card {
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid #bbf7d0;
   backdrop-filter: blur(5px);
   transition: all 0.3s ease;
 }
 
-.theme-nature .card:hover {
+.theme-nature .theme-content .card:hover {
   transform: translateY(-3px);
   box-shadow: 0 12px 32px rgba(5, 150, 105, 0.2);
   border-color: #a7f3d0;
 }
 
-.theme-nature .event-title {
+.theme-nature .theme-content .event-title {
   color: #064e3b;
   text-shadow: 0 2px 4px rgba(5, 150, 105, 0.1);
   position: relative;
 }
 
-.theme-nature .event-title::after {
+.theme-nature .theme-content .event-title::after {
   content: '';
   position: absolute;
   bottom: -4px;
@@ -101,30 +108,30 @@
   border-radius: 2px;
 }
 
-.theme-nature .event-date-badge {
+.theme-nature .theme-content .event-date-badge {
   background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
   border: 2px solid #059669;
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
 }
 
-.theme-nature .form-input {
+.theme-nature .theme-content .form-input {
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid #bbf7d0;
   transition: all 0.3s ease;
 }
 
-.theme-nature .form-input:focus {
+.theme-nature .theme-content .form-input:focus {
   border-color: #059669;
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
   background: #ffffff;
 }
 
-/* Nature-specific decorative elements */
-.theme-nature .accent-leaf {
+/* Nature-specific decorative elements - content only */
+.theme-nature .theme-content .accent-leaf {
   position: relative;
 }
 
-.theme-nature .accent-leaf::before {
+.theme-nature .theme-content .accent-leaf::before {
   content: '🌿';
   position: absolute;
   right: -20px;

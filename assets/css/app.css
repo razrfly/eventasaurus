@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Eventasaurus Theming System - Selective Animations */
+/* Eventasaurus Theming System */
 
 /* Base theme foundation with CSS custom properties */
 :root {
@@ -34,8 +34,8 @@
   --input-border-radius: 6px;
 }
 
-/* Theme body styles - applies to any themed body */
-body[class*="theme-"] {
+/* Theme content styles - applies only to main content area */
+body[class*="theme-"] .theme-content {
   position: relative;
   background-color: var(--color-background);
   color: var(--color-text);
@@ -46,61 +46,7 @@ body[class*="theme-"] {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: all 0.3s ease;
-  min-height: 100vh;
-}
-
-/* Theme buttons */
-body[class*="theme-"] .theme-button-primary {
-  background-color: var(--color-primary);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: var(--button-border-radius);
-  box-shadow: var(--shadow-style);
-  font-weight: 500;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  z-index: 10;
-}
-
-body[class*="theme-"] .theme-button-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-style-large);
-}
-
-body[class*="theme-"] .theme-button-secondary {
-  background-color: transparent;
-  color: var(--color-primary);
-  border: 2px solid var(--color-border);
-  padding: 10px 22px;
-  border-radius: var(--button-border-radius);
-  font-weight: 500;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  z-index: 10;
-}
-
-body[class*="theme-"] .theme-button-secondary:hover {
-  background-color: var(--color-border);
-}
-
-/* Theme cards */
-body[class*="theme-"] .theme-card {
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--card-border-radius);
-  box-shadow: var(--shadow-style);
-  transition: all 0.2s ease;
-  position: relative;
-  z-index: 5;
-}
-
-body[class*="theme-"] .theme-card:hover {
-  box-shadow: var(--shadow-style-large);
+  min-height: calc(100vh - 200px); /* Adjust for header/footer */
 }
 
 /* MINIMAL THEME - Uses default Radiant styling (no overrides) */
