@@ -14,7 +14,7 @@
     
     <!-- Theme CSS files -->
     <%= if assigns[:theme] && assigns[:theme] != :minimal do %>
-      <link phx-track-static rel="stylesheet" href={"/assets/themes/#{assigns[:theme]}.css"} />
+      <link phx-track-static rel="stylesheet" href={"/themes/#{assigns[:theme]}.css"} />
     <% end %>
     
     <!-- Theme font links -->
@@ -88,7 +88,7 @@
     <% end %>
     
     <!-- Radiant-style Header -->
-    <header class="border-b border-white/10 dark:border-white/10 backdrop-blur-md sticky top-0 z-40 dark:bg-gray-900/80">
+    <header class="border-b border-white/10 dark:border-white/10 backdrop-blur-md sticky top-0 z-40 bg-white/80 dark:bg-gray-900/20">
       <.container class="py-4">
         <nav class="flex items-center justify-between">
           <div class="flex items-center space-x-8">

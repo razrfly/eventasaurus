@@ -1,0 +1,104 @@
+/* Velocity theme - Modern, dynamic with motion and gradients */
+.theme-velocity {
+  --color-primary: #ef4444; /* Red */
+  --color-secondary: #f97316; /* Orange */
+  --color-accent: #eab308; /* Yellow */
+  --color-background: #fafafa; /* Neutral */
+  --color-text: #171717; /* Neutral 900 */
+  --color-text-secondary: #525252; /* Neutral 600 */
+  --color-border: #e5e5e5; /* Neutral 200 */
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 800;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 6px;
+  --border-radius-large: 12px;
+  --shadow-style: 0 4px 12px rgba(239, 68, 68, 0.15);
+  --shadow-style-large: 0 8px 32px rgba(239, 68, 68, 0.25);
+  
+  /* Component specific */
+  --button-border-radius: 6px;
+  --card-border-radius: 12px;
+  --input-border-radius: 6px;
+}
+
+/* Velocity theme specific styles */
+.theme-velocity .theme-container {
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+}
+
+.theme-velocity .btn-primary {
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+  transform: perspective(1000px) rotateX(0deg);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-velocity .btn-primary:hover {
+  transform: perspective(1000px) rotateX(-5deg) translateY(-3px);
+  box-shadow: 0 12px 40px rgba(239, 68, 68, 0.4);
+}
+
+.theme-velocity .btn-secondary {
+  background: linear-gradient(135deg, #f97316 0%, #eab308 100%);
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.3);
+}
+
+.theme-velocity .card {
+  background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+  /* Fallback for browsers that don't support mask-composite */
+  border: 2px solid #eab308;
+  background-clip: padding-box;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+/* Advanced gradient-border effect only when supported */
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  .theme-velocity .card {
+    border: 2px solid transparent;
+  }
+  
+  .theme-velocity .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 2px;
+    background: linear-gradient(135deg, #ef4444, #f97316, #eab308);
+    border-radius: inherit;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .theme-velocity .card:hover::before {
+    opacity: 1;
+  }
+}
+
+.theme-velocity .card:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 40px rgba(239, 68, 68, 0.2);
+}
+
+.theme-velocity .event-title {
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 50%, #eab308 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.theme-velocity .event-date-badge {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  border: 2px solid #ef4444;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.2);
+} 
