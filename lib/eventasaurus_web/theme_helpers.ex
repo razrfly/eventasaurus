@@ -145,13 +145,29 @@ defmodule EventasaurusWeb.ThemeHelpers do
   Returns font links for themes that require external fonts.
   """
   def theme_font_links do
-    # Google Fonts for various themes - return as raw HTML string
-    html = """
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Georgia:wght@400;700&display=swap">
-    """
+    # Load Google Fonts for different themes
+    fonts = [
+      # Orbitron for cosmic theme (space-like)
+      "https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap",
+      # Playfair Display for retro theme
+      "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap",
+      # Montserrat for professional theme
+      "https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap",
+      # Fredoka One for celebration theme
+      "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap",
+      # Merriweather for nature theme
+      "https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&display=swap",
+      # Rajdhani for velocity theme
+      "https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;600;700&display=swap"
+    ]
 
-    Phoenix.HTML.raw(html)
+    fonts
+    |> Enum.map(fn font_url ->
+      Phoenix.HTML.raw("""
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="#{font_url}" rel="stylesheet">
+      """)
+    end)
   end
 end

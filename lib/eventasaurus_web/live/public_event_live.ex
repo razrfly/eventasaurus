@@ -46,7 +46,10 @@ defmodule EventasaurusWeb.PublicEventLive do
               {:not_authenticated, nil}
           end
 
-          # Theme is now handled by AuthHooks, just assign event data
+          # Apply event theme to layout
+          theme = event.theme || :minimal
+          theme_class = EventasaurusApp.Themes.get_theme_css_class(theme)
+
           {:ok,
            socket
            |> assign(:event, event)
@@ -54,6 +57,8 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:organizers, organizers)
            |> assign(:registration_status, registration_status)
            |> assign(:user, user)
+           |> assign(:theme, theme)
+           |> assign(:theme_class, theme_class)
            |> assign(:show_registration_modal, false)
            |> assign(:just_registered, false)
            |> assign(:page_title, event.title)
