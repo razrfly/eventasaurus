@@ -143,6 +143,16 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Checks if a user can manage an event (i.e., is an organizer).
+
+  This is an alias for user_is_organizer?/2 but provides clearer intent
+  for authorization checks in controllers and LiveViews.
+  """
+  def user_can_manage_event?(%User{} = user, %Event{} = event) do
+    user_is_organizer?(event, user)
+  end
+
+  @doc """
   Creates an event and associates it with a user in a single transaction.
   """
   def create_event_with_organizer(event_attrs, %User{} = user) do
@@ -213,6 +223,13 @@ defmodule EventasaurusApp.Events do
             preload: [:user]
 
     Repo.all(query)
+  end
+
+  @doc """
+  Lists all participants for an event (alias for list_event_participants_for_event/1).
+  """
+  def list_event_participants(%Event{} = event) do
+    list_event_participants_for_event(event)
   end
 
   @doc """

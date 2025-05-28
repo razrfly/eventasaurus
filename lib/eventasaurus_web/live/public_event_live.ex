@@ -9,9 +9,9 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   def mount(%{"slug" => slug}, _session, socket) do
     IO.puts("=== MOUNT FUNCTION CALLED ===")
-    IO.puts("current_user: #{inspect(socket.assigns.current_user)}")
+    IO.puts("auth_user: #{inspect(socket.assigns.auth_user)}")
     require Logger
-    Logger.debug("PublicEventLive.mount called with current_user: #{inspect(socket.assigns.current_user)}")
+    Logger.debug("PublicEventLive.mount called with auth_user: #{inspect(socket.assigns.auth_user)}")
 
     if ReservedSlugs.reserved?(slug) do
       {:ok,
@@ -34,8 +34,8 @@ defmodule EventasaurusWeb.PublicEventLive do
           organizers = Events.list_event_organizers(event)
 
           # Determine registration status if user is authenticated
-          Logger.debug("PublicEventLive.mount - current_user: #{inspect(socket.assigns.current_user)}")
-          {registration_status, local_user} = case ensure_user_struct(socket.assigns.current_user) do
+          Logger.debug("PublicEventLive.mount - auth_user: #{inspect(socket.assigns.auth_user)}")
+          {registration_status, user} = case ensure_user_struct(socket.assigns.auth_user) do
             {:ok, user} ->
               Logger.debug("PublicEventLive.mount - user found: #{inspect(user)}")
               status = Events.get_user_registration_status(event, user)
@@ -53,7 +53,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:venue, venue)
            |> assign(:organizers, organizers)
            |> assign(:registration_status, registration_status)
-           |> assign(:local_user, local_user)
+           |> assign(:user, user)
            |> assign(:show_registration_modal, false)
            |> assign(:just_registered, false)
            |> assign(:page_title, event.title)
@@ -67,7 +67,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   def handle_event("one_click_register", _params, socket) do
-    case ensure_user_struct(socket.assigns.current_user) do
+    case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         case Events.one_click_register(socket.assigns.event, user) do
           {:ok, _participant} ->
@@ -106,7 +106,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   def handle_event("cancel_registration", _params, socket) do
-    case ensure_user_struct(socket.assigns.current_user) do
+    case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         case Events.cancel_user_registration(socket.assigns.event, user) do
           {:ok, _participant} ->
@@ -139,7 +139,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   def handle_event("reregister", _params, socket) do
-    case ensure_user_struct(socket.assigns.current_user) do
+    case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         case Events.reregister_user_for_event(socket.assigns.event, user) do
           {:ok, _participant} ->
@@ -179,11 +179,11 @@ defmodule EventasaurusWeb.PublicEventLive do
 
     # Update the user's registration status and local user info
     # Only set just_registered for new registrations (not existing users)
-    updated_socket = case ensure_user_struct(socket.assigns.current_user) do
+    updated_socket = case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         socket
         |> assign(:registration_status, :registered)
-        |> assign(:local_user, user)
+        |> assign(:user, user)
         |> assign(:just_registered, type == :new_registration)
 
       {:error, _} ->
@@ -194,7 +194,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           user ->
             socket
             |> assign(:registration_status, :registered)
-            |> assign(:local_user, user)
+            |> assign(:user, user)
             |> assign(:just_registered, true)  # This is always a new registration
         end
     end
@@ -356,11 +356,11 @@ defmodule EventasaurusWeb.PublicEventLive do
                 <!-- Authenticated user - not registered -->
                 <div class="flex items-center gap-3 mb-4">
                   <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-lg font-semibold text-gray-600 border border-gray-200">
-                    <%= String.first(@local_user.name || "?") %>
+                    <%= String.first(@user.name || "?") %>
                   </div>
                   <div>
-                    <div class="font-medium text-gray-900"><%= @local_user.name %></div>
-                    <div class="text-sm text-gray-500"><%= @local_user.email %></div>
+                    <div class="font-medium text-gray-900"><%= @user.name %></div>
+                    <div class="text-sm text-gray-500"><%= @user.email %></div>
                   </div>
                 </div>
                 <button
@@ -543,7 +543,19 @@ defmodule EventasaurusWeb.PublicEventLive do
     """
   end
 
-  # Ensure we have a proper User struct for the current user
+  # Ensures we have a proper User struct for the current user.
+  #
+  # This function processes the raw authentication data from `@auth_user`
+  # into a local database User struct for use in business logic and templates.
+  #
+  # ## Parameters
+  # - `nil`: No authenticated user
+  # - `%User{}`: Already a local User struct
+  # - `%{"id" => supabase_id, ...}`: Raw Supabase user data
+  #
+  # ## Returns
+  # - `{:ok, %User{}}`: Successfully processed user
+  # - `{:error, reason}`: Failed to process or no user
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
   defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do

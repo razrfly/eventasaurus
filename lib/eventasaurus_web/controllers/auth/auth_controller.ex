@@ -7,13 +7,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the login form.
   """
   def login(conn, _params) do
-    render(conn, :login_template)
+    render(conn, :login)
   end
 
   @doc """
   Process the login form submission.
   """
-  def authenticate(conn, %{"email" => email, "password" => password}) do
+  def authenticate(conn, %{"user" => %{"email" => email, "password" => password}}) do
     require Logger
     Logger.debug("Attempting login for email: #{email}")
 
@@ -28,7 +28,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
             Logger.debug("User data fetched: #{inspect(user)}")
 
             conn
-            |> assign(:current_user, user)
+            |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
             |> redirect(to: ~p"/dashboard")
 
@@ -36,7 +36,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
             Logger.error("Failed to store session: #{inspect(reason)}")
             conn
             |> put_flash(:error, "Error storing session data. Please contact support.")
-            |> render(:login_template)
+            |> render(:login)
         end
 
       # Special case for email already exists but with different Supabase ID
@@ -47,12 +47,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
           nil ->
             conn
             |> put_flash(:error, "Authentication failed. Please try again.")
-            |> render(:login_template)
+            |> render(:login)
 
           user ->
             Logger.info("Found existing user with email #{email}, logging in directly")
             conn
-            |> assign(:current_user, user)
+            |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
             |> redirect(to: ~p"/dashboard")
         end
@@ -68,70 +68,43 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
         conn
         |> put_flash(:error, error_message)
-        |> render(:login_template)
+        |> render(:login)
     end
+  end
+
+  # Fallback for flat parameters (backward compatibility)
+  def authenticate(conn, %{"email" => email, "password" => password}) do
+    authenticate(conn, %{"user" => %{"email" => email, "password" => password}})
   end
 
   @doc """
   Show the registration form.
   """
   def register(conn, _params) do
-    render(conn, :register_template)
+    render(conn, :register)
   end
 
   @doc """
   Process the registration form submission.
   """
-  def create_user(conn, %{"name" => name, "email" => email, "password" => password, "password_confirmation" => password_confirmation}) do
-    require Logger
+  def create_user(conn, %{"name" => name, "email" => email, "password" => password}) do
+    case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
+      {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_session(:refresh_token, refresh_token)
+        |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
+        |> redirect(to: ~p"/dashboard")
 
-    if password == password_confirmation do
-      case Auth.register(email, password, name) do
-        {:ok, user_data} ->
-          Logger.debug("User registered successfully: #{inspect(user_data)}")
+      {:error, %{"message" => message}} ->
+        conn
+        |> put_flash(:error, message)
+        |> render(:register)
 
-          # Automatically log the user in after registration
-          case Auth.authenticate(email, password) do
-            {:ok, auth_data} ->
-              case Auth.store_session(conn, auth_data) do
-                {:ok, conn} ->
-                  # Fetch current user for the session
-                  user = Auth.get_current_user(conn)
-
-                  conn
-                  |> assign(:current_user, user)
-                  |> put_flash(:info, "Your account has been created successfully and you're now logged in.")
-                  |> redirect(to: ~p"/dashboard")
-
-                {:error, _reason} ->
-                  # Registration was successful, but auto-login failed, so redirect to login page
-                  conn
-                  |> put_flash(:info, "Your account has been created successfully. Please log in.")
-                  |> redirect(to: ~p"/login")
-              end
-
-            {:error, _reason} ->
-              # Registration was successful, but we couldn't log in automatically
-              conn
-              |> put_flash(:info, "Your account has been created successfully. Please log in.")
-              |> redirect(to: ~p"/login")
-          end
-
-        {:error, reason} ->
-          Logger.error("Registration failed: #{inspect(reason)}")
-          error_message = case reason do
-            %{message: message} when is_binary(message) -> message
-            _ -> "There was an error creating your account. Please try again."
-          end
-
-          conn
-          |> put_flash(:error, error_message)
-          |> render(:register_template)
-      end
-    else
-      conn
-      |> put_flash(:error, "Passwords do not match. Please try again.")
-      |> render(:register_template)
+      {:error, _} ->
+        conn
+        |> put_flash(:error, "Unable to create account")
+        |> render(:register)
     end
   end
 
@@ -139,28 +112,17 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Logs out the current user.
   """
   def logout(conn, _params) do
-    # Get the current access token
-    token = get_session(conn, :access_token) || "mock_token"
-
-    case Auth.logout(token) do
-      :ok ->
-        conn
-        |> Auth.clear_session()
-        |> put_flash(:info, "You have been logged out successfully.")
-        |> redirect(to: ~p"/")
-
-      {:error, _reason} ->
-        conn
-        |> put_flash(:error, "There was an error logging out. Please try again.")
-        |> redirect(to: ~p"/")
-    end
+    conn
+    |> Auth.clear_session()
+    |> put_flash(:info, "You have been logged out")
+    |> redirect(to: ~p"/")
   end
 
   @doc """
   Show the forgot password form.
   """
   def forgot_password(conn, _params) do
-    render(conn, :forgot_password_template)
+    render(conn, :forgot_password)
   end
 
   @doc """
@@ -184,56 +146,45 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the reset password form.
   """
   def reset_password(conn, %{"token" => token}) do
-    render(conn, :reset_password_template, token: token)
+    render(conn, :reset_password, token: token)
   end
 
   @doc """
   Process the reset password form submission.
   """
-  def update_password(conn, %{"token" => token, "password" => password, "password_confirmation" => password_confirmation}) do
-    if password == password_confirmation do
-      case Auth.reset_password(token, password) do
-        {:ok, _} ->
-          conn
-          |> put_flash(:info, "Your password has been reset successfully. Please log in with your new password.")
-          |> redirect(to: ~p"/login")
+  def update_password(conn, %{"token" => token, "password" => password}) do
+    case Auth.update_user_password(token, password) do
+      {:ok, _} ->
+        conn
+        |> put_flash(:info, "Password updated successfully!")
+        |> redirect(to: ~p"/auth/login")
 
-        {:error, _reason} ->
-          conn
-          |> put_flash(:error, "There was an error resetting your password. Please try again.")
-          |> render(:reset_password_template, token: token)
-      end
-    else
-      conn
-      |> put_flash(:error, "Passwords do not match. Please try again.")
-      |> render(:reset_password_template, token: token)
+      {:error, %{"message" => message}} ->
+        conn
+        |> put_flash(:error, message)
+        |> render(:reset_password, token: token)
+
+      {:error, _} ->
+        conn
+        |> put_flash(:error, "Unable to update password")
+        |> render(:reset_password, token: token)
     end
   end
 
   @doc """
   Handle callback routes for authentication flows, such as OAuth or email confirmations.
   """
-  def callback(conn, params) do
-    case params do
-      %{"access_token" => access_token, "refresh_token" => refresh_token, "type" => type} ->
-        auth_data = %{access_token: access_token, refresh_token: refresh_token}
-        {:ok, conn} = Auth.store_session(conn, auth_data)
+  def callback(conn, %{"access_token" => access_token, "refresh_token" => refresh_token}) do
+    conn
+    |> put_session(:access_token, access_token)
+    |> put_session(:refresh_token, refresh_token)
+    |> put_flash(:info, "Successfully signed in!")
+    |> redirect(to: ~p"/dashboard")
+  end
 
-        message = case type do
-          "signup" -> "Your email has been confirmed and you're now signed in!"
-          "recovery" -> "Your password has been reset successfully."
-          _ -> "Authentication completed successfully."
-        end
-
-        conn
-        |> put_flash(:info, message)
-        |> redirect(to: ~p"/dashboard")
-
-      _ ->
-        # No tokens provided, just redirect to home
-        conn
-        |> put_flash(:error, "Invalid authentication callback. Please try logging in.")
-        |> redirect(to: ~p"/login")
-    end
+  def callback(conn, _params) do
+    conn
+    |> put_flash(:error, "Authentication failed")
+    |> redirect(to: ~p"/auth/login")
   end
 end
