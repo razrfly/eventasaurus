@@ -1,12 +1,18 @@
 defmodule EventasaurusWeb.Plugs.AuthPlug do
   @moduledoc """
-  Plug for handling authentication and session persistence.
+  Authentication plugs for Phoenix controllers.
 
-  This plug provides several functions:
+  This module provides plugs for handling user authentication in controllers.
+  It manages the dual user assignment pattern:
 
-  1. `fetch_current_user` - Loads the current user from the session and assigns it to conn
-  2. `require_authenticated_user` - Ensures the user is authenticated, redirects to login if not
-  3. `redirect_if_user_is_authenticated` - Redirects to dashboard if already authenticated
+  - `conn.assigns.auth_user`: Raw authentication data from Supabase (internal use only)
+  - Controllers should process this into a local User struct for business logic
+
+  ## Available Plugs
+
+  1. `fetch_auth_user` - Loads the authenticated user from the session and assigns it to conn
+  2. `require_authenticated_user` - Ensures a user is authenticated or redirects to login
+  3. `redirect_if_user_is_authenticated` - Redirects authenticated users away from auth pages
   """
 
   import Plug.Conn
@@ -26,37 +32,72 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   # @refresh_window 300
 
   @doc """
-  Fetches the current user from the session and assigns it to the connection.
+  Fetches the authenticated user from the session and assigns to `conn.assigns.auth_user`.
+
+  This plug extracts the access token from the session and fetches the user data
+  from Supabase. Controllers should process this raw data into a local User struct
+  for business logic operations.
+
+  ## Usage
+
+      plug :fetch_auth_user
   """
-  def fetch_current_user(conn, _opts) do
+  def fetch_auth_user(conn, _opts) do
     user = Auth.get_current_user(conn)
-    assign(conn, :current_user, user)
+    assign(conn, :auth_user, user)
+  end
+
+  @doc """
+  Processes the auth_user into a local User struct and assigns to `conn.assigns.user`.
+
+  This plug takes the raw auth data from `:auth_user` and converts it into a
+  proper User struct for use in templates and business logic.
+
+  ## Usage
+
+      plug :assign_user_struct
+  """
+  def assign_user_struct(conn, _opts) do
+    user = case ensure_user_struct(conn.assigns[:auth_user]) do
+      {:ok, user} -> user
+      {:error, _} -> nil
+    end
+    assign(conn, :user, user)
   end
 
   @doc """
   Requires that a user is authenticated.
 
-  If not authenticated, redirects to the login page with an error message.
+  If no authenticated user is found in `conn.assigns.auth_user`, redirects to login page.
+
+  ## Usage
+
+      plug :require_authenticated_user
   """
   def require_authenticated_user(conn, _opts) do
-    if conn.assigns[:current_user] do
+    if conn.assigns[:auth_user] do
       conn = maybe_refresh_token(conn)
       conn
     else
       conn
       |> put_flash(:error, "You must log in to access this page.")
-      |> redirect(to: ~p"/login")
+      |> redirect(to: ~p"/auth/login")
       |> halt()
     end
   end
 
   @doc """
-  Redirects to the dashboard if the user is already authenticated.
+  Redirects authenticated users away from authentication pages.
 
-  Useful for login/registration pages that shouldn't be accessible if logged in.
+  Useful for login/register pages that shouldn't be accessible to already
+  authenticated users.
+
+  ## Usage
+
+      plug :redirect_if_user_is_authenticated
   """
   def redirect_if_user_is_authenticated(conn, _opts) do
-    if conn.assigns[:current_user] do
+    if conn.assigns[:auth_user] do
       conn
       |> redirect(to: ~p"/dashboard")
       |> halt()
@@ -92,7 +133,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
             # If tokens couldn't be extracted, clear the session and redirect
             Auth.clear_session(conn)
             |> put_flash(:error, "Your session has expired. Please log in again.")
-            |> redirect(to: ~p"/login")
+            |> redirect(to: ~p"/auth/login")
             |> halt()
           end
 
@@ -100,7 +141,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
           # If refresh fails, clear the session and redirect to login
           Auth.clear_session(conn)
           |> put_flash(:error, "Your session has expired. Please log in again.")
-          |> redirect(to: ~p"/login")
+          |> redirect(to: ~p"/auth/login")
           |> halt()
       end
     else
@@ -121,4 +162,12 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
         nil
     end
   end
+
+  # Helper function to ensure we have a proper User struct
+  defp ensure_user_struct(nil), do: {:error, :no_user}
+  defp ensure_user_struct(%EventasaurusApp.Accounts.User{} = user), do: {:ok, user}
+  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
+    EventasaurusApp.Accounts.find_or_create_from_supabase(supabase_user)
+  end
+  defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 end
