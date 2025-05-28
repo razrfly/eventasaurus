@@ -73,7 +73,7 @@
     data-supabase-api-key={supabase_api_key}
   >
     <!-- Radiant-style Header -->
-    <header class="border-b border-gray-200 bg-white/95 backdrop-blur-sm sticky top-0 z-40">
+    <header class="border-b border-white/10 backdrop-blur-md sticky top-0 z-40">
       <.container class="py-4">
         <nav class="flex items-center justify-between">
           <div class="flex items-center space-x-8">
@@ -82,20 +82,20 @@
             </a>
             <%= if @conn.assigns[:user] do %>
               <div class="hidden lg:flex items-center space-x-6">
-                <a href="/dashboard" class="text-sm font-medium text-gray-600 hover:text-gray-950">
+                <a href="/dashboard" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                   Dashboard
                 </a>
-                <a href="/events" class="text-sm font-medium text-gray-600 hover:text-gray-950">
+                <a href="/events" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                   My Events
                 </a>
-                <a href="/about" class="text-sm font-medium text-gray-600 hover:text-gray-950">
+                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                   About
                 </a>
               </div>
             <% else %>
               <div class="hidden sm:flex items-center space-x-6">
-                <a href="/about" class="text-sm font-medium text-gray-600 hover:text-gray-950">About</a>
-                <a href="/whats-new" class="text-sm font-medium text-gray-600 hover:text-gray-950">What's New</a>
+                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950">About</a>
+                <a href="/whats-new" class="text-sm font-medium text-gray-700 hover:text-gray-950">What's New</a>
               </div>
             <% end %>
           </div>
@@ -103,15 +103,15 @@
           <div class="flex items-center space-x-4">
             <%= if @conn.assigns[:user] do %>
               <!-- Authenticated user UI -->
-              <span class="text-sm text-gray-600">
+              <span class="text-sm text-gray-700">
                 <%= @conn.assigns[:user].email %>
               </span>
-              <a href="/auth/logout" class="text-sm font-medium text-gray-600 hover:text-gray-950">
+              <a href="/auth/logout" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                 Log out
               </a>
             <% else %>
               <!-- Anonymous user UI -->
-              <a href="/login" class="text-sm font-medium text-gray-600 hover:text-gray-950">
+              <a href="/login" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                 Sign In
               </a>
               <a href="/register" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 shadow-md text-base font-medium whitespace-nowrap text-white hover:bg-gray-800">
