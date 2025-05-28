@@ -3,9 +3,15 @@
   
   <div class="min-h-screen py-8">
     <.container>
-      <div class="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/20 p-8">
-        <%= @inner_content %>
-      </div>
+      <%= unless assigns[:hide_gradient] do %>
+        <div class="p-8">
+          <%= @inner_content %>
+        </div>
+      <% else %>
+        <div class="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/20 p-8">
+          <%= @inner_content %>
+        </div>
+      <% end %>
     </.container>
   </div>
 </main> 

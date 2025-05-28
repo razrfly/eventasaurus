@@ -72,6 +72,13 @@
     data-supabase-url={supabase_url}
     data-supabase-api-key={supabase_api_key}
   >
+    <!-- Gradient Background for pages that need it -->
+    <%= unless assigns[:hide_gradient] do %>
+      <div class="fixed inset-0 -z-10 overflow-hidden">
+        <.gradient_background theme="default" />
+      </div>
+    <% end %>
+    
     <!-- Radiant-style Header -->
     <header class="border-b border-white/10 backdrop-blur-md sticky top-0 z-40">
       <.container class="py-4">
