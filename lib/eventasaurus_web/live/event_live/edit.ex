@@ -94,7 +94,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # ========== Form and Validation ==========
 
-  defp save_event(socket, event, event_params) do
+  defp save_event(_socket, event, event_params) do
     Events.update_event(event, event_params)
   end
 
