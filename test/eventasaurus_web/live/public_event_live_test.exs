@@ -224,24 +224,53 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
 
       # Open the registration modal
       html = render_click(view, "show_registration_modal")
-      
+
       # Verify the modal opens and contains all required form elements
       assert html =~ "Register for Event"
       assert html =~ "Your Info"
       assert html =~ "We&#39;ll create an account for you so you can manage your registration."
-      
+
       # Check form elements are present
       assert has_element?(view, "form#registration-form")
       assert has_element?(view, "input[name='registration[name]']")
       assert has_element?(view, "input[name='registration[email]']")
       assert has_element?(view, "button[type='submit']")
-      
+
       # Check that the form has proper attributes for component targeting
       assert html =~ "phx-submit=\"submit\""
       assert html =~ "phx-change=\"validate\""
-      
+
       # Verify the modal can be interacted with
       assert has_element?(view, "button", "Register for Event")
+    end
+  end
+
+  describe "Theme Functionality Tests" do
+    test "cosmic theme CSS is loaded for cosmic events", %{conn: conn} do
+      # Create an event with cosmic theme
+      cosmic_event = event_fixture(%{theme: :cosmic})
+
+      {:ok, _view, html} = live(conn, ~p"/#{cosmic_event.slug}")
+
+      # Check that the cosmic theme CSS link is present in the head
+      assert html =~ ~s(href="/themes/cosmic.css")
+
+      # Check that the body has the cosmic theme class
+      assert html =~ ~s(class="bg-white antialiased overflow-x-hidden min-h-screen flex flex-col theme-cosmic")
+    end
+
+    test "minimal theme does not load extra CSS", %{conn: conn} do
+      # Create an event with minimal theme (or default)
+      minimal_event = event_fixture(%{theme: :minimal})
+
+      {:ok, _view, html} = live(conn, ~p"/#{minimal_event.slug}")
+
+      # Check that no theme CSS link is present for minimal theme
+      refute html =~ ~s(/themes/minimal.css)
+      refute html =~ ~s(/themes/cosmic.css)
+
+      # Check that the body has the minimal theme class
+      assert html =~ ~s(class="bg-white antialiased overflow-x-hidden min-h-screen flex flex-col theme-minimal")
     end
   end
 end
