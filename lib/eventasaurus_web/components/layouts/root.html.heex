@@ -18,7 +18,9 @@
     <% end %>
     
     <!-- Theme font links -->
-    <%= EventasaurusWeb.ThemeHelpers.theme_font_links() %>
+    <%= if assigns[:theme] do %>
+      <%= Phoenix.HTML.raw(EventasaurusWeb.ThemeHelpers.theme_font_link(assigns[:theme])) %>
+    <% end %>
     
     <!-- Google Fonts - Knewave for logo -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -88,27 +90,27 @@
     <% end %>
     
     <!-- Radiant-style Header -->
-    <header class="border-b border-white/10 dark:border-white/10 backdrop-blur-md sticky top-0 z-40 bg-white/80 dark:bg-gray-900/20">
+    <header class="border-b border-white/10 backdrop-blur-md sticky top-0 z-40">
       <.container class="py-4">
         <nav class="flex items-center justify-between">
           <div class="flex items-center space-x-8">
-            <.logo theme={assigns[:theme]} />
+            <.logo />
             <%= if @conn.assigns[:user] do %>
               <div class="hidden lg:flex items-center space-x-6">
-                <a href="/dashboard" class="text-sm font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
+                <a href="/dashboard" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                   Dashboard
                 </a>
-                <a href="/events" class="text-sm font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
+                <a href="/events" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                   My Events
                 </a>
-                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
+                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                   About
                 </a>
               </div>
             <% else %>
               <div class="hidden sm:flex items-center space-x-6">
-                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">About</a>
-                <a href="/whats-new" class="text-sm font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">What's New</a>
+                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950">About</a>
+                <a href="/whats-new" class="text-sm font-medium text-gray-700 hover:text-gray-950">What's New</a>
               </div>
             <% end %>
           </div>
@@ -116,18 +118,18 @@
           <div class="flex items-center space-x-4">
             <%= if @conn.assigns[:user] do %>
               <!-- Authenticated user UI -->
-              <span class="text-sm text-gray-700 dark:text-gray-300">
+              <span class="text-sm text-gray-700">
                 <%= @conn.assigns[:user].email %>
               </span>
-              <a href="/auth/logout" class="text-sm font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
+              <a href="/auth/logout" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                 Log out
               </a>
             <% else %>
               <!-- Anonymous user UI -->
-              <a href="/login" class="text-sm font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
+              <a href="/login" class="text-sm font-medium text-gray-700 hover:text-gray-950">
                 Sign In
               </a>
-              <a href="/register" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent shadow-md text-base font-medium whitespace-nowrap bg-gray-950 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100">
+              <a href="/register" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 shadow-md text-base font-medium whitespace-nowrap text-white hover:bg-gray-800">
                 Get Started
               </a>
             <% end %>
