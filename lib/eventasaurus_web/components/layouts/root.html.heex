@@ -98,20 +98,20 @@
             <.logo />
             <%= if @conn.assigns[:user] do %>
               <div class="hidden lg:flex items-center space-x-6">
-                <a href="/dashboard" class="text-sm font-medium text-gray-700 hover:text-gray-950">
+                <a href="/dashboard" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white">
                   Dashboard
                 </a>
-                <a href="/events" class="text-sm font-medium text-gray-700 hover:text-gray-950">
+                <a href="/events" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white">
                   My Events
                 </a>
-                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950">
+                <a href="/about" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white">
                   About
                 </a>
               </div>
             <% else %>
               <div class="hidden sm:flex items-center space-x-6">
-                <a href="/about" class="text-sm font-medium text-gray-700 hover:text-gray-950">About</a>
-                <a href="/whats-new" class="text-sm font-medium text-gray-700 hover:text-gray-950">What's New</a>
+                <a href="/about" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white">About</a>
+                <a href="/whats-new" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white">What's New</a>
               </div>
             <% end %>
           </div>
@@ -119,18 +119,18 @@
           <div class="flex items-center space-x-4">
             <%= if @conn.assigns[:user] do %>
               <!-- Authenticated user UI -->
-              <span class="text-sm text-gray-700">
+              <span class="text-sm text-gray-700 dark:text-gray-300">
                 <%= @conn.assigns[:user].email %>
               </span>
-              <a href="/auth/logout" class="text-sm font-medium text-gray-700 hover:text-gray-950">
+              <a href="/auth/logout" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white">
                 Log out
               </a>
             <% else %>
               <!-- Anonymous user UI -->
-              <a href="/login" class="text-sm font-medium text-gray-700 hover:text-gray-950">
+              <a href="/login" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white">
                 Sign In
               </a>
-              <a href="/register" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 shadow-md text-base font-medium whitespace-nowrap text-white hover:bg-gray-800">
+              <a href="/register" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 dark:bg-white shadow-md text-base font-medium whitespace-nowrap text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100">
                 Get Started
               </a>
             <% end %>
