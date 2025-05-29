@@ -644,34 +644,6 @@ defmodule EventasaurusWeb.PublicEventLive do
           }
         }
 
-        // Handle theme-specific fonts
-        // Remove existing theme fonts (those with Google Fonts for specific themes)
-        const existingThemeFonts = document.querySelectorAll('link[href*="fonts.googleapis.com"][data-theme-font="true"]');
-        existingThemeFonts.forEach(link => link.remove());
-
-        // Add new theme fonts if needed
-        const themeFont = getThemeFontUrl(newTheme);
-        if (themeFont) {
-          // Add preconnect links
-          const preconnect = document.createElement('link');
-          preconnect.rel = 'preconnect';
-          preconnect.href = 'https://fonts.googleapis.com';
-          document.head.appendChild(preconnect);
-
-          const preconnectCrossorigin = document.createElement('link');
-          preconnectCrossorigin.rel = 'preconnect';
-          preconnectCrossorigin.href = 'https://fonts.gstatic.com';
-          preconnectCrossorigin.crossOrigin = 'anonymous';
-          document.head.appendChild(preconnectCrossorigin);
-
-          // Add font link
-          const fontLink = document.createElement('link');
-          fontLink.rel = 'stylesheet';
-          fontLink.href = themeFont;
-          fontLink.setAttribute('data-theme-font', 'true');
-          document.head.appendChild(fontLink);
-        }
-
         // Handle dark/light mode for navbar and protected UI elements
         const htmlElement = document.documentElement;
         const darkThemes = ['cosmic']; // Only cosmic is currently a dark theme
@@ -690,20 +662,6 @@ defmodule EventasaurusWeb.PublicEventLive do
 
         console.log(`Theme switched to: ${newTheme}`);
       });
-
-      // Helper function to get font URL for each theme
-      function getThemeFontUrl(theme) {
-        const fontUrls = {
-          'cosmic': 'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap',
-          'velocity': 'https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap',
-          'retro': 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap',
-          'celebration': 'https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap',
-          'nature': 'https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap',
-          'professional': 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap'
-        };
-
-        return fontUrls[theme] || null;
-      }
     </script>
     """
   end
