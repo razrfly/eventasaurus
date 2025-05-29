@@ -1,0 +1,141 @@
+# Theme Refactoring & Selective Styling PRD
+
+## Project Overview
+
+**Project Name**: Theme System Refactoring for Selective Font Application
+**Objective**: Fix theme system to apply backgrounds universally while limiting fonts to content areas only
+**Target**: Eventasaurus Phoenix/LiveView Application
+
+## Problem Statement
+
+The current theme system applies styling too broadly, causing:
+- Navbar fonts being overridden by theme fonts (breaking Inter consistency)
+- Footer fonts being overridden by theme fonts
+- Notification/toast fonts being overridden by theme fonts
+- Poor separation between universal theming (backgrounds) and selective theming (fonts)
+
+Previous attempt in branch `05-28-seperation_of_navbar_and_footer_from_css_themes` broke:
+- Background application (no longer full-page)
+- Visual cohesion between themed and non-themed areas
+- Font inheritance for UI elements outside content wrapper
+
+## Success Criteria
+
+### Primary Goals
+1. **Universal Backgrounds**: Theme backgrounds (including animations like cosmic starfield) apply to entire page
+2. **Selective Fonts**: Theme fonts only apply to designated content areas
+3. **Protected UI Elements**: Navbar, footer, and notifications maintain Inter font and original styling
+4. **Visual Cohesion**: Seamless integration between themed and non-themed areas
+5. **All Themes Working**: Cosmic, velocity, retro, and all other themes function correctly
+
+### Technical Requirements
+1. **CSS Architecture**: Use scoped selectors for fonts, universal selectors for backgrounds
+2. **Semantic Classes**: Use meaningful CSS classes (.main-content, .event-content, etc.)
+3. **No Protective CSS**: Avoid `!important` overrides for protection; use inclusion instead
+4. **Performance**: No degradation in CSS performance or bundle size
+5. **Maintainability**: Clear separation of concerns for future theme additions
+
+## Technical Specifications
+
+### Core Architecture
+- **Universal Elements**: Backgrounds, CSS variables, root-level theme properties
+- **Protected Elements**: Navbar, footer, notifications, auth UI (keep Inter font)
+- **Themed Elements**: Main content, event pages, dashboard, user-generated content
+
+### CSS Strategy
+```css
+/* Universal: Apply to entire body */
+.theme-cosmic {
+  background: /* theme background */;
+  --color-primary: /* theme colors */;
+  --font-family: /* theme font */;
+}
+
+/* Selective: Apply only to content areas */
+.theme-cosmic .main-content,
+.theme-cosmic .event-content {
+  font-family: var(--font-family);
+  color: var(--color-text);
+}
+```
+
+### HTML Structure Requirements
+- Remove problematic `.theme-content` wrapper
+- Use semantic content classes (.main-content, .event-content, .dashboard-content)
+- Maintain clean separation between layout and content styling
+
+## Implementation Phases
+
+### Phase 1: Fix Background and Root Variables
+- Restore universal background application to body element
+- Ensure CSS variables are properly defined at theme root level
+- Fix starfield animations and other background effects for full-page coverage
+
+### Phase 2: Implement Selective Font Application
+- Create scoped CSS selectors for theme fonts
+- Apply fonts only to designated content areas
+- Ensure navbar, footer, notifications remain unaffected
+
+### Phase 3: Update Layout Structure
+- Remove `.theme-content` wrapper approach
+- Implement semantic content classes
+- Update LiveView templates with proper class structure
+
+### Phase 4: Testing and Validation
+- Test all existing themes (cosmic, velocity, retro, professional)
+- Verify navbar/footer/notification protection
+- Test responsive design across devices
+- Validate performance impact
+
+## File Modifications Required
+
+### CSS Files
+- `assets/css/app.css` - Base theme system updates
+- `assets/css/themes/cosmic.css` - Scoped font application
+- `assets/css/themes/velocity.css` - Scoped font application  
+- `assets/css/themes/retro.css` - Scoped font application
+- All other theme files in `assets/css/themes/`
+
+### Template Files
+- `lib/eventasaurus_web/components/layouts/root.html.heex` - Layout structure
+- Event LiveView templates - Add semantic content classes
+- Dashboard LiveView templates - Add semantic content classes
+- User profile templates - Add semantic content classes
+
+### New CSS Classes
+- `.main-content` - Primary content wrapper
+- `.event-content` - Event-specific content
+- `.dashboard-content` - Dashboard-specific content  
+- `.user-content` - User profile content
+
+## Technology Stack
+- **Frontend**: Phoenix LiveView, TailwindCSS
+- **CSS**: Custom theme system with CSS variables
+- **Fonts**: Inter (universal), theme-specific fonts (selective)
+- **Build**: Phoenix asset pipeline with esbuild
+
+## Testing Strategy
+1. **Visual Testing**: Verify all themes render correctly
+2. **Font Inheritance Testing**: Confirm navbar/footer maintain Inter
+3. **Notification Testing**: Verify toasts display with proper fonts
+4. **Responsive Testing**: Test across mobile/tablet/desktop
+5. **Performance Testing**: Ensure no CSS performance degradation
+
+## Quality Assurance
+- All existing functionality must remain intact
+- No compilation warnings or errors
+- Cross-browser compatibility (Chrome, Firefox, Safari)
+- Accessibility standards maintained
+- Clean, maintainable CSS architecture
+
+## Timeline Expectations
+- Phase 1: Background fixes (1-2 implementation sessions)
+- Phase 2: Selective fonts (1-2 implementation sessions)  
+- Phase 3: Layout updates (2-3 implementation sessions)
+- Phase 4: Testing and fixes (1-2 implementation sessions)
+
+## Future Considerations
+- Easy addition of new themes without affecting protected elements
+- Potential for user-customizable theme elements
+- Mobile-first theme variations
+- Dark/light mode compatibility within themes 

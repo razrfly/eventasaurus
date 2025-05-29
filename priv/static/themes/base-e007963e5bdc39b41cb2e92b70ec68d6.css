@@ -1,0 +1,190 @@
+/* Base theme foundation with CSS custom properties */
+:root {
+  /* Default theme variables (minimal theme) */
+  --color-primary: #000000;
+  --color-secondary: #333333;
+  --color-accent: #0066cc;
+  --color-background: #ffffff;
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+  --color-border: #e5e7eb;
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 600;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 8px;
+  --border-radius-large: 12px;
+  --shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-style-large: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  /* Component specific */
+  --button-border-radius: 8px;
+  --card-border-radius: 12px;
+  --input-border-radius: 6px;
+}
+
+/* Base theme styles that apply to all themes */
+.theme-container {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography */
+.theme-container h1, 
+.theme-container h2, 
+.theme-container h3,
+.theme-container h4, 
+.theme-container h5, 
+.theme-container h6 {
+  font-weight: var(--heading-weight);
+  color: var(--color-primary);
+  font-family: var(--font-family-heading);
+  letter-spacing: -0.02em;
+}
+
+.theme-container h1 {
+  font-size: 2.5rem;
+  line-height: 1.2;
+}
+
+.theme-container h2 {
+  font-size: 2rem;
+  line-height: 1.3;
+}
+
+.theme-container h3 {
+  font-size: 1.5rem;
+  line-height: 1.4;
+}
+
+/* Text colors */
+.theme-container .text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.theme-container .text-accent {
+  color: var(--color-accent);
+}
+
+/* Buttons */
+.theme-container .btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--button-border-radius);
+  box-shadow: var(--shadow-style);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-container .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-style-large);
+}
+
+.theme-container .btn-secondary {
+  background-color: var(--color-secondary);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--button-border-radius);
+  box-shadow: var(--shadow-style);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-container .btn-secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-style-large);
+}
+
+.theme-container .btn-outline {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 2px solid var(--color-primary);
+  padding: 10px 22px; /* Slightly less padding to account for border */
+  border-radius: var(--button-border-radius);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-container .btn-outline:hover {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+/* Cards */
+.theme-container .card {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-border-radius);
+  box-shadow: var(--shadow-style);
+  padding: 24px;
+  transition: all 0.2s ease;
+}
+
+.theme-container .card:hover {
+  box-shadow: var(--shadow-style-large);
+}
+
+/* Forms */
+.theme-container .form-input {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--input-border-radius);
+  padding: 12px 16px;
+  font-size: 16px;
+  color: var(--color-text);
+  transition: border-color 0.2s ease;
+}
+
+.theme-container .form-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+/* Layout components */
+.theme-container .accent-element {
+  color: var(--color-accent);
+}
+
+.theme-container .border-color {
+  border-color: var(--color-border);
+}
+
+.theme-container .bg-secondary {
+  background-color: var(--color-secondary);
+}
+
+/* Event specific components */
+.theme-container .event-date-badge {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-style);
+}
+
+.theme-container .event-cover-wrapper {
+  border-radius: var(--card-border-radius);
+  box-shadow: var(--shadow-style);
+  border: 1px solid var(--color-border);
+} 
