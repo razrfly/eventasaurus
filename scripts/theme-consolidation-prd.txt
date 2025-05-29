@@ -1,0 +1,238 @@
+# Theme Consolidation & Protection System PRD
+
+## Project Overview
+
+**Project Name:** Theme System Consolidation & UI Protection
+**Version:** 2.0
+**Target Completion:** Q1 2025
+**Priority:** High - Critical maintainability and UX issues
+
+## Problem Statement
+
+### Current Issues
+1. **Massive Code Duplication**: Theme files range from 183-387 lines with 70-80% redundant code
+2. **UI Component Breakage**: Notifications, toasts, navbar, and footer fonts break on theme changes
+3. **Overscoped Styling**: Themes affect spacing/layout when they should only control visual appearance
+4. **Maintenance Nightmare**: Adding a button style requires editing 6+ theme files
+5. **Inconsistent Architecture**: Mixed selector patterns (`.theme-name` vs `body.theme-name`)
+6. **Performance Impact**: Excessive CSS parsing due to repeated selectors
+
+### Business Impact
+- **Developer Productivity**: 3-5x longer to implement theme changes
+- **User Experience**: Broken notifications reduce usability
+- **Technical Debt**: Unsustainable codebase growth
+- **Quality**: Inconsistent spacing and layout across themes
+
+## Solution Requirements
+
+### Functional Requirements
+
+#### F1: Protected UI Components
+- **F1.1**: Navbar, footer, notifications, toasts, modals, dropdowns must never be affected by themes
+- **F1.2**: These components must maintain Inter font regardless of theme
+- **F1.3**: Component color schemes must remain intact (light/dark mode only)
+- **F1.4**: Accessibility features (focus indicators, ARIA) must be protected
+
+#### F2: Theme Scope Limitation
+- **F2.1**: Themes may only affect designated content areas (.main-content, .event-content, etc.)
+- **F2.2**: Themes control ONLY: colors, fonts, transparency, border radius, visual effects
+- **F2.3**: Themes CANNOT control: spacing, layout, positioning, component structure
+- **F2.4**: All themes must produce identical spacing and layout
+
+#### F3: Code Consolidation
+- **F3.1**: Reduce theme file sizes by 70-80% (target: 60-80 lines maximum)
+- **F3.2**: Eliminate selector repetition using modern CSS techniques
+- **F3.3**: Centralize common component patterns in base.css
+- **F3.4**: Use CSS custom properties for all theme variations
+
+#### F4: Consistent Architecture
+- **F4.1**: Standardize on `body.theme-[name]` selector pattern
+- **F4.2**: Use `:is()` pseudo-class for efficient multi-selector targeting
+- **F4.3**: Implement variable-based theming system
+- **F4.4**: Maintain single source of truth for component structures
+
+### Technical Requirements
+
+#### T1: File Structure
+```
+assets/css/themes/
+├── base.css                 # Universal structure & protected UI (expanded)
+├── ui-protection.css        # Explicit protection for universal components
+├── theme-variables.css      # Shared theme variable definitions
+├── cosmic.css              # 60-80 lines max (variables + effects only)
+├── celebration.css         # 60-80 lines max (variables + effects only)
+├── velocity.css            # 60-80 lines max (variables + effects only)
+├── professional.css        # 60-80 lines max (variables + effects only)
+├── retro.css              # 60-80 lines max (variables + effects only)
+├── nature.css             # 60-80 lines max (variables + effects only)
+└── minimal.css            # Minimal overrides only
+```
+
+#### T2: CSS Architecture Rules
+- **T2.1**: All themes use identical selector pattern:
+  ```css
+  body.theme-[name] :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) [selector]
+  ```
+- **T2.2**: Protected components use explicit font protection:
+  ```css
+  .navbar *, .footer *, .notification *, .toast * {
+    font-family: 'Inter', sans-serif !important;
+  }
+  ```
+- **T2.3**: Themes primarily override CSS custom properties
+- **T2.4**: No `!important` declarations except for UI protection
+
+#### T3: Variable System
+- **T3.1**: Standardized color palette variables (8 colors maximum per theme)
+- **T3.2**: Typography scaling variables (not absolute sizes)
+- **T3.3**: Effect variables (gradients, shadows, animations)
+- **T3.4**: Layout scaling variables (border-radius, transparency)
+
+#### T4: Performance Requirements
+- **T4.1**: Reduce total theme CSS size by 60%+ 
+- **T4.2**: Eliminate repeated selector calculations
+- **T4.3**: Maintain CSS parsing performance
+- **T4.4**: No runtime CSS generation
+
+### Non-Functional Requirements
+
+#### NF1: Maintainability
+- Adding new theme should require <100 lines of code
+- Component behavior changes should affect all themes automatically
+- Clear separation between structure and appearance
+- Self-documenting variable naming
+
+#### NF2: Compatibility
+- Maintain backward compatibility with existing theme switching
+- Support all current browsers (Chrome 90+, Firefox 88+, Safari 14+)
+- Work with existing Tailwind CSS classes
+- Preserve all current theme visual characteristics
+
+#### NF3: Testing
+- Automated tests for UI component protection
+- Visual regression tests for all themes
+- Performance benchmarks for CSS load times
+- Cross-browser compatibility verification
+
+## Implementation Strategy
+
+### Phase 1: Foundation & Protection (Week 1)
+1. **Create ui-protection.css**: Immediate fix for broken notifications/navbar
+2. **Expand base.css**: Add universal component structures
+3. **Test protection**: Verify UI components work across all themes
+4. **Document architecture**: Create clear CSS rules and patterns
+
+### Phase 2: Theme Consolidation (Week 2-3)
+1. **Convert cosmic theme**: Simplest theme, establish pattern
+2. **Create theme-variables.css**: Shared variable definitions
+3. **Test extensively**: Ensure no visual regressions
+4. **Convert velocity theme**: Apply proven pattern
+5. **Convert remaining themes**: Professional, retro, nature, celebration
+
+### Phase 3: Optimization & Polish (Week 4)
+1. **Performance audit**: Measure CSS size reduction
+2. **Cross-browser testing**: Verify compatibility
+3. **Documentation**: Update CSS architecture documentation
+4. **Code review**: Ensure maintainability standards
+
+### Phase 4: Validation & Deployment (Week 5)
+1. **Visual regression testing**: Compare before/after screenshots
+2. **User acceptance testing**: Verify theme switching works
+3. **Performance validation**: Confirm load time improvements
+4. **Production deployment**: Roll out consolidated themes
+
+## Success Metrics
+
+### Quantitative
+- **Code Reduction**: 70% reduction in theme file sizes
+- **Performance**: 30% faster CSS parsing
+- **File Count**: Maintain same number of themes with drastically smaller files
+- **Selector Efficiency**: 80% reduction in duplicate selectors
+
+### Qualitative  
+- **Developer Experience**: Easier theme modification and creation
+- **UI Consistency**: No more broken notifications or UI components
+- **Maintainability**: Single location for component behavior changes
+- **Visual Quality**: Identical spacing and layout across all themes
+
+## Risk Assessment
+
+### High Risk
+- **Breaking existing themes**: Mitigation through extensive testing
+- **CSS specificity conflicts**: Mitigation through careful selector ordering
+
+### Medium Risk
+- **Browser compatibility**: Mitigation through progressive enhancement
+- **Performance regressions**: Mitigation through benchmarking
+
+### Low Risk
+- **Variable naming conflicts**: Mitigation through namespacing
+- **Documentation drift**: Mitigation through automated docs
+
+## Dependencies
+
+### Internal
+- Current theme system knowledge
+- Existing CSS architecture
+- Theme switching functionality
+- Component library stability
+
+### External  
+- Modern CSS support (:is() pseudo-class)
+- CSS custom properties support
+- Tailwind CSS compatibility
+- Build system CSS processing
+
+## Acceptance Criteria
+
+### Must Have
+- [ ] All themes reduced to <80 lines each
+- [ ] Notifications/toasts/navbar never break on theme change
+- [ ] Identical spacing/layout across all themes
+- [ ] All existing theme visual characteristics preserved
+- [ ] No performance regressions
+
+### Should Have
+- [ ] 70%+ reduction in total theme CSS size
+- [ ] Self-documenting variable system
+- [ ] Clear CSS architecture documentation
+- [ ] Automated protection tests
+
+### Could Have
+- [ ] Theme creation wizard/template
+- [ ] Runtime theme validation
+- [ ] Advanced animation capabilities
+- [ ] Theme-specific component variants
+
+## Appendix
+
+### Current Theme Analysis
+- **Celebration**: 387 lines (worst offender)
+- **Professional**: 317 lines  
+- **Nature**: 316 lines
+- **Cosmic**: 247 lines (cleanest)
+- **Retro**: 238 lines
+- **Velocity**: 183 lines
+- **Minimal**: 12 lines (target reference)
+
+### Protected Component List
+- Navigation bar (.navbar)
+- Footer (.footer) 
+- Notifications (.notification, .toast)
+- Modals (.modal, [role="dialog"])
+- Dropdowns (.dropdown)
+- Alert components ([role="alert"])
+- Focus indicators (:focus, :focus-visible)
+- Loading states (.loading, .spinner)
+
+### Theme Capabilities Matrix
+| Capability | Allowed | Forbidden |
+|------------|---------|-----------|
+| Colors | ✅ All color properties | ❌ Layout colors only |
+| Typography | ✅ Font family, size scaling | ❌ Line heights, spacing |
+| Visual Effects | ✅ Gradients, shadows, animations | ❌ Transform positioning |
+| Borders | ✅ Radius, style, color | ❌ Width affecting layout |
+| Backgrounds | ✅ Colors, images, patterns | ❌ Size affecting content |
+| Transparency | ✅ Opacity, backdrop-filter | ❌ Display/visibility |
+
+This PRD provides the comprehensive foundation for rebuilding our theme system to be maintainable, performant, and reliable. 
