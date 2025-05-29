@@ -251,27 +251,11 @@ defmodule EventasaurusWeb.EventComponents do
                 id={f[:theme].id}
                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               >
-                <option value="minimal" selected={f[:theme].value == "minimal" || f[:theme].value == :minimal}>
-                  Minimal - Clean and simple design
-                </option>
-                <option value="cosmic" selected={f[:theme].value == "cosmic" || f[:theme].value == :cosmic}>
-                  Cosmic - Space-inspired with dark backgrounds
-                </option>
-                <option value="velocity" selected={f[:theme].value == "velocity" || f[:theme].value == :velocity}>
-                  Velocity - Tech/futuristic with gradients
-                </option>
-                <option value="retro" selected={f[:theme].value == "retro" || f[:theme].value == :retro}>
-                  Retro - Vintage 80s aesthetic
-                </option>
-                <option value="celebration" selected={f[:theme].value == "celebration" || f[:theme].value == :celebration}>
-                  Celebration - Party themed with bright colors
-                </option>
-                <option value="nature" selected={f[:theme].value == "nature" || f[:theme].value == :nature}>
-                  Nature - Organic patterns with earth tones
-                </option>
-                <option value="professional" selected={f[:theme].value == "professional" || f[:theme].value == :professional}>
-                  Professional - Corporate/business focused
-                </option>
+                <%= for theme <- EventasaurusWeb.ThemeComponents.available_themes() do %>
+                  <option value={theme.value} selected={f[:theme].value == theme.value || f[:theme].value == String.to_atom(theme.value)}>
+                    <%= theme.label %> - <%= theme.description %>
+                  </option>
+                <% end %>
               </select>
               <p class="mt-2 text-sm text-gray-500">
                 The theme will customize the appearance of your public event page
