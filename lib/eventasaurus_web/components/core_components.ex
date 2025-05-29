@@ -85,7 +85,7 @@ defmodule EventasaurusWeb.CoreComponents do
                   class="-m-3 flex-none p-3 opacity-20 hover:opacity-40"
                   aria-label={gettext("close")}
                 >
-                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
+                  <.icon name="hero-x-mark-solid" style="height: 1rem !important; width: 1rem !important; border: 0 !important; outline: 0 !important; border-style: none !important; border-width: 0 !important; display: block !important; color: #374151 !important; fill: currentColor !important;" />
                 </button>
               </div>
               <div id={"#{@id}-content"}>
@@ -123,29 +123,6 @@ defmodule EventasaurusWeb.CoreComponents do
   end
 
   @doc """
-  Renders a broken dinosaur icon for error states.
-  """
-  def broken_dinosaur_icon(assigns) do
-    ~H"""
-    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-      <!-- Dinosaur body (cracked) -->
-      <path d="M8 20c-1 0-2-.5-2-1.5L5 15c-.5-1-1-2-1-3.5C4 9 6 7 8.5 7h7C18 7 20 9 20 11.5c0 1.5-.5 2.5-1 3.5l-1 3.5c0 1-1 1.5-2 1.5H8z" stroke="currentColor" stroke-width="0.5" fill="none" stroke-dasharray="2,1"/>
-      <!-- Head (cracked) -->
-      <path d="M6 11c0-1.5 1-3 2.5-3.5L10 7c.5-.3 1-.5 1.5-.5s1 .2 1.5.5l1.5.5C15.5 8 16.5 9.5 16.5 11" stroke="currentColor" stroke-width="0.5" fill="none" stroke-dasharray="2,1"/>
-      <!-- Eyes (X'd out) -->
-      <path d="M9.5 9.5L10.5 10.5M10.5 9.5L9.5 10.5" stroke="currentColor" stroke-width="1"/>
-      <path d="M13.5 9.5L14.5 10.5M14.5 9.5L13.5 10.5" stroke="currentColor" stroke-width="1"/>
-      <!-- Tail (broken) -->
-      <path d="M20 12l2-1c.5-.3.5-1 0-1.3l-1-.7" stroke="currentColor" stroke-width="0.5" fill="none" stroke-dasharray="1,1"/>
-      <!-- Legs (wobbly) -->
-      <path d="M9 20v2M11 20v2M13 20v2M15 20v2" stroke="currentColor" stroke-width="1" stroke-dasharray="1,0.5"/>
-      <!-- Crack lines -->
-      <path d="M12 7L12 15M8 12L16 12" stroke="currentColor" stroke-width="0.3" opacity="0.7"/>
-    </svg>
-    """
-  end
-
-  @doc """
   Renders flash notices.
 
   ## Examples
@@ -168,22 +145,40 @@ defmodule EventasaurusWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class={[
-        "fixed top-2 right-2 w-80 sm:w-96 z-50 rounded-lg p-3 ring-1",
-        @kind == :info && "bg-emerald-50 text-emerald-800 ring-emerald-500 fill-cyan-900",
-        @kind == :error && "bg-rose-50 text-rose-900 shadow-md ring-rose-500 fill-rose-900"
-      ]}
+      style={
+        case @kind do
+          :info -> "position: fixed !important; top: 1rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
+          :error -> "position: fixed !important; top: 5rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
+        end
+      }
       {@rest}
     >
-      <p :if={@title} class="flex items-center gap-1.5 text-sm font-semibold leading-6">
-        <.icon :if={@kind == :info} name="hero-information-circle-mini" class="h-4 w-4" />
-        <.broken_dinosaur_icon :if={@kind == :error} />
-        <%= @title %>
-      </p>
-      <p class="mt-2 text-sm leading-5"><%= msg %></p>
-      <button type="button" class="group absolute top-1 right-1 p-2" aria-label={gettext("close")}>
-        <.icon name="hero-x-mark-solid" class="h-5 w-5 opacity-40 group-hover:opacity-70" />
-      </button>
+      <div style="display: flex !important; align-items: flex-start !important; border: 0 !important; outline: 0 !important; margin: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+        <div style="flex-shrink: 0 !important; border: 0 !important; outline: 0 !important; margin: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+          <span style="font-size: 1.25rem !important; line-height: 1 !important; border: 0 !important; outline: 0 !important; margin: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+            <%= if @kind == :info, do: "🎉", else: "⚠️" %>
+          </span>
+        </div>
+        <div style="margin-left: 0.75rem !important; flex: 1 !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+          <p :if={@title} style="font-size: 0.875rem !important; font-weight: 600 !important; color: #1f2937 !important; margin: 0 !important; font-family: Inter, sans-serif !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+            <%= @title %>
+          </p>
+          <p style={"font-size: 0.875rem !important; color: #6b7280 !important; margin: 0 !important; font-family: Inter, sans-serif !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important; #{@title && "margin-top: 0.25rem !important;"}"}>
+            <%= msg %>
+          </p>
+        </div>
+        <div style="margin-left: 1rem !important; flex-shrink: 0 !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+          <button
+            type="button"
+            style="color: #374151 !important; background: #f9fafb !important; border: 1px solid #e5e7eb !important; outline: 0 !important; padding: 0.25rem !important; cursor: pointer !important; border-radius: 0.375rem !important; margin: 0 !important; border-style: solid !important; border-width: 1px !important; box-sizing: border-box !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important; width: 1.5rem !important; height: 1.5rem !important; font-size: 1rem !important; font-weight: bold !important; font-family: Inter, sans-serif !important;"
+            onmouseover="this.style.background='#e5e7eb'; this.style.color='#111827';"
+            onmouseout="this.style.background='#f9fafb'; this.style.color='#374151';"
+            aria-label={gettext("close")}
+          >
+            ×
+          </button>
+        </div>
+      </div>
     </div>
     """
   end
@@ -199,9 +194,10 @@ defmodule EventasaurusWeb.CoreComponents do
 
   def flash_group(assigns) do
     ~H"""
-    <.flash kind={:info} title="Success!" flash={@flash} />
-    <.flash kind={:error} title="Error!" flash={@flash} />
+    <.flash :if={Phoenix.Flash.get(@flash, :info)} kind={:info} title="Success!" flash={@flash} />
+    <.flash :if={Phoenix.Flash.get(@flash, :error)} kind={:error} title="Error!" flash={@flash} />
     <.flash
+      :if={false}
       id="client-error"
       kind={:error}
       title="Error!"
@@ -213,6 +209,7 @@ defmodule EventasaurusWeb.CoreComponents do
       have been lost in processing. Please check below, or reload the page and try again.
     </.flash>
     <.flash
+      :if={false}
       id="server-error"
       kind={:error}
       title="Error!"
