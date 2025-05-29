@@ -123,7 +123,62 @@ defmodule EventasaurusWeb.EventLive.Edit do
         data when is_map(data) -> event_params
       end
 
-    case save_event(socket, socket.assigns.event, event_params) do
+    # Process venue data from form_data if present
+    final_event_params =
+      case socket.assigns.form_data do
+        form_data when is_map(form_data) ->
+          # Check if we have venue data in form_data and user is not setting virtual
+          venue_name = Map.get(form_data, "venue_name")
+          venue_address = Map.get(form_data, "venue_address")
+          is_virtual = Map.get(form_data, "is_virtual", false)
+
+          if !is_virtual and venue_name && venue_name != "" do
+            # Try to find existing venue or create new one
+            venue_attrs = %{
+              "name" => venue_name,
+              "address" => venue_address,
+              "city" => Map.get(form_data, "venue_city"),
+              "state" => Map.get(form_data, "venue_state"),
+              "country" => Map.get(form_data, "venue_country"),
+              "latitude" => case Map.get(form_data, "venue_latitude") do
+                lat when is_binary(lat) ->
+                  case Float.parse(lat) do
+                    {float_val, _} -> float_val
+                    :error -> nil
+                  end
+                lat -> lat
+              end,
+              "longitude" => case Map.get(form_data, "venue_longitude") do
+                lng when is_binary(lng) ->
+                  case Float.parse(lng) do
+                    {float_val, _} -> float_val
+                    :error -> nil
+                  end
+                lng -> lng
+              end
+            }
+
+            # Try to find existing venue by address first
+            case EventasaurusApp.Venues.find_venue_by_address(venue_address) do
+              nil ->
+                # Create new venue
+                case EventasaurusApp.Venues.create_venue(venue_attrs) do
+                  {:ok, venue} -> Map.put(event_params, "venue_id", venue.id)
+                  {:error, _} -> event_params # Fall back to updating without venue
+                end
+              venue ->
+                # Use existing venue
+                Map.put(event_params, "venue_id", venue.id)
+            end
+          else
+            # Virtual event or no venue data - clear venue_id
+            Map.put(event_params, "venue_id", nil)
+          end
+        _ ->
+          event_params
+      end
+
+    case save_event(socket, socket.assigns.event, final_event_params) do
       {:ok, event} ->
         {:noreply,
          socket
