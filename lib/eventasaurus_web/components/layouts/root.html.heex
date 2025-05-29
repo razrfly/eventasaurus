@@ -76,7 +76,8 @@
 %>
   <body class={[
       "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
-      assigns[:theme_class] && assigns[:theme_class]
+      # Apply theme class to body for universal background application
+      assigns[:theme] && EventasaurusWeb.ThemeHelpers.theme_class(assigns[:theme])
     ]}
     style={assigns[:css_variables] && assigns[:css_variables]}
     data-supabase-url={supabase_url}
@@ -89,8 +90,8 @@
       </div>
     <% end %>
     
-    <!-- Radiant-style Header -->
-    <header class="border-b border-white/10 backdrop-blur-md sticky top-0 z-40">
+    <!-- Navbar - Protected UI Element (always uses Inter font) -->
+    <header class="navbar border-b border-white/10 backdrop-blur-md sticky top-0 z-40">
       <.container class="py-4">
         <nav class="flex items-center justify-between">
           <div class="flex items-center space-x-8">
@@ -138,13 +139,13 @@
       </.container>
     </header>
 
-    <!-- Main content wrapper that grows to fill available space -->
-    <main class="flex-grow">
+    <!-- Main content wrapper - Theme fonts apply here -->
+    <main class="main-content flex-grow">
       <%= @inner_content %>
     </main>
 
-    <!-- Radiant-style Footer -->
-    <footer class="bg-gray-950 text-white mt-24">
+    <!-- Footer - Protected UI Element (always uses Inter font) -->
+    <footer class="footer bg-gray-950 text-white mt-24">
       <.container class="py-16">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div class="lg:col-span-2">
@@ -195,5 +196,10 @@
         </div>
       </.container>
     </footer>
+
+    <!-- Toast notification container - Protected UI Element (always uses Inter font) -->
+    <div class="toast-container fixed bottom-4 right-4 z-50">
+      <!-- Toast notifications will be inserted here -->
+    </div>
   </body>
 </html> 

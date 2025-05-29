@@ -1,0 +1,103 @@
+/* Eventasaurus Theming System - Main Index
+ * 
+ * This file imports all theme files and provides the foundation
+ * for the dynamic theming system.
+ */
+
+/* Import base theme foundation */
+@import './base.css';
+
+/* Import all theme variations */
+@import './minimal.css';
+@import './cosmic.css';
+@import './velocity.css';
+@import './retro.css';
+@import './celebration.css';
+@import './nature.css';
+@import './professional.css';
+
+/* Theme system utilities */
+.theme-system {
+  /* Ensure smooth transitions when switching themes */
+  transition: 
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+/* Apply theme system to all themed containers */
+.theme-container {
+  /* Apply the same transitions as theme-system */
+  transition: 
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+/* Theme-aware responsive utilities */
+@media (prefers-reduced-motion: reduce) {
+  .theme-container,
+  .theme-container *,
+  .theme-system,
+  .theme-system * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Theme loading states */
+.theme-loading {
+  opacity: 0.7;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.theme-loaded {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Dark mode support for themes that need it */
+@media (prefers-color-scheme: dark) {
+  .theme-minimal.auto-dark {
+    --color-background: #1a1a1a;
+    --color-text: #ffffff;
+    --color-text-secondary: #cccccc;
+    --color-border: #333333;
+  }
+  
+  .theme-professional.auto-dark {
+    --color-background: #0f172a;
+    --color-text: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-border: #334155;
+  }
+  
+  .theme-nature.auto-dark {
+    --color-background: #064e3b;
+    --color-text: #f0fdf4;
+    --color-text-secondary: #bbf7d0;
+    --color-border: #065f46;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .theme-container {
+    --shadow-style: 0 0 0 2px currentColor;
+    --shadow-style-large: 0 0 0 3px currentColor;
+  }
+  
+  .theme-container .btn-primary,
+  .theme-container .btn-secondary {
+    border: 2px solid currentColor;
+  }
+  
+  .theme-container .card {
+    border-width: 2px;
+  }
+} 
