@@ -17,6 +17,7 @@
   --color-text: #171717; /* Neutral 900 */
   --color-text-secondary: #525252; /* Neutral 600 */
   --color-border: #e5e5e5; /* Neutral 200 */
+  --color-heading: var(--color-text);
   
   /* Typography variables (applied selectively) */
   --font-family: 'Rajdhani', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -99,6 +100,11 @@
   cursor: pointer;
 }
 
+.theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-button-secondary:focus, .btn-secondary:focus) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 /* Cards in content areas - Consolidated with :is() */
 .theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-card, .card) {
   background: var(--velocity-gradient-card);
@@ -116,11 +122,11 @@
 
 /* Advanced gradient-border effect for supported browsers - Consolidated */
 @supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
-  .theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .card {
+  .theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-card, .card) {
     border: 2px solid transparent;
   }
   
-  .theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .card::before {
+  .theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-card, .card)::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -134,7 +140,7 @@
     transition: opacity 0.3s ease;
   }
 
-  .theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .card:hover::before {
+  .theme-velocity :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-card, .card):hover::before {
     opacity: 1;
   }
 }
