@@ -672,6 +672,16 @@ defmodule EventasaurusWeb.PublicEventLive do
           document.head.appendChild(fontLink);
         }
 
+        // Handle dark/light mode for navbar and protected UI elements
+        const htmlElement = document.documentElement;
+        const darkThemes = ['cosmic']; // Only cosmic is currently a dark theme
+
+        if (darkThemes.includes(newTheme)) {
+          htmlElement.classList.add('dark');
+        } else {
+          htmlElement.classList.remove('dark');
+        }
+
         // Update body class for theme-specific styling
         document.body.className = document.body.className.replace(/\btheme-\w+\b/g, '');
         if (newTheme !== 'minimal') {
