@@ -161,37 +161,25 @@
    ============================================================================ */
 
 /* Primary buttons in content areas */
-.theme-nature .main-content .theme-button-primary,
-.theme-nature .event-content .theme-button-primary,
-.theme-nature .dashboard-content .theme-button-primary,
-.theme-nature .user-content .theme-button-primary,
-.theme-nature .auth-content .theme-button-primary,
-.theme-nature .main-content .btn-primary,
-.theme-nature .event-content .btn-primary,
-.theme-nature .dashboard-content .btn-primary,
-.theme-nature .user-content .btn-primary,
-.theme-nature .auth-content .btn-primary {
+.theme-nature :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-button-primary, .btn-primary) {
   background: var(--nature-gradient-primary);
   box-shadow: var(--nature-shadow-button);
   transition: all 0.3s ease;
   color: white;
   border: none;
   border-radius: var(--button-border-radius);
+  cursor: pointer;
 }
 
-.theme-nature .main-content .theme-button-primary:hover,
-.theme-nature .event-content .theme-button-primary:hover,
-.theme-nature .dashboard-content .theme-button-primary:hover,
-.theme-nature .user-content .theme-button-primary:hover,
-.theme-nature .auth-content .theme-button-primary:hover,
-.theme-nature .main-content .btn-primary:hover,
-.theme-nature .event-content .btn-primary:hover,
-.theme-nature .dashboard-content .btn-primary:hover,
-.theme-nature .user-content .btn-primary:hover,
-.theme-nature .auth-content .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--nature-shadow-button-hover);
+.theme-nature :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-button-primary, .btn-primary):hover {
   background: var(--nature-gradient-primary-hover);
+  box-shadow: var(--nature-shadow-button-hover);
+  transform: translateY(-1px);
+}
+
+.theme-nature :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-button-primary, .btn-primary):focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* Secondary buttons in content areas */
@@ -288,47 +276,20 @@
   border-radius: var(--border-radius);
 }
 
-/* Form inputs in content areas */
-.theme-nature .main-content .form-input,
-.theme-nature .event-content .form-input,
-.theme-nature .dashboard-content .form-input,
-.theme-nature .user-content .form-input,
-.theme-nature .auth-content .form-input,
-.theme-nature .main-content input,
-.theme-nature .event-content input,
-.theme-nature .dashboard-content input,
-.theme-nature .user-content input,
-.theme-nature .auth-content input,
-.theme-nature .main-content textarea,
-.theme-nature .event-content textarea,
-.theme-nature .dashboard-content textarea,
-.theme-nature .user-content textarea,
-.theme-nature .auth-content textarea {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border: 2px solid var(--color-border) !important;
-  transition: all 0.3s ease !important;
-  color: var(--color-text) !important;
-  border-radius: var(--input-border-radius) !important;
+/* Form inputs in content areas - Consolidated and removed !important */
+.theme-nature :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.form-input, input, textarea) {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--color-border);
+  transition: all 0.3s ease;
+  color: var(--color-text);
+  border-radius: var(--input-border-radius);
 }
 
-.theme-nature .main-content .form-input:focus,
-.theme-nature .event-content .form-input:focus,
-.theme-nature .dashboard-content .form-input:focus,
-.theme-nature .user-content .form-input:focus,
-.theme-nature .auth-content .form-input:focus,
-.theme-nature .main-content input:focus,
-.theme-nature .event-content input:focus,
-.theme-nature .dashboard-content input:focus,
-.theme-nature .user-content input:focus,
-.theme-nature .auth-content input:focus,
-.theme-nature .main-content textarea:focus,
-.theme-nature .event-content textarea:focus,
-.theme-nature .dashboard-content textarea:focus,
-.theme-nature .user-content textarea:focus,
-.theme-nature .auth-content textarea:focus {
-  border-color: var(--color-primary) !important;
-  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1) !important;
-  background: #ffffff !important;
+.theme-nature :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.form-input, input, textarea):focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  background: #ffffff;
+  outline: none;
 }
 
 /* Nature-specific decorative elements in content areas */

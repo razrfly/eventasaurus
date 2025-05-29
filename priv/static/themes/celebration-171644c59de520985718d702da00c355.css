@@ -284,9 +284,17 @@
 }
 
 @supports (backdrop-filter: blur(10px)) {
-  .theme-celebration :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.theme-card, .card) {
+  .theme-celebration .main-content .theme-card,
+  .theme-celebration .event-content .theme-card,
+  .theme-celebration .dashboard-content .theme-card,
+  .theme-celebration .user-content .theme-card,
+  .theme-celebration .auth-content .theme-card,
+  .theme-celebration .main-content .card,
+  .theme-celebration .event-content .card,
+  .theme-celebration .dashboard-content .card,
+  .theme-celebration .user-content .card,
+  .theme-celebration .auth-content .card {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(253, 242, 248, 0.9) 100%);
-    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
   }
 }
@@ -326,20 +334,47 @@
   border-radius: var(--border-radius);
 }
 
-/* Form inputs in content areas - Consolidated and removed !important */
-.theme-celebration :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.form-input, input, textarea) {
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid var(--color-border);
-  transition: all 0.3s ease;
-  color: var(--color-text);
-  border-radius: var(--input-border-radius);
+/* Form inputs in content areas */
+.theme-celebration .main-content .form-input,
+.theme-celebration .event-content .form-input,
+.theme-celebration .dashboard-content .form-input,
+.theme-celebration .user-content .form-input,
+.theme-celebration .auth-content .form-input,
+.theme-celebration .main-content input,
+.theme-celebration .event-content input,
+.theme-celebration .dashboard-content input,
+.theme-celebration .user-content input,
+.theme-celebration .auth-content input,
+.theme-celebration .main-content textarea,
+.theme-celebration .event-content textarea,
+.theme-celebration .dashboard-content textarea,
+.theme-celebration .user-content textarea,
+.theme-celebration .auth-content textarea {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 2px solid var(--color-border) !important;
+  transition: all 0.3s ease !important;
+  color: var(--color-text) !important;
+  border-radius: var(--input-border-radius) !important;
 }
 
-.theme-celebration :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.form-input, input, textarea):focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2);
-  background: #ffffff;
-  outline: none;
+.theme-celebration .main-content .form-input:focus,
+.theme-celebration .event-content .form-input:focus,
+.theme-celebration .dashboard-content .form-input:focus,
+.theme-celebration .user-content .form-input:focus,
+.theme-celebration .auth-content .form-input:focus,
+.theme-celebration .main-content input:focus,
+.theme-celebration .event-content input:focus,
+.theme-celebration .dashboard-content input:focus,
+.theme-celebration .user-content input:focus,
+.theme-celebration .auth-content input:focus,
+.theme-celebration .main-content textarea:focus,
+.theme-celebration .event-content textarea:focus,
+.theme-celebration .dashboard-content textarea:focus,
+.theme-celebration .user-content textarea:focus,
+.theme-celebration .auth-content textarea:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2) !important;
+  background: #ffffff !important;
 }
 
 /* ============================================================================

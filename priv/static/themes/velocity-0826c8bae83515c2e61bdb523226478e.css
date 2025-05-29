@@ -1,0 +1,330 @@
+/* ============================================================================
+   VELOCITY THEME - Modern & Dynamic
+   ============================================================================ */
+
+/* Universal theme application (backgrounds, colors, animations) */
+.theme-velocity {
+  /* Universal background and visual properties */
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+  background-attachment: fixed;
+  background-size: 100% 100%;
+  
+  /* CSS Variables for theme */
+  --color-primary: #ef4444; /* Red */
+  --color-secondary: #f97316; /* Orange */
+  --color-accent: #eab308; /* Yellow */
+  --color-background: #fafafa; /* Neutral */
+  --color-text: #171717; /* Neutral 900 */
+  --color-text-secondary: #525252; /* Neutral 600 */
+  --color-border: #e5e5e5; /* Neutral 200 */
+  
+  /* Typography variables (applied selectively) */
+  --font-family: 'Rajdhani', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Rajdhani', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-weight-heading: 800;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Layout variables */
+  --border-radius: 6px;
+  --border-radius-large: 12px;
+  --shadow-style: 0 4px 12px rgba(239, 68, 68, 0.15);
+  --shadow-style-large: 0 8px 32px rgba(239, 68, 68, 0.25);
+  
+  /* Component specific */
+  --button-border-radius: 6px;
+  --card-border-radius: 12px;
+  --input-border-radius: 6px;
+  
+  /* Velocity-specific variables */
+  --velocity-gradient-primary: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  --velocity-gradient-secondary: linear-gradient(135deg, #f97316 0%, #eab308 100%);
+  --velocity-gradient-card: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+  --velocity-gradient-border: linear-gradient(135deg, #ef4444, #f97316, #eab308);
+  --velocity-shadow-glow: 0 4px 16px rgba(239, 68, 68, 0.3);
+  --velocity-shadow-hover: 0 12px 40px rgba(239, 68, 68, 0.4);
+}
+
+/* ============================================================================
+   SELECTIVE FONT APPLICATION (Content Areas Only)
+   ============================================================================ */
+
+/* Apply theme fonts only to content areas */
+.theme-velocity .main-content,
+.theme-velocity .main-content > *,
+.theme-velocity .main-content p,
+.theme-velocity .main-content span,
+.theme-velocity .main-content div,
+.theme-velocity .main-content a,
+.theme-velocity .main-content li,
+.theme-velocity .main-content td,
+.theme-velocity .main-content th,
+.theme-velocity .event-content,
+.theme-velocity .event-content > *,
+.theme-velocity .event-content p,
+.theme-velocity .event-content span,
+.theme-velocity .event-content div,
+.theme-velocity .event-content a,
+.theme-velocity .event-content li,
+.theme-velocity .event-content td,
+.theme-velocity .event-content th,
+.theme-velocity .dashboard-content,
+.theme-velocity .dashboard-content > *,
+.theme-velocity .dashboard-content p,
+.theme-velocity .dashboard-content span,
+.theme-velocity .dashboard-content div,
+.theme-velocity .dashboard-content a,
+.theme-velocity .dashboard-content li,
+.theme-velocity .dashboard-content td,
+.theme-velocity .dashboard-content th,
+.theme-velocity .user-content,
+.theme-velocity .user-content > *,
+.theme-velocity .user-content p,
+.theme-velocity .user-content span,
+.theme-velocity .user-content div,
+.theme-velocity .user-content a,
+.theme-velocity .user-content li,
+.theme-velocity .user-content td,
+.theme-velocity .user-content th,
+.theme-velocity .auth-content,
+.theme-velocity .auth-content > *,
+.theme-velocity .auth-content p,
+.theme-velocity .auth-content span,
+.theme-velocity .auth-content div,
+.theme-velocity .auth-content a,
+.theme-velocity .auth-content li,
+.theme-velocity .auth-content td,
+.theme-velocity .auth-content th {
+  font-family: var(--font-family);
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  color: var(--color-text);
+}
+
+/* Headings within content areas */
+.theme-velocity .main-content h1,
+.theme-velocity .main-content h2,
+.theme-velocity .main-content h3,
+.theme-velocity .main-content h4,
+.theme-velocity .main-content h5,
+.theme-velocity .main-content h6,
+.theme-velocity .event-content h1,
+.theme-velocity .event-content h2,
+.theme-velocity .event-content h3,
+.theme-velocity .event-content h4,
+.theme-velocity .event-content h5,
+.theme-velocity .event-content h6,
+.theme-velocity .dashboard-content h1,
+.theme-velocity .dashboard-content h2,
+.theme-velocity .dashboard-content h3,
+.theme-velocity .dashboard-content h4,
+.theme-velocity .dashboard-content h5,
+.theme-velocity .dashboard-content h6,
+.theme-velocity .user-content h1,
+.theme-velocity .user-content h2,
+.theme-velocity .user-content h3,
+.theme-velocity .user-content h4,
+.theme-velocity .user-content h5,
+.theme-velocity .user-content h6,
+.theme-velocity .auth-content h1,
+.theme-velocity .auth-content h2,
+.theme-velocity .auth-content h3,
+.theme-velocity .auth-content h4,
+.theme-velocity .auth-content h5,
+.theme-velocity .auth-content h6 {
+  font-family: var(--font-family-heading);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: -0.03em;
+}
+
+/* ============================================================================
+   VELOCITY THEME COMPONENTS (Scoped to Content Areas)
+   ============================================================================ */
+
+/* Primary buttons in content areas */
+.theme-velocity .main-content .theme-button-primary,
+.theme-velocity .event-content .theme-button-primary,
+.theme-velocity .dashboard-content .theme-button-primary,
+.theme-velocity .user-content .theme-button-primary,
+.theme-velocity .auth-content .theme-button-primary,
+.theme-velocity .main-content .btn-primary,
+.theme-velocity .event-content .btn-primary,
+.theme-velocity .dashboard-content .btn-primary,
+.theme-velocity .user-content .btn-primary,
+.theme-velocity .auth-content .btn-primary {
+  background: var(--velocity-gradient-primary);
+  box-shadow: var(--velocity-shadow-glow);
+  transform: perspective(1000px) rotateX(0deg);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  color: white;
+  font-weight: 600;
+}
+
+.theme-velocity .main-content .theme-button-primary:hover,
+.theme-velocity .event-content .theme-button-primary:hover,
+.theme-velocity .dashboard-content .theme-button-primary:hover,
+.theme-velocity .user-content .theme-button-primary:hover,
+.theme-velocity .auth-content .theme-button-primary:hover,
+.theme-velocity .main-content .btn-primary:hover,
+.theme-velocity .event-content .btn-primary:hover,
+.theme-velocity .dashboard-content .btn-primary:hover,
+.theme-velocity .user-content .btn-primary:hover,
+.theme-velocity .auth-content .btn-primary:hover {
+  transform: perspective(1000px) rotateX(-5deg) translateY(-3px);
+  box-shadow: var(--velocity-shadow-hover);
+}
+
+/* Secondary buttons in content areas */
+.theme-velocity .main-content .theme-button-secondary,
+.theme-velocity .event-content .theme-button-secondary,
+.theme-velocity .dashboard-content .theme-button-secondary,
+.theme-velocity .user-content .theme-button-secondary,
+.theme-velocity .auth-content .theme-button-secondary,
+.theme-velocity .main-content .btn-secondary,
+.theme-velocity .event-content .btn-secondary,
+.theme-velocity .dashboard-content .btn-secondary,
+.theme-velocity .user-content .btn-secondary,
+.theme-velocity .auth-content .btn-secondary {
+  background: var(--velocity-gradient-secondary);
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.3);
+  border: none;
+  color: white;
+  font-weight: 600;
+}
+
+/* Cards in content areas */
+.theme-velocity .main-content .theme-card,
+.theme-velocity .event-content .theme-card,
+.theme-velocity .dashboard-content .theme-card,
+.theme-velocity .user-content .theme-card,
+.theme-velocity .auth-content .theme-card,
+.theme-velocity .main-content .card,
+.theme-velocity .event-content .card,
+.theme-velocity .dashboard-content .card,
+.theme-velocity .user-content .card,
+.theme-velocity .auth-content .card {
+  background: var(--velocity-gradient-card);
+  border: 2px solid var(--color-accent);
+  background-clip: padding-box;
+  position: relative;
+  transition: all 0.3s ease;
+  border-radius: var(--card-border-radius);
+}
+
+.theme-velocity .main-content .theme-card:hover,
+.theme-velocity .event-content .theme-card:hover,
+.theme-velocity .dashboard-content .theme-card:hover,
+.theme-velocity .user-content .theme-card:hover,
+.theme-velocity .auth-content .theme-card:hover,
+.theme-velocity .main-content .card:hover,
+.theme-velocity .event-content .card:hover,
+.theme-velocity .dashboard-content .card:hover,
+.theme-velocity .user-content .card:hover,
+.theme-velocity .auth-content .card:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 40px rgba(239, 68, 68, 0.2);
+}
+
+/* Advanced gradient-border effect for supported browsers */
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  .theme-velocity .main-content .card,
+  .theme-velocity .event-content .card,
+  .theme-velocity .dashboard-content .card,
+  .theme-velocity .user-content .card,
+  .theme-velocity .auth-content .card {
+    border: 2px solid transparent;
+  }
+  
+  .theme-velocity .main-content .card::before,
+  .theme-velocity .event-content .card::before,
+  .theme-velocity .dashboard-content .card::before,
+  .theme-velocity .user-content .card::before,
+  .theme-velocity .auth-content .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 2px;
+    background: var(--velocity-gradient-border);
+    border-radius: inherit;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .theme-velocity .main-content .card:hover::before,
+  .theme-velocity .event-content .card:hover::before,
+  .theme-velocity .dashboard-content .card:hover::before,
+  .theme-velocity .user-content .card:hover::before,
+  .theme-velocity .auth-content .card:hover::before {
+    opacity: 1;
+  }
+}
+
+/* Event-specific styling in content areas */
+.theme-velocity .main-content .event-title,
+.theme-velocity .event-content .event-title {
+  background: var(--velocity-gradient-border);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.theme-velocity .main-content .event-date-badge,
+.theme-velocity .event-content .event-date-badge {
+  background: var(--velocity-gradient-card);
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.2);
+  border-radius: var(--border-radius);
+}
+
+/* ============================================================================
+   MOTION SENSITIVITY SUPPORT
+   ============================================================================ */
+
+/* Disable animations and transforms for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .theme-velocity .main-content .theme-button-primary,
+  .theme-velocity .event-content .theme-button-primary,
+  .theme-velocity .dashboard-content .theme-button-primary,
+  .theme-velocity .user-content .theme-button-primary,
+  .theme-velocity .auth-content .theme-button-primary,
+  .theme-velocity .main-content .btn-primary,
+  .theme-velocity .event-content .btn-primary,
+  .theme-velocity .dashboard-content .btn-primary,
+  .theme-velocity .user-content .btn-primary,
+  .theme-velocity .auth-content .btn-primary {
+    transform: none;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  
+  .theme-velocity .main-content .theme-button-primary:hover,
+  .theme-velocity .event-content .theme-button-primary:hover,
+  .theme-velocity .dashboard-content .theme-button-primary:hover,
+  .theme-velocity .user-content .theme-button-primary:hover,
+  .theme-velocity .auth-content .theme-button-primary:hover,
+  .theme-velocity .main-content .btn-primary:hover,
+  .theme-velocity .event-content .btn-primary:hover,
+  .theme-velocity .dashboard-content .btn-primary:hover,
+  .theme-velocity .user-content .btn-primary:hover,
+  .theme-velocity .auth-content .btn-primary:hover {
+    transform: none;
+  }
+  
+  .theme-velocity .main-content .theme-card:hover,
+  .theme-velocity .event-content .theme-card:hover,
+  .theme-velocity .dashboard-content .theme-card:hover,
+  .theme-velocity .user-content .theme-card:hover,
+  .theme-velocity .auth-content .theme-card:hover,
+  .theme-velocity .main-content .card:hover,
+  .theme-velocity .event-content .card:hover,
+  .theme-velocity .dashboard-content .card:hover,
+  .theme-velocity .user-content .card:hover,
+  .theme-velocity .auth-content .card:hover {
+    transform: none;
+  }
+} 
