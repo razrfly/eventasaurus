@@ -46,6 +46,13 @@
   --cosmic-card-backdrop: rgba(30, 41, 59, 0.8);
   --cosmic-border-glow: rgba(99, 102, 241, 0.3);
   --cosmic-text-accent: #06b6d4;
+  
+  /* Button gradient variables */
+  --cosmic-gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --cosmic-gradient-primary-hover: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  
+  /* Heading color variable */
+  --color-heading: var(--color-text);
 }
 
 /* ============================================================================
@@ -143,12 +150,18 @@ body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-c
   border: 1px solid rgba(99, 102, 241, 0.4);
   box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
   color: white;
+  cursor: pointer;
 }
 
 body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-blue-600:hover {
   background: var(--cosmic-gradient-primary-hover);
   box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
   transform: translateY(-1px);
+}
+
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-blue-600:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.8);
+  outline-offset: 2px;
 }
 
 /* Background variations in content areas - Consolidated */
