@@ -168,6 +168,54 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
+  def handle_event("switch_theme", %{"theme" => new_theme}, socket) do
+    # Only allow theme switching for event organizers
+    case socket.assigns.registration_status do
+      :organizer ->
+        # Convert string to atom for the theme - use String.to_atom to allow new themes
+        theme_atom = String.to_atom(new_theme)
+
+        # Update the event with the new theme
+        case Events.update_event_theme(socket.assigns.event, theme_atom) do
+          {:ok, updated_event} ->
+            {:noreply,
+             socket
+             |> assign(:event, updated_event)
+             |> assign(:theme, theme_atom)
+             |> put_flash(:info, "Theme switched to #{String.capitalize(new_theme)}!")
+            }
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Unable to switch theme: #{inspect(reason)}")
+            }
+        end
+
+      _ ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Only event organizers can switch themes.")
+        }
+    end
+  end
+
+  def handle_event("manage_event", _params, socket) do
+    # Only allow for event organizers
+    case socket.assigns.registration_status do
+      :organizer ->
+        {:noreply,
+         socket
+         |> redirect(to: ~p"/events/#{socket.assigns.event.slug}/edit")
+        }
+      _ ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Only event organizers can manage events.")
+        }
+    end
+  end
+
   def handle_info(:close_registration_modal, socket) do
     {:noreply, assign(socket, :show_registration_modal, false)}
   end
@@ -233,7 +281,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   def render(assigns) do
     ~H"""
     <!-- Public Event Show Page with dynamic theming -->
-    <div class="container mx-auto px-6 py-10 lg:py-16">
+    <div class="container mx-auto px-6 py-4">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
         <div class="lg:col-span-2">
           <!-- Date/time and main info -->
@@ -453,6 +501,26 @@ defmodule EventasaurusWeb.PublicEventLive do
                   <h4 class="text-lg font-semibold text-gray-900 mb-2">Event Organizer</h4>
                   <p class="text-sm text-gray-600 mb-4">You're hosting this event</p>
 
+                  <!-- Theme Switcher for Organizers -->
+                  <div class="mb-4 text-left">
+                    <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">Event Theme</label>
+                    <select
+                      id="theme-select"
+                      phx-change="switch_theme"
+                      name="theme"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    >
+                      <%= for theme <- EventasaurusWeb.ThemeComponents.available_themes() do %>
+                        <option
+                          value={theme.value}
+                          selected={@theme == theme.value || @theme == String.to_atom(theme.value)}
+                        >
+                          <%= theme.label %> - <%= theme.description %>
+                        </option>
+                      <% end %>
+                    </select>
+                  </div>
+
                   <div class="flex gap-2 mb-4">
                     <button class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200">
                       Add to Calendar
@@ -462,9 +530,12 @@ defmodule EventasaurusWeb.PublicEventLive do
                     </button>
                   </div>
 
-                  <a href="#" class="text-sm text-purple-600 hover:text-purple-700 transition-colors duration-200">
+                  <button
+                    phx-click="manage_event"
+                    class="text-sm text-purple-600 hover:text-purple-700 transition-colors duration-200 font-medium"
+                  >
                     Manage Event →
-                  </a>
+                  </button>
                 </div>
             <% end %>
 

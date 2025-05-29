@@ -169,8 +169,20 @@ footer * {
 .fixed.top-2,
 .fixed.top-2 *,
 .fixed.top-2 p,
-.fixed.top-2 button {
+.fixed.top-2 button,
+/* Additional toast selectors for better protection */
+.flash,
+.flash *,
+[data-phx-component*="flash"],
+[data-phx-component*="flash"] *,
+.alert,
+.alert *,
+.notification,
+.notification * {
   font-family: var(--font-ui) !important;
+  background-color: white !important;
+  color: #1f2937 !important;
+  border: 1px solid #e5e7eb !important;
 }
 
 /* Modal headers and system UI - always use Inter font */

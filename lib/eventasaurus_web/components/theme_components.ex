@@ -78,7 +78,10 @@ defmodule EventasaurusWeb.ThemeComponents do
       %{value: "minimal", label: "Minimal", description: "Clean and simple"},
       %{value: "cosmic", label: "Cosmic", description: "Dark space theme"},
       %{value: "velocity", label: "Velocity", description: "Fast and modern"},
-      %{value: "celebration", label: "Celebration", description: "Bright and festive"}
+      %{value: "celebration", label: "Celebration", description: "Bright and festive"},
+      %{value: "nature", label: "Nature", description: "Earth tones and organic"},
+      %{value: "professional", label: "Professional", description: "Corporate and clean"},
+      %{value: "retro", label: "Retro", description: "Vintage and nostalgic"}
     ]
   end
 
