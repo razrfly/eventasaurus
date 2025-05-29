@@ -140,6 +140,12 @@ header[class*="nav"] * {
   font-family: var(--font-ui) !important;
 }
 
+/* Exception: Allow logo font in navbar */
+.navbar .font-knewave,
+header[class*="nav"] .font-knewave {
+  font-family: 'Knewave', cursive !important;
+}
+
 /* Footer - always uses Inter font */
 .footer,
 .footer *,
@@ -296,5 +302,18 @@ body[class*="theme-"] .theme-card:hover {
   transition-property: transform, box-shadow, background-color;
   transition-duration: 0.2s;
 }
+
+/* ============================================================================
+   UNIVERSAL LOGO FONT PROTECTION
+   ============================================================================ */
+
+/* Ensure logo font always works regardless of theme */
+.font-knewave {
+  font-family: 'Knewave', cursive !important;
+}
+
+/* ============================================================================
+   THEME BASE ARCHITECTURE
+   ============================================================================ */
 
 /* Custom CSS can go here */ 
