@@ -182,6 +182,7 @@ defmodule EventasaurusWeb.PublicEventLive do
              socket
              |> assign(:event, updated_event)
              |> assign(:theme, theme_atom)
+             |> push_event("switch-theme-css", %{theme: new_theme})
              |> put_flash(:info, "Theme switched to #{String.capitalize(new_theme)}!")
             }
 
@@ -504,21 +505,22 @@ defmodule EventasaurusWeb.PublicEventLive do
                   <!-- Theme Switcher for Organizers -->
                   <div class="mb-4 text-left">
                     <label for="theme-select" class="block text-sm font-medium text-gray-700 mb-1">Event Theme</label>
-                    <select
-                      id="theme-select"
-                      phx-change="switch_theme"
-                      name="theme"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                    >
-                      <%= for theme <- EventasaurusWeb.ThemeComponents.available_themes() do %>
-                        <option
-                          value={theme.value}
-                          selected={@theme == theme.value || @theme == String.to_atom(theme.value)}
-                        >
-                          <%= theme.label %> - <%= theme.description %>
-                        </option>
-                      <% end %>
-                    </select>
+                    <form phx-change="switch_theme">
+                      <select
+                        id="theme-select"
+                        name="theme"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      >
+                        <%= for theme <- EventasaurusWeb.ThemeComponents.available_themes() do %>
+                          <option
+                            value={theme.value}
+                            selected={@theme == theme.value || @theme == String.to_atom(theme.value)}
+                          >
+                            <%= theme.label %> - <%= theme.description %>
+                          </option>
+                        <% end %>
+                      </select>
+                    </form>
                   </div>
 
                   <div class="flex gap-2 mb-4">
@@ -613,6 +615,85 @@ defmodule EventasaurusWeb.PublicEventLive do
           console.error('Could not copy text: ', err);
         });
       });
+
+      // Theme switching functionality
+      window.addEventListener("phx:switch-theme-css", (e) => {
+        const newTheme = e.detail.theme;
+
+        // Find existing theme CSS link
+        const existingThemeLink = document.querySelector('link[href*="/themes/"][href$=".css"]');
+
+        if (newTheme === 'minimal') {
+          // For minimal theme, just remove any existing theme CSS
+          if (existingThemeLink) {
+            existingThemeLink.remove();
+          }
+        } else {
+          // For other themes, create or update the theme CSS link
+          const newHref = `/themes/${newTheme}.css`;
+
+          if (existingThemeLink) {
+            // Update existing link
+            existingThemeLink.href = newHref;
+          } else {
+            // Create new link
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = newHref;
+            document.head.appendChild(link);
+          }
+        }
+
+        // Handle theme-specific fonts
+        // Remove existing theme fonts (those with Google Fonts for specific themes)
+        const existingThemeFonts = document.querySelectorAll('link[href*="fonts.googleapis.com"][data-theme-font="true"]');
+        existingThemeFonts.forEach(link => link.remove());
+
+        // Add new theme fonts if needed
+        const themeFont = getThemeFontUrl(newTheme);
+        if (themeFont) {
+          // Add preconnect links
+          const preconnect = document.createElement('link');
+          preconnect.rel = 'preconnect';
+          preconnect.href = 'https://fonts.googleapis.com';
+          document.head.appendChild(preconnect);
+
+          const preconnectCrossorigin = document.createElement('link');
+          preconnectCrossorigin.rel = 'preconnect';
+          preconnectCrossorigin.href = 'https://fonts.gstatic.com';
+          preconnectCrossorigin.crossOrigin = 'anonymous';
+          document.head.appendChild(preconnectCrossorigin);
+
+          // Add font link
+          const fontLink = document.createElement('link');
+          fontLink.rel = 'stylesheet';
+          fontLink.href = themeFont;
+          fontLink.setAttribute('data-theme-font', 'true');
+          document.head.appendChild(fontLink);
+        }
+
+        // Update body class for theme-specific styling
+        document.body.className = document.body.className.replace(/\btheme-\w+\b/g, '');
+        if (newTheme !== 'minimal') {
+          document.body.classList.add(`theme-${newTheme}`);
+        }
+
+        console.log(`Theme switched to: ${newTheme}`);
+      });
+
+      // Helper function to get font URL for each theme
+      function getThemeFontUrl(theme) {
+        const fontUrls = {
+          'cosmic': 'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap',
+          'velocity': 'https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap',
+          'retro': 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap',
+          'celebration': 'https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap',
+          'nature': 'https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap',
+          'professional': 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap'
+        };
+
+        return fontUrls[theme] || null;
+      }
     </script>
     """
   end
