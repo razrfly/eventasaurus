@@ -282,7 +282,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   def render(assigns) do
     ~H"""
     <!-- Public Event Show Page with dynamic theming -->
-    <div class="container mx-auto px-6 py-4">
+    <div class="container mx-auto px-6 py-12 max-w-7xl">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
         <div class="lg:col-span-2">
           <!-- Date/time and main info -->
@@ -353,7 +353,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           <% end %>
 
           <!-- Host section -->
-          <div class="border-t border-gray-200 pt-8 mt-8">
+          <div class="border-t border-gray-200 pt-6 mt-6">
             <h3 class="text-lg font-semibold mb-4 text-gray-900">Hosted by</h3>
             <div class="flex items-center space-x-3">
               <%= if @event.users != [] do %>
