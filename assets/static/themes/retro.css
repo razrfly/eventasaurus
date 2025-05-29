@@ -51,89 +51,17 @@
    SELECTIVE FONT APPLICATION (Content Areas Only)
    ============================================================================ */
 
-/* Apply theme fonts only to content areas */
-.theme-retro .main-content,
-.theme-retro .main-content > *,
-.theme-retro .main-content p,
-.theme-retro .main-content span,
-.theme-retro .main-content div,
-.theme-retro .main-content a,
-.theme-retro .main-content li,
-.theme-retro .main-content td,
-.theme-retro .main-content th,
-.theme-retro .event-content,
-.theme-retro .event-content > *,
-.theme-retro .event-content p,
-.theme-retro .event-content span,
-.theme-retro .event-content div,
-.theme-retro .event-content a,
-.theme-retro .event-content li,
-.theme-retro .event-content td,
-.theme-retro .event-content th,
-.theme-retro .dashboard-content,
-.theme-retro .dashboard-content > *,
-.theme-retro .dashboard-content p,
-.theme-retro .dashboard-content span,
-.theme-retro .dashboard-content div,
-.theme-retro .dashboard-content a,
-.theme-retro .dashboard-content li,
-.theme-retro .dashboard-content td,
-.theme-retro .dashboard-content th,
-.theme-retro .user-content,
-.theme-retro .user-content > *,
-.theme-retro .user-content p,
-.theme-retro .user-content span,
-.theme-retro .user-content div,
-.theme-retro .user-content a,
-.theme-retro .user-content li,
-.theme-retro .user-content td,
-.theme-retro .user-content th,
-.theme-retro .auth-content,
-.theme-retro .auth-content > *,
-.theme-retro .auth-content p,
-.theme-retro .auth-content span,
-.theme-retro .auth-content div,
-.theme-retro .auth-content a,
-.theme-retro .auth-content li,
-.theme-retro .auth-content td,
-.theme-retro .auth-content th {
+/* Apply theme fonts only to content areas - Consolidated with :is() */
+.theme-retro :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content),
+.theme-retro :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) * {
   font-family: var(--font-family);
   font-size: var(--body-size);
   font-weight: var(--body-weight);
   color: var(--color-text);
 }
 
-/* Headings within content areas */
-.theme-retro .main-content h1,
-.theme-retro .main-content h2,
-.theme-retro .main-content h3,
-.theme-retro .main-content h4,
-.theme-retro .main-content h5,
-.theme-retro .main-content h6,
-.theme-retro .event-content h1,
-.theme-retro .event-content h2,
-.theme-retro .event-content h3,
-.theme-retro .event-content h4,
-.theme-retro .event-content h5,
-.theme-retro .event-content h6,
-.theme-retro .dashboard-content h1,
-.theme-retro .dashboard-content h2,
-.theme-retro .dashboard-content h3,
-.theme-retro .dashboard-content h4,
-.theme-retro .dashboard-content h5,
-.theme-retro .dashboard-content h6,
-.theme-retro .user-content h1,
-.theme-retro .user-content h2,
-.theme-retro .user-content h3,
-.theme-retro .user-content h4,
-.theme-retro .user-content h5,
-.theme-retro .user-content h6,
-.theme-retro .auth-content h1,
-.theme-retro .auth-content h2,
-.theme-retro .auth-content h3,
-.theme-retro .auth-content h4,
-.theme-retro .auth-content h5,
-.theme-retro .auth-content h6 {
+/* Headings within content areas - Consolidated with :is() */
+.theme-retro :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(h1, h2, h3, h4, h5, h6) {
   font-family: var(--font-family-heading);
   font-weight: var(--font-weight-heading);
   text-shadow: 2px 2px 0px rgba(217, 119, 6, 0.3);
@@ -293,44 +221,18 @@
   border-radius: var(--border-radius);
 }
 
-/* Form inputs in content areas */
-.theme-retro .main-content .form-input,
-.theme-retro .event-content .form-input,
-.theme-retro .dashboard-content .form-input,
-.theme-retro .user-content .form-input,
-.theme-retro .auth-content .form-input,
-.theme-retro .main-content input,
-.theme-retro .event-content input,
-.theme-retro .dashboard-content input,
-.theme-retro .user-content input,
-.theme-retro .auth-content input,
-.theme-retro .main-content textarea,
-.theme-retro .event-content textarea,
-.theme-retro .dashboard-content textarea,
-.theme-retro .user-content textarea,
-.theme-retro .auth-content textarea {
-  background: #fde68a !important;
-  border: 3px solid #f59e0b !important;
-  box-shadow: inset 2px 2px 4px rgba(217, 119, 6, 0.2) !important;
-  font-family: var(--font-family) !important;
-  color: var(--color-text) !important;
+/* Form inputs in content areas - Consolidated and removed !important */
+.theme-retro :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.form-input, input, textarea) {
+  background: #fde68a;
+  border: 3px solid #f59e0b;
+  box-shadow: inset 2px 2px 4px rgba(217, 119, 6, 0.2);
+  font-family: var(--font-family);
+  color: var(--color-text);
+  border-radius: var(--input-border-radius);
 }
 
-.theme-retro .main-content .form-input:focus,
-.theme-retro .event-content .form-input:focus,
-.theme-retro .dashboard-content .form-input:focus,
-.theme-retro .user-content .form-input:focus,
-.theme-retro .auth-content .form-input:focus,
-.theme-retro .main-content input:focus,
-.theme-retro .event-content input:focus,
-.theme-retro .dashboard-content input:focus,
-.theme-retro .user-content input:focus,
-.theme-retro .auth-content input:focus,
-.theme-retro .main-content textarea:focus,
-.theme-retro .event-content textarea:focus,
-.theme-retro .dashboard-content textarea:focus,
-.theme-retro .user-content textarea:focus,
-.theme-retro .auth-content textarea:focus {
-  border-color: var(--color-primary) !important;
-  box-shadow: inset 2px 2px 4px rgba(217, 119, 6, 0.3), 0 0 0 3px rgba(217, 119, 6, 0.2) !important;
+.theme-retro :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.form-input, input, textarea):focus {
+  border-color: var(--color-primary);
+  box-shadow: inset 2px 2px 4px rgba(217, 119, 6, 0.3), 0 0 0 3px rgba(217, 119, 6, 0.2);
+  outline: none;
 } 
