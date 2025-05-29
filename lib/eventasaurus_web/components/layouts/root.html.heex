@@ -77,7 +77,7 @@
     end
 %>
   <body class={[
-      "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
+      "bg-white antialiased overflow-x-hidden",
       # Apply theme class to body for universal background application
       assigns[:theme] && EventasaurusWeb.ThemeHelpers.theme_class(assigns[:theme])
     ]}
@@ -94,7 +94,7 @@
     
     <!-- Navbar - Protected UI Element (always uses Inter font) -->
     <header class="navbar border-b border-white/10 backdrop-blur-md sticky top-0 z-40">
-      <.container class="py-1">
+      <.container class="py-4">
         <nav class="flex items-center justify-between">
           <div class="flex items-center space-x-8">
             <.logo />
@@ -142,13 +142,13 @@
     </header>
 
     <!-- Main content wrapper - Theme fonts apply here -->
-    <main class="main-content flex-grow">
+    <main class="main-content">
       <%= @inner_content %>
     </main>
 
     <!-- Footer - Protected UI Element (always uses Inter font) -->
-    <footer class="footer bg-gray-950 text-white mt-6">
-      <.container class="py-12">
+    <footer class="footer bg-gray-950 text-white mt-0">
+      <.container class="py-6">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div class="lg:col-span-2">
             <.logo class="text-xl" text_color="text-white" href="/" />

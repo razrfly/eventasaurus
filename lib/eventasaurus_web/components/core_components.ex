@@ -123,6 +123,29 @@ defmodule EventasaurusWeb.CoreComponents do
   end
 
   @doc """
+  Renders a broken dinosaur icon for error states.
+  """
+  def broken_dinosaur_icon(assigns) do
+    ~H"""
+    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <!-- Dinosaur body (cracked) -->
+      <path d="M8 20c-1 0-2-.5-2-1.5L5 15c-.5-1-1-2-1-3.5C4 9 6 7 8.5 7h7C18 7 20 9 20 11.5c0 1.5-.5 2.5-1 3.5l-1 3.5c0 1-1 1.5-2 1.5H8z" stroke="currentColor" stroke-width="0.5" fill="none" stroke-dasharray="2,1"/>
+      <!-- Head (cracked) -->
+      <path d="M6 11c0-1.5 1-3 2.5-3.5L10 7c.5-.3 1-.5 1.5-.5s1 .2 1.5.5l1.5.5C15.5 8 16.5 9.5 16.5 11" stroke="currentColor" stroke-width="0.5" fill="none" stroke-dasharray="2,1"/>
+      <!-- Eyes (X'd out) -->
+      <path d="M9.5 9.5L10.5 10.5M10.5 9.5L9.5 10.5" stroke="currentColor" stroke-width="1"/>
+      <path d="M13.5 9.5L14.5 10.5M14.5 9.5L13.5 10.5" stroke="currentColor" stroke-width="1"/>
+      <!-- Tail (broken) -->
+      <path d="M20 12l2-1c.5-.3.5-1 0-1.3l-1-.7" stroke="currentColor" stroke-width="0.5" fill="none" stroke-dasharray="1,1"/>
+      <!-- Legs (wobbly) -->
+      <path d="M9 20v2M11 20v2M13 20v2M15 20v2" stroke="currentColor" stroke-width="1" stroke-dasharray="1,0.5"/>
+      <!-- Crack lines -->
+      <path d="M12 7L12 15M8 12L16 12" stroke="currentColor" stroke-width="0.3" opacity="0.7"/>
+    </svg>
+    """
+  end
+
+  @doc """
   Renders flash notices.
 
   ## Examples
@@ -154,7 +177,7 @@ defmodule EventasaurusWeb.CoreComponents do
     >
       <p :if={@title} class="flex items-center gap-1.5 text-sm font-semibold leading-6">
         <.icon :if={@kind == :info} name="hero-information-circle-mini" class="h-4 w-4" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle-mini" class="h-4 w-4" />
+        <.broken_dinosaur_icon :if={@kind == :error} />
         <%= @title %>
       </p>
       <p class="mt-2 text-sm leading-5"><%= msg %></p>
