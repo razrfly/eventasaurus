@@ -19,40 +19,6 @@
       <link phx-track-static rel="stylesheet" href={"/themes/#{assigns[:theme]}.css"} />
     <% end %>
     
-    <!-- Theme font links -->
-    <%= if assigns[:theme] do %>
-      <%= case assigns[:theme] do %>
-        <% :minimal -> %>
-          <!-- No custom fonts for minimal theme -->
-        <% :cosmic -> %>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" data-theme-font="true">
-        <% :velocity -> %>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet" data-theme-font="true">
-        <% :retro -> %>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet" data-theme-font="true">
-        <% :celebration -> %>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet" data-theme-font="true">
-        <% :nature -> %>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap" rel="stylesheet" data-theme-font="true">
-        <% :professional -> %>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet" data-theme-font="true">
-        <% _ -> %>
-          <!-- No custom fonts for other themes -->
-      <% end %>
-    <% end %>
-    
     <!-- Google Fonts - Knewave for logo -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
