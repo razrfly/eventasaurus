@@ -1,5 +1,15 @@
-/* Professional theme - Corporate, sophisticated, and trustworthy */
+/* ============================================================================
+   PROFESSIONAL THEME - Corporate, sophisticated, and trustworthy
+   ============================================================================ */
+
+/* Universal theme application (backgrounds, colors, animations) */
 .theme-professional {
+  /* Universal background and visual properties */
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  background-attachment: fixed;
+  background-size: 100% 100%;
+  
+  /* CSS Variables for theme */
   --color-primary: #1e40af; /* Blue 700 */
   --color-secondary: #374151; /* Gray 700 */
   --color-accent: #dc2626; /* Red 600 */
@@ -8,14 +18,14 @@
   --color-text-secondary: #64748b; /* Slate 500 */
   --color-border: #e2e8f0; /* Slate 200 */
   
-  /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --heading-weight: 600;
+  /* Typography variables (applied selectively) */
+  --font-family: 'Montserrat', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Montserrat', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-weight-heading: 600;
   --body-size: 16px;
   --body-weight: 400;
   
-  /* Spacing and layout */
+  /* Layout variables */
   --border-radius: 6px;
   --border-radius-large: 8px;
   --shadow-style: 0 1px 3px rgba(30, 64, 175, 0.12);
@@ -25,118 +35,340 @@
   --button-border-radius: 6px;
   --card-border-radius: 8px;
   --input-border-radius: 6px;
+  
+  /* Professional-specific variables */
+  --professional-shadow-button: 0 1px 3px rgba(30, 64, 175, 0.2);
+  --professional-shadow-button-hover: 0 4px 12px rgba(30, 64, 175, 0.25);
+  --professional-shadow-card: 0 1px 3px rgba(30, 64, 175, 0.08);
+  --professional-shadow-card-hover: 0 4px 16px rgba(30, 64, 175, 0.12);
 }
 
-/* Professional theme specific styles */
-.theme-professional .theme-container {
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+/* ============================================================================
+   SELECTIVE FONT APPLICATION (Content Areas Only)
+   ============================================================================ */
+
+/* Apply theme fonts only to content areas */
+.theme-professional .main-content,
+.theme-professional .main-content > *,
+.theme-professional .main-content p,
+.theme-professional .main-content span,
+.theme-professional .main-content div,
+.theme-professional .main-content a,
+.theme-professional .main-content li,
+.theme-professional .main-content td,
+.theme-professional .main-content th,
+.theme-professional .event-content,
+.theme-professional .event-content > *,
+.theme-professional .event-content p,
+.theme-professional .event-content span,
+.theme-professional .event-content div,
+.theme-professional .event-content a,
+.theme-professional .event-content li,
+.theme-professional .event-content td,
+.theme-professional .event-content th,
+.theme-professional .dashboard-content,
+.theme-professional .dashboard-content > *,
+.theme-professional .dashboard-content p,
+.theme-professional .dashboard-content span,
+.theme-professional .dashboard-content div,
+.theme-professional .dashboard-content a,
+.theme-professional .dashboard-content li,
+.theme-professional .dashboard-content td,
+.theme-professional .dashboard-content th,
+.theme-professional .user-content,
+.theme-professional .user-content > *,
+.theme-professional .user-content p,
+.theme-professional .user-content span,
+.theme-professional .user-content div,
+.theme-professional .user-content a,
+.theme-professional .user-content li,
+.theme-professional .user-content td,
+.theme-professional .user-content th,
+.theme-professional .auth-content,
+.theme-professional .auth-content > *,
+.theme-professional .auth-content p,
+.theme-professional .auth-content span,
+.theme-professional .auth-content div,
+.theme-professional .auth-content a,
+.theme-professional .auth-content li,
+.theme-professional .auth-content td,
+.theme-professional .auth-content th {
+  font-family: var(--font-family);
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  color: var(--color-text);
 }
 
-.theme-professional .btn-primary {
-  background: #1e40af;
+/* Headings within content areas */
+.theme-professional .main-content h1,
+.theme-professional .main-content h2,
+.theme-professional .main-content h3,
+.theme-professional .main-content h4,
+.theme-professional .main-content h5,
+.theme-professional .main-content h6,
+.theme-professional .event-content h1,
+.theme-professional .event-content h2,
+.theme-professional .event-content h3,
+.theme-professional .event-content h4,
+.theme-professional .event-content h5,
+.theme-professional .event-content h6,
+.theme-professional .dashboard-content h1,
+.theme-professional .dashboard-content h2,
+.theme-professional .dashboard-content h3,
+.theme-professional .dashboard-content h4,
+.theme-professional .dashboard-content h5,
+.theme-professional .dashboard-content h6,
+.theme-professional .user-content h1,
+.theme-professional .user-content h2,
+.theme-professional .user-content h3,
+.theme-professional .user-content h4,
+.theme-professional .user-content h5,
+.theme-professional .user-content h6,
+.theme-professional .auth-content h1,
+.theme-professional .auth-content h2,
+.theme-professional .auth-content h3,
+.theme-professional .auth-content h4,
+.theme-professional .auth-content h5,
+.theme-professional .auth-content h6 {
+  font-family: var(--font-family-heading);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: -0.025em;
+}
+
+/* ============================================================================
+   PROFESSIONAL THEME COMPONENTS (Scoped to Content Areas)
+   ============================================================================ */
+
+/* Primary buttons in content areas */
+.theme-professional .main-content .theme-button-primary,
+.theme-professional .event-content .theme-button-primary,
+.theme-professional .dashboard-content .theme-button-primary,
+.theme-professional .user-content .theme-button-primary,
+.theme-professional .auth-content .theme-button-primary,
+.theme-professional .main-content .btn-primary,
+.theme-professional .event-content .btn-primary,
+.theme-professional .dashboard-content .btn-primary,
+.theme-professional .user-content .btn-primary,
+.theme-professional .auth-content .btn-primary {
+  background: var(--color-primary);
   border: 1px solid #1d4ed8;
-  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.2);
+  box-shadow: var(--professional-shadow-button);
   font-weight: 600;
   text-transform: none;
   transition: all 0.2s ease;
+  color: white;
+  border-radius: var(--button-border-radius);
 }
 
-.theme-professional .btn-primary:hover {
+.theme-professional .main-content .theme-button-primary:hover,
+.theme-professional .event-content .theme-button-primary:hover,
+.theme-professional .dashboard-content .theme-button-primary:hover,
+.theme-professional .user-content .theme-button-primary:hover,
+.theme-professional .auth-content .theme-button-primary:hover,
+.theme-professional .main-content .btn-primary:hover,
+.theme-professional .event-content .btn-primary:hover,
+.theme-professional .dashboard-content .btn-primary:hover,
+.theme-professional .user-content .btn-primary:hover,
+.theme-professional .auth-content .btn-primary:hover {
   background: #1d4ed8;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
+  box-shadow: var(--professional-shadow-button-hover);
 }
 
-.theme-professional .btn-primary:active {
+.theme-professional .main-content .theme-button-primary:active,
+.theme-professional .event-content .theme-button-primary:active,
+.theme-professional .dashboard-content .theme-button-primary:active,
+.theme-professional .user-content .theme-button-primary:active,
+.theme-professional .auth-content .theme-button-primary:active,
+.theme-professional .main-content .btn-primary:active,
+.theme-professional .event-content .btn-primary:active,
+.theme-professional .dashboard-content .btn-primary:active,
+.theme-professional .user-content .btn-primary:active,
+.theme-professional .auth-content .btn-primary:active {
   transform: translateY(0);
   box-shadow: 0 1px 2px rgba(30, 64, 175, 0.2);
 }
 
-.theme-professional .btn-secondary {
-  background: #374151;
+/* Secondary buttons in content areas */
+.theme-professional .main-content .theme-button-secondary,
+.theme-professional .event-content .theme-button-secondary,
+.theme-professional .dashboard-content .theme-button-secondary,
+.theme-professional .user-content .theme-button-secondary,
+.theme-professional .auth-content .theme-button-secondary,
+.theme-professional .main-content .btn-secondary,
+.theme-professional .event-content .btn-secondary,
+.theme-professional .dashboard-content .btn-secondary,
+.theme-professional .user-content .btn-secondary,
+.theme-professional .auth-content .btn-secondary {
+  background: var(--color-secondary);
   border: 1px solid #4b5563;
   box-shadow: 0 1px 3px rgba(55, 65, 81, 0.2);
   font-weight: 600;
+  color: white;
+  border-radius: var(--button-border-radius);
 }
 
-.theme-professional .btn-secondary:hover {
+.theme-professional .main-content .theme-button-secondary:hover,
+.theme-professional .event-content .theme-button-secondary:hover,
+.theme-professional .dashboard-content .theme-button-secondary:hover,
+.theme-professional .user-content .theme-button-secondary:hover,
+.theme-professional .auth-content .theme-button-secondary:hover,
+.theme-professional .main-content .btn-secondary:hover,
+.theme-professional .event-content .btn-secondary:hover,
+.theme-professional .dashboard-content .btn-secondary:hover,
+.theme-professional .user-content .btn-secondary:hover,
+.theme-professional .auth-content .btn-secondary:hover {
   background: #4b5563;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(55, 65, 81, 0.25);
 }
 
-.theme-professional .btn-outline {
+/* Outline buttons in content areas */
+.theme-professional .main-content .btn-outline,
+.theme-professional .event-content .btn-outline,
+.theme-professional .dashboard-content .btn-outline,
+.theme-professional .user-content .btn-outline,
+.theme-professional .auth-content .btn-outline {
   background: transparent;
-  color: #1e40af;
-  border: 2px solid #1e40af;
+  color: var(--color-primary);
+  border: 2px solid var(--color-primary);
   font-weight: 600;
+  border-radius: var(--button-border-radius);
 }
 
-.theme-professional .btn-outline:hover {
-  background: #1e40af;
+.theme-professional .main-content .btn-outline:hover,
+.theme-professional .event-content .btn-outline:hover,
+.theme-professional .dashboard-content .btn-outline:hover,
+.theme-professional .user-content .btn-outline:hover,
+.theme-professional .auth-content .btn-outline:hover {
+  background: var(--color-primary);
   color: white;
   box-shadow: 0 4px 12px rgba(30, 64, 175, 0.2);
 }
 
-.theme-professional .card {
+/* Cards in content areas */
+.theme-professional .main-content .theme-card,
+.theme-professional .event-content .theme-card,
+.theme-professional .dashboard-content .theme-card,
+.theme-professional .user-content .theme-card,
+.theme-professional .auth-content .theme-card,
+.theme-professional .main-content .card,
+.theme-professional .event-content .card,
+.theme-professional .dashboard-content .card,
+.theme-professional .user-content .card,
+.theme-professional .auth-content .card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.08);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--professional-shadow-card);
   transition: all 0.2s ease;
+  border-radius: var(--card-border-radius);
 }
 
-.theme-professional .card:hover {
+.theme-professional .main-content .theme-card:hover,
+.theme-professional .event-content .theme-card:hover,
+.theme-professional .dashboard-content .theme-card:hover,
+.theme-professional .user-content .theme-card:hover,
+.theme-professional .auth-content .theme-card:hover,
+.theme-professional .main-content .card:hover,
+.theme-professional .event-content .card:hover,
+.theme-professional .dashboard-content .card:hover,
+.theme-professional .user-content .card:hover,
+.theme-professional .auth-content .card:hover {
   border-color: #cbd5e1;
-  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.12);
+  box-shadow: var(--professional-shadow-card-hover);
   transform: translateY(-1px);
 }
 
-.theme-professional .event-title {
-  color: #1e293b;
+/* Event-specific styling in content areas */
+.theme-professional .main-content .event-title,
+.theme-professional .event-content .event-title {
+  color: var(--color-text);
   font-weight: 600;
   letter-spacing: -0.025em;
   position: relative;
 }
 
-.theme-professional .event-title::after {
+.theme-professional .main-content .event-title::after,
+.theme-professional .event-content .event-title::after {
   content: '';
   position: absolute;
   bottom: -8px;
   left: 0;
   width: 40px;
   height: 2px;
-  background: #dc2626;
+  background: var(--color-accent);
   border-radius: 1px;
 }
 
-.theme-professional .event-date-badge {
+.theme-professional .main-content .event-date-badge,
+.theme-professional .event-content .event-date-badge {
   background: #ffffff;
-  border: 1px solid #1e40af;
+  border: 1px solid var(--color-primary);
   box-shadow: 0 2px 8px rgba(30, 64, 175, 0.1);
-  color: #1e40af;
+  color: var(--color-primary);
+  font-weight: 600;
+  border-radius: var(--border-radius);
+}
+
+/* Form inputs in content areas */
+.theme-professional .main-content .form-input,
+.theme-professional .event-content .form-input,
+.theme-professional .dashboard-content .form-input,
+.theme-professional .user-content .form-input,
+.theme-professional .auth-content .form-input,
+.theme-professional .main-content input,
+.theme-professional .event-content input,
+.theme-professional .dashboard-content input,
+.theme-professional .user-content input,
+.theme-professional .auth-content input,
+.theme-professional .main-content textarea,
+.theme-professional .event-content textarea,
+.theme-professional .dashboard-content textarea,
+.theme-professional .user-content textarea,
+.theme-professional .auth-content textarea {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  font-weight: 400 !important;
+  transition: all 0.2s ease !important;
+  color: var(--color-text) !important;
+  border-radius: var(--input-border-radius) !important;
+}
+
+.theme-professional .main-content .form-input:focus,
+.theme-professional .event-content .form-input:focus,
+.theme-professional .dashboard-content .form-input:focus,
+.theme-professional .user-content .form-input:focus,
+.theme-professional .auth-content .form-input:focus,
+.theme-professional .main-content input:focus,
+.theme-professional .event-content input:focus,
+.theme-professional .dashboard-content input:focus,
+.theme-professional .user-content input:focus,
+.theme-professional .auth-content input:focus,
+.theme-professional .main-content textarea:focus,
+.theme-professional .event-content textarea:focus,
+.theme-professional .dashboard-content textarea:focus,
+.theme-professional .user-content textarea:focus,
+.theme-professional .auth-content textarea:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1) !important;
+}
+
+/* Professional-specific elements in content areas */
+.theme-professional .main-content .highlight-accent,
+.theme-professional .event-content .highlight-accent,
+.theme-professional .dashboard-content .highlight-accent,
+.theme-professional .user-content .highlight-accent,
+.theme-professional .auth-content .highlight-accent {
+  color: var(--color-accent);
   font-weight: 600;
 }
 
-.theme-professional .form-input {
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  font-weight: 400;
-  transition: all 0.2s ease;
-}
-
-.theme-professional .form-input:focus {
-  border-color: #1e40af;
-  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
-}
-
-/* Professional-specific elements */
-.theme-professional .highlight-accent {
-  color: #dc2626;
-  font-weight: 600;
-}
-
-.theme-professional .professional-badge {
-  background: #1e40af;
+.theme-professional .main-content .professional-badge,
+.theme-professional .event-content .professional-badge,
+.theme-professional .dashboard-content .professional-badge,
+.theme-professional .user-content .professional-badge,
+.theme-professional .auth-content .professional-badge {
+  background: var(--color-primary);
   color: white;
   padding: 4px 8px;
   border-radius: 4px;
@@ -146,37 +378,57 @@
   letter-spacing: 0.05em;
 }
 
-.theme-professional .divider {
+.theme-professional .main-content .divider,
+.theme-professional .event-content .divider,
+.theme-professional .dashboard-content .divider,
+.theme-professional .user-content .divider,
+.theme-professional .auth-content .divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
   margin: 24px 0;
 }
 
-/* Table styles for professional data display */
-.theme-professional .table {
+/* Table styles for professional data display in content areas */
+.theme-professional .main-content .table,
+.theme-professional .event-content .table,
+.theme-professional .dashboard-content .table,
+.theme-professional .user-content .table,
+.theme-professional .auth-content .table {
   width: 100%;
   border-collapse: collapse;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
   overflow: hidden;
 }
 
-.theme-professional .table th {
-  background: #f8fafc;
+.theme-professional .main-content .table th,
+.theme-professional .event-content .table th,
+.theme-professional .dashboard-content .table th,
+.theme-professional .user-content .table th,
+.theme-professional .auth-content .table th {
+  background: var(--color-background);
   padding: 12px 16px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--color-border);
   font-weight: 600;
-  color: #374151;
+  color: var(--color-secondary);
   text-align: left;
 }
 
-.theme-professional .table td {
+.theme-professional .main-content .table td,
+.theme-professional .event-content .table td,
+.theme-professional .dashboard-content .table td,
+.theme-professional .user-content .table td,
+.theme-professional .auth-content .table td {
   padding: 12px 16px;
   border-bottom: 1px solid #f1f5f9;
-  color: #1e293b;
+  color: var(--color-text);
 }
 
-.theme-professional .table tr:hover {
-  background: #f8fafc;
+.theme-professional .main-content .table tr:hover,
+.theme-professional .event-content .table tr:hover,
+.theme-professional .dashboard-content .table tr:hover,
+.theme-professional .user-content .table tr:hover,
+.theme-professional .auth-content .table tr:hover {
+  background: var(--color-background);
 } 

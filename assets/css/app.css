@@ -160,7 +160,16 @@ footer * {
 .toast-container,
 .toast-container *,
 [class*="toast"],
-[class*="toast"] * {
+[class*="toast"] *,
+/* Phoenix LiveView flash messages */
+[role="alert"],
+[role="alert"] *,
+[role="alert"] p,
+[role="alert"] button,
+.fixed.top-2,
+.fixed.top-2 *,
+.fixed.top-2 p,
+.fixed.top-2 button {
   font-family: var(--font-ui) !important;
 }
 
