@@ -108,6 +108,13 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("submit", %{"event" => event_params}, socket) do
+    require Logger
+    Logger.debug("[submit] incoming params: #{inspect(event_params)}")
+
+    # Process datetime fields - combine date and time into datetime
+    event_params = process_datetime_fields(event_params)
+    Logger.debug("[submit] processed params: #{inspect(event_params)}")
+
     # Decode external_image_data if it's a JSON string
     event_params =
       case Map.get(event_params, "external_image_data") do
@@ -126,9 +133,11 @@ defmodule EventasaurusWeb.EventLive.New do
         {:noreply,
          socket
          |> put_flash(:info, "Event created successfully")
-         |> redirect(to: ~p"/events/#{event.slug}/edit")}
+         |> redirect(to: ~p"/events/#{event.slug}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
+        require Logger
+        Logger.error("[submit] Event creation failed with changeset errors: #{inspect(changeset.errors)}")
         {:noreply, assign(socket, form: to_form(changeset))}
     end
   end
@@ -555,4 +564,67 @@ defmodule EventasaurusWeb.EventLive.New do
 
     if component, do: component["long_name"], else: ""
   end
+
+  # ============================================================================
+  # Private Functions
+  # ============================================================================
+
+  defp process_datetime_fields(params) do
+    params
+    |> process_start_datetime()
+    |> process_end_datetime()
+  end
+
+  defp process_start_datetime(params) do
+    start_date = Map.get(params, "start_date")
+    start_time = Map.get(params, "start_time")
+    timezone = Map.get(params, "timezone", "UTC")
+
+    case combine_date_time(start_date, start_time, timezone) do
+      {:ok, datetime} ->
+        Map.put(params, "start_at", datetime)
+      {:error, _} ->
+        # Keep existing start_at if combination fails
+        params
+    end
+  end
+
+  defp process_end_datetime(params) do
+    ends_date = Map.get(params, "ends_date")
+    ends_time = Map.get(params, "ends_time")
+    timezone = Map.get(params, "timezone", "UTC")
+
+    case combine_date_time(ends_date, ends_time, timezone) do
+      {:ok, datetime} ->
+        Map.put(params, "ends_at", datetime)
+      {:error, _} ->
+        # Keep existing ends_at if combination fails
+        params
+    end
+  end
+
+  defp combine_date_time(date_str, time_str, timezone) when is_binary(date_str) and is_binary(time_str) and date_str != "" and time_str != "" do
+    try do
+      # Parse the date and time
+      {:ok, date} = Date.from_iso8601(date_str)
+      {:ok, time} = Time.from_iso8601(time_str <> ":00")
+
+      # Create a naive datetime
+      naive_datetime = NaiveDateTime.new!(date, time)
+
+      # Convert to timezone-aware datetime
+      case DateTime.from_naive(naive_datetime, timezone) do
+        {:ok, datetime} ->
+          # Convert to UTC for storage
+          utc_datetime = DateTime.shift_zone!(datetime, "Etc/UTC")
+          {:ok, utc_datetime}
+        {:error, reason} ->
+          {:error, reason}
+      end
+    rescue
+      e -> {:error, e}
+    end
+  end
+
+  defp combine_date_time(_, _, _), do: {:error, :invalid_input}
 end
