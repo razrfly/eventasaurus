@@ -90,87 +90,15 @@ body.theme-cosmic::before {
    SELECTIVE FONT APPLICATION (Content Areas Only)
    ============================================================================ */
 
-/* Apply cosmic fonts only to content areas */
-body.theme-cosmic .main-content,
-body.theme-cosmic .main-content > *,
-body.theme-cosmic .main-content p,
-body.theme-cosmic .main-content span,
-body.theme-cosmic .main-content div,
-body.theme-cosmic .main-content a,
-body.theme-cosmic .main-content li,
-body.theme-cosmic .main-content td,
-body.theme-cosmic .main-content th,
-body.theme-cosmic .event-content,
-body.theme-cosmic .event-content > *,
-body.theme-cosmic .event-content p,
-body.theme-cosmic .event-content span,
-body.theme-cosmic .event-content div,
-body.theme-cosmic .event-content a,
-body.theme-cosmic .event-content li,
-body.theme-cosmic .event-content td,
-body.theme-cosmic .event-content th,
-body.theme-cosmic .dashboard-content,
-body.theme-cosmic .dashboard-content > *,
-body.theme-cosmic .dashboard-content p,
-body.theme-cosmic .dashboard-content span,
-body.theme-cosmic .dashboard-content div,
-body.theme-cosmic .dashboard-content a,
-body.theme-cosmic .dashboard-content li,
-body.theme-cosmic .dashboard-content td,
-body.theme-cosmic .dashboard-content th,
-body.theme-cosmic .user-content,
-body.theme-cosmic .user-content > *,
-body.theme-cosmic .user-content p,
-body.theme-cosmic .user-content span,
-body.theme-cosmic .user-content div,
-body.theme-cosmic .user-content a,
-body.theme-cosmic .user-content li,
-body.theme-cosmic .user-content td,
-body.theme-cosmic .user-content th,
-body.theme-cosmic .auth-content,
-body.theme-cosmic .auth-content > *,
-body.theme-cosmic .auth-content p,
-body.theme-cosmic .auth-content span,
-body.theme-cosmic .auth-content div,
-body.theme-cosmic .auth-content a,
-body.theme-cosmic .auth-content li,
-body.theme-cosmic .auth-content td,
-body.theme-cosmic .auth-content th {
+/* Apply cosmic fonts only to content areas - Consolidated with :is() */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content),
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) * {
   font-family: var(--font-family);
   color: var(--color-text);
 }
 
-/* Headings within content areas */
-body.theme-cosmic .main-content h1,
-body.theme-cosmic .main-content h2,
-body.theme-cosmic .main-content h3,
-body.theme-cosmic .main-content h4,
-body.theme-cosmic .main-content h5,
-body.theme-cosmic .main-content h6,
-body.theme-cosmic .event-content h1,
-body.theme-cosmic .event-content h2,
-body.theme-cosmic .event-content h3,
-body.theme-cosmic .event-content h4,
-body.theme-cosmic .event-content h5,
-body.theme-cosmic .event-content h6,
-body.theme-cosmic .dashboard-content h1,
-body.theme-cosmic .dashboard-content h2,
-body.theme-cosmic .dashboard-content h3,
-body.theme-cosmic .dashboard-content h4,
-body.theme-cosmic .dashboard-content h5,
-body.theme-cosmic .dashboard-content h6,
-body.theme-cosmic .user-content h1,
-body.theme-cosmic .user-content h2,
-body.theme-cosmic .user-content h3,
-body.theme-cosmic .user-content h4,
-body.theme-cosmic .user-content h5,
-body.theme-cosmic .user-content h6,
-body.theme-cosmic .auth-content h1,
-body.theme-cosmic .auth-content h2,
-body.theme-cosmic .auth-content h3,
-body.theme-cosmic .auth-content h4,
-body.theme-cosmic .auth-content h5,
-body.theme-cosmic .auth-content h6 {
+/* Headings within content areas - Consolidated with :is() */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(h1, h2, h3, h4, h5, h6) {
   font-family: var(--font-family-heading);
   font-weight: var(--font-weight-heading);
   color: var(--color-text);
@@ -180,292 +108,127 @@ body.theme-cosmic .auth-content h6 {
    THEME COMPONENT STYLING
    ============================================================================ */
 
-/* Override text colors for content areas in cosmic theme */
-body.theme-cosmic .main-content .text-gray-500,
-body.theme-cosmic .main-content .text-gray-600,
-body.theme-cosmic .main-content .text-gray-700,
-body.theme-cosmic .main-content .text-gray-800,
-body.theme-cosmic .main-content .text-gray-900,
-body.theme-cosmic .event-content .text-gray-500,
-body.theme-cosmic .event-content .text-gray-600,
-body.theme-cosmic .event-content .text-gray-700,
-body.theme-cosmic .event-content .text-gray-800,
-body.theme-cosmic .event-content .text-gray-900,
-body.theme-cosmic .dashboard-content .text-gray-500,
-body.theme-cosmic .dashboard-content .text-gray-600,
-body.theme-cosmic .dashboard-content .text-gray-700,
-body.theme-cosmic .dashboard-content .text-gray-800,
-body.theme-cosmic .dashboard-content .text-gray-900,
-body.theme-cosmic .user-content .text-gray-500,
-body.theme-cosmic .user-content .text-gray-600,
-body.theme-cosmic .user-content .text-gray-700,
-body.theme-cosmic .user-content .text-gray-800,
-body.theme-cosmic .user-content .text-gray-900,
-body.theme-cosmic .auth-content .text-gray-500,
-body.theme-cosmic .auth-content .text-gray-600,
-body.theme-cosmic .auth-content .text-gray-700,
-body.theme-cosmic .auth-content .text-gray-800,
-body.theme-cosmic .auth-content .text-gray-900 {
-  color: var(--color-text-secondary) !important;
+/* Override text colors for content areas in cosmic theme - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900) {
+  color: var(--color-text-secondary);
 }
 
-/* Cards and containers in content areas */
-body.theme-cosmic .main-content .bg-white,
-body.theme-cosmic .event-content .bg-white,
-body.theme-cosmic .dashboard-content .bg-white,
-body.theme-cosmic .user-content .bg-white,
-body.theme-cosmic .auth-content .bg-white {
-  background: var(--cosmic-card-backdrop) !important;
-  border: 1px solid var(--cosmic-border-glow) !important;
+/* Cards and containers in content areas - Consolidated and removed !important */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-white {
+  background: var(--cosmic-card-backdrop);
+  border: 1px solid var(--cosmic-border-glow);
   backdrop-filter: blur(8px);
 }
 
-body.theme-cosmic .main-content .border-gray-200,
-body.theme-cosmic .event-content .border-gray-200,
-body.theme-cosmic .dashboard-content .border-gray-200,
-body.theme-cosmic .user-content .border-gray-200,
-body.theme-cosmic .auth-content .border-gray-200 {
-  border-color: var(--cosmic-border-glow) !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .border-gray-200 {
+  border-color: var(--cosmic-border-glow);
 }
 
-body.theme-cosmic .main-content .border-gray-300,
-body.theme-cosmic .event-content .border-gray-300,
-body.theme-cosmic .dashboard-content .border-gray-300,
-body.theme-cosmic .user-content .border-gray-300,
-body.theme-cosmic .auth-content .border-gray-300 {
-  border-color: rgba(99, 102, 241, 0.4) !important;
-}
-
-/* Links in content areas */
-body.theme-cosmic .main-content a,
-body.theme-cosmic .event-content a,
-body.theme-cosmic .dashboard-content a,
-body.theme-cosmic .user-content a,
-body.theme-cosmic .auth-content a {
-  color: var(--cosmic-text-accent) !important;
-}
-
-body.theme-cosmic .main-content a:hover,
-body.theme-cosmic .event-content a:hover,
-body.theme-cosmic .dashboard-content a:hover,
-body.theme-cosmic .user-content a:hover,
-body.theme-cosmic .auth-content a:hover {
-  color: #67e8f9 !important;
-}
-
-/* Buttons in content areas */
-body.theme-cosmic .main-content .bg-blue-600,
-body.theme-cosmic .event-content .bg-blue-600,
-body.theme-cosmic .dashboard-content .bg-blue-600,
-body.theme-cosmic .user-content .bg-blue-600,
-body.theme-cosmic .auth-content .bg-blue-600 {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
-  box-shadow: var(--shadow-style);
-  border: 1px solid rgba(99, 102, 241, 0.5);
-}
-
-body.theme-cosmic .main-content .bg-blue-600:hover,
-body.theme-cosmic .main-content .hover\:bg-blue-700:hover,
-body.theme-cosmic .event-content .bg-blue-600:hover,
-body.theme-cosmic .event-content .hover\:bg-blue-700:hover,
-body.theme-cosmic .dashboard-content .bg-blue-600:hover,
-body.theme-cosmic .dashboard-content .hover\:bg-blue-700:hover,
-body.theme-cosmic .user-content .bg-blue-600:hover,
-body.theme-cosmic .user-content .hover\:bg-blue-700:hover,
-body.theme-cosmic .auth-content .bg-blue-600:hover,
-body.theme-cosmic .auth-content .hover\:bg-blue-700:hover {
-  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%) !important;
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-style-large);
-}
-
-/* Secondary buttons in content areas */
-body.theme-cosmic .main-content .bg-gray-100,
-body.theme-cosmic .event-content .bg-gray-100,
-body.theme-cosmic .dashboard-content .bg-gray-100,
-body.theme-cosmic .user-content .bg-gray-100,
-body.theme-cosmic .auth-content .bg-gray-100 {
-  background: rgba(51, 65, 85, 0.6) !important;
-  border: 1px solid var(--cosmic-border-glow);
-}
-
-body.theme-cosmic .main-content .bg-gray-100:hover,
-body.theme-cosmic .main-content .hover\:bg-gray-200:hover,
-body.theme-cosmic .event-content .bg-gray-100:hover,
-body.theme-cosmic .event-content .hover\:bg-gray-200:hover,
-body.theme-cosmic .dashboard-content .bg-gray-100:hover,
-body.theme-cosmic .dashboard-content .hover\:bg-gray-200:hover,
-body.theme-cosmic .user-content .bg-gray-100:hover,
-body.theme-cosmic .user-content .hover\:bg-gray-200:hover,
-body.theme-cosmic .auth-content .bg-gray-100:hover,
-body.theme-cosmic .auth-content .hover\:bg-gray-200:hover {
-  background: rgba(71, 85, 105, 0.8) !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .border-gray-300 {
   border-color: rgba(99, 102, 241, 0.4);
 }
 
-/* Special status backgrounds in content areas */
-body.theme-cosmic .main-content .bg-green-100,
-body.theme-cosmic .event-content .bg-green-100,
-body.theme-cosmic .dashboard-content .bg-green-100,
-body.theme-cosmic .user-content .bg-green-100,
-body.theme-cosmic .auth-content .bg-green-100 {
-  background: rgba(34, 197, 94, 0.2) !important;
-  border: 1px solid rgba(34, 197, 94, 0.3);
+/* Links in content areas - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) a {
+  color: var(--cosmic-text-accent);
 }
 
-body.theme-cosmic .main-content .bg-blue-50,
-body.theme-cosmic .event-content .bg-blue-50,
-body.theme-cosmic .dashboard-content .bg-blue-50,
-body.theme-cosmic .user-content .bg-blue-50,
-body.theme-cosmic .auth-content .bg-blue-50 {
-  background: rgba(99, 102, 241, 0.1) !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) a:hover {
+  color: #67e8f9 !important;
+}
+
+/* Button styles in content areas - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-blue-600 {
+  background: var(--cosmic-gradient-primary);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+  color: white;
+}
+
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-blue-600:hover {
+  background: var(--cosmic-gradient-primary-hover);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Background variations in content areas - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-gray-100 {
+  background: rgba(51, 65, 85, 0.6);
   border: 1px solid var(--cosmic-border-glow);
 }
 
-body.theme-cosmic .main-content .bg-purple-100,
-body.theme-cosmic .event-content .bg-purple-100,
-body.theme-cosmic .dashboard-content .bg-purple-100,
-body.theme-cosmic .user-content .bg-purple-100,
-body.theme-cosmic .auth-content .bg-purple-100 {
-  background: rgba(139, 92, 246, 0.2) !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.bg-gray-100:hover, .hover\:bg-gray-200:hover) {
+  background: rgba(71, 85, 105, 0.8);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* Special status backgrounds in content areas - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-green-100 {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-blue-50 {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid var(--cosmic-border-glow);
+}
+
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .bg-purple-100 {
+  background: rgba(139, 92, 246, 0.2);
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
-/* Status text colors in content areas */
-body.theme-cosmic .main-content .text-green-600,
-body.theme-cosmic .event-content .text-green-600,
-body.theme-cosmic .dashboard-content .text-green-600,
-body.theme-cosmic .user-content .text-green-600,
-body.theme-cosmic .auth-content .text-green-600 {
-  color: #4ade80 !important;
+/* Status text colors in content areas - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .text-green-600 {
+  color: #4ade80;
 }
 
-body.theme-cosmic .main-content .text-blue-600,
-body.theme-cosmic .main-content .text-blue-800,
-body.theme-cosmic .event-content .text-blue-600,
-body.theme-cosmic .event-content .text-blue-800,
-body.theme-cosmic .dashboard-content .text-blue-600,
-body.theme-cosmic .dashboard-content .text-blue-800,
-body.theme-cosmic .user-content .text-blue-600,
-body.theme-cosmic .user-content .text-blue-800,
-body.theme-cosmic .auth-content .text-blue-600,
-body.theme-cosmic .auth-content .text-blue-800 {
-  color: #60a5fa !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.text-blue-600, .text-blue-800) {
+  color: #60a5fa;
 }
 
-body.theme-cosmic .main-content .text-purple-600,
-body.theme-cosmic .main-content .text-purple-700,
-body.theme-cosmic .event-content .text-purple-600,
-body.theme-cosmic .event-content .text-purple-700,
-body.theme-cosmic .dashboard-content .text-purple-600,
-body.theme-cosmic .dashboard-content .text-purple-700,
-body.theme-cosmic .user-content .text-purple-600,
-body.theme-cosmic .user-content .text-purple-700,
-body.theme-cosmic .auth-content .text-purple-600,
-body.theme-cosmic .auth-content .text-purple-700 {
-  color: #a78bfa !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(.text-purple-600, .text-purple-700) {
+  color: #a78bfa;
 }
 
-/* Form inputs in content areas */
-body.theme-cosmic .main-content input,
-body.theme-cosmic .main-content textarea,
-body.theme-cosmic .main-content select,
-body.theme-cosmic .event-content input,
-body.theme-cosmic .event-content textarea,
-body.theme-cosmic .event-content select,
-body.theme-cosmic .dashboard-content input,
-body.theme-cosmic .dashboard-content textarea,
-body.theme-cosmic .dashboard-content select,
-body.theme-cosmic .user-content input,
-body.theme-cosmic .user-content textarea,
-body.theme-cosmic .user-content select,
-body.theme-cosmic .auth-content input,
-body.theme-cosmic .auth-content textarea,
-body.theme-cosmic .auth-content select {
-  background: var(--cosmic-card-backdrop) !important;
-  border: 1px solid var(--cosmic-border-glow) !important;
-  color: var(--color-text) !important;
+/* Form inputs in content areas - Consolidated and removed !important */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(input, textarea, select) {
+  background: var(--cosmic-card-backdrop);
+  border: 1px solid var(--cosmic-border-glow);
+  color: var(--color-text);
 }
 
-body.theme-cosmic .main-content input:focus,
-body.theme-cosmic .main-content textarea:focus,
-body.theme-cosmic .main-content select:focus,
-body.theme-cosmic .event-content input:focus,
-body.theme-cosmic .event-content textarea:focus,
-body.theme-cosmic .event-content select:focus,
-body.theme-cosmic .dashboard-content input:focus,
-body.theme-cosmic .dashboard-content textarea:focus,
-body.theme-cosmic .dashboard-content select:focus,
-body.theme-cosmic .user-content input:focus,
-body.theme-cosmic .user-content textarea:focus,
-body.theme-cosmic .user-content select:focus,
-body.theme-cosmic .auth-content input:focus,
-body.theme-cosmic .auth-content textarea:focus,
-body.theme-cosmic .auth-content select:focus {
-  border-color: rgba(99, 102, 241, 0.6) !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(input:focus, textarea:focus, select:focus) {
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  outline: none;
 }
 
-body.theme-cosmic .main-content input::placeholder,
-body.theme-cosmic .main-content textarea::placeholder,
-body.theme-cosmic .event-content input::placeholder,
-body.theme-cosmic .event-content textarea::placeholder,
-body.theme-cosmic .dashboard-content input::placeholder,
-body.theme-cosmic .dashboard-content textarea::placeholder,
-body.theme-cosmic .user-content input::placeholder,
-body.theme-cosmic .user-content textarea::placeholder,
-body.theme-cosmic .auth-content input::placeholder,
-body.theme-cosmic .auth-content textarea::placeholder {
-  color: #94a3b8 !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) :is(input::placeholder, textarea::placeholder) {
+  color: #94a3b8;
 }
 
-/* SVG icons in content areas */
-body.theme-cosmic .main-content svg,
-body.theme-cosmic .event-content svg,
-body.theme-cosmic .dashboard-content svg,
-body.theme-cosmic .user-content svg,
-body.theme-cosmic .auth-content svg {
-  color: var(--color-text-secondary) !important;
+/* SVG icons in content areas - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) svg {
+  color: var(--color-text-secondary);
 }
 
-/* Prose content in content areas */
-body.theme-cosmic .main-content .prose,
-body.theme-cosmic .event-content .prose,
-body.theme-cosmic .dashboard-content .prose,
-body.theme-cosmic .user-content .prose,
-body.theme-cosmic .auth-content .prose {
-  color: var(--color-text-secondary) !important;
+/* Prose content in content areas - Consolidated */
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .prose {
+  color: var(--color-text);
 }
 
-body.theme-cosmic .main-content .prose h1,
-body.theme-cosmic .main-content .prose h2,
-body.theme-cosmic .main-content .prose h3,
-body.theme-cosmic .main-content .prose h4,
-body.theme-cosmic .main-content .prose h5,
-body.theme-cosmic .main-content .prose h6,
-body.theme-cosmic .event-content .prose h1,
-body.theme-cosmic .event-content .prose h2,
-body.theme-cosmic .event-content .prose h3,
-body.theme-cosmic .event-content .prose h4,
-body.theme-cosmic .event-content .prose h5,
-body.theme-cosmic .event-content .prose h6,
-body.theme-cosmic .dashboard-content .prose h1,
-body.theme-cosmic .dashboard-content .prose h2,
-body.theme-cosmic .dashboard-content .prose h3,
-body.theme-cosmic .dashboard-content .prose h4,
-body.theme-cosmic .dashboard-content .prose h5,
-body.theme-cosmic .dashboard-content .prose h6,
-body.theme-cosmic .user-content .prose h1,
-body.theme-cosmic .user-content .prose h2,
-body.theme-cosmic .user-content .prose h3,
-body.theme-cosmic .user-content .prose h4,
-body.theme-cosmic .user-content .prose h5,
-body.theme-cosmic .user-content .prose h6,
-body.theme-cosmic .auth-content .prose h1,
-body.theme-cosmic .auth-content .prose h2,
-body.theme-cosmic .auth-content .prose h3,
-body.theme-cosmic .auth-content .prose h4,
-body.theme-cosmic .auth-content .prose h5,
-body.theme-cosmic .auth-content .prose h6 {
-  color: var(--color-text) !important;
+body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) .prose :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--color-text);
+}
+
+/* ============================================================================
+   MOTION SENSITIVITY SUPPORT
+   ============================================================================ */
+
+/* Disable starfield animation for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  body.theme-cosmic::before {
+    animation: none;
+  }
 } 
