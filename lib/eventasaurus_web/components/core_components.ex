@@ -85,7 +85,7 @@ defmodule EventasaurusWeb.CoreComponents do
                   class="-m-3 flex-none p-3 opacity-20 hover:opacity-40"
                   aria-label={gettext("close")}
                 >
-                  <.icon name="hero-x-mark-solid" style="height: 1rem !important; width: 1rem !important; border: 0 !important; outline: 0 !important; border-style: none !important; border-width: 0 !important; display: block !important; color: #374151 !important; fill: currentColor !important;" />
+                  <.icon name="hero-x-mark-solid" class="h-4 w-4" />
                 </button>
               </div>
               <div id={"#{@id}-content"}>
@@ -147,8 +147,10 @@ defmodule EventasaurusWeb.CoreComponents do
       role="alert"
       style={
         case @kind do
-          :info -> "position: fixed !important; top: 1rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
-          :error -> "position: fixed !important; top: 5rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
+          :info ->
+            "position: fixed !important; top: 1rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
+          :error ->
+            "position: fixed !important; top: 5rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
         end
       }
       {@rest}
