@@ -48,7 +48,6 @@ defmodule EventasaurusWeb.PublicEventLive do
 
           # Apply event theme to layout
           theme = event.theme || :minimal
-          theme_class = EventasaurusApp.Themes.get_theme_css_class(theme)
 
           {:ok,
            socket
@@ -58,7 +57,6 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:registration_status, registration_status)
            |> assign(:user, user)
            |> assign(:theme, theme)
-           |> assign(:theme_class, theme_class)
            |> assign(:show_registration_modal, false)
            |> assign(:just_registered, false)
            |> assign(:page_title, event.title)

@@ -1,0 +1,182 @@
+/* Professional theme - Corporate, sophisticated, and trustworthy */
+.theme-professional {
+  --color-primary: #1e40af; /* Blue 700 */
+  --color-secondary: #374151; /* Gray 700 */
+  --color-accent: #dc2626; /* Red 600 */
+  --color-background: #f8fafc; /* Slate 50 */
+  --color-text: #1e293b; /* Slate 800 */
+  --color-text-secondary: #64748b; /* Slate 500 */
+  --color-border: #e2e8f0; /* Slate 200 */
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --heading-weight: 600;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Spacing and layout */
+  --border-radius: 6px;
+  --border-radius-large: 8px;
+  --shadow-style: 0 1px 3px rgba(30, 64, 175, 0.12);
+  --shadow-style-large: 0 4px 16px rgba(30, 64, 175, 0.15);
+  
+  /* Component specific */
+  --button-border-radius: 6px;
+  --card-border-radius: 8px;
+  --input-border-radius: 6px;
+}
+
+/* Professional theme specific styles */
+.theme-professional .theme-container {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.theme-professional .btn-primary {
+  background: #1e40af;
+  border: 1px solid #1d4ed8;
+  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.2);
+  font-weight: 600;
+  text-transform: none;
+  transition: all 0.2s ease;
+}
+
+.theme-professional .btn-primary:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
+}
+
+.theme-professional .btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(30, 64, 175, 0.2);
+}
+
+.theme-professional .btn-secondary {
+  background: #374151;
+  border: 1px solid #4b5563;
+  box-shadow: 0 1px 3px rgba(55, 65, 81, 0.2);
+  font-weight: 600;
+}
+
+.theme-professional .btn-secondary:hover {
+  background: #4b5563;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(55, 65, 81, 0.25);
+}
+
+.theme-professional .btn-outline {
+  background: transparent;
+  color: #1e40af;
+  border: 2px solid #1e40af;
+  font-weight: 600;
+}
+
+.theme-professional .btn-outline:hover {
+  background: #1e40af;
+  color: white;
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.2);
+}
+
+.theme-professional .card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.08);
+  transition: all 0.2s ease;
+}
+
+.theme-professional .card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.12);
+  transform: translateY(-1px);
+}
+
+.theme-professional .event-title {
+  color: #1e293b;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  position: relative;
+}
+
+.theme-professional .event-title::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: #dc2626;
+  border-radius: 1px;
+}
+
+.theme-professional .event-date-badge {
+  background: #ffffff;
+  border: 1px solid #1e40af;
+  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.1);
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.theme-professional .form-input {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  font-weight: 400;
+  transition: all 0.2s ease;
+}
+
+.theme-professional .form-input:focus {
+  border-color: #1e40af;
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+}
+
+/* Professional-specific elements */
+.theme-professional .highlight-accent {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.theme-professional .professional-badge {
+  background: #1e40af;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.theme-professional .divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+  margin: 24px 0;
+}
+
+/* Table styles for professional data display */
+.theme-professional .table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.theme-professional .table th {
+  background: #f8fafc;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #374151;
+  text-align: left;
+}
+
+.theme-professional .table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.theme-professional .table tr:hover {
+  background: #f8fafc;
+} 
