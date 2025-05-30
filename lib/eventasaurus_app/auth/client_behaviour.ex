@@ -57,4 +57,9 @@ defmodule EventasaurusApp.Auth.ClientBehaviour do
   """
   @callback admin_update_user(String.t(), map()) ::
     {:ok, map()} | {:error, any()}
+
+  @doc """
+  Get a user by email using the admin API.
+  """
+  @callback admin_get_user_by_email(String.t()) :: {:ok, map()} | {:error, any()}
 end
