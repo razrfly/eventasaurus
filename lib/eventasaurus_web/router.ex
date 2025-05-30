@@ -54,7 +54,7 @@ defmodule EventasaurusWeb.Router do
   # LiveView session for authenticated routes
   live_session :authenticated, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
     scope "/", EventasaurusWeb do
-      pipe_through [:browser, :authenticated]
+      pipe_through :browser
 
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
