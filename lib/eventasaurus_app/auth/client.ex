@@ -4,6 +4,8 @@ defmodule EventasaurusApp.Auth.Client do
   This replaces the dependency on the supabase/gotrue/postgrestex packages.
   """
 
+  @behaviour EventasaurusApp.Auth.ClientBehaviour
+
   require Logger
 
   # Get Supabase configuration from application config
