@@ -6,196 +6,278 @@
   This file is kept for compatibility but should not be used directly.
 --%>
 
-<div class="event-management-container">
+<div class="event-management-container max-w-6xl mx-auto px-4 py-8">
+  <!-- Header Section -->
   <div class="mb-8">
-    <div class="flex justify-between items-center">
-      <h1 class="text-2xl font-bold"><%= @event.title %></h1>
-      <div class="action-buttons flex gap-2">
-        <.link href={~p"/events/#{@event.slug}/edit"} class="btn btn-outline">
+    <div class="flex justify-between items-start">
+      <div class="flex-1">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2"><%= @event.title %></h1>
+        <%= if @event.tagline do %>
+          <p class="text-lg text-gray-600 mb-4"><%= @event.tagline %></p>
+        <% end %>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex gap-3 ml-6">
+        <.link href={~p"/events/#{@event.slug}/edit"} class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all duration-200">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+          </svg>
           Edit Event
         </.link>
-        <.link href={~p"/events/#{@event.slug}/attendees"} class="btn btn-outline">
-          Manage Attendees
-        </.link>
-        <.link href={~p"/#{@event.slug}"} class="btn btn-outline" target="_blank">
+        <.link href={~p"/#{@event.slug}"} class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-medium rounded-md shadow-sm hover:from-emerald-600 hover:to-teal-700 transition-all duration-200" target="_blank">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+          </svg>
           View Public Page
         </.link>
       </div>
     </div>
-    
-    <div class="event-metadata mt-4 text-gray-500">
-      <div class="flex flex-wrap gap-4">
-        <div>
-          <span class="font-medium">Created:</span> 
-          <%= Calendar.strftime(@event.inserted_at, "%B %d, %Y") %>
-        </div>
-        <div>
-          <span class="font-medium">Status:</span> 
-          <span class={"status-badge #{if @event.visibility == "public", do: "public", else: "private"}"}>
-            <%= to_string(@event.visibility || "draft") |> String.capitalize() %>
-          </span>
-        </div>
-        <div>
-          <span class="font-medium">Event Date:</span>
-          <%= Calendar.strftime(@event.start_at, "%A, %B %d · %I:%M %p") |> String.replace(" 0", " ") %>
-          <%= if @event.timezone do %>(<%= @event.timezone %>)<% end %>
-        </div>
-      </div>
-    </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-    <div class="md:col-span-2">
-      <div class="card mb-8">
-        <div class="card-header">
-          <h2 class="text-xl font-semibold">Event Details</h2>
-        </div>
-        <div class="card-body">
-          <%= if @event.tagline do %>
-            <div class="mb-4">
-              <div class="font-medium text-gray-700">Tagline</div>
-              <div><%= @event.tagline %></div>
-            </div>
-          <% end %>
+  <!-- Tab Navigation -->
+  <div class="border-b border-gray-200 mb-8">
+    <nav class="-mb-px flex space-x-8">
+      <button class="py-4 px-1 border-b-2 border-blue-500 font-semibold text-blue-600 whitespace-nowrap transition hover:text-blue-700">
+        Overview
+      </button>
+      <button class="py-4 px-1 border-b-2 border-transparent font-semibold text-gray-700 whitespace-nowrap transition hover:text-black hover:border-gray-300">
+        Guests
+      </button>
+      <button class="py-4 px-1 border-b-2 border-transparent font-semibold text-gray-700 whitespace-nowrap transition hover:text-black hover:border-gray-300">
+        Registration
+      </button>
+      <button class="py-4 px-1 border-b-2 border-transparent font-semibold text-gray-700 whitespace-nowrap transition hover:text-black hover:border-gray-300">
+        Updates
+      </button>
+      <button class="py-4 px-1 border-b-2 border-transparent font-semibold text-gray-700 whitespace-nowrap transition hover:text-black hover:border-gray-300">
+        Insights
+      </button>
+      <button class="py-4 px-1 border-b-2 border-transparent font-semibold text-gray-700 whitespace-nowrap transition hover:text-black hover:border-gray-300">
+        More
+      </button>
+    </nav>
+  </div>
 
-          <div class="mb-4">
-            <div class="font-medium text-gray-700">Description</div>
-            <div class="prose mt-2">
-              <%= if @event.description do %>
-                <%= Earmark.as_html!(@event.description) |> raw() %>
-              <% else %>
-                <p class="text-gray-500">No description provided.</p>
-              <% end %>
+  <!-- Main Content Layout -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Left Column - Main Content -->
+    <div class="lg:col-span-2">
+      <!-- Event Hero Section -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
+        <!-- Event Image -->
+        <%= if @event.cover_image_url do %>
+          <div class="aspect-w-16 aspect-h-9">
+            <img src={@event.cover_image_url} alt={@event.title} class="w-full h-64 object-cover" />
+          </div>
+        <% else %>
+          <div class="w-full h-64 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+            <span class="text-white text-6xl font-bold"><%= String.first(@event.title) |> String.upcase() %></span>
+          </div>
+        <% end %>
+        
+        <!-- Event Info -->
+        <div class="p-6">
+          <!-- When & Where Section -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Date & Time -->
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 class="font-semibold text-gray-900 mb-1">When</h3>
+                <p class="text-gray-700">
+                  <%= Calendar.strftime(@event.start_at, "%A, %B %d, %Y") %>
+                </p>
+                <p class="text-gray-600 text-sm">
+                  <%= Calendar.strftime(@event.start_at, "%I:%M %p") |> String.replace(" 0", " ") %>
+                  <%= if @event.ends_at do %>
+                    - <%= Calendar.strftime(@event.ends_at, "%I:%M %p") |> String.replace(" 0", " ") %>
+                  <% end %>
+                  <%= if @event.timezone do %>(<%= @event.timezone %>)<% end %>
+                </p>
+              </div>
             </div>
+
+            <!-- Location -->
+            <%= if @venue do %>
+              <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="font-semibold text-gray-900 mb-1">Where</h3>
+                  <p class="text-gray-700"><%= @venue.name %></p>
+                  <p class="text-gray-600 text-sm">
+                    <%= @venue.address %><br>
+                    <%= @venue.city %><%= if @venue.state do %>, <%= @venue.state %><% end %>
+                  </p>
+                </div>
+              </div>
+            <% end %>
           </div>
 
-          <%= if @venue do %>
-            <div class="mb-4">
-              <div class="font-medium text-gray-700">Location</div>
-              <div>
-                <%= @venue.name %><br />
-                <%= @venue.address %><br />
-                <%= @venue.city %><%= if @venue.state do %>, <%= @venue.state %><% end %>
+          <!-- Description -->
+          <%= if @event.description do %>
+            <div class="border-t border-gray-200 pt-6">
+              <h3 class="font-semibold text-gray-900 mb-3">About this event</h3>
+              <div class="prose max-w-none text-gray-700">
+                <%= Earmark.as_html!(@event.description) |> raw() %>
               </div>
             </div>
           <% end %>
         </div>
       </div>
 
-      <div class="card mb-8">
-        <div class="card-header">
-          <h2 class="text-xl font-semibold">Organizers</h2>
+      <!-- Guests Section (when there are participants) -->
+      <%= if @participants && length(@participants) > 0 do %>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+          <div class="flex justify-between items-center mb-6">
+            <div>
+              <h2 class="text-lg font-bold text-gray-900">Guests</h2>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="text-2xl font-bold text-green-600"><%= length(@participants) %></span>
+                <span class="text-gray-600">going</span>
+              </div>
+            </div>
+            <button class="text-gray-500 hover:text-gray-700 text-sm font-medium">
+              See all
+            </button>
+          </div>
+          
+          <div class="space-y-3">
+            <%= for participant <- Enum.take(@participants, 6) do %>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
+                    <%= String.first(participant.user.name || "?") |> String.upcase() %>
+                  </div>
+                  <div>
+                    <div class="font-medium text-gray-900"><%= participant.user.name %></div>
+                    <div class="text-sm text-gray-500"><%= participant.user.email %></div>
+                  </div>
+                </div>
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Going
+                </span>
+              </div>
+            <% end %>
+          </div>
         </div>
-        <div class="card-body">
-          <div class="organizers-list">
-            <%= for organizer <- @organizers || [] do %>
-              <div class="organizer-item flex items-center gap-3 mb-2">
-                <div class="avatar-placeholder w-10 h-10 rounded-full bg-gray-200"></div>
+      <% end %>
+
+      <!-- Organizers -->
+      <%= if @organizers && length(@organizers) > 0 do %>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 class="text-lg font-bold text-gray-900 mb-4">Hosted by</h2>
+          <div class="space-y-4">
+            <%= for organizer <- @organizers do %>
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                  <span class="text-gray-600 font-medium">
+                    <%= String.first(organizer.name || "?") |> String.upcase() %>
+                  </span>
+                </div>
                 <div>
-                  <div class="font-medium"><%= organizer.name %></div>
+                  <div class="font-medium text-gray-900"><%= organizer.name %></div>
                   <div class="text-sm text-gray-500"><%= organizer.email %></div>
                 </div>
               </div>
             <% end %>
           </div>
         </div>
-      </div>
+      <% end %>
     </div>
 
-    <div class="md:col-span-1">
-      <div class="card mb-8">
-        <div class="card-header">
-          <h2 class="text-lg font-semibold">Quick Stats</h2>
+    <!-- Right Column - Sidebar -->
+    <div class="lg:col-span-1">
+      <!-- Share Section -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h3 class="font-semibold text-gray-900 mb-4">Share Event</h3>
+        
+        <!-- Copy Link -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Event Link</label>
+          <div class="flex">
+            <input 
+              type="text" 
+              readonly 
+              value={"#{EventasaurusWeb.Endpoint.url()}/#{@event.slug}"}
+              class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md text-sm bg-gray-50"
+            />
+            <button 
+              class="px-4 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+              onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy', 2000);"
+            >
+              Copy
+            </button>
+          </div>
         </div>
-        <div class="card-body">
-          <div class="stat-item mb-4">
-            <div class="stat-label">Registrations</div>
-            <div class="stat-value">0</div>
-          </div>
-          
-          <div class="stat-item mb-4">
-            <div class="stat-label">Page Views</div>
-            <div class="stat-value">0</div>
-          </div>
-          
-          <div class="stat-item">
-            <div class="stat-label">Conversion Rate</div>
-            <div class="stat-value">0%</div>
+
+        <!-- Social Share -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Share on social</label>
+          <div class="flex gap-2">
+            <a 
+              href={"https://twitter.com/intent/tweet?text=#{URI.encode(@event.title)}&url=#{URI.encode("#{EventasaurusWeb.Endpoint.url()}/#{@event.slug}")}"}
+              target="_blank" 
+              class="flex-1 px-3 py-2 bg-blue-500 text-white text-center text-sm font-medium rounded-md hover:bg-blue-600 transition-colors"
+            >
+              Twitter
+            </a>
+            <a 
+              href={"https://www.facebook.com/sharer/sharer.php?u=#{URI.encode("#{EventasaurusWeb.Endpoint.url()}/#{@event.slug}")}"}
+              target="_blank" 
+              class="flex-1 px-3 py-2 bg-blue-600 text-white text-center text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Facebook
+            </a>
           </div>
         </div>
       </div>
 
-      <div class="card mb-8">
-        <div class="card-header">
-          <h2 class="text-lg font-semibold">Share</h2>
-        </div>
-        <div class="card-body">
-          <div class="mb-4">
-            <div class="font-medium mb-2">Event URL</div>
-            <div class="flex">
-              <input 
-                type="text" 
-                readonly 
-                value={"#{EventasaurusWeb.Endpoint.url()}/#{@event.slug}"}
-                class="form-input text-sm flex-grow"
-              />
-              <button 
-                class="btn btn-sm btn-outline ml-2"
-                onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy', 2000);"
-              >
-                Copy
-              </button>
-            </div>
+      <!-- Quick Stats -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h3 class="font-semibold text-gray-900 mb-4">Event Stats</h3>
+        
+        <div class="space-y-4">
+          <div class="flex justify-between">
+            <span class="text-gray-600">Registrations</span>
+            <span class="font-medium"><%= if @participants, do: length(@participants), else: 0 %></span>
           </div>
-          
-          <div>
-            <div class="font-medium mb-2">Share on</div>
-            <div class="flex gap-2">
-              <a 
-                href={"https://twitter.com/intent/tweet?text=#{URI.encode(@event.title)}&url=#{URI.encode("#{EventasaurusWeb.Endpoint.url()}/#{@event.slug}")}"}
-                target="_blank" 
-                class="btn btn-sm btn-outline"
-              >
-                Twitter
-              </a>
-              <a 
-                href={"https://www.facebook.com/sharer/sharer.php?u=#{URI.encode("#{EventasaurusWeb.Endpoint.url()}/#{@event.slug}")}"}
-                target="_blank" 
-                class="btn btn-sm btn-outline"
-              >
-                Facebook
-              </a>
-              <a 
-                href={"https://www.linkedin.com/sharing/share-offsite/?url=#{URI.encode("#{EventasaurusWeb.Endpoint.url()}/#{@event.slug}")}"}
-                target="_blank" 
-                class="btn btn-sm btn-outline"
-              >
-                LinkedIn
-              </a>
-            </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Page Views</span>
+            <span class="font-medium">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Status</span>
+            <span class={"inline-flex px-2 py-1 text-xs font-medium rounded-full #{if @event.visibility == "public", do: "bg-green-100 text-green-800", else: "bg-gray-100 text-gray-800"}"}>
+              <%= String.capitalize(to_string(@event.visibility || "draft")) %>
+            </span>
           </div>
         </div>
       </div>
-      
-      <div class="card mb-8">
-        <div class="card-header">
-          <h2 class="text-lg font-semibold">Danger Zone</h2>
-        </div>
-        <div class="card-body">
-          <div class="mb-4">
-            <p class="text-sm text-gray-600 mb-3">
-              Permanently delete this event and all associated data. This action cannot be undone.
-            </p>
-            <.link 
-              href={~p"/events/#{@event.slug}"}
-              method="delete"
-              data-confirm="Are you sure you want to delete this event? This action cannot be undone."
-              class="btn btn-sm btn-danger"
-            >
-              Delete Event
-            </.link>
-          </div>
-        </div>
+
+      <!-- Danger Zone -->
+      <div class="bg-white rounded-lg shadow-sm border border-red-200 p-6">
+        <h3 class="font-semibold text-red-900 mb-2">Danger Zone</h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Permanently delete this event and all associated data. This action cannot be undone.
+        </p>
+        <.link 
+          href={~p"/events/#{@event.slug}"}
+          method="delete"
+          data-confirm="Are you sure you want to delete this event? This action cannot be undone."
+          class="inline-flex items-center px-3 py-2 border border-red-300 text-red-700 text-sm font-medium rounded-md hover:bg-red-50 transition-colors"
+        >
+          Delete Event
+        </.link>
       </div>
     </div>
   </div>
