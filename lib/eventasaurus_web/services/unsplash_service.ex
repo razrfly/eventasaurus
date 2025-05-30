@@ -3,6 +3,8 @@ defmodule EventasaurusWeb.Services.UnsplashService do
   Service for interacting with the Unsplash API.
   """
 
+  @behaviour EventasaurusWeb.Services.UnsplashServiceBehaviour
+
   @doc """
   Search for photos on Unsplash.
   Returns a list of photos that match the search query.
@@ -17,39 +19,39 @@ defmodule EventasaurusWeb.Services.UnsplashService do
         {:error, "Per_page must be between 1 and 30"}
       true ->
         case get("/search/photos", %{query: query, page: page, per_page: per_page}) do
-      {:ok, %{"results" => results}} ->
-        processed_results =
-          results
-          |> Enum.map(fn photo ->
-            %{
-              id: photo["id"],
-              description: photo["description"] || photo["alt_description"] || "Unsplash photo",
-              urls: %{
-                raw: photo["urls"]["raw"],
-                full: photo["urls"]["full"],
-                regular: photo["urls"]["regular"],
-                small: photo["urls"]["small"],
-                thumb: photo["urls"]["thumb"]
-              },
-              user: %{
-                name: photo["user"]["name"],
-                username: photo["user"]["username"],
-                profile_url: photo["user"]["links"]["html"]
-              },
-              download_location: photo["links"]["download_location"]
-            }
-          end)
+          {:ok, %{"results" => results}} ->
+            processed_results =
+              results
+              |> Enum.map(fn photo ->
+                %{
+                  id: photo["id"],
+                  description: photo["description"] || photo["alt_description"] || "Unsplash photo",
+                  urls: %{
+                    raw: photo["urls"]["raw"],
+                    full: photo["urls"]["full"],
+                    regular: photo["urls"]["regular"],
+                    small: photo["urls"]["small"],
+                    thumb: photo["urls"]["thumb"]
+                  },
+                  user: %{
+                    name: photo["user"]["name"],
+                    username: photo["user"]["username"],
+                    profile_url: photo["user"]["links"]["html"]
+                  },
+                  download_location: photo["links"]["download_location"]
+                }
+              end)
 
-        {:ok, processed_results}
+            {:ok, processed_results}
 
-      {:ok, response} ->
-        {:error, "Unexpected response format: #{inspect(response)}"}
+          {:ok, response} ->
+            {:error, "Unexpected response format: #{inspect(response)}"}
 
-      {:error, reason} ->
-        {:error, reason}
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
-end
 
   @doc """
   Triggers a download event for the given photo ID.
