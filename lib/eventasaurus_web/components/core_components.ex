@@ -197,7 +197,7 @@ defmodule EventasaurusWeb.CoreComponents do
   def flash_group(assigns) do
     ~H"""
     <.flash :if={Phoenix.Flash.get(@flash, :info)} kind={:info} title="Success!" flash={@flash} />
-    <.flash :if={Phoenix.Flash.get(@flash, :error)} kind={:error} flash={@flash} />
+    <.flash :if={Phoenix.Flash.get(@flash, :error)} kind={:error} title="Error!" flash={@flash} />
     <.flash
       :if={false}
       id="client-error"

@@ -69,6 +69,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   Requires that a user is authenticated.
 
   If no authenticated user is found in `conn.assigns.auth_user`, redirects to login page.
+  For LiveView routes, skips setting flash message since the LiveView auth hook will handle it.
 
   ## Usage
 
