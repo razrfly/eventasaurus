@@ -68,12 +68,18 @@ defmodule EventasaurusWeb.Router do
     get "/dashboard", DashboardController, :index
   end
 
-  # Event routes (both public and protected)
+  # Protected event routes that require authentication
+  scope "/events", EventasaurusWeb do
+    pipe_through [:browser, :authenticated]
+
+    delete "/:slug", EventController, :delete
+  end
+
+  # Public event routes
   scope "/events", EventasaurusWeb do
     pipe_through :browser
 
     get "/:slug", EventController, :show
-    delete "/:slug", EventController, :delete
     get "/:slug/attendees", EventController, :attendees
   end
 
