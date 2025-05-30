@@ -45,8 +45,9 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
     test "anonymous user shows register button", %{conn: conn, event: event} do
       {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
 
-      # Should show Register Now button for anonymous users
-      assert html =~ "Register Now"
+      # Should show Register for Event button for anonymous users
+      assert html =~ "Register for Event"
+      assert html =~ "Register for this event"
       # Should NOT show One-Click Register
       refute html =~ "One-Click Register"
       # Should show registration card title
@@ -64,8 +65,8 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert html =~ user.email
       # Should show One-Click Register button
       assert html =~ "One-Click Register"
-      # Should NOT show Register Now
-      refute html =~ "Register Now"
+      # Should NOT show Register for Event
+      refute html =~ "Register for Event"
     end
 
     test "registered user shows you're in status", %{conn: conn, event: event} do
@@ -81,7 +82,7 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert html =~ "You&#39;re In"
       assert html =~ "You&#39;re registered for this event"
       # Should NOT show register buttons
-      refute html =~ "Register Now"
+      refute html =~ "Register for Event"
       refute html =~ "One-Click Register"
       # Should show Cancel registration option (HTML entity encoded)
       assert html =~ "Can&#39;t attend? Cancel registration"
@@ -102,7 +103,7 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       # Should show Register Again button
       assert html =~ "Register Again"
       # Should NOT show other registration buttons
-      refute html =~ "Register Now"
+      refute html =~ "Register for Event"
       refute html =~ "One-Click Register"
     end
 
@@ -121,7 +122,7 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert html =~ "Event Organizer"
       assert html =~ "You&#39;re hosting this event"
       # Should NOT show register buttons
-      refute html =~ "Register Now"
+      refute html =~ "Register for Event"
       refute html =~ "One-Click Register"
       refute html =~ "Register Again"
       # Should show management options
@@ -133,13 +134,13 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
     test "anonymous user registration modal opens", %{conn: conn, event: event} do
       {:ok, view, html} = live(conn, ~p"/#{event.slug}")
 
-      # Should show Register Now button
-      assert html =~ "Register Now"
+      # Should show Register for Event button
+      assert html =~ "Register for Event"
       assert has_element?(view, "#register-now-btn")
       # Should not show the modal initially
       refute has_element?(view, "#registration-modal")
 
-      # Click the Register Now button using the phx-click event
+      # Click the Register for Event button using the phx-click event
       html = render_click(view, "show_registration_modal")
 
       # Should show the registration modal component with unique text
@@ -168,7 +169,7 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert html =~ "You&#39;re registered for this event"
       # Should no longer show registration buttons
       refute html =~ "One-Click Register"
-      refute html =~ "Register Now"
+      refute html =~ "Register for Event"
     end
 
     test "cancel registration works", %{conn: conn, event: event} do
@@ -224,22 +225,22 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
 
       # Open the registration modal
       html = render_click(view, "show_registration_modal")
-      
+
       # Verify the modal opens and contains all required form elements
       assert html =~ "Register for Event"
       assert html =~ "Your Info"
       assert html =~ "We&#39;ll create an account for you so you can manage your registration."
-      
+
       # Check form elements are present
       assert has_element?(view, "form#registration-form")
       assert has_element?(view, "input[name='registration[name]']")
       assert has_element?(view, "input[name='registration[email]']")
       assert has_element?(view, "button[type='submit']")
-      
+
       # Check that the form has proper attributes for component targeting
       assert html =~ "phx-submit=\"submit\""
       assert html =~ "phx-change=\"validate\""
-      
+
       # Verify the modal can be interacted with
       assert has_element?(view, "button", "Register for Event")
     end
