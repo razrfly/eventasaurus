@@ -110,11 +110,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
-  # ========== Form and Validation ==========
-
-  defp save_event(_socket, event, event_params) do
-    Events.update_event(event, event_params)
-  end
+  # ========== Event Handlers ==========
 
   @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
@@ -211,52 +207,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
-  # Helper function to combine date and time fields into UTC datetime
-  defp combine_date_time_fields(params) do
-    timezone = Map.get(params, "timezone", "UTC")
-
-    # Combine start date and time
-    start_at = case {Map.get(params, "start_date"), Map.get(params, "start_time")} do
-      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
-        combine_date_time_to_utc(date_str, time_str, timezone)
-      _ -> Map.get(params, "start_at")
-    end
-
-    # Combine end date and time
-    ends_at = case {Map.get(params, "ends_date"), Map.get(params, "ends_time")} do
-      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
-        combine_date_time_to_utc(date_str, time_str, timezone)
-      _ -> Map.get(params, "ends_at")
-    end
-
-    params
-    |> Map.put("start_at", start_at)
-    |> Map.put("ends_at", ends_at)
-  end
-
-  # Helper function to combine date and time strings into UTC datetime
-  defp combine_date_time_to_utc(date_str, time_str, timezone) do
-    try do
-      # Parse the date and time
-      {:ok, date} = Date.from_iso8601(date_str)
-      {:ok, time} = Time.from_iso8601(time_str <> ":00")
-
-      # Create a naive datetime
-      {:ok, naive_datetime} = NaiveDateTime.new(date, time)
-
-      # Convert to the specified timezone, then to UTC
-      case DateTime.from_naive(naive_datetime, timezone) do
-        {:ok, datetime} -> DateTime.to_iso8601(datetime)
-        {:error, _} ->
-          # Fallback to UTC if timezone conversion fails
-          {:ok, utc_datetime} = DateTime.from_naive(naive_datetime, "Etc/UTC")
-          DateTime.to_iso8601(utc_datetime)
-      end
-    rescue
-      _ -> nil
-    end
-  end
-
   @impl true
   def handle_event("venue_selected", venue_data, socket) do
     # Extract venue data with defaults
@@ -330,7 +280,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, assign(socket, :image_tab, tab)}
   end
 
-  # Backward compatibility for older place_selected events
   @impl true
   def handle_event("set_timezone", %{"timezone" => timezone}, socket) do
     IO.puts("DEBUG - Browser detected timezone: #{timezone}")
@@ -502,6 +451,88 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, socket}
   end
 
+  # ========== Info Handlers ==========
+
+  @impl true
+  def handle_info({:image_selected, %{cover_image_url: url, unsplash_data: unsplash_data}}, socket) do
+    # We don't need this anymore since we handle image selection directly
+    # But keeping it for backward compatibility
+
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("external_image_data", unsplash_data)
+
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(Map.put(form_data, "cover_image_url", url))
+      |> Map.put(:action, :validate)
+
+    {:noreply,
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:cover_image_url, nil)
+      |> assign(:external_image_data, unsplash_data)
+      |> assign(:show_image_picker, false)}
+  end
+
+  @impl true
+  def handle_info({:close_image_picker, _}, socket) do
+    {:noreply, assign(socket, :show_image_picker, false)}
+  end
+
+  # ========== Helper Functions ==========
+
+  defp save_event(_socket, event, event_params) do
+    Events.update_event(event, event_params)
+  end
+
+  # Helper function to combine date and time fields into UTC datetime
+  defp combine_date_time_fields(params) do
+    timezone = Map.get(params, "timezone", "UTC")
+
+    # Combine start date and time
+    start_at = case {Map.get(params, "start_date"), Map.get(params, "start_time")} do
+      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
+        combine_date_time_to_utc(date_str, time_str, timezone)
+      _ -> Map.get(params, "start_at")
+    end
+
+    # Combine end date and time
+    ends_at = case {Map.get(params, "ends_date"), Map.get(params, "ends_time")} do
+      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
+        combine_date_time_to_utc(date_str, time_str, timezone)
+      _ -> Map.get(params, "ends_at")
+    end
+
+    params
+    |> Map.put("start_at", start_at)
+    |> Map.put("ends_at", ends_at)
+  end
+
+  # Helper function to combine date and time strings into UTC datetime
+  defp combine_date_time_to_utc(date_str, time_str, timezone) do
+    try do
+      # Parse the date and time
+      {:ok, date} = Date.from_iso8601(date_str)
+      {:ok, time} = Time.from_iso8601(time_str <> ":00")
+
+      # Create a naive datetime
+      {:ok, naive_datetime} = NaiveDateTime.new(date, time)
+
+      # Convert to the specified timezone, then to UTC
+      case DateTime.from_naive(naive_datetime, timezone) do
+        {:ok, datetime} -> DateTime.to_iso8601(datetime)
+        {:error, _} ->
+          # Fallback to UTC if timezone conversion fails
+          {:ok, utc_datetime} = DateTime.from_naive(naive_datetime, "Etc/UTC")
+          DateTime.to_iso8601(utc_datetime)
+      end
+    rescue
+      _ -> nil
+    end
+  end
+
   # Helper function to extract address components
   defp get_address_component(components, type) do
     component = Enum.find(components, fn comp ->
@@ -543,34 +574,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
         |> assign(:loading, false)
         |> assign(:error, "Error searching APIs.")
     end
-  end
-
-  @impl true
-  def handle_info({:image_selected, %{cover_image_url: url, unsplash_data: unsplash_data}}, socket) do
-    # We don't need this anymore since we handle image selection directly
-    # But keeping it for backward compatibility
-
-    form_data =
-      socket.assigns.form_data
-      |> Map.put("external_image_data", unsplash_data)
-
-    changeset =
-      socket.assigns.event
-      |> Events.change_event(Map.put(form_data, "cover_image_url", url))
-      |> Map.put(:action, :validate)
-
-    {:noreply,
-      socket
-      |> assign(:form_data, form_data)
-      |> assign(:changeset, changeset)
-      |> assign(:cover_image_url, nil)
-      |> assign(:external_image_data, unsplash_data)
-      |> assign(:show_image_picker, false)}
-  end
-
-  @impl true
-  def handle_info({:close_image_picker, _}, socket) do
-    {:noreply, assign(socket, :show_image_picker, false)}
   end
 
   # Helper function to parse a datetime into date and time strings
