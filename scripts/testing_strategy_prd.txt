@@ -1,0 +1,337 @@
+# Eventasaurus Simplified Testing Strategy PRD
+**Version:** 2.0  
+**Date:** January 2025  
+**Objective:** Create a focused, practical testing suite that builds confidence in core event management without over-engineering
+
+---
+
+## 1. PROJECT OVERVIEW
+
+### Problem Statement
+- Current tests are brittle and break frequently
+- Too many redundant tests testing trivial functionality  
+- Missing integration coverage for key user workflows
+- Need simple, reliable tests that catch real issues
+
+### Goals
+- Replace brittle tests with focused integration tests
+- Cover CRUD operations and form validation reliably
+- Build confidence incrementally with three focused phases
+- Keep tests simple, fast, and maintainable
+
+### Success Criteria
+- Core event workflows have reliable test coverage
+- Tests run consistently without flaky failures
+- New features can be added with confidence
+- Test suite completes in under 2 minutes
+
+---
+
+## 2. 🧪 THREE-PHASE TEST STRATEGY
+
+### 🔹 Phase 1: Establish Solid Baseline (Integration Focus)
+**Goal:** Cover the "happy paths" for CRUD without touching frontend interactivity too deeply.
+
+**Setup:**
+- Add ExMachina for test data factories
+- Create factories for User, Event, and Venue
+- Use Phoenix.ConnTest and Phoenix.LiveViewTest
+
+**Test Coverage:**
+```
+✅ Event Creation
+  - Create event with valid data
+  - Reject creation with missing required fields
+  
+✅ Event Editing  
+  - Edit event and save changes
+  - Pre-populate form with existing data
+  
+✅ Event Deletion
+  - Delete event and confirm removal
+  - Proper redirect after deletion
+  
+✅ Basic Event Display
+  - Admin event management page loads
+  - Public event page loads
+```
+
+**Validation Strategy:**
+- Manually break validation or form field to verify tests fail meaningfully
+- Focus on controller/LiveView integration, not implementation details
+
+**Target Test Modules:**
+```
+test/eventasaurus_web/live/event_live/new_test.exs
+test/eventasaurus_web/live/event_live/edit_test.exs
+test/eventasaurus_web/live/event_live/show_test.exs
+test/eventasaurus_web/controllers/event_controller_test.exs
+test/eventasaurus_web/controllers/public_event_controller_test.exs
+```
+
+### 🔹 Phase 2: Form Validation and User Feedback  
+**Goal:** Build confidence in form UX, LiveView dynamics, and user feedback.
+
+**Enhanced Coverage:**
+```
+✅ Validation Errors
+  - Error messages show correctly in UI
+  - Past date rejection with proper feedback
+  - Required field enforcement
+  - Form state persists through validation errors
+  
+✅ LiveView Form Dynamics
+  - Use render_change for real-time validation
+  - Use render_submit for form submission
+  - Test client-side form behavior
+  
+✅ User Feedback
+  - Success messages after save
+  - Error message display and styling
+  - Form reset after successful submission
+```
+
+**Tools:**
+- Phoenix.LiveViewTest helpers: `form()`, `render_change()`, `render_submit()`
+- Introduce Mox to mock external email/notification systems
+- Use `data-test-id` attributes for stable selector targeting (e.g., `form[data-test-id="event-form"]`)
+
+**Mox Configuration Example:**
+```elixir
+# test/test_helper.exs
+Mox.defmock(Eventasaurus.NotifierMock, for: Eventasaurus.NotifierBehaviour)
+Application.put_env(:eventasaurus, :notifier, Eventasaurus.NotifierMock)
+```
+
+### 🔹 Phase 3: End-to-End Flow Coverage (Optional/Incremental)
+**Goal:** Simulate real browser behavior for complete user journeys.
+
+**Browser Automation:**
+- Use Wallaby for browser automation
+- Test complete user workflows:
+  - Admin: Log in → Create Event → Edit → Delete
+  - Public: View Event → Register → Confirmation
+- Cover cross-page navigation and state persistence
+
+**Intentional Breaking:**
+- Break routes or page data to confirm browser tests catch them
+- Validate error handling in real browser context
+
+---
+
+## 3. SIMPLIFIED TECHNICAL REQUIREMENTS
+
+### 3.1 Test Infrastructure
+**Phase 1 Tools:**
+- ExMachina for factories
+- Phoenix.ConnTest for controller tests  
+- Phoenix.LiveViewTest for LiveView tests
+- Standard ExUnit assertions
+
+**Phase 2 Additions:**
+- Mox for external service mocking
+- `data-test-id` HTML attributes for robust element targeting
+- LiveView test helpers for form interaction
+
+**Phase 3 Additions:**
+- Wallaby for browser automation
+- Browser-specific assertions and navigation
+
+### 3.2 Factory Setup (ExMachina)
+```elixir
+# test/support/factory.ex
+defmodule Eventasaurus.Factory do
+  use ExMachina.Ecto, repo: Eventasaurus.Repo
+
+  def user_factory do
+    %Eventasaurus.Accounts.User{
+      name: "Test User",
+      email: sequence(:email, &"user#{&1}@example.com"),
+      # ... other required fields
+    }
+  end
+
+  def venue_factory do
+    %Eventasaurus.Events.Venue{
+      name: "Test Venue",
+      address: "123 Test St",
+      city: "Test City",
+      # ... other required fields
+    }
+  end
+
+  def event_factory do
+    %Eventasaurus.Events.Event{
+      title: "Test Event",
+      description: "A test event description",
+      start_at: DateTime.add(DateTime.utc_now(), 1, :day),
+      slug: sequence(:slug, &"test-event-#{&1}"),
+      visibility: "public",
+      venue: build(:venue),
+      user: build(:user)
+    }
+  end
+end
+```
+
+### 3.3 Test Naming Convention
+Use semantic, descriptive test names:
+```elixir
+test "admin creates event successfully with valid fields"
+test "form rejects past date with error message" 
+test "event edit form pre-populates with existing data"
+test "public user can view event details without admin elements"
+test "event deletion requires confirmation and removes data"
+```
+
+---
+
+## 4. SPECIFIC TEST EXAMPLES
+
+### 4.1 Phase 1 - Basic CRUD Test
+```elixir
+defmodule EventasaurusWeb.EventLive.NewTest do
+  use EventasaurusWeb.ConnCase
+  import Eventasaurus.Factory
+
+  test "admin creates event successfully with valid fields", %{conn: conn} do
+    user = insert(:user)
+    venue = insert(:venue)
+    
+    conn = log_in_user(conn, user)
+    
+    {:ok, lv, _html} = live(conn, "/events/new")
+    
+    form_data = %{
+      "event" => %{
+        "title" => "Test Event",
+        "description" => "A great event",
+        "start_at" => "2025-12-25T18:00:00",
+        "venue_id" => venue.id,
+        "visibility" => "public"
+      }
+    }
+    
+    result = lv |> form("[data-test-id='event-form']", form_data) |> render_submit()
+    
+    assert_redirect(lv, "/events")
+    assert Eventasaurus.Events.get_event_by_slug("test-event")
+  end
+end
+```
+
+### 4.2 Phase 2 - Validation Test
+```elixir
+test "form rejects past date with error message", %{conn: conn} do
+  user = insert(:user)
+  conn = log_in_user(conn, user)
+  
+  {:ok, lv, _html} = live(conn, "/events/new")
+  
+  past_date = DateTime.add(DateTime.utc_now(), -1, :day)
+  
+  form_data = %{
+    "event" => %{
+      "title" => "Test Event",
+      "start_at" => DateTime.to_iso8601(past_date)
+    }
+  }
+  
+  html = lv |> form("[data-test-id='event-form']", form_data) |> render_submit()
+  
+  assert html =~ "Start date cannot be in the past"
+  refute has_element?(lv, "[data-test-id='success-message']")
+end
+```
+
+---
+
+## 5. IMPLEMENTATION CHECKLIST
+
+### Phase 1 Setup ✅
+- [ ] Add ExMachina to dependencies
+- [ ] Create test factories for User, Event, Venue
+- [ ] Set up authentication helpers
+- [ ] Remove existing brittle tests
+- [ ] Add `data-test-id` attributes to key form elements (e.g., `form[data-test-id="event-form"]`)
+- [ ] Run full test suite in CI to verify speed and reliability
+
+### Phase 1 Tests ✅
+- [ ] Event creation with valid data
+- [ ] Event creation rejection with missing fields
+- [ ] Event editing and persistence
+- [ ] Event deletion and cleanup
+- [ ] Basic page rendering tests
+
+### Phase 2 Enhancement ✅
+- [ ] Add Mox for external service mocking
+- [ ] Configure Mox in test_helper.exs
+- [ ] Form validation error display tests
+- [ ] LiveView form interaction tests
+- [ ] User feedback and messaging tests
+
+### Phase 3 Browser Tests 🕹️
+- [ ] Add Wallaby dependency
+- [ ] End-to-end user journey tests
+- [ ] Cross-browser compatibility tests
+
+---
+
+## 6. TESTING COMMANDS
+
+### Development Workflow
+```bash
+# Run specific test files
+mix test test/eventasaurus_web/live/event_live/new_test.exs
+
+# Run with focus tag for rapid iteration
+mix test --only focus
+
+# Run all tests with coverage
+mix test --cover
+
+# Run tests and watch for changes
+mix test.watch
+```
+
+### Test Organization
+```
+test/
+├── eventasaurus_web/
+│   ├── live/
+│   │   └── event_live/
+│   │       ├── new_test.exs
+│   │       ├── edit_test.exs
+│   │       └── show_test.exs
+│   └── controllers/
+│       ├── event_controller_test.exs
+│       └── public_event_controller_test.exs
+├── support/
+│   ├── factory.ex
+│   ├── conn_case.ex
+│   └── data_case.ex
+└── test_helper.exs
+```
+
+---
+
+## 7. SUCCESS METRICS
+
+### Phase 1 Complete
+- 8-12 focused integration tests covering CRUD operations
+- All tests pass consistently 
+- Test suite runs in under 30 seconds
+
+### Phase 2 Complete  
+- Comprehensive form validation coverage
+- UI feedback and error message tests
+- LiveView interaction confidence
+
+### Phase 3 Complete
+- End-to-end user journey coverage
+- Browser automation for critical paths
+- Full confidence in user-facing functionality
+
+---
+
+This simplified approach focuses on practical, incremental testing that builds real confidence without the complexity of over-engineering test infrastructure. 
