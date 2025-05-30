@@ -293,39 +293,52 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
             <div>
               <h1 class="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight"><%= @event.title %></h1>
-              <div class="text-lg text-gray-700 mb-3 font-medium">
-                <%= Calendar.strftime(@event.start_at, "%A, %B %d · %I:%M %p") |> String.replace(" 0", " ") %>
-                <%= if @event.ends_at do %>
-                  - <%= Calendar.strftime(@event.ends_at, "%I:%M %p") |> String.replace(" 0", " ") %>
-                <% end %>
-                <span class="text-gray-500 ml-1"><%= @event.timezone %></span>
+              <%= if @event.tagline do %>
+                <p class="text-lg text-gray-600 mb-4"><%= @event.tagline %></p>
+              <% end %>
+
+              <!-- When Section -->
+              <div class="mb-4">
+                <h3 class="font-semibold text-gray-900 mb-1">When</h3>
+                <div class="text-lg text-gray-700 font-medium">
+                  <%= Calendar.strftime(@event.start_at, "%A, %B %d · %I:%M %p") |> String.replace(" 0", " ") %>
+                  <%= if @event.ends_at do %>
+                    - <%= Calendar.strftime(@event.ends_at, "%I:%M %p") |> String.replace(" 0", " ") %>
+                  <% end %>
+                  <span class="text-gray-500 ml-1"><%= @event.timezone %></span>
+                </div>
               </div>
 
-              <div class="flex items-center gap-2 text-gray-600">
-                <span class="text-gray-500">
+              <!-- Where Section -->
+              <div class="flex items-start gap-3">
+                <div class="flex-shrink-0">
                   <%= if @event.venue_id == nil do %>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   <% else %>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   <% end %>
-                </span>
-                <span>
+                </div>
+                <div>
+                  <h3 class="font-semibold text-gray-900 mb-1">Where</h3>
                   <%= if @event.venue_id == nil do %>
-                    <span class="font-medium">Virtual Event</span>
+                    <p class="text-gray-700 font-medium">Virtual Event</p>
                   <% else %>
                     <%= if @venue do %>
-                      <span class="font-medium"><%= @venue.name %></span>, <%= @venue.city %>
-                      <%= if @venue.state && @venue.state != "", do: ", #{@venue.state}" %>
+                      <p class="text-gray-700 font-medium"><%= @venue.name %></p>
+                      <p class="text-gray-600 text-sm">
+                        <%= @venue.address %><br>
+                        <%= @venue.city %><%= if @venue.state && @venue.state != "", do: ", #{@venue.state}" %>
+                      </p>
                     <% else %>
-                      Location details not available
+                      <p class="text-gray-600">Location details not available</p>
                     <% end %>
                   <% end %>
-                </span>
+                </div>
               </div>
             </div>
           </div>
@@ -398,7 +411,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                   phx-click="show_registration_modal"
                   class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg w-full flex items-center justify-center transition-colors duration-200"
                 >
-                  Register Now
+                  Register for Event
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
