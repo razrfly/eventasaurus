@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.Services.UnsplashService do
   Search for photos on Unsplash.
   Returns a list of photos that match the search query.
   """
+  @impl EventasaurusWeb.Services.UnsplashServiceBehaviour
   def search_photos(query, page \\ 1, per_page \\ 20) do
     cond do
       is_nil(query) or query == "" ->
@@ -57,6 +58,7 @@ defmodule EventasaurusWeb.Services.UnsplashService do
   Triggers a download event for the given photo ID.
   This is required by Unsplash API terms whenever a photo is downloaded or used.
   """
+  @impl EventasaurusWeb.Services.UnsplashServiceBehaviour
   def track_download(download_location) do
     if is_binary(download_location) and String.starts_with?(download_location, "https://api.unsplash.com/photos/") do
       case get(download_location, %{}) do
