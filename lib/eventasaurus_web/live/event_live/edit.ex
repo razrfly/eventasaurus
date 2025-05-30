@@ -31,6 +31,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
             # Check if this is a virtual event
             is_virtual = event.venue_id == nil
 
+            # Load venue data if the event has a venue
+            {venue_name, venue_address, venue_city, venue_state, venue_country, venue_latitude, venue_longitude} =
+              if event.venue_id do
+                case Venues.get_venue(event.venue_id) do
+                  nil -> {nil, nil, nil, nil, nil, nil, nil}
+                  venue -> {venue.name, venue.address, venue.city, venue.state, venue.country, venue.latitude, venue.longitude}
+                end
+              else
+                {nil, nil, nil, nil, nil, nil, nil}
+              end
+
             # Prepare form data
             form_data = %{
               "start_date" => start_date,
@@ -40,7 +51,14 @@ defmodule EventasaurusWeb.EventLive.Edit do
               "timezone" => event.timezone,
               "is_virtual" => is_virtual,
               "cover_image_url" => event.cover_image_url,
-              "external_image_data" => event.external_image_data
+              "external_image_data" => event.external_image_data,
+              "venue_name" => venue_name,
+              "venue_address" => venue_address,
+              "venue_city" => venue_city,
+              "venue_state" => venue_state,
+              "venue_country" => venue_country,
+              "venue_latitude" => venue_latitude,
+              "venue_longitude" => venue_longitude
             }
 
             # Set up the socket with all required assigns
@@ -53,8 +71,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:user, user)
               |> assign(:form_data, form_data)
               |> assign(:is_virtual, is_virtual)
-              |> assign(:selected_venue_name, Map.get(form_data, "venue_name"))
-              |> assign(:selected_venue_address, Map.get(form_data, "venue_address"))
+              |> assign(:selected_venue_name, venue_name)
+              |> assign(:selected_venue_address, venue_address)
               |> assign(:show_all_timezones, false)
               |> assign(:cover_image_url, event.cover_image_url)
               |> assign(:external_image_data, event.external_image_data)
@@ -123,60 +141,63 @@ defmodule EventasaurusWeb.EventLive.Edit do
         data when is_map(data) -> event_params
       end
 
-    # Process venue data from form_data if present
-    final_event_params =
-      case socket.assigns.form_data do
-        form_data when is_map(form_data) ->
-          # Check if we have venue data in form_data and user is not setting virtual
-          venue_name = Map.get(form_data, "venue_name")
-          venue_address = Map.get(form_data, "venue_address")
-          is_virtual = Map.get(form_data, "is_virtual", false)
+    # Combine date and time fields into proper UTC datetime values
+    event_params = combine_date_time_fields(event_params)
 
-          if !is_virtual and venue_name && venue_name != "" do
-            # Try to find existing venue or create new one
-            venue_attrs = %{
-              "name" => venue_name,
-              "address" => venue_address,
-              "city" => Map.get(form_data, "venue_city"),
-              "state" => Map.get(form_data, "venue_state"),
-              "country" => Map.get(form_data, "venue_country"),
-              "latitude" => case Map.get(form_data, "venue_latitude") do
-                lat when is_binary(lat) ->
-                  case Float.parse(lat) do
-                    {float_val, _} -> float_val
-                    :error -> nil
-                  end
-                lat -> lat
-              end,
-              "longitude" => case Map.get(form_data, "venue_longitude") do
-                lng when is_binary(lng) ->
-                  case Float.parse(lng) do
-                    {float_val, _} -> float_val
-                    :error -> nil
-                  end
-                lng -> lng
-              end
-            }
+    # Process venue data from the form submission params (not form_data)
+    # Check if we have venue data in the submitted form params and user is not setting virtual
+    venue_name = Map.get(event_params, "venue_name")
+    venue_address = Map.get(event_params, "venue_address")
+    is_virtual = Map.get(event_params, "is_virtual") == "true"
 
-            # Try to find existing venue by address first
-            case EventasaurusApp.Venues.find_venue_by_address(venue_address) do
-              nil ->
-                # Create new venue
-                case EventasaurusApp.Venues.create_venue(venue_attrs) do
-                  {:ok, venue} -> Map.put(event_params, "venue_id", venue.id)
-                  {:error, _} -> event_params # Fall back to updating without venue
-                end
-              venue ->
-                # Use existing venue
-                Map.put(event_params, "venue_id", venue.id)
+    final_event_params = if !is_virtual and venue_name && venue_name != "" do
+      # Try to find existing venue or create new one
+      venue_attrs = %{
+        "name" => venue_name,
+        "address" => venue_address,
+        "city" => Map.get(event_params, "venue_city"),
+        "state" => Map.get(event_params, "venue_state"),
+        "country" => Map.get(event_params, "venue_country"),
+        "latitude" => case Map.get(event_params, "venue_latitude") do
+          lat when is_binary(lat) and lat != "" ->
+            case Float.parse(lat) do
+              {float_val, _} -> float_val
+              :error -> nil
             end
-          else
-            # Virtual event or no venue data - clear venue_id
-            Map.put(event_params, "venue_id", nil)
+          lat -> lat
+        end,
+        "longitude" => case Map.get(event_params, "venue_longitude") do
+          lng when is_binary(lng) and lng != "" ->
+            case Float.parse(lng) do
+              {float_val, _} -> float_val
+              :error -> nil
+            end
+          lng -> lng
+        end
+      }
+
+      # Try to find existing venue by address first
+      case EventasaurusApp.Venues.find_venue_by_address(venue_address) do
+        nil ->
+          # Create new venue
+          case EventasaurusApp.Venues.create_venue(venue_attrs) do
+            {:ok, venue} -> Map.put(event_params, "venue_id", venue.id)
+            {:error, _} -> event_params # Fall back to updating without venue
           end
-        _ ->
-          event_params
+        venue ->
+          # Use existing venue
+          Map.put(event_params, "venue_id", venue.id)
       end
+    else
+      # Virtual event or no venue data - clear venue_id
+      Map.put(event_params, "venue_id", nil)
+    end
+
+    # Clean up venue-related fields that the Event changeset doesn't expect
+    final_event_params = final_event_params
+    |> Map.drop(["venue_name", "venue_address", "venue_city", "venue_state",
+                 "venue_country", "venue_latitude", "venue_longitude", "is_virtual",
+                 "start_date", "start_time", "ends_date", "ends_time"])
 
     case save_event(socket, socket.assigns.event, final_event_params) do
       {:ok, event} ->
@@ -187,6 +208,52 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, changeset: changeset)}
+    end
+  end
+
+  # Helper function to combine date and time fields into UTC datetime
+  defp combine_date_time_fields(params) do
+    timezone = Map.get(params, "timezone", "UTC")
+
+    # Combine start date and time
+    start_at = case {Map.get(params, "start_date"), Map.get(params, "start_time")} do
+      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
+        combine_date_time_to_utc(date_str, time_str, timezone)
+      _ -> Map.get(params, "start_at")
+    end
+
+    # Combine end date and time
+    ends_at = case {Map.get(params, "ends_date"), Map.get(params, "ends_time")} do
+      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
+        combine_date_time_to_utc(date_str, time_str, timezone)
+      _ -> Map.get(params, "ends_at")
+    end
+
+    params
+    |> Map.put("start_at", start_at)
+    |> Map.put("ends_at", ends_at)
+  end
+
+  # Helper function to combine date and time strings into UTC datetime
+  defp combine_date_time_to_utc(date_str, time_str, timezone) do
+    try do
+      # Parse the date and time
+      {:ok, date} = Date.from_iso8601(date_str)
+      {:ok, time} = Time.from_iso8601(time_str <> ":00")
+
+      # Create a naive datetime
+      {:ok, naive_datetime} = NaiveDateTime.new(date, time)
+
+      # Convert to the specified timezone, then to UTC
+      case DateTime.from_naive(naive_datetime, timezone) do
+        {:ok, datetime} -> DateTime.to_iso8601(datetime)
+        {:error, _} ->
+          # Fallback to UTC if timezone conversion fails
+          {:ok, utc_datetime} = DateTime.from_naive(naive_datetime, "Etc/UTC")
+          DateTime.to_iso8601(utc_datetime)
+      end
+    rescue
+      _ -> nil
     end
   end
 
