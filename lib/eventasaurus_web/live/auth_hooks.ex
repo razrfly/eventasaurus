@@ -65,7 +65,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       nil ->
         socket =
           socket
-          |> put_flash(:error, "You must log in to access this page.")
+          |> maybe_put_flash(:error, "You must log in to access this page.")
           |> redirect(to: ~p"/auth/login")
 
         {:halt, socket}
@@ -159,4 +159,11 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
+  # Helper function to only set flash if it doesn't already exist
+  defp maybe_put_flash(socket, key, message) do
+    case socket.assigns.flash[key] do
+      nil -> put_flash(socket, key, message)
+      _existing -> socket
+    end
+  end
 end

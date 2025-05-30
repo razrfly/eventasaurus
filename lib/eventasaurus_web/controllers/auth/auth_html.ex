@@ -25,8 +25,6 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
   def login(assigns) do
     ~H"""
     <div class="mx-auto max-w-sm">
-      <.flash_messages flash={@flash} />
-
       <div class="mx-auto max-w-sm">
         <.header class="text-center">
           Sign in to account
@@ -63,8 +61,6 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
   def register(assigns) do
     ~H"""
     <div class="mx-auto max-w-sm">
-      <.flash_messages flash={@flash} />
-
       <.header class="text-center">
         Register for an account
         <:subtitle>
@@ -95,8 +91,6 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
   def forgot_password(assigns) do
     ~H"""
     <div class="mx-auto max-w-sm">
-      <.flash_messages flash={@flash} />
-
       <.header class="text-center">
         Forgot your password?
         <:subtitle>We'll send a password reset link to your inbox</:subtitle>
@@ -123,8 +117,6 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
   def reset_password(assigns) do
     ~H"""
     <div class="mx-auto max-w-sm">
-      <.flash_messages flash={@flash} />
-
       <.header class="text-center">
         Reset Password
       </.header>
