@@ -30,9 +30,14 @@ defmodule EventasaurusWeb.EventController do
         venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
         organizers = Events.list_event_organizers(event)
 
+        # Load participants (guests) for the event
+        participants = Events.list_event_participants(event)
+                      |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+
         conn
         |> assign(:venue, venue)
         |> assign(:organizers, organizers)
+        |> assign(:participants, participants)
         |> render(:show, event: event, user: user, registration_status: registration_status)
     end
   end
