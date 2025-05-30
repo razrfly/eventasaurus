@@ -179,7 +179,7 @@ defmodule EventasaurusWeb.EventComponents do
     assigns = assign_new(assigns, :id, fn -> "event-form-#{if assigns.action == :new, do: "new", else: "edit"}" end)
 
     ~H"""
-    <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit">
+    <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
       <div class="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200">
         <!-- Cover Image -->
         <div class="mb-8">

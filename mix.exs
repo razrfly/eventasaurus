@@ -63,7 +63,16 @@ defmodule Eventasaurus.MixProject do
       {:httpoison, "~> 2.0"},
 
       # Load environment variables from .env file
-      {:dotenv, "~> 3.1", only: [:dev, :test]}
+      {:dotenv, "~> 3.1", only: [:dev, :test]},
+
+      # Test data factories
+      {:ex_machina, "~> 2.7.0", only: :test},
+
+      # Mocking library for external services in tests
+      {:mox, "~> 1.0", only: :test},
+
+      # Browser automation for end-to-end testing
+      {:wallaby, "~> 0.30.0", only: :test, runtime: false}
     ]
   end
 

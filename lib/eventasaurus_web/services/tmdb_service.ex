@@ -4,6 +4,8 @@ defmodule EventasaurusWeb.Services.TmdbService do
   Supports multi-search (movies, TV, people).
   """
 
+  @behaviour EventasaurusWeb.Services.TmdbServiceBehaviour
+
   @base_url "https://api.themoviedb.org/3"
 
   def search_multi(query, page \\ 1) do

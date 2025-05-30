@@ -24,6 +24,7 @@ defmodule EventasaurusApp.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       import EventasaurusApp.DataCase
+      import EventasaurusApp.Factory
     end
   end
 
