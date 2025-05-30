@@ -32,7 +32,7 @@ defmodule EventasaurusWeb.EventController do
 
         # Load participants (guests) for the event
         participants = Events.list_event_participants(event)
-                      |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+                      |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
 
         conn
         |> assign(:venue, venue)
