@@ -103,10 +103,10 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
       # Should show event details
       assert html =~ "Public Management View"
 
-      # Current implementation shows admin elements to everyone (noted as bug in existing tests)
-      # This is expected behavior that will be fixed in later tasks
-      assert html =~ "Edit Event"
-      assert html =~ "Delete Event"
+      # Should NOT show admin elements to non-organizer users
+      refute html =~ "Edit Event"
+      refute html =~ "Delete Event"
+      refute html =~ "Permanently delete this event"  # Check for actual danger zone content, not just comment
     end
 
     test "loads for unauthenticated users", %{conn: conn} do
@@ -119,10 +119,10 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
       # Should show basic event info
       assert html =~ "Unauthenticated Management View"
 
-      # Current implementation shows admin elements even to unauthenticated users
-      # This is noted behavior that will be fixed in future tasks
-      assert html =~ "Edit Event"
-      assert html =~ "Delete Event"
+      # Should NOT show admin elements to unauthenticated users
+      refute html =~ "Edit Event"
+      refute html =~ "Delete Event"
+      refute html =~ "Permanently delete this event"  # Check for actual danger zone content, not just comment
     end
 
     test "returns 404 for non-existent event", %{conn: conn} do
