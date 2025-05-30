@@ -73,6 +73,7 @@ defmodule EventasaurusWeb.Router do
     pipe_through :browser
 
     get "/:slug", EventController, :show
+    delete "/:slug", EventController, :delete
     get "/:slug/attendees", EventController, :attendees
   end
 
