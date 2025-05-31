@@ -326,19 +326,29 @@ defmodule EventasaurusApp.Events do
     })
 
     Repo.transaction(fn ->
-      event = get_event!(event_id)
+      # Get the event (handle exception)
+      event = try do
+        get_event!(event_id)
+      rescue
+        Ecto.NoResultsError ->
+          Logger.error("Event not found", %{event_id: event_id})
+          Repo.rollback(:event_not_found)
+      end
       Logger.debug("Event found for registration", %{event_title: event.title, event_id: event.id})
 
-      # Check if user exists in our local database first
-      existing_user = Accounts.get_user_by_email(email)
+      # Get the user from the database to update socket assigns
+      user = case Accounts.get_user_by_email(email) do
+        nil -> nil
+        user -> user
+      end
 
-      if existing_user do
-        Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
+      if user do
+        Logger.debug("Existing user found in local database", %{user_id: user.id})
       else
         Logger.debug("No existing user found in local database")
       end
 
-      user = case existing_user do
+      user = case user do
         nil ->
           # User doesn't exist locally, check Supabase and create if needed
           Logger.info("User not found locally, attempting Supabase user creation/lookup")
@@ -392,7 +402,7 @@ defmodule EventasaurusApp.Events do
                 user_id: user.id,
                 event_id: event.id
               })
-              if existing_user do
+              if user do
                 {:existing_user_registered, participant}
               else
                 {:new_registration, participant}
@@ -720,10 +730,10 @@ defmodule EventasaurusApp.Events do
       with {:ok, updated_poll} <- poll
                                    |> EventDatePoll.finalization_changeset(selected_date)
                                    |> Repo.update(),
-           # Update the event's start_at and state
+           # Update the event's start_at and state - preserve original time
            {:ok, updated_event} <- poll.event
                                    |> Event.changeset(%{
-                                     start_at: DateTime.new!(selected_date, ~T[00:00:00], "Etc/UTC"),
+                                     start_at: DateTime.new!(selected_date, DateTime.to_time(poll.event.start_at), poll.event.start_at.time_zone),
                                      state: "confirmed"
                                    })
                                    |> Repo.update() do
@@ -1069,12 +1079,13 @@ defmodule EventasaurusApp.Events do
     })
 
     Repo.transaction(fn ->
-      # Get the event
-      event = case get_event!(event_id) do
-        nil ->
+      # Get the event (handle exception)
+      event = try do
+        get_event!(event_id)
+      rescue
+        Ecto.NoResultsError ->
           Logger.error("Event not found", %{event_id: event_id})
           Repo.rollback(:event_not_found)
-        event -> event
       end
 
       # Check if user exists in our local database first
@@ -1186,16 +1197,280 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
-  Gets a user by email from the local database.
+  Casts multiple votes for a user using a single database transaction.
+
+  This function uses Ecto.Multi to perform bulk vote operations efficiently:
+  - Handles conflict resolution for existing votes (upsert)
+  - Uses Repo.insert_all for new votes
+  - Updates existing votes in bulk
+  - All operations happen in a single transaction
+
+  votes_data should be a list of maps: [%{option_id: 1, vote_type: :yes}, ...]
 
   Returns:
-  - {:ok, user} if user exists
-  - {:error, :not_found} if user doesn't exist
+  - {:ok, %{inserted: count, updated: count}} on success
+  - {:error, reason} on failure
   """
-  def get_user_by_email(email) do
-    case Repo.get_by(User, email: email) do
-      nil -> {:error, :not_found}
-      user -> {:ok, user}
+  def bulk_cast_votes(%User{} = user, votes_data) when is_list(votes_data) do
+    require Logger
+    Logger.info("Starting bulk vote casting", %{
+      user_id: user.id,
+      vote_count: length(votes_data)
+    })
+
+    # Validate vote types before starting
+    valid_vote_types = [:yes, :if_need_be, :no]
+    invalid_votes = Enum.filter(votes_data, fn %{vote_type: vote_type} ->
+      vote_type not in valid_vote_types
+    end)
+
+    if length(invalid_votes) > 0 do
+      Logger.error("Invalid vote types found in bulk operation", %{invalid_votes: invalid_votes})
+      {:error, :invalid_type}
+    else
+      # Prepare votes data for processing
+      option_ids = Enum.map(votes_data, & &1.option_id)
+
+      # Get existing votes for this user and these options
+      existing_votes_query = from(v in EventDateVote,
+        where: v.user_id == ^user.id and v.event_date_option_id in ^option_ids,
+        select: {v.event_date_option_id, v}
+      )
+
+      existing_votes_map = existing_votes_query
+      |> Repo.all()
+      |> Map.new()
+
+      # Separate into updates and inserts
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      {votes_to_update, votes_to_insert} = Enum.reduce(votes_data, {[], []}, fn vote_data, {updates, inserts} ->
+        case Map.get(existing_votes_map, vote_data.option_id) do
+          nil ->
+            # New vote - prepare for insert
+            insert_data = %{
+              event_date_option_id: vote_data.option_id,
+              user_id: user.id,
+              vote_type: vote_data.vote_type,
+              inserted_at: now,
+              updated_at: now
+            }
+            {updates, [insert_data | inserts]}
+
+          existing_vote ->
+            # Existing vote - prepare for update (only if different)
+            if existing_vote.vote_type != vote_data.vote_type do
+              update_data = {existing_vote.id, %{vote_type: vote_data.vote_type, updated_at: now}}
+              {[update_data | updates], inserts}
+            else
+              # Vote type is the same, no update needed
+              {updates, inserts}
+            end
+        end
+      end)
+
+      # Execute the bulk operations using Ecto.Multi
+      multi = Ecto.Multi.new()
+
+      # Add insert operations if there are new votes
+      multi = if length(votes_to_insert) > 0 do
+        Ecto.Multi.insert_all(multi, :insert_votes, EventDateVote, votes_to_insert)
+      else
+        multi
+      end
+
+      # Add update operations if there are votes to update
+      multi = if length(votes_to_update) > 0 do
+        Enum.reduce(votes_to_update, multi, fn {vote_id, update_attrs}, acc ->
+          vote = Repo.get!(EventDateVote, vote_id)
+          changeset = EventDateVote.changeset(vote, update_attrs)
+          Ecto.Multi.update(acc, {:update_vote, vote_id}, changeset)
+        end)
+      else
+        multi
+      end
+
+      # Execute the transaction
+      case Repo.transaction(multi) do
+        {:ok, results} ->
+          inserted_count = case Map.get(results, :insert_votes) do
+            {count, _} -> count
+            nil -> 0
+          end
+
+          updated_count = Enum.count(results, fn {key, _} ->
+            case key do
+              {:update_vote, _} -> true
+              _ -> false
+            end
+          end)
+
+          Logger.info("Bulk vote casting completed successfully", %{
+            user_id: user.id,
+            inserted: inserted_count,
+            updated: updated_count
+          })
+
+          {:ok, %{inserted: inserted_count, updated: updated_count}}
+
+        {:error, operation, reason, _changes} ->
+          Logger.error("Bulk vote casting failed", %{
+            user_id: user.id,
+            operation: operation,
+            reason: inspect(reason)
+          })
+          {:error, reason}
+      end
+    end
+  end
+
+  @doc """
+  Registers a voter and casts multiple votes using bulk operations.
+
+  This is an optimized version of register_voter_and_cast_vote that handles
+  multiple votes in a single transaction for better performance.
+
+  votes_data should be a list of maps: [%{option: option_struct, vote_type: :yes}, ...]
+
+  Returns:
+  - {:ok, result_type, participant, vote_results} on success
+  - {:error, reason} on failure
+  """
+  def register_voter_and_bulk_cast_votes(event_id, name, email, votes_data) when is_list(votes_data) do
+    alias EventasaurusApp.Auth.SupabaseSync
+    alias EventasaurusApp.Accounts
+    require Logger
+
+    Logger.info("Starting voter registration and bulk vote casting", %{
+      event_id: event_id,
+      email: email,
+      name: name,
+      vote_count: length(votes_data)
+    })
+
+    # Validate vote types before starting transaction
+    valid_vote_types = [:yes, :if_need_be, :no]
+    invalid_votes = Enum.filter(votes_data, fn %{vote_type: vote_type} ->
+      vote_type not in valid_vote_types
+    end)
+
+    if length(invalid_votes) > 0 do
+      Logger.error("Invalid vote types found", %{invalid_votes: invalid_votes})
+      {:error, :invalid_vote_types}
+    else
+      Repo.transaction(fn ->
+        # Get the event (handle exception)
+        event = try do
+          get_event!(event_id)
+        rescue
+          Ecto.NoResultsError ->
+            Logger.error("Event not found", %{event_id: event_id})
+            Repo.rollback(:event_not_found)
+        end
+
+        # Check if user exists in our local database first
+        existing_user = Accounts.get_user_by_email(email)
+
+        user = case existing_user do
+          nil ->
+            # User doesn't exist locally, check Supabase and create if needed
+            Logger.info("User not found locally, attempting Supabase user creation/lookup")
+            case create_or_find_supabase_user(email, name) do
+              {:ok, supabase_user} ->
+                Logger.info("Successfully created/found user in Supabase")
+                # Sync with local database
+                case SupabaseSync.sync_user(supabase_user) do
+                  {:ok, user} ->
+                    Logger.info("Successfully synced user to local database", %{user_id: user.id})
+                    user
+                  {:error, reason} ->
+                    Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+                    Repo.rollback(reason)
+                end
+              {:error, reason} ->
+                Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
+                Repo.rollback(reason)
+            end
+
+          user ->
+            # User exists locally
+            Logger.debug("Using existing local user", %{user_id: user.id})
+            user
+        end
+
+        # Check if user is registered for the event, register if not
+        participant = case get_event_participant_by_event_and_user(event, user) do
+          nil ->
+            Logger.debug("User not registered for event, creating participant record", %{
+              user_id: user.id,
+              event_id: event.id
+            })
+
+            participant_attrs = %{
+              event_id: event.id,
+              user_id: user.id,
+              role: :invitee,
+              status: :pending,
+              source: "bulk_voting_registration",
+              metadata: %{
+                registration_date: DateTime.utc_now(),
+                registered_name: name,
+                registered_via_bulk_voting: true
+              }
+            }
+
+            case create_event_participant(participant_attrs) do
+              {:ok, participant} ->
+                Logger.info("Successfully created event participant for bulk voter", %{
+                  participant_id: participant.id,
+                  user_id: user.id,
+                  event_id: event.id
+                })
+                participant
+              {:error, reason} ->
+                Logger.error("Failed to create event participant for bulk voter", %{reason: inspect(reason)})
+                Repo.rollback(reason)
+            end
+
+          participant ->
+            Logger.debug("User already registered for event", %{user_id: user.id, event_id: event.id})
+            participant
+        end
+
+        # Convert votes_data to the format expected by bulk_cast_votes
+        bulk_votes_data = Enum.map(votes_data, fn %{option: option, vote_type: vote_type} ->
+          %{option_id: option.id, vote_type: vote_type}
+        end)
+
+        # Cast all votes using bulk operation
+        case bulk_cast_votes(user, bulk_votes_data) do
+          {:ok, vote_results} ->
+            Logger.info("Successfully cast bulk votes", %{
+              user_id: user.id,
+              vote_results: vote_results
+            })
+
+            result_type = if existing_user, do: :existing_user_voted, else: :new_voter
+            {result_type, participant, vote_results}
+
+          {:error, reason} ->
+            Logger.error("Failed to cast bulk votes", %{reason: inspect(reason)})
+            Repo.rollback(reason)
+        end
+      end)
+      |> case do
+        {:ok, {result_type, participant, vote_results}} ->
+          Logger.info("Bulk voter registration and vote transaction completed successfully", %{
+            result_type: result_type,
+            participant_id: participant.id,
+            vote_results: vote_results
+          })
+          {:ok, result_type, participant, vote_results}
+
+        {:error, reason} ->
+          Logger.warning("Bulk voter registration and vote transaction failed", %{reason: inspect(reason)})
+          {:error, reason}
+      end
     end
   end
 end

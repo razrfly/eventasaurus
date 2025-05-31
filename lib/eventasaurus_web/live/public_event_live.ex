@@ -246,7 +246,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   def handle_event("manage_event", _params, socket) do
     # Redirect to the event management page
     event_slug = socket.assigns.event.slug
-    {:noreply, push_navigate(socket, to: "/manage/#{event_slug}")}
+    {:noreply, push_navigate(socket, to: "/events/#{event_slug}/edit")}
   end
 
   def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
@@ -279,14 +279,20 @@ defmodule EventasaurusWeb.PublicEventLive do
       {:error, _} ->
         # Anonymous user - store vote temporarily in assigns
         option_id_int = String.to_integer(option_id)
-        vote_type_atom = String.to_atom(vote_type)
 
-        updated_temp_votes = Map.put(socket.assigns.temp_votes, option_id_int, vote_type_atom)
+        # Validate option exists
+        unless Enum.any?(socket.assigns.date_options, &(&1.id == option_id_int)) do
+          {:noreply, put_flash(socket, :error, "Invalid voting option")}
+        else
+          vote_type_atom = String.to_atom(vote_type)
 
-        {:noreply,
-         socket
-         |> assign(:temp_votes, updated_temp_votes)
-        }
+          updated_temp_votes = Map.put(socket.assigns.temp_votes, option_id_int, vote_type_atom)
+
+          {:noreply,
+           socket
+           |> assign(:temp_votes, updated_temp_votes)
+          }
+        end
     end
   end
 
@@ -316,9 +322,14 @@ defmodule EventasaurusWeb.PublicEventLive do
         end
 
       {:error, _} ->
+        # Anonymous user - remove from temporary votes
+        option_id_int = String.to_integer(option_id)
+        updated_temp_votes = Map.delete(socket.assigns.temp_votes, option_id_int)
+
         {:noreply,
          socket
-         |> put_flash(:error, "Please log in to manage your votes.")
+         |> assign(:temp_votes, updated_temp_votes)
+         |> put_flash(:info, "Vote removed from your temporary votes.")
         }
     end
   end
@@ -346,15 +357,11 @@ defmodule EventasaurusWeb.PublicEventLive do
 
       {:error, _} ->
         # For new users who just registered, try to find them by email
-        case EventasaurusApp.Accounts.get_user_by_email(email) do
-          nil ->
-            socket
-          user ->
-            socket
-            |> assign(:registration_status, :registered)
-            |> assign(:user, user)
-            |> assign(:just_registered, true)  # This is always a new registration
-        end
+        user = Accounts.get_user_by_email(email)
+        socket
+        |> assign(:registration_status, :registered)
+        |> assign(:user, user)
+        |> assign(:just_registered, true)  # This is always a new registration
     end
 
     {:noreply,
@@ -405,9 +412,11 @@ defmodule EventasaurusWeb.PublicEventLive do
     user_votes = case socket.assigns.auth_user do
       nil ->
         # For anonymous users, try to find the user by email to show their votes
-        case EventasaurusApp.Accounts.get_user_by_email(email) do
-          nil -> []
-          user -> Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+        user = Accounts.get_user_by_email(email)
+        if user do
+          Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+        else
+          []
         end
       auth_user ->
         # For authenticated users, reload their votes normally
@@ -453,75 +462,57 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   def handle_info({:save_all_votes_for_user, event_id, name, email, temp_votes, date_options}, socket) do
-    # Register user and cast all their votes
-    results = for {option_id, vote_type} <- temp_votes do
+    # Convert temp_votes map to the format expected by bulk operations
+    votes_data = for {option_id, vote_type} <- temp_votes do
       option = Enum.find(date_options, &(&1.id == option_id))
-      Events.register_voter_and_cast_vote(event_id, name, email, option, vote_type)
+      %{option: option, vote_type: vote_type}
     end
 
-    case results do
-      # All votes succeeded
-      results when is_list(results) ->
-        success_results = Enum.filter(results, fn
-          {:ok, _, _, _} -> true
-          _ -> false
-        end)
+    # Use bulk vote operation for better performance
+    case Events.register_voter_and_bulk_cast_votes(event_id, name, email, votes_data) do
+      {:ok, result_type, _participant, _vote_results} ->
+        # Get the user from the database to update socket assigns
+        user = Accounts.get_user_by_email(email)
 
-        if length(success_results) == map_size(temp_votes) do
-          # All votes saved successfully - get first result to determine user type
-          {result_type, _participant, _vote} = case hd(success_results) do
-            {:ok, type, participant, vote} -> {type, participant, vote}
-          end
-
-          # Get the user from the participant to update socket assigns
-          user = case Events.get_user_by_email(email) do
-            {:ok, user} -> user
-            _ -> nil
-          end
-
-          # Reload user votes to show updated state
-          user_votes = if user do
-            Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-          else
-            []
-          end
-
-          # Reload voting summary as well
-          voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
-
-          message = case result_type do
-            :new_voter ->
-              "All #{map_size(temp_votes)} votes saved successfully! You're now registered for #{socket.assigns.event.title}. Check your email to verify your account."
-            :existing_user_voted ->
-              "All #{map_size(temp_votes)} votes saved successfully! You're registered for #{socket.assigns.event.title}."
-          end
-
-          {:noreply,
-           socket
-           |> assign(:show_vote_modal, false)
-           |> assign(:temp_votes, %{})
-           |> assign(:user_votes, user_votes)
-           |> assign(:voting_summary, voting_summary)
-           |> assign(:registration_status, :registered)  # Update registration status
-           |> assign(:user, user)  # Set the user so they see authenticated UI
-           |> assign(:just_registered, result_type == :new_voter)  # Show email verification for new users
-           |> put_flash(:info, message)
-          }
+        # Reload user votes to show updated state
+        user_votes = if user do
+          Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
         else
-          # Some votes failed
-          {:noreply,
-           socket
-           |> assign(:show_vote_modal, false)
-           |> put_flash(:error, "Only #{length(success_results)} of #{map_size(temp_votes)} votes were saved. Please try again.")
-          }
+          []
         end
 
-      [] ->
-        # No votes to process
+        # Reload voting summary as well
+        voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+        message = case result_type do
+          :new_voter ->
+            "All #{map_size(temp_votes)} votes saved successfully! You're now registered for #{socket.assigns.event.title}. Check your email to verify your account."
+          :existing_user_voted ->
+            "All #{map_size(temp_votes)} votes saved successfully! You're registered for #{socket.assigns.event.title}."
+        end
+
         {:noreply,
          socket
          |> assign(:show_vote_modal, false)
-         |> put_flash(:error, "No votes to save.")
+         |> assign(:temp_votes, %{})
+         |> assign(:user_votes, user_votes)
+         |> assign(:voting_summary, voting_summary)
+         |> assign(:registration_status, :registered)  # Update registration status
+         |> assign(:user, user)  # Set the user so they see authenticated UI
+         |> assign(:just_registered, result_type == :new_voter)  # Show email verification for new users
+         |> put_flash(:info, message)
+        }
+
+      {:error, reason} ->
+        error_message = case reason do
+          :event_not_found -> "Event not found."
+          _ -> "Failed to save votes. Please try again."
+        end
+
+        {:noreply,
+         socket
+         |> assign(:show_vote_modal, false)
+         |> put_flash(:error, error_message)
         }
     end
   end
@@ -724,11 +715,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                             <%= Calendar.strftime(option.date, "%A, %B %d, %Y") %>
                           </h3>
                           <p class="text-sm text-gray-500">
-                            <%= if Map.has_key?(option, :start_time) and option.start_time do %>
-                              Starting at <%= Calendar.strftime(option.start_time, "%I:%M %p") %>
-                            <% else %>
-                              All day
-                            <% end %>
+                            All day
                           </p>
                         </div>
                         <div class="text-sm text-gray-500">

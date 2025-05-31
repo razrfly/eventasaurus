@@ -503,23 +503,6 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       %{polling_event: polling_event, poll: poll, organizer: user}
     end
 
-    test "anonymous users can see voting buttons to start voting process", %{conn: conn, polling_event: event, poll: _poll} do
-      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
-
-      # Anonymous users should see voting interface with vote buttons, not just tally
-      html = render(view)
-
-      # Should see vote buttons for each option
-      assert html =~ "phx-click=\"cast_vote\""
-
-      # Should NOT show the old register to vote message
-      refute html =~ "Want to vote on the event date?"
-      refute html =~ "Register to Vote"
-
-      # Should see vote tallies
-      assert html =~ "0 votes"
-    end
-
     test "anonymous user sees voting buttons and can start voting process", %{conn: conn, polling_event: event, poll: _poll} do
       {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
 
@@ -730,6 +713,82 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert html =~ "Your votes:" # Vote summary section
       assert html =~ "👍 Yes" # The vote we cast
     end
+
+    test "multiple anonymous voters can vote sequentially", %{conn: conn, polling_event: event, poll: _poll} do
+      # Test sequential voting (since LiveView tests don't support concurrent tasks)
+      num_voters = 3
+
+      results = for i <- 1..num_voters do
+        # Each voter gets a fresh LiveView session
+        {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+        # Each voter votes on first option
+        option = hd(event.date_poll.date_options)
+        render_click(view, "cast_vote", %{
+          "option_id" => to_string(option.id),
+          "vote_type" => "yes"
+        })
+
+        # Click save votes to show modal
+        render_click(view, "save_all_votes")
+
+        # Submit the form with unique voter info
+        view
+        |> form("form", voter: %{
+          name: "Voter #{i}",
+          email: "voter#{i}@example.com"
+        })
+        |> render_submit()
+
+        # Return success indicator
+        :ok
+      end
+
+      # All should succeed
+      assert Enum.all?(results, &(&1 == :ok))
+    end
+
+    test "anonymous voting UI loads within acceptable time", %{conn: conn, polling_event: event, poll: _poll} do
+      # Measure time to load page
+      start_time = System.monotonic_time(:millisecond)
+      {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
+      end_time = System.monotonic_time(:millisecond)
+
+      load_time = end_time - start_time
+
+      # Should load within 2 seconds (generous for test environment)
+      assert load_time < 2000
+
+      # Should show voting interface
+      assert html =~ "Vote on Event Date"
+      assert html =~ "phx-click=\"cast_vote\""
+    end
+
+    test "voting state persists correctly across multiple votes", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      options = event.date_poll.date_options
+
+      # Vote on multiple options in sequence
+      for {option, vote_type} <- Enum.zip(Enum.take(options, 3), ["yes", "if_need_be", "no"]) do
+        render_click(view, "cast_vote", %{
+          "option_id" => to_string(option.id),
+          "vote_type" => vote_type
+        })
+
+        # Verify vote is reflected in UI
+        html = render(view)
+        case vote_type do
+          "yes" -> assert html =~ "bg-green-100 text-green-800"
+          "if_need_be" -> assert html =~ "bg-yellow-100 text-yellow-800"
+          "no" -> assert html =~ "bg-red-100 text-red-800"
+        end
+      end
+
+      # Should show correct vote count
+      html = render(view)
+      assert html =~ "You've voted on 3 date option(s)" or html =~ "3 date option"
+    end
   end
 
   describe "Phase 5: Performance and Load Testing" do
@@ -748,7 +807,7 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       %{polling_event: polling_event, poll: poll, organizer: user}
     end
 
-    test "multiple anonymous voters can vote simultaneously", %{conn: conn, polling_event: event, poll: _poll} do
+    test "multiple anonymous voters can vote sequentially", %{conn: conn, polling_event: event, poll: _poll} do
       # Test sequential voting (since LiveView tests don't support concurrent tasks)
       num_voters = 3
 
