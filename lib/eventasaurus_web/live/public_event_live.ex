@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Accounts
   alias EventasaurusWeb.EventRegistrationComponent
+  alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.ReservedSlugs
 
   def mount(%{"slug" => slug}, _session, socket) do
@@ -80,6 +81,9 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:date_poll, date_poll)
            |> assign(:date_options, date_options)
            |> assign(:user_votes, user_votes)
+           |> assign(:pending_vote, nil)
+           |> assign(:show_vote_modal, false)
+           |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users
           }
       end
     end
@@ -87,6 +91,24 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   def handle_event("show_registration_modal", _params, socket) do
     {:noreply, assign(socket, :show_registration_modal, true)}
+  end
+
+  def handle_event("close_vote_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_vote_modal, false)
+     |> assign(:pending_vote, nil)
+    }
+  end
+
+  def handle_event("save_all_votes", _params, socket) do
+    # Only for anonymous users with temporary votes
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:error, _} when map_size(socket.assigns.temp_votes) > 0 ->
+        {:noreply, assign(socket, :show_vote_modal, true)}
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("one_click_register", _params, socket) do
@@ -222,17 +244,81 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   def handle_event("manage_event", _params, socket) do
-    # Only allow for event organizers
-    case socket.assigns.registration_status do
-      :organizer ->
+    # Redirect to the event management page
+    event_slug = socket.assigns.event.slug
+    {:noreply, push_navigate(socket, to: "/manage/#{event_slug}")}
+  end
+
+  def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:ok, user} ->
+        # Authenticated user - proceed with normal voting flow
+        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
+        vote_type_atom = String.to_atom(vote_type)
+
+        case Events.cast_vote(option, user, vote_type_atom) do
+          {:ok, _vote} ->
+            # Reload user votes and voting summary
+            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+            {:noreply,
+             socket
+             |> assign(:user_votes, user_votes)
+             |> assign(:voting_summary, voting_summary)
+             |> put_flash(:info, "Your vote has been recorded!")
+            }
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
+            }
+        end
+
+      {:error, _} ->
+        # Anonymous user - store vote temporarily in assigns
+        option_id_int = String.to_integer(option_id)
+        vote_type_atom = String.to_atom(vote_type)
+
+        updated_temp_votes = Map.put(socket.assigns.temp_votes, option_id_int, vote_type_atom)
+
         {:noreply,
          socket
-         |> redirect(to: ~p"/events/#{socket.assigns.event.slug}/edit")
+         |> assign(:temp_votes, updated_temp_votes)
         }
-      _ ->
+    end
+  end
+
+  def handle_event("remove_vote", %{"option_id" => option_id}, socket) do
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:ok, user} ->
+        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
+
+        case Events.remove_user_vote(option, user) do
+          {:ok, _} ->
+            # Reload user votes and voting summary
+            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+            {:noreply,
+             socket
+             |> assign(:user_votes, user_votes)
+             |> assign(:voting_summary, voting_summary)
+             |> put_flash(:info, "Your vote has been removed.")
+            }
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
+            }
+        end
+
+      {:error, _} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Only event organizers can manage events.")
+         |> put_flash(:error, "Please log in to manage your votes.")
         }
     end
   end
@@ -299,71 +385,143 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
-  # Date Polling Event Handlers
-
-  def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
-    case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
-        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
-        vote_type_atom = String.to_atom(vote_type)
-
-        case Events.cast_vote(option, user, vote_type_atom) do
-          {:ok, _vote} ->
-            # Reload user votes and voting summary
-            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
-
-            {:noreply,
-             socket
-             |> assign(:user_votes, user_votes)
-             |> assign(:voting_summary, voting_summary)
-             |> put_flash(:info, "Your vote has been recorded!")
-            }
-
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
-            }
-        end
-
-      {:error, _} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Please log in to vote on event dates.")
-        }
-    end
+  def handle_info(:close_vote_modal, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_vote_modal, false)
+     |> assign(:pending_vote, nil)
+    }
   end
 
-  def handle_event("remove_vote", %{"option_id" => option_id}, socket) do
-    case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
-        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
+  def handle_info({:vote_success, type, _name, email}, socket) do
+    message = case type do
+      :new_voter ->
+        "Thanks! Your vote has been recorded. Check your email for account verification instructions."
+      :existing_user_voted ->
+        "Great! Your vote has been recorded."
+    end
 
-        case Events.remove_user_vote(option, user) do
-          {:ok, _} ->
-            # Reload user votes and voting summary
-            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+    # Reload vote data to show the updated vote
+    user_votes = case socket.assigns.auth_user do
+      nil ->
+        # For anonymous users, try to find the user by email to show their votes
+        case EventasaurusApp.Accounts.get_user_by_email(email) do
+          nil -> []
+          user -> Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+        end
+      auth_user ->
+        # For authenticated users, reload their votes normally
+        case ensure_user_struct(auth_user) do
+          {:ok, user} -> Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+          {:error, _} -> []
+        end
+    end
 
-            {:noreply,
-             socket
-             |> assign(:user_votes, user_votes)
-             |> assign(:voting_summary, voting_summary)
-             |> put_flash(:info, "Your vote has been removed.")
-            }
+    # Reload voting summary as well
+    voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
 
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
-            }
+    {:noreply,
+     socket
+     |> assign(:show_vote_modal, false)
+     |> assign(:pending_vote, nil)
+     |> assign(:user_votes, user_votes)
+     |> assign(:voting_summary, voting_summary)
+     |> put_flash(:info, message)
+    }
+  end
+
+  def handle_info({:vote_error, reason}, socket) do
+    error_message = case reason do
+      :event_not_found ->
+        "Event not found. Please refresh the page and try again."
+      %{message: msg} ->
+        msg
+      %{status: 422} ->
+        "This email address is already in use. Please try logging in instead."
+      %{status: _} ->
+        "We're having trouble saving your vote. Please try again in a moment."
+      _ ->
+        "Something went wrong. Please try again or contact the event organizer."
+    end
+
+    {:noreply,
+     socket
+     |> assign(:show_vote_modal, false)
+     |> assign(:pending_vote, nil)
+     |> put_flash(:error, error_message)
+    }
+  end
+
+  def handle_info({:save_all_votes_for_user, event_id, name, email, temp_votes, date_options}, socket) do
+    # Register user and cast all their votes
+    results = for {option_id, vote_type} <- temp_votes do
+      option = Enum.find(date_options, &(&1.id == option_id))
+      Events.register_voter_and_cast_vote(event_id, name, email, option, vote_type)
+    end
+
+    case results do
+      # All votes succeeded
+      results when is_list(results) ->
+        success_results = Enum.filter(results, fn
+          {:ok, _, _, _} -> true
+          _ -> false
+        end)
+
+        if length(success_results) == map_size(temp_votes) do
+          # All votes saved successfully - get first result to determine user type
+          {result_type, _participant, _vote} = case hd(success_results) do
+            {:ok, type, participant, vote} -> {type, participant, vote}
+          end
+
+          # Get the user from the participant to update socket assigns
+          user = case Events.get_user_by_email(email) do
+            {:ok, user} -> user
+            _ -> nil
+          end
+
+          # Reload user votes to show updated state
+          user_votes = if user do
+            Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+          else
+            []
+          end
+
+          # Reload voting summary as well
+          voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+          message = case result_type do
+            :new_voter ->
+              "All #{map_size(temp_votes)} votes saved successfully! You're now registered for #{socket.assigns.event.title}. Check your email to verify your account."
+            :existing_user_voted ->
+              "All #{map_size(temp_votes)} votes saved successfully! You're registered for #{socket.assigns.event.title}."
+          end
+
+          {:noreply,
+           socket
+           |> assign(:show_vote_modal, false)
+           |> assign(:temp_votes, %{})
+           |> assign(:user_votes, user_votes)
+           |> assign(:voting_summary, voting_summary)
+           |> assign(:registration_status, :registered)  # Update registration status
+           |> assign(:user, user)  # Set the user so they see authenticated UI
+           |> assign(:just_registered, result_type == :new_voter)  # Show email verification for new users
+           |> put_flash(:info, message)
+          }
+        else
+          # Some votes failed
+          {:noreply,
+           socket
+           |> assign(:show_vote_modal, false)
+           |> put_flash(:error, "Only #{length(success_results)} of #{map_size(temp_votes)} votes were saved. Please try again.")
+          }
         end
 
-      {:error, _} ->
+      [] ->
+        # No votes to process
         {:noreply,
          socket
-         |> put_flash(:error, "Please log in to manage your votes.")
+         |> assign(:show_vote_modal, false)
+         |> put_flash(:error, "No votes to save.")
         }
     end
   end
@@ -553,51 +711,98 @@ defmodule EventasaurusWeb.PublicEventLive do
                   <% end %>
                 </div>
               <% else %>
-                <!-- Non-authenticated users see voting summary but can't vote -->
+                <!-- Anonymous users see voting buttons and can start voting process -->
                 <div class="space-y-4">
                   <%= for option <- @date_options do %>
                     <% vote_tally = Events.get_date_option_vote_tally(option) %>
+                    <% temp_vote = Map.get(@temp_votes, option.id) %>
 
-                    <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
                       <div class="flex items-center justify-between mb-3">
                         <div class="flex-1">
                           <h3 class="font-medium text-gray-900">
                             <%= Calendar.strftime(option.date, "%A, %B %d, %Y") %>
                           </h3>
                           <p class="text-sm text-gray-500">
-                            <%= vote_tally.total %> <%= if vote_tally.total == 1, do: "vote", else: "votes" %>
-                            · <%= vote_tally.percentage %>% positive
+                            <%= if Map.has_key?(option, :start_time) and option.start_time do %>
+                              Starting at <%= Calendar.strftime(option.start_time, "%I:%M %p") %>
+                            <% else %>
+                              All day
+                            <% end %>
                           </p>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                          <%= vote_tally.total %> votes
                         </div>
                       </div>
 
-                      <!-- Vote tally visualization -->
-                      <div class="mb-3">
-                        <div class="flex h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <%= if vote_tally.total > 0 do %>
-                            <div class="bg-green-500" style={"width: #{(vote_tally.yes / vote_tally.total) * 100}%"}></div>
-                            <div class="bg-yellow-400" style={"width: #{(vote_tally.if_need_be / vote_tally.total) * 100}%"}></div>
-                            <div class="bg-red-400" style={"width: #{(vote_tally.no / vote_tally.total) * 100}%"}></div>
-                          <% end %>
-                        </div>
-                        <div class="flex justify-between text-xs text-gray-500 mt-1">
-                          <span>Yes: <%= vote_tally.yes %></span>
-                          <span>If needed: <%= vote_tally.if_need_be %></span>
-                          <span>No: <%= vote_tally.no %></span>
-                        </div>
+                      <div class="flex gap-2">
+                        <button
+                          type="button"
+                          phx-click="cast_vote"
+                          phx-value-option_id={option.id}
+                          phx-value-vote_type="yes"
+                          class={"px-3 py-2 text-sm font-medium rounded-md transition-colors " <>
+                            if temp_vote == :yes do
+                              "bg-green-100 text-green-800 border-2 border-green-300"
+                            else
+                              "bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100"
+                            end
+                          }
+                        >
+                          👍 Yes
+                        </button>
+
+                        <button
+                          type="button"
+                          phx-click="cast_vote"
+                          phx-value-option_id={option.id}
+                          phx-value-vote_type="if_need_be"
+                          class={"px-3 py-2 text-sm font-medium rounded-md transition-colors " <>
+                            if temp_vote == :if_need_be do
+                              "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
+                            else
+                              "bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100"
+                            end
+                          }
+                        >
+                          🤷 If need be
+                        </button>
+
+                        <button
+                          type="button"
+                          phx-click="cast_vote"
+                          phx-value-option_id={option.id}
+                          phx-value-vote_type="no"
+                          class={"px-3 py-2 text-sm font-medium rounded-md transition-colors " <>
+                            if temp_vote == :no do
+                              "bg-red-100 text-red-800 border-2 border-red-300"
+                            else
+                              "bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100"
+                            end
+                          }
+                        >
+                          👎 No
+                        </button>
                       </div>
                     </div>
                   <% end %>
 
-                  <div class="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p class="text-sm text-blue-800 mb-2">Want to vote on the event date?</p>
-                    <button
-                      phx-click="show_registration_modal"
-                      class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200"
-                    >
-                      Register to Vote
-                    </button>
-                  </div>
+                  <%= if map_size(@temp_votes) > 0 do %>
+                    <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h3 class="font-medium text-blue-900 mb-2">Ready to save your votes?</h3>
+                      <p class="text-sm text-blue-700 mb-3">
+                        You've voted on <%= map_size(@temp_votes) %> date option(s). Click below to save your votes.
+                      </p>
+                      <button
+                        type="button"
+                        phx-click="save_all_votes"
+                        class="w-full bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        Save My Votes
+                      </button>
+                    </div>
+                  <% end %>
                 </div>
               <% end %>
             </div>
@@ -853,6 +1058,16 @@ defmodule EventasaurusWeb.PublicEventLive do
         module={EventRegistrationComponent}
         id="registration-modal"
         event={@event}
+      />
+    <% end %>
+
+    <%= if @show_vote_modal and map_size(@temp_votes) > 0 do %>
+      <.live_component
+        module={AnonymousVoterComponent}
+        id="vote-modal"
+        event={@event}
+        temp_votes={@temp_votes}
+        date_options={@date_options}
       />
     <% end %>
 
