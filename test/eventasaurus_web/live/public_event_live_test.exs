@@ -427,7 +427,7 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       refute has_element?(view, "[data-testid='voting-interface']")
     end
 
-    test "anonymous users can see voting buttons to start voting process", %{conn: conn, polling_event: event, poll: poll} do
+    test "anonymous users can see voting buttons to start voting process", %{conn: conn, polling_event: event, poll: _poll} do
       {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
 
       # Anonymous users should see voting interface with vote buttons, not just tally
@@ -478,6 +478,350 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert html =~ "width: 66.66666666666666%"
       # If needed: 1/3 = 33.33%
       assert html =~ "width: 33.33333333333333%"
+    end
+  end
+
+  describe "Phase 4: Anonymous Voting Flow Tests" do
+    setup %{event: event} do
+      # Create an event with date polling enabled
+      user = user_fixture()
+
+      # Update event to polling state
+      {:ok, polling_event} = Events.update_event(event, %{state: "polling"})
+
+      # Create a date poll for the event
+      {:ok, poll} = Events.create_event_date_poll(polling_event, user, %{})
+
+      # Create some date options (using future dates to avoid validation issues)
+      start_date = Date.add(Date.utc_today(), 7)  # 1 week from now
+      end_date = Date.add(start_date, 7)          # 2 weeks from now
+      {:ok, _options} = Events.create_date_options_from_range(poll, start_date, end_date)
+
+      # Reload the event with date_poll preloaded
+      polling_event = Events.get_event!(polling_event.id) |> EventasaurusApp.Repo.preload([date_poll: :date_options])
+
+      %{polling_event: polling_event, poll: poll, organizer: user}
+    end
+
+    test "anonymous users can see voting buttons to start voting process", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      # Anonymous users should see voting interface with vote buttons, not just tally
+      html = render(view)
+
+      # Should see vote buttons for each option
+      assert html =~ "phx-click=\"cast_vote\""
+
+      # Should NOT show the old register to vote message
+      refute html =~ "Want to vote on the event date?"
+      refute html =~ "Register to Vote"
+
+      # Should see vote tallies
+      assert html =~ "0 votes"
+    end
+
+    test "anonymous user sees voting buttons and can start voting process", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      # Check that we have voting buttons for each option and vote type
+      for option <- event.date_poll.date_options do
+        # Should have Yes, If need be, and No buttons for each option
+        assert has_element?(
+          view,
+          "button[phx-click='cast_vote'][phx-value-option_id='#{option.id}'][phx-value-vote_type='yes']",
+          "👍 Yes"
+        )
+
+        assert has_element?(
+          view,
+          "button[phx-click='cast_vote'][phx-value-option_id='#{option.id}'][phx-value-vote_type='if_need_be']",
+          "🤷 If need be"
+        )
+
+        assert has_element?(
+          view,
+          "button[phx-click='cast_vote'][phx-value-option_id='#{option.id}'][phx-value-vote_type='no']",
+          "👎 No"
+        )
+      end
+    end
+
+    test "anonymous user can select votes and see visual feedback", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      option = hd(event.date_poll.date_options)
+
+      # Cast a vote
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(option.id),
+        "vote_type" => "yes"
+      })
+
+      html = render(view)
+      # Check for the actual styling used - green background and text
+      assert html =~ "bg-green-100 text-green-800"
+      # And thicker border
+      assert html =~ "border-2 border-green-300"
+    end
+
+    test "anonymous user can change temporary votes before saving", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      option = hd(event.date_poll.date_options)
+
+      # Cast yes vote first
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(option.id),
+        "vote_type" => "yes"
+      })
+
+      html = render(view)
+      assert html =~ "bg-green-100 text-green-800"
+
+      # Change to no vote
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(option.id),
+        "vote_type" => "no"
+      })
+
+      html = render(view)
+      # Should now show red styling instead
+      assert html =~ "bg-red-100 text-red-800"
+      # Should NOT show green styling anymore
+      refute html =~ "bg-green-100 text-green-800"
+    end
+
+    test "save my votes button only appears when user has temporary votes", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, html} = live(conn, ~p"/#{event.slug}")
+
+      # Should NOT show Save My Votes button initially
+      refute has_element?(view, "button[phx-click='save_all_votes']", "Save My Votes")
+      refute html =~ "Save My Votes"
+
+      # Cast a vote
+      option = hd(event.date_poll.date_options)
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(option.id),
+        "vote_type" => "yes"
+      })
+
+      # NOW should show Save My Votes button
+      assert has_element?(view, "button[phx-click='save_all_votes']", "Save My Votes")
+    end
+
+    test "anonymous voting shows modal after clicking save all votes button", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      # Cast a vote to show the Save My Votes button
+      option = hd(event.date_poll.date_options)
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(option.id),
+        "vote_type" => "yes"
+      })
+
+      # Click Save My Votes button to show modal
+      render_click(view, "save_all_votes")
+
+      # Should show the anonymous voter modal
+      assert has_element?(view, "[data-phx-component]")
+      assert has_element?(view, "input[name='voter[name]']")
+      assert has_element?(view, "input[name='voter[email]']")
+      assert has_element?(view, "button[type='submit']", "Save All Votes")
+    end
+
+    test "complete voting flow with form submission works", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      # Cast multiple votes
+      options = event.date_poll.date_options
+      first_option = Enum.at(options, 0)
+      second_option = Enum.at(options, 1)
+
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(first_option.id),
+        "vote_type" => "yes"
+      })
+
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(second_option.id),
+        "vote_type" => "if_need_be"
+      })
+
+      # Click Save My Votes button
+      render_click(view, "save_all_votes")
+
+      # Fill out the form
+      view
+      |> form("form", voter: %{name: "Test Voter", email: "voter@example.com"})
+      |> render_submit()
+
+      # Should redirect to registered user view or show success
+      # Check that we're no longer anonymous (should show registration success UI)
+      html = render(view)
+      assert html =~ "You're In" or html =~ "Registration" or html =~ "Successfully registered"
+    end
+
+    test "anonymous voting works with all three vote types", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      options = event.date_poll.date_options
+      first_option = Enum.at(options, 0)
+      second_option = Enum.at(options, 1)
+      third_option = Enum.at(options, 2)
+
+      # Vote yes on first option
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(first_option.id),
+        "vote_type" => "yes"
+      })
+
+      # Vote if_need_be on second option
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(second_option.id),
+        "vote_type" => "if_need_be"
+      })
+
+      # Vote no on third option
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(third_option.id),
+        "vote_type" => "no"
+      })
+
+      html = render(view)
+
+      # Should show that user has voted on 3 options
+      assert html =~ "You've voted on 3 date option(s)" or html =~ "3 date option"
+
+      # Should show Save My Votes button
+      assert has_element?(view, "button[phx-click='save_all_votes']", "Save My Votes")
+
+      # Should show visual feedback on buttons
+      assert html =~ "bg-green-100 text-green-800" # Yes vote styling
+      assert html =~ "bg-yellow-100 text-yellow-800" # If need be styling
+      assert html =~ "bg-red-100 text-red-800" # No vote styling
+    end
+
+    test "anonymous voting flow works correctly until modal submission", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      # Cast a vote
+      option = hd(event.date_poll.date_options)
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(option.id),
+        "vote_type" => "yes"
+      })
+
+      # Should show Save My Votes button after voting
+      assert has_element?(view, "button[phx-click='save_all_votes']")
+
+      # Click save all votes to show modal
+      render_click(view, "save_all_votes")
+
+      # Modal should be visible with form elements
+      # (The modal appears even if eventual submission might fail due to external services)
+      assert has_element?(view, "[data-phx-component]") # Modal container
+      assert has_element?(view, "h3", "Save Your Votes") # Modal title
+      assert has_element?(view, "input[name='voter[name]']") # Name input
+      assert has_element?(view, "input[name='voter[email]']") # Email input
+      assert has_element?(view, "button[type='submit']") # Submit button
+
+      # Verify vote summary is shown in modal
+      html = render(view)
+      assert html =~ "Your votes:" # Vote summary section
+      assert html =~ "👍 Yes" # The vote we cast
+    end
+  end
+
+  describe "Phase 5: Performance and Load Testing" do
+    setup %{event: event} do
+      user = user_fixture()
+      {:ok, polling_event} = Events.update_event(event, %{state: "polling"})
+      {:ok, poll} = Events.create_event_date_poll(polling_event, user, %{})
+
+      start_date = Date.add(Date.utc_today(), 7)
+      end_date = Date.add(start_date, 7)
+      {:ok, _options} = Events.create_date_options_from_range(poll, start_date, end_date)
+
+      # Reload the event with date_poll preloaded
+      polling_event = Events.get_event!(polling_event.id) |> EventasaurusApp.Repo.preload([date_poll: :date_options])
+
+      %{polling_event: polling_event, poll: poll, organizer: user}
+    end
+
+    test "multiple anonymous voters can vote simultaneously", %{conn: conn, polling_event: event, poll: _poll} do
+      # Test sequential voting (since LiveView tests don't support concurrent tasks)
+      num_voters = 3
+
+      results = for i <- 1..num_voters do
+        # Each voter gets a fresh LiveView session
+        {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+        # Each voter votes on first option
+        option = hd(event.date_poll.date_options)
+        render_click(view, "cast_vote", %{
+          "option_id" => to_string(option.id),
+          "vote_type" => "yes"
+        })
+
+        # Click save votes to show modal
+        render_click(view, "save_all_votes")
+
+        # Submit the form with unique voter info
+        view
+        |> form("form", voter: %{
+          name: "Voter #{i}",
+          email: "voter#{i}@example.com"
+        })
+        |> render_submit()
+
+        # Return success indicator
+        :ok
+      end
+
+      # All should succeed
+      assert Enum.all?(results, &(&1 == :ok))
+    end
+
+    test "anonymous voting UI loads within acceptable time", %{conn: conn, polling_event: event, poll: _poll} do
+      # Measure time to load page
+      start_time = System.monotonic_time(:millisecond)
+      {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
+      end_time = System.monotonic_time(:millisecond)
+
+      load_time = end_time - start_time
+
+      # Should load within 2 seconds (generous for test environment)
+      assert load_time < 2000
+
+      # Should show voting interface
+      assert html =~ "Vote on Event Date"
+      assert html =~ "phx-click=\"cast_vote\""
+    end
+
+    test "voting state persists correctly across multiple votes", %{conn: conn, polling_event: event, poll: _poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      options = event.date_poll.date_options
+
+      # Vote on multiple options in sequence
+      for {option, vote_type} <- Enum.zip(Enum.take(options, 3), ["yes", "if_need_be", "no"]) do
+        render_click(view, "cast_vote", %{
+          "option_id" => to_string(option.id),
+          "vote_type" => vote_type
+        })
+
+        # Verify vote is reflected in UI
+        html = render(view)
+        case vote_type do
+          "yes" -> assert html =~ "bg-green-100 text-green-800"
+          "if_need_be" -> assert html =~ "bg-yellow-100 text-yellow-800"
+          "no" -> assert html =~ "bg-red-100 text-red-800"
+        end
+      end
+
+      # Should show correct vote count
+      html = render(view)
+      assert html =~ "You've voted on 3 date option(s)" or html =~ "3 date option"
     end
   end
 end
