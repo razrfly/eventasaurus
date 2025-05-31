@@ -159,4 +159,137 @@ This is the core inspiration for:
 - Participant list display
 - Heatmap summary of results
 
---- 
+---
+
+# ✅ Frictionless Anonymous Voting PRD
+
+**Version:** 1.0
+**Status:** Ready for implementation
+**Objective:** Enable anonymous users to cast votes for event dates with minimal friction, using the same model as our successful registration flow. No schema changes, no added complexity.
+
+---
+
+## 1. Overview
+
+Anonymous users can vote on event date options without logging in. They are asked for their name + email after selecting a vote, at which point their vote is saved to the backend using the same flow as our event registration system.
+
+* No authentication required
+* No new user schema fields
+* No use of browser storage or JavaScript state
+* All temporary data is held in LiveView assigns
+
+---
+
+## 2. Flow Summary
+
+### 🧑 Anonymous User
+
+1. Clicks a vote button (Yes / If need be / No)
+2. Vote stored in `socket.assigns.pending_vote`
+3. Modal opens asking for name + email
+4. User submits form
+5. Backend:
+
+   * Finds or creates user by email
+   * Records vote in database
+6. UI updates to show success
+7. (Optional) Sends verification email
+
+---
+
+## 3. Data Handling
+
+### Temporary Storage
+
+* Vote stored in LiveView memory:
+
+  * assign `pending_vote` to socket
+  * This is not persisted until the user submits their email
+
+### Backend Behavior
+
+* Reuses existing `register_user_for_event` pattern
+* No changes to `users` schema
+* Users are marked unconfirmed until they verify by email (as today)
+
+---
+
+## 4. UI Implementation
+
+* On vote button click:
+
+  * Store vote in assigns
+  * Show modal requesting name + email
+
+* On form submit:
+
+  * Call context function to find/create user and record vote
+  * Dismiss modal, flash success
+  * Reload vote data for display
+
+---
+
+## 5. Backend Logic
+
+* Mirror existing `register_user_for_event`
+* Add new `register_voter_and_cast_vote` context function:
+
+  * Gets or creates user by email
+  * Casts vote using event date option and vote type
+  * Optionally sends verification email
+
+---
+
+## 6. Modal Form
+
+* Simple form asking for name and email
+* Reuse styling and structure from registration modal
+* Submit triggers vote + user creation logic
+
+---
+
+## 7. Edge Case Handling
+
+### ✅ Email Already Exists
+
+* Existing verified user → Vote saved
+* Existing unverified user → Vote saved, email resent
+* Repeated email → Overwrite or reject (decide behavior)
+
+### ✅ User Already Voted
+
+* Allow vote to be changed (overwrite existing)
+
+---
+
+## 8. Why This Works
+
+### UX
+
+* No friction
+* Familiar, proven flow
+* Vote now, confirm later
+
+### Technical
+
+* Reuses patterns
+* No schema changes
+* No browser/local storage
+* No added JS state
+
+### Business
+
+* Higher conversion rate
+* Grow verified user base
+* Easy to support and debug
+
+---
+
+## 9. Success Criteria
+
+* Anonymous users can vote with only name + email
+* Existing flow is reused, no schema changes
+* Users can vote only once per date
+* Users with prior votes can change them
+* Unverified users can verify later via email
+* No vote data lost in edge cases 
