@@ -107,8 +107,8 @@ defmodule EventasaurusWeb.RouteIntegrationTest do
       user = EventasaurusApp.AccountsFixtures.user_fixture()
       event = EventasaurusApp.EventsFixtures.event_fixture(%{user_id: user.id})
 
-      # Test that the public event page loads using slug
-      conn = get(conn, ~p"/events/#{event.slug}")
+      # Test that the public event page loads using slug (this should be the LiveView route /:slug)
+      conn = get(conn, ~p"/#{event.slug}")
       assert html_response(conn, 200) =~ event.title
     end
 
