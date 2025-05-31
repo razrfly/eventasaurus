@@ -13,6 +13,12 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Returns the list of events.
+
+  ## Examples
+
+      iex> list_events()
+      [%Event{}, ...]
+
   """
   def list_events do
     Repo.all(Event)
@@ -49,10 +55,40 @@ defmodule EventasaurusApp.Events do
   Gets a single event by slug.
 
   Raises `Ecto.NoResultsError` if the Event does not exist.
+
+  ## Examples
+
+      iex> get_event_by_slug!("my-event")
+      %Event{}
+
+      iex> get_event_by_slug!("non-existent")
+      ** (Ecto.NoResultsError)
+
   """
   def get_event_by_slug!(slug) do
     Repo.get_by!(Event, slug: slug)
     |> Repo.preload([:venue, :users])
+  end
+
+  @doc """
+  Gets a single event by title.
+
+  Returns `nil` if the Event does not exist.
+
+  ## Examples
+
+      iex> get_event_by_title("My Event")
+      %Event{}
+
+      iex> get_event_by_title("Non-existent")
+      nil
+
+  """
+  def get_event_by_title(title) do
+    case Repo.get_by(Event, title: title) do
+      nil -> nil
+      event -> Repo.preload(event, [:venue, :users])
+    end
   end
 
   @doc """
@@ -597,5 +633,412 @@ defmodule EventasaurusApp.Events do
     event
     |> Event.changeset(%{theme_customizations: default_customizations})
     |> Repo.update()
+  end
+
+  @doc """
+  Transition an event from one state to another using the state machine.
+
+  Returns {:ok, updated_event} on success, {:error, changeset} on failure.
+  """
+  def transition_event_state(%Event{} = event, new_state) do
+    # Check if the transition is valid using our custom state machine
+    if Event.can_transition_to?(event, new_state) do
+      # Persist the state change to the database
+      event
+      |> Event.changeset(%{state: new_state})
+      |> Repo.update()
+    else
+      # Create an error changeset for invalid transitions
+      changeset = Event.changeset(event, %{})
+      {:error, Ecto.Changeset.add_error(changeset, :state, "invalid transition from '#{event.state}' to '#{new_state}'")}
+    end
+  end
+
+  @doc """
+  Check if a state transition is valid for an event.
+  """
+  def can_transition_to?(%Event{} = event, new_state) do
+    Event.can_transition_to?(event, new_state)
+  end
+
+  @doc """
+  Get the list of possible states an event can transition to.
+  """
+  def possible_transitions(%Event{} = event) do
+    Event.possible_transitions(event)
+  end
+
+  # EventDatePoll Functions
+
+  alias EventasaurusApp.Events.EventDatePoll
+
+  @doc """
+  Creates a date poll for an event.
+  """
+  def create_event_date_poll(%Event{} = event, %User{} = creator, attrs \\ %{}) do
+    poll_attrs = Map.merge(attrs, %{
+      event_id: event.id,
+      created_by_id: creator.id
+    })
+
+    %EventDatePoll{}
+    |> EventDatePoll.creation_changeset(poll_attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Gets the date poll for an event.
+  """
+  def get_event_date_poll(%Event{} = event) do
+    Repo.get_by(EventDatePoll, event_id: event.id)
+    |> Repo.preload([:event, :created_by, :date_options])
+  end
+
+  @doc """
+  Gets a date poll by ID.
+  """
+  def get_event_date_poll!(id) do
+    Repo.get!(EventDatePoll, id)
+    |> Repo.preload([:event, :created_by, :date_options])
+  end
+
+  @doc """
+  Updates a date poll.
+  """
+  def update_event_date_poll(%EventDatePoll{} = poll, attrs) do
+    poll
+    |> EventDatePoll.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Finalizes a date poll with the selected date.
+  """
+  def finalize_event_date_poll(%EventDatePoll{} = poll, selected_date) do
+    Repo.transaction(fn ->
+      # Update the poll with the finalized date
+      with {:ok, updated_poll} <- poll
+                                   |> EventDatePoll.finalization_changeset(selected_date)
+                                   |> Repo.update(),
+           # Update the event's start_at and state
+           {:ok, updated_event} <- poll.event
+                                   |> Event.changeset(%{
+                                     start_at: DateTime.new!(selected_date, ~T[00:00:00], "Etc/UTC"),
+                                     state: "confirmed"
+                                   })
+                                   |> Repo.update() do
+        {updated_poll, updated_event}
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  Deletes a date poll.
+  """
+  def delete_event_date_poll(%EventDatePoll{} = poll) do
+    Repo.delete(poll)
+  end
+
+  @doc """
+  Checks if an event has an active date poll.
+  """
+  def has_active_date_poll?(%Event{} = event) do
+    case get_event_date_poll(event) do
+      nil -> false
+      poll -> EventDatePoll.active?(poll)
+    end
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking date poll changes.
+  """
+  def change_event_date_poll(%EventDatePoll{} = poll, attrs \\ %{}) do
+    EventDatePoll.changeset(poll, attrs)
+  end
+
+  # EventDateOption Functions
+
+  alias EventasaurusApp.Events.EventDateOption
+
+  @doc """
+  Creates a date option for a poll.
+  """
+  def create_event_date_option(%EventDatePoll{} = poll, date) when is_binary(date) or is_struct(date, Date) do
+    date_value = case date do
+      %Date{} = d -> d
+      date_string when is_binary(date_string) -> Date.from_iso8601!(date_string)
+    end
+
+    %EventDateOption{}
+    |> EventDateOption.creation_changeset(%{
+      event_date_poll_id: poll.id,
+      date: date_value
+    })
+    |> Repo.insert()
+  end
+
+  @doc """
+  Creates multiple date options for a poll from a date range.
+  """
+  def create_date_options_from_range(%EventDatePoll{} = poll, start_date, end_date) do
+    start_date = ensure_date_struct(start_date)
+    end_date = ensure_date_struct(end_date)
+
+    date_range = Date.range(start_date, end_date)
+
+    Repo.transaction(fn ->
+      Enum.map(date_range, fn date ->
+        case create_event_date_option(poll, date) do
+          {:ok, option} -> option
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+    end)
+  end
+
+  @doc """
+  Creates multiple date options from a list of dates.
+  """
+  def create_date_options_from_list(%EventDatePoll{} = poll, dates) when is_list(dates) do
+    Repo.transaction(fn ->
+      Enum.map(dates, fn date ->
+        case create_event_date_option(poll, date) do
+          {:ok, option} -> option
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+    end)
+  end
+
+  @doc """
+  Gets a date option by ID.
+  """
+  def get_event_date_option!(id) do
+    Repo.get!(EventDateOption, id)
+    |> Repo.preload(:event_date_poll)
+  end
+
+  @doc """
+  Gets all date options for a poll, sorted by date.
+  """
+  def list_event_date_options(%EventDatePoll{} = poll) do
+    from(edo in EventDateOption,
+      where: edo.event_date_poll_id == ^poll.id,
+      order_by: [asc: edo.date]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Updates a date option.
+  """
+  def update_event_date_option(%EventDateOption{} = option, attrs) do
+    option
+    |> EventDateOption.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a date option.
+  """
+  def delete_event_date_option(%EventDateOption{} = option) do
+    Repo.delete(option)
+  end
+
+  @doc """
+  Deletes all date options for a poll.
+  """
+  def delete_all_date_options(%EventDatePoll{} = poll) do
+    from(edo in EventDateOption, where: edo.event_date_poll_id == ^poll.id)
+    |> Repo.delete_all()
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking date option changes.
+  """
+  def change_event_date_option(%EventDateOption{} = option, attrs \\ %{}) do
+    EventDateOption.changeset(option, attrs)
+  end
+
+  @doc """
+  Check if a date already exists as an option in a poll.
+  """
+  def date_option_exists?(%EventDatePoll{} = poll, date) do
+    date_value = ensure_date_struct(date)
+
+    from(edo in EventDateOption,
+      where: edo.event_date_poll_id == ^poll.id and edo.date == ^date_value
+    )
+    |> Repo.exists?()
+  end
+
+  defp ensure_date_struct(%Date{} = date), do: date
+  defp ensure_date_struct(date_string) when is_binary(date_string), do: Date.from_iso8601!(date_string)
+
+  # EventDateVote Functions
+
+  alias EventasaurusApp.Events.EventDateVote
+
+  @doc """
+  Creates a vote for a date option.
+  """
+  def create_event_date_vote(%EventDateOption{} = option, %User{} = user, vote_type) do
+    %EventDateVote{}
+    |> EventDateVote.creation_changeset(%{
+      event_date_option_id: option.id,
+      user_id: user.id,
+      vote_type: vote_type
+    })
+    |> Repo.insert()
+  end
+
+  @doc """
+  Gets a vote by ID.
+  """
+  def get_event_date_vote!(id) do
+    Repo.get!(EventDateVote, id)
+    |> Repo.preload([:event_date_option, :user])
+  end
+
+  @doc """
+  Gets a user's vote for a specific date option.
+  """
+  def get_user_vote_for_option(%EventDateOption{} = option, %User{} = user) do
+    Repo.get_by(EventDateVote, event_date_option_id: option.id, user_id: user.id)
+    |> Repo.preload([:event_date_option, :user])
+  end
+
+  @doc """
+  Gets all votes for a specific date option.
+  """
+  def list_votes_for_date_option(%EventDateOption{} = option) do
+    from(v in EventDateVote,
+      where: v.event_date_option_id == ^option.id,
+      preload: [:user],
+      order_by: [asc: v.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets all votes for a poll (across all date options).
+  """
+  def list_votes_for_poll(%EventDatePoll{} = poll) do
+    from(v in EventDateVote,
+      join: o in EventDateOption, on: v.event_date_option_id == o.id,
+      where: o.event_date_poll_id == ^poll.id,
+      preload: [:user, :event_date_option],
+      order_by: [asc: o.date, asc: v.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets all votes by a user for a specific poll.
+  """
+  def list_user_votes_for_poll(%EventDatePoll{} = poll, %User{} = user) do
+    from(v in EventDateVote,
+      join: o in EventDateOption, on: v.event_date_option_id == o.id,
+      where: o.event_date_poll_id == ^poll.id and v.user_id == ^user.id,
+      preload: [:event_date_option],
+      order_by: [asc: o.date]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Updates a user's vote for a date option (upsert operation).
+  """
+  def cast_vote(%EventDateOption{} = option, %User{} = user, vote_type) do
+    case get_user_vote_for_option(option, user) do
+      nil ->
+        # Create new vote
+        create_event_date_vote(option, user, vote_type)
+
+      existing_vote ->
+        # Update existing vote
+        update_event_date_vote(existing_vote, %{vote_type: vote_type})
+    end
+  end
+
+  @doc """
+  Updates a vote.
+  """
+  def update_event_date_vote(%EventDateVote{} = vote, attrs) do
+    vote
+    |> EventDateVote.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a vote.
+  """
+  def delete_event_date_vote(%EventDateVote{} = vote) do
+    Repo.delete(vote)
+  end
+
+  @doc """
+  Removes a user's vote for a specific date option.
+  """
+  def remove_user_vote(%EventDateOption{} = option, %User{} = user) do
+    case get_user_vote_for_option(option, user) do
+      nil -> {:ok, :no_vote_found}
+      vote -> delete_event_date_vote(vote)
+    end
+  end
+
+  @doc """
+  Gets vote tally for a specific date option.
+  """
+  def get_date_option_vote_tally(%EventDateOption{} = option) do
+    votes = list_votes_for_date_option(option)
+
+    tally = Enum.reduce(votes, %{yes: 0, if_need_be: 0, no: 0, total: 0}, fn vote, acc ->
+      acc
+      |> Map.update!(vote.vote_type, &(&1 + 1))
+      |> Map.update!(:total, &(&1 + 1))
+    end)
+
+    # Calculate weighted score (yes: 1.0, if_need_be: 0.5, no: 0.0)
+    score = tally.yes * 1.0 + tally.if_need_be * 0.5
+    max_possible_score = if tally.total > 0, do: tally.total * 1.0, else: 1.0
+    percentage = if tally.total > 0, do: (score / max_possible_score) * 100, else: 0.0
+
+    Map.put(tally, :score, score)
+    |> Map.put(:percentage, Float.round(percentage, 1))
+  end
+
+  @doc """
+  Gets vote tallies for all options in a poll.
+  """
+  def get_poll_vote_tallies(%EventDatePoll{} = poll) do
+    options = list_event_date_options(poll) |> Repo.preload(:votes)
+
+    Enum.map(options, fn option ->
+      %{
+        option: option,
+        tally: get_date_option_vote_tally(option)
+      }
+    end)
+    |> Enum.sort_by(& &1.tally.score, :desc)
+  end
+
+  @doc """
+  Check if a user has voted for a specific date option.
+  """
+  def user_has_voted?(%EventDateOption{} = option, %User{} = user) do
+    case get_user_vote_for_option(option, user) do
+      nil -> false
+      _vote -> true
+    end
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking vote changes.
+  """
+  def change_event_date_vote(%EventDateVote{} = vote, attrs \\ %{}) do
+    EventDateVote.changeset(vote, attrs)
   end
 end

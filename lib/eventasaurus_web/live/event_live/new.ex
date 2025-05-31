@@ -28,7 +28,8 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:changeset, changeset)
           |> assign(:form_data, %{
             "start_date" => today,
-            "ends_date" => today
+            "ends_date" => today,
+            "enable_date_polling" => false
           })
           |> assign(:is_virtual, false)
           |> assign(:selected_venue_name, nil)
@@ -44,6 +45,7 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:page, 1)
           |> assign(:per_page, 20)
           |> assign_new(:image_tab, fn -> "unsplash" end)
+          |> assign(:enable_date_polling, false)
 
         {:ok, socket}
 
@@ -185,10 +187,20 @@ defmodule EventasaurusWeb.EventLive.New do
 
     case Events.create_event_with_organizer(final_event_params, socket.assigns.user) do
       {:ok, event} ->
+        # If date polling is enabled, create the date poll and options
+        event_with_poll = if Map.get(event_params, "enable_date_polling", false) do
+          case create_date_poll_for_event(event, event_params, socket.assigns.user) do
+            {:ok, updated_event} -> updated_event
+            {:error, _} -> event # Fall back to original event if poll creation fails
+          end
+        else
+          event
+        end
+
         {:noreply,
          socket
          |> put_flash(:info, "Event created successfully")
-         |> redirect(to: ~p"/events/#{event.slug}")}
+         |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         require Logger
@@ -243,6 +255,21 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply,
      socket
      |> assign(:is_virtual, is_virtual)
+     |> assign(:form_data, form_data)}
+  end
+
+  @impl true
+  def handle_event("toggle_date_polling", _params, socket) do
+    enable_date_polling = !socket.assigns.enable_date_polling
+
+    # Update form_data to reflect this change
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("enable_date_polling", enable_date_polling)
+
+    {:noreply,
+     socket
+     |> assign(:enable_date_polling, enable_date_polling)
      |> assign(:form_data, form_data)}
   end
 
@@ -682,4 +709,34 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   defp combine_date_time(_, _, _), do: {:error, :invalid_input}
+
+  # Helper function to create date poll and options for an event
+  defp create_date_poll_for_event(event, form_data, user) do
+    start_date_str = Map.get(form_data, "start_date")
+    end_date_str = Map.get(form_data, "ends_date")
+
+    start_date = Date.from_iso8601!(start_date_str)
+    end_date = Date.from_iso8601!(end_date_str)
+
+    # Create the date poll
+    case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
+      {:ok, poll} ->
+        # Create date options for each day in the range
+        case Events.create_date_options_from_range(poll, start_date, end_date) do
+          {:ok, _options} ->
+            # Update event state to 'polling' (use string, not atom)
+            case Events.update_event(event, %{state: "polling"}) do
+              {:ok, updated_event} ->
+                {:ok, updated_event}
+              {:error, reason} ->
+                {:error, reason}
+            end
+          {:error, reason} ->
+            {:error, reason}
+        end
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
 end
