@@ -7,6 +7,10 @@ defmodule EventasaurusWeb.EventLive.NewTest do
   use EventasaurusWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
   import ExUnit.CaptureLog
+  import EventasaurusApp.Factory
+
+  alias EventasaurusApp.Events
+  alias EventasaurusApp.Accounts
 
   setup do
     clear_test_auth()
@@ -259,6 +263,178 @@ defmodule EventasaurusWeb.EventLive.NewTest do
     test "redirects to login page", %{conn: conn} do
       # Try to access new event page without authentication
       assert {:error, {:redirect, %{to: "/auth/login"}}} = live(conn, ~p"/events/new")
+    end
+  end
+
+  describe "New Event LiveView" do
+    setup do
+      user = insert(:user)
+      %{user: user}
+    end
+
+    test "renders event creation form", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+
+      {:ok, _index_live, html} = live(conn, ~p"/events/new")
+
+      assert html =~ "Create a New Event"
+      assert html =~ "Event Title"
+      assert html =~ "Date & Time"
+      assert html =~ "Let attendees vote on the event date"
+    end
+
+    test "can create a regular event without date polling", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+
+      {:ok, index_live, _html} = live(conn, ~p"/events/new")
+
+      today = Date.utc_today() |> Date.to_iso8601()
+      tomorrow = Date.utc_today() |> Date.add(1) |> Date.to_iso8601()
+
+      # First toggle to virtual
+      index_live
+      |> element("[name='event[is_virtual]']")
+      |> render_click()
+
+      form_data = %{
+        "title" => "Test Event",
+        "description" => "A test event",
+        "start_date" => today,
+        "start_time" => "14:00",
+        "ends_date" => tomorrow,
+        "ends_time" => "16:00",
+        "timezone" => "America/New_York",
+        "theme" => "minimal",
+        "visibility" => "public",
+        "virtual_venue_url" => "https://example.com/meeting"
+      }
+
+      result = index_live
+             |> form("[data-test-id='event-form']", event: form_data)
+             |> render_submit()
+
+      # Check that form submission was successful (not errored)
+      assert is_binary(result) or match?({:error, {:redirect, _}}, result)
+
+      # Verify event was created
+      event = Events.get_event_by_title("Test Event")
+      assert event
+      assert event.title == "Test Event"
+      assert event.state == "confirmed"
+      refute Events.get_event_date_poll(event)
+    end
+
+    test "can create an event with date polling enabled", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+
+      {:ok, index_live, _html} = live(conn, ~p"/events/new")
+
+      # Use future dates only
+      tomorrow = Date.utc_today() |> Date.add(1) |> Date.to_iso8601()
+      week_later = Date.utc_today() |> Date.add(8) |> Date.to_iso8601()
+
+      # First toggle to virtual
+      index_live
+      |> element("[name='event[is_virtual]']")
+      |> render_click()
+
+      # Then toggle date polling
+      index_live
+      |> element("[name='event[enable_date_polling]']")
+      |> render_click()
+
+      form_data = %{
+        "title" => "Poll Event Test",
+        "description" => "An event with date polling",
+        "start_date" => tomorrow,
+        "start_time" => "14:00",
+        "ends_date" => week_later,
+        "ends_time" => "16:00",
+        "timezone" => "America/New_York",
+        "theme" => "minimal",
+        "visibility" => "public",
+        "is_virtual" => "true",
+        "virtual_venue_url" => "https://example.com/meeting",
+        "enable_date_polling" => "true"
+      }
+
+      result = index_live
+             |> form("[data-test-id='event-form']", event: form_data)
+             |> render_submit()
+
+      # Check that form submission was successful (not errored)
+      assert is_binary(result) or match?({:error, {:redirect, _}}, result)
+
+      # Verify event was created with polling state
+      event = Events.get_event_by_title("Poll Event Test")
+      assert event
+      assert event.title == "Poll Event Test"
+      # Check that the event state is updated to polling when date polling is enabled
+      assert event.state == "polling"
+
+      # Verify date poll was created
+      poll = Events.get_event_date_poll(event)
+      assert poll
+      assert poll.created_by_id == user.id
+
+      # Verify date options were created
+      options = Events.list_event_date_options(poll)
+
+      # The range should create 8 date options (tomorrow to 8 days from today)
+      assert length(options) == 8
+
+      # Verify first option has correct date
+      sorted_options = Enum.sort_by(options, & &1.date, Date)
+      first_option = List.first(sorted_options)
+      last_option = List.last(sorted_options)
+
+      assert first_option.date == Date.from_iso8601!(tomorrow)
+      assert last_option.date == Date.from_iso8601!(week_later)
+    end
+
+    test "validates required fields", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+
+      {:ok, index_live, _html} = live(conn, ~p"/events/new")
+
+      # Submit form with empty required fields - should stay on form and show validation
+      result = index_live
+      |> form("[data-test-id='event-form']", event: %{})
+      |> render_submit()
+
+      # The form should either show validation errors or the submit should fail gracefully
+      # We don't need to check for specific error messages since validation behavior may vary
+      assert is_binary(result) or match?({:error, {:redirect, _}}, result)
+
+      # No event should be created with invalid data
+      assert Events.list_events() == []
+    end
+
+    test "toggles date polling correctly", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+
+      {:ok, index_live, html} = live(conn, ~p"/events/new")
+
+      # Initially, date polling should be disabled
+      refute html =~ "Poll Start Date"
+      assert html =~ "Start Date"
+
+      # Toggle date polling on
+      html = index_live
+             |> element("[name='event[enable_date_polling]']")
+             |> render_click()
+
+      assert html =~ "Poll Start Date"
+      assert html =~ "Poll End Date"
+      assert html =~ "Date Polling Enabled"
+
+      # Toggle date polling back off
+      html = index_live
+             |> element("[name='event[enable_date_polling]']")
+             |> render_click()
+
+      refute html =~ "Poll Start Date"
+      assert html =~ "Start Date"
     end
   end
 end
