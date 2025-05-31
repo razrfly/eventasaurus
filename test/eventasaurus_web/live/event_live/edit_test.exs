@@ -183,6 +183,55 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       assert updated_event.title == "Only Title Changed"
       assert updated_event.tagline == "Original Tagline"  # Should be preserved
     end
+
+    test "edit form shows correct state for events with date polling", %{conn: conn} do
+      # Create a user for this test
+      user = EventasaurusApp.AccountsFixtures.user_fixture()
+
+      # Create an event with date polling enabled
+      tomorrow = Date.utc_today() |> Date.add(1)
+      week_later = Date.utc_today() |> Date.add(8)
+
+      event_attrs = %{
+        title: "Polling Event for Edit Test",
+        description: "An event to test edit functionality",
+        start_at: DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        ends_at: DateTime.new!(week_later, ~T[16:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        timezone: "America/New_York",
+        state: "polling",
+        visibility: "public",
+        is_virtual: true,
+        virtual_venue_url: "https://example.com/meeting"
+      }
+
+      {:ok, event} = EventasaurusApp.Events.create_event_with_organizer(event_attrs, user)
+
+      # Create date poll and options
+      {:ok, poll} = EventasaurusApp.Events.create_event_date_poll(event, user, %{voting_deadline: nil})
+      {:ok, _options} = EventasaurusApp.Events.create_date_options_from_range(poll, tomorrow, week_later)
+
+      # Load the edit page
+      conn = log_in_user(conn, user)
+      {:ok, edit_live, html} = live(conn, ~p"/events/#{event.slug}/edit")
+
+      # Check that the date polling checkbox is checked
+      assert html =~ "checked"
+      assert html =~ "Let attendees vote on the event date"
+
+      # Check that the labels show "Poll Start Date" instead of "Start Date"
+      assert html =~ "Poll Start Date"
+      assert html =~ "Poll End Date"
+
+      # Verify that the date polling state is detected correctly
+      assert has_element?(edit_live, "[name='event[enable_date_polling]'][checked]")
+
+      # Verify the form labels change when polling is enabled
+      assert has_element?(edit_live, "label", "Poll Start Date")
+      assert has_element?(edit_live, "label", "Poll End Date")
+
+      # The checkbox should be checked
+      assert has_element?(edit_live, "input[name='event[enable_date_polling]'][checked]")
+    end
   end
 
   describe "access control" do

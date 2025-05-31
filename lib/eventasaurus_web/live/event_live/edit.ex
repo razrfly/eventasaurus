@@ -42,6 +42,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 {nil, nil, nil, nil, nil, nil, nil}
               end
 
+            # Check if this event has date polling enabled
+            date_poll = Events.get_event_date_poll(event)
+            enable_date_polling = !is_nil(date_poll)
+
             # Prepare form data
             form_data = %{
               "start_date" => start_date,
@@ -58,7 +62,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
               "venue_state" => venue_state,
               "venue_country" => venue_country,
               "venue_latitude" => venue_latitude,
-              "venue_longitude" => venue_longitude
+              "venue_longitude" => venue_longitude,
+              "enable_date_polling" => enable_date_polling
             }
 
             # Set up the socket with all required assigns
@@ -84,6 +89,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:page, 1)
               |> assign(:per_page, 20)
               |> assign_new(:image_tab, fn -> "unsplash" end)
+              |> assign(:enable_date_polling, enable_date_polling)
 
             {:ok, socket}
           else
@@ -263,6 +269,21 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket
       |> assign(:is_virtual, is_virtual)
       |> assign(:form_data, form_data)}
+  end
+
+  @impl true
+  def handle_event("toggle_date_polling", _params, socket) do
+    enable_date_polling = !socket.assigns.enable_date_polling
+
+    # Update form_data to reflect this change
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("enable_date_polling", enable_date_polling)
+
+    {:noreply,
+     socket
+     |> assign(:enable_date_polling, enable_date_polling)
+     |> assign(:form_data, form_data)}
   end
 
   @impl true
