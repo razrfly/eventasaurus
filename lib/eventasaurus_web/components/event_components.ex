@@ -174,6 +174,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :external_image_data, :map, default: nil, doc: "external image data for Unsplash/TMDB attribution"
   attr :on_image_click, :string, default: nil, doc: "event name to trigger when clicking on the image picker"
   attr :id, :string, default: nil, doc: "unique id for the form element, required for hooks"
+  attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
 
   def event_form(assigns) do
     assigns = assign_new(assigns, :id, fn -> "event-form-#{if assigns.action == :new, do: "new", else: "edit"}" end)
@@ -279,10 +280,37 @@ defmodule EventasaurusWeb.EventComponents do
         <div class="mb-8">
           <h2 class="text-xl font-bold mb-4">Date & Time</h2>
           <div class="space-y-4">
+            <!-- Date Polling Option -->
+            <div class="flex items-center mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <label class="flex items-start cursor-pointer w-full">
+                <input
+                  type="checkbox"
+                  name="event[enable_date_polling]"
+                  value="true"
+                  checked={@enable_date_polling}
+                  phx-click="toggle_date_polling"
+                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 mr-3"
+                />
+                <div>
+                  <span class="text-sm font-medium text-blue-900">Let attendees vote on the event date</span>
+                  <p class="text-xs text-blue-700 mt-1">
+                    Instead of setting a fixed date, create a poll where attendees can vote on their preferred dates.
+                    The date range below will be used as the options for voting.
+                  </p>
+                </div>
+              </label>
+            </div>
+
             <div phx-hook="DateTimeSync" id="date-time-sync-hook">
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <%= if @enable_date_polling do %>
+                      Poll Start Date
+                    <% else %>
+                      Start Date
+                    <% end %>
+                  </label>
                   <.date_input
                     id={"#{@id}-start_date"}
                     name="event[start_date]"
@@ -290,9 +318,18 @@ defmodule EventasaurusWeb.EventComponents do
                     required
                     data-role="start-date"
                   />
+                  <%= if @enable_date_polling do %>
+                    <p class="text-xs text-gray-500 mt-1">First date option for voting</p>
+                  <% end %>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <%= if @enable_date_polling do %>
+                      Daily Start Time
+                    <% else %>
+                      Start Time
+                    <% end %>
+                  </label>
                   <.time_select
                     id={"#{@id}-start_time"}
                     name="event[start_time]"
@@ -300,26 +337,47 @@ defmodule EventasaurusWeb.EventComponents do
                     required
                     data-role="start-time"
                   />
+                  <%= if @enable_date_polling do %>
+                    <p class="text-xs text-gray-500 mt-1">Start time for all date options</p>
+                  <% end %>
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-4 mt-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <%= if @enable_date_polling do %>
+                      Poll End Date
+                    <% else %>
+                      End Date
+                    <% end %>
+                  </label>
                   <.date_input
                     id={"#{@id}-ends_date"}
                     name="event[ends_date]"
                     value={Map.get(@form_data, "ends_date", "")}
                     data-role="end-date"
                   />
+                  <%= if @enable_date_polling do %>
+                    <p class="text-xs text-gray-500 mt-1">Last date option for voting</p>
+                  <% end %>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <%= if @enable_date_polling do %>
+                      Daily End Time
+                    <% else %>
+                      End Time
+                    <% end %>
+                  </label>
                   <.time_select
                     id={"#{@id}-ends_time"}
                     name="event[ends_time]"
                     value={Map.get(@form_data, "ends_time", "")}
                     data-role="end-time"
                   />
+                  <%= if @enable_date_polling do %>
+                    <p class="text-xs text-gray-500 mt-1">End time for all date options</p>
+                  <% end %>
                 </div>
               </div>
             </div>
@@ -333,6 +391,23 @@ defmodule EventasaurusWeb.EventComponents do
               />
               <p class="mt-1 text-xs text-gray-500">Your local timezone will be auto-detected if available</p>
             </div>
+
+            <%= if @enable_date_polling do %>
+              <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div class="flex items-start">
+                  <svg class="w-5 h-5 text-yellow-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <div>
+                    <h4 class="text-sm font-medium text-yellow-800">Date Polling Enabled</h4>
+                    <p class="text-xs text-yellow-700 mt-1">
+                      Your event will be created in "polling" state. Each day from the start to end date will become a voting option.
+                      Attendees can vote on their preferred dates before you finalize the event.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            <% end %>
 
             <!-- Hidden fields to store the combined datetime values -->
             <input

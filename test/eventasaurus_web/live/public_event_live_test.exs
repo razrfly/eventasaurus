@@ -245,4 +245,263 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       assert has_element?(view, "button", "Register for Event")
     end
   end
+
+  describe "Phase 3: Date Polling Voting Interface Tests" do
+    setup %{event: event} do
+      # Create an event with date polling enabled
+      user = user_fixture()
+
+      # Update event to polling state
+      {:ok, polling_event} = Events.update_event(event, %{state: "polling"})
+
+      # Create a date poll for the event
+      {:ok, poll} = Events.create_event_date_poll(polling_event, user, %{})
+
+      # Create some date options (using future dates to avoid validation issues)
+      start_date = Date.add(Date.utc_today(), 7)  # 1 week from now
+      end_date = Date.add(start_date, 7)          # 2 weeks from now
+      {:ok, _options} = Events.create_date_options_from_range(poll, start_date, end_date)
+
+      # Reload the poll with options
+      poll = Events.get_event_date_poll!(poll.id) |> EventasaurusApp.Repo.preload(:date_options)
+
+      %{polling_event: polling_event, poll: poll, organizer: user}
+    end
+
+    test "anonymous user sees voting summary but cannot vote", %{conn: conn, polling_event: event, poll: poll} do
+      {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
+
+      # Should show the voting interface section
+      assert html =~ "Vote on Event Date"
+      assert html =~ "Help us find the best date that works for everyone"
+
+      # Should show date options with vote tallies
+      for option <- poll.date_options do
+        formatted_date = Calendar.strftime(option.date, "%A, %B %d, %Y")
+        assert html =~ formatted_date
+        assert html =~ "0 votes"  # No votes yet
+        assert html =~ "0.0% positive"
+      end
+
+      # Should NOT show voting buttons for anonymous users
+      refute html =~ "phx-click=\"cast_vote\""
+
+      # Should show call-to-action to register
+      assert html =~ "Want to vote on the event date?"
+      assert html =~ "Register to Vote"
+    end
+
+    test "authenticated user sees voting interface with voting buttons", %{conn: conn, polling_event: event, poll: poll} do
+      user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
+
+      {:ok, view, html} = live(conn, ~p"/#{event.slug}")
+
+      # Should show the voting interface section
+      assert html =~ "Vote on Event Date"
+      assert html =~ "Help us find the best date that works for everyone"
+
+      # Should show date options with voting buttons
+      for option <- poll.date_options do
+        formatted_date = Calendar.strftime(option.date, "%A, %B %d, %Y")
+        assert html =~ formatted_date
+        assert html =~ "0 votes"  # No votes yet
+
+        # Should show voting buttons for each option
+        assert has_element?(view, "button[phx-click='cast_vote'][phx-value-option_id='#{option.id}'][phx-value-vote_type='yes']", "Yes")
+        assert has_element?(view, "button[phx-click='cast_vote'][phx-value-option_id='#{option.id}'][phx-value-vote_type='if_need_be']", "If needed")
+        assert has_element?(view, "button[phx-click='cast_vote'][phx-value-option_id='#{option.id}'][phx-value-vote_type='no']", "No")
+      end
+
+      # Should NOT show register to vote call-to-action
+      refute html =~ "Register to Vote"
+    end
+
+    test "user can cast votes on date options", %{conn: conn, polling_event: event, poll: poll} do
+      user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      # Get the first date option
+      first_option = hd(poll.date_options)
+
+      # Cast a "yes" vote
+      html = render_click(view, "cast_vote", %{
+        "option_id" => to_string(first_option.id),
+        "vote_type" => "yes"
+      })
+
+      # Should show success message
+      assert html =~ "Your vote has been recorded!"
+
+      # Should show the user's vote
+      assert html =~ "Your vote: Yes"
+
+      # Should show updated vote tally
+      assert html =~ "1 vote"
+      assert html =~ "100.0% positive"
+
+      # Should show remove vote button
+      assert has_element?(view, "button[phx-click='remove_vote'][phx-value-option_id='#{first_option.id}']")
+    end
+
+    test "user can change their vote", %{conn: conn, polling_event: event, poll: poll} do
+      user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      first_option = hd(poll.date_options)
+
+      # Cast initial "yes" vote
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(first_option.id),
+        "vote_type" => "yes"
+      })
+
+      # Change to "if_need_be" vote
+      html = render_click(view, "cast_vote", %{
+        "option_id" => to_string(first_option.id),
+        "vote_type" => "if_need_be"
+      })
+
+      # Should show updated vote
+      assert html =~ "Your vote: If needed"
+      assert html =~ "Your vote has been recorded!"
+
+      # Should show updated percentage (if_need_be = 0.5 score)
+      assert html =~ "50.0% positive"
+    end
+
+    test "user can remove their vote", %{conn: conn, polling_event: event, poll: poll} do
+      user = user_fixture()
+      {conn, _token} = authenticate_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      first_option = hd(poll.date_options)
+
+      # Cast initial vote
+      render_click(view, "cast_vote", %{
+        "option_id" => to_string(first_option.id),
+        "vote_type" => "yes"
+      })
+
+      # Remove the vote
+      html = render_click(view, "remove_vote", %{
+        "option_id" => to_string(first_option.id)
+      })
+
+      # Should show removal confirmation
+      assert html =~ "Your vote has been removed."
+
+      # Should no longer show user's vote
+      refute html =~ "Your vote:"
+
+      # Should show zero votes again
+      assert html =~ "0 votes"
+      assert html =~ "0.0% positive"
+
+      # Should not show remove vote button
+      refute has_element?(view, "button[phx-click='remove_vote'][phx-value-option_id='#{first_option.id}']")
+    end
+
+    test "vote tallies display correctly with multiple users", %{conn: conn, polling_event: event, poll: poll} do
+      user1 = user_fixture()
+      user2 = user_fixture()
+
+      first_option = hd(poll.date_options)
+
+      # Create votes directly in the database to simulate multiple users
+      {:ok, _vote1} = Events.cast_vote(first_option, user1, :yes)
+      {:ok, _vote2} = Events.cast_vote(first_option, user2, :if_need_be)
+
+      # Now view as a third user
+      user3 = user_fixture()
+      {conn, _token} = authenticate_user(conn, user3)
+
+      {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
+
+      # Should show correct vote counts
+      assert html =~ "2 votes"
+
+      # Should show correct breakdown (1 yes + 1 if_need_be = 75% positive)
+      assert html =~ "75.0% positive"
+
+      # Should show individual vote counts in the visualization
+      assert html =~ "Yes: 1"
+      assert html =~ "If needed: 1"
+      assert html =~ "No: 0"
+    end
+
+    test "non-polling events do not show voting interface", %{conn: conn} do
+      # Create a completely separate event for this test (not using the modified event from setup)
+      separate_event = event_fixture()
+
+      # Ensure the event is not in polling state
+      {:ok, regular_event} = Events.update_event(separate_event, %{state: "confirmed"})
+
+      # Visit the event page
+      {:ok, view, html} = live(conn, ~p"/#{regular_event.slug}")
+
+      # Should not show voting interface
+      refute html =~ "Vote on Event Date"
+      refute has_element?(view, "[data-testid='voting-interface']")
+    end
+
+    test "voting requires authentication", %{conn: conn, polling_event: event, poll: poll} do
+      {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
+
+      first_option = hd(poll.date_options)
+
+      # Try to vote as anonymous user (should fail gracefully)
+      html = render_click(view, "cast_vote", %{
+        "option_id" => to_string(first_option.id),
+        "vote_type" => "yes"
+      })
+
+      # Should show error message
+      assert html =~ "Please log in to vote on event dates."
+
+      # Vote count should remain zero
+      assert html =~ "0 votes"
+    end
+
+    test "vote tally visualization shows correct proportions", %{conn: conn, polling_event: event, poll: poll} do
+      user1 = user_fixture()
+      user2 = user_fixture()
+      user3 = user_fixture()
+
+      first_option = hd(poll.date_options)
+
+      # Create a mix of votes: 2 yes, 1 if_need_be, 1 no
+      {:ok, _vote1} = Events.cast_vote(first_option, user1, :yes)
+      {:ok, _vote2} = Events.cast_vote(first_option, user2, :yes)
+      {:ok, _vote3} = Events.cast_vote(first_option, user3, :if_need_be)
+
+      # View as another user
+      user4 = user_fixture()
+      {conn, _token} = authenticate_user(conn, user4)
+
+      {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
+
+      # Should show correct total
+      assert html =~ "3 votes"
+
+      # Should show correct percentage: (2*1.0 + 1*0.5) / 3 = 83.3%
+      assert html =~ "83.3% positive"
+
+      # Should show correct individual counts
+      assert html =~ "Yes: 2"
+      assert html =~ "If needed: 1"
+      assert html =~ "No: 0"
+
+      # Should show visualization bars (checking for style attributes)
+      # Yes: 2/3 = 66.67%
+      assert html =~ "width: 66.66666666666666%"
+      # If needed: 1/3 = 33.33%
+      assert html =~ "width: 33.33333333333333%"
+    end
+  end
 end

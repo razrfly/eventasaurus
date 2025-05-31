@@ -1,0 +1,162 @@
+# 📅 Event Date Polling — Complete Feature PRD
+
+**Version:** 1.0  
+**Status:** Ready for implementation  
+**Reference:** UX behavior similar to [Rallly Poll Example](https://app.rallly.co/invite/zjKS5Z7wNcOz)
+
+---
+
+## 1. Overview
+
+This feature enables organizers to create an event in `"polling"` mode, where participants vote on a set of possible dates. Once a date is finalized, the event transitions to `"confirmed"` state and behaves like a standard event.
+
+The user experience is modeled after Rallly but tailored to our Supabase + Phoenix app stack.
+
+---
+
+## 2. Event States
+
+Events have a `state` field (`string`):
+
+- `"confirmed"` – standard default event with fixed date
+- `"polling"` – collecting votes on candidate dates
+
+> Validation: `start_at` and `end_at` are still required for all events.
+- In `"polling"` mode, these represent the **range of possible dates** (not the final event date).
+- The UI will need to reflect that `start_at` and `end_at` are treated as a candidate range, not as confirmed event boundaries.
+
+---
+
+## 3. Feature Behavior
+
+### 3.1 Organizer Flow
+
+- While creating an event, organizer chooses "Let attendees vote on the date."
+- System sets `event.state = "polling"`
+- `start_at` and `end_at` define the poll range
+- One `event_date_option` is created for each date in that range
+- Organizer can:
+  - Monitor vote counts
+  - View a **heatmap** summary of responses
+  - Finalize a date (updates `event.start_at`, sets `state = "confirmed"`)
+
+---
+
+### 3.2 Participant Flow
+
+- Participant sees list of dates and selects one of:
+  - ✅ Yes
+  - 🤷 If need be
+  - ❌ No
+- They must **submit name + email** to complete voting:
+  - If email is new, create an unconfirmed Supabase user
+  - If email exists, prompt for login but preserve vote data
+- After submitting:
+  - Optionally show the **heatmap of aggregated results**
+  - Show a list of all participants who've registered or voted
+
+---
+
+### 3.3 Heatmap (Voting Summary)
+
+- Display to organizers always
+- Optionally visible to participants **after submitting votes**
+- For each date, show:
+  - Total Yes / If need be / No counts
+  - Intensity-based visual indicator (e.g., green > yellow > red)
+
+---
+
+### 3.4 Participant List
+
+- Display list of all users who've registered or voted for the event
+- Show:
+  - Name
+  - Vote status (optional)
+- This promotes transparency and social proof
+
+---
+
+## 4. Database Models
+
+### `event_date_polls`
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | integer | Primary key |
+| event_id | FK | One poll per event |
+| created_by_id | FK | Organizer who created the poll |
+| voting_deadline | utc_datetime | Optional — soft deadline for participants |
+| finalized_date | date | Date selected from poll (copied to `event.start_at`) |
+
+---
+
+### `event_date_options`
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | integer | |
+| event_date_poll_id | FK | |
+| date | date | Each proposed date |
+
+---
+
+### `event_date_votes`
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | integer | |
+| event_date_option_id | FK | |
+| user_id | FK | Supabase user |
+| vote_type | enum | `:yes`, `:if_need_be`, `:no` |
+
+- Unique constraint on `(event_date_option_id, user_id)`
+- No comments or suggested times
+
+---
+
+## 5. User Identity Handling
+
+- Participants **do not need to log in** to vote
+- But must enter name and email before vote submission
+- Supabase `users` are created if necessary (unconfirmed)
+- Vote selections are preserved in the browser (in-memory or local storage)
+- If email is already registered:
+  - Show soft prompt: *"Looks like you've already joined us. Please log in to confirm your votes."*
+  - Ensure no data is lost during this flow
+
+---
+
+## 6. Validations & Rules
+
+- `start_at` and `end_at` are **always required**
+- Voting only allowed if `event.state == "polling"`
+- A user may vote only once per date
+- Finalizing the poll:
+  - Updates `event.start_at` with selected date
+  - Sets `event.state = "confirmed"`
+  - Optionally archives vote data
+
+---
+
+## 7. Tests
+
+- Polling event auto-generates date options from range
+- Voting restricted to polling state
+- Vote uniqueness per user per date enforced
+- Organizer finalizing the poll updates core event record
+- Existing user email during submission prompts login without data loss
+- Heatmap correctly summarizes vote tallies
+
+---
+
+## 8. Visual Reference
+
+[View a Rallly example here](https://app.rallly.co/invite/zjKS5Z7wNcOz)
+
+This is the core inspiration for:
+- Voting interaction
+- Participant list display
+- Heatmap summary of results
+
+--- 

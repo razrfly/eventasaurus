@@ -46,6 +46,23 @@ defmodule EventasaurusWeb.PublicEventLive do
               {:not_authenticated, nil}
           end
 
+          # Load date poll data if event has polling enabled
+          {date_poll, date_options, user_votes} = if event.state == "polling" do
+            poll = Events.get_event_date_poll(event)
+            if poll do
+              options = Events.list_event_date_options(poll)
+              votes = case user do
+                nil -> []
+                user -> Events.list_user_votes_for_poll(poll, user)
+              end
+              {poll, options, votes}
+            else
+              {nil, [], []}
+            end
+          else
+            {nil, [], []}
+          end
+
           # Apply event theme to layout
           theme = event.theme || :minimal
 
@@ -60,6 +77,9 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:show_registration_modal, false)
            |> assign(:just_registered, false)
            |> assign(:page_title, event.title)
+           |> assign(:date_poll, date_poll)
+           |> assign(:date_options, date_options)
+           |> assign(:user_votes, user_votes)
           }
       end
     end
@@ -279,6 +299,75 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
+  # Date Polling Event Handlers
+
+  def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:ok, user} ->
+        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
+        vote_type_atom = String.to_atom(vote_type)
+
+        case Events.cast_vote(option, user, vote_type_atom) do
+          {:ok, _vote} ->
+            # Reload user votes and voting summary
+            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+            {:noreply,
+             socket
+             |> assign(:user_votes, user_votes)
+             |> assign(:voting_summary, voting_summary)
+             |> put_flash(:info, "Your vote has been recorded!")
+            }
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
+            }
+        end
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Please log in to vote on event dates.")
+        }
+    end
+  end
+
+  def handle_event("remove_vote", %{"option_id" => option_id}, socket) do
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:ok, user} ->
+        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
+
+        case Events.remove_user_vote(option, user) do
+          {:ok, _} ->
+            # Reload user votes and voting summary
+            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+            {:noreply,
+             socket
+             |> assign(:user_votes, user_votes)
+             |> assign(:voting_summary, voting_summary)
+             |> put_flash(:info, "Your vote has been removed.")
+            }
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
+            }
+        end
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Please log in to manage your votes.")
+        }
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <!-- Public Event Show Page with dynamic theming -->
@@ -362,6 +451,155 @@ defmodule EventasaurusWeb.PublicEventLive do
             <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
               <h2 class="text-xl font-semibold mb-4 text-gray-900">About This Event</h2>
               <p class="text-gray-500">No description provided for this event.</p>
+            </div>
+          <% end %>
+
+          <!-- Date Voting Interface (only show for polling events) -->
+          <%= if @event.state == "polling" and not is_nil(@date_poll) and @date_options != [] do %>
+            <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm" data-testid="voting-interface">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="text-xl font-semibold text-gray-900">Vote on Event Date</h2>
+                  <p class="text-sm text-gray-600">Help us find the best date that works for everyone</p>
+                </div>
+              </div>
+
+              <%= if @user do %>
+                <!-- Voting interface for authenticated users -->
+                <div class="space-y-4">
+                  <%= for option <- @date_options do %>
+                    <% user_vote = Enum.find(@user_votes, &(&1.event_date_option_id == option.id)) %>
+                    <% vote_tally = Events.get_date_option_vote_tally(option) %>
+
+                    <div class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
+                      <div class="flex items-center justify-between mb-3">
+                        <div class="flex-1">
+                          <h3 class="font-medium text-gray-900">
+                            <%= Calendar.strftime(option.date, "%A, %B %d, %Y") %>
+                          </h3>
+                          <p class="text-sm text-gray-500">
+                            <%= vote_tally.total %> <%= if vote_tally.total == 1, do: "vote", else: "votes" %>
+                            · <%= vote_tally.percentage %>% positive
+                          </p>
+                        </div>
+                        <%= if user_vote do %>
+                          <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-green-600">
+                              Your vote: <%= EventasaurusApp.Events.EventDateVote.vote_type_display(user_vote) %>
+                            </span>
+                            <button
+                              phx-click="remove_vote"
+                              phx-value-option_id={option.id}
+                              class="text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Remove vote"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        <% end %>
+                      </div>
+
+                      <!-- Vote tally visualization -->
+                      <div class="mb-3">
+                        <div class="flex h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <%= if vote_tally.total > 0 do %>
+                            <div class="bg-green-500" style={"width: #{(vote_tally.yes / vote_tally.total) * 100}%"}></div>
+                            <div class="bg-yellow-400" style={"width: #{(vote_tally.if_need_be / vote_tally.total) * 100}%"}></div>
+                            <div class="bg-red-400" style={"width: #{(vote_tally.no / vote_tally.total) * 100}%"}></div>
+                          <% end %>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Yes: <%= vote_tally.yes %></span>
+                          <span>If needed: <%= vote_tally.if_need_be %></span>
+                          <span>No: <%= vote_tally.no %></span>
+                        </div>
+                      </div>
+
+                      <!-- Voting buttons -->
+                      <div class="flex gap-2">
+                        <button
+                          phx-click="cast_vote"
+                          phx-value-option_id={option.id}
+                          phx-value-vote_type="yes"
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 #{if user_vote && user_vote.vote_type == :yes, do: "bg-green-600 text-white", else: "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"}"}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          phx-click="cast_vote"
+                          phx-value-option_id={option.id}
+                          phx-value-vote_type="if_need_be"
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 #{if user_vote && user_vote.vote_type == :if_need_be, do: "bg-yellow-500 text-white", else: "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"}"}
+                        >
+                          If needed
+                        </button>
+                        <button
+                          phx-click="cast_vote"
+                          phx-value-option_id={option.id}
+                          phx-value-vote_type="no"
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 #{if user_vote && user_vote.vote_type == :no, do: "bg-red-600 text-white", else: "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"}"}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% else %>
+                <!-- Non-authenticated users see voting summary but can't vote -->
+                <div class="space-y-4">
+                  <%= for option <- @date_options do %>
+                    <% vote_tally = Events.get_date_option_vote_tally(option) %>
+
+                    <div class="border border-gray-200 rounded-lg p-4">
+                      <div class="flex items-center justify-between mb-3">
+                        <div class="flex-1">
+                          <h3 class="font-medium text-gray-900">
+                            <%= Calendar.strftime(option.date, "%A, %B %d, %Y") %>
+                          </h3>
+                          <p class="text-sm text-gray-500">
+                            <%= vote_tally.total %> <%= if vote_tally.total == 1, do: "vote", else: "votes" %>
+                            · <%= vote_tally.percentage %>% positive
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Vote tally visualization -->
+                      <div class="mb-3">
+                        <div class="flex h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <%= if vote_tally.total > 0 do %>
+                            <div class="bg-green-500" style={"width: #{(vote_tally.yes / vote_tally.total) * 100}%"}></div>
+                            <div class="bg-yellow-400" style={"width: #{(vote_tally.if_need_be / vote_tally.total) * 100}%"}></div>
+                            <div class="bg-red-400" style={"width: #{(vote_tally.no / vote_tally.total) * 100}%"}></div>
+                          <% end %>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Yes: <%= vote_tally.yes %></span>
+                          <span>If needed: <%= vote_tally.if_need_be %></span>
+                          <span>No: <%= vote_tally.no %></span>
+                        </div>
+                      </div>
+                    </div>
+                  <% end %>
+
+                  <div class="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p class="text-sm text-blue-800 mb-2">Want to vote on the event date?</p>
+                    <button
+                      phx-click="show_registration_modal"
+                      class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200"
+                    >
+                      Register to Vote
+                    </button>
+                  </div>
+                </div>
+              <% end %>
             </div>
           <% end %>
 

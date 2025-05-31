@@ -51,6 +51,7 @@ defmodule EventasaurusApp.Factory do
       timezone: "America/Los_Angeles",
       visibility: :public,
       slug: sequence(:slug, &"test-event-#{&1}"),
+      state: "confirmed",
       theme: :minimal,
       theme_customizations: %{},
       venue: build(:venue)
@@ -125,6 +126,109 @@ defmodule EventasaurusApp.Factory do
           "secondary" => "#8b5cf6"
         }
       }
+    })
+  end
+
+  @doc """
+  Creates an event in polling state for date collection
+  """
+  def polling_event_factory do
+    build(:event, %{
+      state: "polling"
+    })
+  end
+
+  @doc """
+  Factory for EventDatePoll schema
+  """
+  def event_date_poll_factory do
+    %EventasaurusApp.Events.EventDatePoll{
+      voting_deadline: DateTime.utc_now() |> DateTime.add(7, :day),
+      event: build(:event, %{state: "polling"}),
+      created_by: build(:user)
+    }
+  end
+
+  @doc """
+  Creates a finalized event date poll
+  """
+  def finalized_event_date_poll_factory do
+    build(:event_date_poll, %{
+      finalized_date: Date.utc_today() |> Date.add(14)
+    })
+  end
+
+  @doc """
+  Factory for EventDateOption schema
+  """
+  def event_date_option_factory do
+    %EventasaurusApp.Events.EventDateOption{
+      date: Date.utc_today() |> Date.add(Enum.random(1..30)),
+      event_date_poll: build(:event_date_poll)
+    }
+  end
+
+  @doc """
+  Creates a date option for today
+  """
+  def today_date_option_factory do
+    build(:event_date_option, %{
+      date: Date.utc_today()
+    })
+  end
+
+  @doc """
+  Creates a date option for tomorrow
+  """
+  def tomorrow_date_option_factory do
+    build(:event_date_option, %{
+      date: Date.utc_today() |> Date.add(1)
+    })
+  end
+
+  @doc """
+  Creates multiple date options for a range
+  """
+  def date_option_range_factory do
+    poll = build(:event_date_poll)
+    start_date = Date.utc_today() |> Date.add(1)
+    end_date = Date.utc_today() |> Date.add(7)
+
+    Date.range(start_date, end_date)
+    |> Enum.map(fn date ->
+      build(:event_date_option, %{
+        date: date,
+        event_date_poll: poll
+      })
+    end)
+  end
+
+  @doc """
+  Factory for EventDateVote schema
+  """
+  def event_date_vote_factory do
+    %EventasaurusApp.Events.EventDateVote{
+      vote_type: :yes,
+      event_date_option: build(:event_date_option),
+      user: build(:user)
+    }
+  end
+
+  @doc """
+  Creates a vote with 'if_need_be' type
+  """
+  def if_need_be_vote_factory do
+    build(:event_date_vote, %{
+      vote_type: :if_need_be
+    })
+  end
+
+  @doc """
+  Creates a vote with 'no' type
+  """
+  def no_vote_factory do
+    build(:event_date_vote, %{
+      vote_type: :no
     })
   end
 
