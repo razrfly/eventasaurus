@@ -92,45 +92,35 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
       assert html =~ "Danger Zone"
     end
 
-    test "loads for authenticated non-organizer users", %{conn: conn} do
-      event = insert(:event, title: "Public Management View", visibility: :public)
-      {conn, _user} = register_and_log_in_user(conn)  # Regular user, not organizer
-
-      conn = get(conn, ~p"/events/#{event.slug}")
-      assert html_response(conn, 200)
-      html = html_response(conn, 200)
-
-      # Should show event details
-      assert html =~ "Public Management View"
-
-      # Should NOT show admin elements to non-organizer users
-      refute html =~ "Edit Event"
-      refute html =~ "Delete Event"
-      refute html =~ "Permanently delete this event"  # Check for actual danger zone content, not just comment
-    end
-
-    test "loads for unauthenticated users", %{conn: conn} do
+    test "✅ SECURITY: redirects unauthenticated users to login", %{conn: conn} do
       event = insert(:event, title: "Unauthenticated Management View", visibility: :public)
 
+      # ✅ SECURITY FIX: Management pages now require authentication
       conn = get(conn, ~p"/events/#{event.slug}")
-      assert html_response(conn, 200)
-      html = html_response(conn, 200)
-
-      # Should show basic event info
-      assert html =~ "Unauthenticated Management View"
-
-      # Should NOT show admin elements to unauthenticated users
-      refute html =~ "Edit Event"
-      refute html =~ "Delete Event"
-      refute html =~ "Permanently delete this event"  # Check for actual danger zone content, not just comment
+      assert redirected_to(conn) == ~p"/auth/login"
     end
 
-    test "returns 404 for non-existent event", %{conn: conn} do
+    test "loads for authenticated non-organizer users", %{conn: conn} do
+      # Create an event
+      event = insert(:event, title: "Non-Organizer Management View", visibility: :public)
+
+      # Log in as a different user (not the organizer)
+      {conn, _user} = register_and_log_in_user(conn)
+
+      # ✅ SECURITY FIX: Non-organizers can't access management pages
+      conn = get(conn, ~p"/events/#{event.slug}")
+      assert redirected_to(conn) == ~p"/dashboard"
+    end
+
+    test "✅ SECURITY: returns 404 for non-existent event and redirects to dashboard", %{conn: conn} do
+      # Create and log in a user first since the route now requires authentication
+      {conn, _user} = register_and_log_in_user(conn)
+
       conn = get(conn, ~p"/events/non-existent-slug")
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/dashboard"
 
       # Check flash message is set using Phoenix.Flash
-      conn = get(recycle(conn), ~p"/")
+      conn = get(recycle(conn), ~p"/dashboard")
       assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Event not found"
     end
 
