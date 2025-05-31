@@ -14,43 +14,36 @@ defmodule EventasaurusWeb.Features.AdminUserJourneyTest do
 
   @moduletag :wallaby
   describe "Admin User Journey - Complete Event Management Flow" do
-    test "admin can complete full event management lifecycle", %{session: session} do
+    test "✅ SECURITY: admin management pages require authentication", %{session: session} do
       try do
-        # Skip if Chrome/chromedriver version issues
-        # Step 1: Visit homepage (unauthenticated)
-        session = session
-        |> visit("/")
-        |> assert_has(Query.css("body"))  # Verify page loads
-
-        # Step 2: Navigate to login page
-        session = session
-        |> visit("/auth/login")
-        |> assert_has(Query.css("body"))  # Verify login page loads
-
-        # Note: Since we can't actually perform OAuth login in tests,
-        # we'll test page accessibility for now
-
-        # Step 3: Create a test event to work with
+        # Step 1: Create a test event
         event = insert(:event, title: "Test Journey Event")
 
-        # Step 4: Access event management page
+        # Step 2: ✅ SECURITY FIX - Management page now redirects to login
         session = session
         |> visit("/events/#{event.slug}")
-        |> assert_has(Query.css("body"))  # Verify event page loads
-        |> assert_has(Query.text(event.title))  # Verify event content
+        |> assert_has(Query.css("body"))
 
-        # Step 5: Access event edit page (will redirect to login for unauthenticated users)
+        # Should be redirected to login page (security working correctly)
+        current_url = session |> Wallaby.Browser.current_url()
+        assert String.contains?(current_url, "/auth/login"),
+          "Management page should redirect to login for unauthenticated users"
+
+        # Step 3: Verify we see login page, not the event management content
+        page_text = Wallaby.Browser.text(session)
+        assert String.contains?(page_text, "Sign in to account"),
+          "Should see login form"
+
+        # Should NOT see event management content
+        refute String.contains?(page_text, event.title),
+          "Should not see event management content without authentication"
+
+        # Step 4: Public event page should still work
         session = session
-        |> visit("/events/#{event.slug}/edit")
-        |> assert_has(Query.css("body"))  # Page should load (login or edit form)
-
-        # Step 6: View public event page
-        _session = session
         |> visit("/#{event.slug}")
-        |> assert_has(Query.css("body"))  # Verify public page loads
-        |> assert_has(Query.text(event.title))  # Verify event content on public page
+        |> assert_has(Query.css("body"))
+        |> assert_has(Query.text(event.title))  # Public page shows event
 
-        # Journey completed successfully
         assert true
 
       rescue
@@ -60,25 +53,29 @@ defmodule EventasaurusWeb.Features.AdminUserJourneyTest do
       end
     end
 
-    test "admin navigation flows work correctly", %{session: session} do
+    test "✅ SECURITY: admin navigation properly protected", %{session: session} do
       try do
         # Create test data
         event = insert(:event, title: "Navigation Test Event")
 
-        # Test navigation between different pages
+        # ✅ SECURITY FIX - Management pages require authentication
         session = session
         |> visit("/events/#{event.slug}")
-        |> assert_has(Query.text(event.title))
+        |> assert_has(Query.css("body"))
 
-        # Test cross-page navigation maintains state
+        # Should be on login page, not event management
+        current_url = session |> Wallaby.Browser.current_url()
+        assert String.contains?(current_url, "/auth/login"),
+          "Event management should redirect to login"
+
+        # Dashboard should also require authentication
         session = session
         |> visit("/dashboard")
         |> assert_has(Query.css("body"))
 
-        # Navigate back to event
-        _session = session
-        |> visit("/events/#{event.slug}")
-        |> assert_has(Query.text(event.title))  # State should be maintained
+        current_url = session |> Wallaby.Browser.current_url()
+        assert String.contains?(current_url, "/auth/login"),
+          "Dashboard should redirect to login"
 
         assert true
 
@@ -91,27 +88,32 @@ defmodule EventasaurusWeb.Features.AdminUserJourneyTest do
   end
 
   describe "Admin Event Management Workflow" do
-    test "event creation to management workflow", %{session: session} do
+    test "✅ SECURITY: event management workflow requires authentication", %{session: session} do
       try do
-        # Test the specific workflow of creating and managing events
-
         # Step 1: Create an event for testing
         event = insert(:event, title: "Workflow Test Event", tagline: "Testing the workflow")
 
-        # Step 2: Verify event appears in management view
+        # Step 2: ✅ SECURITY FIX - Management view requires authentication
         session = session
         |> visit("/events/#{event.slug}")
-        |> assert_has(Query.text(event.title))
-        |> assert_has(Query.text(event.tagline))
-        # NOTE: Admin controls like "Edit Event" only visible to authenticated organizers
+        |> assert_has(Query.css("body"))
 
-        # Step 3: Test edit page accessibility (will redirect to login for unauthenticated users)
+        # Should be redirected to login page
+        current_url = session |> Wallaby.Browser.current_url()
+        assert String.contains?(current_url, "/auth/login"),
+          "Event management should redirect to login for unauthenticated users"
+
+        # Step 3: Edit page should also require authentication
         session = session
         |> visit("/events/#{event.slug}/edit")
-        |> assert_has(Query.css("body"))  # Page should load (login or edit form)
+        |> assert_has(Query.css("body"))
 
-        # Step 4: Verify public view works
-        _session = session
+        current_url = session |> Wallaby.Browser.current_url()
+        assert String.contains?(current_url, "/auth/login"),
+          "Edit page should redirect to login for unauthenticated users"
+
+        # Step 4: Public view should still work without authentication
+        session = session
         |> visit("/#{event.slug}")
         |> assert_has(Query.text(event.title))
         |> assert_has(Query.text(event.tagline))

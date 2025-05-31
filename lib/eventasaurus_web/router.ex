@@ -72,15 +72,9 @@ defmodule EventasaurusWeb.Router do
   scope "/events", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
 
-    delete "/:slug", EventController, :delete
-  end
-
-  # Public event routes
-  scope "/events", EventasaurusWeb do
-    pipe_through :browser
-
     get "/:slug", EventController, :show
     get "/:slug/attendees", EventController, :attendees
+    delete "/:slug", EventController, :delete
   end
 
   # Public routes with auth user assignment
