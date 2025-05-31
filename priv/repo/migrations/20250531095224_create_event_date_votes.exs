@@ -1,7 +1,7 @@
 defmodule Eventasaurus.Repo.Migrations.CreateEventDateVotes do
   use Ecto.Migration
 
-  def change do
+  def up do
     create table(:event_date_votes) do
       add :event_date_option_id, references(:event_date_options, on_delete: :delete_all), null: false
       add :user_id, references(:users, on_delete: :delete_all), null: false
@@ -18,5 +18,15 @@ defmodule Eventasaurus.Repo.Migrations.CreateEventDateVotes do
 
     # Index for finding votes by type for analytics
     create index(:event_date_votes, [:vote_type])
+
+    # Add constraint to enforce valid vote types
+    execute "ALTER TABLE event_date_votes ADD CONSTRAINT valid_vote_type CHECK (vote_type IN ('yes', 'if_need_be', 'no'))"
+  end
+
+  def down do
+    # Drop constraint first
+    execute "ALTER TABLE event_date_votes DROP CONSTRAINT valid_vote_type"
+
+    drop table(:event_date_votes)
   end
 end
