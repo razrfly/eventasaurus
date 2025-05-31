@@ -125,7 +125,7 @@ defmodule EventasaurusWeb.Features.CrossPageIntegrationTest do
   end
 
   describe "Application State Management Across Pages" do
-    test "data consistency between admin and public views", %{session: session} do
+    test "✅ SECURITY: data consistency with proper authentication handling", %{session: session} do
       try do
         # Create an event with specific content
         venue = insert(:venue, name: "Consistency Test Venue", city: "Test City")
@@ -137,25 +137,33 @@ defmodule EventasaurusWeb.Features.CrossPageIntegrationTest do
           visibility: "public"
         )
 
-        # Step 1: View admin page and verify content
+        # Step 1: ✅ SECURITY FIX - Management page requires authentication
         session = session
         |> visit("/events/#{event.slug}")
-        |> assert_has(Query.text(event.title))
-        |> assert_has(Query.text(event.tagline))
-        |> assert_has(Query.text(venue.name))
+        |> assert_has(Query.css("body"))
 
-        # Step 2: View public page and verify same content
+        # Should be redirected to login
+        current_url = session |> Wallaby.Browser.current_url()
+        assert String.contains?(current_url, "/auth/login"),
+          "Management page should redirect to login for unauthenticated users"
+
+        # Step 2: Public view should work without authentication and show same content
         session = session
         |> visit("/#{event.slug}")
         |> assert_has(Query.text(event.title))
         |> assert_has(Query.text(event.tagline))
         |> assert_has(Query.text(venue.name))
 
-        # Step 3: Navigate between views multiple times
+        # Step 3: Verify management access still requires authentication
         session = session
         |> visit("/events/#{event.slug}")
-        |> assert_has(Query.text(event.title))
+        |> assert_has(Query.css("body"))
 
+        current_url = session |> Wallaby.Browser.current_url()
+        assert String.contains?(current_url, "/auth/login"),
+          "Management page should consistently require authentication"
+
+        # Step 4: Public view should remain accessible
         _session = session
         |> visit("/#{event.slug}")
         |> assert_has(Query.text(event.title))
