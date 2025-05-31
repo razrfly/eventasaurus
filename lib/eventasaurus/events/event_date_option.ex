@@ -26,12 +26,7 @@ defmodule EventasaurusApp.Events.EventDateOption do
   Creates a changeset for creating multiple date options at once.
   """
   def creation_changeset(event_date_option, attrs) do
-    event_date_option
-    |> cast(attrs, [:date, :event_date_poll_id])
-    |> validate_required([:date, :event_date_poll_id])
-    |> validate_date_not_in_past()
-    |> foreign_key_constraint(:event_date_poll_id)
-    |> unique_constraint([:event_date_poll_id, :date], message: "date already exists for this poll")
+    changeset(event_date_option, attrs)
   end
 
   @doc """

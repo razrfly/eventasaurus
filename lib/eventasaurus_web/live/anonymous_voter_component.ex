@@ -67,18 +67,23 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
           pending_vote = socket.assigns.pending_vote
           option = Enum.find(socket.assigns.date_options, &(&1.id == pending_vote.option_id))
 
-          case Events.register_voter_and_cast_vote(socket.assigns.event.id, name, email, option, pending_vote.vote_type) do
-            {:ok, :new_voter, _participant, _vote} ->
-              send(self(), {:vote_success, :new_voter, name, email})
-              {:noreply, assign(socket, :loading, false)}
+          if option do
+            case Events.register_voter_and_cast_vote(socket.assigns.event.id, name, email, option, pending_vote.vote_type) do
+              {:ok, :new_voter, _participant, _vote} ->
+                send(self(), {:vote_success, :new_voter, name, email})
+                {:noreply, assign(socket, :loading, false)}
 
-            {:ok, :existing_user_voted, _participant, _vote} ->
-              send(self(), {:vote_success, :existing_user_voted, name, email})
-              {:noreply, assign(socket, :loading, false)}
+              {:ok, :existing_user_voted, _participant, _vote} ->
+                send(self(), {:vote_success, :existing_user_voted, name, email})
+                {:noreply, assign(socket, :loading, false)}
 
-            {:error, reason} ->
-              send(self(), {:vote_error, reason})
-              {:noreply, assign(socket, :loading, false)}
+              {:error, reason} ->
+                send(self(), {:vote_error, reason})
+                {:noreply, assign(socket, :loading, false)}
+            end
+          else
+            send(self(), {:vote_error, :option_not_found})
+            {:noreply, assign(socket, :loading, false)}
           end
 
         errors ->
@@ -144,24 +149,26 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
             <h4 class="text-sm font-medium text-gray-900 mb-2">Your votes:</h4>
             <%= for {option_id, vote_type} <- @temp_votes do %>
               <% option = Enum.find(@date_options, &(&1.id == option_id)) %>
-              <div class="flex justify-between items-center text-sm py-1">
-                <span class="text-gray-700">
-                  <%= Calendar.strftime(option.date, "%b %d") %>
-                </span>
-                <span class={"font-medium " <>
-                  case vote_type do
-                    :yes -> "text-green-700"
-                    :if_need_be -> "text-yellow-700"
-                    :no -> "text-red-700"
-                  end
-                }>
-                  <%= case vote_type do
-                    :yes -> "👍 Yes"
-                    :if_need_be -> "🤷 If needed"
-                    :no -> "👎 No"
-                  end %>
-                </span>
-              </div>
+              <%= if option do %>
+                <div class="flex justify-between items-center text-sm py-1">
+                  <span class="text-gray-700">
+                    <%= Calendar.strftime(option.date, "%b %d") %>
+                  </span>
+                  <span class={"font-medium " <>
+                    case vote_type do
+                      :yes -> "text-green-700"
+                      :if_need_be -> "text-yellow-700"
+                      :no -> "text-red-700"
+                    end
+                  }>
+                    <%= case vote_type do
+                      :yes -> "👍 Yes"
+                      :if_need_be -> "🤷 If needed"
+                      :no -> "👎 No"
+                    end %>
+                  </span>
+                </div>
+              <% end %>
             <% end %>
           </div>
 
