@@ -268,29 +268,6 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       %{polling_event: polling_event, poll: poll, organizer: user}
     end
 
-    test "anonymous user sees voting summary but cannot vote", %{conn: conn, polling_event: event, poll: poll} do
-      {:ok, _view, html} = live(conn, ~p"/#{event.slug}")
-
-      # Should show the voting interface section
-      assert html =~ "Vote on Event Date"
-      assert html =~ "Help us find the best date that works for everyone"
-
-      # Should show date options with vote tallies
-      for option <- poll.date_options do
-        formatted_date = Calendar.strftime(option.date, "%A, %B %d, %Y")
-        assert html =~ formatted_date
-        assert html =~ "0 votes"  # No votes yet
-        assert html =~ "0.0% positive"
-      end
-
-      # Should NOT show voting buttons for anonymous users
-      refute html =~ "phx-click=\"cast_vote\""
-
-      # Should show call-to-action to register
-      assert html =~ "Want to vote on the event date?"
-      assert html =~ "Register to Vote"
-    end
-
     test "authenticated user sees voting interface with voting buttons", %{conn: conn, polling_event: event, poll: poll} do
       user = user_fixture()
       {conn, _token} = authenticate_user(conn, user)
@@ -450,21 +427,20 @@ defmodule EventasaurusWeb.PublicEventLiveTest do
       refute has_element?(view, "[data-testid='voting-interface']")
     end
 
-    test "voting requires authentication", %{conn: conn, polling_event: event, poll: poll} do
+    test "anonymous users can see voting buttons to start voting process", %{conn: conn, polling_event: event, poll: poll} do
       {:ok, view, _html} = live(conn, ~p"/#{event.slug}")
 
-      first_option = hd(poll.date_options)
+      # Anonymous users should see voting interface with vote buttons, not just tally
+      html = render(view)
 
-      # Try to vote as anonymous user (should fail gracefully)
-      html = render_click(view, "cast_vote", %{
-        "option_id" => to_string(first_option.id),
-        "vote_type" => "yes"
-      })
+      # Should see vote buttons for each option
+      assert html =~ "phx-click=\"cast_vote\""
 
-      # Should show error message
-      assert html =~ "Please log in to vote on event dates."
+      # Should NOT show the old register to vote message
+      refute html =~ "Want to vote on the event date?"
+      refute html =~ "Register to Vote"
 
-      # Vote count should remain zero
+      # Should see vote tallies
       assert html =~ "0 votes"
     end
 
