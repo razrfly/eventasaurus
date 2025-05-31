@@ -1041,4 +1041,161 @@ defmodule EventasaurusApp.Events do
   def change_event_date_vote(%EventDateVote{} = vote, attrs \\ %{}) do
     EventDateVote.changeset(vote, attrs)
   end
+
+  @doc """
+  Registers a voter and casts their vote for an event date option.
+
+  This function mirrors register_user_for_event but also casts the vote:
+  1. Checks if user exists in Supabase Auth (by email)
+  2. Creates user if they don't exist (with temporary password)
+  3. Checks if user is already registered for event (if not, registers them)
+  4. Casts the vote for the specified date option
+
+  Returns:
+  - {:ok, :new_voter, participant, vote} - User was created, registered, and vote cast
+  - {:ok, :existing_user_voted, participant, vote} - Existing user voted (may or may not have been registered)
+  - {:error, reason} - Other errors
+  """
+  def register_voter_and_cast_vote(event_id, name, email, option, vote_type) do
+    alias EventasaurusApp.Auth.SupabaseSync
+    alias EventasaurusApp.Accounts
+    require Logger
+    Logger.info("Starting voter registration and vote casting", %{
+      event_id: event_id,
+      email: email,
+      name: name,
+      option_id: option.id,
+      vote_type: vote_type
+    })
+
+    Repo.transaction(fn ->
+      # Get the event
+      event = case get_event!(event_id) do
+        nil ->
+          Logger.error("Event not found", %{event_id: event_id})
+          Repo.rollback(:event_not_found)
+        event -> event
+      end
+
+      # Check if user exists in our local database first
+      existing_user = Accounts.get_user_by_email(email)
+
+      if existing_user do
+        Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
+      else
+        Logger.debug("No existing user found in local database")
+      end
+
+      user = case existing_user do
+        nil ->
+          # User doesn't exist locally, check Supabase and create if needed
+          Logger.info("User not found locally, attempting Supabase user creation/lookup")
+          case create_or_find_supabase_user(email, name) do
+            {:ok, supabase_user} ->
+              Logger.info("Successfully created/found user in Supabase")
+              # Sync with local database
+              case SupabaseSync.sync_user(supabase_user) do
+                {:ok, user} ->
+                  Logger.info("Successfully synced user to local database", %{user_id: user.id})
+                  user
+                {:error, reason} ->
+                  Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+                  Repo.rollback(reason)
+              end
+            {:error, reason} ->
+              Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
+              Repo.rollback(reason)
+          end
+
+        user ->
+          # User exists locally
+          Logger.debug("Using existing local user", %{user_id: user.id})
+          user
+      end
+
+      # Check if user is registered for the event, register if not
+      participant = case get_event_participant_by_event_and_user(event, user) do
+        nil ->
+          Logger.debug("User not registered for event, creating participant record", %{
+            user_id: user.id,
+            event_id: event.id
+          })
+          # User not registered, create participant record
+          participant_attrs = %{
+            event_id: event.id,
+            user_id: user.id,
+            role: :invitee,
+            status: :pending,
+            source: "voting_registration",
+            metadata: %{
+              registration_date: DateTime.utc_now(),
+              registered_name: name,
+              registered_via_voting: true
+            }
+          }
+
+          case create_event_participant(participant_attrs) do
+            {:ok, participant} ->
+              Logger.info("Successfully created event participant for voter", %{
+                participant_id: participant.id,
+                user_id: user.id,
+                event_id: event.id
+              })
+              participant
+            {:error, reason} ->
+              Logger.error("Failed to create event participant for voter", %{reason: inspect(reason)})
+              Repo.rollback(reason)
+          end
+
+        participant ->
+          Logger.debug("User already registered for event", %{user_id: user.id, event_id: event.id})
+          participant
+      end
+
+      # Cast the vote
+      case cast_vote(option, user, vote_type) do
+        {:ok, vote} ->
+          Logger.info("Successfully cast vote", %{
+            vote_id: vote.id,
+            user_id: user.id,
+            option_id: option.id,
+            vote_type: vote_type
+          })
+          if existing_user do
+            {:existing_user_voted, participant, vote}
+          else
+            {:new_voter, participant, vote}
+          end
+        {:error, reason} ->
+          Logger.error("Failed to cast vote", %{reason: inspect(reason)})
+          Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, result} ->
+        Logger.info("Voter registration and vote transaction completed successfully", %{
+          result_type: elem(result, 0),
+          participant_id: elem(result, 1).id,
+          vote_id: elem(result, 2).id
+        })
+        {:ok, elem(result, 0), elem(result, 1), elem(result, 2)}
+      {:error, reason} ->
+        Logger.warning("Voter registration and vote transaction failed", %{reason: inspect(reason)})
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Gets a user by email from the local database.
+
+  Returns:
+  - {:ok, user} if user exists
+  - {:error, :not_found} if user doesn't exist
+  """
+  def get_user_by_email(email) do
+    case Repo.get_by(User, email: email) do
+      nil -> {:error, :not_found}
+      user -> {:ok, user}
+    end
+  end
 end
