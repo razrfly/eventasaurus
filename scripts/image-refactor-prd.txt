@@ -1,0 +1,210 @@
+# Event Image Handling Refactor PRD
+
+## Overview
+Refactor the event creation and editing forms' image handling system to eliminate redundancy, add default images, and create a cleaner, more maintainable architecture. Currently, the system stores image data in both `cover_image_url` and `external_image_data` fields, creating unnecessary complexity and data duplication.
+
+## Current State Issues
+1. **Data Redundancy**: Image URLs stored in both `cover_image_url` and `external_image_data`
+2. **No Default Images**: Events without images show empty state
+3. **Inconsistent Metadata**: Different data structures for Unsplash, TMDB, and uploads
+4. **Complex Form Logic**: Dual field handling in LiveView components
+5. **Maintenance Burden**: Template logic must handle both fields
+
+## Goals
+1. **Add Default Images**: Provide appealing fallback images for new events
+2. **Eliminate Redundancy**: Single source of truth for image data
+3. **Standardize Metadata**: Consistent data structure across all image sources
+4. **Simplify Codebase**: Reduce complexity in forms and templates
+5. **Improve UX**: Better user experience with default images and cleaner interface
+
+## Technical Requirements
+
+### Phase 1: Add Default Images (Current Schema)
+- Create default image collection in `priv/static/images/events/defaults/`
+- Add 8 default images covering common event categories:
+  - concert.jpg (live music events)
+  - conference.jpg (business/professional meetings) 
+  - festival.jpg (festivals and cultural events)
+  - sports.jpg (sporting events and competitions)
+  - party.jpg (social gatherings and celebrations)
+  - education.jpg (workshops and learning events)
+  - business.jpg (corporate events and networking)
+  - general.jpg (catch-all for other events)
+- Implement default image selection logic in event creation
+- Randomly assign default image when creating new event
+- Allow users to override default with Unsplash/TMDB/upload options
+
+### Phase 2: Standardize Image Data Structure
+- Design unified image metadata schema for all sources:
+  ```json
+  {
+    "source": "default|unsplash|tmdb|upload",
+    "url": "actual_display_url",
+    "metadata": {
+      // Source-specific data varies by type
+    }
+  }
+  ```
+- Maintain both fields during transition for backward compatibility
+- Update form logic to use standardized structure
+- Ensure proper attribution for Unsplash/TMDB images
+
+### Phase 3: Database Schema Migration  
+- Remove `cover_image_url` field from events table
+- Migrate existing data to `external_image_data` with standardized format
+- Update all database queries and model logic
+- Add database constraints and validations
+
+### Phase 4: Clean Up Codebase
+- Remove dual field handling from LiveView controllers
+- Simplify form templates and components
+- Update display templates to use single image source
+- Remove obsolete helper functions and assigns
+
+## Image Source Specifications
+
+### Default Images
+- **Storage**: `priv/static/images/events/defaults/`
+- **Format**: JPEG, optimized for web (under 200KB each)
+- **Dimensions**: 800x400px (2:1 aspect ratio)
+- **Style**: Professional, appealing, relevant to category
+- **Data Structure**:
+  ```json
+  {
+    "source": "default",
+    "url": "/images/events/defaults/concert.jpg",
+    "metadata": {
+      "category": "concert",
+      "filename": "concert.jpg"
+    }
+  }
+  ```
+
+### Unsplash Images  
+- **API**: Maintain current Unsplash integration
+- **Attribution**: Preserve photographer credit requirements
+- **Data Structure**:
+  ```json
+  {
+    "source": "unsplash", 
+    "url": "https://images.unsplash.com/...",
+    "metadata": {
+      "photo_id": "abc123",
+      "photographer_name": "John Doe",
+      "photographer_url": "https://unsplash.com/@johndoe",
+      "download_location": "https://api.unsplash.com/photos/abc123/download"
+    }
+  }
+  ```
+
+### TMDB Images
+- **API**: Maintain current TMDB integration  
+- **Attribution**: Link to TMDB source
+- **Data Structure**:
+  ```json
+  {
+    "source": "tmdb",
+    "url": "https://image.tmdb.org/t/p/w500/poster.jpg", 
+    "metadata": {
+      "tmdb_id": "12345",
+      "title": "Movie Title",
+      "media_type": "movie"
+    }
+  }
+  ```
+
+### File Uploads
+- **Storage**: Maintain current Supabase integration
+- **Security**: Preserve current validation and constraints
+- **Data Structure**:
+  ```json
+  {
+    "source": "upload",
+    "url": "https://storage.supabase.com/...",
+    "metadata": {
+      "path": "events/filename.jpg",
+      "uploaded_at": "2025-01-XX",
+      "file_size": 1024000
+    }
+  }
+  ```
+
+## User Experience Flow
+
+### New Event Creation
+1. User starts creating new event
+2. System automatically assigns random default image
+3. Event form shows default image with option to change
+4. User can click "Change Image" to open image picker
+5. Image picker shows tabs: Default Images, Unsplash, Upload
+6. User selection updates preview immediately
+
+### Event Editing
+1. User opens edit form for existing event
+2. Current image displays with "Change Image" option
+3. Same image picker interface as creation
+4. Preserves current image if user cancels
+
+### Image Picker Interface
+1. **Default Images Tab**: Grid of 8 default options
+2. **Unsplash Tab**: Current search and selection interface
+3. **Upload Tab**: Current file upload interface  
+4. Clear visual feedback for selected image
+5. Consistent "Select" action across all tabs
+
+## Implementation Phases
+
+### Phase 1: Default Images (Weeks 1-2)
+- Create and optimize default image assets
+- Implement default selection logic
+- Update form components to handle defaults
+- Add default images tab to image picker
+- Test default image functionality
+
+### Phase 2: Data Standardization (Weeks 3-4)  
+- Design and implement unified data structure
+- Update form handling logic
+- Migrate image selection to use new format
+- Maintain backward compatibility
+- Test with all image sources
+
+### Phase 3: Database Migration (Week 5)
+- Create migration script for existing data
+- Remove `cover_image_url` field
+- Update all model references
+- Test data integrity and performance
+
+### Phase 4: Code Cleanup (Week 6)
+- Remove obsolete dual field logic
+- Simplify templates and components
+- Update display logic across application
+- Performance optimization and testing
+
+## Success Criteria
+1. All new events automatically have appealing default images
+2. No data redundancy - single source of truth for image data
+3. Consistent metadata structure across all image sources
+4. Simplified codebase with reduced complexity
+5. Backward compatibility maintained during transition
+6. No performance regression
+7. All image attributions properly maintained
+8. User experience improved with better default state
+
+## Technical Constraints
+- Must maintain Unsplash API attribution requirements
+- Must preserve existing uploaded images
+- Must not break existing event display functionality  
+- Must maintain current security and validation
+- Should not require changes to core event functionality
+
+## Acceptance Criteria
+- [ ] 8 high-quality default images implemented
+- [ ] Random default assignment on event creation  
+- [ ] Unified image metadata structure implemented
+- [ ] Database migration successfully removes redundancy
+- [ ] All image sources work correctly with new structure
+- [ ] No broken images or missing attributions
+- [ ] Performance metrics maintained or improved
+- [ ] All existing events continue to display correctly
+- [ ] Form complexity reduced by at least 30%
+- [ ] Code coverage maintained above 90% 
