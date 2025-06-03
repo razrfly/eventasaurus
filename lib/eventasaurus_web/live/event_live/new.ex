@@ -11,7 +11,7 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusWeb.Services.SearchService
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     # auth_user is already assigned by the on_mount hook
     # Ensure we have a proper User struct for creating events
     case ensure_user_struct(socket.assigns.auth_user) do
@@ -46,6 +46,7 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:per_page, 20)
           |> assign_new(:image_tab, fn -> "unsplash" end)
           |> assign(:enable_date_polling, false)
+          |> assign(:supabase_access_token, session["access_token"])
 
         {:ok, socket}
 
