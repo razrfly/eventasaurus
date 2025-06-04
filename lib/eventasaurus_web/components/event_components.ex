@@ -181,14 +181,16 @@ defmodule EventasaurusWeb.EventComponents do
 
     ~H"""
     <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
+      <!-- Two-column layout: Image & Theme (left) + Form Fields (right) -->
       <div class="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200">
-        <!-- Cover Image -->
-        <div class="mb-8">
-          <h2 class="text-xl font-bold mb-4">Cover Image</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
 
-          <div class="space-y-4">
-            <%= if is_nil(f[:cover_image_url].value) or f[:cover_image_url].value == "" do %>
-              <div class="mb-4">
+          <!-- Left Column: Cover Image & Theme (40% width = 2/5) -->
+          <div class="lg:col-span-2">
+            <!-- Cover Image -->
+            <div class="mb-6">
+              <h2 class="text-lg font-semibold mb-3 text-gray-800">Cover Image</h2>
+              <%= if is_nil(f[:cover_image_url].value) or f[:cover_image_url].value == "" do %>
                 <button
                   type="button"
                   phx-click={JS.push(@on_image_click)}
@@ -200,12 +202,9 @@ defmodule EventasaurusWeb.EventComponents do
                   </svg>
                   <p class="mt-2 text-sm text-gray-600">Click to add a cover image</p>
                 </button>
-              </div>
-            <% else %>
-              <div class="mb-4">
+              <% else %>
                 <div class="relative rounded-lg overflow-hidden h-48 bg-gray-100">
                   <img src={f[:cover_image_url].value} alt="Cover image" class="w-full h-full object-cover" />
-
                   <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-30 transition-all">
                     <button
                       type="button"
@@ -216,41 +215,35 @@ defmodule EventasaurusWeb.EventComponents do
                     </button>
                   </div>
                 </div>
+              <% end %>
 
-                <%= if @external_image_data do %>
-                  <div class="mt-2 text-xs text-gray-500">
-                    <%= if @external_image_data["source"] == "unsplash" && @external_image_data["photographer_name"] do %>
-                      Photo by <a href={@external_image_data["photographer_url"]} target="_blank" rel="noopener noreferrer" class="underline"><%= @external_image_data["photographer_name"] %></a> on <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" class="underline">Unsplash</a>
-                    <% end %>
-                    <%= if @external_image_data["source"] == "tmdb" && @external_image_data["url"] do %>
-                      Image from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" class="underline">TMDB</a>
-                    <% end %>
-                  </div>
-                <% end %>
-              </div>
-            <% end %>
+              <%= if @external_image_data do %>
+                <div class="mt-2 text-xs text-gray-500">
+                  <%= if @external_image_data["source"] == "unsplash" && @external_image_data["photographer_name"] do %>
+                    Photo by <a href={@external_image_data["photographer_url"]} target="_blank" rel="noopener noreferrer" class="underline"><%= @external_image_data["photographer_name"] %></a> on <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" class="underline">Unsplash</a>
+                  <% end %>
+                  <%= if @external_image_data["source"] == "tmdb" && @external_image_data["url"] do %>
+                    Image from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" class="underline">TMDB</a>
+                  <% end %>
+                </div>
+              <% end %>
 
-            <%= hidden_input f, :cover_image_url %>
-            <%= if @external_image_data do %>
-              <% encoded_data =
-                if is_map(@external_image_data), do: Jason.encode!(@external_image_data), else: @external_image_data || "" %>
-              <%= hidden_input f, :external_image_data, value: encoded_data %>
-            <% end %>
-          </div>
-        </div>
+              <!-- Hidden fields for image data -->
+              <%= hidden_input f, :cover_image_url %>
+              <%= if @external_image_data do %>
+                <% encoded_data =
+                  if is_map(@external_image_data), do: Jason.encode!(@external_image_data), else: @external_image_data || "" %>
+                <%= hidden_input f, :external_image_data, value: encoded_data %>
+              <% end %>
+            </div>
 
-        <!-- Theme Selection -->
-        <div class="mb-8">
-          <h2 class="text-xl font-bold mb-4">Event Theme</h2>
-          <div class="space-y-4">
-            <div class="form-group">
-              <label for={f[:theme].id} class="block text-sm font-medium text-gray-700 mb-2">
-                Choose a theme for your event page
-              </label>
+            <!-- Theme Selection -->
+            <div>
+              <h2 class="text-lg font-semibold mb-3 text-gray-800">Event Theme</h2>
               <select
                 name="event[theme]"
                 id={f[:theme].id}
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm"
               >
                 <%= for theme <- EventasaurusWeb.ThemeComponents.available_themes() do %>
                   <option value={theme.value} selected={f[:theme].value == theme.value || f[:theme].value == String.to_atom(theme.value)}>
@@ -258,305 +251,209 @@ defmodule EventasaurusWeb.EventComponents do
                   </option>
                 <% end %>
               </select>
-              <p class="mt-2 text-sm text-gray-500">
-                The theme will customize the appearance of your public event page
+              <p class="mt-1 text-xs text-gray-500">
+                Customize your event page appearance
               </p>
             </div>
           </div>
-        </div>
 
-        <!-- Basic Information -->
-        <div class="mb-8">
-          <h2 class="text-xl font-bold mb-4">Basic Information</h2>
-          <div class="space-y-4">
-            <.input field={f[:title]} type="text" label="Event Title" required />
-            <.input field={f[:tagline]} type="text" label="Tagline" />
-            <.input field={f[:description]} type="textarea" label="Description" />
-            <.input field={f[:visibility]} type="select" label="Visibility" options={[{"Public", "public"}, {"Private", "private"}]} />
-          </div>
-        </div>
-
-        <!-- Date & Time -->
-        <div class="mb-8">
-          <h2 class="text-xl font-bold mb-4">Date & Time</h2>
-          <div class="space-y-4">
-            <!-- Date Polling Option -->
-            <div class="flex items-center mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <label class="flex items-start cursor-pointer w-full">
-                <input
-                  type="checkbox"
-                  name="event[enable_date_polling]"
-                  value="true"
-                  checked={@enable_date_polling}
-                  phx-click="toggle_date_polling"
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 mr-3"
-                />
-                <div>
-                  <span class="text-sm font-medium text-blue-900">Let attendees vote on the event date</span>
-                  <p class="text-xs text-blue-700 mt-1">
-                    Instead of setting a fixed date, create a poll where attendees can vote on their preferred dates.
-                    The date range below will be used as the options for voting.
-                  </p>
-                </div>
-              </label>
+          <!-- Right Column: Form Fields (60% width = 3/5) -->
+          <div class="lg:col-span-3">
+            <!-- Event Title (prominent) -->
+            <div class="mb-4">
+              <.input field={f[:title]} type="text" label="Event Title" required class="text-lg" />
             </div>
 
-            <div phx-hook="DateTimeSync" id="date-time-sync-hook">
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    <%= if @enable_date_polling do %>
-                      Poll Start Date
-                    <% else %>
-                      Start Date
-                    <% end %>
-                  </label>
-                  <.date_input
-                    id={"#{@id}-start_date"}
-                    name="event[start_date]"
-                    value={Map.get(@form_data, "start_date", "")}
-                    required
-                    data-role="start-date"
-                  />
-                  <%= if @enable_date_polling do %>
-                    <p class="text-xs text-gray-500 mt-1">First date option for voting</p>
-                  <% end %>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    <%= if @enable_date_polling do %>
-                      Daily Start Time
-                    <% else %>
-                      Start Time
-                    <% end %>
-                  </label>
-                  <.time_select
-                    id={"#{@id}-start_time"}
-                    name="event[start_time]"
-                    value={Map.get(@form_data, "start_time", "")}
-                    required
-                    data-role="start-time"
-                  />
-                  <%= if @enable_date_polling do %>
-                    <p class="text-xs text-gray-500 mt-1">Start time for all date options</p>
-                  <% end %>
-                </div>
-              </div>
-              <div class="grid grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    <%= if @enable_date_polling do %>
-                      Poll End Date
-                    <% else %>
-                      End Date
-                    <% end %>
-                  </label>
-                  <.date_input
-                    id={"#{@id}-ends_date"}
-                    name="event[ends_date]"
-                    value={Map.get(@form_data, "ends_date", "")}
-                    data-role="end-date"
-                  />
-                  <%= if @enable_date_polling do %>
-                    <p class="text-xs text-gray-500 mt-1">Last date option for voting</p>
-                  <% end %>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    <%= if @enable_date_polling do %>
-                      Daily End Time
-                    <% else %>
-                      End Time
-                    <% end %>
-                  </label>
-                  <.time_select
-                    id={"#{@id}-ends_time"}
-                    name="event[ends_time]"
-                    value={Map.get(@form_data, "ends_time", "")}
-                    data-role="end-time"
-                  />
-                  <%= if @enable_date_polling do %>
-                    <p class="text-xs text-gray-500 mt-1">End time for all date options</p>
-                  <% end %>
-                </div>
-              </div>
-            </div>
+            <!-- Date & Time (compact) -->
+            <div class="mb-4">
+              <h3 class="text-sm font-semibold text-gray-700 mb-2">When</h3>
 
-            <div class="form-group">
-              <label for={f[:timezone].id} class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-              <.timezone_select
-                field={f[:timezone]}
-                selected={Map.get(@form_data, "timezone", nil)}
-                show_all={@show_all_timezones}
-              />
-              <p class="mt-1 text-xs text-gray-500">Your local timezone will be auto-detected if available</p>
-            </div>
-
-            <%= if @enable_date_polling do %>
-              <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div class="flex items-start">
-                  <svg class="w-5 h-5 text-yellow-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                  </svg>
+              <!-- Date Polling Toggle -->
+              <div class="flex items-center mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <label class="flex items-start cursor-pointer w-full">
+                  <input
+                    type="checkbox"
+                    name="event[enable_date_polling]"
+                    value="true"
+                    checked={@enable_date_polling}
+                    phx-click="toggle_date_polling"
+                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 mr-3"
+                  />
                   <div>
-                    <h4 class="text-sm font-medium text-yellow-800">Date Polling Enabled</h4>
-                    <p class="text-xs text-yellow-700 mt-1">
-                      Your event will be created in "polling" state. Each day from the start to end date will become a voting option.
-                      Attendees can vote on their preferred dates before you finalize the event.
-                    </p>
+                    <span class="text-sm font-medium text-blue-900">Let attendees vote on the date</span>
+                    <p class="text-xs text-blue-700 mt-1">Create a poll for attendees to choose their preferred dates</p>
+                  </div>
+                </label>
+              </div>
+
+              <div phx-hook="DateTimeSync" id="date-time-sync-hook">
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                      <%= if @enable_date_polling, do: "Poll Start Date", else: "Start Date" %>
+                    </label>
+                    <.date_input
+                      id={"#{@id}-start_date"}
+                      name="event[start_date]"
+                      value={Map.get(@form_data, "start_date", "")}
+                      required
+                      data-role="start-date"
+                      class="text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                      <%= if @enable_date_polling, do: "Start Time", else: "Start Time" %>
+                    </label>
+                    <.time_select
+                      id={"#{@id}-start_time"}
+                      name="event[start_time]"
+                      value={Map.get(@form_data, "start_time", "")}
+                      required
+                      data-role="start-time"
+                      class="text-sm"
+                    />
                   </div>
                 </div>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                      <%= if @enable_date_polling, do: "Poll End Date", else: "End Date" %>
+                    </label>
+                    <.date_input
+                      id={"#{@id}-ends_date"}
+                      name="event[ends_date]"
+                      value={Map.get(@form_data, "ends_date", "")}
+                      data-role="end-date"
+                      class="text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                      <%= if @enable_date_polling, do: "End Time", else: "End Time" %>
+                    </label>
+                    <.time_select
+                      id={"#{@id}-ends_time"}
+                      name="event[ends_time]"
+                      value={Map.get(@form_data, "ends_time", "")}
+                      data-role="end-time"
+                      class="text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label for={f[:timezone].id} class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                  <.timezone_select
+                    field={f[:timezone]}
+                    selected={Map.get(@form_data, "timezone", nil)}
+                    show_all={@show_all_timezones}
+                    class="text-sm"
+                  />
+                  <p class="mt-1 text-xs text-gray-500">Auto-detected if available</p>
+                </div>
               </div>
-            <% end %>
 
-            <!-- Hidden fields to store the combined datetime values -->
-            <input
-              type="hidden"
-              name="event[start_at]"
-              id={"#{@id}-start_at"}
-              value={format_datetime_for_input(@event, :start_at)}
-            />
-            <input
-              type="hidden"
-              name="event[ends_at]"
-              id={"#{@id}-ends_at"}
-              value={format_datetime_for_input(@event, :ends_at)}
-            />
-          </div>
-        </div>
+              <%= if @enable_date_polling do %>
+                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mt-3">
+                  <div class="flex items-start">
+                    <svg class="w-4 h-4 text-yellow-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <div>
+                      <h4 class="text-sm font-medium text-yellow-800">Date Polling Enabled</h4>
+                      <p class="text-xs text-yellow-700 mt-1">
+                        Each day from start to end date will become a voting option for attendees.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
 
-        <!-- Venue -->
-        <div class="mb-8">
-          <h2 class="text-xl font-bold mb-4">Venue</h2>
-          <div class="space-y-6">
-            <div class="flex items-center mb-4">
-              <label class="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="event[is_virtual]"
-                  value="true"
-                  checked={Map.get(@form_data, "is_virtual", false) == true}
-                  phx-click="toggle_virtual"
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span class="ml-2 text-sm font-medium">This is a virtual/online event</span>
-              </label>
+              <!-- Hidden fields for combined datetime values -->
+              <input type="hidden" name="event[start_at]" id={"#{@id}-start_at"} value={format_datetime_for_input(@event, :start_at)} />
+              <input type="hidden" name="event[ends_at]" id={"#{@id}-ends_at"} value={format_datetime_for_input(@event, :ends_at)} />
             </div>
 
-            <%= if !@is_virtual do %>
-              <div>
-                <label for="venue-search" class="block text-sm font-medium text-gray-700 mb-1">
-                  Search for venue/address
+            <!-- Location -->
+            <div class="mb-4">
+              <h3 class="text-sm font-semibold text-gray-700 mb-2">Where</h3>
+
+              <div class="flex items-center mb-2">
+                <label class="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="event[is_virtual]"
+                    value="true"
+                    checked={Map.get(@form_data, "is_virtual", false) == true}
+                    phx-click="toggle_virtual"
+                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span class="ml-2 text-sm">Virtual/online event</span>
                 </label>
-                <div id="venue-search-container" class="mt-1 relative">
+              </div>
+
+              <%= if !@is_virtual do %>
+                <div>
                   <input
                     type="text"
                     id={"venue-search-#{if @action == :new, do: "new", else: "edit"}"}
-                    placeholder="Start typing a venue or address..."
+                    placeholder="Search for venue or address..."
                     phx-hook="GooglePlacesAutocomplete"
-                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                   />
-                  <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-                    </svg>
+                  <!-- Hidden venue fields remain the same -->
+                  <input type="hidden" name="event[venue_name]" id={"venue-name-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_name", "")} />
+                  <input type="hidden" name="event[venue_address]" id={"venue-address-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_address", "")} />
+                  <input type="hidden" name="event[venue_city]" id={"venue-city-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_city", "")} />
+                  <input type="hidden" name="event[venue_state]" id={"venue-state-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_state", "")} />
+                  <input type="hidden" name="event[venue_country]" id={"venue-country-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_country", "")} />
+                  <input type="hidden" name="event[venue_latitude]" id={"venue-lat-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_latitude", "")} />
+                  <input type="hidden" name="event[venue_longitude]" id={"venue-lng-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_longitude", "")} />
+                </div>
+
+                <!-- Selected venue display -->
+                <%= if @selected_venue_name do %>
+                  <div class="mt-2 p-2 bg-blue-50 border border-blue-300 rounded-md text-sm">
+                    <div class="font-medium text-blue-700"><%= @selected_venue_name %></div>
+                    <div class="text-blue-600 text-xs"><%= @selected_venue_address %></div>
                   </div>
-                </div>
-                <p class="mt-1 text-xs text-gray-500">Type to search for a venue or address</p>
-              </div>
-
-              <!-- Hidden fields for venue data -->
-              <div>
-                <input type="hidden" name="event[venue_name]" id={"venue-name-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_name", "")} />
-                <input type="hidden" name="event[venue_address]" id={"venue-address-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_address", "")} />
-                <input type="hidden" name="event[venue_city]" id={"venue-city-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_city", "")} />
-                <input type="hidden" name="event[venue_state]" id={"venue-state-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_state", "")} />
-                <input type="hidden" name="event[venue_country]" id={"venue-country-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_country", "")} />
-                <input type="hidden" name="event[venue_latitude]" id={"venue-lat-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_latitude", "")} />
-                <input type="hidden" name="event[venue_longitude]" id={"venue-lng-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_longitude", "")} />
-              </div>
-
-              <!-- Selected venue display -->
-              <%= if @selected_venue_name do %>
-                <div class="mt-4 p-3 bg-blue-50 border border-blue-300 rounded-md">
-                  <h3 class="font-medium text-blue-700 mb-1">Selected Venue:</h3>
-                  <p class="font-bold"><%= @selected_venue_name %></p>
-                  <p class="text-sm text-blue-600"><%= @selected_venue_address %></p>
-
-                  <%= if Application.get_env(:eventasaurus, :environment) != :prod do %>
-                    <div class="mt-2 text-xs text-blue-500">
-                      <p>City: <%= Map.get(@form_data, "venue_city", "") %></p>
-                      <p>State: <%= Map.get(@form_data, "venue_state", "") %></p>
-                      <p>Country: <%= Map.get(@form_data, "venue_country", "") %></p>
-                      <p>Coordinates: <%= Map.get(@form_data, "venue_latitude", "") %>, <%= Map.get(@form_data, "venue_longitude", "") %></p>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
-
-              <!-- Debug info - show current form_data -->
-              <%= if Application.get_env(:eventasaurus, :environment) != :prod do %>
-                <div class="mt-4 p-3 bg-gray-100 text-xs font-mono">
-                  <p class="font-bold">Debug - form_data in venue step:</p>
-                  <p>venue_name: <%= Map.get(@form_data, "venue_name", "") %></p>
-                  <p>venue_address: <%= Map.get(@form_data, "venue_address", "") %></p>
-                  <p>is_virtual: <%= Map.get(@form_data, "is_virtual", "") %></p>
-                </div>
-              <% end %>
-            <% else %>
-              <div>
-                <.input field={f[:virtual_venue_url]} type="text" label="Meeting URL" placeholder="https://..." />
-                <p class="mt-1 text-xs text-gray-500">Enter the URL where attendees can join your virtual event</p>
-              </div>
-            <% end %>
-          </div>
-        </div>
-
-        <!-- Details -->
-        <div class="mb-8">
-          <h2 class="text-xl font-bold mb-4">Details</h2>
-          <div class="space-y-4">
-            <!-- Cover Image URL input removed - handled via image picker and hidden field -->
-          </div>
-        </div>
-
-        <!-- Venue Preview -->
-        <div class="mb-8">
-          <h2 class="text-xl font-bold mb-4">Venue Information</h2>
-
-          <% is_virtual = Map.get(@form_data, "is_virtual", false) %>
-
-          <div>
-            <strong>Venue:</strong>
-            <%= if is_virtual do %>
-              Virtual Event - <%= Map.get(@form_data, "virtual_venue_url", "") %>
-            <% else %>
-              <%= if venue_name = Map.get(@form_data, "venue_name", nil) do %>
-                <div class="p-2 bg-gray-50 border border-gray-200 rounded-md mt-1">
-                  <div><%= venue_name %></div>
-                  <div class="text-sm text-gray-500"><%= Map.get(@form_data, "venue_address", "") %></div>
-                  <div class="text-sm text-gray-500">
-                    <%= Map.get(@form_data, "venue_city", "") %><%= if Map.get(@form_data, "venue_city", "") != "" && Map.get(@form_data, "venue_state", "") != "", do: ", " %><%= Map.get(@form_data, "venue_state", "") %>
-                    <%= if Map.get(@form_data, "venue_country", "") != "", do: ", #{Map.get(@form_data, "venue_country", "")}" %>
-                  </div>
-                </div>
+                <% end %>
               <% else %>
-                <div class="p-2 bg-gray-50 border border-gray-200 rounded-md mt-1">
-                  No venue selected
-                </div>
+                <.input field={f[:virtual_venue_url]} type="text" label="Meeting URL" placeholder="https://..." class="text-sm" />
               <% end %>
-            <% end %>
+            </div>
+
+            <!-- Description & Details -->
+            <div class="mb-4">
+              <.input field={f[:description]} type="textarea" label="Description" required class="text-sm" />
+            </div>
+
+            <!-- Additional Options (compact) -->
+            <div class="mb-4">
+              <details class="group">
+                <summary class="flex items-center justify-between cursor-pointer text-sm font-medium text-gray-700 mb-2">
+                  <span>Additional Options</span>
+                  <svg class="w-4 h-4 text-gray-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div class="space-y-3 pl-4 border-l-2 border-gray-100">
+                  <.input field={f[:tagline]} type="text" label="Tagline" class="text-sm" />
+                  <.input field={f[:visibility]} type="select" label="Visibility" options={[{"Public", "public"}, {"Private", "private"}]} class="text-sm" />
+                </div>
+              </details>
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- Action Buttons -->
       <div class={@action == :edit && "flex justify-between" || "flex justify-end"}>
         <%= if @action == :edit && @cancel_path do %>
           <.link navigate={@cancel_path} class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
             Cancel
           </.link>
         <% end %>
-
         <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
           <%= @submit_label %>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
