@@ -516,7 +516,7 @@ defmodule EventasaurusWeb.EventComponents do
         <div class="mb-8">
           <h2 class="text-xl font-bold mb-4">Details</h2>
           <div class="space-y-4">
-            <.input field={f[:cover_image_url]} type="text" label="Cover Image URL" id="details_cover_image_url" />
+            <!-- Cover Image URL input removed - handled via image picker and hidden field -->
           </div>
         </div>
 
