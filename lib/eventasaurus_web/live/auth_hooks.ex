@@ -109,23 +109,11 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       token = session["access_token"]
 
       if token do
-        # Handle both test tokens and real tokens
-        case token do
-          "test_token_" <> _id ->
-            # In test environment, extract user ID from test token
-            with id_str <- String.replace(token, "test_token_", ""),
-                 {user_id, ""} <- Integer.parse(id_str),
-                 %Accounts.User{} = user <- Accounts.get_user(user_id) do
-              user
-            else
-              _ -> nil
-            end
-          _ ->
-            # In real environment, use the AuthHelper directly with the token
-            case Auth.AuthHelper.get_current_user(token) do
-              {:ok, user} -> user
-              _ -> nil
-            end
+        # Use the AuthHelper for all tokens (both test and real)
+        # The AuthHelper will delegate to TestClient in test environment
+        case Auth.AuthHelper.get_current_user(token) do
+          {:ok, user} -> user
+          _ -> nil
         end
       else
         nil

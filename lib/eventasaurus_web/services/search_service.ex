@@ -11,11 +11,9 @@ defmodule EventasaurusWeb.Services.SearchService do
     page = Keyword.get(opts, :page, 1)
     per_page = Keyword.get(opts, :per_page, 10)
 
-    unsplash = Task.async(fn -> UnsplashService.search_photos(query, page, per_page) end)
-    tmdb = Task.async(fn -> TmdbService.search_multi(query, page) end)
-
-    unsplash_results = Task.await(unsplash, 5000)
-    tmdb_results = Task.await(tmdb, 5000)
+    # Use the actual service functions
+    unsplash_results = UnsplashService.search_photos(query, page, per_page)
+    tmdb_results = TmdbService.search_multi(query, page)
 
     %{
       unsplash: parse_unsplash(unsplash_results),
