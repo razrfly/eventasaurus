@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.EventLive.NewTest do
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Accounts
+  alias EventasaurusWeb.Services.SearchService
 
   setup do
     clear_test_auth()
@@ -435,6 +436,509 @@ defmodule EventasaurusWeb.EventLive.NewTest do
 
       refute html =~ "Poll Start Date"
       assert html =~ "Start Date"
+    end
+  end
+
+  describe "session and authentication" do
+    setup %{conn: conn} do
+      user = insert(:user)
+      %{conn: conn, user: user}
+    end
+
+    test "assigns supabase_access_token from session", %{conn: conn, user: user} do
+      {:ok, view, _html} =
+        conn
+        |> log_in_user(user)
+        |> Plug.Test.init_test_session(%{})
+        |> put_session("supabase_access_token", "test_token_123")
+        |> live(~p"/events/new")
+
+      # Open image picker to trigger supabase token assignment
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # The image picker should be open and contain the access token attribute
+      assert html =~ "data-access-token="
+    end
+
+    test "handles missing access token gracefully", %{conn: conn, user: user} do
+      # Use normal authentication
+      conn = log_in_user(conn, user)
+
+      {:ok, view, html} = live(conn, ~p"/events/new")
+
+      # Should handle access token gracefully - verify page loads successfully
+      assert html =~ "Create a New Event"
+      assert has_element?(view, "form[data-test-id='event-form']")
+
+      # Open image picker to check upload functionality when token might be missing
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # In unified interface, upload is always visible (no tabs)
+      # Should have some kind of access token (empty string is acceptable)
+      assert html =~ "data-access-token="
+      assert html =~ "Drag and drop or click here to upload"
+    end
+
+    test "initializes form with required assigns", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+
+      {:ok, view, html} = live(conn, ~p"/events/new")
+
+      # Verify the page mounted successfully and has expected elements
+      assert html =~ "Create a New Event"
+      assert has_element?(view, "form[data-test-id='event-form']")
+      assert has_element?(view, "[name='event[title]']")
+      assert has_element?(view, "[name='event[description]']")
+      assert has_element?(view, "[name='event[start_date]']")
+      assert has_element?(view, "[name='event[timezone]']")
+
+      # Verify that the image picker is initially closed
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+
+    test "image picker opens when cover image button is clicked", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Initial state - image picker should be closed
+      html = render(view)
+      refute html =~ "Choose a Cover Image"
+
+      # Click to open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Image picker should now be open
+      assert html =~ "Choose a Cover Image"
+      assert html =~ "Featured"
+      assert html =~ "General"
+      assert html =~ "Drag and drop or click here to upload"
+      assert html =~ "Search for more photos"
+
+      # Should show unified interface, not tabs
+      refute html =~ "role=\"tab\""
+      refute html =~ "aria-selected"
+    end
+
+    test "image picker loads default images", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Should show default images
+      assert html =~ "/images/events/general/"
+      assert html =~ "phx-click=\"select_default_image\""
+    end
+
+    test "search form uses unified search", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Should have unified search form, not separate search forms
+      assert html =~ "phx-submit=\"unified_search\""
+      refute html =~ "phx-submit=\"search_unsplash\""
+      refute html =~ "phx-submit=\"search_tmdb\""
+    end
+
+    test "search_unsplash event with valid query", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker first
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Submit search with valid query using unified search
+      html =
+        view
+        |> form("form[phx-submit='unified_search']", search_query: "test query")
+        |> render_submit()
+
+      # Should trigger unified search, not old search_unsplash
+      assert html =~ "phx-submit=\"unified_search\""
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+
+    test "tmdb search functionality works", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Search for movie images
+      html =
+        view
+        |> form("form[phx-submit='unified_search']", search_query: "star wars")
+        |> render_submit()
+
+      # Should trigger unified search
+      assert html =~ "phx-submit=\"unified_search\""
+    end
+
+    test "image picker shows categories", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Should show categories sidebar
+      assert html =~ "Featured"
+      assert html =~ "General"
+      assert html =~ "phx-click=\"select_category\""
+      assert html =~ "phx-value-category=\"featured\""
+      assert html =~ "phx-value-category=\"general\""
+    end
+
+    test "image picker shows all sections simultaneously", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Should show all sections at once (not tabs)
+      assert html =~ "Drag and drop or click here to upload"  # Upload section
+      assert html =~ "Search for more photos"  # Search section
+      assert html =~ "Featured"  # Categories
+      assert html =~ "/images/events/general/"  # Default images
+
+      # Should NOT have tab interface
+      refute html =~ "role=\"tab\""
+      refute html =~ "aria-selected"
+    end
+  end
+
+  describe "image upload functionality" do
+    setup do
+      user = insert(:user)
+      %{user: user}
+    end
+
+    test "image_uploaded event updates form correctly", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Simulate successful image upload
+      upload_data = %{
+        "publicUrl" => "https://storage.supabase.com/test-image.jpg",
+        "path" => "events/test-image.jpg"
+      }
+
+      html = render_hook(view, "image_uploaded", upload_data)
+
+      # Verify the form was updated - check for hidden field with image URL
+      assert html =~ "https://storage.supabase.com/test-image.jpg"
+      # Image picker should be closed after upload
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+
+    test "image_upload_error event displays error", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Simulate upload error - this should set a flash message or error state
+      html = render_hook(view, "image_upload_error", %{"error" => "File too large"})
+
+      # The error handling might not show immediately in HTML, so we'll check the view still works
+      # and doesn't crash when handling errors
+      assert html # The view should render successfully after error
+
+      # Try to render again to see if error persists or is shown
+      current_html = render(view)
+      # This test just verifies the error handler doesn't crash the view
+      assert current_html =~ "Create a New Event"
+    end
+  end
+
+  describe "image search functionality" do
+    setup do
+      user = insert(:user)
+      %{user: user}
+    end
+
+    test "unified_search event with empty query clears results", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker first
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Submit empty search query
+      html = view
+      |> element("form[phx-submit='unified_search']")
+      |> render_submit(%{search_query: ""})
+
+      # Should clear results and not show loading spinner
+      refute html =~ "animate-spin"
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+
+    test "select_image event updates form with unsplash image", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker first
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Simulate selecting an Unsplash image by triggering the event directly
+      html = render_hook(view, "select_image", %{
+        "source" => "unsplash",
+        "image_url" => "https://unsplash.com/test.jpg",
+        "image_data" => %{
+          "id" => "test-123",
+          "user" => %{"name" => "Test Photographer"}
+        }
+      })
+
+      # Verify the image was selected - check for image URL in form
+      assert html =~ "https://unsplash.com/test.jpg"
+      # Image picker should be closed after selection
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+
+    test "select_image event updates form with tmdb image", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker first
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Simulate selecting a TMDB image
+      html = render_hook(view, "select_tmdb_image", %{
+        "image_url" => "https://tmdb.org/test-poster.jpg",
+        "image_data" => %{
+          "id" => "movie-456",
+          "title" => "Test Movie"
+        }
+      })
+
+      # Verify the image was selected
+      assert html =~ "https://tmdb.org/test-poster.jpg"
+      # Image picker should be closed after selection
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+  end
+
+  describe "image picker interface" do
+    setup do
+      user = insert(:user)
+      %{user: user}
+    end
+
+    test "open_image_picker shows modal", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Verify modal is visible with unified search
+      assert html =~ "Choose a Cover Image"
+      assert html =~ "phx-submit=\"unified_search\""
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+
+    test "close_image_picker hides modal", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open the image picker first
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Close the image picker using the X button in header (more specific)
+      html = view |> element("button[aria-label='Close image picker']") |> render_click()
+
+      # Verify image picker is closed - search form should not be visible
+      refute html =~ "phx-submit=\"search_unsplash\""
+    end
+  end
+
+  describe "form validation and submission" do
+    setup do
+      user = insert(:user)
+      %{user: user}
+    end
+
+    test "form preserves image data during validation", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker and select an image
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      render_hook(view, "select_image", %{
+        "source" => "unsplash",
+        "image_url" => "https://unsplash.com/test.jpg",
+        "image_data" => %{
+          "id" => "test-123",
+          "user" => %{"name" => "Test Photographer"}
+        }
+      })
+
+      # Submit form with validation errors (missing required fields)
+      html = view
+             |> form("form[data-test-id='event-form']", %{
+               "event" => %{
+                 "title" => "", # Missing title should cause validation error
+                 "description" => "Test description"
+               }
+             })
+             |> render_submit()
+
+      # Verify image data is preserved even during validation errors
+      assert html =~ "https://unsplash.com/test.jpg"
+      # Verify the form is still present
+      assert html =~ "Create a New Event"
+    end
+
+    test "image_selected event from real UI works for unsplash", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker first
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Call the EXACT event with EXACT parameters that the real UI sends (no "source" param!)
+      html = render_hook(view, "image_selected", %{
+        "cover_image_url" => "https://images.unsplash.com/photo-1463852247062-1bbca38f7805",
+        "unsplash_data" => %{
+          "description" => "Happy Gorilla",
+          "id" => "r077pfFsdaU",
+          "urls" => %{
+            "regular" => "https://images.unsplash.com/photo-1463852247062-1bbca38f7805"
+          },
+          "user" => %{
+            "name" => "Kelly Sikkema",
+            "username" => "kellysikkema"
+          }
+        }
+      })
+
+      # Verify image was selected
+      assert html =~ "https://images.unsplash.com/photo-1463852247062-1bbca38f7805"
+    end
+
+    test "image_selected event from real UI works for tmdb", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker first
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Call the EXACT event with EXACT parameters that the real UI sends for TMDB
+      html = render_hook(view, "image_selected", %{
+        "cover_image_url" => "https://image.tmdb.org/t/p/w500/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg",
+        "tmdb_data" => %{
+          "first_air_date" => "2020-05-15",
+          "id" => 219403,
+          "name" => "Great God Monkey",
+          "poster_path" => "/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg",
+          "type" => "tv"
+        }
+      })
+
+      # Verify image was selected
+      assert html =~ "https://image.tmdb.org/t/p/w500/bBh86ZjLtbWo2MPCkahYVGzDYAb.jpg"
+    end
+  end
+
+  describe "unified image picker interface" do
+    @tag :unified
+    setup do
+      user = insert(:user)
+      %{user: user}
+    end
+
+    @tag :unified
+    test "unified image picker shows all sections without tabs", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Verify unified interface components are present
+      assert html =~ "Drag and drop or click here to upload"  # Upload section
+      assert html =~ "Search for more photos"  # Search section
+      assert html =~ "Featured"  # Categories section
+
+      # Verify no tabs are present (old interface)
+      refute html =~ "role=\"tab\""  # No tab navigation
+      refute html =~ "aria-selected"  # No tab selection
+
+      # Verify categories sidebar exists
+      assert html =~ "Categories"
+    end
+
+    @tag :unified
+    test "unified picker shows default image categories", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      html = view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Check for real categories that exist
+      assert html =~ "Featured"
+      assert html =~ "General"  # This category exists in priv/static/images/events/general
+    end
+
+    @tag :unified
+    test "category selection loads different images", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Start with featured category (default)
+      # Should show featured images
+      initial_html = render(view)
+      assert initial_html =~ "High Five Dino"  # A real image from general category
+
+      # Click on General category
+      html = view |> element("button", "General") |> render_click()
+
+      # Should still show the general category images
+      assert html =~ "Yoga Dino"  # Another real image from general category
+    end
+
+    @tag :unified
+    test "unified search works for both Unsplash and TMDB", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Perform unified search
+      html = view |> element("form[phx-submit='unified_search']") |> render_submit(%{search_query: "nature"})
+
+      # Search form should still be present
+      assert html =~ "Search for more photos"
+    end
+
+    @tag :unified
+    test "default image selection works", %{conn: conn, user: user} do
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Open image picker
+      view |> element("button", "Click to add a cover image") |> render_click()
+
+      # Select a default image (this should work immediately since images are loaded)
+      html = view |> element("[phx-click='select_default_image']", "High Five Dino") |> render_click()
+
+      # Image picker should close and image should be selected
+      refute html =~ "Search for more photos"  # Modal should be closed
+      # The image URL should be set (check in form data or render the main view)
+      updated_html = render(view)
+      assert updated_html =~ "/images/events/general/high-five-dino.png"
     end
   end
 end

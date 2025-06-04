@@ -129,7 +129,7 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
   describe "vote tallies and analytics" do
     setup do
       poll = insert(:event_date_poll)
-      option = insert(:event_date_option, %{event_date_poll: poll})
+      option = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(50)})
       %{poll: poll, option: option}
     end
 
@@ -167,8 +167,8 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
     end
 
     test "list_votes_for_poll/1 returns votes across all options", %{poll: poll} do
-      option1 = insert(:event_date_option, %{event_date_poll: poll})
-      option2 = insert(:event_date_option, %{event_date_poll: poll})
+      option1 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(1)})
+      option2 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(2)})
 
       user1 = insert(:user)
       user2 = insert(:user)
@@ -181,8 +181,8 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
     end
 
     test "list_user_votes_for_poll/2 returns user's votes for poll", %{poll: poll} do
-      option1 = insert(:event_date_option, %{event_date_poll: poll})
-      option2 = insert(:event_date_option, %{event_date_poll: poll})
+      option1 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(7)})
+      option2 = insert(:event_date_option, %{event_date_poll: poll, date: Date.utc_today() |> Date.add(8)})
 
       user1 = insert(:user)
       user2 = insert(:user)
@@ -203,8 +203,8 @@ defmodule EventasaurusApp.Events.EventDateVoteTest do
     test "get_poll_vote_tallies/1 returns tallies sorted by score", %{poll: _poll} do
       # Create a fresh poll for this test to avoid interference
       fresh_poll = insert(:event_date_poll)
-      option1 = insert(:event_date_option, %{event_date_poll: fresh_poll})
-      option2 = insert(:event_date_option, %{event_date_poll: fresh_poll})
+      option1 = insert(:event_date_option, %{event_date_poll: fresh_poll, date: Date.utc_today() |> Date.add(9)})
+      option2 = insert(:event_date_option, %{event_date_poll: fresh_poll, date: Date.utc_today() |> Date.add(10)})
 
       user1 = insert(:user)
       user2 = insert(:user)

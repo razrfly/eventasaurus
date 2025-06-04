@@ -12,8 +12,6 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def mount(_params, session, socket) do
-    # auth_user is already assigned by the on_mount hook
-    # Ensure we have a proper User struct for creating events
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         changeset = Events.change_event(%Event{})
@@ -29,7 +27,8 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:form_data, %{
             "start_date" => today,
             "ends_date" => today,
-            "enable_date_polling" => false
+            "enable_date_polling" => false,
+            "slug" => Nanoid.generate(10)
           })
           |> assign(:is_virtual, false)
           |> assign(:selected_venue_name, nil)
@@ -44,18 +43,18 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:error, nil)
           |> assign(:page, 1)
           |> assign(:per_page, 20)
-          |> assign_new(:image_tab, fn -> "unsplash" end)
+          |> assign(:image_tab, "search") # Changed from "unsplash" to unified search
           |> assign(:enable_date_polling, false)
+          # New unified picker assigns
+          |> assign(:selected_category, "featured")
+          |> assign(:default_categories, EventasaurusWeb.Services.DefaultImagesService.get_categories())
+          |> assign(:default_images, EventasaurusWeb.Services.DefaultImagesService.get_featured_images())
           |> assign(:supabase_access_token, session["access_token"])
 
         {:ok, socket}
 
-      {:error, _} ->
-        {:ok,
-         socket
-         |> put_flash(:error, "You must be logged in to create events")
-         |> redirect(to: ~p"/auth/login")
-        }
+      {:error, reason} ->
+        {:ok, put_flash(socket, :error, "Authentication error: #{reason}")}
     end
   end
 
@@ -63,6 +62,19 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_info({:close_image_picker, _}, socket) do
     {:noreply, assign(socket, :show_image_picker, false)}
+  end
+
+  @impl true
+  def handle_info({:start_unified_search, query}, socket) do
+    # Perform the unified search
+    results = EventasaurusWeb.Services.SearchService.unified_search(query)
+
+    socket =
+      socket
+      |> assign(:search_results, results)
+      |> assign(:loading, false)
+      |> assign(:error, nil)
+    {:noreply, socket}
   end
 
   # ========== Handle Event Implementations ==========
@@ -276,7 +288,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("open_image_picker", _params, socket) do
-    {:noreply, assign(socket, show_image_picker: true, image_tab: "unsplash")}
+    {:noreply, assign(socket, show_image_picker: true, image_tab: "search")}
   end
 
   @impl true
@@ -466,143 +478,165 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("select_image", %{"id" => id}, socket) do
-    require Logger
-    Logger.debug("[handle_event :select_image] id: #{inspect(id)}")
+  def handle_event("select_image", %{"source" => source, "image_url" => image_url, "image_data" => image_data} = params, socket) do
+    external_data = %{
+      "source" => source,
+      "url" => image_url,
+      "id" => params["id"] || image_data["id"] || "unknown",
+      "metadata" => image_data
+    }
 
-    # Find the image in the search results
-    image =
-      socket.assigns.search_results
-      |> Map.values()
-      |> List.flatten()
-      |> Enum.find(fn img ->
-        (img[:id] || img["id"]) == id
-      end)
+    socket =
+      socket
+      |> assign(:cover_image_url, image_url)
+      |> assign(:external_image_data, external_data)
+      |> assign(:show_image_picker, false)
 
-    case image do
-      nil ->
-        Logger.error("Image with id #{id} not found in search results")
-        {:noreply, socket}
-
-      image when is_map(image) ->
-        # Handle Unsplash images
-        if image[:urls] || image["urls"] do
-          urls = image[:urls] || image["urls"]
-          image_url = urls[:regular] || urls["regular"]
-
-          unsplash_data = %{
-            "source" => "unsplash",
-            "id" => image[:id] || image["id"],
-            "url" => image_url,
-            "description" => image[:description] || image["description"] || image[:alt_description] || image["alt_description"],
-            "photographer" => get_in(image, [:user, :name]) || get_in(image, ["user", "name"]),
-            "photographer_url" => get_in(image, [:user, :links, :html]) || get_in(image, ["user", "links", "html"])
-          }
-
-          form_data =
-            socket.assigns.form_data
-            |> Map.put("external_image_data", unsplash_data)
-
-          changeset =
-            %Event{}
-            |> Events.change_event(form_data)
-            |> Map.put(:action, :validate)
-
-          {:noreply,
-           socket
-           |> assign(:form_data, form_data)
-           |> assign(:changeset, changeset)
-           |> assign(:cover_image_url, image_url)
-           |> assign(:external_image_data, unsplash_data)
-           |> assign(:show_image_picker, false)}
-
-        # Handle TMDb images
-        else
-          poster_path =
-            image[:poster_path] || image["poster_path"] || image[:profile_path] ||
-              image["profile_path"]
-
-          image_url = poster_path && "https://image.tmdb.org/t/p/w500" <> poster_path
-
-          tmdb_data = %{
-            "source" => "tmdb",
-            "id" => image[:id] || image["id"],
-            "url" => image_url,
-            "title" => image[:title] || image["title"] || image[:name] || image["name"],
-            "media_type" => image[:media_type] || image["media_type"] || "movie"
-          }
-
-          form_data =
-            socket.assigns.form_data
-            |> Map.put("external_image_data", tmdb_data)
-
-          changeset =
-            %Event{}
-            |> Events.change_event(form_data)
-            |> Map.put(:action, :validate)
-
-          {:noreply,
-           socket
-           |> assign(:form_data, form_data)
-           |> assign(:changeset, changeset)
-           |> assign(:cover_image_url, image_url)
-           |> assign(:external_image_data, tmdb_data)
-           |> assign(:show_image_picker, false)}
-        end
-    end
-  end
-
-  @impl true
-  def handle_event("select_image", params, socket) do
-    require Logger
-    Logger.warning("[select_image] Missing id in params: #{inspect(params)}")
     {:noreply, socket}
   end
 
-  @impl true
-  def handle_event("image_selected", %{"cover_image_url" => url} = params, socket) do
+  def handle_event("select_image", params, socket) do
     require Logger
+    Logger.warning("[select_image] Missing required params in: #{inspect(params)}")
+    {:noreply, socket}
+  end
 
-    Logger.debug(
-      "[handle_event :image_selected] url: #{inspect(url)}, params: #{inspect(params)}"
-    )
+  # Handle TMDB image selection
+  def handle_event("select_tmdb_image", params, socket) do
+    handle_event("select_image", Map.put(params, "source", "tmdb"), socket)
+  end
 
-    {external_image_data, _source} =
-      cond do
-        Map.has_key?(params, "unsplash_data") ->
-          data = params["unsplash_data"]
-          data = Map.put(data, "source", "unsplash")
-          {data, "unsplash"}
+  # Handle successful image upload
+  def handle_event("image_upload_success", %{"url" => url, "path" => path}, socket) do
+    socket =
+      socket
+      |> assign(:cover_image_url, url)
+      |> assign(:external_image_data, %{
+        "source" => "upload",
+        "url" => url,
+        "path" => path
+      })
+      |> put_flash(:info, "Image uploaded successfully!")
 
-        Map.has_key?(params, "tmdb_data") ->
-          data = params["tmdb_data"]
-          data = Map.put(data, "source", "tmdb")
-          {data, "tmdb"}
+    {:noreply, socket}
+  end
 
-        true ->
-          {nil, nil}
-      end
+  # Handle image selection from UI components (actual event name used by UI)
+  @impl true
+  def handle_event("image_selected", %{"cover_image_url" => image_url} = params, socket) do
+    # Determine source and extract image data based on what's present in params
+    {source, image_data} = cond do
+      Map.has_key?(params, "unsplash_data") ->
+        {"unsplash", Map.get(params, "unsplash_data", %{})}
+      Map.has_key?(params, "tmdb_data") ->
+        {"tmdb", Map.get(params, "tmdb_data", %{})}
+      true ->
+        {"unknown", %{}}
+    end
 
-    form_data =
-      socket.assigns.form_data
-      |> Map.put("external_image_data", external_image_data)
+    external_data = %{
+      "source" => source,
+      "url" => image_url,
+      "id" => image_data["id"] || "unknown",
+      "metadata" => image_data
+    }
 
+    # Update form_data with the new image
+    form_data = Map.merge(socket.assigns.form_data, %{
+      "cover_image_url" => image_url,
+      "external_image_data" => external_data
+    })
+
+    # Update changeset
     changeset =
       %Event{}
-      |> Events.change_event(Map.put(socket.assigns.form_data, "cover_image_url", url))
+      |> Events.change_event(form_data)
       |> Map.put(:action, :validate)
 
-    IO.puts("DEBUG - Image Selected:")
-    IO.inspect(url, label: "Cover image URL")
-    IO.inspect(external_image_data, label: "External image data")
+    socket =
+      socket
+      |> assign(:cover_image_url, image_url)
+      |> assign(:external_image_data, external_data)
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:show_image_picker, false)
 
-    {:noreply,
-     socket
-     |> assign(:form_data, form_data)
-     |> assign(:changeset, changeset)
-     |> assign(:cover_image_url, nil)
-     |> assign(:external_image_data, external_image_data)
-     |> assign(:show_image_picker, false)}
+    {:noreply, socket}
+  end
+
+  # Handle category selection in unified image picker
+  @impl true
+  def handle_event("select_category", %{"category" => category}, socket) do
+    default_images = case category do
+      "featured" ->
+        EventasaurusWeb.Services.DefaultImagesService.get_featured_images()
+      _ ->
+        EventasaurusWeb.Services.DefaultImagesService.get_images_for_category(category)
+    end
+
+    socket =
+      socket
+      |> assign(:selected_category, category)
+      |> assign(:default_images, default_images)
+      |> assign(:search_query, "") # Clear search when switching categories
+      |> assign(:search_results, %{unsplash: [], tmdb: []}) # Clear search results
+
+    {:noreply, socket}
+  end
+
+  # Handle default image selection
+  @impl true
+  def handle_event("select_default_image", %{"image_url" => image_url, "filename" => filename, "category" => category}, socket) do
+    external_data = %{
+      "source" => "default",
+      "url" => image_url,
+      "id" => filename,
+      "category" => category
+    }
+
+    # Update form_data with the new image
+    form_data = Map.merge(socket.assigns.form_data, %{
+      "cover_image_url" => image_url,
+      "external_image_data" => external_data
+    })
+
+    # Update changeset
+    changeset =
+      %Event{}
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:cover_image_url, image_url)
+      |> assign(:external_image_data, external_data)
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:show_image_picker, false)
+
+    {:noreply, socket}
+  end
+
+  # Handle unified search (combines Unsplash and TMDB)
+  @impl true
+  def handle_event("unified_search", %{"search_query" => query}, socket) do
+    socket = assign(socket, :search_query, query)
+
+    if String.trim(query) == "" do
+      socket =
+        socket
+        |> assign(:search_results, %{unsplash: [], tmdb: []})
+        |> assign(:loading, false)
+        |> assign(:error, nil)
+      {:noreply, socket}
+    else
+      socket = assign(socket, :loading, true)
+
+      # Start both searches concurrently
+      send(self(), {:start_unified_search, query})
+
+      {:noreply, socket}
+    end
   end
 
   # Helper function for searching
