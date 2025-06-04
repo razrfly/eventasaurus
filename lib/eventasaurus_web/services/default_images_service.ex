@@ -51,6 +51,18 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
     get_images_for_category("general")
   end
 
+  def get_random_image do
+    # Get all categories and their images
+    all_images =
+      get_categories()
+      |> Enum.flat_map(fn category -> get_images_for_category(category.name) end)
+
+    case all_images do
+      [] -> nil
+      images -> Enum.random(images)
+    end
+  end
+
   defp is_image_file?(filename) do
     ext = Path.extname(filename) |> String.downcase()
     ext in @supported_extensions
