@@ -18,24 +18,52 @@ defmodule EventasaurusWeb.EventLive.New do
         today = Date.utc_today() |> Date.to_iso8601()
         venues = Venues.list_venues()
 
+        # Auto-select a random default image
+        random_image = EventasaurusWeb.Services.DefaultImagesService.get_random_image()
+
+        {cover_image_url, external_image_data} = case random_image do
+          nil -> {nil, nil}
+          image -> {
+            image.url,
+            %{
+              "source" => "default",
+              "url" => image.url,
+              "filename" => image.filename,
+              "category" => image.category,
+              "title" => image.title
+            }
+          }
+        end
+
+        # Update form_data with the random image
+        initial_form_data = %{
+          "start_date" => today,
+          "ends_date" => today,
+          "enable_date_polling" => false,
+          "slug" => Nanoid.generate(10)
+        }
+
+        form_data_with_image = case cover_image_url do
+          nil -> initial_form_data
+          url -> Map.merge(initial_form_data, %{
+            "cover_image_url" => url,
+            "external_image_data" => external_image_data
+          })
+        end
+
         socket =
           socket
           |> assign(:form, to_form(changeset))
           |> assign(:venues, venues)
           |> assign(:user, user)
           |> assign(:changeset, changeset)
-          |> assign(:form_data, %{
-            "start_date" => today,
-            "ends_date" => today,
-            "enable_date_polling" => false,
-            "slug" => Nanoid.generate(10)
-          })
+          |> assign(:form_data, form_data_with_image)
           |> assign(:is_virtual, false)
           |> assign(:selected_venue_name, nil)
           |> assign(:selected_venue_address, nil)
           |> assign(:show_all_timezones, false)
-          |> assign(:cover_image_url, nil)
-          |> assign(:external_image_data, nil)
+          |> assign(:cover_image_url, cover_image_url)
+          |> assign(:external_image_data, external_image_data)
           |> assign(:show_image_picker, false)
           |> assign(:search_query, "")
           |> assign(:search_results, %{unsplash: [], tmdb: []})

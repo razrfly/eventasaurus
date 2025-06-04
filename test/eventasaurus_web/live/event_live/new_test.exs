@@ -281,7 +281,7 @@ defmodule EventasaurusWeb.EventLive.NewTest do
       assert html =~ "Create a New Event"
       assert html =~ "Event Title"
       assert html =~ "Date & Time"
-      assert html =~ "Let attendees vote on the event date"
+      assert html =~ "Let attendees vote on the date"
     end
 
     test "can create a regular event without date polling", %{conn: conn, user: user} do
