@@ -16,18 +16,11 @@ defmodule EventasaurusApp.Auth.TestClient do
   Uses ETS to ensure data is available across all processes.
   """
   def get_user(token) do
-    Logger.debug("TestClient.get_user called with token: #{inspect(token)}")
-
-    # Ensure the ETS table exists
-    ensure_table_exists()
-
     case :ets.lookup(@table_name, token) do
+      [{^token, user_data}] ->
+        {:ok, user_data}
       [] ->
-        Logger.debug("No test user found for token: #{inspect(token)}")
-        {:error, %{status: 401, message: "Invalid token"}}
-      [{^token, user}] ->
-        Logger.debug("Found test user: #{inspect(user)}")
-        {:ok, user}
+        {:error, %{message: "Invalid token", status: 401}}
     end
   end
 
@@ -35,9 +28,11 @@ defmodule EventasaurusApp.Auth.TestClient do
   Helper function to set up a mock user for a specific token in tests.
   """
   def set_test_user(token, user_data) do
-    Logger.debug("Setting test user for token #{inspect(token)}: #{inspect(user_data)}")
+    # Ensure the ETS table exists
     ensure_table_exists()
+
     :ets.insert(@table_name, {token, user_data})
+    :ok
   end
 
   @doc """
