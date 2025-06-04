@@ -197,6 +197,215 @@ Refactor the event creation and editing forms' image handling system to eliminat
 - Must maintain current security and validation
 - Should not require changes to core event functionality
 
+## Image Functionality Audit & Testing Requirements
+
+### Critical Functionality Audit
+
+#### 1. Image Upload System (Supabase)
+**Requirements:**
+- Access token must be properly passed from session to LiveView assigns
+- Upload hook must receive `data-access-token` attribute
+- File validation (type, size) must work correctly
+- Upload progress and error handling must function
+- Successful uploads must update form state immediately
+
+**Testing Points:**
+- Session contains `access_token` after authentication
+- LiveView assigns include `:supabase_access_token` from session
+- Template renders `data-access-token={@supabase_access_token}` correctly
+- JavaScript hook receives and uses access token
+- Upload success triggers `image_uploaded` event with correct data
+- Upload failures trigger `image_upload_error` event
+
+#### 2. Image Search System (Unsplash + TMDB)
+**Requirements:**
+- SearchService.unified_search/2 must return combined results
+- Results must include both Unsplash and TMDB data
+- Search pagination must work correctly
+- Image selection must update form with proper metadata
+- API errors must be handled gracefully
+
+**Testing Points:**
+- SearchService.unified_search returns `%{unsplash: [], tmdb: []}` structure
+- Search form submission triggers `search_unsplash` event
+- Search results display in proper format for both sources
+- Image selection triggers `select_image` event with correct ID
+- Selected images update `cover_image_url` and `external_image_data`
+- API timeouts and errors display user-friendly messages
+
+#### 3. Default Image System
+**Requirements:**
+- Default images must be served from correct path
+- Random selection must work on new event creation
+- Default image metadata must follow standard structure
+- Selection from defaults tab must update form correctly
+
+**Testing Points:**
+- Default images exist in `/priv/static/images/events/defaults/`
+- DefaultImageService functions exist and return correct data
+- Mount assigns random default image to new events
+- Default image selection updates form state
+- Default image data follows standardized metadata format
+
+#### 4. Form State Management
+**Requirements:**
+- Form data must persist across image selections
+- Image changes must trigger changeset validation
+- External image data must be properly encoded/decoded
+- Form submission must include all image metadata
+
+**Testing Points:**
+- Image selection preserves other form field values
+- Changeset updates trigger form re-validation
+- `external_image_data` JSON encoding/decoding works correctly
+- Form submission includes both `cover_image_url` and `external_image_data`
+- Validation errors display correctly when image is missing
+
+### Automated Testing Strategy
+
+#### Unit Tests
+```elixir
+# test/eventasaurus_web/live/event_live/new_test.exs
+defmodule EventasaurusWeb.EventLive.NewTest do
+  use EventasaurusWeb.ConnCase, async: true
+  import Phoenix.LiveViewTest
+
+  describe "mount/3" do
+    test "assigns supabase_access_token from session" do
+      session = %{"access_token" => "test_token"}
+      {:ok, _view, html} = live_with_session(conn, ~p"/events/new", session)
+      assert html =~ "data-access-token=\"test_token\""
+    end
+
+    test "assigns random default image on mount" do
+      # Test that mount assigns a default image
+    end
+  end
+
+  describe "image upload functionality" do
+    test "image_uploaded event updates form correctly" do
+      # Test upload success handling
+    end
+
+    test "image_upload_error event displays error" do
+      # Test upload error handling
+    end
+  end
+
+  describe "image search functionality" do
+    test "search_unsplash event triggers unified search" do
+      # Test search integration
+    end
+
+    test "select_image event updates form with correct data" do
+      # Test image selection
+    end
+  end
+end
+```
+
+#### Integration Tests
+```elixir
+# test/eventasaurus_web/integration/image_functionality_test.exs
+defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
+  use EventasaurusWeb.ConnCase
+  import Phoenix.LiveViewTest
+
+  describe "image upload integration" do
+    test "complete upload workflow" do
+      # Test full upload from file selection to form update
+    end
+  end
+
+  describe "image search integration" do
+    test "unsplash search and selection workflow" do
+      # Test search → results → selection → form update
+    end
+
+    test "tmdb search and selection workflow" do
+      # Test TMDB-specific workflow
+    end
+  end
+
+  describe "default image integration" do
+    test "default image assignment and override workflow" do
+      # Test default → override with search/upload
+    end
+  end
+end
+```
+
+#### End-to-End Tests (Browser Tests)
+```elixir
+# test/eventasaurus_web/e2e/event_creation_test.exs
+defmodule EventasaurusWeb.E2E.EventCreationTest do
+  use EventasaurusWeb.FeatureCase
+
+  test "user can create event with uploaded image" do
+    # Full browser test for upload workflow
+  end
+
+  test "user can create event with searched image" do
+    # Full browser test for search workflow
+  end
+
+  test "user can create event with default image" do
+    # Full browser test for default workflow
+  end
+end
+```
+
+### Manual Testing Checklist
+
+#### Image Upload Testing
+- [ ] Navigate to new event form
+- [ ] Open image picker → Upload tab
+- [ ] Verify file input has `data-access-token` attribute
+- [ ] Select image file and verify upload progress
+- [ ] Confirm upload success updates form preview
+- [ ] Test upload failure scenarios (large file, wrong type)
+- [ ] Verify uploaded image persists in created event
+
+#### Image Search Testing
+- [ ] Navigate to new event form
+- [ ] Open image picker → Unsplash/TMDB tabs
+- [ ] Enter search query and verify results display
+- [ ] Test empty search query handling
+- [ ] Select image and verify form updates
+- [ ] Test pagination with "Load More" button
+- [ ] Verify attribution data is preserved
+- [ ] Test API timeout/error scenarios
+
+#### Default Image Testing
+- [ ] Navigate to new event form
+- [ ] Verify random default image is assigned on load
+- [ ] Open image picker → Default Images tab
+- [ ] Verify all 6 default images display correctly
+- [ ] Select different default and verify form updates
+- [ ] Verify default metadata structure is correct
+
+#### Form Integration Testing
+- [ ] Test image selection preserves other form data
+- [ ] Test form validation with/without images
+- [ ] Test form submission with each image type
+- [ ] Verify created event displays correct image
+- [ ] Test edit form preserves current image
+
+### Performance Monitoring
+- Monitor search API response times
+- Track upload success/failure rates
+- Monitor image loading performance
+- Track form submission times with images
+
+### Error Handling Verification
+- Network timeout scenarios
+- Invalid API responses  
+- Upload authentication failures
+- File size/type validation errors
+- Search service unavailability
+
+This audit ensures that the image refactor maintains robust functionality and prevents silent failures like we experienced with missing access tokens and incorrect search service calls.
+
 ## Acceptance Criteria
 - [ ] 8 high-quality default images implemented
 - [ ] Random default assignment on event creation  

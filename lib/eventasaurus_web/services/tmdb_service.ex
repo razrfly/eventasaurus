@@ -9,33 +9,38 @@ defmodule EventasaurusWeb.Services.TmdbService do
   @base_url "https://api.themoviedb.org/3"
 
   def search_multi(query, page \\ 1) do
-    api_key = System.get_env("TMDB_API_KEY")
-    IO.inspect(api_key, label: "[TMDB] API KEY in ENV")
-    if is_nil(api_key) or api_key == "" do
-      {:error, "TMDB_API_KEY is not set in environment"}
+    # Handle nil or empty queries
+    if is_nil(query) or String.trim(to_string(query)) == "" do
+      {:ok, []}
     else
-      url = "#{@base_url}/search/multi?api_key=#{api_key}&query=#{URI.encode(query)}&page=#{page}"
-      headers = [
-        {"Accept", "application/json"}
-      ]
-      IO.inspect(url, label: "[TMDB] Search URL")
-      case HTTPoison.get(url, headers) do
-        {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
-          IO.inspect({code, body}, label: "[TMDB] Raw response")
-          case code do
-            200 ->
-              case Jason.decode(body) do
-                {:ok, %{"results" => results}} ->
-                  {:ok, Enum.map(results, &format_result/1)}
-                {:error, _} ->
-                  {:error, "Failed to decode TMDb response"}
-              end
-            _ ->
-              {:error, "TMDb error: #{code} - #{body}"}
-          end
-        {:error, reason} ->
-          IO.inspect(reason, label: "[TMDB] HTTP error")
-          {:error, reason}
+      api_key = System.get_env("TMDB_API_KEY")
+      IO.inspect(api_key, label: "[TMDB] API KEY in ENV")
+      if is_nil(api_key) or api_key == "" do
+        {:error, "TMDB_API_KEY is not set in environment"}
+      else
+        url = "#{@base_url}/search/multi?api_key=#{api_key}&query=#{URI.encode(query)}&page=#{page}"
+        headers = [
+          {"Accept", "application/json"}
+        ]
+        IO.inspect(url, label: "[TMDB] Search URL")
+        case HTTPoison.get(url, headers) do
+          {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+            IO.inspect({code, body}, label: "[TMDB] Raw response")
+            case code do
+              200 ->
+                case Jason.decode(body) do
+                  {:ok, %{"results" => results}} ->
+                    {:ok, Enum.map(results, &format_result/1)}
+                  {:error, _} ->
+                    {:error, "Failed to decode TMDb response"}
+                end
+              _ ->
+                {:error, "TMDb error: #{code} - #{body}"}
+            end
+          {:error, reason} ->
+            IO.inspect(reason, label: "[TMDB] HTTP error")
+            {:error, reason}
+        end
       end
     end
   end
