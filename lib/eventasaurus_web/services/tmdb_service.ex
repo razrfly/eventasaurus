@@ -14,7 +14,6 @@ defmodule EventasaurusWeb.Services.TmdbService do
       {:ok, []}
     else
       api_key = System.get_env("TMDB_API_KEY")
-      IO.inspect(api_key, label: "[TMDB] API KEY in ENV")
       if is_nil(api_key) or api_key == "" do
         {:error, "TMDB_API_KEY is not set in environment"}
       else
@@ -22,10 +21,11 @@ defmodule EventasaurusWeb.Services.TmdbService do
         headers = [
           {"Accept", "application/json"}
         ]
-        IO.inspect(url, label: "[TMDB] Search URL")
+        require Logger
+        Logger.debug("TMDB search URL: #{url}")
         case HTTPoison.get(url, headers) do
           {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
-            IO.inspect({code, body}, label: "[TMDB] Raw response")
+            Logger.debug("TMDB response: #{code}")
             case code do
               200 ->
                 case Jason.decode(body) do
@@ -38,7 +38,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
                 {:error, "TMDb error: #{code} - #{body}"}
             end
           {:error, reason} ->
-            IO.inspect(reason, label: "[TMDB] HTTP error")
+            Logger.error("TMDB HTTP error: #{inspect(reason)}")
             {:error, reason}
         end
       end

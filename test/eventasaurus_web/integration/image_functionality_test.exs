@@ -2,7 +2,6 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
   use EventasaurusWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
 
-  alias EventasaurusApp.Accounts
   alias EventasaurusApp.Auth.TestClient
 
   @moduletag :integration
@@ -23,7 +22,7 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       view |> element("button", "Click to add a cover image") |> render_click()
 
       # Perform search
-      render_hook(view, "search_unsplash", %{"search_query" => "nature"})
+      render_hook(view, "unified_search", %{"search_query" => "nature"})
 
       # Select an image
       render_hook(view, "select_image", %{
@@ -84,8 +83,10 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       # Submit form with validation errors (missing required fields)
       html = render_submit(view, :submit, %{"event" => %{"title" => ""}})
 
-      # Check that image data persists even with validation errors
-      assert html =~ "test-image" or html =~ "can't be blank"
+      # Verify image data is preserved
+      assert html =~ "test-image"
+      # Verify validation error is shown by checking for error styling or required field indicators
+      assert html =~ "phx-feedback-for" or html =~ "invalid" or html =~ "error"
     end
 
     test "search with empty query clears results", %{conn: conn, user: user} do
@@ -101,10 +102,6 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       # Should show search form ready for input
       assert html =~ "Search for more photos"
     end
-
-    # Commented out broken auth test that needs fixing
-    # test "session token missing handles gracefully", %{conn: conn, user: user} do
-    # end
 
     test "unified image picker interface shows all sections", %{conn: conn, user: user} do
       conn = log_in_user(conn, user)

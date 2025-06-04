@@ -10,8 +10,6 @@ defmodule EventasaurusWeb.EventLive.NewTest do
   import EventasaurusApp.Factory
 
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Accounts
-  alias EventasaurusWeb.Services.SearchService
 
   setup do
     clear_test_auth()
