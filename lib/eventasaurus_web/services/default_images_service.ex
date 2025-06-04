@@ -9,39 +9,64 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
   @supported_extensions [".jpg", ".jpeg", ".png", ".gif", ".webp"]
 
   def get_categories do
-    case File.ls(@base_path) do
-      {:ok, directories} ->
-        directories
-        |> Enum.filter(&File.dir?(Path.join(@base_path, &1)))
-        |> Enum.map(&%{
-          name: &1,
-          display_name: humanize_category(&1),
-          path: &1
-        })
-        |> Enum.sort_by(& &1.display_name)
+    unless File.exists?(@base_path) do
+      require Logger
+      Logger.warning("Default images base path does not exist: #{@base_path}")
+      []
+    else
+      case File.ls(@base_path) do
+        {:ok, directories} ->
+          directories
+          |> Enum.filter(&File.dir?(Path.join(@base_path, &1)))
+          |> Enum.map(&%{
+            name: &1,
+            display_name: humanize_category(&1),
+            path: &1
+          })
+          |> Enum.sort_by(& &1.display_name)
 
-      {:error, _} -> []
+        {:error, reason} ->
+          require Logger
+          Logger.error("Failed to list categories from #{@base_path}: #{inspect(reason)}")
+          []
+      end
     end
   end
 
   def get_images_for_category(category) do
-    category_path = Path.join(@base_path, category)
+    # Validate input
+    if is_nil(category) or category == "" do
+      []
+    else
+      # Sanitize category to prevent directory traversal
+      sanitized_category = Path.basename(to_string(category))
+      category_path = Path.join(@base_path, sanitized_category)
 
-    case File.ls(category_path) do
-      {:ok, files} ->
-        files
-        |> Enum.filter(&is_image_file?/1)
-        |> Enum.map(fn filename ->
-          %{
-            url: "#{@base_url}/#{category}/#{filename}",
-            filename: filename,
-            category: category,
-            title: humanize_filename(filename)
-          }
-        end)
-        |> Enum.sort_by(& &1.title)
+      unless File.dir?(category_path) do
+        require Logger
+        Logger.warning("Category directory does not exist: #{category_path}")
+        []
+      else
+        case File.ls(category_path) do
+          {:ok, files} ->
+            files
+            |> Enum.filter(&is_image_file?/1)
+            |> Enum.map(fn filename ->
+              %{
+                url: "#{@base_url}/#{sanitized_category}/#{filename}",
+                filename: filename,
+                category: sanitized_category,
+                title: humanize_filename(filename)
+              }
+            end)
+            |> Enum.sort_by(& &1.title)
 
-      {:error, _} -> []
+          {:error, reason} ->
+            require Logger
+            Logger.error("Failed to list images from #{category_path}: #{inspect(reason)}")
+            []
+        end
+      end
     end
   end
 
