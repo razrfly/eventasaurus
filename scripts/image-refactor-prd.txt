@@ -380,7 +380,7 @@ end
 - [ ] Navigate to new event form
 - [ ] Verify random default image is assigned on load
 - [ ] Open image picker → Default Images tab
-- [ ] Verify all 6 default images display correctly
+- [ ] Verify all 8 default images display correctly
 - [ ] Select different default and verify form updates
 - [ ] Verify default metadata structure is correct
 
