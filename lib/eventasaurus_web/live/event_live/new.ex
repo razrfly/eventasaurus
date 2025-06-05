@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.EventLive.New do
   import EventasaurusWeb.EventComponents
   import EventasaurusWeb.CoreComponents
   import EventasaurusWeb.LiveHelpers
+  import EventasaurusWeb.Components.ImagePickerModal
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
