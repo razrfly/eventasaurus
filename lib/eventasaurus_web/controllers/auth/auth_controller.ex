@@ -87,7 +87,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Process the registration form submission.
   """
-  def create_user(conn, %{"name" => name, "email" => email, "password" => password}) do
+    def create_user(conn, %{"user" => %{"name" => name, "email" => email, "password" => password}}) do
     require Logger
     Logger.info("Registration attempt for email: #{email}")
 
@@ -100,7 +100,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
         |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
         |> redirect(to: ~p"/dashboard")
 
-      {:ok, %{user: user, confirmation_required: true}} ->
+      {:ok, %{user: _user, access_token: access_token}} ->
+        Logger.info("Registration successful with access token")
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_flash(:info, "Account created successfully!")
+        |> redirect(to: ~p"/dashboard")
+
+      {:ok, %{user: _user, confirmation_required: true}} ->
         Logger.info("Registration successful, confirmation required")
         conn
         |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
@@ -186,17 +193,44 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Handle callback routes for authentication flows, such as OAuth or email confirmations.
   """
-  def callback(conn, %{"access_token" => access_token, "refresh_token" => refresh_token}) do
-    conn
-    |> put_session(:access_token, access_token)
-    |> put_session(:refresh_token, refresh_token)
-    |> put_flash(:info, "Successfully signed in!")
-    |> redirect(to: ~p"/dashboard")
-  end
+  def callback(conn, params) do
+    require Logger
+    Logger.info("Auth callback received: #{inspect(params)}")
 
-  def callback(conn, _params) do
-    conn
-    |> put_flash(:error, "Authentication failed")
-    |> redirect(to: ~p"/auth/login")
+    case params do
+      %{"access_token" => access_token, "refresh_token" => refresh_token} ->
+        Logger.info("Callback with tokens - storing session")
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_session(:refresh_token, refresh_token)
+        |> put_flash(:info, "Successfully signed in!")
+        |> redirect(to: ~p"/dashboard")
+
+      %{"access_token" => access_token} ->
+        Logger.info("Callback with access token only - storing session")
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_flash(:info, "Successfully signed in!")
+        |> redirect(to: ~p"/dashboard")
+
+      %{"error" => error, "error_description" => description} ->
+        Logger.error("Callback error: #{error} - #{description}")
+        conn
+        |> put_flash(:error, "Authentication failed: #{description}")
+        |> redirect(to: ~p"/auth/login")
+
+      %{"error" => error} ->
+        Logger.error("Callback error: #{error}")
+        conn
+        |> put_flash(:error, "Authentication failed")
+        |> redirect(to: ~p"/auth/login")
+
+      _other ->
+        Logger.warning("Callback with no recognized parameters, redirecting to dashboard")
+        # For email confirmations without tokens, redirect to login to let user sign in
+        conn
+        |> put_flash(:info, "Email confirmed! Please sign in.")
+        |> redirect(to: ~p"/auth/login")
+    end
   end
 end
