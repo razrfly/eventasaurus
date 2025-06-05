@@ -1,5 +1,5 @@
-<.header>
-  Edit Event: <%= @event.title %>
+<.header class="text-center mb-8">
+  <h1 class="text-3xl font-bold text-gray-900 sm:text-4xl">Edit Event: <%= @event.title %></h1>
   <:subtitle>Update your event details</:subtitle>
 </.header>
 
@@ -23,131 +23,16 @@
   />
 </div>
 
-<%= if @show_image_picker do %>
-  <!-- Simple modal container without LiveComponent nesting -->
-  <div 
-    id="image-picker-modal"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="image-picker-title"
-    class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" 
-    phx-window-keydown="close_image_picker" 
-    phx-key="escape"
-  >
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col" phx-click-away="close_image_picker">
-      <!-- Header -->
-      <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-        <h2 id="image-picker-title" class="text-xl font-bold">Choose a Cover Image</h2>
-        <button type="button" phx-click="close_image_picker" class="text-gray-500 hover:text-gray-700">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-          </svg>
-        </button>
-      </div>
-      
-      <!-- Content - Direct inclusion of image picker -->
-      <div class="p-4 overflow-y-auto flex-1">
-        <!-- Unsplash search implemented directly in the template -->
-        <div class="w-full">
-          <!-- Search form -->
-          <form phx-submit="search_unsplash" class="mb-6">
-            <div class="flex">
-              <div class="relative flex-grow">
-                <input
-                  type="text"
-                  name="search_query"
-                  value={@search_query}
-                  class="w-full px-4 py-2 border border-gray-300 rounded-l-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="Search for images..."
-                  aria-label="Search for images"
-                />
-              </div>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-indigo-600 border border-transparent rounded-r-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Search
-              </button>
-            </div>
-          </form>
-
-          <%= if @loading and @page == 1 do %>
-            <div class="flex justify-center my-12">
-              <div class="w-12 h-12 border-t-2 border-b-2 border-indigo-500 rounded-full animate-spin"></div>
-            </div>
-          <% end %>
-
-          <%= if @error do %>
-            <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
-              <span class="block sm:inline"><%= @error %></span>
-            </div>
-          <% end %>
-
-          <%= if @search_results[:unsplash] && length(@search_results[:unsplash]) > 0 do %>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
-              <%= for image <- @search_results[:unsplash] do %>
-                <div
-                  phx-click="select_image"
-                  phx-value-id={image.id}
-                  class="relative group cursor-pointer overflow-hidden rounded-md"
-                >
-                  <img
-                    src={image.urls.small}
-                    alt={image.description || "Unsplash image"}
-                    class="w-full h-40 object-cover transform transition-transform duration-300 group-hover:scale-110"
-                  />
-                  <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity duration-300"></div>
-                  <div class="absolute bottom-0 left-0 right-0 p-2 text-white bg-gradient-to-t from-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <p class="text-xs truncate">Photo by <%= image.user.name %></p>
-                  </div>
-                </div>
-              <% end %>
-            </div>
-
-            <%= if @loading and @page > 1 do %>
-              <div class="flex justify-center my-6">
-                <div class="w-8 h-8 border-t-2 border-b-2 border-indigo-500 rounded-full animate-spin"></div>
-              </div>
-            <% else %>
-              <div class="flex justify-center mb-6">
-                <button
-                  phx-click="load_more_images"
-                  class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Load More
-                </button>
-              </div>
-            <% end %>
-          <% else %>
-            <%= if @search_query == "" do %>
-              <div class="text-center py-12 text-gray-500">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                </svg>
-                <p class="mt-2 text-sm">Search for images on Unsplash</p>
-              </div>
-            <% else %>
-              <%= if not @loading do %>
-                <div class="text-center py-12 text-gray-500">
-                  <p class="mt-2 text-sm">No results found for "<%= @search_query %>"</p>
-                </div>
-              <% end %>
-            <% end %>
-          <% end %>
-        </div>
-      </div>
-      
-      <!-- Footer -->
-      <div class="p-4 border-t border-gray-200 flex justify-end">
-        <button
-          type="button"
-          phx-click="close_image_picker"
-          class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-<% end %> 
+<.image_picker_modal
+  id="image-picker"
+  show={@show_image_picker}
+  selected_category={@selected_category}
+  default_categories={@default_categories}
+  default_images={@default_images}
+  search_query={@search_query}
+  search_results={@search_results}
+  loading={@loading}
+  error={@error}
+  supabase_access_token={@supabase_access_token}
+  on_close="close_image_picker"
+/> 
