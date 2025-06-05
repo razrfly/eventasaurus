@@ -64,12 +64,9 @@
     </script>
   </head>
 <%
-  {supabase_url, supabase_api_key} =
-    if Mix.env() == :dev do
-      {System.get_env("SUPABASE_URL_LOCAL"), System.get_env("SUPABASE_API_KEY_LOCAL")}
-    else
-      {System.get_env("SUPABASE_URL"), System.get_env("SUPABASE_API_KEY")}
-    end
+  supabase_config = Application.get_env(:eventasaurus, :supabase)
+  supabase_url = supabase_config[:url]
+  supabase_api_key = supabase_config[:api_key]
 %>
   <body class={[
       "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",

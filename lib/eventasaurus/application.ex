@@ -8,7 +8,7 @@ defmodule Eventasaurus.Application do
   @impl true
   def start(_type, _args) do
     # Load environment variables from .env file if in dev/test environment
-    if Mix.env() in [:dev, :test] do
+    if Application.get_env(:eventasaurus, :environment) in [:dev, :test] do
       # Simple approach to load .env file
       case File.read(Path.expand(".env")) do
         {:ok, body} ->
