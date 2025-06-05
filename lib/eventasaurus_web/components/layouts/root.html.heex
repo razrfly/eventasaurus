@@ -67,6 +67,7 @@
   supabase_config = Application.get_env(:eventasaurus, :supabase)
   supabase_url = supabase_config[:url] || raise("Missing Supabase URL configuration")
   supabase_api_key = supabase_config[:api_key] || raise("Missing Supabase API key configuration")
+  supabase_bucket = supabase_config[:bucket] || "event-images"
 %>
   <body class={[
       "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
@@ -76,6 +77,7 @@
     style={assigns[:css_variables] && assigns[:css_variables]}
     data-supabase-url={supabase_url}
     data-supabase-api-key={supabase_api_key}
+    data-supabase-bucket={supabase_bucket}
   >
     <!-- Gradient Background for pages that need it -->
     <%= unless assigns[:hide_gradient] do %>
