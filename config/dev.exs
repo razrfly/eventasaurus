@@ -1,5 +1,8 @@
 import Config
 
+# Set environment
+config :eventasaurus, :environment, :dev
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

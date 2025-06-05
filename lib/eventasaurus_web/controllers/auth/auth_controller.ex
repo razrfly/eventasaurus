@@ -88,20 +88,32 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Process the registration form submission.
   """
   def create_user(conn, %{"name" => name, "email" => email, "password" => password}) do
+    require Logger
+    Logger.info("Registration attempt for email: #{email}")
+
     case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
       {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
+        Logger.info("Registration successful with tokens")
         conn
         |> put_session(:access_token, access_token)
         |> put_session(:refresh_token, refresh_token)
         |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
         |> redirect(to: ~p"/dashboard")
 
+      {:ok, %{user: user, confirmation_required: true}} ->
+        Logger.info("Registration successful, confirmation required")
+        conn
+        |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
+        |> redirect(to: ~p"/login")
+
       {:error, %{"message" => message}} ->
+        Logger.error("Registration failed with message: #{message}")
         conn
         |> put_flash(:error, message)
         |> render(:register)
 
-      {:error, _} ->
+      {:error, reason} ->
+        Logger.error("Registration failed with reason: #{inspect(reason)}")
         conn
         |> put_flash(:error, "Unable to create account")
         |> render(:register)
