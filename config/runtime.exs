@@ -99,4 +99,23 @@ if config_env() == :prod do
   #     config :swoosh, :api_client, Swoosh.ApiClient.Hackney
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+
+  # Configure the database for production
+  config :eventasaurus, EventasaurusApp.Repo,
+    url: System.get_env("SUPABASE_DATABASE_URL"),
+    database: "postgres",
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    ssl: true,
+    ssl_opts: [verify: :verify_none]
+
+  # Configure Supabase settings for production
+  config :eventasaurus, :supabase,
+    url: System.get_env("SUPABASE_URL"),
+    api_key: System.get_env("SUPABASE_API_KEY"),
+    database_url: System.get_env("SUPABASE_DATABASE_URL"),
+    auth: %{
+      site_url: System.get_env("SUPABASE_CALLBACK_URL"),
+      additional_redirect_urls: ["#{System.get_env("SUPABASE_CALLBACK_URL")}/auth/callback"],
+      auto_confirm_email: false
+    }
 end

@@ -4,29 +4,17 @@ defmodule EventasaurusWeb.Helpers.SupabaseHelper do
   """
 
   @doc """
-  Gets the appropriate Supabase URL based on the current environment.
+  Gets the appropriate Supabase URL from configuration.
   """
   def supabase_url do
-    if Application.get_env(:eventasaurus_app, :env) == :dev do
-      Application.get_env(:eventasaurus_app, :supabase_url_local) ||
-      System.get_env("SUPABASE_URL_LOCAL")
-    else
-      Application.get_env(:eventasaurus_app, :supabase_url) ||
-      System.get_env("SUPABASE_URL")
-    end
+    Application.get_env(:eventasaurus, :supabase)[:url]
   end
 
   @doc """
-  Gets the appropriate Supabase API key based on the current environment.
+  Gets the appropriate Supabase API key from configuration.
   """
   def supabase_api_key do
-    if Application.get_env(:eventasaurus_app, :env) == :dev do
-      Application.get_env(:eventasaurus_app, :supabase_api_key_local) ||
-      System.get_env("SUPABASE_API_KEY_LOCAL")
-    else
-      Application.get_env(:eventasaurus_app, :supabase_api_key) ||
-      System.get_env("SUPABASE_API_KEY")
-    end
+    Application.get_env(:eventasaurus, :supabase)[:api_key]
   end
 
   @doc """
