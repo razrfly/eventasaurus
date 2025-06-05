@@ -8,7 +8,7 @@
   </div>
 
   <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-    <.form :let={f} for={%{}} action={~p"/register"} method="post" class="space-y-6">
+    <.form :let={f} for={%{}} as={:user} action={~p"/register"} method="post" class="space-y-6">
       <div>
         <.input field={f[:name]} type="text" label="Full name" required />
       </div>
