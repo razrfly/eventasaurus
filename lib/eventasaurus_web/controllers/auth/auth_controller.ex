@@ -3,6 +3,17 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   alias EventasaurusApp.Auth
 
+  # Privacy-safe email logging for GDPR/CCPA compliance
+  defp mask_email(email) do
+    case String.split(email, "@", parts: 2) do
+      [local, domain] ->
+        masked_local = String.slice(local, 0, 2) <> "***"
+        "#{masked_local}@#{domain}"
+      _ ->
+        "***@invalid"
+    end
+  end
+
   @doc """
   Show the login form.
   """
@@ -50,7 +61,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
             |> render(:login)
 
           user ->
-            Logger.info("Found existing user with email #{email}, logging in directly")
+            Logger.info("Found existing user with email #{mask_email(email)}, logging in directly")
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
@@ -89,7 +100,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
     def create_user(conn, %{"user" => %{"name" => name, "email" => email, "password" => password}}) do
     require Logger
-    Logger.info("Registration attempt for email: #{email}")
+    Logger.info("Registration attempt for email: #{mask_email(email)}")
 
     case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
       {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
