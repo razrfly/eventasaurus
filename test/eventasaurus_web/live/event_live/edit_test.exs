@@ -216,7 +216,7 @@ defmodule EventasaurusWeb.EventLive.EditTest do
 
       # Check that the date polling checkbox is checked
       assert html =~ "checked"
-      assert html =~ "Let attendees vote on the event date"
+      assert html =~ "Let attendees vote on the date"
 
       # Check that the labels show "Poll Start Date" instead of "Start Date"
       assert html =~ "Poll Start Date"
