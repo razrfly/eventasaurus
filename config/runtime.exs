@@ -37,13 +37,14 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  host = System.get_env("PHX_HOST") || "eventasaur.us"
   port = String.to_integer(System.get_env("PORT") || "4000")
 
   config :eventasaurus, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :eventasaurus, EventasaurusWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
+    check_origin: ["https://eventasaur.us", "https://eventasaurus.fly.dev"],
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
@@ -105,7 +106,15 @@ if config_env() == :prod do
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 
   # Configure the database for production
-  ssl_verify = if System.get_env("SSL_VERIFY_NONE") == "true", do: :verify_none, else: :verify_peer
+  # Note: Supabase typically requires verify_none in containerized environments
+  # Set SSL_VERIFY_PEER=true to enable certificate verification (may cause connection issues with Supabase)
+  ssl_verify = if System.get_env("SSL_VERIFY_PEER") == "true", do: :verify_peer, else: :verify_none
+
+  if ssl_verify == :verify_none do
+    require Logger
+    Logger.warning("Database SSL verification disabled for Supabase compatibility. Set SSL_VERIFY_PEER=true to enable certificate verification.")
+  end
+
   config :eventasaurus, EventasaurusApp.Repo,
     url: System.get_env("SUPABASE_DATABASE_URL"),
     database: "postgres",
