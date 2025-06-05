@@ -321,7 +321,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket
       |> assign(:page, socket.assigns.page + 1)
       |> assign(:loading, true)
-      |> do_search()
+      |> do_unified_search()
     }
   end
 
@@ -575,9 +575,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
     if component, do: component["long_name"], else: ""
   end
 
-  # Helper function for searching
-  defp do_search(socket) do
-    # Use the unified search service
+  # Helper function for unified searching (same as new page)
+  defp do_unified_search(socket) do
     case SearchService.unified_search(
            socket.assigns.search_query,
            page: socket.assigns.page,
@@ -589,39 +588,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
       } ->
         # If this is page 1, replace results, otherwise append for Unsplash; for TMDb, always replace
         updated_unsplash =
-          if socket.assigns.page == 1 do
-            unsplash_results
-          else
-            (socket.assigns.search_results[:unsplash] || []) ++ unsplash_results
-          end
-
-        updated_tmdb = tmdb_results
-
-        socket
-        |> assign(:search_results, %{unsplash: updated_unsplash, tmdb: updated_tmdb})
-        |> assign(:loading, false)
-        |> assign(:error, nil)
-
-      _ ->
-        socket
-        |> assign(:loading, false)
-        |> assign(:error, "Error searching APIs.")
-    end
-  end
-
-  # Helper function for unified searching (same as new page)
-  defp do_unified_search(socket) do
-    case SearchService.unified_search(
-           socket.assigns.search_query,
-           page: socket.assigns.page,
-           per_page: socket.assigns.per_page
-         ) do
-      %{\
-        unsplash: unsplash_results,
-        tmdb: tmdb_results
-      } ->
-        # If this is page 1, replace results, otherwise append for Unsplash; for TMDb, always replace
-        updated_unsplash =\
           if socket.assigns.page == 1 do
             unsplash_results
           else
