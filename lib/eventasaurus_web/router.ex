@@ -47,6 +47,7 @@ defmodule EventasaurusWeb.Router do
     pipe_through :browser
 
     get "/callback", Auth.AuthController, :callback
+    post "/callback", Auth.AuthController, :callback
     get "/logout", Auth.AuthController, :logout
     post "/logout", Auth.AuthController, :logout
   end
