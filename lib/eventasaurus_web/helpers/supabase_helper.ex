@@ -7,14 +7,20 @@ defmodule EventasaurusWeb.Helpers.SupabaseHelper do
   Gets the appropriate Supabase URL from configuration.
   """
   def supabase_url do
-    Application.get_env(:eventasaurus, :supabase)[:url]
+    case Application.get_env(:eventasaurus, :supabase) do
+      nil -> raise "Supabase configuration not found"
+      config -> config[:url] || raise "Supabase URL not configured"
+    end
   end
 
   @doc """
   Gets the appropriate Supabase API key from configuration.
   """
   def supabase_api_key do
-    Application.get_env(:eventasaurus, :supabase)[:api_key]
+    case Application.get_env(:eventasaurus, :supabase) do
+      nil -> raise "Supabase configuration not found"
+      config -> config[:api_key] || raise "Supabase API key not configured"
+    end
   end
 
   @doc """
