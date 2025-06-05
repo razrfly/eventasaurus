@@ -21,6 +21,10 @@ if System.get_env("PHX_SERVER") do
 end
 
 if config_env() == :prod do
+  # Validate required Supabase environment variables are set
+  for var <- ~w(SUPABASE_URL SUPABASE_API_KEY SUPABASE_DATABASE_URL) do
+    System.fetch_env!(var)
+  end
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want
@@ -101,12 +105,15 @@ if config_env() == :prod do
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 
   # Configure the database for production
+  ssl_verify = if System.get_env("SSL_VERIFY_NONE") == "true", do: :verify_none, else: :verify_peer
   config :eventasaurus, EventasaurusApp.Repo,
     url: System.get_env("SUPABASE_DATABASE_URL"),
     database: "postgres",
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
+    queue_target: 5000,
+    queue_interval: 30000,
     ssl: true,
-    ssl_opts: [verify: :verify_none]
+    ssl_opts: [verify: ssl_verify]
 
   # Configure Supabase settings for production
   config :eventasaurus, :supabase,
@@ -114,8 +121,8 @@ if config_env() == :prod do
     api_key: System.get_env("SUPABASE_API_KEY"),
     database_url: System.get_env("SUPABASE_DATABASE_URL"),
     auth: %{
-      site_url: System.get_env("SUPABASE_CALLBACK_URL"),
-      additional_redirect_urls: ["#{System.get_env("SUPABASE_CALLBACK_URL")}/auth/callback"],
+      site_url: "https://eventasaur.us",
+      additional_redirect_urls: ["https://eventasaur.us/auth/callback"],
       auto_confirm_email: false
     }
 end

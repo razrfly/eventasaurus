@@ -45,6 +45,17 @@ config :phoenix_live_view,
 # Test-specific configuration for Auth.Client mocking
 config :eventasaurus, :auth_client, EventasaurusApp.Auth.TestClient
 
+# Test Supabase configuration with local demo values
+config :eventasaurus, :supabase,
+  url: "http://127.0.0.1:54321",
+  api_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+  database_url: "ecto://postgres:postgres@127.0.0.1:54322/postgres_test",
+  auth: %{
+    site_url: "http://localhost:4002",
+    additional_redirect_urls: ["http://localhost:4002/auth/callback"],
+    auto_confirm_email: true
+  }
+
 # Configure Wallaby for browser automation testing
 config :wallaby,
   driver: Wallaby.Chrome,

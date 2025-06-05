@@ -65,8 +65,8 @@
   </head>
 <%
   supabase_config = Application.get_env(:eventasaurus, :supabase)
-  supabase_url = supabase_config[:url]
-  supabase_api_key = supabase_config[:api_key]
+  supabase_url = supabase_config[:url] || raise("Missing Supabase URL configuration")
+  supabase_api_key = supabase_config[:api_key] || raise("Missing Supabase API key configuration")
 %>
   <body class={[
       "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
