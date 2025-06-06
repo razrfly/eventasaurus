@@ -1,8 +1,12 @@
 defmodule EventasaurusApp.EventsTest do
   use EventasaurusApp.DataCase
+  import Mox
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Accounts
+
+  # Make sure mocks are verified when the test exits
+  setup :verify_on_exit!
 
   describe "smart registration functions" do
     test "get_user_registration_status/2 returns :not_registered for unregistered user" do
@@ -554,8 +558,22 @@ defmodule EventasaurusApp.EventsTest do
       %{event: polling_event, poll: poll, options: poll.date_options}
     end
 
-    @tag :skip_in_ci
     test "registers new voter and casts multiple votes", %{event: event, options: options} do
+      # Mock Supabase API calls for new user creation
+      EventasaurusApp.HTTPoison.Mock
+      |> expect(:get, fn _url, _headers ->
+        {:ok, %HTTPoison.Response{
+          status_code: 200,
+          body: Jason.encode!(%{"users" => []})  # No existing user found
+        }}
+      end)
+      |> expect(:post, fn _url, _body, _headers ->
+        {:ok, %HTTPoison.Response{
+          status_code: 200,
+          body: Jason.encode!(%{})  # OTP sent successfully
+        }}
+      end)
+
       votes_data = [
         %{option: Enum.at(options, 0), vote_type: :yes},
         %{option: Enum.at(options, 1), vote_type: :if_need_be}
@@ -564,31 +582,8 @@ defmodule EventasaurusApp.EventsTest do
       name = "Test Voter"
       email = "testvoter@example.com"
 
-      # This test will fail in CI due to Supabase not being available
-      # In a real test environment with Supabase, this would pass
-      case Events.register_voter_and_bulk_cast_votes(event.id, name, email, votes_data) do
-        {:ok, :new_voter, participant, vote_results} ->
-          # Verify participant was created
-          assert participant.event_id == event.id
-          assert participant.status == :pending
-
-          # Verify vote results
-          assert vote_results.inserted == 2
-          assert vote_results.updated == 0
-
-          # Verify votes were actually cast
-          user = Accounts.get_user_by_email(email)
-          assert user
-          vote1 = Events.get_user_vote_for_option(Enum.at(options, 0), user)
-          vote2 = Events.get_user_vote_for_option(Enum.at(options, 1), user)
-
-          assert vote1.vote_type == :yes
-          assert vote2.vote_type == :if_need_be
-
-        {:error, _reason} ->
-          # Expected in test environment without Supabase
-          :ok
-      end
+            assert {:ok, :email_sent, %{"email" => ^email}} =
+        Events.register_voter_and_bulk_cast_votes(event.id, name, email, votes_data)
     end
 
     test "handles existing user voting", %{event: event, options: options} do
@@ -635,23 +630,27 @@ defmodule EventasaurusApp.EventsTest do
         Events.register_voter_and_bulk_cast_votes(event.id, "Test", "test@example.com", votes_data)
     end
 
-    @tag :skip_in_ci
     test "handles empty votes data", %{event: event} do
+      # Mock Supabase API calls for new user creation
+      EventasaurusApp.HTTPoison.Mock
+      |> expect(:get, fn _url, _headers ->
+        {:ok, %HTTPoison.Response{
+          status_code: 200,
+          body: Jason.encode!(%{"users" => []})  # No existing user found
+        }}
+      end)
+      |> expect(:post, fn _url, _body, _headers ->
+        {:ok, %HTTPoison.Response{
+          status_code: 200,
+          body: Jason.encode!(%{})  # OTP sent successfully
+        }}
+      end)
+
       name = "Test Voter"
       email = "testvoter@example.com"
 
-      # This test will fail in CI due to Supabase not being available
-      case Events.register_voter_and_bulk_cast_votes(event.id, name, email, []) do
-        {:ok, :new_voter, participant, vote_results} ->
-          # Verify participant was still created even with no votes
-          assert participant.event_id == event.id
-          assert vote_results.inserted == 0
-          assert vote_results.updated == 0
-
-        {:error, _reason} ->
-          # Expected in test environment without Supabase
-          :ok
-      end
+            assert {:ok, :email_sent, %{"email" => ^email}} =
+        Events.register_voter_and_bulk_cast_votes(event.id, name, email, [])
     end
   end
 

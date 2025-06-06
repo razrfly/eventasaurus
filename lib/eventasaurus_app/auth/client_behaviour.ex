@@ -47,6 +47,13 @@ defmodule EventasaurusApp.Auth.ClientBehaviour do
     {:ok, map()} | {:error, any()}
 
   @doc """
+  Send a one-time password (OTP) to the user's email for passwordless authentication.
+  Creates the user if they don't exist (when shouldCreateUser is true).
+  """
+  @callback sign_in_with_otp(String.t(), map()) ::
+    {:ok, map()} | {:error, any()}
+
+  @doc """
   Create a user using admin API.
   """
   @callback admin_create_user(String.t(), String.t(), map()) ::

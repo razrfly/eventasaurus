@@ -8,6 +8,11 @@ defmodule EventasaurusApp.Auth.Client do
 
   require Logger
 
+  # Get HTTP client module (configurable for testing)
+  defp http_client do
+    Application.get_env(:eventasaurus, :http_client, HTTPoison)
+  end
+
   # Get Supabase configuration from application config
   def get_config do
     Application.get_env(:eventasaurus, :supabase)
@@ -57,7 +62,7 @@ defmodule EventasaurusApp.Auth.Client do
       data: %{name: name}
     })
 
-    case HTTPoison.post(url, body, default_headers()) do
+    case http_client().post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         {:ok, Jason.decode!(response_body)}
 
@@ -84,7 +89,7 @@ defmodule EventasaurusApp.Auth.Client do
       password: password
     })
 
-    case HTTPoison.post(url, body, default_headers()) do
+    case http_client().post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         response = Jason.decode!(response_body)
         Logger.debug("Authentication successful")
@@ -113,7 +118,7 @@ defmodule EventasaurusApp.Auth.Client do
   def sign_out(token) do
     url = "#{get_auth_url()}/logout"
 
-    case HTTPoison.post(url, "", auth_headers(token)) do
+    case http_client().post(url, "", auth_headers(token)) do
       {:ok, %{status_code: status}} when status in [200, 204] ->
         :ok
 
@@ -138,7 +143,7 @@ defmodule EventasaurusApp.Auth.Client do
       email: email
     })
 
-    case HTTPoison.post(url, body, default_headers()) do
+    case http_client().post(url, body, default_headers()) do
       {:ok, %{status_code: status}} when status in [200, 204] ->
         {:ok, %{email: email}}
 
@@ -163,7 +168,7 @@ defmodule EventasaurusApp.Auth.Client do
       password: new_password
     })
 
-    case HTTPoison.put(url, body, auth_headers(token)) do
+    case http_client().put(url, body, auth_headers(token)) do
       {:ok, %{status_code: 200}} ->
         {:ok, %{}}
 
@@ -188,7 +193,7 @@ defmodule EventasaurusApp.Auth.Client do
       refresh_token: refresh_token
     })
 
-    case HTTPoison.post(url, body, default_headers()) do
+    case http_client().post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         {:ok, Jason.decode!(response_body)}
 
@@ -209,7 +214,7 @@ defmodule EventasaurusApp.Auth.Client do
   def get_user(token) do
     url = "#{get_auth_url()}/user"
 
-    case HTTPoison.get(url, auth_headers(token)) do
+    case http_client().get(url, auth_headers(token)) do
       {:ok, %{status_code: 200, body: response_body}} ->
         {:ok, Jason.decode!(response_body)}
 
@@ -218,6 +223,74 @@ defmodule EventasaurusApp.Auth.Client do
         {:error, %{status: code, message: error["message"] || "Failed to get user data"}}
 
       {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Sign in with OTP (passwordless) and optionally create user if they don't exist.
+
+  This method uses Supabase's passwordless authentication flow that:
+  - Sends an email with OTP/magic link to the user
+  - Creates the user automatically if they don't exist (when shouldCreateUser: true)
+  - Respects the auto_confirm_email configuration setting
+  - Allows users to set their password via the confirmation email
+
+  This is the preferred method for event registration as it provides a consistent
+  email confirmation experience matching regular signup behavior.
+
+  Returns {:ok, response} on success or {:error, reason} on failure.
+  """
+  def sign_in_with_otp(email, user_metadata \\ %{}) do
+    url = "#{get_auth_url()}/otp"
+
+    # Get site URL from config for email redirect
+    site_url = get_config()[:auth][:site_url] || "https://eventasaur.us"
+
+    # Extract event context if provided in user_metadata
+    {event_context, clean_metadata} = Map.pop(user_metadata, :event_context, nil)
+
+    redirect_url = case event_context do
+      %{slug: event_slug, id: event_id} ->
+        "#{site_url}/auth/callback?type=event_registration&event_slug=#{event_slug}&event_id=#{event_id}"
+      _ ->
+        "#{site_url}/auth/callback"
+    end
+
+    body = Jason.encode!(%{
+      email: email,
+      data: clean_metadata,  # User metadata without event context
+      options: %{
+        shouldCreateUser: true,  # Auto-create user if doesn't exist
+        emailRedirectTo: redirect_url
+      }
+    })
+
+    Logger.debug("Sending OTP request", %{
+      email_domain: email |> String.split("@") |> List.last(),
+      metadata_keys: Map.keys(user_metadata),
+      redirect_url: "#{site_url}/auth/callback"
+    })
+
+    case http_client().post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        Logger.info("OTP request successful", %{
+          email_domain: email |> String.split("@") |> List.last()
+        })
+        {:ok, response}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        Logger.error("OTP request failed", %{
+          status: code,
+          error: error["message"] || "OTP request failed",
+          email_domain: email |> String.split("@") |> List.last()
+        })
+        {:error, %{status: code, message: error["message"] || "OTP request failed"}}
+
+      {:error, error} ->
+        Logger.error("OTP request network error", %{error: inspect(error)})
         {:error, error}
     end
   end
@@ -267,7 +340,7 @@ defmodule EventasaurusApp.Auth.Client do
       email_confirm: true  # This bypasses email confirmation
     })
 
-    case HTTPoison.post(url, body, admin_headers()) do
+    case http_client().post(url, body, admin_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         {:ok, Jason.decode!(response_body)}
 
@@ -290,7 +363,7 @@ defmodule EventasaurusApp.Auth.Client do
 
     body = Jason.encode!(attrs)
 
-    case HTTPoison.put(url, body, admin_headers()) do
+    case http_client().put(url, body, admin_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         {:ok, Jason.decode!(response_body)}
 
@@ -316,7 +389,7 @@ defmodule EventasaurusApp.Auth.Client do
     Logger.debug("admin_get_user_by_email: Searching for email #{email}")
     Logger.debug("admin_get_user_by_email: Using URL #{url}")
 
-    case HTTPoison.get(url, admin_headers()) do
+    case http_client().get(url, admin_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         response = Jason.decode!(response_body)
         Logger.debug("admin_get_user_by_email: Full response: #{inspect(response)}")

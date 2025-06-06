@@ -352,9 +352,18 @@ defmodule EventasaurusApp.Events do
         nil ->
           # User doesn't exist locally, check Supabase and create if needed
           Logger.info("User not found locally, attempting Supabase user creation/lookup")
-          case create_or_find_supabase_user(email, name) do
+          case create_or_find_supabase_user(email, name, %{slug: event.slug, id: event.id}) do
+            {:ok, %{"email_sent" => true} = response} ->
+              # New user - OTP was sent, they need to confirm email before account creation
+              Logger.info("Passwordless signup initiated - user will need to confirm email", %{
+                email_domain: email |> String.split("@") |> List.last()
+              })
+              # Return early with email_sent response - user account will be created when they confirm
+              Repo.rollback({:email_sent, response})
+
             {:ok, supabase_user} ->
-              Logger.info("Successfully created/found user in Supabase")
+              # Existing user found in Supabase
+              Logger.info("Successfully found existing user in Supabase")
               # Sync with local database
               case SupabaseSync.sync_user(supabase_user) do
                 {:ok, user} ->
@@ -424,6 +433,12 @@ defmodule EventasaurusApp.Events do
           participant_id: elem(result, 1).id
         })
         {:ok, elem(result, 0), elem(result, 1)}
+      {:error, {:email_sent, response}} ->
+        # Special case: new user needs to confirm email before registration can complete
+        Logger.info("Registration initiated - confirmation email sent", %{
+          email_domain: response["email"] |> String.split("@") |> List.last()
+        })
+        {:ok, :email_sent, response}
       {:error, reason} ->
         Logger.warning("Registration transaction failed", %{reason: inspect(reason)})
         {:error, reason}
@@ -512,6 +527,71 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Complete event registration after email confirmation.
+
+  This function is called from the auth callback when a user clicks
+  an email confirmation link from event registration.
+  """
+  def complete_event_registration_after_confirmation(event_id, %User{} = user) do
+    require Logger
+
+    Logger.info("Completing event registration after email confirmation", %{
+      event_id: event_id,
+      user_id: user.id
+    })
+
+    try do
+      event = get_event!(event_id)
+
+      # Check if user is already registered
+      case get_event_participant_by_event_and_user(event, user) do
+        nil ->
+          # Create participant record
+          participant_attrs = %{
+            event_id: event.id,
+            user_id: user.id,
+            role: :invitee,
+            status: :pending,
+            source: "email_confirmation_registration",
+            metadata: %{
+              registration_date: DateTime.utc_now(),
+              confirmed_via_email: true
+            }
+          }
+
+          case create_event_participant(participant_attrs) do
+            {:ok, participant} ->
+              Logger.info("Successfully completed event registration after confirmation", %{
+                participant_id: participant.id,
+                user_id: user.id,
+                event_id: event.id
+              })
+              {:ok, :registered}
+
+            {:error, reason} ->
+              Logger.error("Failed to create participant after email confirmation", %{
+                reason: inspect(reason),
+                user_id: user.id,
+                event_id: event.id
+              })
+              {:error, reason}
+          end
+
+        _participant ->
+          Logger.info("User already registered for event", %{
+            user_id: user.id,
+            event_id: event.id
+          })
+          {:ok, :already_registered}
+      end
+    rescue
+      Ecto.NoResultsError ->
+        Logger.error("Event not found for post-confirmation registration", %{event_id: event_id})
+        {:error, :event_not_found}
+    end
+  end
+
+  @doc """
   One-click registration for authenticated users.
   """
   def one_click_register(%Event{} = event, %User{} = user) do
@@ -537,57 +617,48 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  defp create_or_find_supabase_user(email, name) do
+  defp create_or_find_supabase_user(email, name, event_context \\ nil) do
     alias EventasaurusApp.Auth.Client
     require Logger
 
-    Logger.debug("Starting Supabase user lookup/creation", %{
+    Logger.debug("Starting user lookup/creation with OTP flow", %{
       email_domain: email |> String.split("@") |> List.last(),
       name: name
     })
 
-    # First check if user exists in Supabase
-    case Client.admin_get_user_by_email(email) do
-      {:ok, nil} ->
-        # User doesn't exist, create them
-        Logger.info("User not found in Supabase, creating new user")
-        temp_password = generate_temporary_password()
-        user_metadata = %{name: name}
+    # Check if user exists locally first
+    case Repo.get_by(User, email: email) do
+      nil ->
+        # User doesn't exist locally, send OTP email
+        Logger.info("User not found locally, sending OTP email")
 
-        case Client.admin_create_user(email, temp_password, user_metadata) do
-          {:ok, supabase_user} ->
-            Logger.info("Successfully created user in Supabase", %{
-              supabase_user_id: supabase_user["id"],
+        case Client.sign_in_with_otp(email, event_context) do
+          {:ok, _response} ->
+            Logger.info("Successfully sent OTP email", %{
               email_domain: email |> String.split("@") |> List.last()
             })
-            {:ok, supabase_user}
+            {:ok, %{"email_sent" => true, "email" => email}}
           {:error, reason} ->
-            Logger.error("Failed to create user in Supabase", %{reason: inspect(reason)})
+            Logger.error("Failed to send OTP email", %{reason: inspect(reason)})
             {:error, reason}
         end
 
-      {:ok, supabase_user} ->
-        # User exists in Supabase
-        Logger.debug("User already exists in Supabase", %{
-          supabase_user_id: supabase_user["id"],
+      user ->
+        # User exists locally, return user data in Supabase format for compatibility
+        Logger.debug("User already exists locally", %{
+          user_id: user.id,
           email_domain: email |> String.split("@") |> List.last()
         })
+        supabase_user = %{
+          "id" => user.supabase_id,
+          "email" => user.email,
+          "user_metadata" => %{"name" => user.name}
+        }
         {:ok, supabase_user}
-
-      {:error, reason} ->
-        Logger.error("Error checking for user in Supabase", %{reason: inspect(reason)})
-        {:error, reason}
     end
   end
 
-  defp generate_temporary_password do
-    # Generate a secure random password
-    :crypto.strong_rand_bytes(16)
-    |> Base.encode64()
-    |> String.replace(~r/[^a-zA-Z0-9]/, "")
-    |> String.slice(0, 12)
-    |> Kernel.<>("!")
-  end
+
 
   # Theme Management Functions
 
@@ -1101,7 +1172,7 @@ defmodule EventasaurusApp.Events do
         nil ->
           # User doesn't exist locally, check Supabase and create if needed
           Logger.info("User not found locally, attempting Supabase user creation/lookup")
-          case create_or_find_supabase_user(email, name) do
+          case create_or_find_supabase_user(email, name, %{slug: event.slug, id: event.id}) do
             {:ok, supabase_user} ->
               Logger.info("Successfully created/found user in Supabase")
               # Sync with local database
@@ -1190,6 +1261,12 @@ defmodule EventasaurusApp.Events do
           vote_id: elem(result, 2).id
         })
         {:ok, elem(result, 0), elem(result, 1), elem(result, 2)}
+      {:error, {:email_sent, response}} ->
+        # Special case: new user needs to confirm email before voting can complete
+        Logger.info("Voter registration initiated - confirmation email sent", %{
+          email_domain: response["email"] |> String.split("@") |> List.last()
+        })
+        {:ok, :email_sent, response}
       {:error, reason} ->
         Logger.warning("Voter registration and vote transaction failed", %{reason: inspect(reason)})
         {:error, reason}
@@ -1376,8 +1453,17 @@ defmodule EventasaurusApp.Events do
             # User doesn't exist locally, check Supabase and create if needed
             Logger.info("User not found locally, attempting Supabase user creation/lookup")
             case create_or_find_supabase_user(email, name) do
+              {:ok, %{"email_sent" => true} = response} ->
+                # New user - OTP was sent, they need to confirm email before account creation
+                Logger.info("Passwordless signup initiated for voter - user will need to confirm email", %{
+                  email_domain: email |> String.split("@") |> List.last()
+                })
+                # Return early with email_sent response - user account will be created when they confirm
+                Repo.rollback({:email_sent, response})
+
               {:ok, supabase_user} ->
-                Logger.info("Successfully created/found user in Supabase")
+                # Existing user found in Supabase
+                Logger.info("Successfully found existing user in Supabase")
                 # Sync with local database
                 case SupabaseSync.sync_user(supabase_user) do
                   {:ok, user} ->
@@ -1466,6 +1552,13 @@ defmodule EventasaurusApp.Events do
             vote_results: vote_results
           })
           {:ok, result_type, participant, vote_results}
+
+        {:error, {:email_sent, response}} ->
+          # Special case: new user needs to confirm email before bulk voting can complete
+          Logger.info("Bulk voter registration initiated - confirmation email sent", %{
+            email_domain: response["email"] |> String.split("@") |> List.last()
+          })
+          {:ok, :email_sent, response}
 
         {:error, reason} ->
           Logger.warning("Bulk voter registration and vote transaction failed", %{reason: inspect(reason)})
