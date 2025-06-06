@@ -182,7 +182,7 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
                           (item.type != :person && item.poster_path && ("https://image.tmdb.org/t/p/w500" <> item.poster_path)) ||
                           "/images/placeholder.png",
                     src != "/images/placeholder.png" do %>
-                    <% display_name = item[:title] || item[:name] %>
+                    <% display_name = item[:title] || item[:name] || item["title"] || item["name"] %>
                     <div
                       id={"tmdb-image-#{item[:id] || item["id"]}"}
                       data-image={Jason.encode!(%{
@@ -209,6 +209,7 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
                             <%= if item.type == :movie do %>Movie<% end %>
                             <%= if item.type == :tv do %>TV Show<% end %>
                             <%= if item.type == :person do %>Person<% end %>
+                            <%= if item.type == :collection do %>Collection<% end %>
                           </span>
                           <span class="text-xs">
                             <%= if item.type == :movie and item.release_date do %><%= String.slice(item.release_date, 0, 4) %><% end %>
