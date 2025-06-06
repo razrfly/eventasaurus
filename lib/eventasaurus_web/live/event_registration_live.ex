@@ -58,6 +58,11 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
             send(self(), {:registration_success, :existing_user_registered, name, email})
             {:noreply, assign(socket, :loading, false)}
 
+          {:ok, :email_sent, _response} ->
+            # New passwordless flow - email confirmation sent
+            send(self(), {:registration_success, :email_sent, name, email})
+            {:noreply, assign(socket, :loading, false)}
+
           {:error, :already_registered} ->
             send(self(), {:registration_error, :already_registered})
             {:noreply, assign(socket, :loading, false)}
@@ -209,7 +214,7 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
           <!-- Info Text -->
           <div class="mt-6 space-y-2 text-center">
             <p class="text-xs text-gray-500">
-              By registering, you'll receive an email to verify your account and set your password.
+              We'll send you an email to confirm your registration and set up your account.
             </p>
             <p class="text-xs text-gray-500">
               You'll also receive event updates via email.

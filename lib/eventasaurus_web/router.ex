@@ -18,6 +18,11 @@ defmodule EventasaurusWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Health check pipeline - no authentication required
+  pipeline :health do
+    plug :accepts, ["json"]
+  end
+
   # Routes that require authentication
   pipeline :authenticated do
     plug :require_authenticated_user
@@ -26,6 +31,14 @@ defmodule EventasaurusWeb.Router do
   # Routes that should redirect if already authenticated
   pipeline :redirect_if_authenticated do
     plug :redirect_if_user_is_authenticated
+  end
+
+  # Health check routes - MUST be before catch-all routes
+  scope "/health", EventasaurusWeb do
+    pipe_through :health
+
+    get "/", HealthController, :index
+    get "/auth", HealthController, :auth
   end
 
   # Authentication routes - placing these BEFORE the catch-all public routes

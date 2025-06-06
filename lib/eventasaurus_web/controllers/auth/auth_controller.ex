@@ -211,18 +211,19 @@ defmodule EventasaurusWeb.Auth.AuthController do
     case params do
       %{"access_token" => access_token, "refresh_token" => refresh_token} ->
         Logger.info("Callback with tokens - storing session")
-        conn
-        |> put_session(:access_token, access_token)
-        |> put_session(:refresh_token, refresh_token)
-        |> put_flash(:info, "Successfully signed in!")
-        |> redirect(to: ~p"/dashboard")
+        conn = conn
+               |> put_session(:access_token, access_token)
+               |> put_session(:refresh_token, refresh_token)
+
+        # Check if this is an event registration callback
+        handle_event_registration_callback(conn, params, access_token)
 
       %{"access_token" => access_token} ->
         Logger.info("Callback with access token only - storing session")
-        conn
-        |> put_session(:access_token, access_token)
-        |> put_flash(:info, "Successfully signed in!")
-        |> redirect(to: ~p"/dashboard")
+        conn = conn |> put_session(:access_token, access_token)
+
+        # Check if this is an event registration callback
+        handle_event_registration_callback(conn, params, access_token)
 
       %{"error" => error, "error_description" => description} ->
         Logger.error("Callback error: #{error} - #{description}")
@@ -236,12 +237,82 @@ defmodule EventasaurusWeb.Auth.AuthController do
         |> put_flash(:error, "Authentication failed")
         |> redirect(to: ~p"/auth/login")
 
+      # Handle event registration callback without tokens (email confirmation only)
+      %{"type" => "event_registration", "event_slug" => event_slug} ->
+        Logger.info("Event registration email confirmation without tokens")
+        conn
+        |> put_flash(:info, "Email confirmed! Please complete your registration by signing in.")
+        |> redirect(to: ~p"/#{event_slug}")
+
       _other ->
         Logger.warning("Callback with no recognized parameters, redirecting to dashboard")
         # For email confirmations without tokens, redirect to login to let user sign in
         conn
         |> put_flash(:info, "Email confirmed! Please sign in.")
         |> redirect(to: ~p"/auth/login")
+    end
+  end
+
+  # Helper function to handle event registration callbacks
+  defp handle_event_registration_callback(conn, params, _access_token) do
+    require Logger
+    case params do
+      %{"type" => "event_registration", "event_slug" => event_slug, "event_id" => event_id_str} ->
+        Logger.info("Processing event registration callback", %{
+          event_slug: event_slug,
+          event_id: event_id_str
+        })
+
+        # Parse event_id
+        {event_id, _} = Integer.parse(event_id_str)
+
+        # Get current user and sync with local database
+        case Auth.get_current_user(conn) do
+          nil ->
+            Logger.error("No user found after authentication for event registration")
+            conn
+            |> put_flash(:error, "Authentication failed. Please try again.")
+            |> redirect(to: ~p"/#{event_slug}")
+
+          user ->
+            # Complete the event registration
+            case EventasaurusApp.Events.complete_event_registration_after_confirmation(event_id, user) do
+              {:ok, :registered} ->
+                Logger.info("Successfully completed event registration", %{
+                  user_id: user.id,
+                  event_id: event_id
+                })
+                conn
+                |> put_flash(:info, "Welcome! You're now registered for this event.")
+                |> redirect(to: ~p"/#{event_slug}")
+
+              {:ok, :already_registered} ->
+                Logger.info("User was already registered for event", %{
+                  user_id: user.id,
+                  event_id: event_id
+                })
+                conn
+                |> put_flash(:info, "Welcome back! You're already registered for this event.")
+                |> redirect(to: ~p"/#{event_slug}")
+
+              {:error, reason} ->
+                Logger.error("Failed to complete event registration", %{
+                  user_id: user.id,
+                  event_id: event_id,
+                  reason: inspect(reason)
+                })
+                conn
+                |> put_flash(:error, "Registration failed. Please try again.")
+                |> redirect(to: ~p"/#{event_slug}")
+            end
+        end
+
+      _ ->
+        # Regular authentication callback
+        Logger.info("Regular authentication callback - redirecting to dashboard")
+        conn
+        |> put_flash(:info, "Successfully signed in!")
+        |> redirect(to: ~p"/dashboard")
     end
   end
 end

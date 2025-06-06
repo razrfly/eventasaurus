@@ -344,24 +344,38 @@ defmodule EventasaurusWeb.PublicEventLive do
         "Welcome! You're now registered for #{socket.assigns.event.title}. Check your email for account verification instructions."
       :existing_user_registered ->
         "Great! You're now registered for #{socket.assigns.event.title}."
+      :email_sent ->
+        "Registration started! Check your email to confirm your account and complete your registration for #{socket.assigns.event.title}."
     end
 
     # Update the user's registration status and local user info
-    # Only set just_registered for new registrations (not existing users)
-    updated_socket = case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
+    # Handle different registration types appropriately
+    updated_socket = case type do
+      :email_sent ->
+        # Email confirmation in progress - user account not created yet
         socket
-        |> assign(:registration_status, :registered)
-        |> assign(:user, user)
-        |> assign(:just_registered, type == :new_registration)
+        |> assign(:registration_status, :email_confirmation_pending)
+        |> assign(:user, nil)
+        |> assign(:just_registered, false)
+        |> assign(:email_confirmation_email, email)
 
-      {:error, _} ->
-        # For new users who just registered, try to find them by email
-        user = Accounts.get_user_by_email(email)
-        socket
-        |> assign(:registration_status, :registered)
-        |> assign(:user, user)
-        |> assign(:just_registered, true)  # This is always a new registration
+      _ ->
+        # Existing flow for completed registrations
+        case ensure_user_struct(socket.assigns.auth_user) do
+          {:ok, user} ->
+            socket
+            |> assign(:registration_status, :registered)
+            |> assign(:user, user)
+            |> assign(:just_registered, type == :new_registration)
+
+          {:error, _} ->
+            # For new users who just registered, try to find them by email
+            user = Accounts.get_user_by_email(email)
+            socket
+            |> assign(:registration_status, :registered)
+            |> assign(:user, user)
+            |> assign(:just_registered, true)  # This is always a new registration
+        end
     end
 
     {:noreply,
@@ -470,6 +484,17 @@ defmodule EventasaurusWeb.PublicEventLive do
 
     # Use bulk vote operation for better performance
     case Events.register_voter_and_bulk_cast_votes(event_id, name, email, votes_data) do
+      {:ok, :email_sent, response} ->
+        # New user - email confirmation required
+        {:noreply,
+         socket
+         |> assign(:show_vote_modal, false)
+         |> assign(:temp_votes, %{})
+         |> assign(:registration_status, :email_confirmation_pending)
+         |> assign(:email_confirmation_email, response["email"])
+         |> put_flash(:info, "Thanks for voting! Check your email to complete your registration for #{socket.assigns.event.title}.")
+        }
+
       {:ok, result_type, _participant, _vote_results} ->
         # Get the user from the database to update socket assigns
         user = Accounts.get_user_by_email(email)
@@ -932,6 +957,31 @@ defmodule EventasaurusWeb.PublicEventLive do
                   </button>
 
                   <p class="text-xs text-gray-500">Changed your mind? You can register again.</p>
+                </div>
+
+              <% :email_confirmation_pending -> %>
+                <!-- User registration started - waiting for email confirmation -->
+                <div class="text-center">
+                  <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h4 class="text-lg font-semibold text-gray-900 mb-2">Check Your Email</h4>
+                  <p class="text-sm text-gray-600 mb-4">
+                    We've sent a confirmation email to
+                    <span class="font-medium"><%= @email_confirmation_email %></span>
+                  </p>
+
+                  <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p class="text-sm text-blue-800 text-center">
+                      Click the link in your email to complete your registration for <%= @event.title %>.
+                    </p>
+                  </div>
+
+                  <p class="text-xs text-gray-500">
+                    Didn't receive the email? Check your spam folder or try registering again.
+                  </p>
                 </div>
 
               <% :organizer -> %>

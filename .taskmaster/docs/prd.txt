@@ -1,0 +1,58 @@
+# Event Registration Email Fix - Product Requirements Document
+
+## Project Overview
+Fix the email confirmation flow for event registration to match the behavior of regular user signup. Currently, users who register for events don't receive confirmation emails, while regular signups do.
+
+## Background
+The application has two different signup flows:
+1. Regular signup - uses public Supabase API, sends confirmation emails ✅  
+2. Event registration - uses admin Supabase API, bypasses email confirmation ❌
+
+This creates inconsistent user experience and leaves event registrants unable to access their accounts.
+
+## Solution Overview
+Replace the admin API approach with Supabase's passwordless `signInWithOtp()` method for event registration.
+
+## Technical Requirements
+
+### Core Implementation
+- Replace `Client.admin_create_user()` calls with `Client.sign_in_with_otp()` 
+- Use Supabase `/auth/v1/otp` endpoint instead of `/auth/v1/admin/users`
+- Set `shouldCreateUser: true` to auto-create users if they don't exist
+- Maintain existing event registration UX (name + email only)
+
+### User Experience Requirements  
+- Users provide only name and email during event registration
+- Users receive confirmation email automatically 
+- Users can set their password later via the confirmation email
+- No changes to regular signup flow
+- Consistent email confirmation behavior across both flows
+
+### Technical Specifications
+- **Language**: Elixir/Phoenix
+- **Database**: Supabase
+- **API**: Supabase Auth REST API
+- **Files to modify**: 
+  - `lib/eventasaurus_app/auth/client.ex` 
+  - `lib/eventasaurus_app/events.ex`
+
+## Constraints
+- No migration of existing users required
+- No changes to regular signup flow  
+- Maintain current event registration UI/UX
+- Must respect existing `auto_confirm_email: false` configuration
+
+## Success Criteria
+1. Event registrants receive confirmation emails
+2. Event registrants can set passwords via email confirmation
+3. Both signup flows use identical email confirmation process
+4. Existing regular signup continues to work unchanged
+5. No breaking changes to current functionality
+
+## Implementation Priority
+High - This affects user onboarding and account access for event registrants.
+
+## Dependencies
+- Access to Supabase project configuration
+- Existing Phoenix/Elixir codebase
+- Current auth configuration settings 
