@@ -4,20 +4,36 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
   Handles different categories of images stored in priv/static/images/events/
   """
 
-  @base_path "priv/static/images/events"
   @base_url "/images/events"
   @supported_extensions [".jpg", ".jpeg", ".png", ".gif", ".webp"]
 
+  # Get the correct priv directory path for both dev and production
+  defp base_path do
+    # In production, use the release priv directory; in dev, use the app priv directory
+    case Mix.env() do
+      :prod ->
+        # For releases, static files are in the release directory
+        Path.join([Application.app_dir(:eventasaurus, "priv"), "static", "images", "events"])
+      _ ->
+        # For development, use the standard priv path
+        Path.join(["priv", "static", "images", "events"])
+    end
+  rescue
+    # Fallback for production when Mix.env() is not available
+    _ -> Path.join([Application.app_dir(:eventasaurus, "priv"), "static", "images", "events"])
+  end
+
   def get_categories do
-    unless File.exists?(@base_path) do
+    path = base_path()
+    unless File.exists?(path) do
       require Logger
-      Logger.warning("Default images base path does not exist: #{@base_path}")
+      Logger.warning("Default images base path does not exist: #{path}")
       []
     else
-      case File.ls(@base_path) do
+      case File.ls(path) do
         {:ok, directories} ->
           directories
-          |> Enum.filter(&File.dir?(Path.join(@base_path, &1)))
+          |> Enum.filter(&File.dir?(Path.join(path, &1)))
           |> Enum.map(&%{
             name: &1,
             display_name: humanize_category(&1),
@@ -27,7 +43,7 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
 
         {:error, reason} ->
           require Logger
-          Logger.error("Failed to list categories from #{@base_path}: #{inspect(reason)}")
+          Logger.error("Failed to list categories from #{path}: #{inspect(reason)}")
           []
       end
     end
@@ -40,7 +56,7 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
     else
       # Sanitize category to prevent directory traversal
       sanitized_category = Path.basename(to_string(category))
-      category_path = Path.join(@base_path, sanitized_category)
+      category_path = Path.join(base_path(), sanitized_category)
 
       unless File.dir?(category_path) do
         require Logger

@@ -129,6 +129,7 @@ if config_env() == :prod do
     url: System.get_env("SUPABASE_URL"),
     api_key: System.get_env("SUPABASE_API_KEY"),
     database_url: System.get_env("SUPABASE_DATABASE_URL"),
+    bucket: System.get_env("SUPABASE_BUCKET") || "event-images",
     auth: %{
       site_url: "https://eventasaur.us",
       additional_redirect_urls: ["https://eventasaur.us/auth/callback"],
