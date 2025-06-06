@@ -49,9 +49,6 @@ RUN mix deps.compile
 
 COPY priv priv
 
-# Debug: List contents of priv/static/images/events to verify images are copied
-RUN ls -la priv/static/images/events/ || echo "priv/static/images/events does not exist"
-
 COPY lib lib
 
 COPY assets assets
@@ -61,17 +58,6 @@ RUN cd assets && npm install
 
 # compile assets
 RUN mix assets.deploy
-
-# Debug: Check if images still exist after assets.deploy
-RUN ls -la priv/static/images/events/ || echo "priv/static/images/events does not exist after assets.deploy"
-
-# Ensure images directory is preserved during compilation
-RUN if [ -d "priv/static/images/events" ]; then \
-      echo "Images directory exists, ensuring it's preserved"; \
-    else \
-      echo "Creating images directory structure"; \
-      mkdir -p priv/static/images/events; \
-    fi
 
 # Compile the release
 RUN mix compile
