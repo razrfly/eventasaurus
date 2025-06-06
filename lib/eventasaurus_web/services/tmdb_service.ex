@@ -74,5 +74,18 @@ defmodule EventasaurusWeb.Services.TmdbService do
       known_for: item["known_for"]
     }
   end
-  defp format_result(item), do: item
+  defp format_result(%{"media_type" => "collection"} = item) do
+    %{
+      type: :collection,
+      id: item["id"],
+      name: item["name"] || item["title"],
+      overview: item["overview"],
+      poster_path: item["poster_path"],
+      backdrop_path: item["backdrop_path"]
+    }
+  end
+  # Fallback for unknown media types - ensure we always have a type field
+  defp format_result(item) do
+    Map.put(item, :type, :unknown)
+  end
 end
