@@ -453,3 +453,242 @@ body[class*="theme-"] .theme-card:hover {
    ============================================================================ */
 
 /* Custom CSS can go here */ 
+
+/* ============================================================================
+   SOCIAL AUTHENTICATION COMPONENTS
+   ============================================================================ */
+
+/* Social Auth Button Loading States */
+.social-auth-container [data-provider] {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.social-auth-container [data-provider]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.social-auth-container [data-provider].loading {
+  background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.5s infinite;
+}
+
+.social-auth-container [data-provider].loading .loading-text {
+  opacity: 0.8;
+}
+
+.social-auth-container [data-provider].loading .loading-spinner {
+  display: inline-block !important;
+}
+
+@keyframes loading-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Success State Animation */
+.social-auth-container [data-provider].success {
+  background-color: #10b981 !important;
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+  animation: success-pulse 0.6s ease-out;
+}
+
+@keyframes success-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1.02); }
+}
+
+/* Anti-Social Theme Animation */
+.anti-social-intro {
+  animation: subtle-fade-in 0.6s ease-out;
+}
+
+@keyframes subtle-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Social Button Hover Effects */
+.facebook-auth-btn:hover {
+  background-color: #1877f2;
+  transform: translateY(-2px);
+}
+
+.twitter-auth-btn:hover {
+  background-color: #1d9bf0;
+  transform: translateY(-2px);
+}
+
+/* Loading State Animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner .animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Compact Layout Responsiveness */
+@media (max-width: 640px) {
+  .social-buttons-grid-compact {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .social-auth-buttons-compact .facebook-auth-btn,
+  .social-auth-buttons-compact .twitter-auth-btn {
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+/* Enhanced Anti-Social Copy Styling */
+.anti-social-intro .text-gray-500 {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.anti-social-intro-compact .text-gray-500 {
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Focus States for Accessibility */
+.facebook-auth-btn:focus-visible,
+.twitter-auth-btn:focus-visible,
+.social-provider-btn:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  ring-offset-2: 2px;
+}
+
+/* Dark Mode Support (if implemented) */
+@media (prefers-color-scheme: dark) {
+  .social-auth-container .text-gray-500 {
+    color: rgb(156 163 175);
+  }
+  
+  .social-auth-container .text-gray-600 {
+    color: rgb(156 163 175);
+  }
+  
+  .social-auth-container .border-gray-300\/50 {
+    border-color: rgb(75 85 99 / 0.5);
+  }
+}
+
+/* ============================================================================
+   SOCIAL AUTHENTICATION ERROR HANDLING
+   ============================================================================ */
+
+/* Social Auth Error Styles */
+.social-auth-error {
+  animation: slideInError 0.3s ease-out;
+}
+
+.social-auth-error-compact {
+  animation: fadeInError 0.3s ease-out;
+}
+
+@keyframes slideInError {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInError {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Social Auth Container with Error */
+.social-auth-container-with-error {
+  position: relative;
+}
+
+/* Error Icon Animation */
+.social-auth-error .hero-exclamation-triangle,
+.social-auth-error-compact .hero-exclamation-triangle {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Error Button Hover Effects */
+.social-auth-error button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+}
+
+.social-auth-error-compact button:hover {
+  transform: translateY(-1px);
+}
+
+/* Error Dismiss Animation */
+.social-auth-error.dismissing {
+  animation: slideOutError 0.3s ease-in forwards;
+}
+
+@keyframes slideOutError {
+  from {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    max-height: 200px;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scaleY(0.8);
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Responsive Error Styling */
+@media (max-width: 640px) {
+  .social-auth-error {
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  
+  .social-auth-error h3 {
+    font-size: 0.875rem;
+  }
+  
+  .social-auth-error p {
+    font-size: 0.8125rem;
+  }
+  
+  .social-auth-error-compact {
+    padding: 0.5rem;
+    margin-top: 0.5rem;
+  }
+} 

@@ -29,6 +29,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
   alias EventasaurusApp.Auth
   alias EventasaurusApp.Accounts
+  alias Phoenix.PubSub
 
   require Logger
 
@@ -39,6 +40,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   - `:assign_auth_user` - Assigns authenticated user data to socket
   - `:require_authenticated_user` - Requires authentication, redirects if not found
   - `:assign_auth_user_and_theme` - Assigns user data and theme information
+  - `:assign_auth_user_with_session_sync` - Assigns user data and sets up session synchronization
   """
   def on_mount(:assign_auth_user, _params, session, socket) do
     socket =
@@ -66,7 +68,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
         socket =
           socket
           |> maybe_put_flash(:error, "You must log in to access this page.")
-          |> redirect(to: ~p"/auth/login")
+          |> push_navigate(to: ~p"/auth/login")
 
         {:halt, socket}
 
@@ -102,6 +104,30 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     {:cont, socket}
   end
 
+  def on_mount(:assign_auth_user_with_session_sync, _params, session, socket) do
+    socket =
+      socket
+      |> assign_auth_user_with_validation(session)
+      |> assign_new(:user, fn ->
+        case socket.assigns[:auth_user] do
+          nil -> nil
+          auth_user ->
+            case ensure_user_struct(auth_user) do
+              {:ok, user} ->
+                # Subscribe to auth events for this user
+                setup_auth_subscription(user.id)
+                user
+              {:error, reason} ->
+                Logger.warning("Failed to ensure user struct: #{inspect(reason)}")
+                nil
+            end
+        end
+      end)
+      |> assign(:session_sync_enabled, true)
+
+    {:cont, socket}
+  end
+
   # Private function to assign auth_user from session
   defp assign_auth_user(socket, session) do
     assign_new(socket, :auth_user, fn ->
@@ -119,6 +145,72 @@ defmodule EventasaurusWeb.Live.AuthHooks do
         nil
       end
     end)
+  end
+
+  # Enhanced version with session validation and error handling
+  defp assign_auth_user_with_validation(socket, session) do
+    assign_new(socket, :auth_user, fn ->
+      token = session["access_token"]
+      refresh_token = session["refresh_token"]
+
+      cond do
+        is_nil(token) ->
+          Logger.debug("No access token found in session")
+          nil
+
+        is_valid_token?(token) ->
+          case Auth.AuthHelper.get_current_user(token) do
+            {:ok, user} ->
+              Logger.debug("Successfully validated session for user: #{inspect(user["email"])}")
+              user
+            {:error, reason} ->
+              Logger.warning("Failed to get current user: #{inspect(reason)}")
+              attempt_token_refresh(refresh_token)
+          end
+
+        true ->
+          Logger.debug("Token appears invalid, attempting refresh")
+          attempt_token_refresh(refresh_token)
+      end
+    end)
+  end
+
+  # Set up PubSub subscription for auth events
+  defp setup_auth_subscription(user_id) do
+    topic = "user_auth:#{user_id}"
+    PubSub.subscribe(EventasaurusApp.PubSub, topic)
+    Logger.debug("Subscribed to auth events for user: #{user_id}")
+  end
+
+  # Basic token validation (can be enhanced)
+  defp is_valid_token?(token) when is_binary(token) do
+    # Basic checks - token should be a valid JWT format
+    case String.split(token, ".") do
+      [_header, _payload, _signature] -> true
+      _ -> false
+    end
+  end
+  defp is_valid_token?(_), do: false
+
+  # Attempt to refresh the session token
+  defp attempt_token_refresh(nil) do
+    Logger.debug("No refresh token available")
+    nil
+  end
+  defp attempt_token_refresh(refresh_token) do
+    case Auth.refresh_session(refresh_token) do
+      {:ok, %{"access_token" => new_token}} ->
+        Logger.debug("Successfully refreshed session token")
+        case Auth.AuthHelper.get_current_user(new_token) do
+          {:ok, user} -> user
+          {:error, reason} ->
+            Logger.warning("Failed to get user with refreshed token: #{inspect(reason)}")
+            nil
+        end
+      {:error, reason} ->
+        Logger.warning("Failed to refresh session: #{inspect(reason)}")
+        nil
+    end
   end
 
   # Helper function to ensure we have a proper User struct
@@ -153,5 +245,88 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       nil -> put_flash(socket, key, message)
       _existing -> socket
     end
+  end
+
+  @doc """
+  Handle authentication events from PubSub.
+
+  This function should be called from LiveView modules that use auth hooks.
+  Add this to your LiveView:
+
+      def handle_info({:auth_event, event, metadata}, socket) do
+        EventasaurusWeb.Live.AuthHooks.handle_auth_event(event, metadata, socket)
+      end
+  """
+  def handle_auth_event(:logged_out, _metadata, socket) do
+    Logger.info("User logged out in another tab, redirecting")
+
+    socket =
+      socket
+      |> assign(:auth_user, nil)
+      |> assign(:user, nil)
+      |> put_flash(:info, "You have been logged out")
+      |> push_event("auth_updated", %{event: "logout", timestamp: System.system_time(:millisecond)})
+      |> push_navigate(to: ~p"/auth/login")
+
+    {:noreply, socket}
+  end
+
+  def handle_auth_event(:session_expired, _metadata, socket) do
+    Logger.info("Session expired, redirecting to login")
+
+    socket =
+      socket
+      |> assign(:auth_user, nil)
+      |> assign(:user, nil)
+      |> put_flash(:error, "Your session has expired. Please log in again.")
+      |> push_event("auth_updated", %{event: "session_expired", timestamp: System.system_time(:millisecond)})
+      |> push_navigate(to: ~p"/auth/login")
+
+    {:noreply, socket}
+  end
+
+  def handle_auth_event(:session_refreshed, metadata, socket) do
+    Logger.info("Session refreshed")
+
+    # Update the auth_user if new user data is provided
+    socket = case Map.get(metadata, :user_data) do
+      nil -> socket
+      user_data -> assign(socket, :auth_user, user_data)
+    end
+
+    socket =
+      socket
+      |> push_event("auth_updated", %{event: "session_refreshed", timestamp: System.system_time(:millisecond)})
+
+    {:noreply, socket}
+  end
+
+  def handle_auth_event(:logged_in, metadata, socket) do
+    Logger.info("User logged in")
+
+    # Update auth state if user data is provided
+    socket = case Map.get(metadata, :user_data) do
+      nil -> socket
+      user_data ->
+        socket
+        |> assign(:auth_user, user_data)
+        |> assign_new(:user, fn ->
+          case ensure_user_struct(user_data) do
+            {:ok, user} -> user
+            {:error, _} -> nil
+          end
+        end)
+    end
+
+    socket =
+      socket
+      |> push_event("auth_updated", %{event: "logged_in", timestamp: System.system_time(:millisecond)})
+
+    {:noreply, socket}
+  end
+
+  def handle_auth_event(event, metadata, socket) do
+    Logger.debug("Unhandled auth event: #{inspect(event)} with metadata: #{inspect(metadata)}")
+    {:noreply, socket}
   end
 end

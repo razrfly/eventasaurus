@@ -89,6 +89,8 @@ defmodule EventasaurusWeb do
       import Phoenix.HTML
       # Core UI components
       import EventasaurusWeb.CoreComponents
+      # Social authentication components
+      import EventasaurusWeb.SocialAuthComponents
 
       # Custom helpers
       import EventasaurusWeb.Helpers.SupabaseHelper

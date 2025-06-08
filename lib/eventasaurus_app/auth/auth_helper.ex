@@ -115,4 +115,58 @@ defmodule EventasaurusApp.Auth.AuthHelper do
       {:error, reason} -> {:error, reason}
     end
   end
+
+  @doc """
+  Exchange OAuth authorization code for session tokens and sync user.
+
+  This function handles the complete OAuth callback flow by:
+  1. Exchanging the authorization code for tokens
+  2. Fetching user data from Supabase
+  3. Syncing the user with our local database
+
+  ## Parameters
+    - code: The authorization code from OAuth provider
+
+  ## Returns
+    - {:ok, %{user: user, access_token: token, refresh_token: token}} if successful
+    - {:error, reason} otherwise
+  """
+  def exchange_oauth_code(code) when is_binary(code) do
+    with {:ok, session_data} <- Client.exchange_code_for_session(code),
+         access_token = session_data["access_token"],
+         {:ok, user} <- get_current_user(access_token) do
+
+      result = %{user: user, access_token: access_token}
+
+      # Include refresh token if present
+      result = if session_data["refresh_token"] do
+        Map.put(result, :refresh_token, session_data["refresh_token"])
+      else
+        result
+      end
+
+      {:ok, result}
+    else
+      {:error, reason} ->
+        Logger.error("OAuth code exchange failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  def exchange_oauth_code(_), do: {:error, :invalid_code}
+
+  @doc """
+  Get OAuth authorization URL for a social provider.
+
+  ## Parameters
+    - provider: "facebook" | "twitter" | other supported provider
+    - redirect_to: Optional URL to redirect to after authentication
+    - scopes: Optional scopes to request from the provider
+
+  ## Returns
+    The OAuth authorization URL string
+  """
+  def get_oauth_url(provider, redirect_to \\ nil, scopes \\ nil) do
+    Client.get_oauth_url(provider, redirect_to, scopes)
+  end
 end

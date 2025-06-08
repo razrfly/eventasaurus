@@ -91,6 +91,18 @@
         </div>
       </.form>
 
+                  <!-- Social Authentication Options with Error Handling -->
+            <div phx-hook="SocialAuth" id="social-auth-register" data-csrf-token={get_csrf_token()}>
+              <%
+                social_auth_data = EventasaurusWeb.Auth.AuthHTML.social_auth_assigns(@conn)
+              %>
+              <.social_auth_buttons_with_error 
+                redirect_to="/onboarding" 
+                auth_error={social_auth_data.auth_error}
+                last_attempted_provider={social_auth_data.last_attempted_provider}
+              />
+            </div>
+
       <div class="mt-8">
         <div class="relative">
           <div class="absolute inset-0 flex items-center">

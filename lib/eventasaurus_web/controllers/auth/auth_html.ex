@@ -1,10 +1,48 @@
 defmodule EventasaurusWeb.Auth.AuthHTML do
-  use EventasaurusWeb, :html
+  @moduledoc """
+  This module contains pages rendered by AuthController.
 
-  embed_templates "auth_html/*", suffix: "_template"
+  See the `auth_html` directory for all templates.
+  """
+  use EventasaurusWeb, :html
+  import Phoenix.Controller, only: [get_csrf_token: 0]
+  import EventasaurusWeb.SocialAuthComponents
+
+  embed_templates "auth_html/*"
 
   # Define the required flash attribute for the flash_messages function
   attr :flash, :map, required: true
+
+  @doc """
+  Helper function to handle social authentication errors in templates.
+
+  This can be used in templates to add error handling state to forms.
+  """
+    def social_auth_assigns(conn) do
+    flash = Map.get(conn.assigns, :flash, %{})
+    auth_error = Phoenix.Flash.get(flash, :auth_error)
+    last_attempted_provider = Phoenix.Flash.get(flash, :last_attempted_provider)
+
+    %{
+      auth_error: if(auth_error, do: %{"reason" => auth_error, "provider" => last_attempted_provider}),
+      last_attempted_provider: last_attempted_provider
+    }
+  end
+
+  @doc """
+  Creates a JavaScript configuration for social authentication.
+
+  This provides the Supabase configuration to the frontend JavaScript.
+  """
+  def social_auth_config(_conn) do
+    supabase_url = Application.get_env(:eventasaurus, :supabase)[:url]
+    supabase_anon_key = Application.get_env(:eventasaurus, :supabase)[:anon_key]
+
+    %{
+      "data-supabase-url" => supabase_url,
+      "data-supabase-api-key" => supabase_anon_key
+    }
+  end
 
   def flash_messages(assigns) do
     ~H"""
@@ -58,35 +96,7 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
     """
   end
 
-  def register(assigns) do
-    ~H"""
-    <div class="mx-auto max-w-sm">
-      <.header class="text-center">
-        Register for an account
-        <:subtitle>
-          Already have an account?
-          <.link navigate={~p"/auth/login"} class="font-semibold text-brand hover:underline">
-            Sign in
-          </.link>
-          to your account now.
-        </:subtitle>
-      </.header>
 
-      <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/auth/register"}>
-        <.input field={f[:name]} type="text" label="Name" required />
-        <.input field={f[:email]} type="email" label="Email" required />
-        <.input field={f[:password]} type="password" label="Password" required />
-        <.input field={f[:password_confirmation]} type="password" label="Confirm password" required />
-
-        <:actions>
-          <.button phx-disable-with="Creating account..." class="w-full">
-            Create an account <span aria-hidden="true">→</span>
-          </.button>
-        </:actions>
-      </.simple_form>
-    </div>
-    """
-  end
 
   def forgot_password(assigns) do
     ~H"""

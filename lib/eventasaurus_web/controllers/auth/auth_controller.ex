@@ -142,10 +142,23 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Logs out the current user.
   """
   def logout(conn, _params) do
-    conn
-    |> Auth.clear_session()
-    |> put_flash(:info, "You have been logged out")
-    |> redirect(to: ~p"/")
+    # Get current user before clearing session
+    current_user = Auth.get_current_user(conn)
+
+    case current_user do
+      %{"id" => user_id} ->
+        # Use enhanced logout with broadcast
+        {:ok, conn} = Auth.logout_with_broadcast(conn, user_id)
+        conn
+        |> put_flash(:info, "You have been logged out")
+        |> redirect(to: ~p"/")
+      _ ->
+        # No user found, just clear session
+        conn
+        |> Auth.clear_session()
+        |> put_flash(:info, "You have been logged out")
+        |> redirect(to: ~p"/")
+    end
   end
 
   @doc """
@@ -202,6 +215,33 @@ defmodule EventasaurusWeb.Auth.AuthController do
   end
 
   @doc """
+  Handle authentication errors from the frontend JavaScript.
+  """
+  def auth_error(conn, %{"provider" => provider, "reason" => reason} = _params) do
+    require Logger
+    Logger.warning("Social auth error for #{provider}: #{reason}")
+
+    # Store error information in flash for display
+    conn
+    |> put_flash(:auth_error, reason)
+    |> put_flash(:last_attempted_provider, provider)
+    |> json(%{status: "error_logged"})
+  end
+
+  @doc """
+  Handle retry authentication requests from the frontend.
+  """
+  def retry_auth(conn, %{"provider" => provider}) do
+    require Logger
+    Logger.info("Retrying #{provider} authentication")
+
+    # Clear previous error state
+    conn
+    |> clear_flash()
+    |> json(%{status: "retry_initiated", provider: provider})
+  end
+
+  @doc """
   Handle callback routes for authentication flows, such as OAuth or email confirmations.
   """
   def callback(conn, params) do
@@ -209,6 +249,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.info("Auth callback received: #{inspect(params)}")
 
     case params do
+      # OAuth callback with authorization code (new OAuth flow)
+      %{"code" => code} when is_binary(code) ->
+        Logger.info("OAuth callback with authorization code")
+        handle_oauth_callback(conn, code, params)
+
+      # Legacy: Direct token callback (existing email auth flows)
       %{"access_token" => access_token, "refresh_token" => refresh_token} ->
         Logger.info("Callback with tokens - storing session")
         conn
@@ -224,17 +270,26 @@ defmodule EventasaurusWeb.Auth.AuthController do
         |> put_flash(:info, "Successfully signed in!")
         |> redirect(to: ~p"/dashboard")
 
+      # Error responses
       %{"error" => error, "error_description" => description} ->
         Logger.error("Callback error: #{error} - #{description}")
+        error_message = format_oauth_error_message(error, description)
+        redirect_path = determine_error_redirect_path(params)
+
         conn
-        |> put_flash(:error, "Authentication failed: #{description}")
-        |> redirect(to: ~p"/auth/login")
+        |> put_flash(:auth_error, error_message)
+        |> put_flash(:last_attempted_provider, get_provider_from_params(params))
+        |> redirect(to: redirect_path)
 
       %{"error" => error} ->
         Logger.error("Callback error: #{error}")
+        error_message = format_oauth_error_message(error, nil)
+        redirect_path = determine_error_redirect_path(params)
+
         conn
-        |> put_flash(:error, "Authentication failed")
-        |> redirect(to: ~p"/auth/login")
+        |> put_flash(:auth_error, error_message)
+        |> put_flash(:last_attempted_provider, get_provider_from_params(params))
+        |> redirect(to: redirect_path)
 
       _other ->
         Logger.warning("Callback with no recognized parameters, redirecting to dashboard")
@@ -242,6 +297,118 @@ defmodule EventasaurusWeb.Auth.AuthController do
         conn
         |> put_flash(:info, "Email confirmed! Please sign in.")
         |> redirect(to: ~p"/auth/login")
+    end
+  end
+
+  # Handle OAuth authorization code exchange
+  defp handle_oauth_callback(conn, code, params) do
+    require Logger
+
+    case Auth.exchange_oauth_code(code) do
+      {:ok, %{user: user, access_token: access_token} = auth_data} ->
+        Logger.info("OAuth authentication successful for user: #{user.email}")
+
+        # Store tokens in session
+        conn = conn
+               |> put_session(:access_token, access_token)
+               |> assign(:auth_user, user)
+
+        # Store refresh token if present
+        conn = if Map.has_key?(auth_data, :refresh_token) do
+          put_session(conn, :refresh_token, auth_data.refresh_token)
+        else
+          conn
+        end
+
+        # Determine redirect URL based on user type and params
+        redirect_to = determine_user_redirect_path(user, params)
+
+        success_message = if user_is_new?(user) do
+          "Welcome to Eventasaurus! Your account has been created successfully."
+        else
+          "Successfully signed in with social authentication!"
+        end
+
+        conn
+        |> put_flash(:info, success_message)
+        |> redirect(to: redirect_to)
+
+      {:error, reason} ->
+        Logger.error("OAuth authentication failed: #{inspect(reason)}")
+
+        error_message = case reason do
+          %{message: message} when is_binary(message) -> "Authentication failed: #{message}"
+          _ -> "Social authentication failed. Please try again."
+        end
+
+        conn
+        |> put_flash(:error, error_message)
+        |> redirect(to: ~p"/auth/login")
+    end
+  end
+
+  # Helper functions for enhanced error handling
+
+  defp format_oauth_error_message(error, description) do
+    case error do
+      "access_denied" -> "You declined to authorize the application. Please try again if this was unintentional."
+      "invalid_request" -> "There was an issue with the authentication request. Please try again."
+      "temporarily_unavailable" -> "The authentication service is temporarily unavailable. Please try again later."
+      "server_error" -> "The authentication server encountered an error. Please try again."
+      _ -> description || "Social authentication failed. Please try again."
+    end
+  end
+
+  defp determine_error_redirect_path(params) do
+    # Check if this was a registration flow vs login flow
+    case Map.get(params, "redirect_to") do
+      redirect_url when is_binary(redirect_url) ->
+        if String.contains?(redirect_url, "register") do
+          ~p"/auth/register"
+        else
+          ~p"/auth/login"
+        end
+      _ ->
+        ~p"/auth/login"
+    end
+  end
+
+  defp get_provider_from_params(params) do
+    # Try to extract provider from the state parameter or error details
+    case Map.get(params, "state") do
+      state when is_binary(state) ->
+        case Base.decode64(state) do
+          {:ok, decoded} ->
+            case Jason.decode(decoded) do
+              {:ok, %{"provider" => provider}} -> provider
+              _ -> "social"
+            end
+          _ -> "social"
+        end
+      _ -> "social"
+    end
+  end
+
+  defp determine_user_redirect_path(user, params) do
+    # Check if this is a new user (just created) vs returning user
+    case Map.get(params, "redirect_to") do
+      redirect_url when is_binary(redirect_url) -> redirect_url
+      _ ->
+        # For new users, redirect to onboarding; for existing users, to dashboard
+        if user_is_new?(user) do
+          "/onboarding"
+        else
+          "/dashboard"
+        end
+    end
+  end
+
+  defp user_is_new?(user) do
+    # Check if user was created recently (within last 5 minutes) as a heuristic for new registration
+    case user.inserted_at do
+      %DateTime{} = inserted_at ->
+        DateTime.diff(DateTime.utc_now(), inserted_at, :second) < 300
+      _ -> false
     end
   end
 end

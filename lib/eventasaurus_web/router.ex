@@ -50,6 +50,10 @@ defmodule EventasaurusWeb.Router do
     post "/callback", Auth.AuthController, :callback
     get "/logout", Auth.AuthController, :logout
     post "/logout", Auth.AuthController, :logout
+
+    # Social auth error handling endpoints
+    post "/error", Auth.AuthController, :auth_error
+    post "/retry", Auth.AuthController, :retry_auth
   end
 
   # LiveView session for authenticated routes
@@ -67,6 +71,15 @@ defmodule EventasaurusWeb.Router do
     pipe_through [:browser, :authenticated]
 
     get "/dashboard", DashboardController, :index
+  end
+
+  # Session management test route (authenticated)
+  live_session :session_test, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_with_session_sync}] do
+    scope "/", EventasaurusWeb do
+      pipe_through [:browser, :authenticated]
+
+      live "/session-test", SessionTestLive
+    end
   end
 
   # Protected event routes that require authentication
@@ -94,13 +107,13 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
-  # Public event routes (with theme support)
+  # Public event routes (with theme support) - MUST BE LAST due to catch-all route
   live_session :public,
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
-      # Public event page with embedded registration (catch-all route should be last)
+      # Public event page with embedded registration (catch-all route MUST be last)
       live "/:slug", PublicEventLive
     end
   end

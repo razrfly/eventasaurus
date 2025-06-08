@@ -202,6 +202,13 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Alias for refresh_token/1 to match session management naming convention.
+
+  Returns {:ok, tokens} on success or {:error, reason} on failure.
+  """
+  def refresh_session(refresh_token), do: refresh_token(refresh_token)
+
+  @doc """
   Get the current user information using their access token.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
@@ -405,5 +412,66 @@ defmodule EventasaurusApp.Auth.Client do
         Logger.error("admin_get_user_by_email: Request error: #{inspect(error)}")
         {:error, error}
     end
+  end
+
+  @doc """
+  Exchange OAuth authorization code for access and refresh tokens.
+
+  This function handles the server-side OAuth callback by exchanging the
+  authorization code received from OAuth providers (Facebook, Twitter, etc.)
+  for a session with access and refresh tokens.
+
+  Returns {:ok, session_data} on success or {:error, reason} on failure.
+  """
+  def exchange_code_for_session(code) do
+    url = "#{get_auth_url()}/token?grant_type=authorization_code"
+
+    body = Jason.encode!(%{
+      auth_code: code
+    })
+
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        session_data = Jason.decode!(response_body)
+        Logger.info("OAuth code exchange successful")
+        {:ok, session_data}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        Logger.error("OAuth code exchange failed with status #{code}: #{inspect(error)}")
+        {:error, %{status: code, message: error["message"] || "OAuth code exchange failed"}}
+
+      {:error, error} ->
+        Logger.error("OAuth code exchange request failed: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Get OAuth URL for a specific provider.
+
+  Generates the OAuth authorization URL for redirecting users to social providers.
+  The user will be redirected back to the callback URL after authentication.
+
+  ## Parameters
+    - provider: "facebook" | "twitter" | other supported provider
+    - redirect_to: The URL to redirect to after successful authentication
+    - scopes: Optional scopes to request from the provider
+
+  Returns the OAuth authorization URL.
+  """
+  def get_oauth_url(provider, redirect_to \\ nil, scopes \\ nil) do
+    base_url = "#{get_auth_url()}/authorize"
+    redirect_url = redirect_to || "#{get_config()[:site_url]}/auth/callback"
+
+    query_params = [
+      {"provider", provider},
+      {"redirect_to", redirect_url}
+    ]
+
+    query_params = if scopes, do: [{"scopes", scopes} | query_params], else: query_params
+
+    query_string = URI.encode_query(query_params)
+    "#{base_url}?#{query_string}"
   end
 end

@@ -3,10 +3,348 @@ import "phoenix_html";
 import {Socket} from "phoenix";
 import {LiveSocket} from "phoenix_live_view";
 import topbar from "../vendor/topbar";
+import { createClient } from '@supabase/supabase-js';
 
 // Define LiveView hooks here
 import SupabaseImageUpload from "./supabase_upload";
+import AuthSyncHook from "./hooks/auth_sync_hook";
 let Hooks = {};
+
+// Base64 utilities for encoding state parameters
+const Base64 = {
+  encode: (str) => btoa(unescape(encodeURIComponent(str))),
+  decode: (str) => decodeURIComponent(escape(atob(str)))
+};
+
+// Supabase Auth OAuth Hook for social authentication
+Hooks.SocialAuth = {
+  mounted() {
+    // Get Supabase configuration from body data attributes
+    const supabaseUrl = document.body.dataset.supabaseUrl;
+    const supabaseApiKey = document.body.dataset.supabaseApiKey;
+    
+    if (!supabaseUrl || !supabaseApiKey) {
+      console.error('Supabase configuration not found');
+      return;
+    }
+
+    // Initialize Supabase client
+    this.supabase = createClient(supabaseUrl, supabaseApiKey);
+    
+    // Handle OAuth provider buttons
+    this.el.addEventListener('click', async (e) => {
+      const button = e.target.closest('[data-provider]');
+      if (!button) return;
+      
+      e.preventDefault();
+      
+      const provider = button.dataset.provider;
+      const redirectTo = button.dataset.redirectTo || '/dashboard';
+      const isLoading = button.classList.contains('loading');
+      
+      if (isLoading) return; // Prevent double-clicks
+      
+      // Set loading state with visual feedback
+      this.setLoadingState(button, true);
+      
+      try {
+        await this.signInWithProvider(provider, redirectTo);
+        
+        // Show success state briefly before the OAuth redirect happens
+        this.setSuccessState(button, true);
+        
+      } catch (error) {
+        console.error(`${provider} auth error:`, error);
+        this.setLoadingState(button, false);
+        
+        // Send error to backend for flash storage and display
+        this.sendErrorToBackend(provider, error.message || 'Authentication failed', this.categorizeError(error));
+        
+        // Show immediate toast feedback
+        this.showError(`Failed to connect with ${provider}. Please try again.`);
+      }
+    });
+    
+    // Set up error dismissal event listeners
+    this.setupErrorHandlers();
+  },
+
+  async signInWithProvider(provider, redirectTo = '/dashboard') {
+    // Determine if we're on a registration page
+    const isRegistration = window.location.pathname.includes('/register') || 
+                          window.location.pathname.includes('/signup');
+    
+    // Create state parameter with provider and context info
+    const state = {
+      provider: provider,
+      context: isRegistration ? 'registration' : 'login',
+      timestamp: Date.now()
+    };
+    
+    const encodedState = Base64.encode(JSON.stringify(state));
+    
+    const { data, error } = await this.supabase.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent(redirectTo)}`,
+        queryParams: {
+          state: encodedState
+        }
+      }
+    });
+    
+    if (error) {
+      throw error;
+    }
+    
+    // The redirect will happen automatically via Supabase
+    // No further action needed here - the OAuth provider will redirect
+    // back to our callback URL with the authorization code
+  },
+  
+  setLoadingState(button, isLoading) {
+    const loadingText = button.querySelector('.loading-text');
+    const loadingSpinner = button.querySelector('.loading-spinner');
+    
+    if (isLoading) {
+      button.disabled = true;
+      button.classList.add('loading');
+      button.classList.remove('success');
+      if (loadingSpinner) loadingSpinner.classList.remove('hidden');
+      if (loadingText) loadingText.textContent = 'Connecting...';
+    } else {
+      button.disabled = false;
+      button.classList.remove('loading');
+      if (loadingSpinner) loadingSpinner.classList.add('hidden');
+      if (loadingText) {
+        const provider = button.dataset.provider;
+        loadingText.textContent = `Continue with ${provider.charAt(0).toUpperCase() + provider.slice(1)}`;
+      }
+    }
+  },
+
+  setSuccessState(button, isSuccess) {
+    const loadingText = button.querySelector('.loading-text');
+    const loadingSpinner = button.querySelector('.loading-spinner');
+    
+    if (isSuccess) {
+      button.classList.remove('loading');
+      button.classList.add('success');
+      if (loadingSpinner) loadingSpinner.classList.add('hidden');
+      if (loadingText) loadingText.textContent = 'Redirecting...';
+    } else {
+      button.classList.remove('success');
+    }
+  },
+  
+  categorizeError(error) {
+    const message = error.message || error.toString();
+    
+    if (message.includes('popup_closed') || message.includes('closed')) {
+      return 'popup_closed';
+    } else if (message.includes('network') || message.includes('timeout')) {
+      return 'network_error';
+    } else if (message.includes('access_denied') || message.includes('user_denied')) {
+      return 'access_denied';
+    } else if (message.includes('invalid_request') || message.includes('invalid_grant')) {
+      return 'invalid_request';
+    } else if (message.includes('server_error') || message.includes('temporarily_unavailable')) {
+      return 'server_error';
+    } else {
+      return 'unknown_error';
+    }
+  },
+  
+  // Send error data to backend
+  async sendErrorToBackend(provider, reason, errorType) {
+    try {
+      const csrfToken = this.el.dataset.csrfToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      const response = await fetch('/auth/error', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({
+          provider: provider,
+          reason: reason,
+          error_type: errorType
+        })
+      });
+
+      if (!response.ok) {
+        console.warn('Failed to send error to backend:', response.status);
+      }
+    } catch (error) {
+      console.warn('Error sending auth error to backend:', error);
+    }
+  },
+
+  // Set up error handling event listeners
+  setupErrorHandlers() {
+    // Handle error dismissal buttons
+    this.el.addEventListener('click', (e) => {
+      if (e.target.closest('[phx-click="dismiss_auth_error"]')) {
+        e.preventDefault();
+        const errorElement = e.target.closest('.social-auth-error, .social-auth-error-compact');
+        if (errorElement) {
+          this.dismissError(errorElement);
+        }
+      }
+    });
+    
+    // Handle retry buttons
+    this.el.addEventListener('click', (e) => {
+      const retryButton = e.target.closest('[phx-click^="retry_"]');
+      if (retryButton) {
+        e.preventDefault();
+        const provider = retryButton.getAttribute('phx-click').replace('retry_', '').replace('_auth', '');
+        this.retryAuth(provider);
+      }
+    });
+  },
+
+  // Dismiss error with animation
+  dismissError(errorElement) {
+    errorElement.classList.add('dismissing');
+    setTimeout(() => {
+      if (errorElement.parentNode) {
+        errorElement.parentNode.removeChild(errorElement);
+      }
+    }, 300);
+  },
+
+  // Retry authentication for a specific provider
+  async retryAuth(provider) {
+    const button = this.el.querySelector(`[data-provider="${provider}"]`);
+    if (button) {
+      // Clear any existing errors first
+      const errorElements = this.el.querySelectorAll('.social-auth-error, .social-auth-error-compact');
+      errorElements.forEach(el => this.dismissError(el));
+      
+      // Trigger the auth flow again
+      button.click();
+    }
+  },
+
+  // Handle retry events from LiveView
+  handleEvent(event, callback) {
+    if (event === 'retry_social_auth') {
+      callback(() => {
+        // Find the last clicked button and retry
+        const buttons = this.el.querySelectorAll('[data-provider]');
+        const lastButton = Array.from(buttons).find(btn => btn.classList.contains('loading'));
+        if (lastButton) {
+          lastButton.click();
+        }
+      });
+    }
+  },
+
+  showError(message) {
+    // Create a simple toast notification that matches the app's flash style
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-20 right-4 max-w-sm w-full bg-white border border-red-200 rounded-xl shadow-lg p-4 z-50 transition-all duration-300';
+    toast.innerHTML = `
+      <div class="flex items-start">
+        <div class="flex-shrink-0">
+          <span class="text-red-500 text-lg">⚠️</span>
+        </div>
+        <div class="ml-3 flex-1">
+          <p class="text-sm text-red-800 font-medium">${message}</p>
+        </div>
+        <button class="ml-4 text-red-500 hover:text-red-700" onclick="this.parentElement.parentElement.remove()">
+          <span class="sr-only">Close</span>
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+          </svg>
+        </button>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+          }
+        }, 300);
+      }
+    }, 5000);
+  }
+};
+
+// Global OAuth functions for use outside of LiveView contexts
+window.EventasaurusAuth = {
+  async signInWithFacebook() {
+    const supabaseUrl = document.body.dataset.supabaseUrl;
+    const supabaseApiKey = document.body.dataset.supabaseApiKey;
+    
+    if (!supabaseUrl || !supabaseApiKey) {
+      throw new Error('Supabase configuration not found');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseApiKey);
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'facebook',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async signInWithTwitter() {
+    const supabaseUrl = document.body.dataset.supabaseUrl;
+    const supabaseApiKey = document.body.dataset.supabaseApiKey;
+    
+    if (!supabaseUrl || !supabaseApiKey) {
+      throw new Error('Supabase configuration not found');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseApiKey);
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'twitter',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async signInWithProvider(provider) {
+    const supabaseUrl = document.body.dataset.supabaseUrl;
+    const supabaseApiKey = document.body.dataset.supabaseApiKey;
+    
+    if (!supabaseUrl || !supabaseApiKey) {
+      throw new Error('Supabase configuration not found');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseApiKey);
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+    
+    if (error) throw error;
+    return data;
+  }
+};
 
 // ImagePicker hook for pushing image_selected event
 Hooks.ImagePicker = {
@@ -367,6 +705,9 @@ Hooks.GooglePlacesAutocomplete = {
 
 // Supabase image upload hook for file input
 Hooks.SupabaseImageUpload = SupabaseImageUpload;
+
+// Cross-tab authentication synchronization hook
+Hooks.AuthSyncHook = AuthSyncHook;
 
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
