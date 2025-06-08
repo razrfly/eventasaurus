@@ -353,11 +353,13 @@ defmodule EventasaurusApp.Events do
           # User doesn't exist locally, check Supabase and create if needed
           Logger.info("User not found locally, attempting Supabase user creation/lookup")
           case create_or_find_supabase_user(email, name) do
-            {:ok, %{"email_sent" => true} = _magic_link_response} ->
+            {:ok, %{"email_sent" => true} = magic_link_response} ->
               # Magic link sent - create a temporary local user record for participant registration
-              Logger.info("Magic link sent for new user, creating temporary local user record")
+              Logger.info("Magic link sent for new user, creating temporary local user record", %{
+                response: Map.take(magic_link_response, ["email_sent", "message_id"])
+              })
               # Create user with temporary supabase_id - will be updated when they confirm email
-              temp_supabase_id = "temp_#{System.unique_integer([:positive])}_#{System.system_time(:microsecond)}"
+              temp_supabase_id = "temp_#{Ecto.UUID.generate()}"
               case Accounts.create_user(%{
                 email: email,
                 name: name,
