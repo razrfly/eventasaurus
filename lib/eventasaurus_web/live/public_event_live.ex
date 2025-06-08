@@ -341,7 +341,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   def handle_info({:registration_success, type, _name, email}, socket) do
     message = case type do
       :new_registration ->
-        "Welcome! You're now registered for #{socket.assigns.event.title}. Check your email for account verification instructions."
+        "Registration successful! You're now registered for #{socket.assigns.event.title}. Please check your email to activate your account."
       :existing_user_registered ->
         "Great! You're now registered for #{socket.assigns.event.title}."
     end
@@ -403,7 +403,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   def handle_info({:vote_success, type, _name, email}, socket) do
     message = case type do
       :new_voter ->
-        "Thanks! Your vote has been recorded. Check your email for account verification instructions."
+        "Thanks! Your vote has been recorded. Please check your email to activate your account."
       :existing_user_voted ->
         "Great! Your vote has been recorded."
     end
@@ -486,7 +486,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
         message = case result_type do
           :new_voter ->
-            "All #{map_size(temp_votes)} votes saved successfully! You're now registered for #{socket.assigns.event.title}. Check your email to verify your account."
+            "All #{map_size(temp_votes)} votes saved successfully! You're now registered for #{socket.assigns.event.title}. Please check your email to activate your account."
           :existing_user_voted ->
             "All #{map_size(temp_votes)} votes saved successfully! You're registered for #{socket.assigns.event.title}."
         end
