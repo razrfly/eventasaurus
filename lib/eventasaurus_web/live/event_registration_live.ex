@@ -209,10 +209,10 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
           <!-- Info Text -->
           <div class="mt-6 space-y-2 text-center">
             <p class="text-xs text-gray-500">
-              By registering, you'll receive an email to verify your account and set your password.
+              By registering, you'll receive a magic link via email to create your account.
             </p>
             <p class="text-xs text-gray-500">
-              You'll also receive event updates via email.
+              No password required - just click the link to access your account.
             </p>
           </div>
         </div>

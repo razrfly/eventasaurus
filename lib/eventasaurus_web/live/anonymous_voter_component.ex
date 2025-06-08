@@ -173,7 +173,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
           </div>
 
           <p class="text-sm text-gray-500 text-center mt-4">
-            Enter your details to save these votes to the event.
+            Enter your details to save these votes. You'll receive a magic link via email to create your account.
           </p>
 
           <form phx-submit="submit" phx-target={@myself} class="mt-4">
