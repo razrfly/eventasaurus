@@ -325,6 +325,39 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Sign in with OTP (magic link) - creates user if doesn't exist and sends confirmation email.
+
+  This uses Supabase's passwordless authentication which automatically:
+  - Creates new users if they don't exist
+  - Sends confirmation emails automatically
+  - Requires email confirmation for account access
+
+  Returns {:ok, response} on success or {:error, reason} on failure.
+  """
+  def sign_in_with_otp(email, user_metadata \\ %{}) do
+    url = "#{get_auth_url()}/otp"
+
+    body = Jason.encode!(%{
+      email: email,
+      data: user_metadata,  # Include name and other metadata
+      options: %{
+        shouldCreateUser: true,  # Auto-create user if doesn't exist
+        emailRedirectTo: "#{get_config()[:site_url]}/auth/callback"
+      }
+    })
+
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        {:ok, Jason.decode!(response_body)}
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "OTP request failed"}}
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
   Get a user by email using admin API.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
