@@ -353,9 +353,26 @@ defmodule EventasaurusApp.Events do
           # User doesn't exist locally, check Supabase and create if needed
           Logger.info("User not found locally, attempting Supabase user creation/lookup")
           case create_or_find_supabase_user(email, name) do
+            {:ok, %{"email_sent" => true} = _magic_link_response} ->
+              # Magic link sent - create a temporary local user record for participant registration
+              Logger.info("Magic link sent for new user, creating temporary local user record")
+              # Create user with temporary supabase_id - will be updated when they confirm email
+              temp_supabase_id = "temp_#{System.unique_integer([:positive])}_#{System.system_time(:microsecond)}"
+              case Accounts.create_user(%{
+                email: email,
+                name: name,
+                supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
+              }) do
+                {:ok, user} ->
+                  Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
+                  user
+                {:error, reason} ->
+                  Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
+                  Repo.rollback(reason)
+              end
             {:ok, supabase_user} ->
               Logger.info("Successfully created/found user in Supabase")
-              # Sync with local database
+              # Sync with local database (existing user case)
               case SupabaseSync.sync_user(supabase_user) do
                 {:ok, user} ->
                   Logger.info("Successfully synced user to local database", %{user_id: user.id})
@@ -541,7 +558,7 @@ defmodule EventasaurusApp.Events do
     alias EventasaurusApp.Auth.Client
     require Logger
 
-    Logger.debug("Starting Supabase user lookup/creation", %{
+    Logger.debug("Starting passwordless Supabase user creation for event", %{
       email_domain: email |> String.split("@") |> List.last(),
       name: name
     })
@@ -549,20 +566,20 @@ defmodule EventasaurusApp.Events do
     # First check if user exists in Supabase
     case Client.admin_get_user_by_email(email) do
       {:ok, nil} ->
-        # User doesn't exist, create them
-        Logger.info("User not found in Supabase, creating new user")
-        temp_password = generate_temporary_password()
+        # User doesn't exist, create them via passwordless OTP
+        Logger.info("User not found in Supabase, creating with passwordless OTP")
         user_metadata = %{name: name}
 
-        case Client.admin_create_user(email, temp_password, user_metadata) do
-          {:ok, supabase_user} ->
-            Logger.info("Successfully created user in Supabase", %{
-              supabase_user_id: supabase_user["id"],
+        case Client.sign_in_with_otp(email, user_metadata) do
+          {:ok, _response} ->
+            Logger.info("Successfully initiated passwordless signup", %{
               email_domain: email |> String.split("@") |> List.last()
             })
-            {:ok, supabase_user}
+            # The response doesn't contain user data since email confirmation is required
+            # We return a success indicator that OTP was sent
+            {:ok, %{"email_sent" => true, "email" => email, "user_metadata" => user_metadata}}
           {:error, reason} ->
-            Logger.error("Failed to create user in Supabase", %{reason: inspect(reason)})
+            Logger.error("Failed to create passwordless user", %{reason: inspect(reason)})
             {:error, reason}
         end
 
@@ -580,14 +597,7 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  defp generate_temporary_password do
-    # Generate a secure random password
-    :crypto.strong_rand_bytes(16)
-    |> Base.encode64()
-    |> String.replace(~r/[^a-zA-Z0-9]/, "")
-    |> String.slice(0, 12)
-    |> Kernel.<>("!")
-  end
+
 
   # Theme Management Functions
 
