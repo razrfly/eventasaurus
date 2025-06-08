@@ -250,10 +250,10 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
-  Create a user using admin API (bypasses email confirmation if configured).
+  Create a user using admin API with email confirmation required.
 
   This requires a service role key and is used for programmatic user creation
-  where we want to bypass the normal signup flow.
+  where we want to create accounts that require email confirmation for access.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
@@ -264,7 +264,7 @@ defmodule EventasaurusApp.Auth.Client do
       email: email,
       password: password,
       user_metadata: user_metadata,
-      email_confirm: true  # This bypasses email confirmation
+      email_confirm: false  # This requires email confirmation for account access
     })
 
     case HTTPoison.post(url, body, admin_headers()) do
