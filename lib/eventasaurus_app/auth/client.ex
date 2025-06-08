@@ -304,6 +304,27 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Delete a user using admin API.
+
+  Returns {:ok, %{}} on success or {:error, reason} on failure.
+  """
+  def admin_delete_user(user_id) do
+    url = "#{get_auth_url()}/admin/users/#{user_id}"
+
+    case HTTPoison.delete(url, admin_headers()) do
+      {:ok, %{status_code: 200}} ->
+        {:ok, %{}}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, %{status: code, message: error["message"] || "User deletion failed"}}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
   Get a user by email using admin API.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
