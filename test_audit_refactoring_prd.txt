@@ -1,0 +1,232 @@
+# Test Suite Audit & Refactoring PRD
+## Eventasaurus Test Quality Improvement Initiative
+
+### Project Overview
+Refactor and audit the current test suite of 417 tests across 36 test files to create a maintainable, reliable, and efficient testing system. Currently experiencing 40 test failures and significant technical debt in test organization.
+
+### Current State Analysis
+- **Test Count**: 417 tests across 36 files
+- **Failure Rate**: 40 failures (9.6% failure rate) 
+- **Test Categories Identified**:
+  - Integration tests (Wallaby-based feature tests)
+  - LiveView component tests
+  - Context/business logic tests
+  - Authentication flow tests
+  - Registration flow tests
+  - API endpoint tests
+
+### Business Goals
+1. **Reduce Test Maintenance Burden**: Cut test execution time by 50%
+2. **Improve Reliability**: Achieve 100% test pass rate
+3. **Enhance Developer Experience**: Clear test categories and fast feedback loops
+4. **Future-Proof Architecture**: Scalable test organization for rapid feature development
+
+### Technical Requirements
+
+#### 1. Test Classification System
+Implement a comprehensive tagging and organization system:
+
+**Core Test Categories:**
+- `@tag :unit` - Fast, isolated unit tests (< 10ms each)
+- `@tag :integration` - Integration tests between components
+- `@tag :feature` - End-to-end user journey tests (Wallaby)
+- `@tag :auth` - Authentication and authorization tests
+- `@tag :slow` - Tests requiring external services or heavy setup
+- `@tag :broken` - Currently failing tests to be fixed or removed
+
+**Domain-Specific Tags:**
+- `@tag :events` - Event management functionality
+- `@tag :registration` - User registration flows
+- `@tag :admin` - Administrative functionality
+- `@tag :public` - Public-facing features
+- `@tag :api` - API endpoint tests
+
+#### 2. Test Audit Methodology
+**Phase 1: Automated Analysis**
+- Generate test execution timing report
+- Identify duplicate test scenarios
+- Map test dependencies and setup requirements
+- Categorize tests by failure patterns
+
+**Phase 2: Manual Review Process**
+- Evaluate test value vs. maintenance cost
+- Identify overlapping test coverage
+- Document business-critical test scenarios
+- Flag tests that don't align with current architecture
+
+**Phase 3: Classification & Prioritization**
+- **Keep**: High-value, maintainable tests
+- **Refactor**: Valuable tests needing cleanup
+- **Merge**: Duplicate tests to be consolidated
+- **Remove**: Low-value or obsolete tests
+
+#### 3. Test Infrastructure Improvements
+
+**Test Performance Optimization:**
+- Implement test database seeding strategies
+- Optimize Factory/fixture usage
+- Introduce test data caching for expensive setups
+- Separate fast unit tests from slow integration tests
+
+**Test Organization:**
+```
+test/
+├── unit/                          # Fast, isolated tests
+│   ├── contexts/                  # Business logic
+│   ├── schemas/                   # Ecto schema validations
+│   └── utilities/                 # Helper functions
+├── integration/                   # Component integration
+│   ├── auth/                      # Authentication flows
+│   ├── live_views/                # LiveView interactions
+│   └── api/                       # API endpoints
+├── features/                      # End-to-end user journeys
+│   ├── admin/                     # Admin workflows
+│   ├── public/                    # Public user flows
+│   └── registration/              # Registration processes
+├── support/                       # Test helpers and utilities
+│   ├── factories.ex
+│   ├── test_helpers.ex
+│   └── assertions.ex
+└── fixtures/                      # Static test data
+```
+
+#### 4. Specific Phoenix/Elixir Testing Best Practices
+
+**LiveView Testing Strategy:**
+- Use `render_component/2` for isolated component tests
+- Use `live/2` and `live_isolated/3` for full LiveView integration
+- Implement proper async test patterns with SQL Sandbox
+- Mock external services consistently
+
+**Authentication Testing Patterns:**
+- Standardized user creation and login helpers
+- Consistent session management across tests
+- Proper cleanup of authentication state
+
+**Database Testing Optimization:**
+- Use `ExUnit.Case` async: true wherever possible
+- Implement proper transaction rollback strategies
+- Optimize factory creation for common scenarios
+
+#### 5. Test Execution Strategy
+
+**Multi-Tier Test Execution:**
+```bash
+# Fast feedback loop (< 30 seconds)
+mix test --only unit
+
+# Integration testing (< 2 minutes)  
+mix test --only integration
+
+# Full feature testing (< 5 minutes)
+mix test --only feature
+
+# Complete test suite
+mix test
+```
+
+**CI/CD Integration:**
+- Parallel test execution by category
+- Fail-fast on unit test failures
+- Detailed reporting on test performance regressions
+
+#### 6. Test Quality Metrics
+
+**Success Criteria:**
+- 100% test pass rate
+- Unit tests execute in < 30 seconds
+- Integration tests execute in < 2 minutes
+- Feature tests execute in < 5 minutes
+- Total test count reduced to < 250 tests
+- Zero flaky tests (consistent pass/fail)
+
+**Ongoing Monitoring:**
+- Test execution time tracking
+- Test coverage reporting
+- Failure pattern analysis
+- Developer feedback on test utility
+
+### Implementation Requirements
+
+#### Phase 1: Audit & Analysis (2-3 weeks)
+1. **Automated Test Analysis Tool**
+   - Parse all test files and extract metadata
+   - Generate test execution timing report
+   - Identify test dependencies and setup costs
+   - Create test coverage mapping
+
+2. **Test Classification System**
+   - Implement tagging strategy across all tests
+   - Create test execution filtering system
+   - Document test purpose and business value
+
+3. **Failure Analysis & Fixing**
+   - Categorize current 40 test failures
+   - Fix critical business logic tests immediately
+   - Flag non-essential failing tests for removal
+
+#### Phase 2: Refactoring & Organization (3-4 weeks)
+1. **Test Infrastructure Modernization**
+   - Optimize Factory and fixture usage
+   - Implement proper test database strategies
+   - Create reusable test helper modules
+
+2. **Test Consolidation**
+   - Merge duplicate test scenarios
+   - Remove obsolete or low-value tests
+   - Refactor slow tests for better performance
+
+3. **Documentation & Guidelines**
+   - Create testing style guide
+   - Document test writing best practices
+   - Establish test review criteria
+
+#### Phase 3: Validation & Monitoring (1-2 weeks)
+1. **Performance Validation**
+   - Verify test execution time improvements
+   - Validate test reliability across multiple runs
+   - Ensure CI/CD pipeline integration
+
+2. **Developer Experience Testing**
+   - Gather feedback on new test organization
+   - Validate test discoverability and maintenance
+   - Fine-tune test categorization
+
+### Technical Specifications
+
+#### Test Helper Improvements
+- Standardized authentication helpers
+- Consistent factory patterns
+- Reusable assertion helpers
+- Mock service configurations
+
+#### Configuration Updates
+- ExUnit configuration for parallel execution
+- Test environment optimizations
+- Database pool and sandbox configurations
+
+#### Monitoring & Reporting
+- Test execution time tracking
+- Failure pattern analysis
+- Coverage gap identification
+- Performance regression detection
+
+### Success Metrics
+- **Execution Time**: 50% reduction in total test suite time
+- **Reliability**: 100% consistent test pass rate
+- **Maintainability**: 40% reduction in total test count
+- **Developer Satisfaction**: Faster feedback loops and clearer test purposes
+- **Code Coverage**: Maintain > 85% coverage with fewer, more targeted tests
+
+### Dependencies
+- Phoenix LiveView testing best practices
+- ExUnit async testing capabilities
+- Wallaby for feature testing
+- Proper factory/fixture management
+- CI/CD pipeline integration
+
+### Risk Mitigation
+- Comprehensive backup of current test suite
+- Incremental rollout of new test organization
+- Parallel maintenance of critical existing tests during transition
+- Rollback plan for performance or reliability regressions 
