@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="419" viewBox="0 0 800 419" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient background definition -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:<%= format_color(@theme.color1) %>;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:<%= format_color(@theme.color2) %>;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Clip path for rounded corners on event image -->
+    <clipPath id="imageClip">
+      <rect x="418" y="32" width="350" height="350" rx="24" ry="24"/>
+    </clipPath>
+
+    <!-- Clip path for RSVP bubble rounded corners -->
+    <clipPath id="rsvpClip">
+      <rect x="32" y="355" width="80" height="32" rx="16" ry="16"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background gradient -->
+  <rect width="800" height="419" fill="url(#bgGradient)"/>
+
+  <!-- Event image (positioned top-right with rounded corners) -->
+  <%= if has_image?(@event) do %>
+    <image href="<%= safe_image_url(@event) %>"
+           x="418" y="32"
+           width="350" height="350"
+           clip-path="url(#imageClip)"
+           preserveAspectRatio="xMidYMid slice"/>
+  <% else %>
+    <!-- Placeholder if no image -->
+    <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+    <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+  <% end %>
+
+  <!-- Logo (top-left) - Using emoji placeholder for now -->
+  <rect x="32" y="32" width="64" height="64" rx="8" ry="8" fill="#10b981"/>
+  <text x="64" y="72" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="white">🦖</text>
+
+  <!-- Event title (left-aligned, multi-line) -->
+  <text font-family="Arial, sans-serif" font-weight="bold"
+        font-size="<%= calculate_font_size(@event.title) %>" fill="white">
+    <%= if format_title(@event.title, 0) != "" do %>
+      <tspan x="32" y="140"><%= format_title(@event.title, 0) %></tspan>
+    <% end %>
+    <%= if format_title(@event.title, 1) != "" do %>
+      <tspan x="32" y="<%= 140 + String.to_integer(calculate_font_size(@event.title)) + 8 %>">
+        <%= format_title(@event.title, 1) %>
+      </tspan>
+    <% end %>
+    <%= if format_title(@event.title, 2) != "" do %>
+      <tspan x="32" y="<%= 140 + (String.to_integer(calculate_font_size(@event.title)) + 8) * 2 %>">
+        <%= format_title(@event.title, 2) %>
+      </tspan>
+    <% end %>
+  </text>
+
+  <!-- RSVP bubble (bottom-left) -->
+  <rect x="32" y="355" width="80" height="32" rx="16" ry="16" fill="white" opacity="0.95"/>
+  <text x="72" y="375" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="14" font-weight="bold" fill="#374151">RSVP</text>
+</svg>
