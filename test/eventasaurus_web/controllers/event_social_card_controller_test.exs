@@ -4,7 +4,9 @@ defmodule EventasaurusWeb.EventSocialCardControllerTest do
   import EventasaurusApp.EventsFixtures
   import EventasaurusApp.AccountsFixtures
 
-  describe "GET /events/:id/social_card.png" do
+  alias Eventasaurus.SocialCards.HashGenerator
+
+  describe "GET /events/:slug/social-card-:hash.png" do
     setup do
       # Create a test user and event for each test
       user = user_fixture()
@@ -25,12 +27,13 @@ defmodule EventasaurusWeb.EventSocialCardControllerTest do
           assert true
 
         _path ->
-          response = get(conn, ~p"/events/#{event.id}/social_card.png")
+          hash = HashGenerator.generate_hash(event)
+          response = get(conn, "/events/#{event.slug}/social-card-#{hash}.png")
 
           assert response.status == 200
           # Content-type includes charset in Phoenix
           assert get_resp_header(response, "content-type") == ["image/png; charset=utf-8"]
-          assert get_resp_header(response, "cache-control") == ["public, max-age=86400"]
+          assert get_resp_header(response, "cache-control") == ["public, max-age=31536000"]  # 1 year cache
 
           # Verify we have ETag header (format will vary)
           [etag] = get_resp_header(response, "etag")
@@ -43,38 +46,29 @@ defmodule EventasaurusWeb.EventSocialCardControllerTest do
     end
 
     test "returns 404 for non-existent event", %{conn: conn} do
-      response = get(conn, ~p"/events/99999/social_card.png")
+      response = get(conn, "/events/non-existent-slug/social-card-abcd1234.png")
 
       assert response.status == 404
-      assert get_resp_header(response, "content-type") == ["application/json; charset=utf-8"]
-
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["error"] == "Event not found"
+      assert response.resp_body == "Event not found"
     end
 
-    test "returns 500 when rsvg-convert is not available", %{conn: conn, event: event} do
-      # Mock the system dependency check to fail
-      original_executable = System.find_executable("rsvg-convert")
+    test "returns 301 redirect for stale hash", %{conn: conn, event: event} do
+      # Use an incorrect hash
+      stale_hash = "stale123"
+      response = get(conn, "/events/#{event.slug}/social-card-#{stale_hash}.png")
 
-      case original_executable do
-        nil ->
-          # If rsvg-convert is actually not available, test the error path
-          response = get(conn, ~p"/events/#{event.id}/social_card.png")
+      assert response.status == 301
 
-          assert response.status == 500
-          assert get_resp_header(response, "content-type") == ["text/plain; charset=utf-8"]
-          assert response.resp_body == "Social card generation unavailable"
-
-        _path ->
-          # Skip this test since rsvg-convert is available
-          # We can't easily mock System.find_executable in a unit test
-          assert true
-      end
+      # Should redirect to current URL with correct hash
+      [location] = get_resp_header(response, "location")
+      current_hash = HashGenerator.generate_hash(event)
+      assert location == "/events/#{event.slug}/social-card-#{current_hash}.png"
     end
 
-    test "handles various event ID formats", %{conn: conn, event: event} do
-      # Test with valid integer ID
-      response = get(conn, ~p"/events/#{event.id}/social_card.png")
+    test "handles various hash formats", %{conn: conn, event: event} do
+      # Test with valid hash
+      hash = HashGenerator.generate_hash(event)
+      response = get(conn, "/events/#{event.slug}/social-card-#{hash}.png")
 
       case System.find_executable("rsvg-convert") do
         nil ->
@@ -86,38 +80,43 @@ defmodule EventasaurusWeb.EventSocialCardControllerTest do
       end
     end
 
-    test "generates consistent ETags for same event", %{conn: conn, event: event} do
+    test "generates consistent hashes for same event", %{conn: conn, event: event} do
+      # Generate hash twice for the same event
+      hash1 = HashGenerator.generate_hash(event)
+      hash2 = HashGenerator.generate_hash(event)
+
+      # Hashes should be identical for the same event data
+      assert hash1 == hash2
+
       case System.find_executable("rsvg-convert") do
         nil ->
           # Skip test if rsvg-convert is not available
           assert true
 
         _path ->
-          # Make two requests for the same event
-          response1 = get(conn, ~p"/events/#{event.id}/social_card.png")
-          response2 = get(conn, ~p"/events/#{event.id}/social_card.png")
+          # Make two requests with the same hash
+          response1 = get(conn, "/events/#{event.slug}/social-card-#{hash1}.png")
+          response2 = get(conn, "/events/#{event.slug}/social-card-#{hash2}.png")
 
           assert response1.status == 200
           assert response2.status == 200
 
-          # ETags should be the same for the same event (assuming no changes)
+          # ETags should be the same since hash is the same
           etag1 = get_resp_header(response1, "etag")
           etag2 = get_resp_header(response2, "etag")
 
-          # Note: ETags might differ due to updated_at changes, but let's check they exist
-          assert length(etag1) == 1
-          assert length(etag2) == 1
+          assert etag1 == etag2
       end
     end
 
     test "handles invalid SVG content gracefully", %{conn: conn} do
       # Create an event with invalid data that might cause SVG issues
       _user = user_fixture()
-             event = event_fixture(%{
-         title: "Event with <invalid> & XML characters \"quotes\" 'apostrophes'",
-         description: "This has XML & HTML entities that need escaping",
-         cover_image_url: "not-a-valid-url"
-       })
+      event = event_fixture(%{
+        title: "Event with <invalid> & XML characters \"quotes\" 'apostrophes'",
+        description: "This has XML & HTML entities that need escaping",
+        cover_image_url: "not-a-valid-url"
+      })
 
       case System.find_executable("rsvg-convert") do
         nil ->
@@ -125,27 +124,27 @@ defmodule EventasaurusWeb.EventSocialCardControllerTest do
           assert true
 
         _path ->
-          response = get(conn, ~p"/events/#{event.id}/social_card.png")
+          hash = HashGenerator.generate_hash(event)
+          response = get(conn, "/events/#{event.slug}/social-card-#{hash}.png")
 
           # Should still generate successfully due to our text sanitization
           assert response.status == 200
           assert get_resp_header(response, "content-type") == ["image/png; charset=utf-8"]
       end
     end
-  end
 
-  describe "verify_system_dependencies/0" do
-    test "returns :ok when rsvg-convert is available" do
-      case System.find_executable("rsvg-convert") do
-        nil ->
-          # If rsvg-convert is not available, test should reflect that
-          assert EventasaurusWeb.EventSocialCardController.verify_system_dependencies() ==
-                 {:error, "rsvg-convert command not found"}
+    test "hash changes when event data changes", %{conn: _conn, event: event} do
+      # Generate initial hash
+      initial_hash = HashGenerator.generate_hash(event)
 
-        _path ->
-          # If rsvg-convert is available, test should reflect that
-          assert EventasaurusWeb.EventSocialCardController.verify_system_dependencies() == :ok
-      end
+      # Update the event (simulate a change)
+      updated_event = %{event | title: "Updated Event Title", updated_at: DateTime.utc_now()}
+      new_hash = HashGenerator.generate_hash(updated_event)
+
+      # Hashes should be different
+      assert initial_hash != new_hash
     end
   end
+
+
 end
