@@ -72,7 +72,10 @@ defmodule Eventasaurus.MixProject do
       {:mox, "~> 1.0", only: :test},
 
       # Browser automation for end-to-end testing
-      {:wallaby, "~> 0.30.0", only: :test, runtime: false}
+      {:wallaby, "~> 0.30.0", only: :test, runtime: false},
+
+      # HTML sanitization for social cards
+      {:html_sanitize_ex, "~> 1.4"}
     ]
   end
 
