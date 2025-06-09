@@ -87,6 +87,8 @@ defmodule EventasaurusWeb.Router do
       get "/about", PageController, :about
       get "/whats-new", PageController, :whats_new
       get "/components", PageController, :components
+      get "/privacy", PageController, :privacy
+      get "/your-data", PageController, :your_data
 
       # Direct routes for common auth paths (redirect to proper auth routes)
       get "/login", PageController, :redirect_to_auth_login
