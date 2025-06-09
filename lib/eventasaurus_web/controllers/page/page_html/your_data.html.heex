@@ -1,291 +1,416 @@
 <div class="overflow-hidden">
   <main>
     <%!-- Hero Section --%>
-    <.section class="py-16 sm:py-24">
+    <.section class="py-16 sm:py-24 bg-gradient-to-b from-purple-50 to-white">
       <div class="text-center mb-16">
-        <.heading as="h1" class="mb-6 text-4xl sm:text-5xl lg:text-6xl font-bold">
+        <div class="text-6xl mb-4">🗂️</div>
+        <.heading as="h1" class="mb-6 text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
           Your Data & Rights
         </.heading>
-        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
-          Understanding how Eventasaurus handles your personal data and what rights you have regarding your information.
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          You own your data. Here's everything about how to control it, export it, or delete it at Eventasaurus.
         </p>
-        <p class="text-sm text-gray-500 mt-4">
+        <p class="text-sm text-gray-500 mt-6 inline-flex items-center gap-2">
+          <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
           Last Updated: January 2025
         </p>
       </div>
     </.section>
 
-    <%!-- Data Rights Content --%>
+    <%!-- Quick Summary --%>
+    <.section class="py-12 bg-purple-50">
+      <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-xl p-8 shadow-sm border border-purple-100">
+          <h2 class="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-3">
+            🎯 Your Rights at a Glance
+          </h2>
+          <div class="grid md:grid-cols-4 gap-4 text-center">
+            <div class="bg-blue-50 p-4 rounded-lg">
+              <div class="text-2xl mb-2">📥</div>
+              <p class="font-semibold text-blue-800">Export</p>
+              <p class="text-sm text-blue-600">Download all your data</p>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg">
+              <div class="text-2xl mb-2">✏️</div>
+              <p class="font-semibold text-green-800">Update</p>
+              <p class="text-sm text-green-600">Correct any information</p>
+            </div>
+            <div class="bg-orange-50 p-4 rounded-lg">
+              <div class="text-2xl mb-2">🚫</div>
+              <p class="font-semibold text-orange-800">Stop</p>
+              <p class="text-sm text-orange-600">Restrict processing</p>
+            </div>
+            <div class="bg-red-50 p-4 rounded-lg">
+              <div class="text-2xl mb-2">🗑️</div>
+              <p class="font-semibold text-red-800">Delete</p>
+              <p class="text-sm text-red-600">Remove everything</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Main Content --%>
     <.section class="py-16">
-      <div class="max-w-4xl mx-auto prose prose-lg prose-gray">
+      <div class="max-w-4xl mx-auto">
         
-        <h2>Your Data, Your Control</h2>
-        
-        <p>
-          At Eventasaurus, we believe that you should have full control over your personal data. This page outlines the comprehensive rights you have regarding your information and how you can exercise those rights within our platform.
-        </p>
+        <!-- GDPR/CCPA Rights Overview -->
+        <div class="mb-16 bg-white rounded-xl p-8 shadow-sm border border-gray-100">
+          <h2 class="text-3xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            🌍 Your Legal Rights (GDPR & CCPA)
+          </h2>
+          
+          <p class="text-gray-600 mb-8 text-lg">
+            Whether you're in Europe, California, or anywhere else, we give everyone the same comprehensive data rights:
+          </p>
 
-        <h2>1. Data Subject Rights Under GDPR and CCPA</h2>
-        
-        <p>
-          If you are a resident of the European Union or California, you have specific statutory rights regarding your personal data. Eventasaurus complies with applicable data protection regulations and provides the following rights to all users globally:
-        </p>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="bg-blue-50 rounded-lg p-6 border border-blue-200">
+              <h3 class="text-xl font-semibold text-blue-800 mb-4 flex items-center gap-2">
+                🔍 Right to Know
+              </h3>
+              <p class="text-blue-700 mb-3">You can ask us:</p>
+              <ul class="text-blue-700 space-y-1 text-sm">
+                <li>• What data we have about you</li>
+                <li>• Why we're processing it</li>
+                <li>• Who we share it with</li>
+                <li>• How long we keep it</li>
+              </ul>
+            </div>
 
-        <h3>1.1 Right to Access (Article 15 GDPR / CCPA Section 1798.110)</h3>
-        <p>
-          You have the right to obtain confirmation as to whether or not personal data concerning you is being processed, and where that is the case, access to the personal data and the following information:
-        </p>
-        <ul>
-          <li>The purposes of the processing</li>
-          <li>The categories of personal data concerned</li>
-          <li>The recipients or categories of recipients to whom personal data has been or will be disclosed</li>
-          <li>Where possible, the envisaged period for which personal data will be stored</li>
-          <li>The existence of the right to request rectification or erasure of personal data</li>
-          <li>The source of the personal data where it is not collected from the data subject</li>
-        </ul>
+            <div class="bg-green-50 rounded-lg p-6 border border-green-200">
+              <h3 class="text-xl font-semibold text-green-800 mb-4 flex items-center gap-2">
+                📝 Right to Correct
+              </h3>
+              <p class="text-green-700 mb-3">You can:</p>
+              <ul class="text-green-700 space-y-1 text-sm">
+                <li>• Fix inaccurate information</li>
+                <li>• Complete incomplete data</li>
+                <li>• Update outdated details</li>
+                <li>• Modify preferences anytime</li>
+              </ul>
+            </div>
 
-        <h3>1.2 Right to Rectification (Article 16 GDPR)</h3>
-        <p>
-          You have the right to obtain from Eventasaurus without undue delay the rectification of inaccurate personal data concerning you. Taking into account the purposes of the processing, you shall have the right to have incomplete personal data completed, including by means of providing a supplementary statement.
-        </p>
+            <div class="bg-purple-50 rounded-lg p-6 border border-purple-200">
+              <h3 class="text-xl font-semibold text-purple-800 mb-4 flex items-center gap-2">
+                📦 Right to Portability
+              </h3>
+              <p class="text-purple-700 mb-3">You can:</p>
+              <ul class="text-purple-700 space-y-1 text-sm">
+                <li>• Download your data in JSON format</li>
+                <li>• Transfer it to another service</li>
+                <li>• Get machine-readable exports</li>
+                <li>• Take your events with you</li>
+              </ul>
+            </div>
 
-        <h3>1.3 Right to Erasure - "Right to be Forgotten" (Article 17 GDPR / CCPA Section 1798.105)</h3>
-        <p>
-          You have the right to obtain from Eventasaurus the erasure of personal data concerning you without undue delay, and we shall have the obligation to erase personal data without undue delay where one of the following grounds applies:
-        </p>
-        <ul>
-          <li>The personal data are no longer necessary in relation to the purposes for which they were collected</li>
-          <li>You withdraw consent on which the processing is based</li>
-          <li>You object to the processing and there are no overriding legitimate grounds for the processing</li>
-          <li>The personal data have been unlawfully processed</li>
-          <li>The personal data must be erased for compliance with a legal obligation</li>
-        </ul>
-
-        <h3>1.4 Right to Restriction of Processing (Article 18 GDPR)</h3>
-        <p>
-          You have the right to obtain from Eventasaurus restriction of processing where one of the following applies:
-        </p>
-        <ul>
-          <li>The accuracy of the personal data is contested by you</li>
-          <li>The processing is unlawful and you oppose the erasure of the personal data</li>
-          <li>Eventasaurus no longer needs the personal data for the purposes of the processing</li>
-          <li>You have objected to processing pending the verification of whether legitimate grounds override yours</li>
-        </ul>
-
-        <h3>1.5 Right to Data Portability (Article 20 GDPR)</h3>
-        <p>
-          You have the right to receive the personal data concerning you, which you have provided to Eventasaurus, in a structured, commonly used and machine-readable format. You have the right to transmit those data to another controller without hindrance from Eventasaurus, where:
-        </p>
-        <ul>
-          <li>The processing is based on consent or on a contract</li>
-          <li>The processing is carried out by automated means</li>
-        </ul>
-
-        <h3>1.6 Right to Object (Article 21 GDPR)</h3>
-        <p>
-          You have the right to object, on grounds relating to your particular situation, at any time to processing of personal data concerning you which is based on legitimate interests. Eventasaurus shall no longer process the personal data unless we demonstrate compelling legitimate grounds for the processing which override your interests, rights and freedoms.
-        </p>
-
-        <h2>2. How to Exercise Your Rights</h2>
-        
-        <h3>2.1 Account Settings Dashboard</h3>
-        <p>
-          Many of your data rights can be exercised directly through your Eventasaurus account settings:
-        </p>
-        <ul>
-          <li><strong>Data Download:</strong> Export all your personal data in JSON format</li>
-          <li><strong>Account Deletion:</strong> Permanently delete your account and associated data</li>
-          <li><strong>Profile Updates:</strong> Modify or correct your personal information</li>
-          <li><strong>Privacy Settings:</strong> Control data processing preferences</li>
-          <li><strong>Communication Preferences:</strong> Manage marketing and notification settings</li>
-        </ul>
-
-        <h3>2.2 Data Rights Request Form</h3>
-        <p>
-          For more complex requests or if you prefer not to use your account dashboard, you can submit a formal data rights request. We will verify your identity and respond within the legally required timeframes (typically 30 days for GDPR requests, 45 days for CCPA requests).
-        </p>
-
-        <h3>2.3 Verification Process</h3>
-        <p>
-          To protect your privacy and security, we may request additional information to verify your identity before processing certain data rights requests. This may include:
-        </p>
-        <ul>
-          <li>Email verification from your registered account</li>
-          <li>Additional identifying information for account recovery scenarios</li>
-          <li>Government-issued identification for high-security requests</li>
-        </ul>
-
-        <h2>3. Categories of Personal Data We Process</h2>
-        
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 my-8">
-          <h4 class="text-lg font-semibold text-blue-900 mb-3">Account Data</h4>
-          <p class="text-blue-800">Name, email address, password (hashed), account preferences, profile information</p>
+            <div class="bg-red-50 rounded-lg p-6 border border-red-200">
+              <h3 class="text-xl font-semibold text-red-800 mb-4 flex items-center gap-2">
+                🗑️ Right to Delete
+              </h3>
+              <p class="text-red-700 mb-3">You can:</p>
+              <ul class="text-red-700 space-y-1 text-sm">
+                <li>• Delete your entire account</li>
+                <li>• Remove specific data</li>
+                <li>• Be "forgotten" completely</li>
+                <li>• Withdraw consent anytime</li>
+              </ul>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-green-50 border border-green-200 rounded-lg p-6 my-8">
-          <h4 class="text-lg font-semibold text-green-900 mb-3">Event Data</h4>
-          <p class="text-green-800">Events you create, events you attend, RSVPs, poll responses, event preferences</p>
+        <!-- What Data We Have -->
+        <div class="mb-16 bg-white rounded-xl p-8 shadow-sm border border-gray-100">
+          <h2 class="text-3xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            🗃️ What Data We Have About You
+          </h2>
+          
+          <div class="space-y-6">
+            <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
+              <h3 class="text-xl font-semibold text-blue-900 mb-4 flex items-center gap-2">
+                👤 Account Information
+              </h3>
+              <div class="grid md:grid-cols-2 gap-4 text-blue-800">
+                <ul class="space-y-1 text-sm">
+                  <li>• Name and email address</li>
+                  <li>• Profile picture and bio</li>
+                  <li>• Account creation date</li>
+                </ul>
+                <ul class="space-y-1 text-sm">
+                  <li>• Login history and sessions</li>
+                  <li>• Password (encrypted, we can't see it)</li>
+                  <li>• Communication preferences</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
+              <h3 class="text-xl font-semibold text-green-900 mb-4 flex items-center gap-2">
+                🎉 Event Data
+              </h3>
+              <div class="grid md:grid-cols-2 gap-4 text-green-800">
+                <ul class="space-y-1 text-sm">
+                  <li>• Events you've created</li>
+                  <li>• Events you've attended</li>
+                  <li>• RSVPs and responses</li>
+                </ul>
+                <ul class="space-y-1 text-sm">
+                  <li>• Messages and comments</li>
+                  <li>• Poll votes and feedback</li>
+                  <li>• Event preferences</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
+              <h3 class="text-xl font-semibold text-purple-900 mb-4 flex items-center gap-2">
+                🔧 Technical Data
+              </h3>
+              <div class="grid md:grid-cols-2 gap-4 text-purple-800">
+                <ul class="space-y-1 text-sm">
+                  <li>• IP address and location (city-level)</li>
+                  <li>• Browser and device info</li>
+                  <li>• Usage analytics (anonymized)</li>
+                </ul>
+                <ul class="space-y-1 text-sm">
+                  <li>• Performance metrics</li>
+                  <li>• Error logs (for debugging)</li>
+                  <li>• Feature usage patterns</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-purple-50 border border-purple-200 rounded-lg p-6 my-8">
-          <h4 class="text-lg font-semibold text-purple-900 mb-3">Technical Data</h4>
-          <p class="text-purple-800">IP address, browser type, device information, session data, cookies, usage analytics</p>
+        <!-- How to Exercise Your Rights -->
+        <div class="mb-16 bg-white rounded-xl p-8 shadow-sm border border-gray-100">
+          <h2 class="text-3xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            🚀 How to Exercise Your Rights
+          </h2>
+          
+          <div class="space-y-8">
+            <!-- Self-Service Options -->
+            <div class="bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg p-6">
+              <h3 class="text-xl font-semibold text-green-800 mb-4 flex items-center gap-2">
+                ⚡ Instant Self-Service (Recommended)
+              </h3>
+              <p class="text-green-700 mb-4">Most data rights can be exercised immediately in your account settings:</p>
+              
+              <div class="grid md:grid-cols-2 gap-4">
+                <div class="bg-white rounded-lg p-4 border border-green-200">
+                  <h4 class="font-semibold text-green-800 mb-2">📥 Export Your Data</h4>
+                  <p class="text-sm text-green-700 mb-3">Download everything in one click</p>
+                  <.radiant_button href="/dashboard?section=data" class="bg-green-600 hover:bg-green-700 text-white text-sm w-full">
+                    Go to Data Export
+                  </.radiant_button>
+                </div>
+                
+                <div class="bg-white rounded-lg p-4 border border-red-200">
+                  <h4 class="font-semibold text-red-800 mb-2">🗑️ Delete Account</h4>
+                  <p class="text-sm text-red-700 mb-3">Permanently remove everything</p>
+                  <.radiant_button href="/dashboard?section=delete" variant="outline" class="border-red-600 text-red-600 hover:bg-red-50 text-sm w-full">
+                    Account Deletion
+                  </.radiant_button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Email Request -->
+            <div class="bg-blue-50 rounded-lg p-6 border border-blue-200">
+              <h3 class="text-xl font-semibold text-blue-800 mb-4 flex items-center gap-2">
+                📧 Email Us for Complex Requests
+              </h3>
+              <p class="text-blue-700 mb-4">For specific requests or if you can't access your account:</p>
+              
+              <div class="bg-white rounded-lg p-4 border border-blue-200 mb-4">
+                <p class="text-blue-800 font-semibold mb-2">Send your request to:</p>
+                <a href="mailto:privacy@eventasaurus.com" class="text-blue-600 hover:text-blue-800 transition-colors font-semibold text-lg">
+                  privacy@eventasaurus.com
+                </a>
+                <p class="text-sm text-blue-600 mt-2">
+                  ⏱️ We respond within 30 days (usually much faster!)
+                </p>
+              </div>
+              
+              <div class="grid md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p class="font-semibold text-blue-800 mb-2">Include in your email:</p>
+                  <ul class="text-blue-700 space-y-1">
+                    <li>• Your registered email address</li>
+                    <li>• Specific request details</li>
+                    <li>• Verification info if needed</li>
+                  </ul>
+                </div>
+                <div>
+                  <p class="font-semibold text-blue-800 mb-2">We can help with:</p>
+                  <ul class="text-blue-700 space-y-1">
+                    <li>• Data access requests</li>
+                    <li>• Correction of information</li>
+                    <li>• Processing restrictions</li>
+                    <li>• Objections to processing</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-orange-50 border border-orange-200 rounded-lg p-6 my-8">
-          <h4 class="text-lg font-semibold text-orange-900 mb-3">Communication Data</h4>
-          <p class="text-orange-800">Messages sent through our platform, support tickets, email communications</p>
+        <!-- Data Retention -->
+        <div class="mb-16 bg-white rounded-xl p-8 shadow-sm border border-gray-100">
+          <h2 class="text-3xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            ⏰ How Long We Keep Your Data
+          </h2>
+          
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse border border-gray-300 rounded-lg overflow-hidden">
+              <thead>
+                <tr class="bg-gradient-to-r from-purple-500 to-blue-600 text-white">
+                  <th class="border border-gray-300 px-4 py-3 text-left font-semibold">Data Type</th>
+                  <th class="border border-gray-300 px-4 py-3 text-left font-semibold">Retention Period</th>
+                  <th class="border border-gray-300 px-4 py-3 text-left font-semibold">Why We Keep It</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="bg-blue-50">
+                  <td class="border border-gray-300 px-4 py-3 font-medium">Account Data</td>
+                  <td class="border border-gray-300 px-4 py-3">Until you delete your account</td>
+                  <td class="border border-gray-300 px-4 py-3">To provide the service</td>
+                </tr>
+                <tr class="bg-white">
+                  <td class="border border-gray-300 px-4 py-3 font-medium">Event Data</td>
+                  <td class="border border-gray-300 px-4 py-3">Until event + 1 year</td>
+                  <td class="border border-gray-300 px-4 py-3">For organizer reference</td>
+                </tr>
+                <tr class="bg-green-50">
+                  <td class="border border-gray-300 px-4 py-3 font-medium">Usage Analytics</td>
+                  <td class="border border-gray-300 px-4 py-3">13 months (anonymized)</td>
+                  <td class="border border-gray-300 px-4 py-3">Product improvement</td>
+                </tr>
+                <tr class="bg-white">
+                  <td class="border border-gray-300 px-4 py-3 font-medium">Support Messages</td>
+                  <td class="border border-gray-300 px-4 py-3">3 years</td>
+                  <td class="border border-gray-300 px-4 py-3">Legal compliance</td>
+                </tr>
+                <tr class="bg-yellow-50">
+                  <td class="border border-gray-300 px-4 py-3 font-medium">Marketing Data</td>
+                  <td class="border border-gray-300 px-4 py-3">Until you unsubscribe</td>
+                  <td class="border border-gray-300 px-4 py-3">Your consent</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <h2>4. Legal Basis for Processing</h2>
-        
-        <p>Under GDPR, we process your personal data based on the following legal grounds:</p>
-        
-        <table class="w-full border-collapse border border-gray-300 my-6">
-          <thead>
-            <tr class="bg-gray-50">
-              <th class="border border-gray-300 px-4 py-2 text-left">Data Category</th>
-              <th class="border border-gray-300 px-4 py-2 text-left">Legal Basis</th>
-              <th class="border border-gray-300 px-4 py-2 text-left">Retention Period</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="border border-gray-300 px-4 py-2">Account Data</td>
-              <td class="border border-gray-300 px-4 py-2">Contract Performance</td>
-              <td class="border border-gray-300 px-4 py-2">Until account deletion</td>
-            </tr>
-            <tr class="bg-gray-50">
-              <td class="border border-gray-300 px-4 py-2">Event Data</td>
-              <td class="border border-gray-300 px-4 py-2">Contract Performance / Legitimate Interest</td>
-              <td class="border border-gray-300 px-4 py-2">Until event completion + 1 year</td>
-            </tr>
-            <tr>
-              <td class="border border-gray-300 px-4 py-2">Technical Data</td>
-              <td class="border border-gray-300 px-4 py-2">Legitimate Interest</td>
-              <td class="border border-gray-300 px-4 py-2">13 months (analytics), 30 days (logs)</td>
-            </tr>
-            <tr class="bg-gray-50">
-              <td class="border border-gray-300 px-4 py-2">Marketing Data</td>
-              <td class="border border-gray-300 px-4 py-2">Consent</td>
-              <td class="border border-gray-300 px-4 py-2">Until consent withdrawal</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- Legal Basis -->
+        <div class="mb-16 bg-white rounded-xl p-8 shadow-sm border border-gray-100">
+          <h2 class="text-3xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            ⚖️ Legal Basis for Processing
+          </h2>
+          
+          <p class="text-gray-600 mb-6 text-lg">
+            Under GDPR and other privacy laws, we need a legal reason to process your data:
+          </p>
 
-        <h2>5. Data Processors and Third Parties</h2>
-        
-        <p>
-          Eventasaurus works with the following categories of data processors to provide our services. All processors are bound by Data Processing Agreements (DPAs) that ensure GDPR compliance:
-        </p>
-        
-        <ul>
-          <li><strong>Cloud Infrastructure:</strong> Amazon Web Services, Google Cloud Platform</li>
-          <li><strong>Analytics:</strong> Anonymized usage analytics providers</li>
-          <li><strong>Email Services:</strong> Transactional and marketing email providers</li>
-          <li><strong>Payment Processing:</strong> PCI-compliant payment processors (we do not store payment card data)</li>
-          <li><strong>Customer Support:</strong> Help desk and live chat platforms</li>
-          <li><strong>Security Services:</strong> DDoS protection, security monitoring, fraud prevention</li>
-        </ul>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="bg-green-50 rounded-lg p-6 border border-green-200">
+              <h3 class="text-lg font-semibold text-green-800 mb-3 flex items-center gap-2">
+                📝 Contract Performance
+              </h3>
+              <p class="text-green-700 text-sm mb-3">We process data to provide you our service:</p>
+              <ul class="text-green-700 text-sm space-y-1">
+                <li>• Creating and managing your account</li>
+                <li>• Running events and handling RSVPs</li>
+                <li>• Providing customer support</li>
+              </ul>
+            </div>
 
-        <h2>6. International Data Transfers</h2>
-        
-        <p>
-          Eventasaurus operates globally and may transfer your personal data outside your home country. When we transfer data internationally, we ensure appropriate safeguards are in place:
-        </p>
-        
-        <ul>
-          <li><strong>Adequacy Decisions:</strong> We transfer data to countries with adequacy decisions from your local data protection authority</li>
-          <li><strong>Standard Contractual Clauses:</strong> We use EU Standard Contractual Clauses for transfers to countries without adequacy decisions</li>
-          <li><strong>Binding Corporate Rules:</strong> Where applicable, we implement binding corporate rules for intra-group transfers</li>
-          <li><strong>Certification Schemes:</strong> We work with providers who maintain relevant privacy certifications</li>
-        </ul>
+            <div class="bg-blue-50 rounded-lg p-6 border border-blue-200">
+              <h3 class="text-lg font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                🎯 Legitimate Interest
+              </h3>
+              <p class="text-blue-700 text-sm mb-3">We have legitimate business reasons:</p>
+              <ul class="text-blue-700 text-sm space-y-1">
+                <li>• Improving our product features</li>
+                <li>• Preventing fraud and abuse</li>
+                <li>• Understanding usage patterns</li>
+              </ul>
+            </div>
 
-        <h2>7. Automated Decision Making and Profiling</h2>
-        
-        <p>
-          Eventasaurus may use automated decision-making in limited circumstances:
-        </p>
-        
-        <ul>
-          <li><strong>Spam Detection:</strong> Automated systems flag potentially spam events or accounts</li>
-          <li><strong>Security:</strong> Automated fraud detection and account security measures</li>
-          <li><strong>Recommendations:</strong> Event recommendation algorithms based on your preferences</li>
-        </ul>
-        
-        <p>
-          You have the right not to be subject to a decision based solely on automated processing, including profiling, which produces legal effects concerning you or similarly significantly affects you. If you believe you have been subject to impactful automated decision-making, please contact us.
-        </p>
+            <div class="bg-purple-50 rounded-lg p-6 border border-purple-200">
+              <h3 class="text-lg font-semibold text-purple-800 mb-3 flex items-center gap-2">
+                ✅ Your Consent
+              </h3>
+              <p class="text-purple-700 text-sm mb-3">When you explicitly agree:</p>
+              <ul class="text-purple-700 text-sm space-y-1">
+                <li>• Marketing emails and newsletters</li>
+                <li>• Optional analytics cookies</li>
+                <li>• Beta feature participation</li>
+              </ul>
+            </div>
 
-        <h2>8. Data Breach Notification</h2>
-        
-        <p>
-          In the event of a personal data breach that is likely to result in a high risk to your rights and freedoms, Eventasaurus will notify you without undue delay (within 72 hours of becoming aware of the breach, where feasible). We will provide:
-        </p>
-        
-        <ul>
-          <li>Description of the nature of the personal data breach</li>
-          <li>Categories and approximate number of data subjects concerned</li>
-          <li>Likely consequences of the personal data breach</li>
-          <li>Measures taken or proposed to address the breach</li>
-          <li>Contact information for our Data Protection Officer</li>
-        </ul>
+            <div class="bg-orange-50 rounded-lg p-6 border border-orange-200">
+              <h3 class="text-lg font-semibold text-orange-800 mb-3 flex items-center gap-2">
+                🏛️ Legal Obligation
+              </h3>
+              <p class="text-orange-700 text-sm mb-3">When required by law:</p>
+              <ul class="text-orange-700 text-sm space-y-1">
+                <li>• Tax and accounting records</li>
+                <li>• Responding to legal requests</li>
+                <li>• Safety and security reporting</li>
+              </ul>
+            </div>
+          </div>
+        </div>
 
-        <h2>9. Contact Information</h2>
-        
-        <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mt-8">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Data Protection Officer</h3>
+        <!-- Contact -->
+        <div class="bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl p-8 text-white">
+          <h2 class="text-3xl font-bold mb-6 flex items-center gap-3">
+            🦕 Questions About Your Data?
+          </h2>
           
           <div class="grid md:grid-cols-2 gap-6">
             <div>
-              <h4 class="font-medium text-gray-900 mb-2">General Data Inquiries</h4>
-              <p class="text-gray-600 mb-1">Email: privacy@eventasaurus.com</p>
-              <p class="text-gray-600 mb-1">Response time: 48 hours</p>
+              <p class="text-purple-100 mb-6 text-lg">
+                Your data rights are important to us. If you have any questions, concerns, or need help exercising your rights, don't hesitate to reach out!
+              </p>
+              
+              <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl">📧</span>
+                  <a href="mailto:privacy@eventasaurus.com" class="text-white hover:text-purple-200 transition-colors font-semibold">
+                    privacy@eventasaurus.com
+                  </a>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl">💬</span>
+                  <span class="text-purple-100">Live chat support</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl">⚡</span>
+                  <span class="text-purple-100">Usually respond within 24 hours</span>
+                </div>
+              </div>
             </div>
             
-            <div>
-              <h4 class="font-medium text-gray-900 mb-2">Formal Data Rights Requests</h4>
-              <p class="text-gray-600 mb-1">Email: dataprotection@eventasaurus.com</p>
-              <p class="text-gray-600 mb-1">Response time: 30 days (GDPR), 45 days (CCPA)</p>
+            <div class="bg-white/10 rounded-lg p-6">
+              <h3 class="text-xl font-semibold mb-4">🔥 Popular Actions</h3>
+              
+              <div class="space-y-3">
+                <.radiant_button href="/dashboard?section=data" class="bg-white text-purple-600 hover:bg-purple-50 w-full">
+                  Export My Data
+                </.radiant_button>
+                <.radiant_button href="/dashboard?section=privacy" variant="outline" class="border-white text-white hover:bg-white/10 w-full">
+                  Update Preferences
+                </.radiant_button>
+                <.radiant_button href="mailto:privacy@eventasaurus.com" variant="outline" class="border-white text-white hover:bg-white/10 w-full">
+                  Ask a Question
+                </.radiant_button>
+              </div>
+              
+              <p class="text-purple-100 text-xs mt-4 text-center">
+                💡 Most requests can be handled instantly in your dashboard!
+              </p>
             </div>
-          </div>
-          
-          <div class="mt-6 pt-4 border-t border-gray-200">
-            <h4 class="font-medium text-gray-900 mb-2">Postal Address</h4>
-            <p class="text-gray-600">
-              Eventasaurus Data Protection Team<br>
-              [Physical address to be provided]<br>
-              [City, State/Province, Postal Code]<br>
-              [Country]
-            </p>
-          </div>
-        </div>
-
-        <h2>10. Supervisory Authority Rights</h2>
-        
-        <p>
-          If you believe that our processing of your personal data infringes data protection laws, you have the right to lodge a complaint with a supervisory authority, in particular in the EU Member State of your habitual residence, place of work, or place of the alleged infringement.
-        </p>
-        
-        <p>
-          For EU residents, you can find your local Data Protection Authority at: 
-          <a href="https://edpb.europa.eu/about-edpb/board/members_en" class="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">
-            European Data Protection Board Members
-          </a>
-        </p>
-
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-12">
-          <h3 class="text-lg font-semibold text-blue-900 mb-2">Need Help?</h3>
-          <p class="text-blue-800 mb-4">
-            Our data protection team is here to help you understand and exercise your rights. Don't hesitate to reach out with any questions about your personal data.
-          </p>
-          <div class="flex flex-col sm:flex-row gap-3">
-            <.radiant_button href="mailto:privacy@eventasaurus.com" variant="outline" class="text-blue-600 border-blue-600 hover:bg-blue-50">
-              Email Privacy Team
-            </.radiant_button>
-            <.radiant_button href="/dashboard" variant="outline" class="text-blue-600 border-blue-600 hover:bg-blue-50">
-              Manage Your Data
-            </.radiant_button>
           </div>
         </div>
       </div>
