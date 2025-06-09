@@ -11,6 +11,34 @@
       <%= assigns[:page_title] || "Home" %>
     </.live_title>
     
+    <!-- Open Graph and Twitter Card meta tags -->
+    <%= if assigns[:meta_title] do %>
+      <meta property="og:title" content={assigns[:meta_title]} />
+      <meta property="og:description" content={assigns[:meta_description] || ""} />
+      <meta property="og:image" content={assigns[:meta_image]} />
+      <meta property="og:image:width" content="800" />
+      <meta property="og:image:height" content="419" />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content={assigns[:meta_url] || ""} />
+      <meta property="og:site_name" content="Eventasaurus" />
+      
+      <!-- Twitter Card tags -->
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={assigns[:meta_title]} />
+      <meta name="twitter:description" content={assigns[:meta_description] || ""} />
+      <meta name="twitter:image" content={assigns[:meta_image]} />
+      
+      <!-- Standard meta description -->
+      <meta name="description" content={assigns[:meta_description] || ""} />
+    <% else %>
+      <!-- Default meta tags -->
+      <meta name="description" content="Create and manage events with Eventasaurus - the modern event management platform" />
+      <meta property="og:title" content="Eventasaurus" />
+      <meta property="og:description" content="Create and manage events with Eventasaurus - the modern event management platform" />
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content="Eventasaurus" />
+    <% end %>
+    
     <!-- Main application CSS (includes base theme system) -->
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     

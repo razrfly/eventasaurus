@@ -1,0 +1,130 @@
+# Eventasaurus Dynamic Social Card Generation PRD
+
+## Project Overview
+Implement dynamic social card generation for Eventasaurus events, similar to Lu.ma's approach. Generate Open Graph-compatible social preview images (PNG) dynamically when requested via URL, ensuring real-time reflection of event data and proper cache invalidation for social platforms.
+
+## Goals & Objectives
+- **Primary Goal**: Dynamically generate social preview images for each event on-demand
+- **Cache Management**: Implement filename versioning to force Facebook/social platform cache invalidation when events change
+- **Performance**: Render images on-the-fly using SVG templates converted to PNG
+- **Compatibility**: Ensure Open Graph and Twitter Card compatibility
+- **Maintainability**: Use Phoenix/Elixir templating system for easy customization
+
+## Technical Requirements
+
+### Core Architecture
+- **Template System**: Use .svg.eex templates for dynamic SVG rendering
+- **Image Processing**: Convert SVG to PNG using rsvg-convert system command
+- **Runtime Generation**: No pre-generation - create images on request only
+- **Phoenix Integration**: Deliver via Phoenix controller routes
+- **File Management**: Temporary file handling with cleanup
+
+### Image Specifications
+- **Canvas Size**: 800×419 pixels (1.91:1 aspect ratio for OG/Twitter)
+- **Layout Padding**: 32px margin around content
+- **Event Image**: 350×350px positioned top-right with 24px rounded corners
+- **Title Text**: Left-aligned, up to 3 lines, bold, 40-48px font size
+- **Logo**: Eventasaurus dino logo, 64×64px, positioned top-left
+- **RSVP Bubble**: 80×32px pill-shaped button, bottom-left positioning
+
+### SVG Template Elements
+1. **Gradient Background**: Dynamic gradient using theme.color1 and theme.color2
+2. **Event Image**: Rendered from event.image_url with rounded corners via clipPath
+3. **Logo**: Static Eventasaurus dino asset
+4. **Title**: Dynamic text block from event.title
+5. **RSVP Bubble**: White-filled rounded rectangle with centered "RSVP" text
+
+### Cache Busting Strategy
+- **Filename Versioning**: Include MD5 hash of event.image_url + event.updated_at
+- **Hash Length**: 8-character truncated hash for manageable filenames
+- **URL Pattern**: `/social_cards/{event_id}-{image_hash}.png`
+- **Auto-Invalidation**: New URLs generated when event data changes
+
+### Security Requirements
+- **Input Validation**: Sanitize all dynamic content before SVG rendering
+- **Access Control**: Consider signed URLs or UUID-based access for public cards
+- **Injection Prevention**: Validate and escape all user-provided data
+
+## Technical Implementation Flow
+
+### Step 1: SVG Template Rendering
+```elixir
+svg = Phoenix.View.render_to_string(MyAppWeb.SocialCardView, "card.svg", 
+  event: event, theme: theme)
+```
+
+### Step 2: Temporary File Management
+```elixir
+svg_path = "/tmp/eventasaurus_#{event.id}_#{event.image_hash}.svg"
+File.write!(svg_path, svg)
+```
+
+### Step 3: PNG Conversion
+```elixir
+png_path = String.replace(svg_path, ".svg", ".png")
+System.cmd("rsvg-convert", [svg_path, "-o", png_path])
+```
+
+### Step 4: HTTP Response
+```elixir
+conn
+|> put_resp_content_type("image/png")
+|> send_file(200, png_path)
+```
+
+### Hash Generation Algorithm
+```elixir
+image_hash = :crypto.hash(:md5, event.image_url <> to_string(event.updated_at))
+  |> Base.encode16(case: :lower)
+  |> binary_part(0, 8)
+```
+
+## Dependencies & Prerequisites
+- **rsvg-convert**: System dependency for SVG to PNG conversion
+- **Phoenix Framework**: For templating and HTTP handling
+- **Elixir/Erlang**: Runtime environment
+- **File System**: Temporary directory access with write permissions
+
+## Route & Controller Structure
+- **Route**: GET `/events/:id/social_card.png`
+- **Controller**: EventSocialCardController
+- **Action**: generate_card/2
+- **Template**: `social_card/card.svg.eex`
+
+## Error Handling
+- **Missing Events**: Return 404 for non-existent events
+- **Image Processing Failures**: Fallback to default/placeholder image
+- **File System Issues**: Graceful degradation with error logging
+- **Template Errors**: Validate data before rendering
+
+## Performance Considerations
+- **Temporary File Cleanup**: Implement cleanup mechanism for generated files
+- **Concurrent Requests**: Handle multiple simultaneous card generation requests
+- **Resource Limits**: Monitor memory usage during SVG/PNG processing
+- **Response Caching**: Consider HTTP caching headers for generated images
+
+## Testing Requirements
+- **Unit Tests**: SVG template rendering with various event data
+- **Integration Tests**: Full PNG generation pipeline
+- **Visual Tests**: Verify output matches design specifications
+- **Security Tests**: Validate input sanitization and injection prevention
+- **Performance Tests**: Load testing for concurrent card generation
+
+## Deployment Considerations
+- **System Dependencies**: Ensure rsvg-convert is available in production
+- **File Permissions**: Temporary directory write access
+- **Resource Monitoring**: Track file system usage and cleanup
+- **Error Logging**: Comprehensive logging for debugging production issues
+
+## Success Metrics
+- **Functional**: Cards generate successfully for all events
+- **Performance**: Sub-2-second response times for card generation
+- **Cache Invalidation**: Facebook/social platforms show updated cards within 24 hours
+- **Error Rate**: <1% failure rate for card generation requests
+- **Visual Quality**: Generated cards match design specifications exactly
+
+## Future Enhancements
+- **Template Variations**: Multiple card layouts/themes
+- **Customization**: Event-specific styling options
+- **Optimization**: Pre-generation for high-traffic events
+- **Analytics**: Track social card usage and click-through rates 
