@@ -107,6 +107,13 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
+  # Public social card generation (no auth required)
+  scope "/events", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/:id/social_card.png", EventSocialCardController, :generate_card
+  end
+
   # Other scopes may use custom stacks.
   scope "/api", EventasaurusWeb do
     pipe_through :api

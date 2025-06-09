@@ -67,6 +67,11 @@ defmodule EventasaurusWeb.PublicEventLive do
           # Apply event theme to layout
           theme = event.theme || :minimal
 
+          # Prepare meta tag data for social sharing
+          event_url = url(socket, ~p"/#{event.slug}")
+          social_image_url = social_card_url(socket, event)
+          description = truncate_description(event.description || "Join us for #{event.title}")
+
           {:ok,
            socket
            |> assign(:event, event)
@@ -84,6 +89,11 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:pending_vote, nil)
            |> assign(:show_vote_modal, false)
            |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users
+           # Meta tag data for social sharing
+           |> assign(:meta_title, event.title)
+           |> assign(:meta_description, description)
+           |> assign(:meta_image, social_image_url)
+           |> assign(:meta_url, event_url)
           }
       end
     end
@@ -1117,6 +1127,20 @@ defmodule EventasaurusWeb.PublicEventLive do
       });
     </script>
     """
+  end
+
+    # Helper function to generate social card URL
+  defp social_card_url(socket, event) do
+    url(socket, ~p"/events/#{event.id}/social_card.png")
+  end
+
+  # Helper function to truncate description for meta tags
+  defp truncate_description(description, max_length \\ 160) do
+    if String.length(description) > max_length do
+      String.slice(description, 0, max_length - 3) <> "..."
+    else
+      description
+    end
   end
 
   # Ensures we have a proper User struct for the current user.
