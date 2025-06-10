@@ -1,0 +1,122 @@
+Eventasaurus — Date Selection UI Redesign
+Product Requirements Document (PRD)
+
+PROJECT OVERVIEW
+================
+This project focuses on replacing the current date range picker UI with a calendar-style date selection interface. Users currently select a date range, but we want to allow them to cherry-pick specific dates from a calendar instead. All existing backend logic, voting functionality, and database operations remain unchanged.
+
+CURRENT STATE
+=============
+- Event creation uses a date range picker (start_at/end_at)
+- Users select a continuous range of dates
+- Existing voting/polling system works with these dates
+- All backend date storage and validation logic is already implemented
+
+TARGET OBJECTIVE
+================
+Replace the date range picker UI with a calendar interface that allows users to select 2 or more specific dates (non-continuous) while maintaining all existing backend functionality.
+
+SCOPE - WHAT WE'RE CHANGING
+===========================
+✅ **UI ONLY**: Replace date range picker with calendar-style date selection
+✅ **Date Selection**: Allow cherry-picking specific dates instead of continuous ranges  
+✅ **Visual Interface**: Calendar component for date selection
+✅ **Selected Dates Display**: Show selected dates in a list format
+
+SCOPE - WHAT WE'RE NOT CHANGING
+===============================
+❌ **Database Schema**: No changes to date storage
+❌ **Backend Logic**: Keep all existing date creation and storage logic
+❌ **Voting System**: All existing preference options (✅ Preferred, 🤷 If Needed, ❌ Not Available) stay the same
+❌ **Validation Logic**: Keep all existing validation unchanged
+❌ **Event States**: No changes to event status handling
+❌ **Vote Tallying**: All existing vote counting and result logic stays the same
+
+TECHNICAL REQUIREMENTS
+======================
+
+UI Component Changes
+-------------------
+1. **Replace**: Current date range picker input field(s)
+2. **With**: Interactive calendar component
+3. **Behavior**: Users click on calendar dates to select/deselect them
+4. **Minimum**: Require selection of at least 2 dates
+5. **Display**: Show selected dates in a list below the calendar
+6. **Integration**: Use same data structure as current range picker for backend compatibility
+
+Backend Integration
+------------------
+1. **Same Data Flow**: Calendar selections must generate the same date data structure as the current range picker
+2. **No Logic Changes**: Use existing date creation, storage, and validation functions
+3. **Compatibility**: Ensure calendar output works with all existing voting and polling functionality
+
+FUNCTIONAL SPECIFICATIONS
+=========================
+
+User Interaction Flow
+--------------------
+1. User navigates to event creation page
+2. Instead of date range picker, user sees calendar interface
+3. User clicks on calendar dates to select them (minimum 2 required)
+4. Selected dates appear in a list below calendar
+5. User can click dates again to deselect them
+6. System processes selected dates using existing backend logic
+7. Event creation continues with existing flow
+
+Technical Implementation
+-----------------------
+1. **Calendar Component**: Create reusable calendar component
+2. **Date Selection State**: Manage selected dates array in component state
+3. **Backend Interface**: Format selected dates to match expected input format
+4. **Form Integration**: Replace existing date picker in event creation form
+5. **Validation**: Ensure minimum 2 dates selected before form submission
+
+DESIGN REQUIREMENTS
+===================
+1. **Visual Clarity**: Clearly show selected vs available dates
+2. **Responsive**: Work on desktop and mobile devices
+3. **Accessible**: Keyboard navigation and screen reader support
+4. **Consistent**: Match existing Eventasaurus design system
+5. **Intuitive**: Users should immediately understand how to select dates
+
+ACCEPTANCE CRITERIA
+==================
+1. ✅ Calendar component replaces existing date range picker
+2. ✅ Users can select 2 or more specific dates by clicking on calendar
+3. ✅ Selected dates are visually distinct from unselected dates
+4. ✅ Users can deselect dates by clicking them again
+5. ✅ Selected dates display in a clear list format
+6. ✅ Form validation requires minimum 2 dates before submission
+7. ✅ Backend receives date data in same format as before
+8. ✅ All existing voting/polling functionality continues to work unchanged
+9. ✅ Component is responsive and accessible
+10. ✅ No breaking changes to existing event creation flow
+
+DELIVERABLES
+============
+1. **Calendar Date Selection Component** - Interactive calendar for date picking
+2. **Updated Event Creation Form** - Integration of calendar into existing form
+3. **Responsive Styling** - Mobile and desktop support
+4. **Testing** - Component and integration tests
+5. **Documentation** - Usage documentation for the new component
+
+TECHNICAL CONSTRAINTS
+====================
+1. **No Backend Changes**: Must work with existing API endpoints and data structures
+2. **Phoenix/Elixir Stack**: Component must work within current technology stack
+3. **No Database Changes**: Use existing date storage mechanisms
+4. **Backward Compatibility**: Existing events and functionality must continue working
+5. **Performance**: Calendar should load and respond quickly
+
+REFERENCE DESIGN
+================
+Use Rallly.co calendar interface as inspiration for visual design and interaction patterns.
+
+SUCCESS METRICS
+===============
+1. Users can successfully create events using the new calendar interface
+2. All existing voting and date polling functionality works unchanged
+3. No increase in event creation errors or user confusion
+4. Calendar component performs well on various devices and browsers 
+
+https://private-user-images.githubusercontent.com/48241/453440100-5cd62673-2b7a-4d0e-908b-3b1e81e14cd6.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDk1NTU3MzMsIm5iZiI6MTc0OTU1NTQzMywicGF0aCI6Ii80ODI0MS80NTM0NDAxMDAtNWNkNjI2NzMtMmI3YS00ZDBlLTkwOGItM2IxZTgxZTE0Y2Q2LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTA2MTAlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwNjEwVDExMzcxM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTQxM2EzNGUzZjM3N2VmNTU2NTQ3ZDE4ZjM1MGNkNjExNjUyN2MwZDBhMDg0ODRjMmY5YmFmODEwNjVhZWVmMTAmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.qrS0GEqzzoLvn9jn-JKct_RdWF_kYI49rHJoALdbXPY

@@ -106,6 +106,20 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply, socket}
   end
 
+    @impl true
+  def handle_info({:selected_dates_changed, dates}, socket) do
+    # Convert dates to ISO8601 strings for form data
+    date_strings = Enum.map(dates, &Date.to_iso8601/1)
+    dates_string = Enum.join(date_strings, ",")
+
+    # Update form_data with the new selected dates
+    form_data = Map.put(socket.assigns.form_data, "selected_poll_dates", dates_string)
+
+    socket = assign(socket, :form_data, form_data)
+
+    {:noreply, socket}
+  end
+
   # ========== Handle Event Implementations ==========
 
   @impl true
@@ -227,27 +241,25 @@ defmodule EventasaurusWeb.EventLive.New do
           event_params
       end
 
-    case Events.create_event_with_organizer(final_event_params, socket.assigns.user) do
-      {:ok, event} ->
-        # If date polling is enabled, create the date poll and options
-        event_with_poll = if Map.get(event_params, "enable_date_polling", false) do
-          case create_date_poll_for_event(event, event_params, socket.assigns.user) do
-            {:ok, updated_event} -> updated_event
-            {:error, _} -> event # Fall back to original event if poll creation fails
-          end
-        else
-          event
-        end
+    # Validate date polling requirements
+    if Map.get(final_event_params, "enable_date_polling", false) do
+      selected_dates = Map.get(final_event_params, "selected_poll_dates", "")
+      if selected_dates == "" or String.trim(selected_dates) == "" do
+        # Create a custom changeset error for missing poll dates
+        changeset =
+          %Event{}
+          |> Events.change_event(final_event_params)
+          |> Ecto.Changeset.add_error(:selected_poll_dates, "Please select at least one date for polling")
+          |> Map.put(:action, :validate)
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Event created successfully")
-         |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        require Logger
-        Logger.error("[submit] Event creation failed with changeset errors: #{inspect(changeset.errors)}")
         {:noreply, assign(socket, form: to_form(changeset))}
+      else
+        # Proceed with event creation
+        create_event_with_validation(final_event_params, socket)
+      end
+    else
+      # No date polling, proceed normally
+      create_event_with_validation(final_event_params, socket)
     end
   end
 
@@ -776,30 +788,95 @@ defmodule EventasaurusWeb.EventLive.New do
 
   # Helper function to create date poll and options for an event
   defp create_date_poll_for_event(event, form_data, user) do
-    start_date_str = Map.get(form_data, "start_date")
-    end_date_str = Map.get(form_data, "ends_date")
+    # Check if we have selected poll dates (new calendar approach)
+    case Map.get(form_data, "selected_poll_dates") do
+      dates_string when is_binary(dates_string) and dates_string != "" ->
+        # Parse the comma-separated date strings
+        selected_dates =
+          dates_string
+          |> String.split(",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(&(&1 != ""))
+          |> Enum.map(&Date.from_iso8601!/1)
+          |> Enum.sort()
 
-    start_date = Date.from_iso8601!(start_date_str)
-    end_date = Date.from_iso8601!(end_date_str)
-
-    # Create the date poll
-    case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
-      {:ok, poll} ->
-        # Create date options for each day in the range
-        case Events.create_date_options_from_range(poll, start_date, end_date) do
-          {:ok, _options} ->
-            # Update event state to 'polling' (use string, not atom)
-            case Events.update_event(event, %{state: "polling"}) do
-              {:ok, updated_event} ->
-                {:ok, updated_event}
+        # Create the date poll
+        case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
+          {:ok, poll} ->
+            # Create date options for each selected date
+            case Events.create_date_options_from_list(poll, selected_dates) do
+              {:ok, _options} ->
+                # Update event state to 'polling'
+                case Events.update_event(event, %{state: "polling"}) do
+                  {:ok, updated_event} ->
+                    {:ok, updated_event}
+                  {:error, reason} ->
+                    {:error, reason}
+                end
               {:error, reason} ->
                 {:error, reason}
             end
           {:error, reason} ->
             {:error, reason}
         end
-      {:error, reason} ->
-        {:error, reason}
+
+      _ ->
+        # Fall back to old date range approach if no selected dates
+        start_date_str = Map.get(form_data, "start_date")
+        end_date_str = Map.get(form_data, "ends_date")
+
+        if start_date_str && end_date_str do
+          start_date = Date.from_iso8601!(start_date_str)
+          end_date = Date.from_iso8601!(end_date_str)
+
+          # Create the date poll
+          case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
+            {:ok, poll} ->
+              # Create date options for each day in the range
+              case Events.create_date_options_from_range(poll, start_date, end_date) do
+                {:ok, _options} ->
+                  # Update event state to 'polling'
+                  case Events.update_event(event, %{state: "polling"}) do
+                    {:ok, updated_event} ->
+                      {:ok, updated_event}
+                    {:error, reason} ->
+                      {:error, reason}
+                  end
+                {:error, reason} ->
+                  {:error, reason}
+              end
+            {:error, reason} ->
+              {:error, reason}
+          end
+        else
+          {:error, :missing_date_data}
+        end
+    end
+  end
+
+  # Helper function to create event with proper error handling
+  defp create_event_with_validation(final_event_params, socket) do
+    case Events.create_event_with_organizer(final_event_params, socket.assigns.user) do
+      {:ok, event} ->
+        # If date polling is enabled, create the date poll and options
+        event_with_poll = if Map.get(final_event_params, "enable_date_polling", false) do
+          case create_date_poll_for_event(event, final_event_params, socket.assigns.user) do
+            {:ok, updated_event} -> updated_event
+            {:error, _} -> event # Fall back to original event if poll creation fails
+          end
+        else
+          event
+        end
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Event created successfully")
+         |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        require Logger
+        Logger.error("[submit] Event creation failed with changeset errors: #{inspect(changeset.errors)}")
+        {:noreply, assign(socket, form: to_form(changeset))}
     end
   end
 
