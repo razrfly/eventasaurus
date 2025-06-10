@@ -105,9 +105,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:per_page, 20)
               |> assign_new(:image_tab, fn -> "unsplash" end)
               |> assign(:enable_date_polling, enable_date_polling)
-              |> assign(:selected_category, "featured")
+              |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
-              |> assign(:default_images, DefaultImagesService.get_images_for_category("featured"))
+              |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
               |> assign(:supabase_access_token, "edit_token_#{user.id}")
 
             {:ok, socket}
