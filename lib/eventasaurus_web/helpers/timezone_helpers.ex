@@ -57,6 +57,19 @@ defmodule EventasaurusWeb.TimezoneHelpers do
   end
 
   @doc """
+  Convert a UTC datetime to the specified timezone.
+  Returns the converted datetime or the original if conversion fails.
+  """
+  def convert_to_timezone(datetime, timezone) when is_binary(timezone) do
+    case DateTime.shift_zone(datetime, timezone) do
+      {:ok, converted} -> converted
+      {:error, _} -> datetime
+    end
+  end
+
+  def convert_to_timezone(datetime, _), do: datetime
+
+  @doc """
   Format a timezone string with its UTC offset for display purposes.
   Example: "America/New_York (UTC-05:00)"
   """
