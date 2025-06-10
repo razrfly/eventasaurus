@@ -310,8 +310,12 @@ defmodule EventasaurusWeb.EventComponents do
                   />
                   <!-- Hidden fields to store selected dates -->
                   <input type="hidden" name="event[selected_poll_dates]" id={"#{@id}-selected-dates"} value={encode_selected_dates(@form_data)} />
-                  <!-- Validation error container -->
-                  <div id="date-selection-error" class="hidden mt-2"></div>
+                  <!-- Validation error display -->
+                  <%= if f[:selected_poll_dates] && f[:selected_poll_dates].errors != [] do %>
+                    <div class="mt-2 text-sm text-red-600" phx-feedback-for="event[selected_poll_dates]">
+                      <%= Enum.map(f[:selected_poll_dates].errors, fn {msg, _} -> msg end) |> Enum.join(", ") %>
+                    </div>
+                  <% end %>
                 </div>
 
                 <!-- Time inputs for polling -->
@@ -473,7 +477,7 @@ defmodule EventasaurusWeb.EventComponents do
 
             <!-- Description & Details -->
             <div class="mb-4">
-              <.input field={f[:description]} type="textarea" label="Description" required class="text-sm" />
+              <.input field={f[:description]} type="textarea" label="Description" class="text-sm" />
             </div>
 
             <!-- Additional Options (compact) -->
