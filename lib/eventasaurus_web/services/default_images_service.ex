@@ -86,11 +86,7 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
     end
   end
 
-  def get_featured_images do
-    # For now, just return general category as featured
-    # Later we can implement a more sophisticated featured algorithm
-    get_images_for_category("general")
-  end
+
 
   def get_random_image do
     # Get all categories and their images
