@@ -350,6 +350,17 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
+  def handle_event("calendar_dates_changed", %{"dates" => dates, "component_id" => _id}, socket) do
+    selected_dates = Enum.join(dates, ",")
+    form_data = Map.put(socket.assigns.form_data, "selected_poll_dates", selected_dates)
+    changeset = Events.change_event(%Event{}, form_data)
+
+    {:noreply,
+     assign(socket, :form_data, form_data)
+     |> assign(:changeset, changeset)}
+  end
+
+  @impl true
   def handle_event("toggle_image_picker", %{"show" => show}, socket) do
     {:noreply, assign(socket, :show_image_picker, show == "true")}
   end

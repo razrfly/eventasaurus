@@ -463,6 +463,42 @@ Hooks.CalendarFormSync = {
   }
 };
 
+// Calendar Keyboard Navigation Hook - Handles keyboard navigation within calendar
+Hooks.CalendarKeyboardNav = {
+  mounted() {
+    if (process.env.NODE_ENV !== 'production') console.log("CalendarKeyboardNav hook mounted");
+    
+    // Handle keyboard navigation events
+    this.el.addEventListener('keydown', (e) => {
+      const currentButton = e.target;
+      
+      // Only handle navigation for calendar day buttons
+      if (!currentButton.hasAttribute('phx-value-date')) return;
+      
+      const currentDate = currentButton.getAttribute('phx-value-date');
+      
+      // Handle arrow keys and space/enter
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', ' '].includes(e.key)) {
+        e.preventDefault();
+        
+        // Send navigation event to LiveComponent
+        this.pushEvent("key_navigation", {
+          key: e.key === ' ' ? 'Space' : e.key,
+          date: currentDate
+        });
+      }
+    });
+    
+    // Handle focus events from server
+    this.handleEvent("focus_date", ({ date }) => {
+      const button = this.el.querySelector(`[phx-value-date="${date}"]`);
+      if (button && !button.disabled) {
+        button.focus();
+      }
+    });
+  }
+};
+
 // Supabase image upload hook for file input
 Hooks.SupabaseImageUpload = SupabaseImageUpload;
 
