@@ -76,9 +76,9 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:image_tab, "search") # Changed from "unsplash" to unified search
           |> assign(:enable_date_polling, false)
           # New unified picker assigns
-          |> assign(:selected_category, "featured")
+          |> assign(:selected_category, "general")
           |> assign(:default_categories, EventasaurusWeb.Services.DefaultImagesService.get_categories())
-          |> assign(:default_images, EventasaurusWeb.Services.DefaultImagesService.get_featured_images())
+          |> assign(:default_images, EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general"))
           |> assign(:supabase_access_token, session["access_token"])
 
         {:ok, socket}
@@ -615,12 +615,7 @@ defmodule EventasaurusWeb.EventLive.New do
   # Handle category selection in unified image picker
   @impl true
   def handle_event("select_category", %{"category" => category}, socket) do
-    default_images = case category do
-      "featured" ->
-        EventasaurusWeb.Services.DefaultImagesService.get_featured_images()
-      _ ->
-        EventasaurusWeb.Services.DefaultImagesService.get_images_for_category(category)
-    end
+    default_images = EventasaurusWeb.Services.DefaultImagesService.get_images_for_category(category)
 
     socket =
       socket

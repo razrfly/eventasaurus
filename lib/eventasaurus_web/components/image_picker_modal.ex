@@ -31,20 +31,6 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
             <div class="w-1/4 p-4 border-r border-gray-200 overflow-y-auto">
               <h3 class="font-semibold text-gray-900 mb-3">Categories</h3>
               <ul class="space-y-1">
-                <!-- Featured Category -->
-                <li>
-                  <button
-                    type="button"
-                    phx-click="select_category"
-                    phx-value-category="featured"
-                    class={[
-                      "w-full text-left px-3 py-2 rounded-md text-sm",
-                      if(@selected_category == "featured", do: "bg-indigo-100 text-indigo-700 font-medium", else: "text-gray-700 hover:bg-gray-100")
-                    ]}
-                  >
-                    Featured
-                  </button>
-                </li>
                 <!-- Dynamic Categories -->
                 <%= for category <- @default_categories do %>
                   <li>
