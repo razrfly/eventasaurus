@@ -34,6 +34,9 @@ defmodule EventasaurusApp.Events.Event do
       default: :minimal
     field :theme_customizations, :map, default: %{}
 
+    # Virtual field for date polling validation
+    field :selected_poll_dates, :string, virtual: true
+
     belongs_to :venue, EventasaurusApp.Venues.Venue
 
     many_to_many :users, EventasaurusApp.Accounts.User,
@@ -49,7 +52,7 @@ defmodule EventasaurusApp.Events.Event do
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
-                   :theme, :theme_customizations, :state])
+                   :theme, :theme_customizations, :state, :selected_poll_dates])
     |> validate_required([:title, :start_at, :timezone, :visibility])
     |> validate_length(:title, min: 3, max: 100)
     |> validate_length(:tagline, max: 255)

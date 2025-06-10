@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.EventLive.New do
   import EventasaurusWeb.LiveHelpers
   import EventasaurusWeb.Components.ImagePickerModal
 
+
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
@@ -142,6 +143,7 @@ defmodule EventasaurusWeb.EventLive.New do
       %Event{}
       |> Events.change_event(event_params)
       |> Map.put(:action, :validate)
+      |> validate_date_polling(event_params)
 
     # Update form_data with the validated params
     form_data = Map.merge(socket.assigns.form_data, event_params)
@@ -241,25 +243,18 @@ defmodule EventasaurusWeb.EventLive.New do
           event_params
       end
 
-    # Validate date polling requirements
-    if Map.get(final_event_params, "enable_date_polling", false) do
-      selected_dates = Map.get(final_event_params, "selected_poll_dates", "")
-      if selected_dates == "" or String.trim(selected_dates) == "" do
-        # Create a custom changeset error for missing poll dates
-        changeset =
-          %Event{}
-          |> Events.change_event(final_event_params)
-          |> Ecto.Changeset.add_error(:selected_poll_dates, "Please select at least one date for polling")
-          |> Map.put(:action, :validate)
+    # Validate date polling before saving
+    validation_changeset =
+      %Event{}
+      |> Events.change_event(final_event_params)
+      |> validate_date_polling(final_event_params)
 
-        {:noreply, assign(socket, form: to_form(changeset))}
-      else
-        # Proceed with event creation
-        create_event_with_validation(final_event_params, socket)
-      end
-    else
-      # No date polling, proceed normally
+    if validation_changeset.valid? do
+      # No date polling validation errors, proceed normally
       create_event_with_validation(final_event_params, socket)
+    else
+      # Validation failed, show errors
+      {:noreply, assign(socket, form: to_form(validation_changeset))}
     end
   end
 
@@ -928,6 +923,36 @@ defmodule EventasaurusWeb.EventLive.New do
         require Logger
         Logger.error("[submit] Event creation failed with changeset errors: #{inspect(changeset.errors)}")
         {:noreply, assign(socket, form: to_form(changeset))}
+    end
+  end
+
+  # Helper function to validate date polling options
+  defp validate_date_polling(changeset, params) do
+    enable_date_polling = Map.get(params, "enable_date_polling", false)
+
+    # Handle string "true"/"false" from form submissions
+    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
+
+    if is_polling_enabled do
+      selected_dates_string = Map.get(params, "selected_poll_dates", "")
+
+      if selected_dates_string == "" do
+        Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+      else
+        selected_dates =
+          selected_dates_string
+          |> String.split(",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(&(&1 != ""))
+
+        if length(selected_dates) < 2 do
+          Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+        else
+          changeset
+        end
+      end
+    else
+      changeset
     end
   end
 
