@@ -239,6 +239,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
         {:error, %Ecto.Changeset{} = changeset} ->
           {:noreply, assign(socket, form: to_form(changeset))}
+
+        {:error, socket_with_error} ->
+          {:noreply, socket_with_error}
       end
     else
       {:noreply, assign(socket,
@@ -576,11 +579,21 @@ defmodule EventasaurusWeb.EventLive.Edit do
     case Events.update_event(event, event_params) do
       {:ok, updated_event} ->
         # Handle date polling updates
-        handle_date_polling_update(updated_event, event_params, socket.assigns.user)
-        {:ok, updated_event}
+        case handle_date_polling_update(updated_event, event_params, socket.assigns.user) do
+          {:error, changeset} ->
+            require Logger
+            Logger.error("Failed to update date polling", changeset: inspect(changeset))
+            socket = put_flash(socket, :error, "We couldn't save the poll dates – please try again.")
+            {:error, socket}
+          _ ->
+            {:ok, updated_event}
+        end
 
       {:error, changeset} ->
-        {:error, changeset}
+        require Logger
+        Logger.error("Failed to update event", changeset: inspect(changeset))
+        socket = put_flash(socket, :error, "We couldn't save the event – please try again.")
+        {:error, socket}
     end
   end
 
@@ -619,9 +632,11 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 if event.state != "polling" do
                   Events.update_event(event, %{state: "polling"})
                 end
-              {:error, _changeset} ->
-                # Handle error silently for now
-                nil
+              {:error, changeset} ->
+                require Logger
+                Logger.error("Failed to update date options", changeset: inspect(changeset))
+                # Return error to be handled by caller
+                {:error, changeset}
             end
           else
             # Create new poll
