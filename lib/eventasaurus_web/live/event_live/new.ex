@@ -247,6 +247,7 @@ defmodule EventasaurusWeb.EventLive.New do
     validation_changeset =
       %Event{}
       |> Events.change_event(final_event_params)
+      |> Map.put(:action, :validate)
       |> validate_date_polling(final_event_params)
 
     if validation_changeset.valid? do
