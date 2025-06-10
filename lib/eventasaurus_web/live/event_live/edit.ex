@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   import EventasaurusWeb.LiveHelpers
   import EventasaurusWeb.Components.ImagePickerModal
 
+
   alias EventasaurusApp.Events
   alias EventasaurusApp.Venues
   alias EventasaurusWeb.Services.UnsplashService
@@ -142,6 +143,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket.assigns.event
       |> Events.change_event(event_params)
       |> Map.put(:action, :validate)
+      |> validate_date_polling(event_params)
 
     {:noreply, assign(socket, form: to_form(changeset))}
   end
@@ -220,15 +222,29 @@ defmodule EventasaurusWeb.EventLive.Edit do
                  "venue_country", "venue_latitude", "venue_longitude", "is_virtual",
                  "start_date", "start_time", "ends_date", "ends_time"])
 
-    case save_event(socket, socket.assigns.event, final_event_params) do
-      {:ok, event} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Event updated successfully")
-         |> redirect(to: ~p"/events/#{event.slug}")}
+    # Validate date polling before saving
+    validation_changeset =
+      socket.assigns.event
+      |> Events.change_event(final_event_params)
+      |> Map.put(:action, :validate)
+      |> validate_date_polling(final_event_params)
 
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign(socket, changeset: changeset)}
+    if validation_changeset.valid? do
+      case save_event(socket, socket.assigns.event, final_event_params) do
+        {:ok, event} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Event updated successfully")
+           |> redirect(to: ~p"/events/#{event.slug}")}
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:noreply, assign(socket, form: to_form(changeset))}
+      end
+    else
+      {:noreply, assign(socket,
+        form: to_form(validation_changeset),
+        changeset: validation_changeset
+      )}
     end
   end
 
@@ -743,5 +759,35 @@ defmodule EventasaurusWeb.EventLive.Edit do
     date = datetime |> DateTime.to_date() |> Date.to_iso8601()
     time = datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
     {date, time}
+  end
+
+  # Helper function to validate date polling options
+  defp validate_date_polling(changeset, params) do
+    enable_date_polling = Map.get(params, "enable_date_polling", false)
+
+    # Handle string "true"/"false" from form submissions
+    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
+
+    if is_polling_enabled do
+      selected_dates_string = Map.get(params, "selected_poll_dates", "")
+
+      if selected_dates_string == "" do
+        Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+      else
+        selected_dates =
+          selected_dates_string
+          |> String.split(",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(&(&1 != ""))
+
+        if length(selected_dates) < 2 do
+          Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+        else
+          changeset
+        end
+      end
+    else
+      changeset
+    end
   end
 end
