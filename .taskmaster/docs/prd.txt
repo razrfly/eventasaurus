@@ -127,4 +127,105 @@ image_hash = :crypto.hash(:md5, event.image_url <> to_string(event.updated_at))
 - **Template Variations**: Multiple card layouts/themes
 - **Customization**: Event-specific styling options
 - **Optimization**: Pre-generation for high-traffic events
-- **Analytics**: Track social card usage and click-through rates 
+- **Analytics**: Track social card usage and click-through rates
+
+## Event Polling UI & Schema Redesign
+
+### Current State
+- Events currently use a fixed start_at/end_at datetime model
+- Users must define specific start and end times at event creation
+- Limited flexibility for gathering input on multiple possible dates
+- UI uses basic datetime pickers
+
+### Target Objectives
+1. Allow users to suggest and vote on multiple possible dates for an event
+2. Remove requirement to define a specific start_at or end_at at event creation
+3. Change the UI to support a calendar-style system for choosing dates
+4. Maintain existing database schema and validation logic
+5. Create a more engaging and flexible event planning experience
+
+### Technical Requirements
+
+#### UI/UX Changes
+1. Replace datetime picker with a calendar-style date selection system
+2. Allow users to select 2 or more date options visually on a calendar interface
+3. Remove the current date range selection in favor of cherry-picking specific dates
+4. Display selected dates in a clear list format after selection
+5. Implement voting interface with preference options:
+   - ✅ Preferred
+   - 🤷 If Needed  
+   - ❌ Not Available
+6. Show vote tallies and popularity scores
+7. Display heatmap or tallied result view for organizers
+
+#### Backend Logic
+1. Maintain existing database schema - no schema changes required
+2. Continue using existing date creation logic and database storage
+3. Store dates immediately after selection (same as current behavior)
+4. Use median or most selected date as stand-in start_at for validation
+5. Preserve all existing validation logic
+6. Support multiple date storage using current date model
+
+#### Event States (Future Enhancement)
+Prepare foundation for these event states:
+- draft
+- polling  
+- confirmed
+- cancelled
+- recruiting (not enough interest)
+- closed (past event)
+- rescheduling
+
+### Functional Specifications
+
+#### Date Selection Flow
+1. User creates new event
+2. Instead of start/end datetime pickers, user sees calendar interface
+3. User clicks on 2+ dates on calendar to select possible event dates
+4. Selected dates appear in a list below calendar
+5. System stores these dates using existing date creation logic
+6. For validation purposes, system calculates median date as temporary start_at
+
+#### Voting Flow
+1. Invitees receive event with multiple date options
+2. For each date option, invitees can select preference level
+3. Votes are recorded and tallied in real-time
+4. Organizer can view results in heatmap or summary format
+5. Most popular/median date becomes candidate for final validation
+
+#### Organizer Controls
+1. Organizer can always override and select final date manually
+2. Organizer can see vote visibility and popularity previews
+3. Organizer can add/remove date options during polling phase
+
+### Technical Constraints
+1. NO database schema changes - use existing date storage model
+2. Maintain all existing validation logic
+3. UI changes only - backend date handling remains the same
+4. Must work with current Phoenix/Elixir stack
+5. Calendar interface should be responsive and accessible
+
+### Reference Design
+Use Rallly.co as UI inspiration for calendar-based date selection and voting interface.
+
+### Acceptance Criteria
+1. Users can select multiple dates via calendar interface instead of datetime pickers
+2. Selected dates are stored using existing database logic
+3. Voting system allows preference selection for each date option
+4. Organizer can view vote results and make final date selection
+5. All existing validation continues to work with median date calculation
+6. UI is responsive and accessible
+7. No breaking changes to existing event creation flow
+8. Calendar interface supports easy date selection and deselection
+
+### Deliverables
+1. New calendar-based date selection component
+2. Date voting interface for invitees
+3. Vote results dashboard for organizers
+4. Updated event creation flow
+5. Integration with existing validation system
+6. Responsive UI implementation
+7. Testing for all new functionality
+
+### Timeline Considerations
+This is a UI-focused change that should maintain existing backend logic, making it primarily a frontend development effort with minimal backend modifications needed for vote storage and retrieval. 

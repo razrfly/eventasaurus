@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.EventComponents do
   use Phoenix.Component
   import EventasaurusWeb.CoreComponents
   alias EventasaurusWeb.TimezoneHelpers
+  alias EventasaurusWeb.CalendarComponent
   import Phoenix.HTML.Form
   alias Phoenix.LiveView.JS
 
@@ -177,7 +178,14 @@ defmodule EventasaurusWeb.EventComponents do
   attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
 
   def event_form(assigns) do
-    assigns = assign_new(assigns, :id, fn -> "event-form-#{if assigns.action == :new, do: "new", else: "edit"}" end)
+    assigns = assign_new(assigns, :id, fn ->
+      action_suffix = case Map.get(assigns, :action) do
+        :new -> "new"
+        :edit -> "edit"
+        _ -> "default"
+      end
+      "event-form-#{action_suffix}"
+    end)
 
     ~H"""
     <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
@@ -286,25 +294,30 @@ defmodule EventasaurusWeb.EventComponents do
                 </label>
               </div>
 
-              <div phx-hook="DateTimeSync" id="date-time-sync-hook">
+              <%= if @enable_date_polling do %>
+                <!-- Calendar-based date selection for polling -->
+                <div class="mb-4" phx-hook="CalendarFormSync" id={"calendar-form-sync-#{@id}"}>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Select dates for polling
+                  </label>
+                  <p class="text-xs text-gray-500 mb-3">
+                    Click on calendar dates to include them in the poll. Attendees will vote on these dates.
+                  </p>
+                  <.live_component
+                    module={CalendarComponent}
+                    id={"#{@id}-calendar"}
+                    selected_dates={parse_selected_dates(@form_data)}
+                  />
+                  <!-- Hidden fields to store selected dates -->
+                  <input type="hidden" name="event[selected_poll_dates]" id={"#{@id}-selected-dates"} value={encode_selected_dates(@form_data)} />
+                  <!-- Validation error container -->
+                  <div id="date-selection-error" class="hidden mt-2"></div>
+                </div>
+
+                <!-- Time inputs for polling -->
                 <div class="grid grid-cols-2 gap-3 mb-3">
                   <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      <%= if @enable_date_polling, do: "Poll Start Date", else: "Start Date" %>
-                    </label>
-                    <.date_input
-                      id={"#{@id}-start_date"}
-                      name="event[start_date]"
-                      value={Map.get(@form_data, "start_date", "")}
-                      required
-                      data-role="start-date"
-                      class="text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      <%= if @enable_date_polling, do: "Start Time", else: "Start Time" %>
-                    </label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
                     <.time_select
                       id={"#{@id}-start_time"}
                       name="event[start_time]"
@@ -314,24 +327,8 @@ defmodule EventasaurusWeb.EventComponents do
                       class="text-sm"
                     />
                   </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3 mb-3">
                   <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      <%= if @enable_date_polling, do: "Poll End Date", else: "End Date" %>
-                    </label>
-                    <.date_input
-                      id={"#{@id}-ends_date"}
-                      name="event[ends_date]"
-                      value={Map.get(@form_data, "ends_date", "")}
-                      data-role="end-date"
-                      class="text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      <%= if @enable_date_polling, do: "End Time", else: "End Time" %>
-                    </label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
                     <.time_select
                       id={"#{@id}-ends_time"}
                       name="event[ends_time]"
@@ -341,28 +338,79 @@ defmodule EventasaurusWeb.EventComponents do
                     />
                   </div>
                 </div>
-                <div>
-                  <label for={f[:timezone].id} class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-                  <.timezone_select
-                    field={f[:timezone]}
-                    selected={Map.get(@form_data, "timezone", nil)}
-                    show_all={@show_all_timezones}
-                    class="text-sm"
-                  />
-                  <p class="mt-1 text-xs text-gray-500">Auto-detected if available</p>
+              <% else %>
+                <!-- Traditional date range selection -->
+                <div phx-hook="DateTimeSync" id="date-time-sync-hook">
+                  <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                      <.date_input
+                        id={"#{@id}-start_date"}
+                        name="event[start_date]"
+                        value={Map.get(@form_data, "start_date", "")}
+                        required
+                        data-role="start-date"
+                        class="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                      <.time_select
+                        id={"#{@id}-start_time"}
+                        name="event[start_time]"
+                        value={Map.get(@form_data, "start_time", "")}
+                        required
+                        data-role="start-time"
+                        class="text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                      <.date_input
+                        id={"#{@id}-ends_date"}
+                        name="event[ends_date]"
+                        value={Map.get(@form_data, "ends_date", "")}
+                        data-role="end-date"
+                        class="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                      <.time_select
+                        id={"#{@id}-ends_time"}
+                        name="event[ends_time]"
+                        value={Map.get(@form_data, "ends_time", "")}
+                        data-role="end-time"
+                        class="text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
+              <% end %>
+
+              <div>
+                <label for={f[:timezone].id} class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                <.timezone_select
+                  field={f[:timezone]}
+                  selected={Map.get(@form_data, "timezone", nil)}
+                  show_all={@show_all_timezones}
+                  class="text-sm"
+                />
+                <p class="mt-1 text-xs text-gray-500">Auto-detected if available</p>
               </div>
 
               <%= if @enable_date_polling do %>
-                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mt-3">
+                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mt-3">
                   <div class="flex items-start">
-                    <svg class="w-4 h-4 text-yellow-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    <svg class="w-4 h-4 text-blue-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M13 2a1 1 0 00-1-1H8a1 1 0 00-1 1v1H5a1 1 0 000 2h1v10a2 2 0 002 2h4a2 2 0 002-2V5h1a1 1 0 100-2h-2V2zM9 4h2v1H9V4z" clip-rule="evenodd" />
                     </svg>
                     <div>
-                      <h4 class="text-sm font-medium text-yellow-800">Date Polling Enabled</h4>
-                      <p class="text-xs text-yellow-700 mt-1">
-                        Each day from start to end date will become a voting option for attendees.
+                      <h4 class="text-sm font-medium text-blue-800">Calendar Polling Mode</h4>
+                      <p class="text-xs text-blue-700 mt-1">
+                        Use the calendar above to select specific dates for polling. Attendees will vote on the selected dates.
                       </p>
                     </div>
                   </div>
@@ -475,4 +523,45 @@ defmodule EventasaurusWeb.EventComponents do
   end
 
   defp format_datetime_for_input(_, _), do: ""
+
+  # Helper functions for calendar date selection
+  defp parse_selected_dates(form_data) do
+    case Map.get(form_data, "selected_poll_dates") do
+      nil -> []
+      "" -> []
+      dates_string when is_binary(dates_string) ->
+        dates_string
+        |> String.split(",")
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.map(fn date_str ->
+          case Date.from_iso8601(date_str) do
+            {:ok, date} -> date
+            {:error, _} -> nil
+          end
+        end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.sort()
+      dates when is_list(dates) -> dates
+      _ -> []
+    end
+  end
+
+  defp encode_selected_dates(form_data) do
+    case Map.get(form_data, "selected_poll_dates") do
+      nil -> ""
+      [] -> ""
+      dates when is_list(dates) ->
+        dates
+        |> Enum.map(fn
+          %Date{} = date -> Date.to_iso8601(date)
+          date_str when is_binary(date_str) -> date_str
+          _ -> nil
+        end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.join(",")
+      dates_string when is_binary(dates_string) -> dates_string
+      _ -> ""
+    end
+  end
 end
