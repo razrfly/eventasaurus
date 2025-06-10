@@ -2,86 +2,89 @@ defmodule EventasaurusWeb.EventSocialCardController do
   use EventasaurusWeb, :controller
 
   require Logger
-  alias Eventasaurus.Services.SvgConverter
+
   alias EventasaurusApp.Events
+  alias Eventasaurus.Services.SvgConverter
+  alias Eventasaurus.SocialCards.HashGenerator
+
+  # Import view helper functions for use in template
+  import EventasaurusWeb.SocialCardView
 
   @doc """
-  Generates and serves a social card PNG image for the specified event.
-
-  URL format: /events/:id/social_card.png
+  Generates a social card PNG for an event by slug with hash validation.
+  Provides cache busting through hash-based URLs.
   """
-  @spec generate_card(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def generate_card(conn, %{"id" => event_id}) do
-    case verify_system_dependencies() do
-      :ok ->
-        # Fetch real event data from database
-        case Events.get_event(event_id) do
-          nil ->
-            Logger.warning("Event #{event_id} not found")
-            conn
-            |> put_status(:not_found)
-            |> put_resp_content_type("application/json")
-            |> send_resp(404, Jason.encode!(%{error: "Event not found"}))
+  def generate_card_by_slug(conn, %{"slug" => slug, "hash" => hash, "rest" => rest}) do
+    Logger.info("Social card requested for event slug: #{slug}, hash: #{hash}, rest: #{inspect(rest)}")
 
-          event ->
-            Logger.info("Generating social card for event #{event_id}: #{event.title}")
+    # The hash should be clean now, but check if rest contains .png
+    final_hash = if rest == ["png"] do
+      hash  # Hash is clean, rest contains the extension
+    else
+      # Fallback: extract hash from combined parameter
+      combined = if is_list(rest) and length(rest) > 0 do
+        "#{hash}.#{Enum.join(rest, ".")}"
+      else
+        hash
+      end
+      String.replace_suffix(combined, ".png", "")
+    end
 
-            # Render SVG template with real event data
-            svg_content = render_svg_template(event)
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        Logger.warning("Event not found for slug: #{slug}")
+        send_resp(conn, 404, "Event not found")
 
-            Logger.debug("Generated SVG content length: #{String.length(svg_content)} characters")
+      event ->
+        # Validate that the hash matches current event data
+        case HashGenerator.validate_hash(event, final_hash) do
+          true ->
+            Logger.info("Hash validated for event #{slug}: #{event.title}")
 
-            # Convert SVG to PNG using our converter service
-            case SvgConverter.svg_to_png(svg_content, event_id, event) do
+            # Sanitize event data before rendering
+            sanitized_event = sanitize_event(event)
+
+            # Render SVG template with sanitized event data
+            svg_content = render_svg_template(sanitized_event)
+
+            # Convert SVG to PNG
+            case SvgConverter.svg_to_png(svg_content, event.slug, sanitized_event) do
               {:ok, png_path} ->
-                Logger.info("Successfully converted social card for event #{event_id}")
+                # Read the PNG file and serve it
+                case File.read(png_path) do
+                  {:ok, png_data} ->
+                    Logger.info("Successfully generated social card PNG for slug #{slug} (#{byte_size(png_data)} bytes)")
 
-                # Schedule cleanup of temporary file after serving
-                SvgConverter.cleanup_temp_file(png_path)
+                    # Clean up the temporary file
+                    SvgConverter.cleanup_temp_file(png_path)
 
-                # Serve the PNG file with appropriate headers
-                conn
-                |> put_resp_content_type("image/png")
-                |> put_resp_header("cache-control", "public, max-age=86400")
-                |> put_resp_header("etag", "\"#{Path.basename(png_path, ".png")}\"")
-                |> send_file(200, png_path)
+                    conn
+                    |> put_resp_content_type("image/png")
+                    |> put_resp_header("cache-control", "public, max-age=31536000")  # Cache for 1 year since hash ensures freshness
+                    |> put_resp_header("etag", "\"#{final_hash}\"")
+                    |> send_resp(200, png_data)
+
+                  {:error, reason} ->
+                    Logger.error("Failed to read PNG file for slug #{slug}: #{inspect(reason)}")
+                    SvgConverter.cleanup_temp_file(png_path)
+                    send_resp(conn, 500, "Failed to generate social card")
+                end
 
               {:error, reason} ->
-                Logger.error("Failed to generate social card for event #{event_id}: #{inspect(reason)}")
-
-                # Return error response with fallback
-                conn
-                |> put_status(:internal_server_error)
-                |> json(%{
-                  error: "Failed to generate social card",
-                  reason: reason,
-                  event_id: event_id
-                })
+                Logger.error("Failed to convert SVG to PNG for slug #{slug}: #{inspect(reason)}")
+                send_resp(conn, 500, "Failed to generate social card")
             end
+
+          false ->
+            Logger.warning("Hash mismatch for event #{slug}. Expected: #{HashGenerator.generate_hash(event)}, Got: #{final_hash}")
+
+            # Redirect to current URL with correct hash
+            current_url = HashGenerator.generate_url_path(event)
+
+            conn
+            |> put_resp_header("location", current_url)
+            |> send_resp(301, "Social card URL has been updated")
         end
-
-      {:error, reason} ->
-        Logger.error("Social card generation failed - system dependency missing: #{reason}")
-
-        conn
-        |> put_status(:internal_server_error)
-        |> put_resp_content_type("text/plain")
-        |> send_resp(500, "Social card generation unavailable")
-    end
-  end
-
-  @doc """
-  Verifies that required system dependencies are available.
-  Returns :ok if all dependencies are present, {:error, reason} otherwise.
-  """
-  @spec verify_system_dependencies() :: :ok | {:error, String.t()}
-  def verify_system_dependencies do
-    case System.find_executable("rsvg-convert") do
-      nil ->
-        {:error, "rsvg-convert command not found"}
-
-      _path ->
-        :ok
     end
   end
 
@@ -89,9 +92,6 @@ defmodule EventasaurusWeb.EventSocialCardController do
   defp render_svg_template(event) do
     # Create theme data
     theme = %{color1: "#1a1a1a", color2: "#333333"}
-
-    # Import view helper functions for use in template
-    import EventasaurusWeb.SocialCardView
 
     # Build image section - download external images locally for rsvg-convert compatibility
     image_section = if has_image?(event) do
