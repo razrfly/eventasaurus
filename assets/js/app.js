@@ -365,6 +365,46 @@ Hooks.GooglePlacesAutocomplete = {
   }
 };
 
+// Calendar Form Sync Hook - Updates hidden form field when calendar dates change
+Hooks.CalendarFormSync = {
+  mounted() {
+    if (process.env.NODE_ENV !== 'production') console.log("CalendarFormSync hook mounted");
+    
+    // Listen for calendar date changes from the LiveComponent
+    this.handleEvent("calendar_dates_changed", ({ dates, component_id }) => {
+      if (process.env.NODE_ENV !== 'production') console.log("Calendar dates changed:", dates);
+      
+      // Find the hidden input field for selected poll dates
+      const hiddenInput = document.querySelector('[name="event[selected_poll_dates]"]');
+      if (hiddenInput) {
+        hiddenInput.value = dates.join(',');
+        if (process.env.NODE_ENV !== 'production') console.log("Updated hidden field with:", hiddenInput.value);
+        
+        // Dispatch change event to trigger any form validation
+        hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        if (process.env.NODE_ENV !== 'production') console.warn("Could not find hidden input for selected_poll_dates");
+      }
+      
+      // Also update any date validation display
+      this.updateDateValidation(dates);
+    });
+  },
+  
+  updateDateValidation(dates) {
+    const errorContainer = document.getElementById('date-selection-error');
+    if (errorContainer) {
+      if (dates.length === 0) {
+        errorContainer.textContent = 'Please select at least one date for the poll';
+        errorContainer.className = 'text-red-600 text-sm mt-1';
+      } else {
+        errorContainer.textContent = '';
+        errorContainer.className = 'hidden';
+      }
+    }
+  }
+};
+
 // Supabase image upload hook for file input
 Hooks.SupabaseImageUpload = SupabaseImageUpload;
 
