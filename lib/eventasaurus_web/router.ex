@@ -18,6 +18,10 @@ defmodule EventasaurusWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :image do
+    plug :accepts, ["png", "jpg", "jpeg", "gif", "webp"]
+  end
+
   # Routes that require authentication
   pipeline :authenticated do
     plug :require_authenticated_user
@@ -110,7 +114,7 @@ defmodule EventasaurusWeb.Router do
 
   # Public social card generation (no auth required)
   scope "/events", EventasaurusWeb do
-    pipe_through :browser
+    pipe_through :image
 
     # Cache-busting social card generation (by slug with hash)
     get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug, as: :social_card_cached

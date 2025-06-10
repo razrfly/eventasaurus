@@ -45,16 +45,21 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
   def sanitize_text(_), do: ""
 
   @doc """
-  Validates image URLs - only allows proper HTTP/HTTPS image URLs.
+  Validates image URLs - allows HTTP/HTTPS URLs and local static file paths.
   """
   @spec validate_image_url(any()) :: String.t() | nil
   def validate_image_url(url) when is_binary(url) do
-    uri = URI.parse(url)
-
-    if valid_scheme?(uri.scheme) and valid_host?(uri.host) and image_extension?(url) do
+    # Handle local static file paths (e.g., /images/events/general/metaverse.png)
+    if is_local_static_path?(url) do
       url
     else
-      nil
+      # Handle external URLs
+      uri = URI.parse(url)
+      if valid_scheme?(uri.scheme) and valid_host?(uri.host) and image_extension?(url) do
+        url
+      else
+        nil
+      end
     end
   end
   def validate_image_url(_), do: nil
@@ -79,5 +84,24 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
 
   defp valid_host?(host), do: is_binary(host) and String.length(host) > 2
 
-  defp image_extension?(url), do: Regex.match?(~r/\.(jpe?g|png|gif|webp)(\?.*)?$/i, url)
+  defp is_local_static_path?(path) do
+    # Check if it's a local path starting with / and has a valid image extension
+    String.starts_with?(path, "/") and
+    Regex.match?(~r/\.(jpe?g|png|gif|webp)$/i, path) and
+    # Security check: ensure it's within allowed static directories
+    String.contains?(path, "/images/")
+  end
+
+  defp image_extension?(url) do
+    # Check for file extension in path
+    has_extension = Regex.match?(~r/\.(jpe?g|png|gif|webp)(\?.*)?$/i, url)
+
+    # Also check for format indicators in query params (e.g., Unsplash URLs)
+    has_format_param = Regex.match?(~r/[&?]fm=(jpe?g|png|gif|webp)/i, url)
+
+    # Allow known image service domains even without explicit extensions
+    known_image_service = Regex.match?(~r/^https?:\/\/(images\.unsplash\.com|.*\.cloudinary\.com|.*\.amazonaws\.com)/i, url)
+
+    has_extension or has_format_param or known_image_service
+  end
 end
