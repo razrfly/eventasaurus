@@ -39,14 +39,17 @@ defmodule EventasaurusWeb.EventSocialCardController do
           true ->
             Logger.info("Hash validated for event #{slug}: #{event.title}")
 
-            # Sanitize event data before rendering
-            sanitized_event = sanitize_event(event)
+            # Check for system dependencies first
+            case SvgConverter.verify_rsvg_available() do
+              :ok ->
+                # Sanitize event data before rendering
+                sanitized_event = sanitize_event(event)
 
-            # Render SVG template with sanitized event data
-            svg_content = render_svg_template(sanitized_event)
+                # Render SVG template with sanitized event data
+                svg_content = render_svg_template(sanitized_event)
 
-            # Convert SVG to PNG
-            case SvgConverter.svg_to_png(svg_content, event.slug, sanitized_event) do
+                # Convert SVG to PNG
+                case SvgConverter.svg_to_png(svg_content, event.slug, sanitized_event) do
               {:ok, png_path} ->
                 # Read the PNG file and serve it
                 case File.read(png_path) do
@@ -68,9 +71,17 @@ defmodule EventasaurusWeb.EventSocialCardController do
                     send_resp(conn, 500, "Failed to generate social card")
                 end
 
-              {:error, reason} ->
-                Logger.error("Failed to convert SVG to PNG for slug #{slug}: #{inspect(reason)}")
-                send_resp(conn, 500, "Failed to generate social card")
+                  {:error, reason} ->
+                    Logger.error("Failed to convert SVG to PNG for slug #{slug}: #{inspect(reason)}")
+                    send_resp(conn, 500, "Failed to generate social card")
+                end
+
+              {:error, :command_not_found} ->
+                Logger.error("rsvg-convert command not found - social card generation unavailable. Install librsvg2-bin package.")
+
+                conn
+                |> put_resp_content_type("text/plain")
+                |> send_resp(503, "Social card generation temporarily unavailable - missing system dependency")
             end
 
           false ->
