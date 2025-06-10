@@ -168,7 +168,7 @@ defmodule EventasaurusWeb.CalendarComponent do
             Selected dates (<%= length(@selected_dates) %>):
           </h4>
           <div class="flex flex-wrap gap-1">
-            <%= for date <- @selected_dates do %>
+            <%= for date <- Enum.sort(@selected_dates, Date) do %>
               <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-md">
                 <%= Calendar.strftime(date, "%b %d") %>
                 <button

@@ -538,23 +538,62 @@ defmodule EventasaurusWeb.EventLive.Edit do
   defp combine_date_time_fields(params) do
     timezone = Map.get(params, "timezone", "UTC")
 
-    # Combine start date and time
-    start_at = case {Map.get(params, "start_date"), Map.get(params, "start_time")} do
-      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
-        combine_date_time_to_utc(date_str, time_str, timezone)
-      _ -> Map.get(params, "start_at")
-    end
+    # Check if date polling is enabled
+    if Map.get(params, "enable_date_polling", false) do
+      # For date polling, use middle date from selected dates
+      case Map.get(params, "selected_poll_dates") do
+        dates_string when is_binary(dates_string) and dates_string != "" ->
+          # Parse the comma-separated date strings
+          selected_dates =
+            dates_string
+            |> String.split(",")
+            |> Enum.map(&String.trim/1)
+            |> Enum.filter(&(&1 != ""))
+            |> Enum.map(&Date.from_iso8601!/1)
+            |> Enum.sort()
 
-    # Combine end date and time
-    ends_at = case {Map.get(params, "ends_date"), Map.get(params, "ends_time")} do
-      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
-        combine_date_time_to_utc(date_str, time_str, timezone)
-      _ -> Map.get(params, "ends_at")
-    end
+          if length(selected_dates) > 0 do
+            # Calculate the middle date (median)
+            middle_index = div(length(selected_dates), 2)
+            middle_date = Enum.at(selected_dates, middle_index)
 
-    params
-    |> Map.put("start_at", start_at)
-    |> Map.put("ends_at", ends_at)
+            # Get start and end times
+            start_time = Map.get(params, "start_time", "09:00")
+            end_time = Map.get(params, "ends_time", "17:00")
+
+            # Create start_at and ends_at using middle date
+            start_at = combine_date_time_to_utc(Date.to_iso8601(middle_date), start_time, timezone)
+            ends_at = combine_date_time_to_utc(Date.to_iso8601(middle_date), end_time, timezone)
+
+            params
+            |> Map.put("start_at", start_at)
+            |> Map.put("ends_at", ends_at)
+          else
+            params
+          end
+        _ ->
+          params
+      end
+    else
+      # Traditional date handling
+      # Combine start date and time
+      start_at = case {Map.get(params, "start_date"), Map.get(params, "start_time")} do
+        {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
+          combine_date_time_to_utc(date_str, time_str, timezone)
+        _ -> Map.get(params, "start_at")
+      end
+
+      # Combine end date and time
+      ends_at = case {Map.get(params, "ends_date"), Map.get(params, "ends_time")} do
+        {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
+          combine_date_time_to_utc(date_str, time_str, timezone)
+        _ -> Map.get(params, "ends_at")
+      end
+
+      params
+      |> Map.put("start_at", start_at)
+      |> Map.put("ends_at", ends_at)
+    end
   end
 
   # Helper function to combine date and time strings into UTC datetime
