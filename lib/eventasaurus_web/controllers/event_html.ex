@@ -43,4 +43,21 @@ defmodule EventasaurusWeb.EventHTML do
     Calendar.strftime(converted_dt, "%A, %B %d")
   end
   def format_date(_, _), do: ""
+
+  def format_event_datetime(event) do
+    assigns = %{event: event}
+
+    ~H"""
+    <p class="text-gray-700">
+      <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%A, %B %d, %Y") %>
+    </p>
+    <p class="text-gray-600 text-sm">
+      <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
+      <%= if @event.ends_at do %>
+        - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
+      <% end %>
+      <%= if @event.timezone do %>(<%= @event.timezone %>)<% end %>
+    </p>
+    """
+  end
 end

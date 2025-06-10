@@ -29,34 +29,48 @@ defmodule EventasaurusWeb.EventController do
               participants = Events.list_event_participants(event)
                             |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
 
-              # Load polling data if event is in polling state
-              {date_poll, date_options, votes_by_date} = if event.state == "polling" do
+              # Get polling data if event is in polling state
+              {date_options, votes_by_date, votes_breakdown} = if event.state == "polling" do
                 poll = Events.get_event_date_poll(event)
                 if poll do
                   options = Events.list_event_date_options(poll)
-                  # Create votes_by_date structure for visualization
-                  votes_map = options
-                              |> Enum.map(fn option ->
-                                votes = Events.list_votes_for_date_option(option)
-                                {option.date, votes}
-                              end)
-                              |> Enum.into(%{})
-                  {poll, options, votes_map}
+                                      votes = Events.list_votes_for_poll(poll)
+
+                  # Group votes by date
+                  votes_by_date = Enum.group_by(votes, & &1.event_date_option.date)
+
+                  # Pre-compute vote breakdowns to avoid O(n²) in template
+                  votes_breakdown =
+                    votes_by_date
+                    |> Map.new(fn {date, votes} ->
+                      breakdown = Enum.frequencies_by(votes, &to_string(&1.vote_type))
+                      total = length(votes)
+                      {date, %{
+                        total: total,
+                        yes: Map.get(breakdown, "yes", 0),
+                        if_need_be: Map.get(breakdown, "if_need_be", 0),
+                        no: Map.get(breakdown, "no", 0)
+                      }}
+                    end)
+
+                  {options, votes_by_date, votes_breakdown}
                 else
-                  {nil, [], %{}}
+                  {[], %{}, %{}}
                 end
               else
-                {nil, [], %{}}
+                {[], %{}, %{}}
               end
 
               conn
               |> assign(:venue, venue)
               |> assign(:organizers, organizers)
               |> assign(:participants, participants)
-              |> assign(:date_poll, date_poll)
               |> assign(:date_options, date_options)
               |> assign(:votes_by_date, votes_by_date)
-              |> render(:show, event: event, user: user, registration_status: registration_status)
+              |> assign(:votes_breakdown, votes_breakdown)
+              |> assign(:is_manager, true)
+              |> assign(:registration_status, registration_status)
+              |> render(:show, event: event, user: user)
             else
               conn
               |> put_flash(:error, "You don't have permission to manage this event")
