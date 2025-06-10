@@ -878,6 +878,50 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Intelligently updates date options for a poll, preserving existing votes.
+  This function only adds new date options and removes date options that are no longer selected,
+  keeping existing date options (and their votes) that remain in the selection.
+  """
+  def update_event_date_options(%EventDatePoll{} = poll, new_dates) do
+    new_dates = Enum.map(new_dates, &ensure_date_struct/1)
+    existing_options = list_event_date_options(poll)
+    existing_dates = Enum.map(existing_options, & &1.date)
+
+    # Find dates to add and remove
+    dates_to_add = new_dates -- existing_dates
+    dates_to_remove = existing_dates -- new_dates
+
+    Repo.transaction(fn ->
+      # Remove date options that are no longer selected
+      if length(dates_to_remove) > 0 do
+        options_to_remove = Enum.filter(existing_options, fn option ->
+          option.date in dates_to_remove
+        end)
+
+        Enum.each(options_to_remove, fn option ->
+          case delete_event_date_option(option) do
+            {:ok, _} -> :ok
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end)
+      end
+
+      # Add new date options
+      if length(dates_to_add) > 0 do
+        Enum.each(dates_to_add, fn date ->
+          case create_event_date_option(poll, date) do
+            {:ok, _option} -> :ok
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end)
+      end
+
+      # Return the updated list of options
+      list_event_date_options(poll)
+    end)
+  end
+
+  @doc """
   Returns an `%Ecto.Changeset{}` for tracking date option changes.
   """
   def change_event_date_option(%EventDateOption{} = option, attrs \\ %{}) do
