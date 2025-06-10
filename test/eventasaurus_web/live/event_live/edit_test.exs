@@ -218,19 +218,103 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       assert html =~ "checked"
       assert html =~ "Let attendees vote on the date"
 
-      # Check that the labels show "Poll Start Date" instead of "Start Date"
-      assert html =~ "Poll Start Date"
-      assert html =~ "Poll End Date"
+      # Check that polling mode indicators are present
+      assert html =~ "Calendar Polling Mode"
+      assert html =~ "Select dates for polling"
 
       # Verify that the date polling state is detected correctly
       assert has_element?(edit_live, "[name='event[enable_date_polling]'][checked]")
 
-      # Verify the form labels change when polling is enabled
-      assert has_element?(edit_live, "label", "Poll Start Date")
-      assert has_element?(edit_live, "label", "Poll End Date")
+      # Verify polling-specific UI elements are present
+      assert has_element?(edit_live, ".calendar-component")
+      assert has_element?(edit_live, "h4", "Calendar Polling Mode")
 
       # The checkbox should be checked
       assert has_element?(edit_live, "input[name='event[enable_date_polling]'][checked]")
+    end
+
+    test "editing date options during polling preserves existing votes", %{conn: conn} do
+      # Create a user for this test
+      user = EventasaurusApp.AccountsFixtures.user_fixture()
+      other_user = EventasaurusApp.AccountsFixtures.user_fixture()
+
+      # Create an event with date polling enabled
+      tomorrow = Date.utc_today() |> Date.add(1)
+      day_after = Date.utc_today() |> Date.add(2)
+      day_three = Date.utc_today() |> Date.add(3)
+
+      event_attrs = %{
+        title: "Test Vote Preservation",
+        description: "Testing that votes are preserved during edits",
+        start_at: DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        ends_at: DateTime.new!(day_three, ~T[16:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        timezone: "America/New_York",
+        state: "polling",
+        visibility: "public",
+        is_virtual: true
+      }
+
+      {:ok, event} = EventasaurusApp.Events.create_event_with_organizer(event_attrs, user)
+
+      # Create date poll and initial options (tomorrow and day_after)
+      {:ok, poll} = EventasaurusApp.Events.create_event_date_poll(event, user, %{voting_deadline: nil})
+      {:ok, option1} = EventasaurusApp.Events.create_event_date_option(poll, tomorrow)
+      {:ok, option2} = EventasaurusApp.Events.create_event_date_option(poll, day_after)
+
+      # Create votes on the initial options
+      {:ok, vote1} = EventasaurusApp.Events.create_event_date_vote(option1, other_user, :yes)
+      {:ok, vote2} = EventasaurusApp.Events.create_event_date_vote(option2, other_user, :if_need_be)
+
+      # Verify initial votes exist
+      initial_vote1 = EventasaurusApp.Events.get_event_date_vote!(vote1.id)
+      initial_vote2 = EventasaurusApp.Events.get_event_date_vote!(vote2.id)
+      assert initial_vote1.vote_type == :yes
+      assert initial_vote2.vote_type == :if_need_be
+
+      # Load the edit page
+      conn = log_in_user(conn, user)
+      {:ok, edit_live, _html} = live(conn, ~p"/events/#{event.slug}/edit")
+
+            # First, click on the new date in the calendar component to add it
+      # This simulates the user clicking on day_three in the calendar
+      day_three_string = Date.to_iso8601(day_three)
+
+      edit_live
+      |> element("button[phx-value-date='#{day_three_string}']")
+      |> render_click()
+
+      # Now submit the form to save the changes
+      updated_data = %{
+        "event[title]" => "Test Vote Preservation",
+        "event[enable_date_polling]" => "true",
+        "event[start_time]" => "14:00",
+        "event[ends_time]" => "16:00",
+        "event[timezone]" => "America/New_York"
+      }
+
+      # Submit the form to save the event with the newly added date option
+      _html = edit_live
+      |> form("form[data-test-id='event-form']", updated_data)
+      |> render_submit()
+
+      # Should redirect to event show page
+      assert_redirected(edit_live, "/events/#{event.slug}")
+
+      # Verify existing votes are still there
+      preserved_vote1 = EventasaurusApp.Events.get_event_date_vote!(vote1.id)
+      preserved_vote2 = EventasaurusApp.Events.get_event_date_vote!(vote2.id)
+
+      assert preserved_vote1.vote_type == :yes
+      assert preserved_vote2.vote_type == :if_need_be
+
+      # Verify the new date option was added
+      updated_options = EventasaurusApp.Events.list_event_date_options(poll)
+      assert length(updated_options) == 3
+
+      # Verify all three dates are present
+      option_dates = Enum.map(updated_options, & &1.date) |> Enum.sort()
+      expected_dates = [tomorrow, day_after, day_three] |> Enum.sort()
+      assert option_dates == expected_dates
     end
   end
 
