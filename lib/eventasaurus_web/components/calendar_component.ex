@@ -100,24 +100,58 @@ defmodule EventasaurusWeb.CalendarComponent do
   end
 
   @impl true
+  def handle_event("key_navigation", %{"key" => key, "date" => current_date_string}, socket) do
+    case Date.from_iso8601(current_date_string) do
+      {:ok, current_date} ->
+        next_date = case key do
+          "ArrowLeft" -> Date.add(current_date, -1)
+          "ArrowRight" -> Date.add(current_date, 1)
+          "ArrowUp" -> Date.add(current_date, -7)
+          "ArrowDown" -> Date.add(current_date, 7)
+          "Enter" ->
+            # Toggle the current date
+            send(self(), {:toggle_date, current_date_string})
+            current_date
+          "Space" ->
+            # Toggle the current date
+            send(self(), {:toggle_date, current_date_string})
+            current_date
+          _ -> current_date
+        end
+
+        # Update the focused date if navigation occurred
+        if next_date != current_date do
+          socket = push_event(socket, "focus_date", %{date: Date.to_iso8601(next_date)})
+          {:noreply, socket}
+        else
+          {:noreply, socket}
+        end
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
-    <div class="calendar-component bg-white border border-gray-200 rounded-lg shadow-sm">
+    <div class="calendar-component bg-white border border-gray-200 rounded-lg shadow-sm" role="application" aria-label="Date picker calendar" phx-hook="CalendarKeyboardNav" id={"calendar-#{@id || "default"}"}>
       <!-- Calendar Header -->
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+      <div class="flex items-center justify-between px-3 py-3 sm:px-4 border-b border-gray-200">
         <button
           type="button"
           phx-click="prev_month"
           phx-target={@myself}
-          class="p-1 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-manipulation"
           aria-label="Previous month"
+          title="Previous month"
         >
-          <svg class="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
-        <h3 class="text-lg font-semibold text-gray-900">
+        <h3 class="text-base sm:text-lg font-semibold text-gray-900" id="calendar-month-year">
           <%= Calendar.strftime(@current_month, "%B %Y") %>
         </h3>
 
@@ -125,30 +159,52 @@ defmodule EventasaurusWeb.CalendarComponent do
           type="button"
           phx-click="next_month"
           phx-target={@myself}
-          class="p-1 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-manipulation"
           aria-label="Next month"
+          title="Next month"
         >
-          <svg class="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
       </div>
 
       <!-- Calendar Grid -->
-      <div class="p-4">
+      <div class="p-3 sm:p-4">
         <!-- Day headers -->
-        <div class="grid grid-cols-7 gap-1 mb-2">
-          <div class="text-center text-xs font-medium text-gray-500 py-2">Sun</div>
-          <div class="text-center text-xs font-medium text-gray-500 py-2">Mon</div>
-          <div class="text-center text-xs font-medium text-gray-500 py-2">Tue</div>
-          <div class="text-center text-xs font-medium text-gray-500 py-2">Wed</div>
-          <div class="text-center text-xs font-medium text-gray-500 py-2">Thu</div>
-          <div class="text-center text-xs font-medium text-gray-500 py-2">Fri</div>
-          <div class="text-center text-xs font-medium text-gray-500 py-2">Sat</div>
+        <div class="grid grid-cols-7 gap-1 mb-2" role="row">
+          <div class="text-center text-xs font-medium text-gray-500 py-2" role="columnheader" aria-label="Sunday">
+            <span class="hidden sm:inline">Sun</span>
+            <span class="sm:hidden">S</span>
+          </div>
+          <div class="text-center text-xs font-medium text-gray-500 py-2" role="columnheader" aria-label="Monday">
+            <span class="hidden sm:inline">Mon</span>
+            <span class="sm:hidden">M</span>
+          </div>
+          <div class="text-center text-xs font-medium text-gray-500 py-2" role="columnheader" aria-label="Tuesday">
+            <span class="hidden sm:inline">Tue</span>
+            <span class="sm:hidden">T</span>
+          </div>
+          <div class="text-center text-xs font-medium text-gray-500 py-2" role="columnheader" aria-label="Wednesday">
+            <span class="hidden sm:inline">Wed</span>
+            <span class="sm:hidden">W</span>
+          </div>
+          <div class="text-center text-xs font-medium text-gray-500 py-2" role="columnheader" aria-label="Thursday">
+            <span class="hidden sm:inline">Thu</span>
+            <span class="sm:hidden">T</span>
+          </div>
+          <div class="text-center text-xs font-medium text-gray-500 py-2" role="columnheader" aria-label="Friday">
+            <span class="hidden sm:inline">Fri</span>
+            <span class="sm:hidden">F</span>
+          </div>
+          <div class="text-center text-xs font-medium text-gray-500 py-2" role="columnheader" aria-label="Saturday">
+            <span class="hidden sm:inline">Sat</span>
+            <span class="sm:hidden">S</span>
+          </div>
         </div>
 
         <!-- Calendar dates -->
-        <div class="grid grid-cols-7 gap-1">
+        <div class="grid grid-cols-7 gap-1" role="grid" aria-labelledby="calendar-month-year">
           <%= for date <- calendar_dates(@current_month) do %>
             <.calendar_day
               date={date}
@@ -163,21 +219,23 @@ defmodule EventasaurusWeb.CalendarComponent do
 
       <!-- Selected dates summary -->
       <%= if length(@selected_dates) > 0 do %>
-        <div class="px-4 py-3 border-t border-gray-200 bg-gray-50">
-          <h4 class="text-sm font-medium text-gray-700 mb-2">
+        <div class="px-3 py-3 sm:px-4 border-t border-gray-200 bg-gray-50">
+          <h4 class="text-sm font-medium text-gray-700 mb-2" role="status" aria-live="polite">
             Selected dates (<%= length(@selected_dates) %>):
           </h4>
           <div class="flex flex-wrap gap-1">
             <%= for date <- Enum.sort(@selected_dates, Date) do %>
               <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-md">
-                <%= Calendar.strftime(date, "%b %d") %>
+                <span class="hidden sm:inline"><%= Calendar.strftime(date, "%b %d") %></span>
+                <span class="sm:hidden"><%= Calendar.strftime(date, "%m/%d") %></span>
                 <button
                   type="button"
                   phx-click="toggle_date"
                   phx-target={@myself}
                   phx-value-date={Date.to_iso8601(date)}
-                  class="ml-1 text-blue-600 hover:text-blue-800"
-                  aria-label={"Remove #{Calendar.strftime(date, "%B %d")}"}
+                  class="ml-1 text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:ring-offset-1 touch-manipulation"
+                  aria-label={"Remove #{Calendar.strftime(date, "%B %d, %Y")} from selection"}
+                  title={"Remove #{Calendar.strftime(date, "%B %d")}"}
                 >
                   <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -202,7 +260,7 @@ defmodule EventasaurusWeb.CalendarComponent do
     is_hovered = assigns.date == assigns.hover_date
 
     # Determine styling classes
-    base_classes = "relative w-full h-10 flex items-center justify-center text-sm rounded-md transition-all duration-150 cursor-pointer"
+    base_classes = "relative w-full h-8 sm:h-10 flex items-center justify-center text-xs sm:text-sm rounded-md transition-all duration-150 cursor-pointer touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
 
     day_classes = cond do
       is_past and is_current_month ->
@@ -212,16 +270,16 @@ defmodule EventasaurusWeb.CalendarComponent do
         "#{base_classes} text-gray-300 cursor-not-allowed"
 
       is_selected ->
-        "#{base_classes} bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700"
+        "#{base_classes} bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:bg-blue-700"
 
       is_today and is_current_month ->
-        "#{base_classes} bg-blue-50 text-blue-600 font-semibold border border-blue-200 hover:bg-blue-100"
+        "#{base_classes} bg-blue-50 text-blue-600 font-semibold border border-blue-200 hover:bg-blue-100 focus:bg-blue-100"
 
       is_hovered and is_current_month and !is_past ->
         "#{base_classes} bg-gray-100 text-gray-900 font-medium"
 
       is_current_month ->
-        "#{base_classes} text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+        "#{base_classes} text-gray-700 hover:bg-gray-100 hover:text-gray-900 focus:bg-gray-100"
 
       true ->
         "#{base_classes} text-gray-300 cursor-not-allowed"
@@ -247,10 +305,18 @@ defmodule EventasaurusWeb.CalendarComponent do
       phx-mouseleave={if @is_current_month and !@is_past, do: "unhover_date"}
       aria-label={"#{if @is_selected, do: "Deselect", else: "Select"} #{Calendar.strftime(@date, "%B %d, %Y")}"}
       aria-pressed={@is_selected}
+      role="gridcell"
+      tabindex={if @is_current_month and !@is_past, do: "0", else: "-1"}
+      title={"#{Calendar.strftime(@date, "%B %d, %Y")}#{if @is_today, do: " (Today)", else: ""}#{if @is_selected, do: " - Selected", else: ""}"}
     >
-      <%= @date.day %>
+      <span class="sr-only">
+        <%= Calendar.strftime(@date, "%B %d, %Y") %>
+        <%= if @is_today, do: " (Today)" %>
+        <%= if @is_selected, do: " - Selected" %>
+      </span>
+      <span aria-hidden="true"><%= @date.day %></span>
       <%= if @is_today do %>
-        <span class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-current rounded-full"></span>
+        <span class="absolute bottom-0.5 sm:bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-current rounded-full" aria-hidden="true"></span>
       <% end %>
     </button>
     """

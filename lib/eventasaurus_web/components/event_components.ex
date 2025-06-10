@@ -30,7 +30,7 @@ defmodule EventasaurusWeb.EventComponents do
     <select
       id={@id}
       name={@name}
-      class={["block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm", @class]}
+      class={["block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-colors duration-200 sm:text-sm", @class]}
       required={@required}
       phx-update="ignore"
       phx-hook={@hook}
@@ -81,7 +81,7 @@ defmodule EventasaurusWeb.EventComponents do
       id={@id}
       name={@name}
       value={@value}
-      class={["block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm", @class]}
+      class={["block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-colors duration-200 sm:text-sm", @class]}
       required={@required}
       {@rest}
     />
@@ -115,7 +115,7 @@ defmodule EventasaurusWeb.EventComponents do
       <select
         id={@id}
         name={@field.name}
-        class={["block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm", @class]}
+        class={["block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-colors duration-200 sm:text-sm", @class]}
         required={@required}
         {@rest}
       >
@@ -189,12 +189,12 @@ defmodule EventasaurusWeb.EventComponents do
 
     ~H"""
     <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
-      <!-- Two-column layout: Image & Theme (left) + Form Fields (right) -->
-      <div class="bg-white shadow-md rounded-lg p-6 mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+      <!-- Responsive layout: Mobile stacked, Desktop two-column -->
+      <div class="bg-white shadow-md rounded-lg p-4 sm:p-6 mb-6 border border-gray-200">
+        <div class="grid grid-cols-1 xl:grid-cols-5 gap-6 lg:gap-8">
 
           <!-- Left Column: Cover Image & Theme (40% width = 2/5) -->
-          <div class="lg:col-span-2">
+          <div class="xl:col-span-2 order-2 xl:order-1">
             <!-- Cover Image -->
             <div class="mb-6">
               <h2 class="text-lg font-semibold mb-3 text-gray-800">Cover Image</h2>
@@ -266,7 +266,7 @@ defmodule EventasaurusWeb.EventComponents do
           </div>
 
           <!-- Right Column: Form Fields (60% width = 3/5) -->
-          <div class="lg:col-span-3">
+          <div class="xl:col-span-3 order-1 xl:order-2">
             <!-- Event Title (prominent) -->
             <div class="mb-4">
               <.input field={f[:title]} type="text" label="Event Title" required class="text-lg" />
@@ -319,7 +319,7 @@ defmodule EventasaurusWeb.EventComponents do
                 </div>
 
                 <!-- Time inputs for polling -->
-                <div class="grid grid-cols-2 gap-3 mb-3" phx-hook="TimeSync" id={"time-sync-#{@id}"}>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3" phx-hook="TimeSync" id={"time-sync-#{@id}"}>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
                     <.time_select
@@ -345,7 +345,7 @@ defmodule EventasaurusWeb.EventComponents do
               <% else %>
                 <!-- Traditional date range selection -->
                 <div phx-hook="DateTimeSync" id="date-time-sync-hook">
-                  <div class="grid grid-cols-2 gap-3 mb-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                       <.date_input
@@ -369,7 +369,7 @@ defmodule EventasaurusWeb.EventComponents do
                       />
                     </div>
                   </div>
-                  <div class="grid grid-cols-2 gap-3 mb-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                       <.date_input
@@ -500,13 +500,13 @@ defmodule EventasaurusWeb.EventComponents do
       </div>
 
       <!-- Action Buttons -->
-      <div class={@action == :edit && "flex justify-between" || "flex justify-end"}>
+      <div class={@action == :edit && "flex flex-col sm:flex-row sm:justify-between gap-3 sm:gap-0" || "flex justify-end"}>
         <%= if @action == :edit && @cancel_path do %>
-          <.link navigate={@cancel_path} class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+          <.link navigate={@cancel_path} class="inline-flex items-center px-4 py-3 sm:py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 touch-manipulation min-h-[44px] sm:min-h-[auto]">
             Cancel
           </.link>
         <% end %>
-        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+        <button type="submit" class="inline-flex items-center px-4 py-3 sm:py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 touch-manipulation min-h-[44px] sm:min-h-[auto]">
           <%= @submit_label %>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
