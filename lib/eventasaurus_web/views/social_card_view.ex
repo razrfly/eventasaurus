@@ -196,6 +196,192 @@ defmodule EventasaurusWeb.SocialCardView do
   def local_image_data_url(_), do: nil
 
   @doc """
+  Gets an HTTP-accessible URL for images to use in SVG rendering.
+  For local static files, returns the web-accessible path.
+  For external images, copies them to static directory temporarily.
+  This works better with rsvg-convert than base64 data URLs.
+  Returns an HTTP URL string if successful, otherwise returns nil.
+  """
+  def http_image_url(%{cover_image_url: url}) do
+    case Sanitizer.validate_image_url(url) do
+      nil -> nil
+      valid_url ->
+        if String.starts_with?(valid_url, "/") do
+          # For local static files, return the web-accessible URL
+          valid_url
+        else
+          # For external images, download and serve them temporarily
+          case Eventasaurus.Services.SvgConverter.download_image_locally(valid_url) do
+            {:ok, local_path} ->
+              # Copy to static directory with a unique name for HTTP access
+              filename = "temp_social_#{System.unique_integer([:positive])}.jpg"
+              static_path = Path.join(["priv", "static", "images", "temp", filename])
+
+              # Ensure temp directory exists
+              Path.dirname(static_path) |> File.mkdir_p!()
+
+              case File.cp(local_path, static_path) do
+                :ok ->
+                  # Clean up the original temp file
+                  File.rm(local_path)
+
+                  # Schedule cleanup of the static temp file
+                  Task.start(fn ->
+                    Process.sleep(30_000)  # 30 seconds delay
+                    File.rm(static_path)
+                  end)
+
+                  # Return HTTP URL
+                  "/images/temp/#{filename}"
+
+                {:error, _reason} ->
+                  File.rm(local_path)  # Clean up on failure
+                  nil
+              end
+
+            {:error, _reason} -> nil
+          end
+        end
+    end
+  end
+  def http_image_url(_), do: nil
+
+  @doc """
+  Gets a local file path for images that rsvg-convert can access.
+  For local static files, returns the existing path.
+  For external images, downloads them to a permanent location.
+  Returns an absolute file path string if successful, otherwise returns nil.
+  """
+  def local_file_path_for_svg(%{cover_image_url: url}) do
+    case Sanitizer.validate_image_url(url) do
+      nil -> nil
+      valid_url ->
+        if String.starts_with?(valid_url, "/") do
+          # For local static files, return the absolute path
+          relative_path = String.trim_leading(valid_url, "/")
+          static_dir = Path.join(["priv", "static"])
+          static_path = Path.join(static_dir, relative_path)
+
+          # SECURITY: Ensure the resolved path is still within the static directory
+          canonical_static_dir = Path.expand(static_dir)
+          canonical_static_path = Path.expand(static_path)
+
+          if String.starts_with?(canonical_static_path, canonical_static_dir <> "/") and
+             File.exists?(canonical_static_path) do
+            canonical_static_path
+          else
+            nil
+          end
+        else
+          # For external images, download and save them to static directory permanently
+          case Eventasaurus.Services.SvgConverter.download_image_locally(valid_url) do
+            {:ok, local_path} ->
+              # Copy to static directory with a unique name
+              filename = "downloaded_#{System.unique_integer([:positive])}.jpg"
+              static_path = Path.join(["priv", "static", "images", "temp", filename])
+
+              # Ensure temp directory exists
+              Path.dirname(static_path) |> File.mkdir_p!()
+
+              case File.cp(local_path, static_path) do
+                :ok ->
+                  # Clean up the original temp file
+                  File.rm(local_path)
+
+                  # Return absolute path for rsvg-convert
+                  Path.expand(static_path)
+
+                {:error, _reason} ->
+                  File.rm(local_path)  # Clean up on failure
+                  nil
+              end
+
+            {:error, _reason} -> nil
+          end
+        end
+    end
+  end
+  def local_file_path_for_svg(_), do: nil
+
+  @doc """
+  Gets an optimized base64 data URL for external images.
+  Downloads and resizes external images to reduce data URL size for better rsvg-convert compatibility.
+  Returns a data URL string if successful, otherwise returns nil.
+  """
+  def optimized_external_image_data_url(%{cover_image_url: url}) do
+    case Sanitizer.validate_image_url(url) do
+      nil -> nil
+      valid_url ->
+        unless String.starts_with?(valid_url, "/") do
+          # For external images only
+          case Eventasaurus.Services.SvgConverter.download_image_locally(valid_url) do
+            {:ok, local_path} ->
+              # Try to resize the image to reduce file size
+              resized_path = resize_image_for_social_card(local_path)
+
+              case File.read(resized_path || local_path) do
+                {:ok, image_data} ->
+                  # Determine MIME type
+                  mime_type = case Path.extname(resized_path || local_path) |> String.downcase() do
+                    ".png" -> "image/png"
+                    ".jpg" -> "image/jpeg"
+                    ".jpeg" -> "image/jpeg"
+                    ".gif" -> "image/gif"
+                    ".webp" -> "image/webp"
+                    _ -> "image/jpeg"  # Default for external images
+                  end
+
+                  # Convert to base64 and create data URL
+                  base64_data = Base.encode64(image_data)
+                  data_url = "data:#{mime_type};base64,#{base64_data}"
+
+                  # Clean up temporary files
+                  File.rm(local_path)
+                  if resized_path && resized_path != local_path, do: File.rm(resized_path)
+
+                  data_url
+
+                {:error, _reason} ->
+                  File.rm(local_path)
+                  if resized_path && resized_path != local_path, do: File.rm(resized_path)
+                  nil
+              end
+
+            {:error, _reason} -> nil
+          end
+        else
+          nil  # Not an external image
+        end
+    end
+  end
+  def optimized_external_image_data_url(_), do: nil
+
+  # Resizes an image to optimize it for social card use.
+  # Returns the path to the resized image, or nil if resizing fails.
+  defp resize_image_for_social_card(image_path) do
+    try do
+      # Create a resized version using ImageMagick if available
+      resized_path = image_path <> "_resized"
+
+      # Try to resize to 400x400 max with quality 85 to reduce file size
+      {_output, exit_code} = System.cmd("convert", [
+        image_path,
+        "-resize", "400x400>",  # Only resize if larger than 400x400
+        "-quality", "85",       # Reduce quality slightly
+        resized_path
+      ], stderr_to_stdout: true)
+
+      if exit_code == 0 && File.exists?(resized_path) do
+        resized_path
+      else
+        nil  # Fallback to original if resize fails
+      end
+    rescue
+      _ -> nil  # ImageMagick not available or other error
+    end
+  end
+
+  @doc """
   Gets sanitized event title for safe SVG rendering.
   """
   def safe_title(event) do
