@@ -227,8 +227,8 @@ defmodule EventasaurusWeb.EventLive.CalendarIntegrationTest do
       assert has_element?(view, "[data-test-id='event-form']")
 
       # Selected dates should still be visible and selected
-      assert has_element?(view, "button[phx-value-date='#{Date.to_iso8601(date1)}'][aria-pressed='aria-pressed']")
-      assert has_element?(view, "button[phx-value-date='#{Date.to_iso8601(date2)}'][aria-pressed='aria-pressed']")
+      assert has_element?(view, "button[phx-value-date='#{Date.to_iso8601(date1)}'][aria-pressed='true']")
+      assert has_element?(view, "button[phx-value-date='#{Date.to_iso8601(date2)}'][aria-pressed='true']")
       assert has_element?(view, "[role='status']", "Selected dates (2):")
     end
 
@@ -324,7 +324,7 @@ defmodule EventasaurusWeb.EventLive.CalendarIntegrationTest do
       |> render_click()
 
       # Verify the date appears as selected in the calendar
-      assert has_element?(view, "button[phx-value-date='#{date_string}'][aria-pressed='aria-pressed']")
+      assert has_element?(view, "button[phx-value-date='#{date_string}'][aria-pressed='true']")
 
       # Verify it appears in the selected dates summary
       formatted_date = Calendar.strftime(future_date, "%b %d")

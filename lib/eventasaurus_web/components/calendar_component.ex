@@ -41,27 +41,7 @@ defmodule EventasaurusWeb.CalendarComponent do
   def handle_event("toggle_date", %{"date" => date_string}, socket) do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
-        selected_dates = socket.assigns.selected_dates
-
-        updated_dates =
-          if date in selected_dates do
-            List.delete(selected_dates, date)
-          else
-            [date | selected_dates] |> Enum.sort()
-          end
-
-        socket =
-          socket
-          |> assign(:selected_dates, updated_dates)
-          |> push_event("calendar_dates_changed", %{
-            dates: Enum.map(updated_dates, &Date.to_iso8601/1),
-            component_id: socket.assigns.id || "calendar"
-          })
-
-        # Send the updated dates to the parent LiveView
-        send(self(), {:selected_dates_changed, updated_dates})
-
-        {:noreply, socket}
+        toggle_date_in_socket(socket, date)
 
       {:error, _} ->
         {:noreply, socket}
@@ -103,28 +83,37 @@ defmodule EventasaurusWeb.CalendarComponent do
   def handle_event("key_navigation", %{"key" => key, "date" => current_date_string}, socket) do
     case Date.from_iso8601(current_date_string) do
       {:ok, current_date} ->
-        next_date = case key do
-          "ArrowLeft" -> Date.add(current_date, -1)
-          "ArrowRight" -> Date.add(current_date, 1)
-          "ArrowUp" -> Date.add(current_date, -7)
-          "ArrowDown" -> Date.add(current_date, 7)
-          "Enter" ->
-            # Toggle the current date
-            send(self(), {:toggle_date, current_date_string})
-            current_date
-          "Space" ->
-            # Toggle the current date
-            send(self(), {:toggle_date, current_date_string})
-            current_date
-          _ -> current_date
-        end
+        case key do
+          "ArrowLeft" ->
+            next_date = Date.add(current_date, -1)
+            socket = push_event(socket, "focus_date", %{date: Date.to_iso8601(next_date)})
+            {:noreply, socket}
 
-        # Update the focused date if navigation occurred
-        if next_date != current_date do
-          socket = push_event(socket, "focus_date", %{date: Date.to_iso8601(next_date)})
-          {:noreply, socket}
-        else
-          {:noreply, socket}
+          "ArrowRight" ->
+            next_date = Date.add(current_date, 1)
+            socket = push_event(socket, "focus_date", %{date: Date.to_iso8601(next_date)})
+            {:noreply, socket}
+
+          "ArrowUp" ->
+            next_date = Date.add(current_date, -7)
+            socket = push_event(socket, "focus_date", %{date: Date.to_iso8601(next_date)})
+            {:noreply, socket}
+
+          "ArrowDown" ->
+            next_date = Date.add(current_date, 7)
+            socket = push_event(socket, "focus_date", %{date: Date.to_iso8601(next_date)})
+            {:noreply, socket}
+
+          "Enter" ->
+            # Toggle the current date directly
+            toggle_date_in_socket(socket, current_date)
+
+          "Space" ->
+            # Toggle the current date directly
+            toggle_date_in_socket(socket, current_date)
+
+          _ ->
+            {:noreply, socket}
         end
 
       {:error, _} ->
@@ -304,7 +293,7 @@ defmodule EventasaurusWeb.CalendarComponent do
       phx-mouseenter={if @is_current_month and !@is_past, do: "hover_date"}
       phx-mouseleave={if @is_current_month and !@is_past, do: "unhover_date"}
       aria-label={"#{if @is_selected, do: "Deselect", else: "Select"} #{Calendar.strftime(@date, "%B %d, %Y")}"}
-      aria-pressed={@is_selected}
+      aria-pressed={if @is_selected, do: "true", else: "false"}
       role="gridcell"
       tabindex={if @is_current_month and !@is_past, do: "0", else: "-1"}
       title={"#{Calendar.strftime(@date, "%B %d, %Y")}#{if @is_today, do: " (Today)", else: ""}#{if @is_selected, do: " - Selected", else: ""}"}
@@ -344,5 +333,30 @@ defmodule EventasaurusWeb.CalendarComponent do
     # Generate the range of dates
     Date.range(start_date, end_date)
     |> Enum.to_list()
+  end
+
+  # Private helper function to toggle a date in the socket
+  defp toggle_date_in_socket(socket, date) do
+    selected_dates = socket.assigns.selected_dates
+
+    updated_dates =
+      if date in selected_dates do
+        List.delete(selected_dates, date)
+      else
+        [date | selected_dates] |> Enum.sort()
+      end
+
+    socket =
+      socket
+      |> assign(:selected_dates, updated_dates)
+      |> push_event("calendar_dates_changed", %{
+        dates: Enum.map(updated_dates, &Date.to_iso8601/1),
+        component_id: socket.assigns.id || "calendar"
+      })
+
+    # Send the updated dates to the parent LiveView
+    send(self(), {:selected_dates_changed, updated_dates})
+
+    {:noreply, socket}
   end
 end
