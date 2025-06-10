@@ -13,7 +13,6 @@
   background-attachment: fixed;
   background-size: 100% 100%;
   position: relative;
-  overflow: hidden;
   
   /* CSS Variables for theme */
   --color-primary: #ec4899; /* Pink 500 */
