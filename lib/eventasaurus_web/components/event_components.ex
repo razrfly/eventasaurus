@@ -319,7 +319,7 @@ defmodule EventasaurusWeb.EventComponents do
                 </div>
 
                 <!-- Time inputs for polling -->
-                <div class="grid grid-cols-2 gap-3 mb-3">
+                <div class="grid grid-cols-2 gap-3 mb-3" phx-hook="TimeSync" id={"time-sync-#{@id}"}>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
                     <.time_select

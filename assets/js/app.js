@@ -114,6 +114,64 @@ Hooks.DateTimeSync = {
   }
 };
 
+// TimeSync Hook - For date polling mode where we only sync time fields
+Hooks.TimeSync = {
+  mounted() {
+    const startTime = document.querySelector('[data-role="start-time"]');
+    const endTime = document.querySelector('[data-role="end-time"]');
+
+    if (!startTime || !endTime) return;
+
+    // Helper: round up to next 30-min interval
+    function getNextHalfHour(now) {
+      let mins = now.getMinutes();
+      let rounded = mins < 30 ? 30 : 0;
+      let hour = now.getHours() + (mins >= 30 ? 1 : 0);
+      return { hour: hour % 24, minute: rounded };
+    }
+
+    function setInitialTimes() {
+      const now = new Date();
+      const { hour, minute } = getNextHalfHour(now);
+
+      // Format to HH:MM
+      const pad = n => n.toString().padStart(2, '0');
+      const startTimeVal = `${pad(hour)}:${pad(minute)}`;
+      startTime.value = startTimeVal;
+
+      // Set end time to +1 hour
+      let endHour = (hour + 1) % 24;
+      endTime.value = `${pad(endHour)}:${pad(minute)}`;
+      
+      // Trigger events to ensure LiveView updates
+      startTime.dispatchEvent(new Event('input', { bubbles: true }));
+      startTime.dispatchEvent(new Event('change', { bubbles: true }));
+      endTime.dispatchEvent(new Event('input', { bubbles: true }));
+      endTime.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // Sync end time when start time changes
+    function syncEndTime() {
+      if (!startTime.value) return;
+      
+      // Parse start time
+      const [sHour, sMinute] = startTime.value.split(':').map(Number);
+      let endHour = (sHour + 1) % 24;
+      endTime.value = `${endHour.toString().padStart(2, '0')}:${sMinute.toString().padStart(2, '0')}`;
+      
+      // Trigger events to ensure LiveView updates
+      endTime.dispatchEvent(new Event('input', { bubbles: true }));
+      endTime.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // Initialize times if start time is empty
+    if (!startTime.value) setInitialTimes();
+
+    startTime.addEventListener('change', syncEndTime);
+    startTime.addEventListener('input', syncEndTime);
+  }
+};
+
 // Google Places Autocomplete Hook
 Hooks.GooglePlacesAutocomplete = {
   mounted() {
