@@ -536,8 +536,8 @@ defmodule EventasaurusWeb.PublicEventLive do
           <!-- Date/time and main info -->
           <div class="flex items-start gap-4 mb-8">
             <div class="bg-white border border-gray-200 rounded-lg p-3 w-16 h-16 flex flex-col items-center justify-center text-center font-medium shadow-sm">
-              <div class="text-xs text-gray-500 uppercase tracking-wide"><%= Calendar.strftime(@event.start_at, "%b") %></div>
-              <div class="text-xl font-semibold text-gray-900"><%= Calendar.strftime(@event.start_at, "%d") %></div>
+              <div class="text-xs text-gray-500 uppercase tracking-wide"><%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%b") %></div>
+              <div class="text-xl font-semibold text-gray-900"><%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%d") %></div>
             </div>
             <div>
               <h1 class="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight"><%= @event.title %></h1>
@@ -549,9 +549,9 @@ defmodule EventasaurusWeb.PublicEventLive do
               <div class="mb-4">
                 <h3 class="font-semibold text-gray-900 mb-1">When</h3>
                 <div class="text-lg text-gray-700 font-medium">
-                  <%= Calendar.strftime(@event.start_at, "%A, %B %d · %I:%M %p") |> String.replace(" 0", " ") %>
+                  <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%A, %B %d · %I:%M %p") |> String.replace(" 0", " ") %>
                   <%= if @event.ends_at do %>
-                    - <%= Calendar.strftime(@event.ends_at, "%I:%M %p") |> String.replace(" 0", " ") %>
+                    - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
                   <% end %>
                   <span class="text-gray-500 ml-1"><%= @event.timezone %></span>
                 </div>

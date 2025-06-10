@@ -92,12 +92,12 @@
               <div>
                 <h3 class="font-semibold text-gray-900 mb-1">When</h3>
                 <p class="text-gray-700">
-                  <%= Calendar.strftime(@event.start_at, "%A, %B %d, %Y") %>
+                  <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%A, %B %d, %Y") %>
                 </p>
                 <p class="text-gray-600 text-sm">
-                  <%= Calendar.strftime(@event.start_at, "%I:%M %p") |> String.replace(" 0", " ") %>
+                  <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
                   <%= if @event.ends_at do %>
-                    - <%= Calendar.strftime(@event.ends_at, "%I:%M %p") |> String.replace(" 0", " ") %>
+                    - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
                   <% end %>
                   <%= if @event.timezone do %>(<%= @event.timezone %>)<% end %>
                 </p>
