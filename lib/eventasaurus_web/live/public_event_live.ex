@@ -1129,9 +1129,12 @@ defmodule EventasaurusWeb.PublicEventLive do
     """
   end
 
-    # Helper function to generate social card URL
-  defp social_card_url(socket, event) do
-    url(socket, ~p"/events/#{event.id}/social_card.png")
+  # Helper function to generate social card URL
+  defp social_card_url(_socket, event) do
+    # Use the new hash-based URL format
+    base_url = EventasaurusWeb.Endpoint.url()
+    hash_path = EventasaurusWeb.SocialCardView.social_card_url(event)
+    base_url <> hash_path
   end
 
   # Helper function to truncate description for meta tags

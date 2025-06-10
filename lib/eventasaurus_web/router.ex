@@ -112,7 +112,8 @@ defmodule EventasaurusWeb.Router do
   scope "/events", EventasaurusWeb do
     pipe_through :browser
 
-    get "/:id/social_card.png", EventSocialCardController, :generate_card
+    # Cache-busting social card generation (by slug with hash)
+    get "/:slug/social-card-:hash/*rest", EventSocialCardController, :generate_card_by_slug, as: :social_card_cached
   end
 
   # Other scopes may use custom stacks.

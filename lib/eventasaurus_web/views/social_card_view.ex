@@ -1,10 +1,13 @@
 defmodule EventasaurusWeb.SocialCardView do
   @moduledoc """
-  Helper functions for SVG template rendering in social cards.
+  View helpers for generating social card content.
 
-  This module provides utility functions for safely rendering dynamic content
-  in SVG templates, including text escaping, color formatting, and layout calculations.
+  This module provides functions for safely processing event data
+  and generating SVG content for social cards with proper sanitization.
   """
+
+  alias Eventasaurus.SocialCards.Sanitizer
+  alias Eventasaurus.SocialCards.HashGenerator
 
   @doc """
   Helper function to ensure text fits within specified line limits.
@@ -20,63 +23,64 @@ defmodule EventasaurusWeb.SocialCardView do
     end
   end
 
-    @doc """
-  Formats title text for multi-line display in SVG.
-  Splits long titles into multiple lines for better readability.
-
-  ## Parameters
-
-    * `title` - The event title to format
-    * `line_number` - Which line to return (0, 1, or 2)
-    * `max_chars_per_line` - Maximum characters per line (default: 25)
-
-  ## Returns
-
-    * String content for the specified line, or empty string if line doesn't exist
+  @doc """
+  Formats event title for multi-line display in SVG.
+  Returns a specific line (0, 1, or 2) of the title.
   """
-  def format_title(title, line_number, max_chars_per_line \\ 25)
+  def format_title(title, line_number) when is_binary(title) and line_number >= 0 do
+    # Sanitize the title first
+    safe_title = Sanitizer.sanitize_text(title)
 
-  def format_title(title, line_number, max_chars_per_line) when is_binary(title) do
-    words = String.split(title, " ")
-    lines = split_into_lines(words, max_chars_per_line, [])
+    # Split title into words and group into lines
+    words = String.split(safe_title, " ")
+    lines = split_into_lines(words, 18)  # ~18 chars per line max
 
-    case Enum.at(lines, line_number) do
-      nil -> ""
-      line -> svg_escape(line)
+    Enum.at(lines, line_number, "")
+  end
+  def format_title(_, _), do: ""
+
+  @doc """
+  Calculates appropriate font size based on title length.
+  """
+  def calculate_font_size(title) when is_binary(title) do
+    # Sanitize first
+    safe_title = Sanitizer.sanitize_text(title)
+    length = String.length(safe_title)
+
+    cond do
+      length <= 20 -> "48"
+      length <= 40 -> "36"
+      length <= 60 -> "28"
+      true -> "24"
     end
   end
+  def calculate_font_size(_), do: "48"
 
-  def format_title(_, _, _), do: ""
-
-  # Private helper to split words into lines
-  defp split_into_lines([], _max_chars, acc), do: Enum.reverse(acc)
-  defp split_into_lines(_words, _max_chars, acc) when length(acc) >= 3 do
-    # Limit to 3 lines maximum
-    Enum.reverse(acc)
-  end
-  defp split_into_lines(words, max_chars, acc) do
-    {line_words, remaining_words} = take_words_for_line(words, max_chars, [])
-    line = Enum.join(line_words, " ")
-
-    case remaining_words do
-      [] -> Enum.reverse([line | acc])
-      _ -> split_into_lines(remaining_words, max_chars, [line | acc])
-    end
+  @doc """
+  Formats color values for safe use in SVG.
+  """
+  def format_color(color) do
+    Sanitizer.validate_color(color)
   end
 
-  # Take words until we exceed max_chars
-  defp take_words_for_line([], _max_chars, acc), do: {Enum.reverse(acc), []}
-  defp take_words_for_line([word | rest] = words, max_chars, acc) do
-    current_line = Enum.join(Enum.reverse([word | acc]), " ")
+  # Private helper to split words into lines with max character limit
+  defp split_into_lines(words, max_chars_per_line) do
+    words
+    |> Enum.reduce({[], ""}, fn word, {lines, current_line} ->
+      new_line = if current_line == "", do: word, else: current_line <> " " <> word
 
-    if String.length(current_line) <= max_chars do
-      take_words_for_line(rest, max_chars, [word | acc])
-    else
-      case acc do
-        [] -> {[word], rest}  # Single word exceeds limit, take it anyway
-        _ -> {Enum.reverse(acc), words}  # Return accumulated words
+      if String.length(new_line) <= max_chars_per_line do
+        {lines, new_line}
+      else
+        # Start new line with current word
+        {lines ++ [current_line], word}
       end
+    end)
+    |> case do
+      {lines, ""} -> lines
+      {lines, last_line} -> lines ++ [last_line]
     end
+    |> Enum.take(3)  # Max 3 lines
   end
 
   @doc """
@@ -95,60 +99,68 @@ defmodule EventasaurusWeb.SocialCardView do
   def svg_escape(nil), do: ""
 
   @doc """
-  Generates CSS-safe color values from theme colors.
-  Ensures color values are properly formatted for SVG gradients.
-  """
-  def format_color(color) when is_binary(color) do
-    # Ensure color starts with # if it's a hex color
-    case color do
-      "#" <> _rest -> color
-      color -> "##{color}"
-    end
-  end
-
-  def format_color(_), do: "#000000"
-
-  @doc """
-  Calculates the optimal font size based on title length.
-  Ensures text fits properly within the allocated space.
-  """
-  def calculate_font_size(title) when is_binary(title) do
-    length = String.length(title)
-
-    cond do
-      length <= 20 -> "48"
-      length <= 40 -> "42"
-      length <= 60 -> "36"
-      true -> "32"
-    end
-  end
-
-  def calculate_font_size(_), do: "42"
-
-  @doc """
   Determines if an event has a valid image URL.
+  Uses sanitizer to validate the URL.
   """
-  def has_image?(%{cover_image_url: url}) when is_binary(url) and url != "", do: true
+  def has_image?(%{cover_image_url: url}) do
+    sanitized_url = Sanitizer.validate_image_url(url)
+    sanitized_url != nil
+  end
   def has_image?(_), do: false
 
   @doc """
   Gets a safe image URL for SVG rendering.
-  Returns the URL if valid, otherwise returns nil.
+  Returns the validated URL if valid, otherwise returns nil.
   """
-  def safe_image_url(%{cover_image_url: url}) when is_binary(url) and url != "" do
-    svg_escape(url)
+  def safe_image_url(%{cover_image_url: url}) do
+    Sanitizer.validate_image_url(url)
   end
   def safe_image_url(_), do: nil
 
   @doc """
   Gets a local image path for SVG rendering by downloading external images.
   Returns a local file path if successful, otherwise returns nil.
+  Uses sanitizer to validate the URL before downloading.
   """
-  def local_image_path(%{cover_image_url: url}) when is_binary(url) and url != "" do
-    case Eventasaurus.Services.SvgConverter.download_image_locally(url) do
-      {:ok, local_path} -> local_path
-      {:error, _reason} -> nil
+  def local_image_path(%{cover_image_url: url}) do
+    case Sanitizer.validate_image_url(url) do
+      nil -> nil
+      valid_url ->
+        case Eventasaurus.Services.SvgConverter.download_image_locally(valid_url) do
+          {:ok, local_path} -> local_path
+          {:error, _reason} -> nil
+        end
     end
   end
   def local_image_path(_), do: nil
+
+  @doc """
+  Gets sanitized event title for safe SVG rendering.
+  """
+  def safe_title(event) do
+    title = Map.get(event, :title, "")
+    Sanitizer.sanitize_text(title)
+  end
+
+  @doc """
+  Gets sanitized event description for safe SVG rendering.
+  """
+  def safe_description(event) do
+    description = Map.get(event, :description, "")
+    Sanitizer.sanitize_text(description)
+  end
+
+  @doc """
+  Sanitizes complete event data for safe use in social card generation.
+  """
+  def sanitize_event(event) do
+    Sanitizer.sanitize_event_data(event)
+  end
+
+  @doc """
+  Generates the social card URL for an event using the new hash-based format.
+  """
+  def social_card_url(event) do
+    HashGenerator.generate_url_path(event)
+  end
 end
