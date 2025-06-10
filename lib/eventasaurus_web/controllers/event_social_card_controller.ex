@@ -109,18 +109,18 @@ defmodule EventasaurusWeb.EventSocialCardController do
     end
     theme = %{color1: theme_colors.primary, color2: theme_colors.secondary}
 
-    # Build image section - download external images locally for rsvg-convert compatibility
+    # Build image section - use base64 data URLs for local images to fix rsvg-convert compatibility
     image_section = if has_image?(event) do
-      case local_image_path(event) do
+      case local_image_data_url(event) do
         nil ->
-          # Fallback to "No Image" if download fails
+          # Fallback to "No Image" if image processing fails
           """
           <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
           <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
           """
-        local_path ->
+        data_url ->
           """
-          <image href="file://#{local_path}"
+          <image href="#{data_url}"
                  x="418" y="32"
                  width="350" height="350"
                  clip-path="url(#imageClip)"
