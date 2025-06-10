@@ -29,10 +29,33 @@ defmodule EventasaurusWeb.EventController do
               participants = Events.list_event_participants(event)
                             |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
 
+              # Load polling data if event is in polling state
+              {date_poll, date_options, votes_by_date} = if event.state == "polling" do
+                poll = Events.get_event_date_poll(event)
+                if poll do
+                  options = Events.list_event_date_options(poll)
+                  # Create votes_by_date structure for visualization
+                  votes_map = options
+                              |> Enum.map(fn option ->
+                                votes = Events.list_votes_for_date_option(option)
+                                {option.date, votes}
+                              end)
+                              |> Enum.into(%{})
+                  {poll, options, votes_map}
+                else
+                  {nil, [], %{}}
+                end
+              else
+                {nil, [], %{}}
+              end
+
               conn
               |> assign(:venue, venue)
               |> assign(:organizers, organizers)
               |> assign(:participants, participants)
+              |> assign(:date_poll, date_poll)
+              |> assign(:date_options, date_options)
+              |> assign(:votes_by_date, votes_by_date)
               |> render(:show, event: event, user: user, registration_status: registration_status)
             else
               conn

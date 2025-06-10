@@ -1,0 +1,167 @@
+# Eventasaurus Test Suite Cleanup & Refactoring PRD
+## Test Quality Improvement Initiative v2.0
+
+### Executive Summary
+The Eventasaurus test suite has grown to 496 tests across 37 files, with significant technical debt and organizational challenges. This initiative will reduce the test suite by ~50%, improve execution speed by 70%, and establish sustainable testing practices.
+
+### Current State Analysis
+- **Total**: 496 tests across 37 files (vs. 417 in existing PRD)
+- **Browser Tests**: ~30 tests consistently skipped due to Chrome/chromedriver mismatch
+- **Heavy Duplication**: Registration flow tested 50+ times across 8 files
+- **No Organization**: Mixed unit/integration/feature tests without clear structure
+- **Performance Issues**: Database-heavy tests without optimization, no async execution
+
+### Critical Problems to Solve
+
+#### 1. Chrome/Chromedriver Issues
+All Wallaby feature tests are conditionally skipped due to version mismatch. ~30 tests affected across feature test files preventing browser-based testing.
+
+#### 2. Massive Test Duplication
+- Registration/Auth: 50+ duplicate tests across 8 files
+- Event Creation: 30+ similar scenarios across multiple contexts
+- Social Cards: 3 files testing same functionality with 57+ total tests
+- Date Polling: Overlapping tests in 4+ files
+
+#### 3. Test Organization Chaos
+- Mixed unit/integration tests in same files
+- No clear separation between fast/slow tests
+- Inconsistent naming conventions and missing categorization
+- Top heavy files: new_test.exs (37), events_test.exs (37), public_event_live_test.exs (32)
+
+#### 4. Technical Debt Issues
+- SVG converter tests depend on system binaries (rsvg-convert)
+- External service dependencies not properly mocked
+- Database-heavy tests without proper isolation
+- No parallel execution strategy implemented
+
+### Solution Architecture
+
+#### Proposed Test Structure
+```
+test/
+├── unit/                          # Target: < 10ms per test
+│   ├── schemas/                   # Ecto changeset validations
+│   ├── services/                  # Pure business logic
+│   └── helpers/                   # Utility functions
+├── integration/                   # Target: < 100ms per test
+│   ├── contexts/                  # Context integration
+│   ├── live_components/           # LiveComponent tests
+│   └── controllers/               # Controller integration
+├── features/                      # Target: < 500ms per test
+│   ├── journeys/                  # End-to-end flows
+│   └── smoke/                     # Critical path tests
+└── support/                       # Test infrastructure
+```
+
+### Implementation Requirements
+
+#### Phase 1: Infrastructure Setup
+- Fix Chrome/chromedriver version mismatch for Wallaby tests
+- Set up proper test categorization with @unit, @integration, @feature tags
+- Create shared test helpers and fixtures for common scenarios
+- Implement mock modules for external services (SVG converter, etc.)
+- Configure parallel test execution with ExUnit async: true
+
+#### Phase 2: Unit Test Extraction
+- Extract pure unit tests from mixed files (target 200 tests @ <10ms each)
+- Remove database dependencies from unit tests using mocks
+- Consolidate duplicate schema validations into focused unit tests
+- Create fast feedback loop for core business logic
+
+#### Phase 3: Integration Test Refactoring
+- Consolidate overlapping integration tests (target 50 tests @ <100ms each)
+- Optimize database setup/teardown with shared fixtures
+- Group related tests for better isolation and maintainability
+- Focus on context boundaries and component interactions
+
+#### Phase 4: Feature Test Optimization
+- Fix Wallaby configuration issues for browser automation
+- Create reusable page objects for common UI interactions
+- Focus on critical user journeys only (target 20 tests @ <500ms each)
+- Implement proper test data management for features
+
+#### Phase 5: Cleanup & Documentation
+- Remove identified redundant tests systematically
+- Update test documentation and create testing guidelines
+- Set up CI performance monitoring and test health metrics
+- Establish maintenance procedures for ongoing test quality
+
+### Specific Consolidation Targets
+
+#### Registration Flow Tests (50+ → 5 tests)
+- Keep: 1 unit test for registration logic validation
+- Keep: 1 integration test for registration context
+- Keep: 1 feature test for full registration flow
+- Remove: Duplicate registration checks in liveview_interaction_test.exs (11), user_feedback_test.exs (8), form_validation_test.exs (6)
+
+#### Event Management Tests (74 → 25 tests)
+- Merge overlapping tests from new_test.exs and events_test.exs
+- Extract: 15 pure validation tests to unit/schemas/
+- Keep: 10 context integration tests with database
+- Remove: 12 duplicate UI tests covered by components
+
+#### Social Card Tests (57+ → 10 tests)
+- Merge 3 separate files: social_card_view_test.exs (25), social_card_hash_test.exs (12), hash_generator_test.exs (20)
+- Mock system dependencies like rsvg-convert
+- Focus on core generation logic and caching behavior
+- Remove duplicate sanitization tests
+
+### Performance Optimization Strategy
+
+#### Database Optimization
+Replace heavy object creation in setup with minimal fixtures:
+```elixir
+# Before: Each test creates full object graph
+# After: Shared fixtures with minimal data
+setup :register_and_log_in_user
+setup :create_minimal_event
+```
+
+#### Mock External Services
+Replace actual HTTP calls and system binaries with controlled mocks:
+```elixir
+# Before: Actual system calls
+{:ok, png} = SvgConverter.convert_to_png(svg)
+
+# After: Mocked responses
+expect(MockSvgConverter, :convert_to_png, fn _ -> {:ok, <<PNG_MAGIC_BYTES>>} end)
+```
+
+#### Parallel Execution Implementation
+Tag all unit tests for async execution and group related tests to prevent conflicts.
+
+### Success Metrics & Expected Outcomes
+
+#### Quantitative Goals
+- Test count reduction: 496 → 250 tests (50% reduction)
+- Execution time: Unit <30s, Integration <2m, Features <5m (70% faster)
+- Pass rate: 100% (vs current ~94% with skips)
+- Async test coverage: 80% of unit tests running in parallel
+
+#### Qualitative Goals
+- Clear test organization and discoverability for developers
+- Fast feedback loops with sub-minute unit test execution
+- Reliable CI/CD pipeline without flaky tests
+- Easy test addition following established patterns
+
+### Risk Mitigation Strategy
+- Run coverage analysis before removing tests to prevent gaps
+- Maintain critical path test scenarios during consolidation
+- Implement changes incrementally with validation against production
+- Document removed test rationale for future reference
+- Provide team training and migration guides
+
+### Technical Stack Requirements
+- ExUnit with async: true optimization for parallel execution
+- Wallaby with proper Chrome setup for browser automation
+- Mox for external service mocking and test isolation
+- ExMachina for consistent test data factory management
+- CI/CD matrix configuration for parallel test suite execution
+
+### Maintenance Strategy
+- Weekly test health checks monitoring execution times and flaky tests
+- Monthly test audits reviewing coverage gaps and duplication
+- Continuous optimization of slow tests and category updates
+- Regular documentation updates and pattern enforcement
+
+This comprehensive refactoring will transform the test suite from a maintenance burden into a development accelerator, enabling faster feature development with confidence. 

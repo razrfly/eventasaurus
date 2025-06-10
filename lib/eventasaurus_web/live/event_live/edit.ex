@@ -612,13 +612,16 @@ defmodule EventasaurusWeb.EventLive.Edit do
             |> Enum.filter(&(&1 != nil))
 
           if existing_poll do
-            # Update existing poll - delete old options and create new ones
-            Events.delete_all_date_options(existing_poll)
-            Events.create_date_options_from_list(existing_poll, selected_dates)
-
-            # Update event state to polling if not already
-            if event.state != "polling" do
-              Events.update_event(event, %{state: "polling"})
+            # Smart update: only add/remove changed date options to preserve existing votes
+            case Events.update_event_date_options(existing_poll, selected_dates) do
+              {:ok, _updated_options} ->
+                # Update event state to polling if not already
+                if event.state != "polling" do
+                  Events.update_event(event, %{state: "polling"})
+                end
+              {:error, _changeset} ->
+                # Handle error silently for now
+                nil
             end
           else
             # Create new poll
