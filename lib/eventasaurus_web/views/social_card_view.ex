@@ -155,6 +155,47 @@ defmodule EventasaurusWeb.SocialCardView do
   def local_image_path(_), do: nil
 
   @doc """
+  Gets a base64 data URL for local images to embed directly in SVG.
+  This solves the rsvg-convert issue with file:// URLs by embedding the image data directly.
+  Returns a data URL string if successful, otherwise returns nil.
+  """
+  def local_image_data_url(%{cover_image_url: url}) do
+    case local_image_path(%{cover_image_url: url}) do
+      nil -> nil
+      local_path ->
+        case File.read(local_path) do
+          {:ok, image_data} ->
+            # Determine MIME type from file extension
+            mime_type = case Path.extname(local_path) |> String.downcase() do
+              ".png" -> "image/png"
+              ".jpg" -> "image/jpeg"
+              ".jpeg" -> "image/jpeg"
+              ".gif" -> "image/gif"
+              ".webp" -> "image/webp"
+              _ -> "image/png"  # Default fallback
+            end
+
+            # Convert to base64 and create data URL
+            base64_data = Base.encode64(image_data)
+            data_url = "data:#{mime_type};base64,#{base64_data}"
+
+            # Clean up temporary downloaded files (but not static files)
+            if String.contains?(local_path, "social_card_img_") do
+              Task.start(fn ->
+                Process.sleep(1000)  # Small delay to ensure data URL is used
+                File.rm(local_path)
+              end)
+            end
+
+            data_url
+
+          {:error, _reason} -> nil
+        end
+    end
+  end
+  def local_image_data_url(_), do: nil
+
+  @doc """
   Gets sanitized event title for safe SVG rendering.
   """
   def safe_title(event) do
