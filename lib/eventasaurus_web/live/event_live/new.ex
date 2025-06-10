@@ -729,8 +729,59 @@ defmodule EventasaurusWeb.EventLive.New do
 
   defp process_datetime_fields(params) do
     params
+    |> process_date_polling_datetime()
     |> process_start_datetime()
     |> process_end_datetime()
+  end
+
+  defp process_date_polling_datetime(params) do
+    # If date polling is enabled, calculate average date and set start_at/ends_at
+    if Map.get(params, "enable_date_polling", false) do
+      case Map.get(params, "selected_poll_dates") do
+        dates_string when is_binary(dates_string) and dates_string != "" ->
+          # Parse the comma-separated date strings
+          selected_dates =
+            dates_string
+            |> String.split(",")
+            |> Enum.map(&String.trim/1)
+            |> Enum.filter(&(&1 != ""))
+            |> Enum.map(&Date.from_iso8601!/1)
+            |> Enum.sort()
+
+          if length(selected_dates) > 0 do
+            # Calculate the middle date (median)
+            middle_index = div(length(selected_dates), 2)
+            middle_date = Enum.at(selected_dates, middle_index)
+
+            # Get start and end times
+            start_time = Map.get(params, "start_time", "09:00")
+            end_time = Map.get(params, "ends_time", "17:00")
+            timezone = Map.get(params, "timezone", "UTC")
+
+            # Create start_at datetime using middle date and start time
+            case combine_date_time(Date.to_iso8601(middle_date), start_time, timezone) do
+              {:ok, start_datetime} ->
+                # Create ends_at datetime using middle date and end time
+                case combine_date_time(Date.to_iso8601(middle_date), end_time, timezone) do
+                  {:ok, end_datetime} ->
+                    params
+                    |> Map.put("start_at", start_datetime)
+                    |> Map.put("ends_at", end_datetime)
+                  {:error, _} ->
+                    params
+                end
+              {:error, _} ->
+                params
+            end
+          else
+            params
+          end
+        _ ->
+          params
+      end
+    else
+      params
+    end
   end
 
   defp process_start_datetime(params) do
