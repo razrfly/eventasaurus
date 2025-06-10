@@ -88,10 +88,11 @@ defmodule EventasaurusWeb.EventSocialCardController do
     end
   end
 
-  # Private helper to render SVG template with proper context
+    # Private helper to render SVG template with proper context
   defp render_svg_template(event) do
-    # Create theme data
-    theme = %{color1: "#1a1a1a", color2: "#333333"}
+    # Get theme colors from event's theme
+    theme_colors = get_theme_colors(event.theme || :minimal)
+    theme = %{color1: theme_colors.primary, color2: theme_colors.secondary}
 
     # Build image section - download external images locally for rsvg-convert compatibility
     image_section = if has_image?(event) do
@@ -187,5 +188,18 @@ defmodule EventasaurusWeb.EventSocialCardController do
             font-size="14" font-weight="bold" fill="#374151">RSVP</text>
     </svg>
     """
+  end
+
+    # Private helper to extract colors from theme
+  defp get_theme_colors(theme) do
+    theme_config = EventasaurusApp.Themes.get_default_customizations(theme)
+    colors = Map.get(theme_config, "colors", %{})
+
+    %{
+      primary: Map.get(colors, "primary", "#1a1a1a"),
+      secondary: Map.get(colors, "secondary", "#333333"),
+      accent: Map.get(colors, "accent", "#0066cc"),
+      text: Map.get(colors, "text", "#ffffff")
+    }
   end
 end
