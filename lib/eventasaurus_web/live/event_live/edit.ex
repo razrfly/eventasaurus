@@ -48,6 +48,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
             date_poll = Events.get_event_date_poll(event)
             enable_date_polling = !is_nil(date_poll)
 
+            # Get existing selected poll dates if date polling is enabled
+            selected_poll_dates = if date_poll do
+              date_poll.date_options
+              |> Enum.map(& &1.date)
+              |> Enum.sort(Date)
+              |> Enum.map(&Date.to_iso8601/1)
+              |> Enum.join(",")
+            else
+              ""
+            end
+
             # Prepare form data
             form_data = %{
               "start_date" => start_date,
@@ -65,7 +76,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
               "venue_country" => venue_country,
               "venue_latitude" => venue_latitude,
               "venue_longitude" => venue_longitude,
-              "enable_date_polling" => enable_date_polling
+              "enable_date_polling" => enable_date_polling,
+              "selected_poll_dates" => selected_poll_dates
             }
 
             # Set up the socket with all required assigns
@@ -202,6 +214,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
 
     # Clean up venue-related fields that the Event changeset doesn't expect
+    # Keep date polling fields for our custom logic
     final_event_params = final_event_params
     |> Map.drop(["venue_name", "venue_address", "venue_city", "venue_state",
                  "venue_country", "venue_latitude", "venue_longitude", "is_virtual",
@@ -514,7 +527,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, assign(socket, :show_image_picker, false)}
   end
 
-  @impl true
+      @impl true
   def handle_info({:selected_dates_changed, dates}, socket) do
     # Convert dates to ISO8601 strings for form data
     date_strings = Enum.map(dates, &Date.to_iso8601/1)
@@ -530,8 +543,71 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # ========== Helper Functions ==========
 
-  defp save_event(_socket, event, event_params) do
-    Events.update_event(event, event_params)
+  defp save_event(socket, event, event_params) do
+    # First update the event
+    case Events.update_event(event, event_params) do
+      {:ok, updated_event} ->
+        # Handle date polling updates
+        handle_date_polling_update(updated_event, event_params, socket.assigns.auth_user)
+        {:ok, updated_event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  # Helper function to handle date polling updates
+  defp handle_date_polling_update(event, params, user) do
+    enable_date_polling = Map.get(params, "enable_date_polling", false)
+    existing_poll = Events.get_event_date_poll(event)
+
+    cond do
+      # Case 1: Enabling date polling (create new poll or update existing)
+      enable_date_polling ->
+        selected_dates_string = Map.get(params, "selected_poll_dates", "")
+
+        if selected_dates_string != "" do
+          # Parse selected dates
+          selected_dates =
+            selected_dates_string
+            |> String.split(",")
+            |> Enum.map(&String.trim/1)
+            |> Enum.filter(&(&1 != ""))
+            |> Enum.map(&Date.from_iso8601!/1)
+
+          if existing_poll do
+            # Update existing poll - delete old options and create new ones
+            Events.delete_all_date_options(existing_poll)
+            Events.create_date_options_from_list(existing_poll, selected_dates)
+
+            # Update event state to polling if not already
+            if event.state != "polling" do
+              Events.update_event(event, %{state: "polling"})
+            end
+          else
+            # Create new poll
+            case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
+              {:ok, poll} ->
+                Events.create_date_options_from_list(poll, selected_dates)
+                Events.update_event(event, %{state: "polling"})
+              {:error, _} ->
+                # Handle error silently for now
+                nil
+            end
+          end
+        end
+
+      # Case 2: Disabling date polling (keep poll but change event state)
+      existing_poll && !enable_date_polling ->
+        # Change event state back to published but keep the poll data
+        if event.state == "polling" do
+          Events.update_event(event, %{state: "published"})
+        end
+
+      # Case 3: No changes needed
+      true ->
+        nil
+    end
   end
 
   # Helper function to combine date and time fields into UTC datetime
