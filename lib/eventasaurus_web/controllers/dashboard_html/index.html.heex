@@ -26,11 +26,30 @@
               </a>
             </:col>
             <:col :let={event} label="Date & Time">
-              <%= EventasaurusWeb.EventHTML.format_datetime(event.start_at) %>
-              <%= if event.ends_at do %>
-                - <%= EventasaurusWeb.EventHTML.format_datetime(event.ends_at) %>
+              <%= if event.state == "polling" do %>
+                <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full mb-2">
+                  📊 Date Polling
+                </span>
+                <div class="text-sm text-gray-600">
+                  Multiple dates being voted on
+                </div>
+              <% else %>
+                <div class="mb-1">
+                  <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                    ✓ Confirmed
+                  </span>
+                </div>
+                <div class="font-medium">
+                  <%= EventasaurusWeb.EventHTML.format_date(event.start_at, event.timezone) %>
+                </div>
+                <div class="text-sm text-gray-600">
+                  <%= EventasaurusWeb.EventHTML.format_time(event.start_at, event.timezone) %>
+                  <%= if event.ends_at do %>
+                    - <%= EventasaurusWeb.EventHTML.format_time(event.ends_at, event.timezone) %>
+                  <% end %>
+                </div>
               <% end %>
-              <span class="block text-xs text-gray-500"><%= event.timezone %></span>
+              <span class="block text-xs text-gray-500 mt-1"><%= event.timezone %></span>
             </:col>
             <:col :let={event} label="Venue">
               <%= if event.venue_id == nil do %>
@@ -50,11 +69,30 @@
               </a>
             </:col>
             <:col :let={event} label="Date & Time">
-              <%= EventasaurusWeb.EventHTML.format_datetime(event.start_at) %>
-              <%= if event.ends_at do %>
-                - <%= EventasaurusWeb.EventHTML.format_datetime(event.ends_at) %>
+              <%= if event.state == "polling" do %>
+                <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full mb-2">
+                  📊 Was Polling
+                </span>
+                <div class="text-sm text-gray-600">
+                  Date poll never finalized
+                </div>
+              <% else %>
+                <div class="mb-1">
+                  <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                    ✓ Was Confirmed
+                  </span>
+                </div>
+                <div class="font-medium text-gray-700">
+                  <%= EventasaurusWeb.EventHTML.format_date(event.start_at, event.timezone) %>
+                </div>
+                <div class="text-sm text-gray-600">
+                  <%= EventasaurusWeb.EventHTML.format_time(event.start_at, event.timezone) %>
+                  <%= if event.ends_at do %>
+                    - <%= EventasaurusWeb.EventHTML.format_time(event.ends_at, event.timezone) %>
+                  <% end %>
+                </div>
               <% end %>
-              <span class="block text-xs text-gray-500"><%= event.timezone %></span>
+              <span class="block text-xs text-gray-500 mt-1"><%= event.timezone %></span>
             </:col>
             <:col :let={event} label="Venue">
               <%= if event.venue_id == nil do %>
