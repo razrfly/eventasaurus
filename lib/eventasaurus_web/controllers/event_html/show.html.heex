@@ -98,22 +98,13 @@
                   <p class="text-gray-700">
                     Attendees are voting on the best date for this event
                   </p>
-                  <%= if @date_options != [] do %>
+                  <%= if is_list(@date_options) and @date_options != [] do %>
                     <p class="text-gray-600 text-sm">
                       <%= length(@date_options) %> date options available for voting
                     </p>
                   <% end %>
                 <% else %>
-                  <p class="text-gray-700">
-                    <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%A, %B %d, %Y") %>
-                  </p>
-                  <p class="text-gray-600 text-sm">
-                    <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
-                    <%= if @event.ends_at do %>
-                      - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
-                    <% end %>
-                    <%= if @event.timezone do %>(<%= @event.timezone %>)<% end %>
-                  </p>
+                  <%= format_event_datetime(@event) %>
                 <% end %>
               </div>
             </div>
@@ -140,46 +131,46 @@
           </div>
 
           <!-- Date Voting Visualization (only show for polling events) -->
-          <%= if @event.state == "polling" and @votes_by_date != %{} do %>
+          <%= if @event.state == "polling" and is_map(@votes_breakdown) and map_size(@votes_breakdown) > 0 do %>
             <div class="border-t border-gray-200 pt-6 mb-6">
               <h3 class="font-semibold text-gray-900 mb-4">📊 Date Poll Results</h3>
               <div class="bg-gray-50 rounded-lg p-4">
                 <div class="space-y-3">
-                  <%= for {date, votes} <- Enum.sort(@votes_by_date) do %>
+                  <%= for {date, breakdown} <- Enum.sort(@votes_breakdown) do %>
                     <div class="flex items-center justify-between">
                       <span class="font-medium text-gray-900 min-w-[120px]">
                         <%= Calendar.strftime(date, "%b %d") %>
                       </span>
                       <div class="flex gap-3 flex-wrap text-sm">
-                        <%= total = length(votes) %>
-                        <%= if total > 0 do %>
-                                                  <%= for {pref, emoji, color} <- [{"yes", "🟢", "text-green-600"}, {"if_need_be", "🟡", "text-yellow-600"}, {"no", "🔴", "text-red-600"}] do %>
-                          <% count = Enum.count(votes, &(to_string(&1.vote_type) == pref)) %>
-                          <%= if count > 0 do %>
-                            <span class={"#{color} font-medium"} title="#{count} #{pref} votes">
-                              <%= emoji %> <%= round(100 * count / total) %>%
-                            </span>
+                        <%= if breakdown.total > 0 do %>
+                          <%= for {_pref, emoji, color, count} <- [
+                            {"yes", "🟢", "text-green-600", breakdown.yes},
+                            {"if_need_be", "🟡", "text-yellow-600", breakdown.if_need_be},
+                            {"no", "🔴", "text-red-600", breakdown.no}
+                          ] do %>
+                            <%= if count > 0 do %>
+                              <span class={"#{color} font-medium"} title="#{count} #{pref} votes">
+                                <%= emoji %> <%= round(100 * count / breakdown.total) %>%
+                              </span>
+                            <% end %>
                           <% end %>
-                        <% end %>
                         <% else %>
                           <span class="text-gray-500 text-sm">No votes yet</span>
                         <% end %>
                       </div>
                       <span class="text-gray-500 text-sm min-w-[60px] text-right">
-                        <%= total %> <%= if total == 1, do: "vote", else: "votes" %>
+                        <%= breakdown.total %> <%= if breakdown.total == 1, do: "vote", else: "votes" %>
                       </span>
                     </div>
                   <% end %>
                 </div>
-                <%= if map_size(@votes_by_date) > 0 do %>
-                  <div class="mt-4 pt-3 border-t border-gray-200 text-xs text-gray-500">
-                    <div class="flex gap-4">
-                      <span><span class="text-green-600">🟢</span> Preferred</span>
-                      <span><span class="text-yellow-600">🟡</span> Acceptable</span>
-                      <span><span class="text-red-600">🔴</span> Unavailable</span>
-                    </div>
+                <div class="mt-4 pt-3 border-t border-gray-200 text-xs text-gray-500">
+                  <div class="flex gap-4">
+                    <span><span class="text-green-600">🟢</span> Preferred</span>
+                    <span><span class="text-yellow-600">🟡</span> Acceptable</span>
+                    <span><span class="text-red-600">🔴</span> Unavailable</span>
                   </div>
-                <% end %>
+                </div>
               </div>
             </div>
           <% end %>

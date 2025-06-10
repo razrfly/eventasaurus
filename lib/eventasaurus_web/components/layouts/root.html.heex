@@ -11,6 +11,9 @@
       <%= assigns[:page_title] || "Home" %>
     </.live_title>
     
+    <!-- Favicon with dinosaur emoji -->
+    <link rel="icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='65' font-size='85' text-anchor='middle' alignment-baseline='central'%3E🦖%3C/text%3E%3C/svg%3E" />
+    
     <!-- Open Graph and Twitter Card meta tags -->
     <%= if assigns[:meta_title] do %>
       <meta property="og:title" content={assigns[:meta_title]} />
