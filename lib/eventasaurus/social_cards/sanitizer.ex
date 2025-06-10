@@ -14,7 +14,9 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       title: sanitize_text(Map.get(event, :title, "")),
       description: sanitize_text(Map.get(event, :description, "")),
       cover_image_url: validate_image_url(Map.get(event, :cover_image_url)),
-      updated_at: Map.get(event, :updated_at)
+      updated_at: Map.get(event, :updated_at),
+      theme: Map.get(event, :theme),
+      theme_customizations: Map.get(event, :theme_customizations)
     }
   end
 
