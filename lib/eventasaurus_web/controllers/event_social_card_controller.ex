@@ -109,23 +109,45 @@ defmodule EventasaurusWeb.EventSocialCardController do
     end
     theme = %{color1: theme_colors.primary, color2: theme_colors.secondary}
 
-    # Build image section - use base64 data URLs for local images to fix rsvg-convert compatibility
+    # Build image section - use different approaches for local vs external images
     image_section = if has_image?(event) do
-      case local_image_data_url(event) do
-        nil ->
-          # Fallback to "No Image" if image processing fails
-          """
-          <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
-          <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
-          """
-        data_url ->
-          """
-          <image href="#{data_url}"
-                 x="418" y="32"
-                 width="350" height="350"
-                 clip-path="url(#imageClip)"
-                 preserveAspectRatio="xMidYMid slice"/>
-          """
+      # Check if this is a local static file or external URL
+      if String.starts_with?(event.cover_image_url, "/") do
+        # Local static file - use base64 data URL (this works)
+        case local_image_data_url(event) do
+          nil ->
+            # Fallback to "No Image" if image processing fails
+            """
+            <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+            <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+            """
+          data_url ->
+            """
+            <image href="#{data_url}"
+                   x="418" y="32"
+                   width="350" height="350"
+                   clip-path="url(#imageClip)"
+                   preserveAspectRatio="xMidYMid slice"/>
+            """
+        end
+      else
+        # External URL - download, optimize, and use base64 data URL
+        case optimized_external_image_data_url(event) do
+          nil ->
+            # Fallback to "No Image" if download/optimization fails
+            """
+            <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+            <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+            """
+          data_url ->
+            """
+            <image href="#{data_url}"
+                   x="418" y="32"
+                   width="350" height="350"
+                   clip-path="url(#imageClip)"
+                   preserveAspectRatio="xMidYMid slice"/>
+            """
+        end
       end
     else
       """
