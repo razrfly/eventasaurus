@@ -28,8 +28,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
             changeset = Events.change_event(event)
 
             # Convert the event to a changeset
-            {start_date, start_time} = parse_datetime(event.start_at)
-            {ends_date, ends_time} = parse_datetime(event.ends_at)
+            {start_date, start_time} = parse_datetime_with_timezone(event.start_at, event.timezone)
+            {ends_date, ends_time} = parse_datetime_with_timezone(event.ends_at, event.timezone)
 
             # Check if this is a virtual event
             is_virtual = event.venue_id == nil
@@ -545,8 +545,20 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
       @impl true
   def handle_info({:selected_dates_changed, dates}, socket) do
-    # Convert dates to ISO8601 strings for form data
-    date_strings = Enum.map(dates, &Date.to_iso8601/1)
+    # Validate and process dates
+    date_strings = case dates do
+      dates when is_list(dates) ->
+        dates
+        |> Enum.uniq()
+        |> Enum.map(fn
+          %Date{} = date -> Date.to_iso8601(date)
+          _ -> nil
+        end)
+        |> Enum.reject(&is_nil/1)
+      _ ->
+        []
+    end
+
     dates_string = Enum.join(date_strings, ",")
 
     # Update form_data with the new selected dates
@@ -564,7 +576,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     case Events.update_event(event, event_params) do
       {:ok, updated_event} ->
         # Handle date polling updates
-        handle_date_polling_update(updated_event, event_params, socket.assigns.auth_user)
+        handle_date_polling_update(updated_event, event_params, socket.assigns.user)
         {:ok, updated_event}
 
       {:error, changeset} ->
@@ -575,11 +587,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
   # Helper function to handle date polling updates
   defp handle_date_polling_update(event, params, user) do
     enable_date_polling = Map.get(params, "enable_date_polling", false)
+    # Handle string "true"/"false" from form submissions properly
+    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
     existing_poll = Events.get_event_date_poll(event)
 
     cond do
       # Case 1: Enabling date polling (create new poll or update existing)
-      enable_date_polling ->
+      is_polling_enabled ->
         selected_dates_string = Map.get(params, "selected_poll_dates", "")
 
         if selected_dates_string != "" do
@@ -589,7 +603,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
             |> String.split(",")
             |> Enum.map(&String.trim/1)
             |> Enum.filter(&(&1 != ""))
-            |> Enum.map(&Date.from_iso8601!/1)
+            |> Enum.map(fn date_str ->
+              case Date.from_iso8601(date_str) do
+                {:ok, date} -> date
+                {:error, _} -> nil
+              end
+            end)
+            |> Enum.filter(&(&1 != nil))
 
           if existing_poll do
             # Update existing poll - delete old options and create new ones
@@ -614,7 +634,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         end
 
       # Case 2: Disabling date polling (keep poll but change event state)
-      existing_poll && !enable_date_polling ->
+      existing_poll && !is_polling_enabled ->
         # Change event state back to published but keep the poll data
         if event.state == "polling" do
           Events.update_event(event, %{state: "published"})
@@ -641,7 +661,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
             |> String.split(",")
             |> Enum.map(&String.trim/1)
             |> Enum.filter(&(&1 != ""))
-            |> Enum.map(&Date.from_iso8601!/1)
+            |> Enum.map(fn date_str ->
+              case Date.from_iso8601(date_str) do
+                {:ok, date} -> date
+                {:error, _} -> nil
+              end
+            end)
+            |> Enum.filter(&(&1 != nil))
             |> Enum.sort()
 
           if length(selected_dates) > 0 do
@@ -654,12 +680,19 @@ defmodule EventasaurusWeb.EventLive.Edit do
             end_time = Map.get(params, "ends_time", "17:00")
 
             # Create start_at and ends_at using middle date
-            start_at = combine_date_time_to_utc(Date.to_iso8601(middle_date), start_time, timezone)
-            ends_at = combine_date_time_to_utc(Date.to_iso8601(middle_date), end_time, timezone)
-
-            params
-            |> Map.put("start_at", start_at)
-            |> Map.put("ends_at", ends_at)
+            case combine_date_time_to_utc(Date.to_iso8601(middle_date), start_time, timezone) do
+              {:ok, start_datetime} ->
+                case combine_date_time_to_utc(Date.to_iso8601(middle_date), end_time, timezone) do
+                  {:ok, end_datetime} ->
+                    params
+                    |> Map.put("start_at", start_datetime)
+                    |> Map.put("ends_at", end_datetime)
+                  {:error, _} ->
+                    params
+                end
+              {:error, _} ->
+                params
+            end
           else
             params
           end
@@ -671,14 +704,20 @@ defmodule EventasaurusWeb.EventLive.Edit do
       # Combine start date and time
       start_at = case {Map.get(params, "start_date"), Map.get(params, "start_time")} do
         {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
-          combine_date_time_to_utc(date_str, time_str, timezone)
+          case combine_date_time_to_utc(date_str, time_str, timezone) do
+            {:ok, datetime} -> datetime
+            {:error, _} -> Map.get(params, "start_at")
+          end
         _ -> Map.get(params, "start_at")
       end
 
       # Combine end date and time
       ends_at = case {Map.get(params, "ends_date"), Map.get(params, "ends_time")} do
         {date_str, time_str} when is_binary(date_str) and is_binary(time_str) ->
-          combine_date_time_to_utc(date_str, time_str, timezone)
+          case combine_date_time_to_utc(date_str, time_str, timezone) do
+            {:ok, datetime} -> datetime
+            {:error, _} -> Map.get(params, "ends_at")
+          end
         _ -> Map.get(params, "ends_at")
       end
 
@@ -689,27 +728,30 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   # Helper function to combine date and time strings into UTC datetime
-  defp combine_date_time_to_utc(date_str, time_str, timezone) do
+  defp combine_date_time_to_utc(date_str, time_str, timezone) when is_binary(date_str) and is_binary(time_str) and date_str != "" and time_str != "" do
     try do
       # Parse the date and time
       {:ok, date} = Date.from_iso8601(date_str)
       {:ok, time} = Time.from_iso8601(time_str <> ":00")
 
       # Create a naive datetime
-      {:ok, naive_datetime} = NaiveDateTime.new(date, time)
+      naive_datetime = NaiveDateTime.new!(date, time)
 
-      # Convert to the specified timezone, then to UTC
+      # Convert to timezone-aware datetime
       case DateTime.from_naive(naive_datetime, timezone) do
-        {:ok, datetime} -> DateTime.to_iso8601(datetime)
-        {:error, _} ->
-          # Fallback to UTC if timezone conversion fails
-          {:ok, utc_datetime} = DateTime.from_naive(naive_datetime, "Etc/UTC")
-          DateTime.to_iso8601(utc_datetime)
+        {:ok, datetime} ->
+          # Convert to UTC for storage
+          utc_datetime = DateTime.shift_zone!(datetime, "Etc/UTC")
+          {:ok, utc_datetime}
+        {:error, reason} ->
+          {:error, reason}
       end
     rescue
-      _ -> nil
+      e -> {:error, e}
     end
   end
+
+  defp combine_date_time_to_utc(_, _, _), do: {:error, :invalid_input}
 
   # Helper function to extract address components
   defp get_address_component(components, type) do
@@ -759,6 +801,21 @@ defmodule EventasaurusWeb.EventLive.Edit do
     date = datetime |> DateTime.to_date() |> Date.to_iso8601()
     time = datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
     {date, time}
+  end
+
+  # Helper function to parse a datetime into date and time strings with timezone conversion
+  defp parse_datetime_with_timezone(nil, _timezone), do: {nil, nil}
+  defp parse_datetime_with_timezone(datetime, timezone) do
+    # Convert UTC datetime to the event's timezone for display
+    case DateTime.shift_zone(datetime, timezone) do
+      {:ok, shifted_datetime} ->
+        date = shifted_datetime |> DateTime.to_date() |> Date.to_iso8601()
+        time = shifted_datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
+        {date, time}
+      {:error, _} ->
+        # Fallback to UTC if timezone conversion fails
+        parse_datetime(datetime)
+    end
   end
 
   # Helper function to validate date polling options
