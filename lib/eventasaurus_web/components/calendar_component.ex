@@ -37,7 +37,7 @@ defmodule EventasaurusWeb.CalendarComponent do
     {:ok, socket}
   end
 
-  @impl true
+    @impl true
   def handle_event("toggle_date", %{"date" => date_string}, socket) do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
@@ -58,7 +58,7 @@ defmodule EventasaurusWeb.CalendarComponent do
             component_id: socket.assigns.id || "calendar"
           })
 
-        # Send the updated dates to the parent
+        # Send the updated dates to the parent LiveView
         send(self(), {:selected_dates_changed, updated_dates})
 
         {:noreply, socket}
