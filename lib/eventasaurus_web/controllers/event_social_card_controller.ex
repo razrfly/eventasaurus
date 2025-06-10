@@ -59,7 +59,7 @@ defmodule EventasaurusWeb.EventSocialCardController do
                     SvgConverter.cleanup_temp_file(png_path)
 
                     conn
-                    |> put_resp_content_type("image/png")
+                    |> put_resp_header("content-type", "image/png")
                     |> put_resp_header("cache-control", "public, max-age=31536000")  # Cache for 1 year since hash ensures freshness
                     |> put_resp_header("etag", "\"#{final_hash}\"")
                     |> send_resp(200, png_data)

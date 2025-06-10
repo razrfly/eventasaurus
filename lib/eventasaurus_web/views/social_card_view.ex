@@ -118,7 +118,7 @@ defmodule EventasaurusWeb.SocialCardView do
   def safe_image_url(_), do: nil
 
   @doc """
-  Gets a local image path for SVG rendering by downloading external images.
+  Gets a local image path for SVG rendering by downloading external images or using static files.
   Returns a local file path if successful, otherwise returns nil.
   Uses sanitizer to validate the URL before downloading.
   """
@@ -126,9 +126,20 @@ defmodule EventasaurusWeb.SocialCardView do
     case Sanitizer.validate_image_url(url) do
       nil -> nil
       valid_url ->
-        case Eventasaurus.Services.SvgConverter.download_image_locally(valid_url) do
-          {:ok, local_path} -> local_path
-          {:error, _reason} -> nil
+        if String.starts_with?(valid_url, "/") do
+          # Handle local static file path
+          static_path = Path.join(["priv", "static"]) |> Path.join(String.trim_leading(valid_url, "/"))
+          if File.exists?(static_path) do
+            Path.absname(static_path)
+          else
+            nil
+          end
+        else
+          # Handle external URL - download it
+          case Eventasaurus.Services.SvgConverter.download_image_locally(valid_url) do
+            {:ok, local_path} -> local_path
+            {:error, _reason} -> nil
+          end
         end
     end
   end
