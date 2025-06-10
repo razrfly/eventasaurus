@@ -106,6 +106,8 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       title: Map.get(event, :title, ""),
       description: Map.get(event, :description, ""),
       cover_image_url: Map.get(event, :cover_image_url, ""),
+      theme: Map.get(event, :theme, :minimal),
+      theme_customizations: Map.get(event, :theme_customizations, %{}),
       updated_at: format_timestamp(Map.get(event, :updated_at)),
       version: @social_card_version
     }
