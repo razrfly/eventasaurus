@@ -127,10 +127,19 @@ defmodule EventasaurusWeb.SocialCardView do
       nil -> nil
       valid_url ->
         if String.starts_with?(valid_url, "/") do
-          # Handle local static file path
-          static_path = Path.join(["priv", "static"]) |> Path.join(String.trim_leading(valid_url, "/"))
-          if File.exists?(static_path) do
-            Path.absname(static_path)
+          # Handle local static file path with security validation
+          # SECURITY: Prevent directory traversal - construct safe path
+          relative_path = String.trim_leading(valid_url, "/")
+          static_dir = Path.join(["priv", "static"])
+          static_path = Path.join(static_dir, relative_path)
+
+          # SECURITY: Ensure the resolved path is still within the static directory
+          canonical_static_dir = Path.expand(static_dir)
+          canonical_static_path = Path.expand(static_path)
+
+          if String.starts_with?(canonical_static_path, canonical_static_dir <> "/") and
+             File.exists?(canonical_static_path) do
+            canonical_static_path
           else
             nil
           end

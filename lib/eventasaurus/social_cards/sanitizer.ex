@@ -15,8 +15,8 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       description: sanitize_text(Map.get(event, :description, "")),
       cover_image_url: validate_image_url(Map.get(event, :cover_image_url)),
       updated_at: Map.get(event, :updated_at),
-      theme: Map.get(event, :theme),
-      theme_customizations: Map.get(event, :theme_customizations)
+      theme: validate_theme(Map.get(event, :theme)),
+      theme_customizations: sanitize_theme_customizations(Map.get(event, :theme_customizations))
     }
   end
 
@@ -80,7 +80,25 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
   def validate_color(_), do: "#6E56CF"
 
   # Simple private helpers
-  defp truncate_text(text, max_length), do: String.slice(text, 0, max_length)
+  defp truncate_text(text, max_length) do
+    if String.length(text) <= max_length do
+      text
+    else
+      # Try to break at word boundary to avoid cutting words
+      truncated = String.slice(text, 0, max_length - 3)
+      case String.split(truncated, " ") do
+        [_single_word] ->
+          # Single word that's too long, just truncate and add ellipsis
+          String.slice(text, 0, max_length - 3) <> "..."
+        words ->
+          # Multiple words, remove last potentially broken word
+          words
+          |> Enum.drop(-1)
+          |> Enum.join(" ")
+          |> Kernel.<>("...")
+      end
+    end
+  end
 
   defp valid_scheme?(scheme), do: scheme in ["http", "https"]
 
@@ -88,10 +106,22 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
 
   defp is_local_static_path?(path) do
     # Check if it's a local path starting with / and has a valid image extension
-    String.starts_with?(path, "/") and
-    Regex.match?(~r/\.(jpe?g|png|gif|webp)$/i, path) and
-    # Security check: ensure it's within allowed static directories
-    String.contains?(path, "/images/")
+    if String.starts_with?(path, "/") and Regex.match?(~r/\.(jpe?g|png|gif|webp)$/i, path) do
+      # SECURITY: Prevent directory traversal attacks
+      # Normalize the path and ensure it stays within allowed directories
+      normalized_path = Path.expand(path, "/")
+
+      # Check that the normalized path starts with allowed directories
+      allowed_prefixes = ["/images/", "/uploads/"]
+
+      Enum.any?(allowed_prefixes, fn prefix ->
+        String.starts_with?(normalized_path, prefix) and
+        # Ensure no traversal sequences remain after normalization
+        not String.contains?(normalized_path, "..")
+      end)
+    else
+      false
+    end
   end
 
   defp image_extension?(url) do
@@ -106,4 +136,48 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
 
     has_extension or has_format_param or known_image_service
   end
+
+  # Theme validation helpers
+  defp validate_theme(theme) when is_atom(theme) do
+    # Only allow known theme atoms
+    valid_themes = [:minimal, :cosmic, :celebration, :velocity, :retro, :nature, :professional]
+    if theme in valid_themes, do: theme, else: :minimal
+  end
+  defp validate_theme(_), do: :minimal
+
+  defp sanitize_theme_customizations(customizations) when is_map(customizations) do
+    # Only allow known safe keys and validate values
+    customizations
+    |> Map.take(["colors", "fonts", "spacing"])
+    |> Enum.into(%{}, fn {key, value} -> {key, sanitize_theme_value(key, value)} end)
+  end
+  defp sanitize_theme_customizations(_), do: %{}
+
+  defp sanitize_theme_value("colors", colors) when is_map(colors) do
+    colors
+    |> Map.take(["primary", "secondary", "accent", "text", "background"])
+    |> Enum.into(%{}, fn {key, value} -> {key, validate_color(value)} end)
+  end
+  defp sanitize_theme_value("fonts", fonts) when is_map(fonts) do
+    # Only allow safe font properties
+    fonts
+    |> Map.take(["family", "size", "weight"])
+    |> Enum.into(%{}, fn {key, value} -> {key, sanitize_text(to_string(value))} end)
+  end
+  defp sanitize_theme_value("spacing", spacing) when is_map(spacing) do
+    # Only allow numeric spacing values
+    spacing
+    |> Map.take(["margin", "padding", "gap"])
+    |> Enum.into(%{}, fn {key, value} -> {key, sanitize_numeric_value(value)} end)
+  end
+  defp sanitize_theme_value(_, _), do: %{}
+
+  defp sanitize_numeric_value(value) when is_integer(value) and value >= 0 and value <= 100, do: value
+  defp sanitize_numeric_value(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {num, ""} when num >= 0 and num <= 100 -> num
+      _ -> 0
+    end
+  end
+  defp sanitize_numeric_value(_), do: 0
 end

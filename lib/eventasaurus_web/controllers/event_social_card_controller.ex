@@ -6,8 +6,6 @@ defmodule EventasaurusWeb.EventSocialCardController do
   alias EventasaurusApp.Events
   alias Eventasaurus.Services.SvgConverter
   alias Eventasaurus.SocialCards.HashGenerator
-
-  # Import view helper functions for use in template
   import EventasaurusWeb.SocialCardView
 
   @doc """
@@ -59,7 +57,7 @@ defmodule EventasaurusWeb.EventSocialCardController do
                     SvgConverter.cleanup_temp_file(png_path)
 
                     conn
-                    |> put_resp_header("content-type", "image/png")
+                    |> put_resp_content_type("image/png")
                     |> put_resp_header("cache-control", "public, max-age=31536000")  # Cache for 1 year since hash ensures freshness
                     |> put_resp_header("etag", "\"#{final_hash}\"")
                     |> send_resp(200, png_data)
@@ -90,8 +88,14 @@ defmodule EventasaurusWeb.EventSocialCardController do
 
     # Private helper to render SVG template with proper context
   defp render_svg_template(event) do
-    # Get theme colors from event's theme
-    theme_colors = get_theme_colors(event.theme || :minimal)
+    # Get theme colors from event's theme with error handling
+    theme_colors = case get_theme_colors(event.theme || :minimal) do
+      %{primary: primary, secondary: secondary} = colors when is_binary(primary) and is_binary(secondary) ->
+        colors
+      _ ->
+        Logger.warning("Failed to get valid theme colors for theme: #{inspect(event.theme)}, using defaults")
+        %{primary: "#1a1a1a", secondary: "#333333"}
+    end
     theme = %{color1: theme_colors.primary, color2: theme_colors.secondary}
 
     # Build image section - download external images locally for rsvg-convert compatibility
@@ -190,16 +194,31 @@ defmodule EventasaurusWeb.EventSocialCardController do
     """
   end
 
-    # Private helper to extract colors from theme
+  # Private helper to extract colors from theme with error handling
   defp get_theme_colors(theme) do
-    theme_config = EventasaurusApp.Themes.get_default_customizations(theme)
-    colors = Map.get(theme_config, "colors", %{})
+    try do
+      theme_config = EventasaurusApp.Themes.get_default_customizations(theme)
+      colors = if is_map(theme_config) do
+        Map.get(theme_config, "colors", %{})
+      else
+        %{}
+      end
 
-    %{
-      primary: Map.get(colors, "primary", "#1a1a1a"),
-      secondary: Map.get(colors, "secondary", "#333333"),
-      accent: Map.get(colors, "accent", "#0066cc"),
-      text: Map.get(colors, "text", "#ffffff")
-    }
+      %{
+        primary: validate_color_or_default(Map.get(colors, "primary"), "#1a1a1a"),
+        secondary: validate_color_or_default(Map.get(colors, "secondary"), "#333333"),
+        accent: validate_color_or_default(Map.get(colors, "accent"), "#0066cc"),
+        text: validate_color_or_default(Map.get(colors, "text"), "#ffffff")
+      }
+    rescue
+      error ->
+        Logger.error("Failed to get theme colors for #{inspect(theme)}: #{inspect(error)}")
+        %{primary: "#1a1a1a", secondary: "#333333", accent: "#0066cc", text: "#ffffff"}
+    end
   end
+
+  defp validate_color_or_default(color, default) when is_binary(color) do
+    if Regex.match?(~r/^#[0-9A-Fa-f]{3,8}$/i, color), do: color, else: default
+  end
+  defp validate_color_or_default(_, default), do: default
 end
