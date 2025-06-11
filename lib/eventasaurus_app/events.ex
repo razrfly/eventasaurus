@@ -353,28 +353,9 @@ defmodule EventasaurusApp.Events do
           # User doesn't exist locally, check Supabase and create if needed
           Logger.info("User not found locally, attempting Supabase user creation/lookup")
           case create_or_find_supabase_user(email, name) do
-            {:ok, %{"email_sent" => true} = magic_link_response} ->
-              # Magic link sent - create a temporary local user record for participant registration
-              Logger.info("Magic link sent for new user, creating temporary local user record", %{
-                response: Map.take(magic_link_response, ["email_sent", "message_id"])
-              })
-              # Create user with temporary supabase_id - will be updated when they confirm email
-              temp_supabase_id = "temp_#{Ecto.UUID.generate()}"
-              case Accounts.create_user(%{
-                email: email,
-                name: name,
-                supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
-              }) do
-                {:ok, user} ->
-                  Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
-                  user
-                {:error, reason} ->
-                  Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
-                  Repo.rollback(reason)
-              end
             {:ok, supabase_user} ->
               Logger.info("Successfully created/found user in Supabase")
-              # Sync with local database (existing user case)
+              # Sync with local database
               case SupabaseSync.sync_user(supabase_user) do
                 {:ok, user} ->
                   Logger.info("Successfully synced user to local database", %{user_id: user.id})
@@ -383,6 +364,26 @@ defmodule EventasaurusApp.Events do
                   Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
                   Repo.rollback(reason)
               end
+                          {:error, :user_confirmation_required} ->
+                # User was created via OTP but email confirmation is required
+                Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
+                # Create user with temporary supabase_id - will be updated when they confirm email
+                temp_supabase_id = "temp_#{Ecto.UUID.generate()}"
+                case Accounts.create_user(%{
+                  email: email,
+                  name: name,
+                  supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
+                }) do
+                  {:ok, user} ->
+                    Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
+                    user
+                  {:error, reason} ->
+                    Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
+                    Repo.rollback(reason)
+                end
+              {:error, :invalid_user_data} ->
+                Logger.error("Invalid user data from Supabase after OTP creation")
+                Repo.rollback(:invalid_user_data)
             {:error, reason} ->
               Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
               Repo.rollback(reason)
@@ -577,9 +578,39 @@ defmodule EventasaurusApp.Events do
             Logger.info("Successfully initiated passwordless signup", %{
               email_domain: email |> String.split("@") |> List.last()
             })
-            # The response doesn't contain user data since email confirmation is required
-            # We return a success indicator that OTP was sent
-            {:ok, %{"email_sent" => true, "email" => email, "user_metadata" => user_metadata}}
+
+            # After OTP creation, the user should exist in Supabase
+            # Try to fetch the user data again (no sleep - if timing is an issue, we'll handle it differently)
+            case Client.admin_get_user_by_email(email) do
+              {:ok, supabase_user} when not is_nil(supabase_user) ->
+                Logger.info("Successfully retrieved user data after OTP creation", %{
+                  user_id: supabase_user["id"],
+                  email: supabase_user["email"],
+                  has_metadata: !is_nil(supabase_user["user_metadata"]),
+                  confirmed_at: supabase_user["confirmed_at"],
+                  email_confirmed_at: supabase_user["email_confirmed_at"]
+                })
+
+                # Additional validation - ensure we have the required fields
+                if is_nil(supabase_user["id"]) or is_nil(supabase_user["email"]) do
+                  Logger.error("Supabase user data missing required fields", %{
+                    has_id: !is_nil(supabase_user["id"]),
+                    has_email: !is_nil(supabase_user["email"]),
+                    user_keys: Map.keys(supabase_user)
+                  })
+                  {:error, :invalid_user_data}
+                else
+                  {:ok, supabase_user}
+                end
+
+              {:ok, nil} ->
+                # User still doesn't exist - this might happen due to timing or confirmation requirements
+                Logger.warning("User not found after OTP creation - email confirmation may be required")
+                {:error, :user_confirmation_required}
+              {:error, reason} ->
+                Logger.error("Failed to retrieve user after OTP creation", %{reason: inspect(reason)})
+                {:error, reason}
+            end
           {:error, reason} ->
             Logger.error("Failed to create passwordless user", %{reason: inspect(reason)})
             {:error, reason}
@@ -598,8 +629,6 @@ defmodule EventasaurusApp.Events do
         {:error, reason}
     end
   end
-
-
 
   # Theme Management Functions
 
@@ -1166,22 +1195,28 @@ defmodule EventasaurusApp.Events do
         nil ->
           # User doesn't exist locally, check Supabase and create if needed
           Logger.info("User not found locally, attempting Supabase user creation/lookup")
-          case create_or_find_supabase_user(email, name) do
-            {:ok, supabase_user} ->
-              Logger.info("Successfully created/found user in Supabase")
-              # Sync with local database
-              case SupabaseSync.sync_user(supabase_user) do
-                {:ok, user} ->
-                  Logger.info("Successfully synced user to local database", %{user_id: user.id})
-                  user
+                        case create_or_find_supabase_user(email, name) do
+                {:ok, supabase_user} ->
+                  Logger.info("Successfully created/found user in Supabase")
+                  # Sync with local database
+                  case SupabaseSync.sync_user(supabase_user) do
+                    {:ok, user} ->
+                      Logger.info("Successfully synced user to local database", %{user_id: user.id})
+                      user
+                    {:error, reason} ->
+                      Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+                      Repo.rollback(reason)
+                  end
+                {:error, :user_confirmation_required} ->
+                  Logger.info("User created via OTP but email confirmation required for voting")
+                  Repo.rollback(:email_confirmation_required)
+                {:error, :invalid_user_data} ->
+                  Logger.error("Invalid user data from Supabase after OTP creation")
+                  Repo.rollback(:invalid_user_data)
                 {:error, reason} ->
-                  Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+                  Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
                   Repo.rollback(reason)
               end
-            {:error, reason} ->
-              Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
-              Repo.rollback(reason)
-          end
 
         user ->
           # User exists locally
@@ -1452,6 +1487,9 @@ defmodule EventasaurusApp.Events do
                     Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
                     Repo.rollback(reason)
                 end
+              {:error, :user_confirmation_required} ->
+                Logger.info("User created via OTP but email confirmation required for voting")
+                Repo.rollback(:email_confirmation_required)
               {:error, reason} ->
                 Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
                 Repo.rollback(reason)
