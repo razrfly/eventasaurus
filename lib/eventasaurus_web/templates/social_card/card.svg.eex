@@ -41,15 +41,15 @@
   <text font-family="Arial, sans-serif" font-weight="bold"
         font-size="<%= calculate_font_size(@event.title) %>" fill="white">
     <%= if format_title(@event.title, 0) != "" do %>
-      <tspan x="32" y="200"><%= format_title(@event.title, 0) %></tspan>
+      <tspan x="32" y="<%= title_line_y_position(0, calculate_font_size(@event.title)) %>"><%= format_title(@event.title, 0) %></tspan>
     <% end %>
     <%= if format_title(@event.title, 1) != "" do %>
-      <tspan x="32" y="<%= 200 + String.to_integer(calculate_font_size(@event.title)) + 8 %>">
+      <tspan x="32" y="<%= title_line_y_position(1, calculate_font_size(@event.title)) %>">
         <%= format_title(@event.title, 1) %>
       </tspan>
     <% end %>
     <%= if format_title(@event.title, 2) != "" do %>
-      <tspan x="32" y="<%= 200 + (String.to_integer(calculate_font_size(@event.title)) + 8) * 2 %>">
+      <tspan x="32" y="<%= title_line_y_position(2, calculate_font_size(@event.title)) %>">
         <%= format_title(@event.title, 2) %>
       </tspan>
     <% end %>
