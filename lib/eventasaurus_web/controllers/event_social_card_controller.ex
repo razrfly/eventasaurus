@@ -158,22 +158,21 @@ defmodule EventasaurusWeb.EventSocialCardController do
 
     # Build title sections - positioned lower for better balance
     title_line_1 = if format_title(event.title, 0) != "" do
-      ~s(<tspan x="32" y="200">#{format_title(event.title, 0)}</tspan>)
+      y_pos = EventasaurusWeb.SocialCardView.title_line_y_position(0, calculate_font_size(event.title))
+      ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 0)}</tspan>)
     else
       ""
     end
 
     title_line_2 = if format_title(event.title, 1) != "" do
-      font_size = String.to_integer(calculate_font_size(event.title))
-      y_pos = 200 + font_size + 8
+      y_pos = EventasaurusWeb.SocialCardView.title_line_y_position(1, calculate_font_size(event.title))
       ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 1)}</tspan>)
     else
       ""
     end
 
     title_line_3 = if format_title(event.title, 2) != "" do
-      font_size = String.to_integer(calculate_font_size(event.title))
-      y_pos = 200 + (font_size + 8) * 2
+      y_pos = EventasaurusWeb.SocialCardView.title_line_y_position(2, calculate_font_size(event.title))
       ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 2)}</tspan>)
     else
       ""
