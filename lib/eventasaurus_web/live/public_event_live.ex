@@ -516,6 +516,7 @@ defmodule EventasaurusWeb.PublicEventLive do
       {:error, reason} ->
         error_message = case reason do
           :event_not_found -> "Event not found."
+          :email_confirmation_required -> "A magic link has been sent to your email. Please click the link to verify your email address, then try voting again."
           _ -> "Failed to save votes. Please try again."
         end
 
