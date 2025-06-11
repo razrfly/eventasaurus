@@ -208,9 +208,7 @@
               <%= if participant.user do %>
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                      <%= String.first(participant.user.name || "?") |> String.upcase() %>
-                    </div>
+                    <%= avatar_img_size(participant.user, :md) %>
                     <div>
                       <div class="font-medium text-gray-900"><%= participant.user.name || "Unknown User" %></div>
                       <div class="text-sm text-gray-500"><%= participant.user.email || "No email" %></div>
@@ -248,11 +246,7 @@
           <div class="space-y-4">
             <%= for organizer <- @organizers do %>
               <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                  <span class="text-gray-600 font-medium">
-                    <%= String.first(organizer.name || "?") |> String.upcase() %>
-                  </span>
-                </div>
+                <%= avatar_img_size(organizer, :lg) %>
                 <div>
                   <div class="font-medium text-gray-900"><%= organizer.name %></div>
                   <div class="text-sm text-gray-500"><%= organizer.email %></div>

@@ -811,9 +811,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             <h3 class="text-lg font-semibold mb-4 text-gray-900">Hosted by</h3>
             <div class="flex items-center space-x-3">
               <%= if @event.users != [] do %>
-                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-lg font-semibold text-gray-600 border border-gray-200">
-                  <%= String.first(hd(@event.users).name || "?") %>
-                </div>
+                <%= avatar_img_size(hd(@event.users), :lg, class: "border border-gray-200") %>
                 <div>
                   <div class="font-medium text-gray-900"><%= hd(@event.users).name %></div>
                   <a href="#" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View other events</a>
@@ -861,9 +859,7 @@ defmodule EventasaurusWeb.PublicEventLive do
               <% :not_registered -> %>
                 <!-- Authenticated user - not registered -->
                 <div class="flex items-center gap-3 mb-4">
-                  <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-lg font-semibold text-gray-600 border border-gray-200">
-                    <%= String.first(@user.name || "?") %>
-                  </div>
+                  <%= avatar_img_size(@user, :md, class: "border border-gray-200") %>
                   <div>
                     <div class="font-medium text-gray-900"><%= @user.name %></div>
                     <div class="text-sm text-gray-500"><%= @user.email %></div>

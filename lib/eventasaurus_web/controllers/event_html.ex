@@ -7,7 +7,8 @@ defmodule EventasaurusWeb.EventHTML do
   # when using embed_templates
 
   # Helper function to format datetime with timezone conversion
-  def format_datetime(%DateTime{} = dt, timezone \\ nil) do
+  def format_datetime(dt, timezone \\ nil)
+  def format_datetime(%DateTime{} = dt, timezone) do
     converted_dt = if timezone do
       EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
     else
@@ -20,7 +21,8 @@ defmodule EventasaurusWeb.EventHTML do
   def format_datetime(_, _), do: "Date not set"
 
   # Helper function to format time only
-  def format_time(%DateTime{} = dt, timezone \\ nil) do
+  def format_time(dt, timezone \\ nil)
+  def format_time(%DateTime{} = dt, timezone) do
     converted_dt = if timezone do
       EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
     else
@@ -33,7 +35,8 @@ defmodule EventasaurusWeb.EventHTML do
   def format_time(_, _), do: ""
 
   # Helper function to format date only
-  def format_date(%DateTime{} = dt, timezone \\ nil) do
+  def format_date(dt, timezone \\ nil)
+  def format_date(%DateTime{} = dt, timezone) do
     converted_dt = if timezone do
       EventasaurusWeb.TimezoneHelpers.convert_to_timezone(dt, timezone)
     else
