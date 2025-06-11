@@ -411,29 +411,58 @@ defmodule EventasaurusWeb.SocialCardView do
     HashGenerator.generate_url_path(event)
   end
 
+    # Logo constants for consistent positioning
+  @logo_x 32
+  @logo_y 16
+  @logo_width 280
+  @logo_height 120
+
+  # Title positioning constants to avoid duplication
+  @title_x 32
+  @title_base_y 200
+  @title_line_spacing 8
+
+  @doc """
+  Calculates the Y position for a title line based on line number and font size.
+  """
+  def title_line_y_position(line_number, font_size) when line_number >= 0 do
+    font_size_int = if is_binary(font_size), do: String.to_integer(font_size), else: font_size
+    @title_base_y + (line_number * (font_size_int + @title_line_spacing))
+  end
+
+  # Pre-load and encode logo at compile time for better performance
+  @logo_path Path.join([:code.priv_dir(:eventasaurus), "static", "images", "logos", "general.png"])
+  @logo_data (case File.read(@logo_path) do
+    {:ok, image_data} ->
+      base64_data = Base.encode64(image_data)
+      data_url = "data:image/png;base64,#{base64_data}"
+      {:ok, data_url}
+    {:error, _reason} ->
+      {:error, :file_not_found}
+  end)
+
   @doc """
   Gets the logo as an SVG element with base64 data URL for reliable rendering.
-  Falls back to dinosaur emoji if logo file cannot be read.
+  Falls back to dinosaur emoji with consistent positioning if logo file cannot be read.
   """
   def get_logo_svg_element do
-    logo_path = Path.join(["priv", "static", "images", "logos", "general.png"])
-
-    case File.read(logo_path) do
-      {:ok, image_data} ->
-        base64_data = Base.encode64(image_data)
-        data_url = "data:image/png;base64,#{base64_data}"
-
+    case @logo_data do
+      {:ok, data_url} ->
         """
         <image href="#{data_url}"
-               x="24" y="0"
-               width="280" height="120"
+               x="#{@logo_x}" y="#{@logo_y}"
+               width="#{@logo_width}" height="#{@logo_height}"
                preserveAspectRatio="xMidYMid meet"/>
         """
 
-      {:error, _reason} ->
-        # Fallback to text if logo file can't be read
+      {:error, :file_not_found} ->
+        # Fallback with consistent positioning and background
+        fallback_center_x = @logo_x + div(@logo_width, 2)
+        fallback_center_y = @logo_y + div(@logo_height, 2) + 12  # Offset for text baseline
+
         """
-        <text x="64" y="72" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="white">🦖</text>
+        <rect x="#{@logo_x}" y="#{@logo_y}" width="#{@logo_width}" height="#{@logo_height}" rx="8" ry="8" fill="#10b981"/>
+        <text x="#{fallback_center_x}" y="#{fallback_center_y}" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="white">🦖</text>
         """
     end
   end
