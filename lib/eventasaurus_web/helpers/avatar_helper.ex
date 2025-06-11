@@ -53,11 +53,15 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
     @doc """
   Renders an avatar URL for use in other contexts.
 
+  Accepts options as either a keyword list or map.
+
   ## Examples
 
       <div style="background-image: url(<%= avatar_url(@user) %>)"></div>
+      <%= avatar_url(@user, size: 100) %>
+      <%= avatar_url(@user, %{size: 100, backgroundColor: "blue"}) %>
   """
-  def avatar_url(user_or_email, options \\ %{})
+  def avatar_url(user_or_email, options \\ [])
 
   def avatar_url(%User{} = user, options) do
     Avatars.generate_user_avatar(user, options)
@@ -105,27 +109,27 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
   def avatar_img_size(user_or_email, size_preset, options \\ [])
 
   def avatar_img_size(user_or_email, :xs, options) do
-    merged_options = Keyword.merge([size: 24, class: "w-6 h-6"], options)
+    merged_options = Keyword.merge([size: 24, class: "w-6 h-6 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :sm, options) do
-    merged_options = Keyword.merge([size: 32, class: "w-8 h-8"], options)
+    merged_options = Keyword.merge([size: 32, class: "w-8 h-8 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :md, options) do
-    merged_options = Keyword.merge([size: 48, class: "w-12 h-12"], options)
+    merged_options = Keyword.merge([size: 48, class: "w-12 h-12 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :lg, options) do
-    merged_options = Keyword.merge([size: 64, class: "w-16 h-16"], options)
+    merged_options = Keyword.merge([size: 64, class: "w-16 h-16 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :xl, options) do
-    merged_options = Keyword.merge([size: 96, class: "w-24 h-24"], options)
+    merged_options = Keyword.merge([size: 96, class: "w-24 h-24 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
@@ -135,7 +139,7 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
 
   # Private helper to split avatar generation options from img tag options
   defp split_options(options) do
-    avatar_keys = [:size, :backgroundColor, :radius, :scale]
+    avatar_keys = [:size, :backgroundColor, :backgroundBorderRadius, :radius, :scale]
 
     {avatar_opts, img_opts} = Enum.split_with(options, fn {key, _} ->
       key in avatar_keys

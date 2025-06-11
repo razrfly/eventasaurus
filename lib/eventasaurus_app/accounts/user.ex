@@ -29,6 +29,8 @@ defmodule EventasaurusApp.Accounts.User do
   @doc """
   Generate an avatar URL for this user using DiceBear.
 
+  Accepts options as either a keyword list or map.
+
   ## Examples
 
       iex> user = %User{email: "test@example.com"}
@@ -37,8 +39,19 @@ defmodule EventasaurusApp.Accounts.User do
 
       iex> User.avatar_url(user, size: 100)
       "https://api.dicebear.com/9.x/dylan/svg?seed=test%40example.com&size=100"
+
+      iex> User.avatar_url(user, %{size: 100, backgroundColor: "blue"})
+      "https://api.dicebear.com/9.x/dylan/svg?seed=test%40example.com&size=100&backgroundColor=blue"
   """
-  def avatar_url(%__MODULE__{} = user, options \\ %{}) do
-    EventasaurusApp.Avatars.generate_user_avatar(user, options)
+  def avatar_url(%__MODULE__{} = user, options \\ []) do
+    # Normalize keywords to map to avoid crashing later
+    opts_map =
+      case options do
+        kw when is_list(kw) -> Enum.into(kw, %{})
+        m when is_map(m) -> m
+        _ -> %{}
+      end
+
+    EventasaurusApp.Avatars.generate_user_avatar(user, opts_map)
   end
 end

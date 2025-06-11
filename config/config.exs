@@ -84,6 +84,7 @@ config :eventasaurus, :avatars,
     # Add any default DiceBear options here
     # backgroundColor: "transparent",
     # size: 200
+    backgroundBorderRadius: 50
   }
 
 # Import environment specific config. This must remain at the bottom
