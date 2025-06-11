@@ -410,4 +410,31 @@ defmodule EventasaurusWeb.SocialCardView do
   def social_card_url(event) do
     HashGenerator.generate_url_path(event)
   end
+
+  @doc """
+  Gets the logo as an SVG element with base64 data URL for reliable rendering.
+  Falls back to dinosaur emoji if logo file cannot be read.
+  """
+  def get_logo_svg_element do
+    logo_path = Path.join(["priv", "static", "images", "logos", "general.png"])
+
+    case File.read(logo_path) do
+      {:ok, image_data} ->
+        base64_data = Base.encode64(image_data)
+        data_url = "data:image/png;base64,#{base64_data}"
+
+        """
+        <image href="#{data_url}"
+               x="24" y="0"
+               width="280" height="120"
+               preserveAspectRatio="xMidYMid meet"/>
+        """
+
+      {:error, _reason} ->
+        # Fallback to text if logo file can't be read
+        """
+        <text x="64" y="72" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="white">🦖</text>
+        """
+    end
+  end
 end
