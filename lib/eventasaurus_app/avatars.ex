@@ -9,6 +9,8 @@ defmodule EventasaurusApp.Avatars do
   The seed can be any string - typically a user ID, email, or name.
   DiceBear will generate a consistent avatar for the same seed.
 
+  Accepts options as either a keyword list or map.
+
   ## Examples
 
       iex> EventasaurusApp.Avatars.generate_url("user123")
@@ -16,13 +18,32 @@ defmodule EventasaurusApp.Avatars do
 
       iex> EventasaurusApp.Avatars.generate_url("user@example.com", size: 100)
       "https://api.dicebear.com/9.x/dylan/svg?seed=user%40example.com&size=100"
+
+      iex> EventasaurusApp.Avatars.generate_url("user@example.com", %{size: 100, backgroundColor: "blue"})
+      "https://api.dicebear.com/9.x/dylan/svg?seed=user%40example.com&size=100&backgroundColor=blue"
   """
-  def generate_url(seed, options \\ %{}) do
+  def generate_url(seed, options \\ []) do
+    # Normalize to map so callers may pass keyword lists
+    options =
+      case options do
+        kw when is_list(kw) and length(kw) > 0 ->
+          # Check if it's a keyword list (all tuples with atom keys)
+          if Keyword.keyword?(kw), do: Map.new(kw), else: %{}
+        map when is_map(map) -> map
+        _ -> %{}
+      end
+
     config = Application.get_env(:eventasaurus, :avatars)
 
-    base_url = Keyword.get(config, :base_url)
-    style = Keyword.get(config, :style)
-    format = Keyword.get(config, :format)
+    # Ensure configuration exists
+    if is_nil(config) do
+      raise "Avatar configuration is missing. Please ensure :eventasaurus, :avatars is configured."
+    end
+
+    # Use fetch! to ensure required configuration is present
+    base_url = Keyword.fetch!(config, :base_url)
+    style = Keyword.fetch!(config, :style)
+    format = Keyword.fetch!(config, :format)
     default_options = Keyword.get(config, :default_options, %{})
 
     # Merge default options with provided options
@@ -49,8 +70,10 @@ defmodule EventasaurusApp.Avatars do
 
   @doc """
   Generates an avatar URL using a user's email as the seed.
+
+  Accepts options as either a keyword list or map.
   """
-  def generate_user_avatar(user_or_email, options \\ %{})
+  def generate_user_avatar(user_or_email, options \\ [])
 
   def generate_user_avatar(%{email: email}, options) do
     generate_url(email, options)
@@ -62,15 +85,19 @@ defmodule EventasaurusApp.Avatars do
 
   @doc """
   Generates an avatar URL using a user's ID as the seed.
+
+  Accepts options as either a keyword list or map.
   """
-  def generate_user_avatar_by_id(user_id, options \\ %{}) do
+  def generate_user_avatar_by_id(user_id, options \\ []) do
     generate_url("user_#{user_id}", options)
   end
 
   @doc """
   Generates an avatar URL for an event using the event ID as seed.
+
+  Accepts options as either a keyword list or map.
   """
-  def generate_event_avatar(event_id, options \\ %{}) do
+  def generate_event_avatar(event_id, options \\ []) do
     generate_url("event_#{event_id}", options)
   end
 
@@ -79,7 +106,12 @@ defmodule EventasaurusApp.Avatars do
   """
   def current_style do
     config = Application.get_env(:eventasaurus, :avatars)
-    Keyword.get(config, :style)
+
+    if is_nil(config) do
+      raise "Avatar configuration is missing. Please ensure :eventasaurus, :avatars is configured."
+    end
+
+    Keyword.fetch!(config, :style)
   end
 
   @doc """
