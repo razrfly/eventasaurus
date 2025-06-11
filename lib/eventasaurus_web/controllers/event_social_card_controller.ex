@@ -156,16 +156,16 @@ defmodule EventasaurusWeb.EventSocialCardController do
       """
     end
 
-    # Build title sections
+    # Build title sections - positioned lower for better balance
     title_line_1 = if format_title(event.title, 0) != "" do
-      ~s(<tspan x="32" y="140">#{format_title(event.title, 0)}</tspan>)
+      ~s(<tspan x="32" y="200">#{format_title(event.title, 0)}</tspan>)
     else
       ""
     end
 
     title_line_2 = if format_title(event.title, 1) != "" do
       font_size = String.to_integer(calculate_font_size(event.title))
-      y_pos = 140 + font_size + 8
+      y_pos = 200 + font_size + 8
       ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 1)}</tspan>)
     else
       ""
@@ -173,7 +173,7 @@ defmodule EventasaurusWeb.EventSocialCardController do
 
     title_line_3 = if format_title(event.title, 2) != "" do
       font_size = String.to_integer(calculate_font_size(event.title))
-      y_pos = 140 + (font_size + 8) * 2
+      y_pos = 200 + (font_size + 8) * 2
       ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 2)}</tspan>)
     else
       ""
@@ -207,9 +207,8 @@ defmodule EventasaurusWeb.EventSocialCardController do
       <!-- Event image (positioned top-right with rounded corners) -->
       #{image_section}
 
-      <!-- Logo (top-left) - Using emoji placeholder for now -->
-      <rect x="32" y="32" width="64" height="64" rx="8" ry="8" fill="#10b981"/>
-      <text x="64" y="72" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="white">🦖</text>
+      <!-- Logo (top-left) - Using actual Eventasaurus logo -->
+      #{get_logo_svg_element()}
 
       <!-- Event title (left-aligned, multi-line) -->
       <text font-family="Arial, sans-serif" font-weight="bold"
@@ -250,7 +249,7 @@ defmodule EventasaurusWeb.EventSocialCardController do
     end
   end
 
-  defp validate_color_or_default(color, default) when is_binary(color) do
+    defp validate_color_or_default(color, default) when is_binary(color) do
     if Regex.match?(~r/^#[0-9A-Fa-f]{3,8}$/i, color), do: color, else: default
   end
   defp validate_color_or_default(_, default), do: default
