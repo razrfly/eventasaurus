@@ -25,4 +25,20 @@ defmodule EventasaurusApp.Accounts.User do
     |> unique_constraint(:email)
     |> unique_constraint(:supabase_id)
   end
+
+  @doc """
+  Generate an avatar URL for this user using DiceBear.
+
+  ## Examples
+
+      iex> user = %User{email: "test@example.com"}
+      iex> User.avatar_url(user)
+      "https://api.dicebear.com/9.x/dylan/svg?seed=test%40example.com"
+
+      iex> User.avatar_url(user, size: 100)
+      "https://api.dicebear.com/9.x/dylan/svg?seed=test%40example.com&size=100"
+  """
+  def avatar_url(%__MODULE__{} = user, options \\ %{}) do
+    EventasaurusApp.Avatars.generate_user_avatar(user, options)
+  end
 end
