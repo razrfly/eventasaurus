@@ -3,13 +3,18 @@
     <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
     
     <div class="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded">
-      <p>You are logged in successfully!</p>
-      <p class="mt-2">
-        <strong>Email:</strong> <%= @user.email %>
-      </p>
-      <p class="mt-1">
-        <strong>Name:</strong> <%= @user.name || "Not provided" %>
-      </p>
+      <div class="flex items-center gap-4">
+        <%= avatar_img_size(@user, :lg, class: "border-2 border-green-400") %>
+        <div>
+          <p class="font-semibold">You are logged in successfully!</p>
+          <p class="mt-1">
+            <strong>Email:</strong> <%= @user.email %>
+          </p>
+          <p class="mt-1">
+            <strong>Name:</strong> <%= @user.name || "Not provided" %>
+          </p>
+        </div>
+      </div>
     </div>
     
     <div class="mt-8">
