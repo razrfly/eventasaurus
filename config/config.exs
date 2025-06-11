@@ -74,6 +74,18 @@ config :phoenix_live_view, :debug_heex_annotations, true
 # Configure time zone database
 config :elixir, :time_zone_database, TimeZoneInfo.TimeZoneDatabase
 
+# Avatar configuration
+config :eventasaurus, :avatars,
+  provider: :dicebear,
+  style: "dylan",  # Can be changed to: adventurer, avataaars, bottts, croodles, fun-emoji, etc.
+  base_url: "https://api.dicebear.com/9.x",
+  format: "svg",
+  default_options: %{
+    # Add any default DiceBear options here
+    # backgroundColor: "transparent",
+    # size: 200
+  }
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
