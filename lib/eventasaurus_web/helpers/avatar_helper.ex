@@ -19,6 +19,7 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
   def avatar_img(user_or_email, options \\ [])
 
   def avatar_img(%User{} = user, options) do
+    options = normalize_opts(options)
     {img_options, avatar_options} = split_options(options)
 
     src = Avatars.generate_user_avatar(user, avatar_options)
@@ -34,6 +35,7 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
   end
 
   def avatar_img(email, options) when is_binary(email) do
+    options = normalize_opts(options)
     {img_options, avatar_options} = split_options(options)
 
     src = Avatars.generate_user_avatar(email, avatar_options)
@@ -64,10 +66,12 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
   def avatar_url(user_or_email, options \\ [])
 
   def avatar_url(%User{} = user, options) do
+    options = normalize_opts(options)
     Avatars.generate_user_avatar(user, options)
   end
 
   def avatar_url(email, options) when is_binary(email) do
+    options = normalize_opts(options)
     Avatars.generate_user_avatar(email, options)
   end
 
@@ -82,6 +86,7 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
       <%= event_avatar_img(@event, size: 64) %>
   """
   def event_avatar_img(event, options \\ []) do
+    options = normalize_opts(options)
     {img_options, avatar_options} = split_options(options)
 
     src = Avatars.generate_event_avatar(event.id, avatar_options)
@@ -109,32 +114,55 @@ defmodule EventasaurusWeb.Helpers.AvatarHelper do
   def avatar_img_size(user_or_email, size_preset, options \\ [])
 
   def avatar_img_size(user_or_email, :xs, options) do
-    merged_options = Keyword.merge([size: 24, class: "w-6 h-6 rounded-full"], options)
+    merged_options = merge_size_options([size: 24, class: "w-6 h-6 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :sm, options) do
-    merged_options = Keyword.merge([size: 32, class: "w-8 h-8 rounded-full"], options)
+    merged_options = merge_size_options([size: 32, class: "w-8 h-8 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :md, options) do
-    merged_options = Keyword.merge([size: 48, class: "w-12 h-12 rounded-full"], options)
+    merged_options = merge_size_options([size: 48, class: "w-12 h-12 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :lg, options) do
-    merged_options = Keyword.merge([size: 64, class: "w-16 h-16 rounded-full"], options)
+    merged_options = merge_size_options([size: 64, class: "w-16 h-16 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, :xl, options) do
-    merged_options = Keyword.merge([size: 96, class: "w-24 h-24 rounded-full"], options)
+    merged_options = merge_size_options([size: 96, class: "w-24 h-24 rounded-full"], options)
     avatar_img(user_or_email, merged_options)
   end
 
   def avatar_img_size(user_or_email, _size, options) do
+    options = normalize_opts(options)
     avatar_img(user_or_email, options)
+  end
+
+  # Private helper to normalize options from map to keyword list
+  defp normalize_opts(opts) when is_map(opts), do: Map.to_list(opts)
+  defp normalize_opts(opts), do: opts
+
+  # Private helper to merge size options while preserving and concatenating classes
+  defp merge_size_options(base_options, user_options) do
+    user_options = normalize_opts(user_options)
+    base_class = Keyword.get(base_options, :class, "")
+    user_class = Keyword.get(user_options, :class, "")
+
+    combined_class = case {base_class, user_class} do
+      {"", ""} -> ""
+      {base, ""} -> base
+      {"", user} -> user
+      {base, user} -> "#{base} #{user}"
+    end
+
+    base_options
+    |> Keyword.merge(user_options)
+    |> Keyword.put(:class, combined_class)
   end
 
   # Private helper to split avatar generation options from img tag options
