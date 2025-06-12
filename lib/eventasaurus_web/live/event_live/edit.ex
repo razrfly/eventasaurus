@@ -546,7 +546,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, assign(socket, :show_image_picker, false)}
   end
 
-      @impl true
+        @impl true
   def handle_info({:selected_dates_changed, dates}, socket) do
     # Validate and process dates
     date_strings = case dates do
@@ -629,15 +629,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
             case Events.update_event_date_options(existing_poll, selected_dates) do
               {:ok, _updated_options} ->
                 # Update event state to polling if not already
-                                          if event.status != :polling do
-          case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7, :day)}) do
-                      {:ok, _} -> :ok
-                      {:error, changeset} ->
-                        require Logger
-                        Logger.error("Failed to enable polling mode", changeset: inspect(changeset))
-                        {:error, changeset}
-                    end
+                if event.status != :polling do
+                  case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
+                    {:ok, _} -> :ok
+                    {:error, changeset} ->
+                      require Logger
+                      Logger.error("Failed to enable polling mode", changeset: inspect(changeset))
+                      {:error, changeset}
                   end
+                else
+                  # Event is already in polling mode, just return success
+                  :ok
+                end
               {:error, changeset} ->
                 require Logger
                 Logger.error("Failed to update date options", changeset: inspect(changeset))
@@ -649,7 +652,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
             case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
               {:ok, poll} ->
                 Events.create_date_options_from_list(poll, selected_dates)
-                Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7, :day)})
+                Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)})
               {:error, _} ->
                 # Handle error silently for now
                 nil
@@ -661,7 +664,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       existing_poll && !is_polling_enabled ->
         # Change event state back to published but keep the poll data
                   if event.status == :polling do
-            case Events.update_event(event, %{status: :confirmed}) do
+            case Events.update_event(event, %{status: :confirmed, polling_deadline: nil}) do
               {:ok, _} -> :ok
               {:error, changeset} ->
                 require Logger

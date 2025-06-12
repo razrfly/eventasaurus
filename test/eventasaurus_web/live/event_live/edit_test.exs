@@ -198,8 +198,8 @@ defmodule EventasaurusWeb.EventLive.EditTest do
         start_at: DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
         ends_at: DateTime.new!(week_later, ~T[16:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
         timezone: "America/New_York",
-        status: "polling",
-        polling_deadline: DateTime.add(DateTime.utc_now(), 7, :day),
+        status: :polling,
+        polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second),
         visibility: "public",
         is_virtual: true,
         virtual_venue_url: "https://example.com/meeting"
@@ -250,8 +250,8 @@ defmodule EventasaurusWeb.EventLive.EditTest do
         start_at: DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
         ends_at: DateTime.new!(day_three, ~T[16:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
         timezone: "America/New_York",
-        status: "polling",
-        polling_deadline: DateTime.add(DateTime.utc_now(), 7, :day),
+        status: :polling,
+        polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second),
         visibility: "public",
         is_virtual: true
       }

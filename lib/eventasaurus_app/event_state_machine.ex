@@ -112,7 +112,10 @@ defmodule EventasaurusApp.EventStateMachine do
       false
   """
   def status_matches?(attrs) when is_map(attrs) do
-    current_status = get_status(attrs)
+    current_status = case get_status(attrs) do
+      s when is_binary(s) -> String.to_existing_atom(s)
+      s -> s
+    end
     inferred_status = infer_status(attrs)
     current_status == inferred_status
   end
