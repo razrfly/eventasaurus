@@ -852,7 +852,7 @@ defmodule EventasaurusApp.Events do
   def transition_event_state(%Event{} = event, new_state) do
     # Check if the transition is valid using our custom state machine
     # Use Machinery's transition checking instead of manual validation
-    case Machinery.transition_to(event, EventStateMachine, new_state) do
+    case Machinery.transition_to(event, Event, new_state) do
       {:ok, _} ->
         # Persist the state change to the database
         event
@@ -869,7 +869,7 @@ defmodule EventasaurusApp.Events do
   Check if a state transition is valid for an event using Machinery.
   """
   def can_transition_to?(%Event{} = event, new_state) do
-    case Machinery.transition_to(event, EventStateMachine, new_state) do
+    case Machinery.transition_to(event, Event, new_state) do
       {:ok, _} -> true
       {:error, _} -> false
     end
