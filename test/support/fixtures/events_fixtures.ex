@@ -51,7 +51,7 @@ defmodule EventasaurusApp.EventsFixtures do
     end
 
     # Reload the event with users preloaded
-    Events.get_event!(event.id)
+    Events.get_event!(event.id) |> EventasaurusApp.Repo.preload(:users)
   end
 
   @doc """

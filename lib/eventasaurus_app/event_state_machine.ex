@@ -128,9 +128,13 @@ defmodule EventasaurusApp.EventStateMachine do
   def auto_correct_status(attrs) when is_map(attrs) do
     inferred_status = infer_status(attrs)
 
-    attrs
-    |> Map.put(:status, inferred_status)
-    |> Map.put("status", inferred_status)
+    # Only set the key type that already exists in the map to avoid mixed keys
+    cond do
+      Map.has_key?(attrs, :status) -> Map.put(attrs, :status, inferred_status)
+      Map.has_key?(attrs, "status") -> Map.put(attrs, "status", inferred_status)
+      # Default to string key for new maps (form data is typically strings)
+      true -> Map.put(attrs, "status", inferred_status)
+    end
   end
 
   # Private helper functions
