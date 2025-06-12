@@ -43,7 +43,7 @@ defmodule EventasaurusApp.EventsFixtures do
       "start_at" => ~U[2024-12-01 10:00:00Z],
       "timezone" => "UTC",
       "slug" => "test-event-#{System.unique_integer([:positive])}",
-      "status" => "confirmed"
+      "status" => :confirmed
     }, string_attrs)
 
     {:ok, event} = Events.create_event(final_attrs)

@@ -78,7 +78,8 @@ defmodule EventasaurusApp.Events.Event do
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
                    :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :canceled_at, :selected_poll_dates])
-    |> validate_required([:title, :start_at, :timezone, :visibility])
+    |> validate_required([:title, :timezone, :visibility])
+    |> maybe_validate_start_at()
     |> validate_length(:title, min: 3, max: 100)
     |> validate_length(:tagline, max: 255)
     |> validate_length(:slug, min: 3, max: 100)
@@ -153,6 +154,15 @@ defmodule EventasaurusApp.Events.Event do
     # Simplified validation - just ensure status is valid
     # Status inference and auto-correction happens at the context level
     changeset
+  end
+
+  defp maybe_validate_start_at(changeset) do
+    case get_field(changeset, :status) do
+      status when status in [:confirmed, :threshold] ->
+        validate_required(changeset, [:start_at])
+      _ ->
+        changeset
+    end
   end
 
   defp validate_slug(changeset) do

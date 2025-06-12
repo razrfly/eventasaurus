@@ -26,8 +26,11 @@ defmodule EventasaurusWeb.CalendarComponent do
 
   @impl true
   def update(assigns, socket) do
-    # Update selected_dates if passed from parent
-    selected_dates = Map.get(assigns, :selected_dates, socket.assigns.selected_dates)
+    # Always use selected_dates from parent if provided, otherwise keep internal state
+    selected_dates = case Map.get(assigns, :selected_dates) do
+      nil -> Map.get(socket.assigns, :selected_dates, [])
+      dates -> dates
+    end
 
     socket =
       socket

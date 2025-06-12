@@ -227,17 +227,7 @@ defmodule EventasaurusApp.Events do
       # Use Machinery for state transitions instead of manual transition_to function
       case update_event(event, %{status: new_status}) do
         {:ok, updated_event} ->
-          # Persist the change to the database using the updated fields
-          attrs = %{
-            status: updated_event.status,
-            canceled_at: updated_event.canceled_at
-          }
-
-          changeset = Event.changeset(event, attrs)
-          case Repo.update(changeset) do
-            {:ok, persisted_event} -> Event.with_computed_fields(persisted_event)
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
+          Event.with_computed_fields(updated_event)
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
