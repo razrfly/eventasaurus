@@ -857,10 +857,10 @@ defmodule EventasaurusWeb.EventLive.New do
         case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
           {:ok, poll} ->
             # Create date options for each selected date
-            case Events.create_date_options_from_list(poll, selected_dates) do
-              {:ok, _options} ->
-                # Update event state to 'polling'
-                case Events.update_event(event, %{state: "polling"}) do
+                          case Events.create_date_options_from_list(poll, selected_dates) do
+                {:ok, _options} ->
+                  # Update event state to 'polling'
+                  case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
                   {:ok, updated_event} ->
                     {:ok, updated_event}
                   {:error, reason} ->
@@ -889,7 +889,7 @@ defmodule EventasaurusWeb.EventLive.New do
               case Events.create_date_options_from_range(poll, start_date, end_date) do
                 {:ok, _options} ->
                   # Update event state to 'polling'
-                  case Events.update_event(event, %{state: "polling"}) do
+                  case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
                     {:ok, updated_event} ->
                       {:ok, updated_event}
                     {:error, reason} ->

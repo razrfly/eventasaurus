@@ -51,7 +51,7 @@ defmodule EventasaurusApp.Factory do
       timezone: "America/Los_Angeles",
       visibility: :public,
       slug: sequence(:slug, &"test-event-#{&1}"),
-      state: "confirmed",
+      status: :confirmed,
       theme: :minimal,
       theme_customizations: %{},
       venue: build(:venue)
@@ -134,7 +134,8 @@ defmodule EventasaurusApp.Factory do
   """
   def polling_event_factory do
     build(:event, %{
-      state: "polling"
+      status: :polling,
+      polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day)
     })
   end
 
@@ -144,7 +145,7 @@ defmodule EventasaurusApp.Factory do
   def event_date_poll_factory do
     %EventasaurusApp.Events.EventDatePoll{
       voting_deadline: DateTime.utc_now() |> DateTime.add(7, :day),
-      event: build(:event, %{state: "polling"}),
+      event: build(:event, %{status: :polling, polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day)}),
       created_by: build(:user)
     }
   end

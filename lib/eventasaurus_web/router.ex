@@ -73,13 +73,28 @@ defmodule EventasaurusWeb.Router do
     get "/dashboard", DashboardController, :index
   end
 
-  # Protected event routes that require authentication
+  # Protected event routes that require authentication (browser)
   scope "/events", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
 
     get "/:slug", EventController, :show
     get "/:slug/attendees", EventController, :attendees
     delete "/:slug", EventController, :delete
+    post "/:slug/cancel", EventController, :cancel
+    post "/:slug/auto-correct-status", EventController, :auto_correct_status
+  end
+
+  # Protected event API routes that require authentication (JSON)
+  scope "/api/events", EventasaurusWeb do
+    pipe_through [:api, :authenticated]
+
+    # Action-driven setup API endpoints
+    post "/:slug/pick-date", EventController, :pick_date
+    post "/:slug/enable-polling", EventController, :enable_polling
+    post "/:slug/set-threshold", EventController, :set_threshold
+    post "/:slug/enable-ticketing", EventController, :enable_ticketing
+    post "/:slug/add-details", EventController, :add_details
+    post "/:slug/publish", EventController, :publish
   end
 
   # Public routes with auth user assignment

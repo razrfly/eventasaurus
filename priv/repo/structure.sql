@@ -682,6 +682,20 @@ $$;
 
 
 --
+-- Name: delete_user_on_auth_delete(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.delete_user_on_auth_delete() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+BEGIN
+  DELETE FROM public.users WHERE supabase_id = OLD.id::text;
+  RETURN OLD;
+END;
+$$;
+
+
+--
 -- Name: apply_rls(jsonb, integer); Type: FUNCTION; Schema: realtime; Owner: -
 --
 
@@ -2549,6 +2563,105 @@ COMMENT ON COLUMN auth.users.is_sso_user IS 'Auth: Set this column to true when 
 
 
 --
+-- Name: event_date_options; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.event_date_options (
+    id bigint NOT NULL,
+    event_date_poll_id bigint NOT NULL,
+    date date NOT NULL,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
+-- Name: event_date_options_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.event_date_options_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: event_date_options_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.event_date_options_id_seq OWNED BY public.event_date_options.id;
+
+
+--
+-- Name: event_date_polls; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.event_date_polls (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    created_by_id bigint NOT NULL,
+    voting_deadline timestamp(0) without time zone,
+    finalized_date date,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
+-- Name: event_date_polls_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.event_date_polls_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: event_date_polls_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.event_date_polls_id_seq OWNED BY public.event_date_polls.id;
+
+
+--
+-- Name: event_date_votes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.event_date_votes (
+    id bigint NOT NULL,
+    event_date_option_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    vote_type character varying(255) NOT NULL,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
+-- Name: event_date_votes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.event_date_votes_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: event_date_votes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.event_date_votes_id_seq OWNED BY public.event_date_votes.id;
+
+
+--
 -- Name: event_participants; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2638,6 +2751,11 @@ CREATE TABLE public.events (
     external_image_data jsonb,
     theme character varying(255) DEFAULT 'minimal'::character varying NOT NULL,
     theme_customizations jsonb DEFAULT '{}'::jsonb NOT NULL,
+    polling_deadline timestamp(0) without time zone,
+    threshold_count integer,
+    canceled_at timestamp(0) without time zone,
+    status character varying(255) DEFAULT 'confirmed'::character varying NOT NULL,
+    CONSTRAINT valid_status CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'polling'::character varying, 'threshold'::character varying, 'confirmed'::character varying, 'canceled'::character varying])::text[]))),
     CONSTRAINT valid_theme_values CHECK (((theme)::text = ANY ((ARRAY['minimal'::character varying, 'cosmic'::character varying, 'velocity'::character varying, 'retro'::character varying, 'celebration'::character varying, 'nature'::character varying, 'professional'::character varying])::text[])))
 );
 
@@ -2967,6 +3085,27 @@ ALTER TABLE ONLY auth.refresh_tokens ALTER COLUMN id SET DEFAULT nextval('auth.r
 
 
 --
+-- Name: event_date_options id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_options ALTER COLUMN id SET DEFAULT nextval('public.event_date_options_id_seq'::regclass);
+
+
+--
+-- Name: event_date_polls id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_polls ALTER COLUMN id SET DEFAULT nextval('public.event_date_polls_id_seq'::regclass);
+
+
+--
+-- Name: event_date_votes id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_votes ALTER COLUMN id SET DEFAULT nextval('public.event_date_votes_id_seq'::regclass);
+
+
+--
 -- Name: event_participants id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3206,6 +3345,30 @@ ALTER TABLE ONLY auth.users
 
 ALTER TABLE ONLY auth.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_date_options event_date_options_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_options
+    ADD CONSTRAINT event_date_options_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_date_polls event_date_polls_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_polls
+    ADD CONSTRAINT event_date_polls_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_date_votes event_date_votes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_votes
+    ADD CONSTRAINT event_date_votes_pkey PRIMARY KEY (id);
 
 
 --
@@ -3654,6 +3817,76 @@ CREATE INDEX users_is_anonymous_idx ON auth.users USING btree (is_anonymous);
 
 
 --
+-- Name: event_date_options_date_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX event_date_options_date_index ON public.event_date_options USING btree (date);
+
+
+--
+-- Name: event_date_options_event_date_poll_id_date_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX event_date_options_event_date_poll_id_date_index ON public.event_date_options USING btree (event_date_poll_id, date);
+
+
+--
+-- Name: event_date_options_event_date_poll_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX event_date_options_event_date_poll_id_index ON public.event_date_options USING btree (event_date_poll_id);
+
+
+--
+-- Name: event_date_polls_created_by_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX event_date_polls_created_by_id_index ON public.event_date_polls USING btree (created_by_id);
+
+
+--
+-- Name: event_date_polls_event_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX event_date_polls_event_id_index ON public.event_date_polls USING btree (event_id);
+
+
+--
+-- Name: event_date_polls_voting_deadline_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX event_date_polls_voting_deadline_index ON public.event_date_polls USING btree (voting_deadline);
+
+
+--
+-- Name: event_date_votes_event_date_option_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX event_date_votes_event_date_option_id_index ON public.event_date_votes USING btree (event_date_option_id);
+
+
+--
+-- Name: event_date_votes_event_date_option_id_user_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX event_date_votes_event_date_option_id_user_id_index ON public.event_date_votes USING btree (event_date_option_id, user_id);
+
+
+--
+-- Name: event_date_votes_user_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX event_date_votes_user_id_index ON public.event_date_votes USING btree (user_id);
+
+
+--
+-- Name: event_date_votes_vote_type_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX event_date_votes_vote_type_index ON public.event_date_votes USING btree (vote_type);
+
+
+--
 -- Name: event_participants_event_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3696,10 +3929,31 @@ CREATE INDEX event_users_user_id_index ON public.event_users USING btree (user_i
 
 
 --
+-- Name: events_canceled_at_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX events_canceled_at_index ON public.events USING btree (canceled_at);
+
+
+--
+-- Name: events_polling_deadline_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX events_polling_deadline_index ON public.events USING btree (polling_deadline);
+
+
+--
 -- Name: events_slug_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX events_slug_index ON public.events USING btree (slug);
+
+
+--
+-- Name: events_status_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX events_status_index ON public.events USING btree (status);
 
 
 --
@@ -3819,6 +4073,13 @@ CREATE INDEX supabase_functions_hooks_h_table_id_h_name_idx ON supabase_function
 --
 
 CREATE INDEX supabase_functions_hooks_request_id_idx ON supabase_functions.hooks USING btree (request_id);
+
+
+--
+-- Name: users on_auth_user_deleted; Type: TRIGGER; Schema: auth; Owner: -
+--
+
+CREATE TRIGGER on_auth_user_deleted AFTER DELETE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.delete_user_on_auth_delete();
 
 
 --
@@ -3964,6 +4225,46 @@ ALTER TABLE ONLY auth.sessions
 
 ALTER TABLE ONLY auth.sso_domains
     ADD CONSTRAINT sso_domains_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: event_date_options event_date_options_event_date_poll_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_options
+    ADD CONSTRAINT event_date_options_event_date_poll_id_fkey FOREIGN KEY (event_date_poll_id) REFERENCES public.event_date_polls(id) ON DELETE CASCADE;
+
+
+--
+-- Name: event_date_polls event_date_polls_created_by_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_polls
+    ADD CONSTRAINT event_date_polls_created_by_id_fkey FOREIGN KEY (created_by_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: event_date_polls event_date_polls_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_polls
+    ADD CONSTRAINT event_date_polls_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: event_date_votes event_date_votes_event_date_option_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_votes
+    ADD CONSTRAINT event_date_votes_event_date_option_id_fkey FOREIGN KEY (event_date_option_id) REFERENCES public.event_date_options(id) ON DELETE CASCADE;
+
+
+--
+-- Name: event_date_votes event_date_votes_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_date_votes
+    ADD CONSTRAINT event_date_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
@@ -4269,3 +4570,9 @@ INSERT INTO public."schema_migrations" (version) VALUES (20250508104758);
 INSERT INTO public."schema_migrations" (version) VALUES (20250519114737);
 INSERT INTO public."schema_migrations" (version) VALUES (20250522145346);
 INSERT INTO public."schema_migrations" (version) VALUES (20250523134206);
+INSERT INTO public."schema_migrations" (version) VALUES (20250531090137);
+INSERT INTO public."schema_migrations" (version) VALUES (20250531094222);
+INSERT INTO public."schema_migrations" (version) VALUES (20250531094707);
+INSERT INTO public."schema_migrations" (version) VALUES (20250531095224);
+INSERT INTO public."schema_migrations" (version) VALUES (20250608104045);
+INSERT INTO public."schema_migrations" (version) VALUES (20250612085356);

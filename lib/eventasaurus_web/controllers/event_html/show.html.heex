@@ -91,7 +91,7 @@
               </div>
               <div>
                 <h3 class="font-semibold text-gray-900 mb-1">When</h3>
-                <%= if @event.state == "polling" do %>
+                <%= if @event.status == :polling do %>
                   <div class="inline-flex items-center px-3 py-1 text-sm font-medium bg-yellow-100 text-yellow-800 rounded-full mb-2">
                     📊 Date Polling Active
                   </div>
@@ -131,7 +131,7 @@
           </div>
 
           <!-- Date Voting Visualization (only show for polling events) -->
-          <%= if @event.state == "polling" and is_map(@votes_breakdown) and map_size(@votes_breakdown) > 0 do %>
+          <%= if @event.status == :polling and is_map(@votes_breakdown) and map_size(@votes_breakdown) > 0 do %>
             <div class="border-t border-gray-200 pt-6 mb-6">
               <h3 class="font-semibold text-gray-900 mb-4">📊 Date Poll Results</h3>
               <div class="bg-gray-50 rounded-lg p-4">

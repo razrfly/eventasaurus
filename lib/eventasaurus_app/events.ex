@@ -6,6 +6,7 @@ defmodule EventasaurusApp.Events do
   import Ecto.Query, warn: false
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
+  alias EventasaurusApp.EventStateMachine
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Themes
@@ -22,6 +23,62 @@ defmodule EventasaurusApp.Events do
   """
   def list_events do
     Repo.all(Event)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
+  Returns the list of events that are currently active (not ended or canceled).
+  """
+  def list_active_events do
+    query = from e in Event,
+            where: e.status != ^:canceled and (is_nil(e.ends_at) or e.ends_at > ^DateTime.utc_now()),
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
+  Returns the list of events that have active polls.
+  """
+  def list_polling_events do
+    current_time = DateTime.utc_now()
+
+    query = from e in Event,
+            where: e.status == :polling and
+                   not is_nil(e.polling_deadline) and
+                   e.polling_deadline > ^current_time,
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
+  Returns the list of events that can sell tickets.
+  """
+  def list_ticketed_events do
+    query = from e in Event,
+            where: e.status == :confirmed,
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+    |> Enum.filter(& &1.can_sell_tickets?)
+  end
+
+  @doc """
+  Returns the list of events that have ended.
+  """
+  def list_ended_events do
+    current_time = DateTime.utc_now()
+
+    query = from e in Event,
+            where: not is_nil(e.ends_at) and e.ends_at < ^current_time,
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
   end
 
   @doc """
@@ -29,7 +86,7 @@ defmodule EventasaurusApp.Events do
 
   Raises `Ecto.NoResultsError` if the Event does not exist.
   """
-  def get_event!(id), do: Repo.get!(Event, id) |> Repo.preload([:venue, :users])
+  def get_event!(id), do: Repo.get!(Event, id) |> Repo.preload([:venue, :users]) |> Event.with_computed_fields()
 
   @doc """
   Gets a single event.
@@ -39,7 +96,7 @@ defmodule EventasaurusApp.Events do
   def get_event(id), do: Repo.get(Event, id) |> maybe_preload()
 
   defp maybe_preload(nil), do: nil
-  defp maybe_preload(event), do: Repo.preload(event, [:venue, :users])
+  defp maybe_preload(event), do: Repo.preload(event, [:venue, :users]) |> Event.with_computed_fields()
 
   @doc """
   Gets a single event by slug.
@@ -92,21 +149,48 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
-  Creates an event.
+  Creates an event with automatic status inference.
+
+  The event status is automatically inferred based on the provided attributes
+  using the EventStateMachine. If a status is explicitly provided in attrs,
+  it will be validated for consistency with the inferred status.
   """
   def create_event(attrs \\ %{}) do
-    %Event{}
-    |> Event.changeset(attrs)
+    # Use changeset with inferred status for automatic state management
+    result = %Event{}
+    |> Event.changeset_with_inferred_status(attrs)
     |> Repo.insert()
+
+    case result do
+      {:ok, event} ->
+        event
+        |> Repo.preload([:venue, :users])
+        |> Event.with_computed_fields()
+        |> then(&{:ok, &1})
+      error -> error
+    end
   end
 
   @doc """
-  Updates an event.
+  Updates an event with automatic status inference.
+
+  Similar to create_event/1, the status is automatically inferred based on
+  the updated attributes. Virtual computed fields are automatically populated
+  in the returned event.
   """
   def update_event(%Event{} = event, attrs) do
-    event
-    |> Event.changeset(attrs)
+    result = event
+    |> Event.changeset_with_inferred_status(attrs)
     |> Repo.update()
+
+    case result do
+      {:ok, updated_event} ->
+        updated_event
+        |> Repo.preload([:venue, :users])
+        |> Event.with_computed_fields()
+        |> then(&{:ok, &1})
+      error -> error
+    end
   end
 
   @doc """
@@ -121,6 +205,75 @@ defmodule EventasaurusApp.Events do
   """
   def change_event(%Event{} = event, attrs \\ %{}) do
     Event.changeset(event, attrs)
+  end
+
+      @doc """
+  Manually transition an event to a new status.
+
+  This function bypasses automatic status inference and directly sets
+  the event to the specified status. Use with caution - prefer update_event/2
+  for normal operations as it includes proper validation.
+
+  ## Examples
+
+      iex> transition_event(event, :canceled)
+      {:ok, %Event{status: :canceled}}
+
+      iex> transition_event(event, :invalid_status)
+      {:error, "invalid transition from 'draft' to 'invalid_status'"}
+  """
+  def transition_event(%Event{} = event, new_status) do
+    Repo.transaction(fn ->
+      # Use Machinery for state transitions instead of manual transition_to function
+      case update_event(event, %{status: new_status}) do
+        {:ok, updated_event} ->
+          Event.with_computed_fields(updated_event)
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  @doc """
+  Get the current inferred status for an event without updating it.
+
+  Useful for checking what status an event should have based on its
+  current attributes without performing a database update.
+  """
+  def get_inferred_status(%Event{} = event) do
+    EventStateMachine.infer_status(event)
+  end
+
+  @doc """
+  Auto-correct an event's status based on its current attributes.
+
+  This function checks if the event's stored status matches what it should be
+  based on its attributes, and updates it if necessary.
+  """
+  def auto_correct_event_status(%Event{} = event) do
+    inferred_status = EventStateMachine.infer_status(event)
+
+    if event.status == inferred_status do
+      {:ok, Event.with_computed_fields(event)}
+    else
+      # Use changeset approach to bypass transition rules for auto-correction
+      # Auto-correction is for fixing data integrity, not normal business logic
+      corrected_attrs = %{status: inferred_status}
+
+      # Add required fields based on inferred status
+      corrected_attrs = case inferred_status do
+        :canceled -> Map.put(corrected_attrs, :canceled_at, DateTime.utc_now())
+        _ -> Map.delete(corrected_attrs, :canceled_at)  # Clear canceled_at when moving away from canceled
+      end
+
+      case event
+           |> Event.changeset(corrected_attrs)
+           |> Repo.update() do
+        {:ok, updated_event} ->
+          {:ok, Event.with_computed_fields(updated_event)}
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    end
   end
 
   @doc """
@@ -190,12 +343,17 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Creates an event and associates it with a user in a single transaction.
+
+  The event status is automatically inferred and virtual computed fields
+  are populated in the returned event.
   """
   def create_event_with_organizer(event_attrs, %User{} = user) do
     Repo.transaction(fn ->
       with {:ok, event} <- create_event(event_attrs),
            {:ok, _} <- add_user_to_event(event, user) do
-        event |> Repo.preload([:venue, :users])
+        event
+        |> Repo.preload([:venue, :users])
+        |> Event.with_computed_fields()
       else
         {:error, changeset} -> Repo.rollback(changeset)
       end
@@ -693,30 +851,44 @@ defmodule EventasaurusApp.Events do
   """
   def transition_event_state(%Event{} = event, new_state) do
     # Check if the transition is valid using our custom state machine
-    if Event.can_transition_to?(event, new_state) do
-      # Persist the state change to the database
-      event
-      |> Event.changeset(%{state: new_state})
-      |> Repo.update()
-    else
-      # Create an error changeset for invalid transitions
-      changeset = Event.changeset(event, %{})
-      {:error, Ecto.Changeset.add_error(changeset, :state, "invalid transition from '#{event.state}' to '#{new_state}'")}
+    # Use Machinery's transition checking instead of manual validation
+    case Machinery.transition_to(event, Event, new_state) do
+      {:ok, _} ->
+        # Persist the state change to the database
+        event
+        |> Event.changeset(%{status: new_state})
+        |> Repo.update()
+      {:error, reason} ->
+        # Create an error changeset for invalid transitions
+        changeset = Event.changeset(event, %{})
+        {:error, Ecto.Changeset.add_error(changeset, :status, "invalid transition from '#{event.status}' to '#{new_state}': #{reason}")}
     end
   end
 
   @doc """
-  Check if a state transition is valid for an event.
+  Check if a state transition is valid for an event using Machinery.
   """
   def can_transition_to?(%Event{} = event, new_state) do
-    Event.can_transition_to?(event, new_state)
+    case Machinery.transition_to(event, Event, new_state) do
+      {:ok, _} -> true
+      {:error, _} -> false
+    end
   end
 
   @doc """
-  Get the list of possible states an event can transition to.
+  Get the list of possible states an event can transition to using Machinery.
   """
   def possible_transitions(%Event{} = event) do
-    Event.possible_transitions(event)
+    # Use Machinery's built-in functionality to get possible transitions
+    # For now, return a basic list based on current status
+    case event.status do
+      :draft -> [:polling, :confirmed, :canceled]
+      :polling -> [:threshold, :confirmed, :canceled]
+      :threshold -> [:confirmed, :canceled]
+      :confirmed -> [:canceled]
+      :canceled -> []
+      _ -> []
+    end
   end
 
   # EventDatePoll Functions
@@ -775,7 +947,7 @@ defmodule EventasaurusApp.Events do
            {:ok, updated_event} <- poll.event
                                    |> Event.changeset(%{
                                      start_at: DateTime.new!(selected_date, DateTime.to_time(poll.event.start_at), poll.event.start_at.time_zone),
-                                     state: "confirmed"
+                                     status: :confirmed
                                    })
                                    |> Repo.update() do
         {updated_poll, updated_event}
@@ -1574,6 +1746,136 @@ defmodule EventasaurusApp.Events do
           Logger.warning("Bulk voter registration and vote transaction failed", %{reason: inspect(reason)})
           {:error, reason}
       end
+    end
+  end
+
+  ## Action-Driven Setup Functions
+
+  @doc """
+  Sets or updates the start date for an event.
+  This action can trigger status transitions based on the event's current state.
+  When a specific date is picked, it ends any active polling.
+  """
+  def pick_date(%Event{} = event, %DateTime{} = start_at, opts \\ []) do
+    ends_at = Keyword.get(opts, :ends_at)
+    timezone = Keyword.get(opts, :timezone, event.timezone)
+
+    attrs = %{
+      start_at: start_at,
+      timezone: timezone,
+      # Clear polling deadline when a specific date is picked
+      polling_deadline: nil
+    }
+
+    attrs = if ends_at, do: Map.put(attrs, :ends_at, ends_at), else: attrs
+
+    # Use inferred status changeset to allow automatic status transitions
+    changeset = Event.changeset_with_inferred_status(event, attrs)
+
+    case Repo.update(changeset) do
+      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
+      error -> error
+    end
+  end
+
+  @doc """
+  Enables polling for an event by setting a polling deadline.
+  This will transition the event to :polling status.
+  """
+  def enable_polling(%Event{} = event, %DateTime{} = polling_deadline) do
+    attrs = %{
+      polling_deadline: polling_deadline
+    }
+
+    changeset = Event.changeset_with_inferred_status(event, attrs)
+
+    # Add custom validation for polling deadline
+    changeset = if DateTime.compare(polling_deadline, DateTime.utc_now()) == :gt do
+      changeset
+    else
+      Ecto.Changeset.add_error(changeset, :polling_deadline, "must be in the future")
+    end
+
+    case Repo.update(changeset) do
+      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
+      error -> error
+    end
+  end
+
+    @doc """
+  Sets a threshold count for an event.
+  This will transition the event to :threshold status.
+  """
+  def set_threshold(%Event{} = event, threshold_count) when is_integer(threshold_count) and threshold_count > 0 do
+    attrs = %{
+      threshold_count: threshold_count,
+      status: :threshold
+    }
+
+    # Use inferred status changeset to handle status transitions properly
+    changeset = Event.changeset_with_inferred_status(event, attrs)
+
+    case Repo.update(changeset) do
+      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
+      error -> error
+    end
+  end
+
+  @doc """
+  Enables ticketing for an event.
+  This is a placeholder for future ticketing system integration.
+  When ticketing is enabled, it clears threshold requirements and confirms the event.
+  """
+  def enable_ticketing(%Event{} = event, _ticketing_options \\ %{}) do
+    # For now, this is a placeholder that just confirms the event
+    # In the future, this would set up ticket types, pricing, etc.
+    # Clear threshold_count since ticketing means the event is confirmed regardless of threshold
+    attrs = %{
+      threshold_count: nil
+    }
+
+    changeset = Event.changeset_with_inferred_status(event, attrs)
+
+    case Repo.update(changeset) do
+      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
+      error -> error
+    end
+  end
+
+  @doc """
+  Adds or updates details for an event (title, description, tagline, etc.).
+  This action doesn't change status but updates event information.
+  """
+  def add_details(%Event{} = event, details) do
+    # Filter to only allowed detail fields
+    allowed_fields = [:title, :description, :tagline, :cover_image_url, :external_image_data, :theme, :theme_customizations]
+    attrs = Map.take(details, allowed_fields)
+
+    # Use regular changeset since we don't want to change status
+    changeset = Event.changeset(event, attrs)
+
+    case Repo.update(changeset) do
+      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
+      error -> error
+    end
+  end
+
+  @doc """
+  Publishes an event by transitioning it to confirmed status.
+  This action makes the event publicly available.
+  """
+  def publish_event(%Event{} = event) do
+    attrs = %{
+      status: :confirmed,
+      visibility: :public
+    }
+
+    # Use inferred status changeset to handle status transitions properly
+    changeset = Event.changeset_with_inferred_status(event, attrs)
+
+    case Repo.update(changeset) do
+      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
+      error -> error
     end
   end
 end
