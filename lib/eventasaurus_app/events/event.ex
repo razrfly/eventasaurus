@@ -10,7 +10,7 @@ defmodule EventasaurusApp.Events.Event do
     states: [:draft, :polling, :threshold, :confirmed, :canceled],
     transitions: %{
       # From draft state
-      draft: [:polling, :confirmed, :canceled],
+      draft: [:polling, :threshold, :confirmed, :canceled],
       # From polling state
       polling: [:threshold, :confirmed, :canceled],
       # From threshold state
@@ -22,7 +22,7 @@ defmodule EventasaurusApp.Events.Event do
     }
 
   # Valid status values for the enum constraint
-  @valid_statuses ~w(draft polling threshold confirmed canceled)
+  @valid_statuses [:draft, :polling, :threshold, :confirmed, :canceled]
 
   def valid_statuses, do: @valid_statuses
 
@@ -102,7 +102,8 @@ defmodule EventasaurusApp.Events.Event do
       nil -> changeset
       status when status in [:draft, :polling, :threshold, :confirmed, :canceled] -> changeset
       _invalid_status ->
-        add_error(changeset, :status, "must be one of: #{Enum.join(@valid_statuses, ", ")}")
+        valid_statuses_str = @valid_statuses |> Enum.map(&to_string/1) |> Enum.join(", ")
+        add_error(changeset, :status, "must be one of: #{valid_statuses_str}")
     end
   end
 
