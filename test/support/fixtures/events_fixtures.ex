@@ -27,18 +27,25 @@ defmodule EventasaurusApp.EventsFixtures do
       [first_organizer | _] -> first_organizer
     end
 
-    {:ok, event} =
-      attrs
+    # Convert all keys to strings for consistency
+    string_attrs = attrs
       |> Map.delete(:user)  # Remove user from attrs since it's not part of event schema
       |> Map.delete(:organizers)  # Remove organizers from attrs since it's not part of event schema
-      |> Enum.into(%{
-        title: "Test Event #{System.unique_integer([:positive])}",
-        description: "A test event description",
-        start_at: ~U[2024-12-01 10:00:00Z],
-        timezone: "UTC",
-        slug: "test-event-#{System.unique_integer([:positive])}"
-      })
-      |> Events.create_event()
+      |> Enum.reduce(%{}, fn {k, v}, acc ->
+        Map.put(acc, to_string(k), v)
+      end)
+
+    # Merge with default string-key attributes
+    final_attrs = Map.merge(%{
+      "title" => "Test Event #{System.unique_integer([:positive])}",
+      "description" => "A test event description",
+      "start_at" => ~U[2024-12-01 10:00:00Z],
+      "timezone" => "UTC",
+      "slug" => "test-event-#{System.unique_integer([:positive])}",
+      "status" => "confirmed"
+    }, string_attrs)
+
+    {:ok, event} = Events.create_event(final_attrs)
 
     # Add the organizers to the event
     organizers_to_add = case organizers do

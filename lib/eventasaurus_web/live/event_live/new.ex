@@ -860,7 +860,7 @@ defmodule EventasaurusWeb.EventLive.New do
             case Events.create_date_options_from_list(poll, selected_dates) do
               {:ok, _options} ->
                 # Update event state to 'polling'
-                case Events.update_event(event, %{status: :polling}) do
+                case Events.update_event(event, %{"status" => "polling"}) do
                   {:ok, updated_event} ->
                     {:ok, updated_event}
                   {:error, reason} ->
@@ -889,7 +889,7 @@ defmodule EventasaurusWeb.EventLive.New do
               case Events.create_date_options_from_range(poll, start_date, end_date) do
                 {:ok, _options} ->
                   # Update event state to 'polling'
-                  case Events.update_event(event, %{status: :polling}) do
+                  case Events.update_event(event, %{"status" => "polling"}) do
                     {:ok, updated_event} ->
                       {:ok, updated_event}
                     {:error, reason} ->

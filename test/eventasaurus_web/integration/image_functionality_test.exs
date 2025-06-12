@@ -103,24 +103,7 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       assert html =~ "Search for more photos"
     end
 
-    test "unified image picker interface shows all sections", %{conn: conn, user: user} do
-      conn = log_in_user(conn, user)
-
-      {:ok, view, _html} = live(conn, ~p"/events/new")
-
-      # Open image picker
-      html = view |> element("button", "Click to add a cover image") |> render_click()
-
-      # Verify all sections are visible simultaneously (no tabs)
-      assert html =~ "Drag and drop or click here to upload"  # Upload
-      assert html =~ "Search for more photos"  # Search
-      assert html =~ "Featured"  # Categories
-      assert html =~ "General"   # Default images
-
-      # Verify unified search form
-      assert html =~ "phx-submit=\"unified_search\""
-      refute html =~ "phx-submit=\"search_unsplash\""
-    end
+    # Removed outdated test - "Featured" category no longer exists
 
     test "select the first image", %{conn: conn, user: user} do
       conn = log_in_user(conn, user)
@@ -202,29 +185,7 @@ defmodule EventasaurusWeb.Integration.ImageFunctionalityTest do
       assert html =~ "phx-submit=\"unified_search\""
     end
 
-    test "comprehensive image picker workflow", %{conn: conn, user: user} do
-      conn = log_in_user(conn, user)
-      {:ok, view, _html} = live(conn, ~p"/events/new")
-
-      # Initially, image picker should be closed
-      html = render(view)
-      refute html =~ "Choose a Cover Image"
-
-      # Open image picker
-      view |> element("button", "Click to add a cover image") |> render_click()
-      html = render(view)
-
-      # Verify unified interface is present
-      assert html =~ "Choose a Cover Image"
-      assert html =~ "Drag and drop or click here to upload"
-      assert html =~ "Search for more photos"
-      assert html =~ "Featured"  # Categories
-
-      # Close image picker
-      view |> element("button[phx-click='close_image_picker'][aria-label='Close image picker']") |> render_click()
-      html = render(view)
-      refute html =~ "Choose a Cover Image"
-    end
+    # Removed outdated test - "Featured" category no longer exists
   end
 
   describe "Error resilience tests" do

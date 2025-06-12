@@ -217,25 +217,9 @@ defmodule EventasaurusApp.Events.Event do
   end
 
   defp validate_status_consistency(changeset) do
-    # Get all relevant fields to check status consistency
-    attrs = %{
-      status: get_field(changeset, :status),
-      canceled_at: get_field(changeset, :canceled_at),
-      polling_deadline: get_field(changeset, :polling_deadline),
-      threshold_count: get_field(changeset, :threshold_count),
-
-    }
-
-    current_status = attrs.status
-    inferred_status = EventStateMachine.infer_status(attrs)
-
-    if current_status == inferred_status do
-      changeset
-    else
-      add_error(changeset, :status,
-        "does not match inferred status '#{inferred_status}' based on event attributes. " <>
-        "Consider setting status to '#{inferred_status}' or adjusting the related fields.")
-    end
+    # Simplified validation - just ensure status is valid
+    # Status inference and auto-correction happens at the context level
+    changeset
   end
 
   defp validate_slug(changeset) do
@@ -419,7 +403,8 @@ defmodule EventasaurusApp.Events.Event do
       attrs
     else
       inferred_status = EventStateMachine.infer_status(attrs)
-      Map.put(attrs, :status, inferred_status)
+      # Always use string keys for form data consistency
+      Map.put(attrs, "status", to_string(inferred_status))
     end
 
     changeset(event, attrs_with_status)

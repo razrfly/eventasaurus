@@ -90,7 +90,7 @@ defmodule EventasaurusApp.EventStateMachine do
     end
   end
 
-    def infer_status(%EventasaurusApp.Events.Event{} = event) do
+  def infer_status(%EventasaurusApp.Events.Event{} = event) do
     infer_status(Map.from_struct(event))
   end
 
@@ -128,13 +128,12 @@ defmodule EventasaurusApp.EventStateMachine do
   def auto_correct_status(attrs) when is_map(attrs) do
     inferred_status = infer_status(attrs)
 
-    # Only set the key type that already exists in the map to avoid mixed keys
-    cond do
-      Map.has_key?(attrs, :status) -> Map.put(attrs, :status, inferred_status)
-      Map.has_key?(attrs, "status") -> Map.put(attrs, "status", inferred_status)
-      # Default to string key for new maps (form data is typically strings)
-      true -> Map.put(attrs, "status", inferred_status)
-    end
+    # Always use string keys for form data consistency
+    # Remove any existing status keys (both atom and string) and set the correct one
+    attrs
+    |> Map.delete(:status)
+    |> Map.delete("status")
+    |> Map.put("status", to_string(inferred_status))
   end
 
   # Private helper functions
