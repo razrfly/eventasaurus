@@ -630,7 +630,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
               {:ok, _updated_options} ->
                 # Update event state to polling if not already
                                   if event.status != :polling do
-                    Events.update_event(event, %{status: :polling})
+                    case Events.update_event(event, %{status: :polling}) do
+                      {:ok, _} -> :ok
+                      {:error, changeset} ->
+                        require Logger
+                        Logger.error("Failed to enable polling mode", changeset: inspect(changeset))
+                        {:error, changeset}
+                    end
                   end
               {:error, changeset} ->
                 require Logger
@@ -655,7 +661,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
       existing_poll && !is_polling_enabled ->
         # Change event state back to published but keep the poll data
                   if event.status == :polling do
-            Events.update_event(event, %{status: :confirmed})
+            case Events.update_event(event, %{status: :confirmed}) do
+              {:ok, _} -> :ok
+              {:error, changeset} ->
+                require Logger
+                Logger.error("Failed to disable polling mode", changeset: inspect(changeset))
+                {:error, changeset}
+            end
           end
 
       # Case 3: No changes needed

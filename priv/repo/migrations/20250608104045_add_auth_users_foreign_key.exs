@@ -3,7 +3,9 @@ defmodule EventasaurusApp.Repo.Migrations.AddAuthUsersForeignKey do
 
   def up do
     # Skip this migration in test environment since auth schema doesn't exist there
-    if Mix.env() != :test do
+    if Code.ensure_loaded?(Mix) and Mix.env() == :test do
+      :skip
+    else
       # Since we can't create a direct FK between UUID and string,
       # we'll use the official Supabase approach: database triggers
 

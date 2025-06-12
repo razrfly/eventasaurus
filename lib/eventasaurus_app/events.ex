@@ -31,7 +31,7 @@ defmodule EventasaurusApp.Events do
   """
   def list_active_events do
     query = from e in Event,
-            where: e.status != :canceled and (is_nil(e.ends_at) or e.ends_at > ^DateTime.utc_now()),
+            where: e.status != ^:canceled and (is_nil(e.ends_at) or e.ends_at > ^DateTime.utc_now()),
             preload: [:venue, :users]
 
     Repo.all(query)
@@ -215,21 +215,23 @@ defmodule EventasaurusApp.Events do
       {:error, "invalid transition from 'draft' to 'invalid_status'"}
   """
   def transition_event(%Event{} = event, new_status) do
-    case Event.transition_to(event, new_status) do
-      {:ok, updated_event} ->
-        # Persist the change to the database using the updated fields
-        attrs = %{
-          status: updated_event.status,
-          canceled_at: updated_event.canceled_at
-        }
+    Repo.transaction(fn ->
+      case Event.transition_to(event, new_status) do
+        {:ok, updated_event} ->
+          # Persist the change to the database using the updated fields
+          attrs = %{
+            status: updated_event.status,
+            canceled_at: updated_event.canceled_at
+          }
 
-        changeset = Event.changeset(event, attrs)
-        case Repo.update(changeset) do
-          {:ok, persisted_event} -> {:ok, Event.with_computed_fields(persisted_event)}
-          error -> error
-        end
-      error -> error
-    end
+          changeset = Event.changeset(event, attrs)
+          case Repo.update(changeset) do
+            {:ok, persisted_event} -> Event.with_computed_fields(persisted_event)
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   @doc """
@@ -261,7 +263,7 @@ defmodule EventasaurusApp.Events do
       # Add required fields based on inferred status
       corrected_attrs = case inferred_status do
         :canceled -> Map.put(corrected_attrs, :canceled_at, DateTime.utc_now())
-        _ -> corrected_attrs
+        _ -> Map.delete(corrected_attrs, :canceled_at)  # Clear canceled_at when moving away from canceled
       end
 
       case event
@@ -1774,6 +1776,13 @@ defmodule EventasaurusApp.Events do
     }
 
     changeset = Event.changeset(event, attrs)
+
+    # Add custom validation for polling deadline
+    changeset = if DateTime.compare(polling_deadline, DateTime.utc_now()) == :gt do
+      changeset
+    else
+      Ecto.Changeset.add_error(changeset, :polling_deadline, "must be in the future")
+    end
 
     case Repo.update(changeset) do
       {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}

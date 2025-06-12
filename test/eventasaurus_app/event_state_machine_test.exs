@@ -217,7 +217,7 @@ defmodule EventasaurusApp.EventStateMachineTest do
       end)
 
       # Should complete in well under 50ms (50,000 microseconds)
-      assert time_microseconds < 1000  # 1ms should be more than enough
+      assert time_microseconds < 50_000  # 50ms should be more than enough for CI
     end
   end
 
