@@ -30,7 +30,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddAuthUsersForeignKey do
   end
 
   def down do
-    if Mix.env() != :test do
+    if Code.ensure_loaded?(Mix) and Mix.env() != :test do
       # Remove the trigger and function
       execute "DROP TRIGGER IF EXISTS on_auth_user_deleted ON auth.users"
       execute "DROP FUNCTION IF EXISTS public.delete_user_on_auth_delete()"
