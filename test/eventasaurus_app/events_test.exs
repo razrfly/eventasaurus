@@ -2,6 +2,7 @@ defmodule EventasaurusApp.EventsTest do
   use EventasaurusApp.DataCase
 
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Accounts
 
   describe "smart registration functions" do
@@ -652,6 +653,601 @@ defmodule EventasaurusApp.EventsTest do
           # Expected in test environment without Supabase
           :ok
       end
+    end
+  end
+
+  describe "state-aware CRUD operations" do
+    # Helper for creating test event attributes that result in draft status
+    # Note: Events default to :confirmed unless they have specific attributes
+    # To create a draft event, we need to explicitly set incomplete required data
+    defp draft_event_attrs(overrides \\ %{}) do
+      future_start = DateTime.add(DateTime.utc_now(), 30, :day)
+
+      # Create minimal event that will be :confirmed by default
+      # Tests should expect :confirmed unless explicitly setting draft attributes
+      %{
+        title: "Test Event",
+        description: "Test",
+        start_at: future_start,
+        timezone: "UTC"
+      }
+      |> Map.merge(overrides)
+    end
+        test "create_event/1 automatically infers status" do
+            # Draft event (minimal required fields with future date)
+      future_start = DateTime.add(DateTime.utc_now(), 30, :day)
+      attrs = %{
+        title: "Test Event",
+        description: "Test",
+        start_at: future_start,
+        timezone: "UTC"
+      }
+      assert {:ok, event} = Events.create_event(attrs)
+      assert event.status == :confirmed
+      assert event.computed_phase == "open"
+
+      # Polling event with future deadline
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day)
+      future_start_2 = DateTime.add(DateTime.utc_now(), 30, :day)
+      polling_attrs = %{
+        title: "Polling Event",
+        description: "Test polling",
+        start_at: future_start_2,
+        timezone: "UTC",
+        polling_deadline: future_deadline
+      }
+      assert {:ok, polling_event} = Events.create_event(polling_attrs)
+      assert polling_event.status == :polling
+      assert polling_event.computed_phase == "polling"
+
+      # Regular confirmed event (default inference)
+      future_start_3 = DateTime.add(DateTime.utc_now(), 7, :day)
+      confirmed_attrs = %{
+        title: "Confirmed Event",
+        description: "Test confirmed",
+        start_at: future_start_3,
+        timezone: "UTC"
+      }
+      assert {:ok, confirmed_event} = Events.create_event(confirmed_attrs)
+      assert confirmed_event.status == :confirmed
+      assert confirmed_event.computed_phase == "open"
+    end
+
+    test "create_event/1 validates status consistency" do
+      # Explicitly provide inconsistent status - try to set threshold status without threshold_count
+      attrs = draft_event_attrs(%{status: :threshold})  # Inconsistent - no threshold_count provided
+      assert {:error, changeset} = Events.create_event(attrs)
+      status_errors = errors_on(changeset)[:status] || []
+      assert Enum.any?(status_errors, &String.contains?(&1, "does not match inferred status"))
+    end
+
+        test "update_event/2 automatically updates status" do
+      # Start with confirmed event
+      {:ok, event} = Events.create_event(draft_event_attrs(%{title: "Test", description: "Test"}))
+      assert event.status == :confirmed
+
+      # Update to add polling deadline - should become polling
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day)
+      assert {:ok, updated_event} = Events.update_event(event, %{polling_deadline: future_deadline})
+      assert updated_event.status == :polling
+      assert updated_event.computed_phase == "polling"
+
+      # Remove polling deadline - should revert to confirmed
+      assert {:ok, confirmed_event} = Events.update_event(updated_event, %{polling_deadline: nil})
+      assert confirmed_event.status == :confirmed
+      assert confirmed_event.computed_phase == "open"
+    end
+
+            test "update_event/2 validates status consistency" do
+      {:ok, event} = Events.create_event(draft_event_attrs(%{title: "Test", description: "Test"}))
+      assert event.status == :confirmed
+
+      # Try to manually set inconsistent status - set threshold without threshold_count
+      assert {:error, changeset} = Events.update_event(event, %{status: :threshold})
+      status_errors = errors_on(changeset)[:status] || []
+      assert Enum.any?(status_errors, &String.contains?(&1, "does not match inferred status"))
+    end
+
+            test "transition_event/2 manually changes status" do
+      {:ok, event} = Events.create_event(draft_event_attrs(%{title: "Test", description: "Test"}))
+      assert event.status == :confirmed
+
+      # Manual transition to canceled (allowed regardless of attributes)
+      assert {:ok, canceled_event} = Events.transition_event(event, :canceled)
+      assert canceled_event.status == :canceled
+      assert canceled_event.computed_phase == "canceled"
+      assert canceled_event.canceled_at != nil
+    end
+
+        test "transition_event/2 validates enum values" do
+      {:ok, event} = Events.create_event(draft_event_attrs(%{title: "Test", description: "Test"}))
+
+      # Invalid status should fail with transition error
+      assert {:error, error_msg} = Events.transition_event(event, :invalid_status)
+      assert is_binary(error_msg)
+      assert error_msg =~ "invalid transition"
+    end
+
+            test "get_inferred_status/1 returns correct status without updating" do
+      {:ok, event} = Events.create_event(draft_event_attrs(%{title: "Test", description: "Test"}))
+
+      # Should return confirmed status for complete basic event
+      assert Events.get_inferred_status(event) == :confirmed
+
+      # Add polling deadline - should infer polling
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day)
+      event_with_deadline = %{event | polling_deadline: future_deadline}
+      assert Events.get_inferred_status(event_with_deadline) == :polling
+    end
+
+            test "auto_correct_event_status/1 fixes inconsistent status" do
+      # Create event with polling deadline (should be :polling)
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day)
+      {:ok, event} = Events.create_event(draft_event_attrs(%{
+        title: "Test",
+        description: "Test",
+        polling_deadline: future_deadline
+      }))
+      assert event.status == :polling
+
+      # Force wrong status directly in database
+      EventasaurusApp.Repo.update_all(
+        from(e in Event, where: e.id == ^event.id),
+        set: [status: :confirmed]
+      )
+
+      # Reload event with wrong status
+      incorrect_event = Events.get_event(event.id)
+      assert incorrect_event.status == :confirmed
+
+      # Auto-correct should fix it back to polling
+      assert {:ok, corrected_event} = Events.auto_correct_event_status(incorrect_event)
+      assert corrected_event.status == :polling
+    end
+
+    test "auto_correct_event_status/1 does nothing when status is correct" do
+      {:ok, event} = Events.create_event(draft_event_attrs(%{title: "Test", description: "Test"}))
+      assert event.status == :confirmed
+
+      # Auto-correct should return same event
+      assert {:ok, same_event} = Events.auto_correct_event_status(event)
+      assert same_event.status == :confirmed
+    end
+
+            test "create_event_with_organizer/2 includes state management" do
+      user = user_fixture()
+
+      # Create event with automatic status inference
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day)
+      attrs = draft_event_attrs(%{
+        title: "Test Event",
+        description: "Test",
+        polling_deadline: future_deadline
+      })
+
+      assert {:ok, event} = Events.create_event_with_organizer(attrs, user)
+      assert event.status == :polling
+      assert event.computed_phase == "polling"
+      assert event.active_poll? == true
+
+      # Verify organizer was added
+      assert Events.user_can_manage_event?(user, event)
+    end
+  end
+
+  describe "virtual flags integration" do
+    setup do
+      venue = EventasaurusApp.Factory.insert(:venue)
+      %{venue: venue}
+    end
+
+    test "list_events/0 includes computed fields", %{venue: venue} do
+      event_attrs = %{
+        title: "Test Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      {:ok, _event} = Events.create_event(event_attrs)
+
+      events = Events.list_events()
+      assert length(events) == 1
+
+      event = List.first(events)
+      # Should have computed_phase
+      assert event.computed_phase == "open"
+
+      # Should have all virtual flags
+      assert is_boolean(event.ended?)
+      assert is_boolean(event.can_sell_tickets?)
+      assert is_boolean(event.threshold_met?)
+      assert is_boolean(event.polling_ended?)
+      assert is_boolean(event.active_poll?)
+    end
+
+    test "get_event!/1 includes computed fields", %{venue: venue} do
+      event_attrs = %{
+        title: "Test Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :polling,
+        polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day),
+        venue_id: venue.id
+      }
+
+      {:ok, created_event} = Events.create_event(event_attrs)
+
+      event = Events.get_event!(created_event.id)
+
+      # Should have computed_phase
+      assert event.computed_phase == "polling"
+
+      # Should have all virtual flags with correct values
+      assert event.ended? == false
+      assert event.can_sell_tickets? == false
+      assert event.threshold_met? == false
+      assert event.polling_ended? == false
+      assert event.active_poll? == true  # Has active poll
+    end
+
+    test "list_active_events/0 returns non-canceled, non-ended events", %{venue: venue} do
+      # Create active event
+      active_attrs = %{
+        title: "Active Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        ends_at: DateTime.utc_now() |> DateTime.add(48, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      # Create ended event
+      ended_attrs = %{
+        title: "Ended Event",
+        start_at: DateTime.utc_now() |> DateTime.add(-48, :hour),
+        ends_at: DateTime.utc_now() |> DateTime.add(-24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      # Create canceled event
+      canceled_attrs = %{
+        title: "Canceled Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :canceled,
+        canceled_at: DateTime.utc_now(),
+        venue_id: venue.id
+      }
+
+      {:ok, _active} = Events.create_event(active_attrs)
+      {:ok, _ended} = Events.create_event(ended_attrs)
+      {:ok, _canceled} = Events.create_event(canceled_attrs)
+
+      active_events = Events.list_active_events()
+
+      # Should only return the active event
+      assert length(active_events) == 1
+      assert List.first(active_events).title == "Active Event"
+      assert List.first(active_events).ended? == false
+    end
+
+    test "list_polling_events/0 returns events with active polls", %{venue: venue} do
+      # Create polling event with future deadline
+      polling_attrs = %{
+        title: "Polling Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :polling,
+        polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day),
+        venue_id: venue.id
+      }
+
+      # Create polling event with past deadline (using changeset_with_inferred_status to bypass validation)
+      expired_attrs = %{
+        title: "Expired Poll Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :polling,
+        polling_deadline: DateTime.utc_now() |> DateTime.add(-1, :day),
+        venue_id: venue.id
+      }
+
+      # Create confirmed event (not polling)
+      confirmed_attrs = %{
+        title: "Confirmed Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      {:ok, _polling} = Events.create_event(polling_attrs)
+
+      # Create expired event by first creating valid polling event, then updating deadline
+      {:ok, expired_event} = Events.create_event(%{expired_attrs | polling_deadline: DateTime.utc_now() |> DateTime.add(1, :day)})
+      past_deadline = DateTime.utc_now() |> DateTime.add(-1, :day) |> DateTime.truncate(:second)
+      EventasaurusApp.Repo.update!(Ecto.Changeset.change(expired_event, polling_deadline: past_deadline))
+
+      {:ok, _confirmed} = Events.create_event(confirmed_attrs)
+
+      polling_events = Events.list_polling_events()
+
+      # Should only return the active polling event
+      assert length(polling_events) == 1
+      assert List.first(polling_events).title == "Polling Event"
+      assert List.first(polling_events).active_poll? == true
+    end
+
+    test "list_ticketed_events/0 returns confirmed events that can sell tickets", %{venue: venue} do
+      # Create confirmed event (can potentially sell tickets)
+      confirmed_attrs = %{
+        title: "Confirmed Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      # Create draft event (cannot sell tickets) - using confirmed status but it won't have ticketing enabled
+      draft_attrs = %{
+        title: "Draft Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,  # Use confirmed but it still won't sell tickets due to ticketing settings
+        venue_id: venue.id
+      }
+
+      {:ok, _confirmed} = Events.create_event(confirmed_attrs)
+
+      # Create draft event by bypassing status validation
+      {:ok, _draft} =
+        %Event{}
+        |> Event.changeset_with_inferred_status(%{draft_attrs | status: :confirmed})
+        |> Ecto.Changeset.put_change(:status, :draft)
+        |> EventasaurusApp.Repo.insert()
+
+      ticketed_events = Events.list_ticketed_events()
+
+      # Should include confirmed events but filter by can_sell_tickets?
+      # Since EventStateMachine.is_ticketed?/1 returns false by default,
+      # this should return an empty list
+      assert length(ticketed_events) == 0
+    end
+
+    test "list_ended_events/0 returns events that have ended", %{venue: venue} do
+      # Create ended event
+      ended_attrs = %{
+        title: "Ended Event",
+        start_at: DateTime.utc_now() |> DateTime.add(-48, :hour),
+        ends_at: DateTime.utc_now() |> DateTime.add(-24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      # Create active event
+      active_attrs = %{
+        title: "Active Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        ends_at: DateTime.utc_now() |> DateTime.add(48, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      # Create event without end time
+      no_end_attrs = %{
+        title: "No End Event",
+        start_at: DateTime.utc_now() |> DateTime.add(24, :hour),
+        timezone: "UTC",
+        visibility: :public,
+        status: :confirmed,
+        venue_id: venue.id
+      }
+
+      {:ok, _ended} = Events.create_event(ended_attrs)
+      {:ok, _active} = Events.create_event(active_attrs)
+      {:ok, _no_end} = Events.create_event(no_end_attrs)
+
+      ended_events = Events.list_ended_events()
+
+      # Should only return the ended event
+      assert length(ended_events) == 1
+      assert List.first(ended_events).title == "Ended Event"
+      assert List.first(ended_events).ended? == true
+    end
+  end
+
+  describe "Action-Driven Setup Functions" do
+        test "pick_date/3 updates event start date and timezone" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      future_date = DateTime.add(DateTime.utc_now(), 30, :day) |> DateTime.truncate(:second)
+
+      assert {:ok, updated_event} = Events.pick_date(event, future_date, timezone: "America/New_York")
+      assert DateTime.compare(updated_event.start_at, future_date) == :eq
+      assert updated_event.timezone == "America/New_York"
+      assert updated_event.computed_phase != nil
+    end
+
+        test "pick_date/3 can set both start and end dates" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      start_date = DateTime.add(DateTime.utc_now(), 30, :day) |> DateTime.truncate(:second)
+      end_date = DateTime.add(start_date, 2, :hour) |> DateTime.truncate(:second)
+
+      assert {:ok, updated_event} = Events.pick_date(event, start_date, ends_at: end_date)
+      assert DateTime.compare(updated_event.start_at, start_date) == :eq
+      assert DateTime.compare(updated_event.ends_at, end_date) == :eq
+    end
+
+        test "enable_polling/2 transitions event to polling status" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day) |> DateTime.truncate(:second)
+
+      assert {:ok, updated_event} = Events.enable_polling(event, future_deadline)
+      assert updated_event.status == :polling
+      assert DateTime.compare(updated_event.polling_deadline, future_deadline) == :eq
+      assert updated_event.computed_phase == "polling"
+    end
+
+    test "enable_polling/2 validates polling deadline is in future" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      past_deadline = DateTime.add(DateTime.utc_now(), -1, :day)
+
+      assert {:error, changeset} = Events.enable_polling(event, past_deadline)
+      assert "must be in the future" in errors_on(changeset)[:polling_deadline]
+    end
+
+    test "set_threshold/2 transitions event to threshold status" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+
+      assert {:ok, updated_event} = Events.set_threshold(event, 10)
+      assert updated_event.status == :threshold
+      assert updated_event.threshold_count == 10
+      assert updated_event.computed_phase == "awaiting_confirmation"
+    end
+
+    test "set_threshold/2 validates threshold count is positive" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+
+      # Test with zero
+      assert_raise FunctionClauseError, fn ->
+        Events.set_threshold(event, 0)
+      end
+
+      # Test with negative
+      assert_raise FunctionClauseError, fn ->
+        Events.set_threshold(event, -5)
+      end
+    end
+
+    test "enable_ticketing/2 transitions event to confirmed status" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+
+      assert {:ok, updated_event} = Events.enable_ticketing(event)
+      assert updated_event.status == :confirmed
+      assert updated_event.computed_phase == "open"
+    end
+
+    test "enable_ticketing/2 accepts ticketing options" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      ticketing_options = %{price: "25.00", currency: "USD"}
+
+      assert {:ok, updated_event} = Events.enable_ticketing(event, ticketing_options)
+      assert updated_event.status == :confirmed
+    end
+
+    test "add_details/2 updates event information without changing status" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      original_status = event.status
+
+      details = %{
+        title: "Updated Title",
+        description: "Updated description",
+        tagline: "New tagline",
+        theme: :cosmic
+      }
+
+      assert {:ok, updated_event} = Events.add_details(event, details)
+      assert updated_event.title == "Updated Title"
+      assert updated_event.description == "Updated description"
+      assert updated_event.tagline == "New tagline"
+      assert updated_event.theme == :cosmic
+      assert updated_event.status == original_status
+    end
+
+    test "add_details/2 filters out non-allowed fields" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      original_status = event.status
+
+      details = %{
+        title: "Updated Title",
+        status: :canceled,  # This should be ignored
+        id: 999,  # This should be ignored
+        polling_deadline: DateTime.utc_now()  # This should be ignored
+      }
+
+      assert {:ok, updated_event} = Events.add_details(event, details)
+      assert updated_event.title == "Updated Title"
+      assert updated_event.status == original_status  # Should not change
+      assert updated_event.id == event.id  # Should not change
+      assert updated_event.polling_deadline == event.polling_deadline  # Should not change
+    end
+
+    test "publish_event/1 transitions event to confirmed and public" do
+      {:ok, event} = Events.create_event(draft_event_attrs(%{visibility: :private}))
+
+      assert {:ok, updated_event} = Events.publish_event(event)
+      assert updated_event.status == :confirmed
+      assert updated_event.visibility == :public
+      assert updated_event.computed_phase == "open"
+    end
+
+        test "action functions maintain computed fields" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+
+      # Test that all action functions return events with computed fields
+      future_date = DateTime.add(DateTime.utc_now(), 30, :day)
+      {:ok, updated_event} = Events.pick_date(event, future_date)
+      assert updated_event.computed_phase != nil
+      assert is_boolean(updated_event.ended?)
+      assert is_boolean(updated_event.can_sell_tickets?)
+
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day)
+      {:ok, polling_event} = Events.enable_polling(updated_event, future_deadline)
+      assert polling_event.computed_phase != nil
+      assert is_boolean(polling_event.active_poll?)
+
+      # Create a separate event for threshold testing (without polling_deadline)
+      {:ok, threshold_base_event} = Events.create_event(draft_event_attrs())
+      {:ok, threshold_event} = Events.set_threshold(threshold_base_event, 10)
+      assert threshold_event.computed_phase != nil
+      assert is_boolean(threshold_event.threshold_met?)
+    end
+
+        test "action functions work with state transitions" do
+      {:ok, event} = Events.create_event(draft_event_attrs())
+      assert event.status == :confirmed
+
+      # Enable polling should transition from confirmed to polling
+      future_deadline = DateTime.add(DateTime.utc_now(), 7, :day)
+      {:ok, polling_event} = Events.enable_polling(event, future_deadline)
+      assert polling_event.status == :polling
+
+      # Set threshold on a polling event - this should fail due to status inference
+      assert {:error, changeset} = Events.set_threshold(polling_event, 10)
+      {error_message, _} = changeset.errors[:status]
+      assert String.contains?(error_message, "does not match inferred status")
+
+      # Remove polling deadline to allow threshold status
+      {:ok, pure_threshold_event} = Events.update_event(polling_event, %{polling_deadline: nil})
+
+      # Now set threshold should work
+      {:ok, threshold_event} = Events.set_threshold(pure_threshold_event, 10)
+      assert threshold_event.status == :threshold
+      assert threshold_event.threshold_count == 10
+
+      # To publish, we need to clear threshold_count first (or the inferred status will be :threshold)
+      {:ok, cleared_event} = Events.update_event(threshold_event, %{threshold_count: nil})
+
+      # Now publish should work
+      {:ok, published_event} = Events.publish_event(cleared_event)
+      assert published_event.status == :confirmed
     end
   end
 

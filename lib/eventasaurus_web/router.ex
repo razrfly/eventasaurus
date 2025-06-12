@@ -80,6 +80,16 @@ defmodule EventasaurusWeb.Router do
     get "/:slug", EventController, :show
     get "/:slug/attendees", EventController, :attendees
     delete "/:slug", EventController, :delete
+    post "/:slug/cancel", EventController, :cancel
+    post "/:slug/auto-correct-status", EventController, :auto_correct_status
+
+    # Action-driven setup API endpoints
+    post "/:slug/pick-date", EventController, :pick_date
+    post "/:slug/enable-polling", EventController, :enable_polling
+    post "/:slug/set-threshold", EventController, :set_threshold
+    post "/:slug/enable-ticketing", EventController, :enable_ticketing
+    post "/:slug/add-details", EventController, :add_details
+    post "/:slug/publish", EventController, :publish
   end
 
   # Public routes with auth user assignment

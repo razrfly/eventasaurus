@@ -10,14 +10,27 @@ defmodule EventasaurusApp.EventsFixtures do
   Generate an event.
   """
   def event_fixture(attrs \\ %{}) do
-    # Create a user for the event if not provided
-    user = Map.get_lazy(attrs, :user, fn ->
-      EventasaurusApp.AccountsFixtures.user_fixture()
-    end)
+    # Convert keyword list to map if necessary
+    attrs = case attrs do
+      list when is_list(list) -> Enum.into(list, %{})
+      map when is_map(map) -> map
+    end
+
+    # Extract organizers if provided
+    organizers = Map.get(attrs, :organizers, [])
+
+    # Create a user for the event if no organizers provided
+    user = case organizers do
+      [] -> Map.get_lazy(attrs, :user, fn ->
+        EventasaurusApp.AccountsFixtures.user_fixture()
+      end)
+      [first_organizer | _] -> first_organizer
+    end
 
     {:ok, event} =
       attrs
       |> Map.delete(:user)  # Remove user from attrs since it's not part of event schema
+      |> Map.delete(:organizers)  # Remove organizers from attrs since it's not part of event schema
       |> Enum.into(%{
         title: "Test Event #{System.unique_integer([:positive])}",
         description: "A test event description",
@@ -27,8 +40,15 @@ defmodule EventasaurusApp.EventsFixtures do
       })
       |> Events.create_event()
 
-    # Add the user to the event
-    {:ok, _} = Events.add_user_to_event(event, user)
+    # Add the organizers to the event
+    organizers_to_add = case organizers do
+      [] -> [user]
+      list -> list
+    end
+
+    for organizer <- organizers_to_add do
+      {:ok, _} = Events.add_user_to_event(event, organizer)
+    end
 
     # Reload the event with users preloaded
     Events.get_event!(event.id)
