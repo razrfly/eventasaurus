@@ -559,11 +559,18 @@ defmodule EventasaurusWeb.EventController do
 
   defp extract_event_details(params) do
     allowed_fields = ["title", "description", "tagline", "cover_image_url", "theme"]
+    atom_map = %{
+      "title" => :title,
+      "description" => :description,
+      "tagline" => :tagline,
+      "cover_image_url" => :cover_image_url,
+      "theme" => :theme
+    }
 
     params
     |> Map.take(allowed_fields)
     |> Enum.reduce(%{}, fn {key, value}, acc ->
-      atom_key = String.to_existing_atom(key)
+      atom_key = Map.get(atom_map, key)
       Map.put(acc, atom_key, value)
     end)
   end

@@ -93,75 +93,8 @@ defmodule EventasaurusApp.Events.Event do
     |> maybe_generate_slug()
   end
 
-      @doc """
-  Check if a status transition is valid.
-  """
-  def can_transition_to?(current_status, new_status) when is_atom(current_status) and is_atom(new_status) do
-    # Access transitions directly from the module configuration
-    transitions = %{
-      draft: [:polling, :confirmed, :canceled],
-      polling: [:threshold, :confirmed, :canceled],
-      threshold: [:confirmed, :canceled],
-      confirmed: [:canceled],
-      canceled: []
-    }
-
-    case Map.get(transitions, current_status) do
-      nil -> false
-      allowed_statuses when is_list(allowed_statuses) -> new_status in allowed_statuses
-      allowed_status when is_atom(allowed_status) -> new_status == allowed_status
-      _ -> false
-    end
-  end
-
-  def can_transition_to?(%__MODULE__{status: current_status}, new_status) do
-    can_transition_to?(current_status, new_status)
-  end
-
-  @doc """
-  Get possible transitions from the current status.
-  """
-  def possible_transitions(current_status) when is_atom(current_status) do
-    transitions = %{
-      draft: [:polling, :confirmed, :canceled],
-      polling: [:threshold, :confirmed, :canceled],
-      threshold: [:confirmed, :canceled],
-      confirmed: [:canceled],
-      canceled: []
-    }
-
-    case Map.get(transitions, current_status) do
-      nil -> []
-      allowed_statuses when is_list(allowed_statuses) -> allowed_statuses
-      allowed_status when is_atom(allowed_status) -> [allowed_status]
-      _ -> []
-    end
-  end
-
-  def possible_transitions(%__MODULE__{status: current_status}) do
-    possible_transitions(current_status)
-  end
-
-    @doc """
-  Transition event to a new status.
-  """
-  def transition_to(%__MODULE__{} = event, new_status) when is_atom(new_status) do
-    if can_transition_to?(event.status, new_status) do
-      # Handle side effects based on the transition
-      updated_event = %{event | status: new_status}
-      updated_event = handle_status_change(updated_event, new_status)
-      {:ok, updated_event}
-    else
-      {:error, "invalid transition from '#{event.status}' to '#{new_status}'"}
-    end
-  end
-
-  # Handle side effects when status changes
-  defp handle_status_change(event, :canceled) do
-    %{event | canceled_at: DateTime.utc_now()}
-  end
-
-  defp handle_status_change(event, _status), do: event
+  # Note: Transition logic is handled by Machinery state machine
+  # See lib/eventasaurus_app/event_state_machine.ex for transition rules
 
   defp validate_status(changeset) do
     case get_field(changeset, :status) do
@@ -403,8 +336,12 @@ defmodule EventasaurusApp.Events.Event do
       attrs
     else
       inferred_status = EventStateMachine.infer_status(attrs)
-      # Always use string keys for form data consistency
-      Map.put(attrs, "status", to_string(inferred_status))
+      # Use atom keys for direct API calls, string keys for form data
+      if is_atom(Map.keys(attrs) |> List.first()) do
+        Map.put(attrs, :status, inferred_status)
+      else
+        Map.put(attrs, "status", to_string(inferred_status))
+      end
     end
 
     changeset(event, attrs_with_status)

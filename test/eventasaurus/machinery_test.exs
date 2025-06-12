@@ -1,17 +1,36 @@
 defmodule Eventasaurus.MachineryTest do
   use ExUnit.Case, async: true
 
-  test "Machinery dependency is correctly installed" do
-    # Just verify the module is available
-    assert Code.ensure_loaded?(Machinery)
+  # Define a minimal dummy state machine for testing
+  defmodule TestStateMachine do
+    use Machinery,
+      field: :status,
+      states: [:draft, :confirmed],
+      transitions: %{
+        draft: [:confirmed],
+        confirmed: []
+      }
 
-    # Verify we can access Machinery functions
-    assert function_exported?(Machinery, :transition_to, 3)
+    defstruct [:id, :status]
+
+    def new(status \\ :draft) do
+      %__MODULE__{id: 1, status: status}
+    end
   end
 
-  test "Machinery basic usage works" do
-    # For now, just test that the dependency is loaded and we can compile
-    # We'll implement proper state machine tests when we create the actual Event schema
-    assert :ok == :ok
+  test "Machinery dependency is correctly installed and functional" do
+    # Verify the module is available
+    assert Code.ensure_loaded?(Machinery)
+
+    # Create a test state machine instance
+    machine = TestStateMachine.new(:draft)
+    assert machine.status == :draft
+
+    # Test a valid transition
+    {:ok, updated_machine} = Machinery.transition_to(machine, TestStateMachine, :confirmed)
+    assert updated_machine.status == :confirmed
+
+    # Test an invalid transition
+    assert {:error, _reason} = Machinery.transition_to(updated_machine, TestStateMachine, :draft)
   end
 end

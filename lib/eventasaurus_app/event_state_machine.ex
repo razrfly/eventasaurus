@@ -21,12 +21,13 @@ defmodule EventasaurusApp.EventStateMachine do
   This should be called during application startup.
   """
   def init_cache do
-    case :ets.whereis(@cache_table) do
-      :undefined ->
-        :ets.new(@cache_table, [:set, :public, :named_table])
-        Logger.info("EventStateMachine: Phase cache initialized")
-        :ok
-      _tid ->
+    try do
+      :ets.new(@cache_table, [:set, :public, :named_table])
+      Logger.info("EventStateMachine: Phase cache initialized")
+      :ok
+    catch
+      :error, :badarg ->
+        # Table already exists
         Logger.debug("EventStateMachine: Phase cache already exists")
         :ok
     end
@@ -128,12 +129,16 @@ defmodule EventasaurusApp.EventStateMachine do
   def auto_correct_status(attrs) when is_map(attrs) do
     inferred_status = infer_status(attrs)
 
-    # Always use string keys for form data consistency
-    # Remove any existing status keys (both atom and string) and set the correct one
-    attrs
-    |> Map.delete(:status)
-    |> Map.delete("status")
-    |> Map.put("status", to_string(inferred_status))
+    # Use the appropriate key type based on the existing map
+    # Remove any existing status keys and set the correct one
+    cleaned_attrs = attrs |> Map.delete(:status) |> Map.delete("status")
+
+    # If the map has atom keys, use atom; otherwise use string
+    if Enum.any?(Map.keys(attrs), &is_atom/1) do
+      Map.put(cleaned_attrs, :status, inferred_status)
+    else
+      Map.put(cleaned_attrs, "status", to_string(inferred_status))
+    end
   end
 
   # Private helper functions
