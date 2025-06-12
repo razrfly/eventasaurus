@@ -1739,6 +1739,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Sets or updates the start date for an event.
   This action can trigger status transitions based on the event's current state.
+  When a specific date is picked, it ends any active polling.
   """
   def pick_date(%Event{} = event, %DateTime{} = start_at, opts \\ []) do
     ends_at = Keyword.get(opts, :ends_at)
@@ -1746,7 +1747,9 @@ defmodule EventasaurusApp.Events do
 
     attrs = %{
       start_at: start_at,
-      timezone: timezone
+      timezone: timezone,
+      # Clear polling deadline when a specific date is picked
+      polling_deadline: nil
     }
 
     attrs = if ends_at, do: Map.put(attrs, :ends_at, ends_at), else: attrs
@@ -1800,11 +1803,16 @@ defmodule EventasaurusApp.Events do
   @doc """
   Enables ticketing for an event.
   This is a placeholder for future ticketing system integration.
+  When ticketing is enabled, it clears threshold requirements and confirms the event.
   """
   def enable_ticketing(%Event{} = event, _ticketing_options \\ %{}) do
     # For now, this is a placeholder that just confirms the event
     # In the future, this would set up ticket types, pricing, etc.
-    attrs = %{status: :confirmed}
+    # Clear threshold_count since ticketing means the event is confirmed regardless of threshold
+    attrs = %{
+      status: :confirmed,
+      threshold_count: nil
+    }
 
     changeset = Event.changeset(event, attrs)
 
@@ -1823,8 +1831,8 @@ defmodule EventasaurusApp.Events do
     allowed_fields = [:title, :description, :tagline, :cover_image_url, :external_image_data, :theme, :theme_customizations]
     attrs = Map.take(details, allowed_fields)
 
-    # Use inferred status changeset to maintain proper status
-    changeset = Event.changeset_with_inferred_status(event, attrs)
+    # Use regular changeset since we don't want to change status
+    changeset = Event.changeset(event, attrs)
 
     case Repo.update(changeset) do
       {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
