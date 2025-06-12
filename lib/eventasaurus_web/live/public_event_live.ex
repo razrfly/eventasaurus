@@ -48,7 +48,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           end
 
           # Load date poll data if event has polling enabled
-          {date_poll, date_options, user_votes} = if event.state == "polling" do
+          {date_poll, date_options, user_votes} = if event.status == :polling do
             poll = Events.get_event_date_poll(event)
             if poll do
               options = Events.list_event_date_options(poll)
@@ -263,27 +263,36 @@ defmodule EventasaurusWeb.PublicEventLive do
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         # Authenticated user - proceed with normal voting flow
-        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
-        vote_type_atom = String.to_atom(vote_type)
+        option_id_int = String.to_integer(option_id)
+        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
 
-        case Events.cast_vote(option, user, vote_type_atom) do
-          {:ok, _vote} ->
-            # Reload user votes and voting summary
-            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+                if option do
+          vote_type_atom = String.to_atom(vote_type)
 
-            {:noreply,
-             socket
-             |> assign(:user_votes, user_votes)
-             |> assign(:voting_summary, voting_summary)
-             |> put_flash(:info, "Your vote has been recorded!")
-            }
+          case Events.cast_vote(option, user, vote_type_atom) do
+            {:ok, _vote} ->
+              # Reload user votes and voting summary
+              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
 
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
-            }
+              {:noreply,
+               socket
+               |> assign(:user_votes, user_votes)
+               |> assign(:voting_summary, voting_summary)
+               |> put_flash(:info, "Your vote has been recorded!")
+              }
+
+            {:error, reason} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
+              }
+          end
+        else
+          {:noreply,
+           socket
+           |> put_flash(:error, "Invalid voting option")
+          }
         end
 
       {:error, _} ->
@@ -309,26 +318,34 @@ defmodule EventasaurusWeb.PublicEventLive do
   def handle_event("remove_vote", %{"option_id" => option_id}, socket) do
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
-        option = Enum.find(socket.assigns.date_options, &(&1.id == String.to_integer(option_id)))
+        option_id_int = String.to_integer(option_id)
+        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
 
-        case Events.remove_user_vote(option, user) do
-          {:ok, _} ->
-            # Reload user votes and voting summary
-            user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-            voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+        if option do
+          case Events.remove_user_vote(option, user) do
+            {:ok, _} ->
+              # Reload user votes and voting summary
+              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
 
-            {:noreply,
-             socket
-             |> assign(:user_votes, user_votes)
-             |> assign(:voting_summary, voting_summary)
-             |> put_flash(:info, "Your vote has been removed.")
-            }
+              {:noreply,
+               socket
+               |> assign(:user_votes, user_votes)
+               |> assign(:voting_summary, voting_summary)
+               |> put_flash(:info, "Your vote has been removed.")
+              }
 
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
-            }
+            {:error, reason} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
+              }
+          end
+        else
+          {:noreply,
+           socket
+           |> put_flash(:error, "Invalid voting option")
+          }
         end
 
       {:error, _} ->
@@ -615,7 +632,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           <% end %>
 
           <!-- Date Voting Interface (only show for polling events) -->
-          <%= if @event.state == "polling" and not is_nil(@date_poll) and @date_options != [] do %>
+          <%= if @event.status == :polling and not is_nil(@date_poll) and @date_options != [] do %>
             <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm" data-testid="voting-interface">
               <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">

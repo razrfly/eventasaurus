@@ -30,7 +30,7 @@ defmodule EventasaurusWeb.EventController do
                             |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
 
               # Get polling data if event is in polling state
-              {date_options, votes_by_date, votes_breakdown} = if event.state == "polling" do
+              {date_options, votes_by_date, votes_breakdown} = if event.status == :polling do
                 poll = Events.get_event_date_poll(event)
                 if poll do
                   options = Events.list_event_date_options(poll)
@@ -147,6 +147,440 @@ defmodule EventasaurusWeb.EventController do
             |> redirect(to: ~p"/auth/login")
         end
     end
+  end
+
+  @doc """
+  Cancel an event by setting its status to canceled.
+  This is separate from delete to maintain data integrity.
+  """
+  def cancel(conn, %{"slug" => slug}) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_flash(:error, "Event not found")
+        |> redirect(to: ~p"/dashboard")
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            if Events.user_can_manage_event?(user, event) do
+              case Events.transition_event(event, :canceled) do
+                {:ok, canceled_event} ->
+                  conn
+                  |> put_flash(:info, "Event canceled successfully")
+                  |> redirect(to: ~p"/#{canceled_event.slug}")
+
+                {:error, _changeset} ->
+                  conn
+                  |> put_flash(:error, "Unable to cancel event")
+                  |> redirect(to: ~p"/#{event.slug}")
+              end
+            else
+              conn
+              |> put_flash(:error, "You don't have permission to cancel this event")
+              |> redirect(to: ~p"/dashboard")
+            end
+
+          {:error, _} ->
+            conn
+            |> put_flash(:error, "You must be logged in to cancel events")
+            |> redirect(to: ~p"/auth/login")
+        end
+    end
+  end
+
+  @doc """
+  Auto-correct an event's status based on its current attributes.
+  Useful for fixing events that may have gotten out of sync.
+  """
+  def auto_correct_status(conn, %{"slug" => slug}) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_flash(:error, "Event not found")
+        |> redirect(to: ~p"/dashboard")
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            if Events.user_can_manage_event?(user, event) do
+              case Events.auto_correct_event_status(event) do
+                {:ok, corrected_event} ->
+                  message = if corrected_event.status != event.status do
+                    "Event status corrected from #{event.status} to #{corrected_event.status}"
+                  else
+                    "Event status is already correct"
+                  end
+
+                  conn
+                  |> put_flash(:info, message)
+                  |> redirect(to: ~p"/#{corrected_event.slug}")
+
+                {:error, _changeset} ->
+                  conn
+                  |> put_flash(:error, "Unable to correct event status")
+                  |> redirect(to: ~p"/#{event.slug}")
+              end
+            else
+              conn
+              |> put_flash(:error, "You don't have permission to modify this event")
+              |> redirect(to: ~p"/dashboard")
+            end
+
+          {:error, _} ->
+            conn
+            |> put_flash(:error, "You must be logged in to modify events")
+            |> redirect(to: ~p"/auth/login")
+        end
+    end
+  end
+
+  ## Action-Driven Setup API Actions
+
+  @doc """
+  Sets or updates the start date for an event.
+  Expects: start_at (ISO8601 datetime), optional: ends_at, timezone
+  """
+  def pick_date(conn, %{"slug" => slug} = params) do
+    with {:ok, event} <- get_event_with_auth(conn, slug),
+         {:ok, start_at} <- parse_datetime(params["start_at"]),
+         opts <- build_pick_date_opts(params),
+         {:ok, updated_event} <- Events.pick_date(event, start_at, opts) do
+
+      conn
+      |> put_flash(:info, "Event date updated successfully")
+      |> json(%{
+        success: true,
+        event: %{
+          id: updated_event.id,
+          slug: updated_event.slug,
+          status: updated_event.status,
+          computed_phase: updated_event.computed_phase,
+          start_at: updated_event.start_at,
+          ends_at: updated_event.ends_at,
+          timezone: updated_event.timezone
+        }
+      })
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      {:error, :unauthorized} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "You don't have permission to modify this event"})
+
+      {:error, :invalid_datetime} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Invalid datetime format. Use ISO8601 format."})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Validation failed", details: format_changeset_errors(changeset)})
+    end
+  end
+
+  @doc """
+  Enables polling for an event.
+  Expects: polling_deadline (ISO8601 datetime)
+  """
+  def enable_polling(conn, %{"slug" => slug, "polling_deadline" => polling_deadline_str}) do
+    with {:ok, event} <- get_event_with_auth(conn, slug),
+         {:ok, polling_deadline} <- parse_datetime(polling_deadline_str),
+         {:ok, updated_event} <- Events.enable_polling(event, polling_deadline) do
+
+      conn
+      |> put_flash(:info, "Polling enabled successfully")
+      |> json(%{
+        success: true,
+        event: %{
+          id: updated_event.id,
+          slug: updated_event.slug,
+          status: updated_event.status,
+          computed_phase: updated_event.computed_phase,
+          polling_deadline: updated_event.polling_deadline
+        }
+      })
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      {:error, :unauthorized} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "You don't have permission to modify this event"})
+
+      {:error, :invalid_datetime} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Invalid datetime format. Use ISO8601 format."})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Validation failed", details: format_changeset_errors(changeset)})
+    end
+  end
+
+  def enable_polling(conn, %{"slug" => _slug}) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "polling_deadline is required"})
+  end
+
+  @doc """
+  Sets a threshold count for an event.
+  Expects: threshold_count (integer)
+  """
+  def set_threshold(conn, %{"slug" => slug, "threshold_count" => threshold_count_str}) do
+    with {:ok, event} <- get_event_with_auth(conn, slug),
+         {threshold_count, ""} <- Integer.parse(threshold_count_str),
+         true <- threshold_count > 0,
+         {:ok, updated_event} <- Events.set_threshold(event, threshold_count) do
+
+      conn
+      |> put_flash(:info, "Threshold set successfully")
+      |> json(%{
+        success: true,
+        event: %{
+          id: updated_event.id,
+          slug: updated_event.slug,
+          status: updated_event.status,
+          computed_phase: updated_event.computed_phase,
+          threshold_count: updated_event.threshold_count
+        }
+      })
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      {:error, :unauthorized} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "You don't have permission to modify this event"})
+
+      :error ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "threshold_count must be a positive integer"})
+
+      false ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "threshold_count must be greater than 0"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Validation failed", details: format_changeset_errors(changeset)})
+    end
+  end
+
+  def set_threshold(conn, %{"slug" => _slug}) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "threshold_count is required"})
+  end
+
+  @doc """
+  Enables ticketing for an event.
+  This is a placeholder for future ticketing system integration.
+  """
+  def enable_ticketing(conn, %{"slug" => slug} = params) do
+    with {:ok, event} <- get_event_with_auth(conn, slug),
+         ticketing_options <- Map.get(params, "ticketing_options", %{}),
+         {:ok, updated_event} <- Events.enable_ticketing(event, ticketing_options) do
+
+      conn
+      |> put_flash(:info, "Ticketing enabled successfully")
+      |> json(%{
+        success: true,
+        event: %{
+          id: updated_event.id,
+          slug: updated_event.slug,
+          status: updated_event.status,
+          computed_phase: updated_event.computed_phase
+        }
+      })
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      {:error, :unauthorized} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "You don't have permission to modify this event"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Validation failed", details: format_changeset_errors(changeset)})
+    end
+  end
+
+  @doc """
+  Adds or updates details for an event.
+  Expects: Any combination of title, description, tagline, cover_image_url, theme, etc.
+  """
+  def add_details(conn, %{"slug" => slug} = params) do
+    with {:ok, event} <- get_event_with_auth(conn, slug),
+         details <- extract_event_details(params),
+         {:ok, updated_event} <- Events.add_details(event, details) do
+
+      conn
+      |> put_flash(:info, "Event details updated successfully")
+      |> json(%{
+        success: true,
+        event: %{
+          id: updated_event.id,
+          slug: updated_event.slug,
+          status: updated_event.status,
+          computed_phase: updated_event.computed_phase,
+          title: updated_event.title,
+          description: updated_event.description,
+          tagline: updated_event.tagline,
+          theme: updated_event.theme
+        }
+      })
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      {:error, :unauthorized} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "You don't have permission to modify this event"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Validation failed", details: format_changeset_errors(changeset)})
+    end
+  end
+
+  @doc """
+  Publishes an event by transitioning it to confirmed status.
+  """
+  def publish(conn, %{"slug" => slug}) do
+    with {:ok, event} <- get_event_with_auth(conn, slug),
+         {:ok, updated_event} <- Events.publish_event(event) do
+
+      conn
+      |> put_flash(:info, "Event published successfully")
+      |> json(%{
+        success: true,
+        event: %{
+          id: updated_event.id,
+          slug: updated_event.slug,
+          status: updated_event.status,
+          computed_phase: updated_event.computed_phase,
+          visibility: updated_event.visibility
+        }
+      })
+    else
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      {:error, :unauthorized} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "You don't have permission to modify this event"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Validation failed", details: format_changeset_errors(changeset)})
+    end
+  end
+
+  ## Helper Functions for Action API
+
+  defp get_event_with_auth(conn, slug) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        {:error, :not_found}
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            if Events.user_can_manage_event?(user, event) do
+              {:ok, event}
+            else
+              {:error, :unauthorized}
+            end
+
+          {:error, _} ->
+            {:error, :unauthorized}
+        end
+    end
+  end
+
+  defp parse_datetime(datetime_str) when is_binary(datetime_str) do
+    case DateTime.from_iso8601(datetime_str) do
+      {:ok, datetime, _offset} -> {:ok, datetime}
+      {:error, _} -> {:error, :invalid_datetime}
+    end
+  end
+  defp parse_datetime(_), do: {:error, :invalid_datetime}
+
+  defp build_pick_date_opts(params) do
+    opts = []
+
+    opts = case params["ends_at"] do
+      ends_at_str when is_binary(ends_at_str) ->
+        case parse_datetime(ends_at_str) do
+          {:ok, ends_at} -> Keyword.put(opts, :ends_at, ends_at)
+          {:error, _} -> opts
+        end
+      _ -> opts
+    end
+
+    opts = case params["timezone"] do
+      timezone when is_binary(timezone) -> Keyword.put(opts, :timezone, timezone)
+      _ -> opts
+    end
+
+    opts
+  end
+
+  defp extract_event_details(params) do
+    allowed_fields = ["title", "description", "tagline", "cover_image_url", "theme"]
+    atom_map = %{
+      "title" => :title,
+      "description" => :description,
+      "tagline" => :tagline,
+      "cover_image_url" => :cover_image_url,
+      "theme" => :theme
+    }
+
+    params
+    |> Map.take(allowed_fields)
+    |> Enum.reduce(%{}, fn {key, value}, acc ->
+      atom_key = Map.get(atom_map, key)
+      Map.put(acc, atom_key, value)
+    end)
+  end
+
+  defp format_changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
   end
 
   # Helper function to ensure we have a proper User struct

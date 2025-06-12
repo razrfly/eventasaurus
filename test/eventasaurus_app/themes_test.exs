@@ -183,54 +183,5 @@ defmodule EventasaurusApp.ThemesTest do
     end
   end
 
-  describe "CSS file accessibility" do
-    @tag :skip
-    test "cosmic theme CSS file is accessible via HTTP" do
-      # Start the server if not already running
-      Application.ensure_all_started(:eventasaurus)
 
-      # Make HTTP request to the cosmic theme CSS (updated path)
-      case HTTPoison.get("http://localhost:4000/assets/css/themes/cosmic.css") do
-        {:ok, %HTTPoison.Response{status_code: 200, body: css_content}} ->
-          # Check that the CSS contains cosmic theme styles
-          assert String.contains?(css_content, ".theme-cosmic"),
-            "Cosmic CSS should contain .theme-cosmic class"
-          assert String.contains?(css_content, "--color-primary: #6366f1"),
-            "Cosmic CSS should contain the indigo primary color"
-          assert String.contains?(css_content, "Orbitron"),
-            "Cosmic CSS should reference Orbitron font"
-          assert String.contains?(css_content, "cosmicStars"),
-            "Cosmic CSS should contain the star animation"
-
-        {:ok, %HTTPoison.Response{status_code: status_code}} ->
-          flunk("Expected cosmic.css to be accessible, but got HTTP #{status_code}")
-
-        {:error, reason} ->
-          flunk("Failed to fetch cosmic.css: #{inspect(reason)}")
-      end
-    end
-
-    @tag :skip
-    test "cosmic theme is applied to event page" do
-      # Make HTTP request to a cosmic-themed event page
-      case HTTPoison.get("http://localhost:4000/tnhtg2b4fz") do
-        {:ok, %HTTPoison.Response{status_code: 200, body: html_content}} ->
-          # Check that the page has cosmic theme class
-          assert String.contains?(html_content, "theme-cosmic"),
-            "Event page should have theme-cosmic class"
-          # Check that cosmic CSS is linked (updated path)
-          assert String.contains?(html_content, "/assets/css/themes/cosmic.css"),
-            "Event page should link to cosmic.css"
-          # Check that Orbitron font is loaded
-          assert String.contains?(html_content, "Orbitron"),
-            "Event page should load Orbitron font for cosmic theme"
-
-        {:ok, %HTTPoison.Response{status_code: status_code}} ->
-          flunk("Expected event page to be accessible, but got HTTP #{status_code}")
-
-        {:error, reason} ->
-          flunk("Failed to fetch event page: #{inspect(reason)}")
-      end
-    end
-  end
 end

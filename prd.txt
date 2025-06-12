@@ -1,0 +1,276 @@
+# Eventasaurus State Management System PRD
+
+## Project Overview
+
+Eventasaurus is an event management platform that needs a robust state management system to handle the lifecycle of events from creation to completion. This PRD defines the implementation of a dual-state system that separates user-controlled explicit states from system-computed phases.
+
+## Problem Statement
+
+Currently, Eventasaurus lacks a clear state management system for events. Users need an intuitive way to manage events through their lifecycle without being overwhelmed by complex status choices. The system should automatically infer states based on user behavior while providing clear progression through event planning stages.
+
+## Solution Vision
+
+Implement a sophisticated event lifecycle management system with:
+- **Explicit Status**: Hard states controlled by user actions (stored in database)
+- **Computed Phases**: Soft states derived at runtime based on logic and context
+- **Action-driven UI**: Interface based on user goals rather than technical states
+- **Automatic State Inference**: Backend logic that determines appropriate states based on user behavior
+
+## Technical Requirements
+
+### Core Architecture
+
+#### Database Schema
+- Use Elixir + Phoenix framework
+- Integrate Machinery library for state machine management
+- Store only explicit states in `events.status` field using Ecto.Enum
+- Default new events to `:confirmed` status (most users skip draft phase)
+
+#### State Machine Configuration
+```elixir
+field :status, Ecto.Enum, 
+  values: [:draft, :polling, :threshold, :confirmed, :canceled], 
+  default: :confirmed
+
+use Machinery, 
+  field: :status,
+  transitions: %{
+    draft: [:polling, :threshold, :confirmed, :canceled],
+    polling: [:confirmed, :canceled],
+    threshold: [:confirmed, :canceled],
+    confirmed: [:canceled],
+    canceled: []
+  }
+```
+
+### Explicit Status States (User-Controlled)
+
+1. **:draft** - Optional: Event still being composed, not ready to publish
+2. **:polling** - Organizer wants users to vote on dates
+3. **:threshold** - Organizer has set minimum attendance requirements
+4. **:confirmed** - Default: Organizer has confirmed date and intent
+5. **:canceled** - Organizer has canceled the event
+
+### Computed Phases (System-Inferred)
+
+Runtime-derived states that are NOT stored in database:
+- **:planning** - Event in early planning stages
+- **:polling** - Active date polling in progress
+- **:awaiting_confirmation** - Polling deadline passed, needs confirmation
+- **:open** - Event confirmed and open for registration
+- **:ticketing** - Event confirmed with ticketing enabled
+- **:prepaid_confirmed** - Threshold event with minimum attendance met
+- **:ended** - Event completion date has passed
+- **:canceled** - Event has been canceled
+
+### State Inference Logic
+
+Implement `infer_status/1` function:
+```elixir
+def infer_status(attrs) do
+  cond do
+    attrs.canceled_at -> :canceled
+    attrs.polling_enabled -> :polling
+    attrs.requires_threshold -> :threshold
+    attrs.starts_at -> :confirmed
+    true -> :confirmed
+  end
+end
+```
+
+### Virtual Flags
+
+Provide convenience boolean methods:
+- `event.ended?` - Check if event has completed
+- `event.can_sell_tickets?` - Verify if ticketing is available
+- `event.threshold_met?` - Check if attendance goal reached
+- `event.polling_ended?` - Verify if polling period closed
+- `event.active_poll?` - Check if poll is currently active
+
+## User Experience Requirements
+
+### UI Design Philosophy
+**Guiding Principle**: Users don't care about states — they care about getting their event live.
+
+Most users want to:
+1. Set a title
+2. Pick a date  
+3. Share the link
+
+### Action-Driven Setup Cards
+
+Replace explicit status selection with intuitive action blocks:
+
+1. **📆 Pick a Date** - Sets date, maintains `:confirmed` status
+2. **📊 Let People Vote** - Enables polling, transitions to `:polling`
+3. **🧍‍♂️ Set Attendance Goal** - Enables threshold, transitions to `:threshold`
+4. **🎟️ Sell Tickets** - Enables ticketing functionality
+5. **📄 Add Details** - Always available for event information
+6. **✅ Publish** - Saves and handles necessary state transitions
+
+### Default Event Structure
+```elixir
+%Event{
+  status: :confirmed,        # Default — most users skip draft
+  is_ticketed: false,
+  starts_at: nil
+}
+```
+
+## Functional Requirements
+
+### State Transitions
+- Automatic state inference based on user actions
+- Validate state transitions using Machinery library
+- Handle edge cases (expired polls, passed dates, etc.)
+- Maintain audit trail of state changes
+
+### Phase Computation
+- Calculate phases in real-time without database storage
+- Consider temporal factors (current time vs event dates)
+- Handle multiple simultaneous conditions
+- Provide consistent phase determination across system
+
+### Event Management Features
+- Date selection and confirmation
+- Polling system for date selection
+- Attendance threshold management
+- Ticketing system integration
+- Event cancellation handling
+- Automatic status updates based on time progression
+
+## Technical Implementation Details
+
+### Dependencies
+Add to mix.exs:
+```elixir
+defp deps do
+  [{:machinery, "~> 1.0"}]
+end
+```
+
+### Phase Computation Function
+```elixir
+def computed_phase(%Event{} = event) do
+  now = DateTime.utc_now()
+  
+  cond do
+    event.status == :canceled -> :canceled
+    event.ends_at && now > event.ends_at -> :ended
+    event.status == :polling and event.polling_deadline && now > event.polling_deadline -> :awaiting_confirmation
+    event.status == :confirmed and event.is_ticketed -> :ticketing
+    event.status == :confirmed -> :open
+    event.status == :threshold and threshold_met?(event) -> :prepaid_confirmed
+    event.status == :polling -> :polling
+    true -> :planning
+  end
+end
+```
+
+### Status Update Pattern
+```elixir
+new_status = infer_status(event_attrs)
+{:ok, event} = Machinery.transition_to(event, Event, new_status)
+```
+
+## Success Metrics
+
+### User Experience
+- Reduced time from event creation to first share
+- Decreased user confusion about event status
+- Increased completion rate of event setup process
+- Higher user satisfaction with event management flow
+
+### Technical Performance
+- Consistent state computation across system
+- Zero state inconsistencies between database and computed phases
+- Successful handling of all state transition edge cases
+- Maintainable and extensible state machine implementation
+
+## Development Phases
+
+### Phase 1: Core State Machine
+- Implement Machinery integration
+- Create basic state transitions
+- Add explicit status field to events table
+- Build state inference logic
+
+### Phase 2: Phase Computation
+- Implement computed_phase function
+- Add virtual flag methods
+- Create temporal logic for time-based transitions
+- Build comprehensive test suite
+
+### Phase 3: UI Integration
+- Design action-driven setup cards
+- Remove explicit status selection from frontend
+- Implement backend state updates based on user actions
+- Add real-time phase display
+
+### Phase 4: Advanced Features
+- Polling system integration
+- Threshold management
+- Ticketing system hooks
+- Event lifecycle notifications
+
+## Risk Mitigation
+
+### Data Integrity
+- Comprehensive validation of state transitions
+- Database constraints on status field
+- Audit logging for state changes
+- Rollback procedures for failed transitions
+
+### User Experience
+- Gradual rollout of new UI components
+- Fallback mechanisms for edge cases
+- Clear error messaging for invalid actions
+- User education about new workflow
+
+### Technical Risks
+- Thorough testing of temporal logic
+- Performance optimization for phase computation
+- Caching strategies for frequently computed phases
+- Monitoring for state machine performance
+
+## Non-Functional Requirements
+
+### Performance
+- Phase computation must complete within 50ms
+- State transitions should be atomic and consistent
+- Database queries optimized for status filtering
+- Caching layer for expensive phase calculations
+
+### Scalability
+- State machine must handle high concurrent event creation
+- Phase computation scalable across event volume
+- Database indexing on status field
+- Efficient batch operations for bulk state updates
+
+### Maintainability
+- Clear separation between explicit states and computed phases
+- Comprehensive documentation of state machine logic
+- Automated testing of all transition paths
+- Monitoring and alerting for state inconsistencies
+
+## Testing Strategy
+
+### Unit Tests
+- All state transition combinations
+- Phase computation logic with various inputs
+- Virtual flag accuracy
+- Edge case handling (null dates, expired polls)
+
+### Integration Tests
+- Full event lifecycle workflows
+- UI action to backend state transition flows
+- Temporal state changes over time
+- Multi-user scenarios (polling, thresholds)
+
+### User Acceptance Testing
+- Event creation and management workflows
+- Status visibility and understanding
+- Action card functionality
+- Error handling and recovery
+
+This PRD provides the foundation for implementing a robust, user-friendly event state management system that prioritizes user experience while maintaining technical integrity and scalability. 
