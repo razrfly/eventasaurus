@@ -16,21 +16,22 @@ defmodule EventasaurusApp.EventsFixtures do
       map when is_map(map) -> map
     end
 
-    # Extract organizers if provided
-    organizers = Map.get(attrs, :organizers, [])
+    # Extract organizers if provided (handle both atom and string keys)
+    organizers = Map.get(attrs, :organizers, Map.get(attrs, "organizers", []))
 
-    # Create a user for the event if no organizers provided
+    # Create a user for the event if no organizers provided (handle both atom and string keys)
     user = case organizers do
       [] -> Map.get_lazy(attrs, :user, fn ->
-        EventasaurusApp.AccountsFixtures.user_fixture()
+        Map.get_lazy(attrs, "user", fn ->
+          EventasaurusApp.AccountsFixtures.user_fixture()
+        end)
       end)
       [first_organizer | _] -> first_organizer
     end
 
     # Convert all keys to strings for consistency
     string_attrs = attrs
-      |> Map.delete(:user)  # Remove user from attrs since it's not part of event schema
-      |> Map.delete(:organizers)  # Remove organizers from attrs since it's not part of event schema
+      |> Map.drop([:user, "user", :organizers, "organizers"])  # Remove user and organizers from attrs since they're not part of event schema
       |> Enum.reduce(%{}, fn {k, v}, acc ->
         Map.put(acc, to_string(k), v)
       end)
