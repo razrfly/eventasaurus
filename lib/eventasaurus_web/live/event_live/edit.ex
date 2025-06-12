@@ -629,9 +629,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
             case Events.update_event_date_options(existing_poll, selected_dates) do
               {:ok, _updated_options} ->
                 # Update event state to polling if not already
-                if event.state != "polling" do
-                  Events.update_event(event, %{state: "polling"})
-                end
+                                  if event.status != :polling do
+                    Events.update_event(event, %{status: :polling})
+                  end
               {:error, changeset} ->
                 require Logger
                 Logger.error("Failed to update date options", changeset: inspect(changeset))
@@ -643,7 +643,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
             case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
               {:ok, poll} ->
                 Events.create_date_options_from_list(poll, selected_dates)
-                Events.update_event(event, %{state: "polling"})
+                Events.update_event(event, %{status: :polling})
               {:error, _} ->
                 # Handle error silently for now
                 nil
@@ -654,9 +654,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
       # Case 2: Disabling date polling (keep poll but change event state)
       existing_poll && !is_polling_enabled ->
         # Change event state back to published but keep the poll data
-        if event.state == "polling" do
-          Events.update_event(event, %{state: "published"})
-        end
+                  if event.status == :polling do
+            Events.update_event(event, %{status: :confirmed})
+          end
 
       # Case 3: No changes needed
       true ->

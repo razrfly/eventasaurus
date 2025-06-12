@@ -75,7 +75,10 @@ defmodule Eventasaurus.MixProject do
       {:wallaby, "~> 0.30.0", only: :test, runtime: false},
 
       # HTML sanitization for social cards
-      {:html_sanitize_ex, "~> 1.4"}
+      {:html_sanitize_ex, "~> 1.4"},
+
+      # State machine library for event lifecycle management
+      {:machinery, "~> 1.0.0"}
     ]
   end
 

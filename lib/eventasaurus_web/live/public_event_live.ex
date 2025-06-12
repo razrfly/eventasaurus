@@ -48,7 +48,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           end
 
           # Load date poll data if event has polling enabled
-          {date_poll, date_options, user_votes} = if event.state == "polling" do
+          {date_poll, date_options, user_votes} = if event.status == :polling do
             poll = Events.get_event_date_poll(event)
             if poll do
               options = Events.list_event_date_options(poll)
@@ -615,7 +615,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           <% end %>
 
           <!-- Date Voting Interface (only show for polling events) -->
-          <%= if @event.state == "polling" and not is_nil(@date_poll) and @date_options != [] do %>
+          <%= if @event.status == :polling and not is_nil(@date_poll) and @date_options != [] do %>
             <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm" data-testid="voting-interface">
               <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
