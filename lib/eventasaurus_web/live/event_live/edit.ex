@@ -150,6 +150,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("submit", %{"event" => event_params}, socket) do
+    require Logger
+    Logger.info("=== SUBMIT EVENT HANDLER CALLED ===")
+    Logger.info("Event params keys: #{inspect(Map.keys(event_params))}")
+
     # Decode external_image_data if it's a JSON string
     event_params =
       case Map.get(event_params, "external_image_data") do
@@ -229,7 +233,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> Map.put(:action, :validate)
       |> validate_date_polling(final_event_params)
 
+    Logger.info("=== VALIDATION STEP ===")
+    Logger.info("Validation changeset valid?: #{validation_changeset.valid?}")
+    Logger.info("Validation errors: #{inspect(validation_changeset.errors)}")
+
     if validation_changeset.valid? do
+      Logger.info("Validation passed, calling save_event")
       case save_event(socket, socket.assigns.event, final_event_params) do
         {:ok, event} ->
           {:noreply,
@@ -244,6 +253,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
           {:noreply, socket_with_error}
       end
     else
+      Logger.info("Validation failed, not calling save_event")
       {:noreply, assign(socket,
         form: to_form(validation_changeset),
         changeset: validation_changeset
@@ -575,23 +585,32 @@ defmodule EventasaurusWeb.EventLive.Edit do
   # ========== Helper Functions ==========
 
   defp save_event(socket, event, event_params) do
+    require Logger
+    Logger.info("=== SAVE EVENT START ===")
+    Logger.info("Event ID: #{event.id}")
+    Logger.info("Event params keys: #{inspect(Map.keys(event_params))}")
+    Logger.info("Enable date polling: #{inspect(Map.get(event_params, "enable_date_polling"))}")
+    Logger.info("Selected poll dates: #{inspect(Map.get(event_params, "selected_poll_dates"))}")
+
     # First update the event
     case Events.update_event(event, event_params) do
       {:ok, updated_event} ->
+        Logger.info("Event update successful")
+
         # Handle date polling updates
+        Logger.info("Starting date polling update...")
         case handle_date_polling_update(updated_event, event_params, socket.assigns.user) do
           {:error, changeset} ->
-            require Logger
-            Logger.error("Failed to update date polling", changeset: inspect(changeset))
+            Logger.error("Date polling update failed with changeset: #{inspect(changeset)}")
             socket = put_flash(socket, :error, "We couldn't save the poll dates – please try again.")
             {:error, socket}
-          _ ->
+          result ->
+            Logger.info("Date polling update result: #{inspect(result)}")
             {:ok, updated_event}
         end
 
       {:error, changeset} ->
-        require Logger
-        Logger.error("Failed to update event", changeset: inspect(changeset))
+        Logger.error("Event update failed with changeset: #{inspect(changeset)}")
         socket = put_flash(socket, :error, "We couldn't save the event – please try again.")
         {:error, socket}
     end
@@ -599,15 +618,25 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # Helper function to handle date polling updates
   defp handle_date_polling_update(event, params, user) do
+    require Logger
+    Logger.info("=== DATE POLLING UPDATE START ===")
+
     enable_date_polling = Map.get(params, "enable_date_polling", false)
+    Logger.info("Raw enable_date_polling value: #{inspect(enable_date_polling)}")
+
     # Handle string "true"/"false" from form submissions properly
     is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
+    Logger.info("Is polling enabled: #{is_polling_enabled}")
+
     existing_poll = Events.get_event_date_poll(event)
+    Logger.info("Existing poll: #{inspect(existing_poll)}")
 
     cond do
       # Case 1: Enabling date polling (create new poll or update existing)
       is_polling_enabled ->
+        Logger.info("Case 1: Enabling date polling")
         selected_dates_string = Map.get(params, "selected_poll_dates", "")
+        Logger.info("Selected dates string: #{inspect(selected_dates_string)}")
 
         if selected_dates_string != "" do
           # Parse selected dates
@@ -624,58 +653,76 @@ defmodule EventasaurusWeb.EventLive.Edit do
             end)
             |> Enum.filter(&(&1 != nil))
 
+          Logger.info("Parsed selected dates: #{inspect(selected_dates)}")
+
           if existing_poll do
+            Logger.info("Updating existing poll with ID: #{existing_poll.id}")
             # Smart update: only add/remove changed date options to preserve existing votes
             case Events.update_event_date_options(existing_poll, selected_dates) do
-              {:ok, _updated_options} ->
+              {:ok, updated_options} ->
+                Logger.info("Date options updated successfully: #{inspect(updated_options)}")
                 # Update event state to polling if not already
                 if event.status != :polling do
+                  Logger.info("Updating event status to polling")
                   case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
-                    {:ok, _} -> :ok
+                    {:ok, _} ->
+                      Logger.info("Event status updated to polling successfully")
+                      :ok
                     {:error, changeset} ->
-                      require Logger
-                      Logger.error("Failed to enable polling mode", changeset: inspect(changeset))
+                      Logger.error("Failed to enable polling mode: #{inspect(changeset)}")
                       {:error, changeset}
                   end
                 else
+                  Logger.info("Event is already in polling mode")
                   # Event is already in polling mode, just return success
                   :ok
                 end
               {:error, changeset} ->
-                require Logger
-                Logger.error("Failed to update date options", changeset: inspect(changeset))
+                Logger.error("Failed to update date options: #{inspect(changeset)}")
                 # Return error to be handled by caller
                 {:error, changeset}
             end
           else
+            Logger.info("Creating new poll")
             # Create new poll
             case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
               {:ok, poll} ->
+                Logger.info("New poll created with ID: #{poll.id}")
                 Events.create_date_options_from_list(poll, selected_dates)
                 Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)})
-              {:error, _} ->
-                # Handle error silently for now
-                nil
+              {:error, changeset} ->
+                Logger.error("Failed to create new poll: #{inspect(changeset)}")
+                {:error, changeset}
             end
           end
+        else
+          Logger.info("No selected dates provided")
+          :ok
         end
 
       # Case 2: Disabling date polling (keep poll but change event state)
       existing_poll && !is_polling_enabled ->
+        Logger.info("Case 2: Disabling date polling")
         # Change event state back to published but keep the poll data
-                  if event.status == :polling do
-            case Events.update_event(event, %{status: :confirmed, polling_deadline: nil}) do
-              {:ok, _} -> :ok
-              {:error, changeset} ->
-                require Logger
-                Logger.error("Failed to disable polling mode", changeset: inspect(changeset))
-                {:error, changeset}
-            end
+        if event.status == :polling do
+          Logger.info("Changing event status from polling to confirmed")
+          case Events.update_event(event, %{status: :confirmed, polling_deadline: nil}) do
+            {:ok, _} ->
+              Logger.info("Event status updated to confirmed successfully")
+              :ok
+            {:error, changeset} ->
+              Logger.error("Failed to disable polling mode: #{inspect(changeset)}")
+              {:error, changeset}
           end
+        else
+          Logger.info("Event is not in polling mode, no status change needed")
+          :ok
+        end
 
       # Case 3: No changes needed
       true ->
-        nil
+        Logger.info("Case 3: No changes needed")
+        :ok
     end
   end
 
@@ -853,15 +900,22 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   # Helper function to validate date polling options
   defp validate_date_polling(changeset, params) do
+    require Logger
+    Logger.info("=== VALIDATE DATE POLLING START ===")
+
     enable_date_polling = Map.get(params, "enable_date_polling", false)
+    Logger.info("Raw enable_date_polling: #{inspect(enable_date_polling)}")
 
     # Handle string "true"/"false" from form submissions
     is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
+    Logger.info("Is polling enabled: #{is_polling_enabled}")
 
     if is_polling_enabled do
       selected_dates_string = Map.get(params, "selected_poll_dates", "")
+      Logger.info("Selected dates string: #{inspect(selected_dates_string)}")
 
       if selected_dates_string == "" do
+        Logger.info("No dates selected, adding error")
         Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
       else
         selected_dates =
@@ -870,13 +924,19 @@ defmodule EventasaurusWeb.EventLive.Edit do
           |> Enum.map(&String.trim/1)
           |> Enum.filter(&(&1 != ""))
 
+        Logger.info("Parsed selected dates: #{inspect(selected_dates)}")
+        Logger.info("Number of dates: #{length(selected_dates)}")
+
         if length(selected_dates) < 2 do
+          Logger.info("Less than 2 dates, adding error")
           Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
         else
+          Logger.info("Validation passed")
           changeset
         end
       end
     else
+      Logger.info("Polling not enabled, skipping validation")
       changeset
     end
   end

@@ -62,6 +62,31 @@ Hooks.DateTimeSync = {
     const endDate = this.el.querySelector('[data-role="end-date"]');
     const endTime = this.el.querySelector('[data-role="end-time"]');
 
+    // Check for polling deadline fields
+    const pollingDate = this.el.querySelector('[data-role="polling-deadline-date"]');
+    const pollingTime = this.el.querySelector('[data-role="polling-deadline-time"]');
+    const pollingHidden = this.el.querySelector('[data-role="polling-deadline"]');
+
+    // Handle polling deadline combination
+    if (pollingDate && pollingTime && pollingHidden) {
+      const combinePollingDateTime = () => {
+        if (pollingDate.value && pollingTime.value) {
+          // Combine date and time into ISO string
+          const dateTimeString = `${pollingDate.value}T${pollingTime.value}:00`;
+          pollingHidden.value = dateTimeString;
+          pollingHidden.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      };
+
+      // Set initial value
+      combinePollingDateTime();
+
+      // Listen for changes
+      pollingDate.addEventListener('change', combinePollingDateTime);
+      pollingTime.addEventListener('change', combinePollingDateTime);
+    }
+
+    // Original start/end date logic
     if (!startDate || !startTime || !endDate || !endTime) return;
 
     // Helper: round up to next 30-min interval
