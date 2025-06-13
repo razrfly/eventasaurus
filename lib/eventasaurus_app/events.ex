@@ -10,6 +10,7 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Themes
+  alias EventasaurusApp.Events.EventDateVote
   require Logger
 
   @doc """
@@ -1072,7 +1073,7 @@ defmodule EventasaurusApp.Events do
     Logger.info("Option ID: #{option.id}, Date: #{option.date}")
 
     # Check if there are any votes for this option
-    votes_count = from(v in EventDateVote, where: v.event_date_option_id == ^option.id)
+    votes_count = from(v in EventasaurusApp.Events.EventDateVote, where: v.event_date_option_id == ^option.id)
                   |> Repo.aggregate(:count, :id)
 
     Logger.info("Votes count for option #{option.id}: #{votes_count}")
