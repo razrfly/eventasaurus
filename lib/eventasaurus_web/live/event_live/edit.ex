@@ -60,6 +60,16 @@ defmodule EventasaurusWeb.EventLive.Edit do
               ""
             end
 
+            # Extract polling deadline date and time if date polling is enabled
+            {polling_deadline_date, polling_deadline_time} = if date_poll && event.polling_deadline do
+              {date_part, time_part} = parse_datetime_with_timezone(event.polling_deadline, event.timezone)
+              {date_part, time_part}
+            else
+              # Default to one week from today at 10 PM
+              default_date = Date.add(Date.utc_today(), 7) |> Date.to_iso8601()
+              {"#{default_date}", "22:00"}
+            end
+
             # Prepare form data
             form_data = %{
               "start_date" => start_date,
@@ -78,7 +88,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
               "venue_latitude" => venue_latitude,
               "venue_longitude" => venue_longitude,
               "enable_date_polling" => enable_date_polling,
-              "selected_poll_dates" => selected_poll_dates
+              "selected_poll_dates" => selected_poll_dates,
+              "polling_deadline" => if(event.polling_deadline, do: DateTime.to_iso8601(event.polling_deadline), else: ""),
+              "polling_deadline_date" => polling_deadline_date,
+              "polling_deadline_time" => polling_deadline_time
             }
 
             # Set up the socket with all required assigns
@@ -729,6 +742,16 @@ defmodule EventasaurusWeb.EventLive.Edit do
   # Helper function to combine date and time fields into UTC datetime
   defp combine_date_time_fields(params) do
     timezone = Map.get(params, "timezone", "UTC")
+
+    # Handle polling deadline if present
+    params = case {Map.get(params, "polling_deadline_date"), Map.get(params, "polling_deadline_time")} do
+      {date_str, time_str} when is_binary(date_str) and is_binary(time_str) and date_str != "" and time_str != "" ->
+        case combine_date_time_to_utc(date_str, time_str, timezone) do
+          {:ok, datetime} -> Map.put(params, "polling_deadline", datetime)
+          {:error, _} -> params
+        end
+      _ -> params
+    end
 
     # Check if date polling is enabled
     if Map.get(params, "enable_date_polling", false) do

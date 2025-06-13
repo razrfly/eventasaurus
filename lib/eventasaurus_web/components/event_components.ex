@@ -622,6 +622,14 @@ defmodule EventasaurusWeb.EventComponents do
         # Format time as HH:MM for the time_select component
         time = DateTime.to_time(datetime)
         "#{String.pad_leading(Integer.to_string(time.hour), 2, "0")}:#{String.pad_leading(Integer.to_string(time.minute), 2, "0")}"
+      iso when is_binary(iso) and iso != "" ->
+        case String.split(iso, "T") do
+          [_date, time_part] ->
+            # Strip seconds/timezone → "HH:MM"
+            String.slice(time_part, 0, 5)
+          _ ->
+            "22:00"
+        end
       _ ->
         # Default to 10 PM
         "22:00"
@@ -631,6 +639,7 @@ defmodule EventasaurusWeb.EventComponents do
   defp format_polling_deadline_for_input(form_data) do
     case Map.get(form_data, "polling_deadline") do
       %DateTime{} = datetime -> DateTime.to_iso8601(datetime)
+      iso when is_binary(iso) -> iso
       _ -> ""
     end
   end
