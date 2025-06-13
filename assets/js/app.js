@@ -74,16 +74,30 @@ Hooks.DateTimeSync = {
           // Combine date and time into ISO string
           const dateTimeString = `${pollingDate.value}T${pollingTime.value}:00`;
           pollingHidden.value = dateTimeString;
-          pollingHidden.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          // Clear the hidden input if either date or time is empty
+          pollingHidden.value = '';
         }
+        pollingHidden.dispatchEvent(new Event('change', { bubbles: true }));
       };
 
       // Set initial value
       combinePollingDateTime();
 
-      // Listen for changes
-      pollingDate.addEventListener('change', combinePollingDateTime);
-      pollingTime.addEventListener('change', combinePollingDateTime);
+      // Listen for both input and change events
+      const eventTypes = ['change', 'input'];
+      eventTypes.forEach(eventType => {
+        pollingDate.addEventListener(eventType, combinePollingDateTime);
+        pollingTime.addEventListener(eventType, combinePollingDateTime);
+      });
+
+      // Store cleanup function for later removal
+      this.pollingCleanup = () => {
+        eventTypes.forEach(eventType => {
+          pollingDate.removeEventListener(eventType, combinePollingDateTime);
+          pollingTime.removeEventListener(eventType, combinePollingDateTime);
+        });
+      };
     }
 
     // Original start/end date logic
@@ -136,6 +150,13 @@ Hooks.DateTimeSync = {
 
     startDate.addEventListener('change', syncEndFields);
     startTime.addEventListener('change', syncEndFields);
+  },
+
+  destroyed() {
+    // Clean up polling deadline event listeners
+    if (this.pollingCleanup) {
+      this.pollingCleanup();
+    }
   }
 };
 
