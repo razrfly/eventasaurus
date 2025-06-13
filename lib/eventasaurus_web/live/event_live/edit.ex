@@ -61,14 +61,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
             end
 
             # Extract polling deadline date and time if date polling is enabled
-            {polling_deadline_date, polling_deadline_time} = if date_poll && event.polling_deadline do
-              {date_part, time_part} = parse_datetime_with_timezone(event.polling_deadline, event.timezone)
-              {date_part, time_part}
-            else
-              # Default to one week from today at 10 PM
-              default_date = Date.add(Date.utc_today(), 7) |> Date.to_iso8601()
-              {"#{default_date}", "22:00"}
-            end
+            {polling_deadline_date, polling_deadline_time} =
+              if enable_date_polling do
+                if event.polling_deadline do
+                  parse_datetime_with_timezone(event.polling_deadline, event.timezone)
+                else
+                  # Default to one week from today at 22:00 in the event's timezone
+                  default_date = Date.add(Date.utc_today(), 7) |> Date.to_iso8601()
+                  {default_date, "22:00"}
+                end
+              else
+                {nil, nil}
+              end
 
             # Prepare form data
             form_data = %{
@@ -750,8 +754,15 @@ defmodule EventasaurusWeb.EventLive.Edit do
           {:ok, datetime} -> Map.put(params, "polling_deadline", datetime)
           {:error, _} -> params
         end
-      _ -> params
+      _ ->
+        # Only clear polling deadline if date polling is explicitly disabled
+        if Map.get(params, "enable_date_polling") == "false" do
+          Map.put(params, "polling_deadline", nil)
+        else
+          params
+        end
     end
+    |> Map.drop(["polling_deadline_date", "polling_deadline_time"])  # Remove helper keys to prevent leakage
 
     # Check if date polling is enabled
     if Map.get(params, "enable_date_polling", false) do
