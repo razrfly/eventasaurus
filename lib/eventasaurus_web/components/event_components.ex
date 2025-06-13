@@ -295,29 +295,6 @@ defmodule EventasaurusWeb.EventComponents do
               </div>
 
               <%= if @enable_date_polling do %>
-                <!-- Calendar-based date selection for polling -->
-                <div class="mb-4" phx-hook="CalendarFormSync" id={"calendar-form-sync-#{@id}"}>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Select dates for polling
-                  </label>
-                  <p class="text-xs text-gray-500 mb-3">
-                    Click on calendar dates to include them in the poll. Attendees will vote on these dates.
-                  </p>
-                  <.live_component
-                    module={CalendarComponent}
-                    id={"#{@id}-calendar"}
-                    selected_dates={parse_selected_dates(@form_data)}
-                  />
-                  <!-- Hidden fields to store selected dates -->
-                  <input type="hidden" name="event[selected_poll_dates]" id={"#{@id}-selected-dates"} value={encode_selected_dates(@form_data)} />
-                  <!-- Validation error display -->
-                  <%= if f[:selected_poll_dates] && f[:selected_poll_dates].errors != [] do %>
-                    <div class="mt-2 text-sm text-red-600" phx-feedback-for="event[selected_poll_dates]">
-                      <%= Enum.map(f[:selected_poll_dates].errors, fn {msg, _} -> msg end) |> Enum.join(", ") %>
-                    </div>
-                  <% end %>
-                </div>
-
                 <!-- Time inputs for polling -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3" phx-hook="TimeSync" id={"time-sync-#{@id}"}>
                   <div>
@@ -341,6 +318,60 @@ defmodule EventasaurusWeb.EventComponents do
                       class="text-sm"
                     />
                   </div>
+                </div>
+
+                <!-- Calendar component for date selection -->
+                <div class="mb-4" phx-hook="CalendarFormSync" id={"calendar-form-sync-#{@id}"}>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Select dates for polling
+                  </label>
+                  <p class="text-xs text-gray-500 mb-3">
+                    Click on calendar dates to include them in the poll. Attendees will vote on these dates.
+                  </p>
+                  <.live_component
+                    module={CalendarComponent}
+                    id={"#{@id}-calendar"}
+                    selected_dates={parse_selected_dates(@form_data)}
+                  />
+                  <!-- Hidden fields to store selected dates -->
+                  <input type="hidden" name="event[selected_poll_dates]" id={"#{@id}-selected-dates"} value={encode_selected_dates(@form_data)} />
+                  <!-- Validation error display -->
+                  <%= if f[:selected_poll_dates] && f[:selected_poll_dates].errors != [] do %>
+                    <div class="mt-2 text-sm text-red-600" phx-feedback-for="event[selected_poll_dates]">
+                      <%= Enum.map(f[:selected_poll_dates].errors, fn {msg, _} -> msg end) |> Enum.join(", ") %>
+                    </div>
+                  <% end %>
+                </div>
+
+                <!-- Polling deadline input (simplified to date + time dropdowns) -->
+                <div class="mb-4" phx-hook="DateTimeSync" id={"polling-deadline-sync-#{@id}"}>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Voting Deadline
+                  </label>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <.date_input
+                        id={"#{@id}-polling_deadline_date"}
+                        name="event[polling_deadline_date]"
+                        value={get_polling_deadline_date(@form_data)}
+                        required
+                        data-role="polling-deadline-date"
+                      />
+                    </div>
+                    <div>
+                      <.time_select
+                        id={"#{@id}-polling_deadline_time"}
+                        name="event[polling_deadline_time]"
+                        value={get_polling_deadline_time(@form_data)}
+                        data-role="polling-deadline-time"
+                      />
+                    </div>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">
+                    When should voting close for date selection?
+                  </p>
+                  <!-- Hidden field to store the combined datetime -->
+                  <input type="hidden" name="event[polling_deadline]" id={"#{@id}-polling_deadline"} value={format_polling_deadline_for_input(@form_data)} data-role="polling-deadline" />
                 </div>
               <% else %>
                 <!-- Traditional date range selection -->
@@ -565,6 +596,41 @@ defmodule EventasaurusWeb.EventComponents do
         |> Enum.reject(&is_nil/1)
         |> Enum.join(",")
       dates_string when is_binary(dates_string) -> dates_string
+      _ -> ""
+    end
+  end
+
+  defp get_polling_deadline_date(form_data) do
+    case Map.get(form_data, "polling_deadline") do
+      %DateTime{} = datetime ->
+        Date.to_iso8601(DateTime.to_date(datetime))
+      date_string when is_binary(date_string) and date_string != "" ->
+        # If it's already a date string, extract just the date part
+        case String.split(date_string, "T") do
+          [date_part | _] -> date_part
+          _ -> date_string
+        end
+      _ ->
+        # Default to one week from today
+        Date.add(Date.utc_today(), 7) |> Date.to_iso8601()
+    end
+  end
+
+  defp get_polling_deadline_time(form_data) do
+    case Map.get(form_data, "polling_deadline") do
+      %DateTime{} = datetime ->
+        # Format time as HH:MM for the time_select component
+        time = DateTime.to_time(datetime)
+        "#{String.pad_leading(Integer.to_string(time.hour), 2, "0")}:#{String.pad_leading(Integer.to_string(time.minute), 2, "0")}"
+      _ ->
+        # Default to 10 PM
+        "22:00"
+    end
+  end
+
+  defp format_polling_deadline_for_input(form_data) do
+    case Map.get(form_data, "polling_deadline") do
+      %DateTime{} = datetime -> DateTime.to_iso8601(datetime)
       _ -> ""
     end
   end

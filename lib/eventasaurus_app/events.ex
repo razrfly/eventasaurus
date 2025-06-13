@@ -1067,7 +1067,26 @@ defmodule EventasaurusApp.Events do
   Deletes a date option.
   """
   def delete_event_date_option(%EventDateOption{} = option) do
-    Repo.delete(option)
+    require Logger
+    Logger.info("=== DELETE EVENT DATE OPTION START ===")
+    Logger.info("Option ID: #{option.id}, Date: #{option.date}")
+
+    # Check if there are any votes for this option
+    votes_count = from(v in EventDateVote, where: v.event_date_option_id == ^option.id)
+                  |> Repo.aggregate(:count, :id)
+
+    Logger.info("Votes count for option #{option.id}: #{votes_count}")
+
+    result = Repo.delete(option)
+
+    case result do
+      {:ok, deleted_option} ->
+        Logger.info("Successfully deleted option ID: #{deleted_option.id}")
+      {:error, changeset} ->
+        Logger.error("Failed to delete option ID: #{option.id}, changeset: #{inspect(changeset)}")
+    end
+
+    result
   end
 
   @doc """
@@ -1084,49 +1103,80 @@ defmodule EventasaurusApp.Events do
   keeping existing date options (and their votes) that remain in the selection.
   """
   def update_event_date_options(%EventDatePoll{} = poll, new_dates) do
+    require Logger
+    Logger.info("=== UPDATE EVENT DATE OPTIONS START ===")
+    Logger.info("Poll ID: #{poll.id}")
+    Logger.info("New dates input: #{inspect(new_dates)}")
+
     new_dates =
       new_dates
       |> Enum.map(&ensure_date_struct/1)
       |> Enum.uniq()
 
+    Logger.info("Processed new dates: #{inspect(new_dates)}")
+
     existing_options = list_event_date_options(poll)
     existing_dates = Enum.map(existing_options, & &1.date)
+
+    Logger.info("Existing options count: #{length(existing_options)}")
+    Logger.info("Existing dates: #{inspect(existing_dates)}")
 
     # Find dates to add and remove
     dates_to_add = new_dates -- existing_dates
     dates_to_remove = existing_dates -- new_dates
 
+    Logger.info("Dates to add: #{inspect(dates_to_add)}")
+    Logger.info("Dates to remove: #{inspect(dates_to_remove)}")
+
     # Early exit if no changes needed
     if dates_to_add == [] and dates_to_remove == [] do
+      Logger.info("No changes needed, returning existing options")
       {:ok, existing_options}
     else
+      Logger.info("Starting transaction to update date options")
       Repo.transaction(fn ->
         # Remove date options that are no longer selected
         if length(dates_to_remove) > 0 do
+          Logger.info("Removing #{length(dates_to_remove)} date options")
           options_to_remove = Enum.filter(existing_options, fn option ->
             option.date in dates_to_remove
           end)
 
+          Logger.info("Options to remove: #{inspect(Enum.map(options_to_remove, &{&1.id, &1.date}))}")
+
           Enum.each(options_to_remove, fn option ->
+            Logger.info("Attempting to delete option ID: #{option.id}, date: #{option.date}")
             case delete_event_date_option(option) do
-              {:ok, _} -> :ok
-              {:error, changeset} -> Repo.rollback(changeset)
+              {:ok, deleted_option} ->
+                Logger.info("Successfully deleted option ID: #{deleted_option.id}")
+                :ok
+              {:error, changeset} ->
+                Logger.error("Failed to delete option ID: #{option.id}, changeset: #{inspect(changeset)}")
+                Repo.rollback(changeset)
             end
           end)
         end
 
         # Add new date options
         if length(dates_to_add) > 0 do
+          Logger.info("Adding #{length(dates_to_add)} new date options")
           Enum.each(dates_to_add, fn date ->
+            Logger.info("Attempting to create option for date: #{date}")
             case create_event_date_option(poll, date) do
-              {:ok, _option} -> :ok
-              {:error, changeset} -> Repo.rollback(changeset)
+              {:ok, option} ->
+                Logger.info("Successfully created option ID: #{option.id} for date: #{date}")
+                :ok
+              {:error, changeset} ->
+                Logger.error("Failed to create option for date: #{date}, changeset: #{inspect(changeset)}")
+                Repo.rollback(changeset)
             end
           end)
         end
 
         # Return the updated list of options
-        list_event_date_options(poll)
+        updated_options = list_event_date_options(poll)
+        Logger.info("Transaction completed, returning #{length(updated_options)} options")
+        updated_options
       end)
     end
   end
