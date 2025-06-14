@@ -1,231 +1,241 @@
-# Eventasaurus Dynamic Social Card Generation PRD
+# 📝 Eventasaurus Ticketing Enhancement PRD
 
-## Project Overview
-Implement dynamic social card generation for Eventasaurus events, similar to Lu.ma's approach. Generate Open Graph-compatible social preview images (PNG) dynamically when requested via URL, ensuring real-time reflection of event data and proper cache invalidation for social platforms.
+**Version:** 2025.06  
+**Author:** Holden  
+**Purpose:** Add comprehensive ticketing functionality to the existing Eventasaurus event management platform.
 
-## Goals & Objectives
-- **Primary Goal**: Dynamically generate social preview images for each event on-demand
-- **Cache Management**: Implement filename versioning to force Facebook/social platform cache invalidation when events change
-- **Performance**: Render images on-the-fly using SVG templates converted to PNG
-- **Compatibility**: Ensure Open Graph and Twitter Card compatibility
-- **Maintainability**: Use Phoenix/Elixir templating system for easy customization
+---
 
-## Technical Requirements
+## 🎯 Goal and Context
 
-### Core Architecture
-- **Template System**: Use .svg.eex templates for dynamic SVG rendering
-- **Image Processing**: Convert SVG to PNG using rsvg-convert system command
-- **Runtime Generation**: No pre-generation - create images on request only
-- **Phoenix Integration**: Deliver via Phoenix controller routes
-- **File Management**: Temporary file handling with cleanup
+**Objective:** Enhance the existing Eventasaurus platform by adding a simplified ticketing system that allows one ticket type per order.
 
-### Image Specifications
-- **Canvas Size**: 800×419 pixels (1.91:1 aspect ratio for OG/Twitter)
-- **Layout Padding**: 32px margin around content
-- **Event Image**: 350×350px positioned top-right with 24px rounded corners
-- **Title Text**: Left-aligned, up to 3 lines, bold, 40-48px font size
-- **Logo**: Eventasaurus dino logo, 64×64px, positioned top-left
-- **RSVP Bubble**: 80×32px pill-shaped button, bottom-left positioning
+**Existing System Overview:**
+Eventasaurus is a fully functional Phoenix/LiveView event management platform that includes:
+- ✅ **User Authentication & Authorization** (via Supabase integration)
+- ✅ **Event Creation & Management** (with organizers, participants, themes)
+- ✅ **Event State Management** (draft, polling, threshold, confirmed, canceled)  
+- ✅ **Date Polling System** (for flexible event scheduling)
+- ✅ **Venue Management** (physical and virtual venues)
+- ✅ **Theme System** (7 themes with customizations)
+- ✅ **User Roles** (organizers, participants, ticket holders)
+- ✅ **Phoenix/LiveView UI** with modern styling
+- ✅ **PostgreSQL Database** with full Ecto schemas
 
-### SVG Template Elements
-1. **Gradient Background**: Dynamic gradient using theme.color1 and theme.color2
-2. **Event Image**: Rendered from event.image_url with rounded corners via clipPath
-3. **Logo**: Static Eventasaurus dino asset
-4. **Title**: Dynamic text block from event.title
-5. **RSVP Bubble**: White-filled rounded rectangle with centered "RSVP" text
+**What's Missing:** Ticketing functionality including payments, order management, and ticket sales.
 
-### Cache Busting Strategy
-- **Filename Versioning**: Include MD5 hash of event.image_url + event.updated_at
-- **Hash Length**: 8-character truncated hash for manageable filenames
-- **URL Pattern**: `/social_cards/{event_id}-{image_hash}.png`
-- **Auto-Invalidation**: New URLs generated when event data changes
+**Inspiration:** Combine the simplicity of Kickstarter's single-tier pledges with a streamlined order process similar to Luma.
 
-### Security Requirements
-- **Input Validation**: Sanitize all dynamic content before SVG rendering
-- **Access Control**: Consider signed URLs or UUID-based access for public cards
-- **Injection Prevention**: Validate and escape all user-provided data
+**Compatibility:** Aligns with Stripe best practices (via [t3dotgg/stripe-recommendations](https://github.com/t3dotgg/stripe-recommendations)).
 
-## Technical Implementation Flow
+---
 
-### Step 1: SVG Template Rendering
-```elixir
-svg = Phoenix.View.render_to_string(MyAppWeb.SocialCardView, "card.svg", 
-  event: event, theme: theme)
-```
+## 🏗️ Existing Architecture
 
-### Step 2: Temporary File Management
-```elixir
-svg_path = "/tmp/eventasaurus_#{event.id}_#{event.image_hash}.svg"
-File.write!(svg_path, svg)
-```
+### Current Data Models (Already Implemented)
+- **Event** - Complete with status, themes, venue, organizers
+- **User** - Authentication via Supabase, roles, relationships  
+- **EventUser** - Organizer relationships
+- **EventParticipant** - Participant relationships (includes :ticket_holder role)
+- **Venue** - Physical and virtual venue management
+- **EventDatePoll/Options/Votes** - Date polling system
 
-### Step 3: PNG Conversion
-```elixir
-png_path = String.replace(svg_path, ".svg", ".png")
-System.cmd("rsvg-convert", [svg_path, "-o", png_path])
-```
+### Current Event Status Flow (Already Implemented)
+Events can be: `draft` → `polling` → `threshold` → `confirmed` → `canceled`
 
-### Step 4: HTTP Response
-```elixir
-conn
-|> put_resp_content_type("image/png")
-|> send_file(200, png_path)
-```
+---
 
-### Hash Generation Algorithm
-```elixir
-image_hash = :crypto.hash(:md5, event.image_url <> to_string(event.updated_at))
-  |> Base.encode16(case: :lower)
-  |> binary_part(0, 8)
-```
+## 📦 New Data Models to Add
 
-## Dependencies & Prerequisites
-- **rsvg-convert**: System dependency for SVG to PNG conversion
-- **Phoenix Framework**: For templating and HTTP handling
-- **Elixir/Erlang**: Runtime environment
-- **File System**: Temporary directory access with write permissions
+### 1. Ticket (New)
+Represents the different types of tickets available for an event.
 
-## Route & Controller Structure
-- **Route**: GET `/events/:id/social_card.png`
-- **Controller**: EventSocialCardController
-- **Action**: generate_card/2
-- **Template**: `social_card/card.svg.eex`
+Fields:
+- `id`
+- `event_id` (FK to existing events table)
+- `title`
+- `description`
+- `price_cents`
+- `currency` (default: `usd`)
+- `quantity` (total available)
+- `quantity_sold` (track sales)
+- `starts_at`, `ends_at` (availability window)
+- `tippable` (boolean, default: false)
+- `created_at`, `updated_at`
 
-## Error Handling
-- **Missing Events**: Return 404 for non-existent events
-- **Image Processing Failures**: Fallback to default/placeholder image
-- **File System Issues**: Graceful degradation with error logging
-- **Template Errors**: Validate data before rendering
+### 2. Order (New)
+Tracks a single purchase of one ticket type.
 
-## Performance Considerations
-- **Temporary File Cleanup**: Implement cleanup mechanism for generated files
-- **Concurrent Requests**: Handle multiple simultaneous card generation requests
-- **Resource Limits**: Monitor memory usage during SVG/PNG processing
-- **Response Caching**: Consider HTTP caching headers for generated images
+Fields:
+- `id`
+- `user_id` (FK to existing users table)
+- `event_id` (FK to existing events table)
+- `ticket_id` (FK to new tickets table)
+- `quantity`
+- `subtotal_cents`, `tax_cents`, `total_cents`
+- `currency`
+- `status` (`pending`, `confirmed`, `refunded`, `canceled`)
+- `stripe_session_id`, `payment_reference`
+- `created_at`, `updated_at`, `confirmed_at`
 
-## Testing Requirements
-- **Unit Tests**: SVG template rendering with various event data
-- **Integration Tests**: Full PNG generation pipeline
-- **Visual Tests**: Verify output matches design specifications
-- **Security Tests**: Validate input sanitization and injection prevention
-- **Performance Tests**: Load testing for concurrent card generation
+---
 
-## Deployment Considerations
-- **System Dependencies**: Ensure rsvg-convert is available in production
-- **File Permissions**: Temporary directory write access
-- **Resource Monitoring**: Track file system usage and cleanup
-- **Error Logging**: Comprehensive logging for debugging production issues
+## 🔄 Enhanced Workflow & State Transitions
 
-## Success Metrics
-- **Functional**: Cards generate successfully for all events
-- **Performance**: Sub-2-second response times for card generation
-- **Cache Invalidation**: Facebook/social platforms show updated cards within 24 hours
-- **Error Rate**: <1% failure rate for card generation requests
-- **Visual Quality**: Generated cards match design specifications exactly
+### Existing Event Creation (No Changes)
+- Organizer creates event using existing UI
+- Event goes through existing status workflow
 
-## Future Enhancements
-- **Template Variations**: Multiple card layouts/themes
-- **Customization**: Event-specific styling options
-- **Optimization**: Pre-generation for high-traffic events
-- **Analytics**: Track social card usage and click-through rates
+### New Ticketing Integration
+1. **Enable Ticketing** - Add to existing event management UI
+   - Organizer can enable ticketing on confirmed events
+   - Create ticket types with pricing
 
-## Event Polling UI & Schema Redesign
+2. **User Ticket Purchase Flow** (New)
+   - User browses event using existing UI
+   - New ticket purchase section appears for ticketed events
+   - User selects one ticket type → creates `Order` in `pending` state
+   - Stripe Checkout handles payment
+   - On success → Order becomes `confirmed`, EventParticipant created
 
-### Current State
-- Events currently use a fixed start_at/end_at datetime model
-- Users must define specific start and end times at event creation
-- Limited flexibility for gathering input on multiple possible dates
-- UI uses basic datetime pickers
+3. **Free Tickets** (New)
+   - No Stripe handoff required
+   - Order goes directly to `confirmed`
+   - EventParticipant automatically created
 
-### Target Objectives
-1. Allow users to suggest and vote on multiple possible dates for an event
-2. Remove requirement to define a specific start_at or end_at at event creation
-3. Change the UI to support a calendar-style system for choosing dates
-4. Maintain existing database schema and validation logic
-5. Create a more engaging and flexible event planning experience
+4. **Integration with Existing EventParticipant**
+   - Successful ticket purchases automatically create EventParticipant with `:ticket_holder` role
+   - Leverage existing participant management system
 
-### Technical Requirements
+---
 
-#### UI/UX Changes
-1. Replace datetime picker with a calendar-style date selection system
-2. Allow users to select 2 or more date options visually on a calendar interface
-3. Remove the current date range selection in favor of cherry-picking specific dates
-4. Display selected dates in a clear list format after selection
-5. Implement voting interface with preference options:
-   - ✅ Preferred
-   - 🤷 If Needed  
-   - ❌ Not Available
-6. Show vote tallies and popularity scores
-7. Display heatmap or tallied result view for organizers
+## 🔐 Stripe Integration Requirements
 
-#### Backend Logic
-1. Maintain existing database schema - no schema changes required
-2. Continue using existing date creation logic and database storage
-3. Store dates immediately after selection (same as current behavior)
-4. Use median or most selected date as stand-in start_at for validation
-5. Preserve all existing validation logic
-6. Support multiple date storage using current date model
+**New Dependencies to Add:**
+- `stripity_stripe` library
+- Stripe webhook handling
+- Environment variables for Stripe keys
 
-#### Event States (Future Enhancement)
-Prepare foundation for these event states:
-- draft
-- polling  
-- confirmed
-- cancelled
-- recruiting (not enough interest)
-- closed (past event)
-- rescheduling
+**Best Practices:**
+- **Do not trust client redirect** to confirm payment
+- Use **webhooks** as single source of truth for payment success
+- Store `stripe_session_id` and `payment_reference`
+- Handle **idempotency** properly
+- Only send confirmation emails after webhook success
 
-### Functional Specifications
+---
 
-#### Date Selection Flow
-1. User creates new event
-2. Instead of start/end datetime pickers, user sees calendar interface
-3. User clicks on 2+ dates on calendar to select possible event dates
-4. Selected dates appear in a list below calendar
-5. System stores these dates using existing date creation logic
-6. For validation purposes, system calculates median date as temporary start_at
+## 🎨 UI/UX Integration Points
 
-#### Voting Flow
-1. Invitees receive event with multiple date options
-2. For each date option, invitees can select preference level
-3. Votes are recorded and tallied in real-time
-4. Organizer can view results in heatmap or summary format
-5. Most popular/median date becomes candidate for final validation
+### Existing UI Enhancements (Modify Existing Components)
+1. **Event Show Page** - Add ticket purchase section
+2. **Event Management Dashboard** - Add ticketing controls
+3. **Event Creation/Edit Forms** - Add ticket type management
+4. **User Dashboard** - Show purchased tickets
 
-#### Organizer Controls
-1. Organizer can always override and select final date manually
-2. Organizer can see vote visibility and popularity previews
-3. Organizer can add/remove date options during polling phase
+### New UI Components Needed
+1. **Ticket Selection Interface**
+2. **Checkout Flow UI**  
+3. **Order Confirmation Pages**
+4. **Ticket Management Admin Interface**
+5. **Order History for Users**
 
-### Technical Constraints
-1. NO database schema changes - use existing date storage model
-2. Maintain all existing validation logic
-3. UI changes only - backend date handling remains the same
-4. Must work with current Phoenix/Elixir stack
-5. Calendar interface should be responsive and accessible
+---
 
-### Reference Design
-Use Rallly.co as UI inspiration for calendar-based date selection and voting interface.
+## 💾 Database Integration
 
-### Acceptance Criteria
-1. Users can select multiple dates via calendar interface instead of datetime pickers
-2. Selected dates are stored using existing database logic
-3. Voting system allows preference selection for each date option
-4. Organizer can view vote results and make final date selection
-5. All existing validation continues to work with median date calculation
-6. UI is responsive and accessible
-7. No breaking changes to existing event creation flow
-8. Calendar interface supports easy date selection and deselection
+### New Tables to Create
+- `tickets` table with FK to existing `events` 
+- `orders` table with FKs to existing `users`, `events`, and new `tickets`
 
-### Deliverables
-1. New calendar-based date selection component
-2. Date voting interface for invitees
-3. Vote results dashboard for organizers
-4. Updated event creation flow
-5. Integration with existing validation system
-6. Responsive UI implementation
-7. Testing for all new functionality
+### Existing Table Modifications
+- Events table: Add `is_ticketed` boolean field
+- No changes needed to users, event_participants, or other existing tables
 
-### Timeline Considerations
-This is a UI-focused change that should maintain existing backend logic, making it primarily a frontend development effort with minimal backend modifications needed for vote storage and retrieval. 
+---
+
+## 🧪 Testing Strategy
+
+### Integration with Existing Tests
+- Leverage existing Factory and test fixtures
+- Extend existing EventsFixtures with ticket/order factories
+- Use existing authentication test helpers
+
+### New Test Coverage Needed
+- Order lifecycle testing
+- Stripe integration testing (with mocks)
+- Ticket availability constraints
+- Free vs paid ticket flows
+- Integration with existing EventParticipant system
+
+---
+
+## 🚀 Implementation Priority
+
+### Phase 1: Core Ticketing Models (High Priority)
+- Create Ticket and Order schemas
+- Add ticketing context module
+- Database migrations
+
+### Phase 2: Stripe Integration (High Priority)  
+- Stripe library integration
+- Checkout session creation
+- Webhook handling for payment confirmation
+
+### Phase 3: UI Integration (High Priority)
+- Modify existing event show pages
+- Add ticket purchase UI components
+- Integrate with existing event management dashboard
+
+### Phase 4: Admin Features (Medium Priority)
+- Ticket type management interface
+- Order management for organizers
+- Integration with existing event analytics
+
+### Phase 5: Enhancements (Low Priority)
+- Email notifications for ticket purchases
+- Order history and management for users
+- Reporting and analytics integration
+
+---
+
+## ✅ Benefits of This Approach
+
+- **Minimal Disruption** - Builds on existing solid foundation
+- **Leverages Existing Code** - Uses current auth, events, and participant systems
+- **Maintains Consistency** - Follows existing Phoenix/LiveView patterns
+- **Scalable** - Can extend with more complex ticketing features later
+
+---
+
+## 🧪 Testing and Validation
+
+### Integration Tests Required
+- Full user flow: browse event → purchase ticket → confirmation
+- Free vs paid ticket flows  
+- Stripe webhook integration testing
+- Integration with existing EventParticipant system
+- Existing event management flows continue to work
+
+### Unit Tests Required
+- Order lifecycle management
+- Ticket availability constraints
+- Time-based ticket sales periods
+- Integration with existing Event status system
+
+---
+
+## 🚧 Stretch Goals (Future Extensions)
+
+| Feature                    | Current Support | Stretch Goal                    |
+|---------------------------|-----------------|----------------------------------|
+| Multiple ticket types     | ❌              | Allow multiple types per event  |
+| Ticket bundles            | ❌              | Multi-type bundle purchases     |
+| Advanced pricing          | ❌              | Early bird, tiered pricing      |
+| Seat reservations         | ❌              | Assigned seating integration    |
+| Group orders              | ❌              | Group purchase management       |
+| Integration with themes   | ❌              | Themed ticket purchase UI       |
+
+---
+
+This enhancement maintains the existing Eventasaurus functionality while adding robust ticketing capabilities that integrate seamlessly with the current architecture.

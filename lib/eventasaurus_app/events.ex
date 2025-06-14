@@ -387,6 +387,41 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Creates or updates an event participant for ticket purchase.
+
+  This function implements the design pattern where:
+  1. If participant doesn't exist, create with confirmed_with_order status
+  2. If participant exists, upgrade their status to confirmed_with_order
+  3. Avoids duplicate participant records
+  """
+  def create_or_upgrade_participant_for_order(%{event_id: event_id, user_id: user_id} = attrs) do
+    case Repo.get_by(EventParticipant, event_id: event_id, user_id: user_id) do
+      nil ->
+        # No existing participant, create new one
+        participant_attrs = Map.merge(attrs, %{
+          status: :confirmed_with_order,
+          role: :ticket_holder
+        })
+
+        %EventParticipant{}
+        |> EventParticipant.changeset(participant_attrs)
+        |> Repo.insert()
+
+      existing_participant ->
+        # Participant exists, upgrade their status
+        upgrade_attrs = %{
+          status: :confirmed_with_order,
+          role: :ticket_holder,
+          metadata: Map.merge(existing_participant.metadata || %{}, attrs[:metadata] || %{})
+        }
+
+        existing_participant
+        |> EventParticipant.changeset(upgrade_attrs)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
   Updates an event participant.
   """
   def update_event_participant(%EventParticipant{} = event_participant, attrs) do

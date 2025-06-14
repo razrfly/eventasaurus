@@ -78,7 +78,10 @@ defmodule Eventasaurus.MixProject do
       {:html_sanitize_ex, "~> 1.4"},
 
       # State machine library for event lifecycle management
-      {:machinery, "~> 1.0"}
+      {:machinery, "~> 1.0"},
+
+      # Stripe payment processing
+      {:stripity_stripe, "~> 3.2"}
     ]
   end
 
