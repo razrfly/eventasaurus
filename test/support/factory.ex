@@ -8,7 +8,7 @@ defmodule EventasaurusApp.Factory do
 
   use ExMachina.Ecto, repo: EventasaurusApp.Repo
 
-  alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
+  alias EventasaurusApp.Events.{Event, EventUser, EventParticipant, Ticket, Order}
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Accounts.User
 
@@ -266,5 +266,87 @@ defmodule EventasaurusApp.Factory do
     participants = build_list(5, :user)
 
     %{event | users: [organizer | participants]}
+  end
+
+  @doc """
+  Factory for Ticket schema
+  """
+  def ticket_factory do
+    %Ticket{
+      title: sequence(:ticket_title, &"General Admission #{&1}"),
+      description: "Standard event ticket",
+      price_cents: 2500,
+      currency: "usd",
+      quantity: 100,
+      starts_at: DateTime.utc_now() |> DateTime.add(1, :day),
+      ends_at: DateTime.utc_now() |> DateTime.add(30, :day),
+      tippable: false,
+      event: build(:event)
+    }
+  end
+
+  @doc """
+  Factory for Order schema
+  """
+  def order_factory do
+    %Order{
+      quantity: 1,
+      subtotal_cents: 2500,
+      tax_cents: 250,
+      total_cents: 2750,
+      currency: "usd",
+      status: "pending",
+      stripe_session_id: sequence(:stripe_session_id, &"cs_test_#{&1}"),
+      payment_reference: nil,
+      confirmed_at: nil,
+      user: build(:user),
+      event: build(:event),
+      ticket: build(:ticket)
+    }
+  end
+
+  @doc """
+  Creates a low-cost ticket
+  """
+  def low_cost_ticket_factory do
+    build(:ticket, %{
+      title: "Early Bird Special",
+      price_cents: 500,
+      tippable: true
+    })
+  end
+
+  @doc """
+  Creates a VIP ticket
+  """
+  def vip_ticket_factory do
+    build(:ticket, %{
+      title: "VIP Access",
+      description: "Premium access with exclusive benefits",
+      price_cents: 10000,
+      quantity: 20
+    })
+  end
+
+  @doc """
+  Creates a confirmed order
+  """
+  def confirmed_order_factory do
+    build(:order, %{
+      status: "confirmed",
+      payment_reference: "pi_test_payment_intent",
+      confirmed_at: DateTime.utc_now()
+    })
+  end
+
+  @doc """
+  Creates a refunded order
+  """
+  def refunded_order_factory do
+    build(:order, %{
+      status: "refunded",
+      payment_reference: "pi_test_payment_intent",
+      confirmed_at: DateTime.utc_now() |> DateTime.add(-1, :day)
+    })
   end
 end
