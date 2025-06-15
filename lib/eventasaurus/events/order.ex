@@ -40,6 +40,7 @@ defmodule EventasaurusApp.Events.Order do
     |> validate_number(:tax_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_number(:total_cents, greater_than: 0, message: "must be greater than 0")
     |> validate_number(:application_fee_amount, greater_than_or_equal_to: 0, message: "cannot be negative")
+    |> validate_application_fee_amount()
     |> validate_inclusion(:currency, ["usd", "eur", "gbp", "cad", "aud"], message: "must be a supported currency")
     |> validate_inclusion(:status, @valid_statuses, message: "must be a valid status")
     |> validate_total_calculation()
@@ -47,6 +48,17 @@ defmodule EventasaurusApp.Events.Order do
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:ticket_id)
     |> foreign_key_constraint(:stripe_connect_account_id)
+  end
+
+  defp validate_application_fee_amount(changeset) do
+    fee = get_field(changeset, :application_fee_amount)
+    total = get_field(changeset, :total_cents)
+
+    if fee && total && fee > total do
+      add_error(changeset, :application_fee_amount, "cannot exceed total_cents")
+    else
+      changeset
+    end
   end
 
   defp validate_total_calculation(changeset) do

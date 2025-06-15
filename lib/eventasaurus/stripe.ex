@@ -96,52 +96,51 @@ defmodule EventasaurusApp.Stripe do
 
     body = URI.encode_query(%{
       "grant_type" => "authorization_code",
-      "code" => code,
-      "client_secret" => secret_key
+      "code" => code
     })
 
     case HTTPoison.post(url, body, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
         case Jason.decode(response_body) do
           {:ok, response_data} ->
-            Logger.info("Successfully exchanged OAuth code", %{
+            Logger.info("Successfully exchanged OAuth code",
               stripe_user_id: response_data["stripe_user_id"],
               livemode: response_data["livemode"]
-            })
+            )
             {:ok, response_data}
 
           {:error, decode_error} ->
-            Logger.error("Failed to decode Stripe OAuth response", %{
+            Logger.error("Failed to decode Stripe OAuth response",
               error: inspect(decode_error),
               response_body: response_body
-            })
+            )
             {:error, "Invalid response format from Stripe"}
         end
 
       {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
         case Jason.decode(response_body) do
           {:ok, error_data} ->
-            Logger.error("Stripe OAuth error response", %{
+            Logger.error("Stripe OAuth error response",
               status_code: status_code,
               error: error_data["error"],
               error_description: error_data["error_description"]
-            })
+            )
             {:error, error_data}
 
           {:error, _} ->
-            Logger.error("Stripe OAuth error with invalid JSON", %{
+            Logger.error("Stripe OAuth error with invalid JSON",
               status_code: status_code,
               response_body: response_body
-            })
+            )
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
 
       {:error, %HTTPoison.Error{reason: reason}} ->
-        Logger.error("HTTP error during Stripe OAuth exchange", %{reason: inspect(reason)})
+        Logger.error("HTTP error during Stripe OAuth exchange", reason: inspect(reason))
         {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
 
       {:error, error} ->
-        Logger.error("Unexpected error during Stripe OAuth exchange", %{error: inspect(error)})
+        Logger.error("Unexpected error during Stripe OAuth exchange", error: inspect(error))
         {:error, "Unexpected error during OAuth exchange"}
     end
   end
