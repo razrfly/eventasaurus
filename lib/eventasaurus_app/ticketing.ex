@@ -322,7 +322,7 @@ defmodule EventasaurusApp.Ticketing do
   def create_order(%User{} = user, %Ticket{} = ticket, attrs \\ %{}) do
     quantity = Map.get(attrs, :quantity, 1)
 
-        # Use transaction with row locking to prevent overselling
+            # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
       # Lock the ticket row to prevent concurrent modifications
       locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
@@ -333,11 +333,12 @@ defmodule EventasaurusApp.Ticketing do
         maybe_broadcast_order_update(order, :created)
         order
       else
+        {:error, reason} -> Repo.rollback(reason)
         error -> Repo.rollback(error)
       end
     end) do
       {:ok, order} -> {:ok, order}
-      {:error, error} -> error
+      {:error, error} -> {:error, error}
     end
   end
 
