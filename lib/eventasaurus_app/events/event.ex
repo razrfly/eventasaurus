@@ -41,6 +41,7 @@ defmodule EventasaurusApp.Events.Event do
     field :polling_deadline, :utc_datetime
     field :threshold_count, :integer
     field :canceled_at, :utc_datetime
+    field :is_ticketed, :boolean, default: false
 
     # Theme fields for the theming system
     field :theme, Ecto.Enum,
@@ -67,6 +68,8 @@ defmodule EventasaurusApp.Events.Event do
       join_through: EventasaurusApp.Events.EventUser
 
     has_one :date_poll, EventasaurusApp.Events.EventDatePoll
+    has_many :tickets, EventasaurusApp.Events.Ticket
+    has_many :orders, EventasaurusApp.Events.Order
 
     timestamps()
   end
@@ -77,7 +80,7 @@ defmodule EventasaurusApp.Events.Event do
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
                    :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
-                   :canceled_at, :selected_poll_dates])
+                   :canceled_at, :selected_poll_dates, :is_ticketed])
     |> validate_required([:title, :timezone, :visibility])
     |> maybe_validate_start_at()
     |> validate_length(:title, min: 3, max: 100)

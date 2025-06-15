@@ -11,6 +11,7 @@ defmodule EventasaurusApp.Accounts.User do
       join_through: EventasaurusApp.Events.EventUser
 
     has_many :event_date_votes, EventasaurusApp.Events.EventDateVote
+    has_many :orders, EventasaurusApp.Events.Order
 
     timestamps()
   end
