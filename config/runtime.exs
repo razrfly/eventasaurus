@@ -20,6 +20,8 @@ if System.get_env("PHX_SERVER") do
   config :eventasaurus, EventasaurusWeb.Endpoint, server: true
 end
 
+
+
 if config_env() == :prod do
   # Validate required Supabase environment variables are set
   for var <- ~w(SUPABASE_URL SUPABASE_API_KEY SUPABASE_DATABASE_URL) do
@@ -135,4 +137,6 @@ if config_env() == :prod do
       additional_redirect_urls: ["https://eventasaur.us/auth/callback"],
       auto_confirm_email: false
     }
+
+
 end
