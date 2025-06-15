@@ -927,19 +927,29 @@ defmodule EventasaurusWeb.EventLive.New do
         end
 
         # If ticketing is enabled, create the tickets
-        final_event = if Map.get(final_event_params, "is_ticketed", false) && length(socket.assigns.tickets) > 0 do
-          case create_tickets_for_event(event_with_poll, socket.assigns.tickets) do
-            :ok -> event_with_poll
-            {:error, _} -> event_with_poll # Fall back to event without tickets if creation fails
-          end
-        else
-          event_with_poll
+        case Map.get(final_event_params, "is_ticketed", false) && length(socket.assigns.tickets) > 0 do
+          true ->
+            case create_tickets_for_event(event_with_poll, socket.assigns.tickets) do
+              :ok ->
+                {:noreply,
+                 socket
+                 |> put_flash(:info, "Event created successfully")
+                 |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
+              {:error, changeset} ->
+                # Log the error and flash a warning to the user
+                require Logger
+                Logger.error("Failed to create tickets for event: #{inspect(changeset)}")
+                {:noreply,
+                 socket
+                 |> put_flash(:error, "Event created but tickets could not be created. Please edit the event to add tickets.")
+                 |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
+            end
+          false ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Event created successfully")
+             |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
         end
-
-        {:noreply,
-         socket
-         |> put_flash(:info, "Event created successfully")
-         |> redirect(to: ~p"/events/#{final_event.slug}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         require Logger
@@ -957,13 +967,13 @@ defmodule EventasaurusWeb.EventLive.New do
     Repo.transaction(fn ->
       Enum.each(tickets, fn ticket_data ->
         ticket_attrs = %{
-          title: ticket_data.title,
-          description: ticket_data.description,
-          price_cents: ticket_data.price_cents,
-          quantity: ticket_data.quantity,
-          starts_at: ticket_data.starts_at,
-          ends_at: ticket_data.ends_at,
-          tippable: ticket_data.tippable
+          title: Map.get(ticket_data, :title),
+          description: Map.get(ticket_data, :description),
+          price_cents: Map.get(ticket_data, :price_cents),
+          quantity: Map.get(ticket_data, :quantity),
+          starts_at: Map.get(ticket_data, :starts_at),
+          ends_at: Map.get(ticket_data, :ends_at),
+          tippable: Map.get(ticket_data, :tippable)
         }
 
         case Ticketing.create_ticket(event, ticket_attrs) do
