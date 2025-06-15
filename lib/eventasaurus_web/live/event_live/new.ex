@@ -927,7 +927,9 @@ defmodule EventasaurusWeb.EventLive.New do
         end
 
         # If ticketing is enabled, create the tickets
-        case Map.get(final_event_params, "is_ticketed", false) && length(socket.assigns.tickets) > 0 do
+        is_ticketed? = final_event_params["is_ticketed"] in [true, "true"]
+
+        case is_ticketed? and length(socket.assigns.tickets) > 0 do
           true ->
             case create_tickets_for_event(event_with_poll, socket.assigns.tickets) do
               :ok ->
