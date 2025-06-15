@@ -70,8 +70,8 @@ defmodule EventasaurusWeb.OrdersController do
 
     if current_user do
       status_filter = Map.get(params, "status")
-      limit = String.to_integer(Map.get(params, "limit", "20"))
-      offset = String.to_integer(Map.get(params, "offset", "0"))
+      limit = safe_parse_integer(Map.get(params, "limit", "20"), 20)
+      offset = safe_parse_integer(Map.get(params, "offset", "0"), 0)
 
       case get_user_orders(current_user.id, status_filter, limit, offset) do
         {:ok, orders} ->
@@ -179,6 +179,15 @@ defmodule EventasaurusWeb.OrdersController do
   end
 
   # Private helper functions
+
+  defp safe_parse_integer(value, default) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} when int >= 0 -> int
+      _ -> default
+    end
+  end
+  defp safe_parse_integer(value, _default) when is_integer(value), do: value
+  defp safe_parse_integer(_, default), do: default
 
   defp get_user_order(user_id, order_id) do
     case Ticketing.get_user_order(user_id, order_id) do
