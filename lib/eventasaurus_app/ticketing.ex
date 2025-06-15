@@ -302,6 +302,74 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   @doc """
+  Gets a user's order by payment intent ID.
+
+  ## Examples
+
+      iex> get_user_order_by_payment_intent(user_id, "pi_123")
+      %Order{}
+
+  """
+  def get_user_order_by_payment_intent(user_id, payment_intent_id) do
+    Order
+    |> where([o], o.user_id == ^user_id and o.stripe_session_id == ^payment_intent_id)
+    |> preload([:ticket, :event, :user])
+    |> Repo.one()
+  end
+
+  @doc """
+  Gets a user's order by ID.
+
+  ## Examples
+
+      iex> get_user_order(user_id, order_id)
+      %Order{}
+
+      iex> get_user_order(user_id, invalid_id)
+      nil
+
+  """
+  def get_user_order(user_id, order_id) do
+    Order
+    |> where([o], o.user_id == ^user_id and o.id == ^order_id)
+    |> preload([:ticket, :event, :user])
+    |> Repo.one()
+  end
+
+  @doc """
+  Lists orders for a user with optional filtering and pagination.
+
+  ## Examples
+
+      iex> list_user_orders(user_id, nil, 10, 0)
+      [%Order{}, ...]
+
+      iex> list_user_orders(user_id, "completed", 5, 10)
+      [%Order{}, ...]
+
+  """
+  def list_user_orders(user_id, status_filter \\ nil, limit \\ 20, offset \\ 0) do
+    query =
+      Order
+      |> where([o], o.user_id == ^user_id)
+      |> preload([:ticket, :event])
+      |> order_by([o], desc: o.inserted_at)
+      |> limit(^limit)
+      |> offset(^offset)
+
+    query =
+      if status_filter do
+        where(query, [o], o.status == ^status_filter)
+      else
+        query
+      end
+
+    Repo.all(query)
+  end
+
+
+
+  @doc """
   Creates an order for a ticket purchase.
 
   This function handles the complete order creation process:
@@ -338,6 +406,54 @@ defmodule EventasaurusApp.Ticketing do
       end
     end) do
       {:ok, order} -> {:ok, order}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  Creates an order with Stripe Connect payment intent.
+
+  This function:
+  1. Creates a pending order
+  2. Finds the event organizer's Stripe Connect account
+  3. Creates a Stripe Payment Intent with application fees
+  4. Associates the payment intent with the order
+
+  ## Examples
+
+      iex> create_order_with_stripe_connect(user, ticket, %{quantity: 2})
+      {:ok, %{order: %Order{}, payment_intent: %{}}}
+
+  """
+  def create_order_with_stripe_connect(%User{} = user, %Ticket{} = ticket, attrs \\ %{}) do
+    quantity = Map.get(attrs, :quantity, 1)
+
+    # Use transaction with row locking to prevent overselling
+    case Repo.transaction(fn ->
+      # Lock the ticket row to prevent concurrent modifications
+      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+
+      with :ok <- validate_ticket_availability(locked_ticket, quantity),
+           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity),
+           {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
+           {:ok, order} <- insert_order_with_stripe_connect(user, locked_ticket, quantity, pricing, connect_account, attrs),
+           {:ok, payment_intent} <- create_stripe_payment_intent(order, connect_account) do
+
+        # Update order with payment intent ID
+        {:ok, updated_order} =
+          order
+          |> Order.changeset(%{stripe_session_id: payment_intent["id"]})
+          |> Repo.update()
+
+        maybe_broadcast_order_update(updated_order, :created)
+
+        %{order: updated_order, payment_intent: payment_intent}
+      else
+        {:error, reason} -> Repo.rollback(reason)
+        error -> Repo.rollback(error)
+      end
+    end) do
+      {:ok, result} -> {:ok, result}
       {:error, error} -> {:error, error}
     end
   end
@@ -445,6 +561,64 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   ## Private Helper Functions
+
+  defp get_event_organizer_stripe_account(event_id) do
+    # Get the event with its organizer
+    event = EventasaurusApp.Events.get_event!(event_id)
+
+    # Find the event organizer (assuming the first user is the organizer)
+    # In a more complex system, you might have a specific organizer field
+    case event.users do
+      [organizer | _] ->
+        case EventasaurusApp.Stripe.get_connect_account(organizer.id) do
+          nil -> {:error, :no_stripe_account}
+          connect_account -> {:ok, connect_account}
+        end
+      [] ->
+        {:error, :no_organizer}
+    end
+  end
+
+  defp insert_order_with_stripe_connect(%User{} = user, %Ticket{} = ticket, quantity, pricing, connect_account, attrs) do
+    # Calculate platform fee (5% of total)
+    application_fee_amount = EventasaurusApp.Events.Order.calculate_platform_fee(pricing.total_cents)
+
+    order_attrs = Map.merge(attrs, %{
+      user_id: user.id,
+      event_id: ticket.event_id,
+      ticket_id: ticket.id,
+      quantity: quantity,
+      subtotal_cents: pricing.subtotal_cents,
+      tax_cents: pricing.tax_cents,
+      total_cents: pricing.total_cents,
+      currency: pricing.currency,
+      status: "pending",
+      stripe_connect_account_id: connect_account.id,
+      application_fee_amount: application_fee_amount
+    })
+
+    %Order{}
+    |> Order.changeset(order_attrs)
+    |> Repo.insert()
+  end
+
+  defp create_stripe_payment_intent(%Order{} = order, connect_account) do
+    metadata = %{
+      "order_id" => to_string(order.id),
+      "event_id" => to_string(order.event_id),
+      "ticket_id" => to_string(order.ticket_id),
+      "user_id" => to_string(order.user_id),
+      "quantity" => to_string(order.quantity)
+    }
+
+    EventasaurusApp.Stripe.create_payment_intent(
+      order.total_cents,
+      order.currency,
+      connect_account,
+      order.application_fee_amount,
+      metadata
+    )
+  end
 
   defp validate_ticket_availability(%Ticket{} = ticket, quantity) do
     if ticket_available?(ticket, quantity) do

@@ -88,6 +88,31 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   @doc """
+  Requires that a user is authenticated for API requests.
+
+  If no authenticated user is found in `conn.assigns.auth_user`, returns JSON error.
+
+  ## Usage
+
+      plug :require_authenticated_api_user
+  """
+  def require_authenticated_api_user(conn, _opts) do
+    if conn.assigns[:auth_user] do
+      conn = maybe_refresh_token_api(conn)
+      conn
+    else
+      conn
+      |> put_status(:unauthorized)
+      |> Phoenix.Controller.json(%{
+        success: false,
+        error: "unauthorized",
+        message: "You must be logged in to access this endpoint"
+      })
+      |> halt()
+    end
+  end
+
+  @doc """
   Redirects authenticated users away from authentication pages.
 
   Useful for login/register pages that shouldn't be accessible to already
@@ -143,6 +168,57 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
           Auth.clear_session(conn)
           |> put_flash(:error, "Your session has expired. Please log in again.")
           |> redirect(to: ~p"/auth/login")
+          |> halt()
+      end
+    else
+      conn
+    end
+  end
+
+  @doc """
+  Attempts to refresh the access token if it's near expiration for API requests.
+
+  Returns the updated connection with new tokens if refreshed,
+  or returns JSON error if refresh fails.
+  """
+  def maybe_refresh_token_api(conn) do
+    refresh_token = get_session(conn, :refresh_token)
+
+    # Only try to refresh if we have a refresh token
+    if refresh_token do
+      case Client.refresh_token(refresh_token) do
+        {:ok, auth_data} ->
+          # Extract the tokens from the response
+          access_token = get_token_value(auth_data, "access_token")
+          new_refresh_token = get_token_value(auth_data, "refresh_token")
+
+          if access_token && new_refresh_token do
+            # Update the session with the new tokens
+            conn
+            |> put_session(:access_token, access_token)
+            |> put_session(:refresh_token, new_refresh_token)
+            |> configure_session(renew: true)
+          else
+            # If tokens couldn't be extracted, return JSON error
+            conn
+            |> put_status(:unauthorized)
+            |> Phoenix.Controller.json(%{
+              success: false,
+              error: "session_expired",
+              message: "Your session has expired. Please log in again."
+            })
+            |> halt()
+          end
+
+        {:error, _reason} ->
+          # If refresh fails, return JSON error
+          conn
+          |> put_status(:unauthorized)
+          |> Phoenix.Controller.json(%{
+            success: false,
+            error: "session_expired",
+            message: "Your session has expired. Please log in again."
+          })
           |> halt()
       end
     else
