@@ -31,7 +31,7 @@ defmodule EventasaurusApp.Events.TicketTest do
       } = errors_on(changeset)
     end
 
-    test "validates price_cents > 0" do
+    test "allows free tickets (price_cents = 0)" do
       event = insert(:event)
 
       attrs = %{
@@ -43,7 +43,22 @@ defmodule EventasaurusApp.Events.TicketTest do
       }
 
       changeset = Ticket.changeset(%Ticket{}, attrs)
-      assert %{price_cents: ["must be greater than 0"]} = errors_on(changeset)
+      assert changeset.valid?
+    end
+
+    test "validates price_cents cannot be negative" do
+      event = insert(:event)
+
+      attrs = %{
+        title: "Negative Price Ticket",
+        price_cents: -100,
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert %{price_cents: ["cannot be negative"]} = errors_on(changeset)
     end
 
     test "validates quantity > 0" do
