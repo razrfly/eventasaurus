@@ -271,27 +271,30 @@ defmodule EventasaurusWeb.EventLive.Edit do
     if validation_changeset.valid? do
       Logger.info("Validation passed, calling Events.update_event")
 
-      # Handle date polling updates if needed
-      socket = case handle_date_polling_update(socket, final_event_params) do
-        {:ok, updated_socket} -> updated_socket
-        {:error, error_socket} -> error_socket
-      end
+      # Handle date polling updates if needed - early return on error
+      case handle_date_polling_update(socket, final_event_params) do
+        {:ok, socket} ->
+          # Continue with event update
+          case Events.update_event(socket.assigns.event, final_event_params) do
+            {:ok, event} ->
+              {:noreply,
+               socket
+               |> put_flash(:info, "Event updated successfully")
+               |> redirect(to: ~p"/events/#{event.slug}")}
 
-      case Events.update_event(socket.assigns.event, final_event_params) do
-        {:ok, event} ->
-          {:noreply,
-           socket
-           |> put_flash(:info, "Event updated successfully")
-           |> redirect(to: ~p"/events/#{event.slug}")}
+            {:error, %Ecto.Changeset{} = changeset} ->
+              {:noreply, assign(socket, form: to_form(changeset))}
+          end
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          {:noreply, assign(socket, form: to_form(changeset))}
+        {:error, error_socket} ->
+          # Early return on date polling error
+          {:noreply, error_socket}
       end
     else
       Logger.info("Validation failed, not calling Events.update_event")
       {:noreply, assign(socket,
         form: to_form(validation_changeset),
-        errors: validation_changeset.errors
+        changeset: validation_changeset
       )}
     end
   end
@@ -1133,7 +1136,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
           case Events.get_event_date_poll(event) do
             nil ->
               # Create new date poll
-              case Events.create_event_date_poll(event, socket.assigns.current_user, %{
+              case Events.create_event_date_poll(event, socket.assigns.user, %{
                 voting_deadline: polling_deadline
               }) do
                 {:ok, poll} ->
