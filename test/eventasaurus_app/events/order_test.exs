@@ -261,8 +261,10 @@ defmodule EventasaurusApp.Events.OrderTest do
 
     test "can_refund?/1" do
       refute Order.can_refund?(%Order{status: "pending"})
-      assert Order.can_refund?(%Order{status: "confirmed"})
-      assert Order.can_refund?(%Order{status: "canceled"})  # Canceled orders can be refunded if payment was captured
+      refute Order.can_refund?(%Order{status: "confirmed", payment_reference: nil})  # No payment captured
+      assert Order.can_refund?(%Order{status: "confirmed", payment_reference: "pi_123"})  # Payment captured
+      refute Order.can_refund?(%Order{status: "canceled", payment_reference: nil})  # No payment captured
+      assert Order.can_refund?(%Order{status: "canceled", payment_reference: "pi_123"})  # Payment captured
       refute Order.can_refund?(%Order{status: "refunded"})
     end
   end

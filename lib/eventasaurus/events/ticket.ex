@@ -37,9 +37,6 @@ defmodule EventasaurusApp.Events.Ticket do
     ends_at = get_field(changeset, :ends_at)
 
     cond do
-      is_nil(starts_at) && ends_at ->
-        add_error(changeset, :starts_at, "must be present when ends_at is set")
-
       starts_at && ends_at && DateTime.compare(starts_at, ends_at) != :lt ->
         add_error(changeset, :ends_at, "must be after start time")
 
