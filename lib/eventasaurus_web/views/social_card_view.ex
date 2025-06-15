@@ -418,7 +418,6 @@ defmodule EventasaurusWeb.SocialCardView do
   @logo_height 120
 
   # Title positioning constants to avoid duplication
-  @title_x 32
   @title_base_y 200
   @title_line_spacing 8
 

@@ -28,11 +28,13 @@ defmodule Eventasaurus.Application do
     api_key = System.get_env("GOOGLE_MAPS_API_KEY")
     IO.puts("DEBUG - Google Maps API key loaded: #{if api_key, do: "YES", else: "NO"}")
 
-    # Debug Stripe environment variables
-    stripe_client_id = System.get_env("STRIPE_CLIENT_ID")
-    stripe_secret = System.get_env("STRIPE_SECRET_KEY")
-    IO.puts("DEBUG - Stripe Client ID loaded: #{if stripe_client_id, do: "YES (#{String.slice(stripe_client_id, 0, 10)}...)", else: "NO"}")
-    IO.puts("DEBUG - Stripe Secret Key loaded: #{if stripe_secret, do: "YES (#{String.slice(stripe_secret, 0, 10)}...)", else: "NO"}")
+    # Debug Stripe environment variables (dev/test only)
+    if Mix.env() in [:dev, :test] do
+      stripe_client_id = System.get_env("STRIPE_CLIENT_ID")
+      stripe_secret = System.get_env("STRIPE_SECRET_KEY")
+      IO.puts("DEBUG - Stripe Client ID loaded: #{if stripe_client_id, do: "YES", else: "NO"}")
+      IO.puts("DEBUG - Stripe Secret Key loaded: #{if stripe_secret, do: "YES", else: "NO"}")
+    end
 
     # Debug Supabase connection
     db_config = Application.get_env(:eventasaurus, EventasaurusApp.Repo)

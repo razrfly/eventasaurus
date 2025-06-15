@@ -19,7 +19,7 @@ defmodule EventasaurusApp.Stripe.StripeConnectAccount do
     |> cast(attrs, [:stripe_user_id, :connected_at, :disconnected_at, :user_id])
     |> validate_required([:stripe_user_id, :user_id, :connected_at])
     |> unique_constraint(:stripe_user_id)
-    |> unique_constraint(:user_id, name: :stripe_connect_accounts_user_id_index)
+    |> unique_constraint(:user_id, name: :stripe_connect_accounts_user_id_index, message: "already has an active Stripe Connect account")
     |> foreign_key_constraint(:user_id)
   end
 
