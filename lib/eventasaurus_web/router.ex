@@ -73,6 +73,22 @@ defmodule EventasaurusWeb.Router do
     get "/dashboard", DashboardController, :index
   end
 
+  # Stripe Connect routes (require authentication)
+  scope "/stripe", EventasaurusWeb do
+    pipe_through [:browser, :authenticated]
+
+    get "/connect", StripeConnectController, :connect
+    post "/disconnect", StripeConnectController, :disconnect
+    get "/status", StripeConnectController, :status
+  end
+
+  # Stripe Connect OAuth callback (no authentication required for callback)
+  scope "/stripe", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/callback", StripeConnectController, :callback
+  end
+
   # Protected event routes that require authentication (browser)
   scope "/events", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
