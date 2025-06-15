@@ -67,5 +67,6 @@ defmodule EventasaurusApp.Events.Order do
   def can_cancel?(_), do: false
 
   def can_refund?(%__MODULE__{status: "confirmed"}), do: true
+  def can_refund?(%__MODULE__{status: "canceled"}), do: true
   def can_refund?(_), do: false
 end

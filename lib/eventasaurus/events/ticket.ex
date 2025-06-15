@@ -23,7 +23,7 @@ defmodule EventasaurusApp.Events.Ticket do
     ticket
     |> cast(attrs, [:title, :description, :price_cents, :currency, :quantity, :starts_at, :ends_at, :tippable, :event_id])
     |> validate_required([:title, :price_cents, :quantity, :event_id])
-    |> validate_number(:price_cents, greater_than: 0, message: "must be greater than 0")
+    |> validate_number(:price_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_number(:quantity, greater_than: 0, message: "must be greater than 0")
     |> validate_length(:title, min: 1, max: 255)
     |> validate_length(:description, max: 1000)
@@ -37,18 +37,27 @@ defmodule EventasaurusApp.Events.Ticket do
     ends_at = get_field(changeset, :ends_at)
 
     cond do
+      is_nil(starts_at) && ends_at ->
+        add_error(changeset, :starts_at, "must be present when ends_at is set")
+
       starts_at && ends_at && DateTime.compare(starts_at, ends_at) != :lt ->
         add_error(changeset, :ends_at, "must be after start time")
 
       starts_at && DateTime.compare(starts_at, DateTime.utc_now()) == :lt ->
         add_error(changeset, :starts_at, "cannot be in the past")
 
+      ends_at && DateTime.compare(ends_at, DateTime.utc_now()) == :lt ->
+        add_error(changeset, :ends_at, "cannot be in the past")
+
       true ->
         changeset
     end
   end
 
-  def on_sale?(%__MODULE__{starts_at: nil}), do: true
+  def on_sale?(%__MODULE__{starts_at: nil, ends_at: nil}), do: true
+  def on_sale?(%__MODULE__{starts_at: nil, ends_at: ends_at}) do
+    DateTime.compare(DateTime.utc_now(), ends_at) == :lt
+  end
   def on_sale?(%__MODULE__{starts_at: starts_at, ends_at: nil}) do
     DateTime.compare(DateTime.utc_now(), starts_at) != :lt
   end
