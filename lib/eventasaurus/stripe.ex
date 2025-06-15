@@ -9,6 +9,7 @@ defmodule EventasaurusApp.Stripe do
   alias EventasaurusApp.Accounts.User
 
   require Logger
+  import Bitwise
 
   @doc """
   Gets a Stripe Connect account for a user.
@@ -163,8 +164,7 @@ defmodule EventasaurusApp.Stripe do
 
     headers = [
       {"Content-Type", "application/x-www-form-urlencoded"},
-      {"Authorization", "Bearer #{secret_key}"},
-      {"Stripe-Account", connect_account.stripe_user_id}
+      {"Authorization", "Bearer #{secret_key}"}
     ]
 
     # Build metadata with order information
@@ -293,12 +293,79 @@ defmodule EventasaurusApp.Stripe do
     end
   end
 
+  @doc """
+  Verifies a Stripe webhook signature to ensure the webhook is authentic.
+  """
+  def verify_webhook_signature(raw_body, signature_header, webhook_secret) do
+    # Parse the signature header
+    case parse_signature_header(signature_header) do
+      {:ok, timestamp, signature} ->
+        # Create the signed payload
+        signed_payload = "#{timestamp}.#{raw_body}"
+
+        # Compute the expected signature
+        expected_signature = :crypto.mac(:hmac, :sha256, webhook_secret, signed_payload)
+        |> Base.encode16(case: :lower)
+
+        # Compare signatures
+        if secure_compare(signature, expected_signature) do
+          # Parse the event from the raw body
+          case Jason.decode(raw_body) do
+            {:ok, event} -> {:ok, event}
+            {:error, _} -> {:error, "Invalid JSON in webhook body"}
+          end
+        else
+          {:error, "Signature verification failed"}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   # Private helper functions
+
+  defp parse_signature_header(signature_header) do
+    # Stripe signature header format: "t=timestamp,v1=signature"
+    parts = String.split(signature_header, ",")
+
+    timestamp =
+      parts
+      |> Enum.find(&String.starts_with?(&1, "t="))
+      |> case do
+        "t=" <> timestamp -> timestamp
+        _ -> nil
+      end
+
+    signature =
+      parts
+      |> Enum.find(&String.starts_with?(&1, "v1="))
+      |> case do
+        "v1=" <> signature -> signature
+        _ -> nil
+      end
+
+    if timestamp && signature do
+      {:ok, timestamp, signature}
+    else
+      {:error, "Invalid signature header format"}
+    end
+  end
+
+  defp secure_compare(a, b) when byte_size(a) == byte_size(b) do
+    secure_compare(a, b, 0) == 0
+  end
+  defp secure_compare(_, _), do: false
+
+  defp secure_compare(<<a, rest_a::binary>>, <<b, rest_b::binary>>, acc) do
+    secure_compare(rest_a, rest_b, bor(acc, bxor(a, b)))
+  end
+  defp secure_compare(<<>>, <<>>, acc), do: acc
 
   defp redact_secrets(raw_response) when is_binary(raw_response) do
     raw_response
-    |> String.replace(~r/"(?:access_token|refresh_token)"\s*:\s*"[^"]+"/, "\"<redacted>\"")
-    |> String.replace(~r/"(?:client_secret)"\s*:\s*"[^"]+"/, "\"<redacted>\"")
+    |> String.replace(~r/"(access_token|refresh_token)"\s*:\s*"[^"]+"/, "\"\\1\":\"<redacted>\"")
+    |> String.replace(~r/"(client_secret)"\s*:\s*"[^"]+"/, "\"\\1\":\"<redacted>\"")
   end
 
   defp redact_secrets(other), do: other

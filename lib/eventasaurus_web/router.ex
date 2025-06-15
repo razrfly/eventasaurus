@@ -40,6 +40,27 @@ defmodule EventasaurusWeb.Router do
     plug :redirect_if_user_is_authenticated
   end
 
+  # Webhook pipeline (no authentication, but captures raw body)
+  pipeline :webhook do
+    plug :accepts, ["json"]
+    plug EventasaurusWeb.Plugs.RawBodyPlug
+  end
+
+  # Secure pipeline for sensitive endpoints (HTTPS enforcement)
+  pipeline :secure do
+    plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
+  end
+
+  # Secure API pipeline for sensitive API endpoints
+  pipeline :secure_api do
+    plug :accepts, ["json"]
+    plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 60, window: 60_000  # 60 requests per minute
+    plug :fetch_session
+    plug :fetch_auth_user
+    plug :assign_user_struct
+  end
+
   # Authentication routes - placing these BEFORE the catch-all public routes
   scope "/auth", EventasaurusWeb do
     pipe_through [:browser, :redirect_if_authenticated]
@@ -90,18 +111,18 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
-  # Stripe Connect routes (require authentication)
+  # Stripe Connect routes (require authentication and HTTPS)
   scope "/stripe", EventasaurusWeb do
-    pipe_through [:browser, :authenticated]
+    pipe_through [:browser, :secure, :authenticated]
 
     get "/connect", StripeConnectController, :connect
     post "/disconnect", StripeConnectController, :disconnect
     get "/status", StripeConnectController, :status
   end
 
-  # Stripe Connect OAuth callback (no authentication required for callback)
+  # Stripe Connect OAuth callback (no authentication required for callback, but HTTPS enforced)
   scope "/stripe", EventasaurusWeb do
-    pipe_through :browser
+    pipe_through [:browser, :secure]
 
     get "/callback", StripeConnectController, :callback
   end
@@ -175,9 +196,9 @@ defmodule EventasaurusWeb.Router do
     get "/search/unified", SearchController, :unified
   end
 
-  # Stripe payment API routes (require authentication)
+  # Stripe payment API routes (require authentication and HTTPS)
   scope "/api/stripe", EventasaurusWeb do
-    pipe_through [:api, :api_authenticated]
+    pipe_through [:secure_api, :api_authenticated]
 
     post "/payment-intent", StripePaymentController, :create_payment_intent
     post "/confirm-payment", StripePaymentController, :confirm_payment
@@ -190,6 +211,21 @@ defmodule EventasaurusWeb.Router do
     get "/", OrdersController, :index
     get "/:id", OrdersController, :show
     post "/:id/cancel", OrdersController, :cancel
+  end
+
+  # Webhook pipeline with security measures for Stripe webhooks
+  pipeline :secure_webhook do
+    plug :accepts, ["json"]
+    plug EventasaurusWeb.Plugs.RawBodyPlug
+    plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: false
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 1000, window: 60_000  # Higher limit for webhooks
+  end
+
+  # Stripe webhook routes (no authentication required, but with security measures)
+  scope "/webhooks/stripe", EventasaurusWeb do
+    pipe_through :secure_webhook
+
+    post "/", StripeWebhookController, :handle_webhook
   end
 
   # Enable Swoosh mailbox preview in development
