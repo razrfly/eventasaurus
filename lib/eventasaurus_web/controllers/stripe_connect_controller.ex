@@ -18,7 +18,7 @@ defmodule EventasaurusWeb.StripeConnectController do
           nil ->
             # Generate OAuth URL and redirect
             oauth_url = Stripe.connect_oauth_url(user_id)
-            Logger.info("Initiating Stripe Connect OAuth for user", %{user_id: user_id})
+            Logger.info("Initiating Stripe Connect OAuth for user", user_id: user_id)
             redirect(conn, external: oauth_url)
 
           _existing_account ->
@@ -38,10 +38,10 @@ defmodule EventasaurusWeb.StripeConnectController do
   Handles the OAuth callback from Stripe Connect.
   """
   def callback(conn, %{"code" => code, "state" => user_id_string} = _params) do
-    Logger.info("Processing Stripe Connect OAuth callback", %{
+    Logger.info("Processing Stripe Connect OAuth callback",
       user_id_string: user_id_string,
       has_code: !is_nil(code)
-    })
+    )
 
     with {user_id, ""} <- Integer.parse(user_id_string),
          %User{} = user <- Accounts.get_user(user_id),
@@ -50,11 +50,11 @@ defmodule EventasaurusWeb.StripeConnectController do
          true <- is_binary(stripe_user_id) and String.length(stripe_user_id) > 0,
          {:ok, connect_account} <- Stripe.create_connect_account(user, stripe_user_id) do
 
-      Logger.info("Successfully connected Stripe account", %{
+      Logger.info("Successfully connected Stripe account",
         user_id: user_id,
         stripe_user_id: stripe_user_id,
         connect_account_id: connect_account.id
-      })
+      )
 
       conn
       |> put_flash(:info, "Successfully connected your Stripe account! You can now receive payments.")
@@ -62,19 +62,19 @@ defmodule EventasaurusWeb.StripeConnectController do
 
     else
       :error ->
-        Logger.error("Invalid user ID in state parameter", %{user_id_string: user_id_string})
+        Logger.error("Invalid user ID in state parameter", user_id_string: user_id_string)
         conn
         |> put_flash(:error, "Invalid callback parameters.")
         |> redirect(to: ~p"/dashboard")
 
       nil ->
-        Logger.error("User not found for Stripe Connect callback", %{user_id_string: user_id_string})
+        Logger.error("User not found for Stripe Connect callback", user_id_string: user_id_string)
         conn
         |> put_flash(:error, "User not found. Please try connecting again.")
         |> redirect(to: ~p"/dashboard")
 
       {:error, %{"error" => error_type, "error_description" => description}} ->
-        Logger.error("Stripe OAuth error", %{error_type: error_type, description: description})
+        Logger.error("Stripe OAuth error", error_type: error_type, description: description)
         conn
         |> put_flash(:error, "Stripe connection failed: #{description}")
         |> redirect(to: ~p"/dashboard")
@@ -85,13 +85,13 @@ defmodule EventasaurusWeb.StripeConnectController do
             String.replace(acc, "%{#{key}}", to_string(value))
           end)
         end)
-        Logger.error("Database error creating Stripe Connect account", %{errors: errors})
+        Logger.error("Database error creating Stripe Connect account", errors: errors)
         conn
         |> put_flash(:error, "Failed to save your Stripe connection. Please try again.")
         |> redirect(to: ~p"/dashboard")
 
       {:error, reason} when is_binary(reason) ->
-        Logger.error("Stripe Connect callback error", %{reason: reason})
+        Logger.error("Stripe Connect callback error", reason: reason)
         conn
         |> put_flash(:error, "Connection failed: #{reason}")
         |> redirect(to: ~p"/dashboard")
@@ -103,7 +103,7 @@ defmodule EventasaurusWeb.StripeConnectController do
         |> redirect(to: ~p"/dashboard")
 
       error ->
-        Logger.error("Unexpected error in Stripe Connect callback", %{error: inspect(error)})
+        Logger.error("Unexpected error in Stripe Connect callback", error: inspect(error))
         conn
         |> put_flash(:error, "Something went wrong connecting your Stripe account.")
         |> redirect(to: ~p"/dashboard")
@@ -113,10 +113,10 @@ defmodule EventasaurusWeb.StripeConnectController do
   def callback(conn, %{"error" => error_type} = params) do
     error_description = params["error_description"] || "Unknown error"
 
-    Logger.warning("Stripe Connect OAuth error", %{
+    Logger.warning("Stripe Connect OAuth error",
       error_type: error_type,
       error_description: error_description
-    })
+    )
 
     conn
     |> put_flash(:error, "Stripe connection was cancelled or failed: #{error_description}")
@@ -124,7 +124,7 @@ defmodule EventasaurusWeb.StripeConnectController do
   end
 
   def callback(conn, params) do
-    Logger.error("Invalid Stripe Connect callback parameters", %{params: inspect(params)})
+    Logger.error("Invalid Stripe Connect callback parameters", params: inspect(params))
 
     conn
     |> put_flash(:error, "Invalid callback parameters.")
@@ -146,20 +146,20 @@ defmodule EventasaurusWeb.StripeConnectController do
           connect_account ->
             case Stripe.disconnect_connect_account(connect_account) do
               {:ok, _disconnected_account} ->
-                Logger.info("Successfully disconnected Stripe account", %{
+                Logger.info("Successfully disconnected Stripe account",
                   user_id: user_id,
                   stripe_user_id: connect_account.stripe_user_id
-                })
+                )
 
                 conn
                 |> put_flash(:info, "Successfully disconnected your Stripe account.")
                 |> redirect(to: ~p"/dashboard")
 
               {:error, changeset} ->
-                Logger.error("Failed to disconnect Stripe account", %{
+                Logger.error("Failed to disconnect Stripe account",
                   user_id: user_id,
                   errors: inspect(changeset.errors)
-                })
+                )
 
                 conn
                 |> put_flash(:error, "Failed to disconnect your Stripe account.")

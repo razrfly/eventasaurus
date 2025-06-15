@@ -4,7 +4,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddStripeConnectToOrders do
   def change do
     alter table(:orders) do
       add :stripe_connect_account_id, references(:stripe_connect_accounts, on_delete: :restrict)
-      add :application_fee_amount, :integer, default: 0
+      add :application_fee_amount, :integer, default: 0, null: false
     end
 
     create index(:orders, [:stripe_connect_account_id])
