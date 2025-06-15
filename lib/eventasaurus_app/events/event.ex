@@ -68,8 +68,8 @@ defmodule EventasaurusApp.Events.Event do
       join_through: EventasaurusApp.Events.EventUser
 
     has_one :date_poll, EventasaurusApp.Events.EventDatePoll
-    has_many :tickets, EventasaurusApp.Events.Ticket
-    has_many :orders, EventasaurusApp.Events.Order
+    has_many :tickets, EventasaurusApp.Events.Ticket, on_delete: :delete_all
+    has_many :orders, EventasaurusApp.Events.Order, on_delete: :delete_all
 
     timestamps()
   end

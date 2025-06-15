@@ -276,15 +276,10 @@ defmodule EventasaurusApp.EventStateMachine do
   @doc """
   Checks if an event has ticketing functionality enabled.
 
-  This is a placeholder for ticketing logic that would check:
-  - If the event has ticket types defined
-  - If ticketing is enabled for this event type
-  - If payment processing is configured
+  Uses the is_ticketed field on the event to determine if ticketing is enabled.
   """
-  def is_ticketed?(%EventasaurusApp.Events.Event{} = _event) do
-    # Placeholder: In a real implementation, this would check
-    # if the event has ticket types, pricing, or other ticketing configuration
-    false
+  def is_ticketed?(%EventasaurusApp.Events.Event{is_ticketed: is_ticketed}) do
+    is_ticketed == true
   end
 
   @doc """
