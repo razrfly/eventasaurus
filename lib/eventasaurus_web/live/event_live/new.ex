@@ -951,27 +951,30 @@ defmodule EventasaurusWeb.EventLive.New do
   # Helper function to create tickets for an event
   defp create_tickets_for_event(event, tickets) do
     alias EventasaurusApp.Ticketing
+    alias EventasaurusApp.Repo
 
-    results = Enum.map(tickets, fn ticket_data ->
-      ticket_attrs = %{
-        title: ticket_data.title,
-        description: ticket_data.description,
-        price_cents: ticket_data.price_cents,
-        quantity: ticket_data.quantity,
-        starts_at: ticket_data.starts_at,
-        ends_at: ticket_data.ends_at,
-        tippable: ticket_data.tippable
-      }
+    # Use a transaction to ensure all tickets are created atomically
+    Repo.transaction(fn ->
+      Enum.each(tickets, fn ticket_data ->
+        ticket_attrs = %{
+          title: ticket_data.title,
+          description: ticket_data.description,
+          price_cents: ticket_data.price_cents,
+          quantity: ticket_data.quantity,
+          starts_at: ticket_data.starts_at,
+          ends_at: ticket_data.ends_at,
+          tippable: ticket_data.tippable
+        }
 
-      Ticketing.create_ticket(event, ticket_attrs)
+        case Ticketing.create_ticket(event, ticket_attrs) do
+          {:ok, _ticket} -> :ok
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
     end)
-
-    # Check if all tickets were created successfully
-    if Enum.all?(results, fn {status, _} -> status == :ok end) do
-      :ok
-    else
-      failed_results = Enum.filter(results, fn {status, _} -> status == :error end)
-      {:error, failed_results}
+    |> case do
+      {:ok, _} -> :ok
+      {:error, changeset} -> {:error, changeset}
     end
   end
 
@@ -1134,7 +1137,10 @@ defmodule EventasaurusWeb.EventLive.New do
           title: Map.get(ticket_data, "title", ""),
           description: Map.get(ticket_data, "description"),
           price_cents: parse_price_to_cents(Map.get(ticket_data, "price", "0")),
-          quantity: String.to_integer(Map.get(ticket_data, "quantity", "0")),
+          quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
+            {n, _} when n >= 0 -> n
+            _ -> 0
+          end,
           starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
           ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
           tippable: Map.get(ticket_data, "tippable", false) == true
@@ -1193,9 +1199,24 @@ defmodule EventasaurusWeb.EventLive.New do
   defp parse_datetime(nil), do: nil
   defp parse_datetime(""), do: nil
   defp parse_datetime(datetime_str) when is_binary(datetime_str) do
-    case DateTime.from_iso8601(datetime_str <> ":00Z") do
-      {:ok, datetime, _} -> datetime
-      {:error, _} -> nil
+    # Handle different datetime formats more carefully
+    cond do
+      # If it already looks like a complete ISO8601 string, try parsing as-is
+      String.contains?(datetime_str, "T") and (String.contains?(datetime_str, "Z") or String.contains?(datetime_str, "+")) ->
+        case DateTime.from_iso8601(datetime_str) do
+          {:ok, datetime, _} -> datetime
+          {:error, _} -> nil
+        end
+
+      # If it's a local datetime format (YYYY-MM-DDTHH:MM), add seconds and Z
+      String.contains?(datetime_str, "T") ->
+        case DateTime.from_iso8601(datetime_str <> ":00Z") do
+          {:ok, datetime, _} -> datetime
+          {:error, _} -> nil
+        end
+
+      # Otherwise, it's not a valid datetime format
+      true -> nil
     end
   end
   defp parse_datetime(_), do: nil
