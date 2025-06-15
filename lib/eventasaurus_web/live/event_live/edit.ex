@@ -270,6 +270,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     if validation_changeset.valid? do
       Logger.info("Validation passed, calling Events.update_event")
+
+      # Handle date polling updates if needed
+      socket = case handle_date_polling_update(socket, final_event_params) do
+        {:ok, updated_socket} -> updated_socket
+        {:error, error_socket} -> error_socket
+      end
+
       case Events.update_event(socket.assigns.event, final_event_params) do
         {:ok, event} ->
           {:noreply,
@@ -284,7 +291,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       Logger.info("Validation failed, not calling Events.update_event")
       {:noreply, assign(socket,
         form: to_form(validation_changeset),
-        changeset: validation_changeset
+        errors: validation_changeset.errors
       )}
     end
   end
@@ -757,7 +764,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
           title: Map.get(ticket_data, "title", ""),
           description: Map.get(ticket_data, "description"),
           price_cents: parse_price_to_cents(Map.get(ticket_data, "price", "0")),
-          quantity: String.to_integer(Map.get(ticket_data, "quantity", "0")),
+          quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
+            {n, _} when n >= 0 -> n
+            _ -> 0
+          end,
           starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
           ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
           tippable: Map.get(ticket_data, "tippable", false) == true
@@ -837,9 +847,24 @@ defmodule EventasaurusWeb.EventLive.Edit do
   defp parse_datetime_input(nil), do: nil
   defp parse_datetime_input(""), do: nil
   defp parse_datetime_input(datetime_str) when is_binary(datetime_str) do
-    case DateTime.from_iso8601(datetime_str <> ":00Z") do
-      {:ok, datetime, _} -> datetime
-      {:error, _} -> nil
+    # Handle different datetime formats more carefully
+    cond do
+      # If it already looks like a complete ISO8601 string, try parsing as-is
+      String.contains?(datetime_str, "T") and (String.contains?(datetime_str, "Z") or String.contains?(datetime_str, "+")) ->
+        case DateTime.from_iso8601(datetime_str) do
+          {:ok, datetime, _} -> datetime
+          {:error, _} -> nil
+        end
+
+      # If it's a local datetime format (YYYY-MM-DDTHH:MM), add seconds and Z
+      String.contains?(datetime_str, "T") ->
+        case DateTime.from_iso8601(datetime_str <> ":00Z") do
+          {:ok, datetime, _} -> datetime
+          {:error, _} -> nil
+        end
+
+      # Otherwise, it's not a valid datetime format
+      true -> nil
     end
   end
   defp parse_datetime_input(_), do: nil
@@ -1075,4 +1100,92 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   defp combine_date_time_to_utc(_, _, _), do: {:error, :invalid_input}
+
+  defp handle_date_polling_update(socket, final_event_params) do
+    event = socket.assigns.event
+    enable_date_polling = Map.get(final_event_params, "enable_date_polling", false)
+
+    # Handle string "true"/"false" from form submissions
+    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
+
+    if is_polling_enabled do
+      # Get selected dates and polling deadline
+      selected_dates_string = Map.get(final_event_params, "selected_poll_dates", "")
+      polling_deadline = Map.get(final_event_params, "polling_deadline")
+
+      if selected_dates_string != "" and polling_deadline do
+        # Parse selected dates
+        selected_dates =
+          selected_dates_string
+          |> String.split(",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(&(&1 != ""))
+          |> Enum.map(fn date_str ->
+            case Date.from_iso8601(date_str) do
+              {:ok, date} -> date
+              {:error, _} -> nil
+            end
+          end)
+          |> Enum.filter(&(&1 != nil))
+
+        if length(selected_dates) >= 2 do
+          # Create or update date poll
+          case Events.get_event_date_poll(event) do
+            nil ->
+              # Create new date poll
+              case Events.create_event_date_poll(event, socket.assigns.current_user, %{
+                voting_deadline: polling_deadline
+              }) do
+                {:ok, poll} ->
+                  # Add date options
+                  case Events.create_date_options_from_list(poll, selected_dates) do
+                    {:ok, _options} -> {:ok, socket}
+                    {:error, _} ->
+                      socket = put_flash(socket, :error, "Failed to create date options")
+                      {:error, socket}
+                  end
+                {:error, _} ->
+                  socket = put_flash(socket, :error, "Failed to create date poll")
+                  {:error, socket}
+              end
+
+            existing_poll ->
+              # Update existing poll
+              case Events.update_event_date_poll(existing_poll, %{
+                voting_deadline: polling_deadline
+              }) do
+                {:ok, updated_poll} ->
+                  # Update date options
+                  case Events.update_event_date_options(updated_poll, selected_dates) do
+                    {:ok, _options} -> {:ok, socket}
+                    {:error, _} ->
+                      socket = put_flash(socket, :error, "Failed to update date options")
+                      {:error, socket}
+                  end
+                {:error, _} ->
+                  socket = put_flash(socket, :error, "Failed to update date poll")
+                  {:error, socket}
+              end
+          end
+        else
+          socket = put_flash(socket, :error, "Please select at least 2 dates for polling")
+          {:error, socket}
+        end
+      else
+        {:ok, socket}
+      end
+    else
+      # Date polling is disabled, remove any existing poll
+      case Events.get_event_date_poll(event) do
+        nil -> {:ok, socket}
+        existing_poll ->
+          case Events.delete_event_date_poll(existing_poll) do
+            {:ok, _} -> {:ok, socket}
+            {:error, _} ->
+              socket = put_flash(socket, :error, "Failed to remove date poll")
+              {:error, socket}
+          end
+      end
+    end
+  end
 end
