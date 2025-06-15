@@ -16,6 +16,9 @@ defmodule EventasaurusWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug :fetch_session
+    plug :fetch_auth_user
+    plug :assign_user_struct
   end
 
   pipeline :image do
@@ -25,6 +28,11 @@ defmodule EventasaurusWeb.Router do
   # Routes that require authentication
   pipeline :authenticated do
     plug :require_authenticated_user
+  end
+
+  # API routes that require authentication (returns JSON instead of redirecting)
+  pipeline :api_authenticated do
+    plug :require_authenticated_api_user
   end
 
   # Routes that should redirect if already authenticated
@@ -73,6 +81,15 @@ defmodule EventasaurusWeb.Router do
     get "/dashboard", DashboardController, :index
   end
 
+  # Protected LiveView routes that require authentication
+  live_session :authenticated_orders, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    scope "/", EventasaurusWeb do
+      pipe_through :browser
+
+      live "/orders", OrderLive, :index
+    end
+  end
+
   # Stripe Connect routes (require authentication)
   scope "/stripe", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
@@ -102,7 +119,7 @@ defmodule EventasaurusWeb.Router do
 
   # Protected event API routes that require authentication (JSON)
   scope "/api/events", EventasaurusWeb do
-    pipe_through [:api, :authenticated]
+    pipe_through [:api, :api_authenticated]
 
     # Action-driven setup API endpoints
     post "/:slug/pick-date", EventController, :pick_date
@@ -156,6 +173,23 @@ defmodule EventasaurusWeb.Router do
     pipe_through :api
 
     get "/search/unified", SearchController, :unified
+  end
+
+  # Stripe payment API routes (require authentication)
+  scope "/api/stripe", EventasaurusWeb do
+    pipe_through [:api, :api_authenticated]
+
+    post "/payment-intent", StripePaymentController, :create_payment_intent
+    post "/confirm-payment", StripePaymentController, :confirm_payment
+  end
+
+  # Order management API routes (require authentication)
+  scope "/api/orders", EventasaurusWeb do
+    pipe_through [:api, :api_authenticated]
+
+    get "/", OrdersController, :index
+    get "/:id", OrdersController, :show
+    post "/:id/cancel", OrdersController, :cancel
   end
 
   # Enable Swoosh mailbox preview in development
