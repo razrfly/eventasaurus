@@ -25,22 +25,30 @@ defmodule EventasaurusWeb.OrderLive do
 
   @impl true
   def handle_event("cancel_order", %{"order_id" => order_id}, socket) do
-    case Ticketing.cancel_order(Ticketing.get_user_order(socket.assigns.current_user.id, order_id)) do
-      {:ok, _order} ->
+    case Ticketing.get_user_order(socket.assigns.current_user.id, order_id) do
+      nil ->
         {:noreply,
          socket
-         |> put_flash(:info, "Order cancelled successfully")
-         |> load_orders()}
+         |> put_flash(:error, "Order not found")}
 
-      {:error, :cannot_cancel} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "This order cannot be cancelled")}
+      order ->
+        case Ticketing.cancel_order(order) do
+          {:ok, _order} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Order cancelled successfully")
+             |> load_orders()}
 
-      {:error, _reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Failed to cancel order")}
+          {:error, :cannot_cancel} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "This order cannot be cancelled")}
+
+          {:error, _reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Failed to cancel order")}
+        end
     end
   end
 
