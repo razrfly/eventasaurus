@@ -90,13 +90,13 @@ defmodule EventasaurusApp.Stripe do
     secret_key = get_stripe_secret_key()
 
     headers = [
-      {"Content-Type", "application/x-www-form-urlencoded"},
-      {"Authorization", "Bearer #{secret_key}"}
+      {"Content-Type", "application/x-www-form-urlencoded"}
     ]
 
     body = URI.encode_query(%{
       "grant_type" => "authorization_code",
-      "code" => code
+      "code" => code,
+      "client_secret" => secret_key
     })
 
     case HTTPoison.post(url, body, headers, timeout: 30_000, recv_timeout: 30_000) do
@@ -112,7 +112,7 @@ defmodule EventasaurusApp.Stripe do
           {:error, decode_error} ->
             Logger.error("Failed to decode Stripe OAuth response",
               error: inspect(decode_error),
-              response_body: response_body
+              response_body: redact_secrets(response_body)
             )
             {:error, "Invalid response format from Stripe"}
         end
@@ -130,7 +130,7 @@ defmodule EventasaurusApp.Stripe do
           {:error, _} ->
             Logger.error("Stripe OAuth error with invalid JSON",
               status_code: status_code,
-              response_body: response_body
+              response_body: redact_secrets(response_body)
             )
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
@@ -204,7 +204,7 @@ defmodule EventasaurusApp.Stripe do
           {:error, decode_error} ->
             Logger.error("Failed to decode Payment Intent response",
               error: inspect(decode_error),
-              response_body: response_body
+              response_body: redact_secrets(response_body)
             )
             {:error, "Invalid response format from Stripe"}
         end
@@ -222,7 +222,7 @@ defmodule EventasaurusApp.Stripe do
           {:error, _} ->
             Logger.error("Stripe Payment Intent error with invalid JSON",
               status_code: status_code,
-              response_body: response_body
+              response_body: redact_secrets(response_body)
             )
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
@@ -264,7 +264,7 @@ defmodule EventasaurusApp.Stripe do
           {:error, decode_error} ->
             Logger.error("Failed to decode Payment Intent response",
               error: inspect(decode_error),
-              response_body: response_body
+              response_body: redact_secrets(response_body)
             )
             {:error, "Invalid response format from Stripe"}
         end
@@ -294,6 +294,14 @@ defmodule EventasaurusApp.Stripe do
   end
 
   # Private helper functions
+
+  defp redact_secrets(raw_response) when is_binary(raw_response) do
+    raw_response
+    |> String.replace(~r/"(?:access_token|refresh_token)"\s*:\s*"[^"]+"/, "\"<redacted>\"")
+    |> String.replace(~r/"(?:client_secret)"\s*:\s*"[^"]+"/, "\"<redacted>\"")
+  end
+
+  defp redact_secrets(other), do: other
 
   defp get_stripe_client_id do
     case System.get_env("STRIPE_CLIENT_ID") do
