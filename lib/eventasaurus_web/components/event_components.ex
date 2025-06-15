@@ -176,6 +176,11 @@ defmodule EventasaurusWeb.EventComponents do
   attr :on_image_click, :string, default: nil, doc: "event name to trigger when clicking on the image picker"
   attr :id, :string, default: nil, doc: "unique id for the form element, required for hooks"
   attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
+  # Ticketing-related attributes
+  attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
+  attr :show_ticket_form, :boolean, default: false, doc: "whether to show the ticket creation/edit form"
+  attr :ticket_form_data, :map, default: %{}, doc: "data for the ticket form"
+  attr :editing_ticket_index, :integer, default: nil, doc: "index of ticket being edited, nil for new ticket"
 
   def event_form(assigns) do
     assigns = assign_new(assigns, :id, fn ->
@@ -526,6 +531,247 @@ defmodule EventasaurusWeb.EventComponents do
                 </div>
               </details>
             </div>
+
+            <!-- Ticketing Section -->
+            <div class="mb-4">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">Ticketing</h3>
+
+              <!-- Enable Ticketing Toggle -->
+              <div class="flex items-center mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <label class="flex items-start cursor-pointer w-full">
+                  <input
+                    type="checkbox"
+                    name="event[is_ticketed]"
+                    value="true"
+                    checked={Map.get(@form_data, "is_ticketed", false) in [true, "true"]}
+                    phx-click="toggle_ticketing"
+                    class="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500 mt-0.5 mr-3"
+                  />
+                  <div>
+                    <span class="text-sm font-medium text-green-900">Enable Ticketing</span>
+                    <p class="text-xs text-green-700 mt-1">Collect payments and manage attendee registration</p>
+                  </div>
+                </label>
+              </div>
+
+              <%= if Map.get(@form_data, "is_ticketed", false) in [true, "true"] do %>
+                <!-- Tickets Management Section -->
+                <div class="space-y-4" id="tickets-section">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-medium text-gray-700">Ticket Types</h4>
+                    <button
+                      type="button"
+                      phx-click="add_ticket_form"
+                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    >
+                      <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Add Ticket
+                    </button>
+                  </div>
+
+                  <!-- Existing Tickets List -->
+                  <%= if assigns[:tickets] && length(@tickets) > 0 do %>
+                    <div class="space-y-3">
+                      <%= for {ticket, index} <- Enum.with_index(@tickets) do %>
+                        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                              <h5 class="text-sm font-medium text-gray-900"><%= ticket.title %></h5>
+                              <%= if ticket.description do %>
+                                <p class="text-xs text-gray-600 mt-1"><%= ticket.description %></p>
+                              <% end %>
+                              <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                                <span>Price: $<%= Float.round(ticket.price_cents / 100, 2) %></span>
+                                <span>Quantity: <%= ticket.quantity %></span>
+                                <%= if ticket.starts_at do %>
+                                  <span>Sale starts: <%= Calendar.strftime(ticket.starts_at, "%m/%d %I:%M %p") %></span>
+                                <% end %>
+                              </div>
+                            </div>
+                            <div class="flex space-x-2">
+                              <button
+                                type="button"
+                                phx-click="edit_ticket"
+                                phx-value-index={index}
+                                class="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                phx-click="remove_ticket"
+                                phx-value-index={index}
+                                class="text-red-600 hover:text-red-800 text-xs"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+
+                  <!-- New/Edit Ticket Form -->
+                  <%= if assigns[:show_ticket_form] do %>
+                    <div class="border border-gray-300 rounded-lg p-4 bg-white">
+                      <div class="flex items-center justify-between mb-3">
+                        <h5 class="text-sm font-medium text-gray-900">
+                          <%= if assigns[:editing_ticket_index], do: "Edit Ticket", else: "New Ticket" %>
+                        </h5>
+                        <button
+                          type="button"
+                          phx-click="cancel_ticket_form"
+                          class="text-gray-400 hover:text-gray-600"
+                        >
+                          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Ticket Title -->
+                        <div class="sm:col-span-2">
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Ticket Name</label>
+                          <input
+                            type="text"
+                            name="ticket[title]"
+                            value={Map.get(@ticket_form_data || %{}, "title", "")}
+                            placeholder="e.g., General Admission, VIP, Early Bird"
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                            phx-change="validate_ticket"
+                          />
+                        </div>
+
+                        <!-- Ticket Description -->
+                        <div class="sm:col-span-2">
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Description (optional)</label>
+                          <textarea
+                            name="ticket[description]"
+                            value={Map.get(@ticket_form_data || %{}, "description", "")}
+                            placeholder="Describe what's included with this ticket..."
+                            rows="2"
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                            phx-change="validate_ticket"
+                          ></textarea>
+                        </div>
+
+                        <!-- Price -->
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Price</label>
+                          <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span class="text-gray-500 text-sm">$</span>
+                            </div>
+                            <input
+                              type="number"
+                              name="ticket[price]"
+                              value={format_price_for_input(@ticket_form_data)}
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              class="block w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                              phx-change="validate_ticket"
+                            />
+                          </div>
+                        </div>
+
+                        <!-- Quantity -->
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Available Tickets</label>
+                          <input
+                            type="number"
+                            name="ticket[quantity]"
+                            value={Map.get(@ticket_form_data || %{}, "quantity", "")}
+                            min="1"
+                            placeholder="100"
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                            phx-change="validate_ticket"
+                          />
+                        </div>
+
+                        <!-- Sale Start Time (optional) -->
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Sale Starts (optional)</label>
+                          <input
+                            type="datetime-local"
+                            name="ticket[starts_at]"
+                            value={Map.get(@ticket_form_data || %{}, "starts_at", "")}
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                            phx-change="validate_ticket"
+                          />
+                        </div>
+
+                        <!-- Sale End Time (optional) -->
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Sale Ends (optional)</label>
+                          <input
+                            type="datetime-local"
+                            name="ticket[ends_at]"
+                            value={Map.get(@ticket_form_data || %{}, "ends_at", "")}
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                            phx-change="validate_ticket"
+                          />
+                        </div>
+                      </div>
+
+                      <!-- Tippable Option -->
+                      <div class="mt-3">
+                        <label class="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            name="ticket[tippable]"
+                            value="true"
+                            checked={Map.get(@ticket_form_data || %{}, "tippable", false) == true}
+                            class="h-3 w-3 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                            phx-change="validate_ticket"
+                          />
+                          <span class="ml-2 text-xs text-gray-700">Allow tips on this ticket</span>
+                        </label>
+                      </div>
+
+                      <!-- Form Actions -->
+                      <div class="flex justify-end space-x-2 mt-4 pt-3 border-t border-gray-200">
+                        <button
+                          type="button"
+                          phx-click="cancel_ticket_form"
+                          class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="save_ticket"
+                          class="px-3 py-1.5 text-xs font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        >
+                          <%= if assigns[:editing_ticket_index], do: "Update Ticket", else: "Add Ticket" %>
+                        </button>
+                      </div>
+                    </div>
+                  <% end %>
+
+                  <!-- Help text for ticketing -->
+                  <div class="text-xs text-gray-500 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex items-start">
+                      <svg class="w-4 h-4 text-blue-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                      </svg>
+                      <div>
+                        <p class="font-medium text-blue-800">Ticketing Tips</p>
+                        <ul class="mt-1 text-blue-700 space-y-1">
+                          <li>• Create different ticket types for early bird, general admission, VIP, etc.</li>
+                          <li>• Set sale windows to create urgency and manage demand</li>
+                          <li>• Enable tips to increase revenue from supporters</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+            </div>
           </div>
         </div>
       </div>
@@ -640,6 +886,14 @@ defmodule EventasaurusWeb.EventComponents do
     case Map.get(form_data, "polling_deadline") do
       %DateTime{} = datetime -> DateTime.to_iso8601(datetime)
       iso when is_binary(iso) -> iso
+      _ -> ""
+    end
+  end
+
+  defp format_price_for_input(form_data) do
+    case Map.get(form_data, "price") do
+      nil -> ""
+      price_str when is_binary(price_str) -> price_str
       _ -> ""
     end
   end
