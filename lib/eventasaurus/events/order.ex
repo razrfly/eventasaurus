@@ -15,9 +15,13 @@ defmodule EventasaurusApp.Events.Order do
     field :payment_reference, :string
     field :confirmed_at, :utc_datetime
 
+    # Minimal Stripe Connect fields
+    field :application_fee_amount, :integer, default: 0
+
     belongs_to :user, EventasaurusApp.Accounts.User
     belongs_to :event, EventasaurusApp.Events.Event
     belongs_to :ticket, EventasaurusApp.Events.Ticket
+    belongs_to :stripe_connect_account, EventasaurusApp.Stripe.StripeConnectAccount
 
     timestamps()
   end
@@ -25,18 +29,24 @@ defmodule EventasaurusApp.Events.Order do
   @doc false
   def changeset(order, attrs) do
     order
-    |> cast(attrs, [:quantity, :subtotal_cents, :tax_cents, :total_cents, :currency, :status, :stripe_session_id, :payment_reference, :confirmed_at, :user_id, :event_id, :ticket_id])
+    |> cast(attrs, [
+      :quantity, :subtotal_cents, :tax_cents, :total_cents, :currency, :status,
+      :stripe_session_id, :payment_reference, :confirmed_at, :user_id, :event_id,
+      :ticket_id, :stripe_connect_account_id, :application_fee_amount
+    ])
     |> validate_required([:quantity, :subtotal_cents, :total_cents, :currency, :status, :user_id, :event_id, :ticket_id])
     |> validate_number(:quantity, greater_than: 0, message: "must be greater than 0")
     |> validate_number(:subtotal_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_number(:tax_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_number(:total_cents, greater_than: 0, message: "must be greater than 0")
+    |> validate_number(:application_fee_amount, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_inclusion(:currency, ["usd", "eur", "gbp", "cad", "aud"], message: "must be a supported currency")
     |> validate_inclusion(:status, @valid_statuses, message: "must be a valid status")
     |> validate_total_calculation()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:ticket_id)
+    |> foreign_key_constraint(:stripe_connect_account_id)
   end
 
   defp validate_total_calculation(changeset) do
@@ -69,4 +79,11 @@ defmodule EventasaurusApp.Events.Order do
   def can_refund?(%__MODULE__{status: "confirmed", payment_reference: ref}) when not is_nil(ref), do: true
   def can_refund?(%__MODULE__{status: "canceled", payment_reference: ref}) when not is_nil(ref), do: true
   def can_refund?(_), do: false
+
+  def using_stripe_connect?(%__MODULE__{stripe_connect_account_id: id}) when not is_nil(id), do: true
+  def using_stripe_connect?(_), do: false
+
+  def calculate_platform_fee(total_cents, fee_percentage \\ 0.05) do
+    round(total_cents * fee_percentage)
+  end
 end

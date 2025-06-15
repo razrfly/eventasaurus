@@ -23,6 +23,8 @@ config :eventasaurus, :supabase,
     auto_confirm_email: true
   }
 
+
+
 config :eventasaurus, EventasaurusWeb.Endpoint,
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}, port: 4000],
