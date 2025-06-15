@@ -560,11 +560,87 @@ defmodule EventasaurusApp.Ticketing do
     Order.changeset(order, attrs)
   end
 
+  @doc """
+  Gets an order by its Stripe Payment Intent ID.
+
+  ## Examples
+
+      iex> get_order_by_payment_intent("pi_1234567890")
+      %Order{}
+
+      iex> get_order_by_payment_intent("nonexistent")
+      nil
+
+  """
+  def get_order_by_payment_intent(payment_intent_id) do
+    Order
+    |> where([o], o.payment_reference == ^payment_intent_id)
+    |> Repo.one()
+  end
+
+  @doc """
+  Confirms an order without requiring a payment reference (for webhook processing).
+
+  ## Examples
+
+      iex> confirm_order(order)
+      {:ok, %Order{}}
+
+  """
+  def confirm_order(%Order{} = order) do
+    Repo.transaction(fn ->
+      # Update order
+      {:ok, confirmed_order} =
+        order
+        |> Order.changeset(%{
+          status: "confirmed",
+          confirmed_at: DateTime.utc_now()
+        })
+        |> Repo.update()
+
+      # Create EventParticipant record
+      {:ok, _participant} = create_event_participant(confirmed_order)
+
+      # Broadcast updates
+      maybe_broadcast_order_update(confirmed_order, :confirmed)
+
+      confirmed_order
+    end)
+  end
+
+  @doc """
+  Marks an order as failed with a reason.
+
+  ## Examples
+
+      iex> fail_order(order, "Payment failed")
+      {:ok, %Order{}}
+
+  """
+  def fail_order(%Order{} = order, reason) do
+    order
+    |> Order.changeset(%{
+      status: "failed",
+      failure_reason: reason,
+      failed_at: DateTime.utc_now()
+    })
+    |> Repo.update()
+    |> case do
+      {:ok, failed_order} ->
+        maybe_broadcast_order_update(failed_order, :failed)
+        {:ok, failed_order}
+      error ->
+        error
+    end
+  end
+
   ## Private Helper Functions
 
   defp get_event_organizer_stripe_account(event_id) do
     # Get the event with its organizer
-    event = EventasaurusApp.Events.get_event!(event_id)
+    event =
+      EventasaurusApp.Events.get_event!(event_id)
+      |> Repo.preload(:users)
 
     # Find the event organizer (assuming the first user is the organizer)
     # In a more complex system, you might have a specific organizer field
