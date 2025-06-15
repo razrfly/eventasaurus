@@ -147,6 +147,152 @@ defmodule EventasaurusApp.Stripe do
 
   def exchange_oauth_code(_), do: {:error, "Invalid authorization code"}
 
+  @doc """
+  Creates a Payment Intent for a Stripe Connect account with application fees.
+  """
+  def create_payment_intent(amount_cents, currency, connect_account, application_fee_amount, metadata \\ %{}) do
+    Logger.info("Creating Payment Intent for Stripe Connect account",
+      amount_cents: amount_cents,
+      currency: currency,
+      stripe_user_id: connect_account.stripe_user_id,
+      application_fee_amount: application_fee_amount
+    )
+
+    url = "https://api.stripe.com/v1/payment_intents"
+    secret_key = get_stripe_secret_key()
+
+    headers = [
+      {"Content-Type", "application/x-www-form-urlencoded"},
+      {"Authorization", "Bearer #{secret_key}"},
+      {"Stripe-Account", connect_account.stripe_user_id}
+    ]
+
+    # Build metadata with order information
+    full_metadata = Map.merge(%{
+      "platform" => "eventasaurus",
+      "connect_account_id" => to_string(connect_account.id)
+    }, metadata)
+
+    body_params = %{
+      "amount" => amount_cents,
+      "currency" => currency,
+      "application_fee_amount" => application_fee_amount,
+      "transfer_data[destination]" => connect_account.stripe_user_id,
+      "automatic_payment_methods[enabled]" => "true"
+    }
+
+    # Add metadata to body params
+    body_params_with_metadata =
+      full_metadata
+      |> Enum.reduce(body_params, fn {key, value}, acc ->
+        Map.put(acc, "metadata[#{key}]", to_string(value))
+      end)
+
+    body = URI.encode_query(body_params_with_metadata)
+
+    case HTTPoison.post(url, body, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, payment_intent} ->
+            Logger.info("Successfully created Payment Intent",
+              payment_intent_id: payment_intent["id"],
+              amount: payment_intent["amount"],
+              application_fee_amount: payment_intent["application_fee_amount"]
+            )
+            {:ok, payment_intent}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode Payment Intent response",
+              error: inspect(decode_error),
+              response_body: response_body
+            )
+            {:error, "Invalid response format from Stripe"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, error_data} ->
+            Logger.error("Stripe Payment Intent error",
+              status_code: status_code,
+              error_type: error_data["error"]["type"],
+              error_message: error_data["error"]["message"]
+            )
+            {:error, error_data["error"]["message"] || "Payment Intent creation failed"}
+
+          {:error, _} ->
+            Logger.error("Stripe Payment Intent error with invalid JSON",
+              status_code: status_code,
+              response_body: response_body
+            )
+            {:error, "Stripe returned an error: HTTP #{status_code}"}
+        end
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("HTTP error during Payment Intent creation", reason: inspect(reason))
+        {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
+
+      {:error, error} ->
+        Logger.error("Unexpected error during Payment Intent creation", error: inspect(error))
+        {:error, "Unexpected error during Payment Intent creation"}
+    end
+  end
+
+  @doc """
+  Retrieves a Payment Intent by ID.
+  """
+  def get_payment_intent(payment_intent_id, connect_account \\ nil) do
+    url = "https://api.stripe.com/v1/payment_intents/#{payment_intent_id}"
+    secret_key = get_stripe_secret_key()
+
+    headers = [
+      {"Authorization", "Bearer #{secret_key}"}
+    ]
+
+    # Add Stripe-Account header if this is for a connected account
+    headers = if connect_account do
+      [{"Stripe-Account", connect_account.stripe_user_id} | headers]
+    else
+      headers
+    end
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, payment_intent} ->
+            {:ok, payment_intent}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode Payment Intent response",
+              error: inspect(decode_error),
+              response_body: response_body
+            )
+            {:error, "Invalid response format from Stripe"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, error_data} ->
+            Logger.error("Stripe Payment Intent retrieval error",
+              status_code: status_code,
+              error_type: error_data["error"]["type"],
+              error_message: error_data["error"]["message"]
+            )
+            {:error, error_data["error"]["message"] || "Payment Intent retrieval failed"}
+
+          {:error, _} ->
+            {:error, "Stripe returned an error: HTTP #{status_code}"}
+        end
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("HTTP error during Payment Intent retrieval", reason: inspect(reason))
+        {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
+
+      {:error, error} ->
+        Logger.error("Unexpected error during Payment Intent retrieval", error: inspect(error))
+        {:error, "Unexpected error during Payment Intent retrieval"}
+    end
+  end
+
   # Private helper functions
 
   defp get_stripe_client_id do
