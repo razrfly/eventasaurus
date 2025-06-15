@@ -66,7 +66,7 @@ defmodule EventasaurusApp.Events.Order do
   def can_cancel?(%__MODULE__{status: "pending"}), do: true
   def can_cancel?(_), do: false
 
-  def can_refund?(%__MODULE__{status: "confirmed"}), do: true
-  def can_refund?(%__MODULE__{status: "canceled"}), do: true
+  def can_refund?(%__MODULE__{status: "confirmed", payment_reference: ref}) when not is_nil(ref), do: true
+  def can_refund?(%__MODULE__{status: "canceled", payment_reference: ref}) when not is_nil(ref), do: true
   def can_refund?(_), do: false
 end
