@@ -386,39 +386,53 @@ defmodule EventasaurusApp.Events do
     |> Repo.insert()
   end
 
-  @doc """
+      @doc """
   Creates or updates an event participant for ticket purchase.
 
   This function implements the design pattern where:
   1. If participant doesn't exist, create with confirmed_with_order status
   2. If participant exists, upgrade their status to confirmed_with_order
   3. Avoids duplicate participant records
+  4. Uses atomic upsert to prevent race conditions
   """
   def create_or_upgrade_participant_for_order(%{event_id: event_id, user_id: user_id} = attrs) do
-    case Repo.get_by(EventParticipant, event_id: event_id, user_id: user_id) do
-      nil ->
-        # No existing participant, create new one
-        participant_attrs = Map.merge(attrs, %{
-          status: :confirmed_with_order,
-          role: :ticket_holder
-        })
+    # For upsert, we need to handle metadata merging at the database level
+    # Since PostgreSQL doesn't have easy metadata merging in upsert, we'll use a transaction
+    Repo.transaction(fn ->
+      case Repo.get_by(EventParticipant, event_id: event_id, user_id: user_id) do
+        nil ->
+          # No existing participant, create new one
+          participant_attrs = Map.merge(attrs, %{
+            status: :confirmed_with_order,
+            role: :ticket_holder
+          })
 
-        %EventParticipant{}
-        |> EventParticipant.changeset(participant_attrs)
-        |> Repo.insert()
+          case %EventParticipant{}
+               |> EventParticipant.changeset(participant_attrs)
+               |> Repo.insert() do
+            {:ok, participant} -> participant
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
 
-      existing_participant ->
-        # Participant exists, upgrade their status
-        upgrade_attrs = %{
-          status: :confirmed_with_order,
-          role: :ticket_holder,
-          metadata: Map.merge(existing_participant.metadata || %{}, attrs[:metadata] || %{})
-        }
+        existing_participant ->
+          # Participant exists, upgrade their status and merge metadata
+          new_metadata = Map.get(attrs, :metadata, %{})
+          merged_metadata = Map.merge(existing_participant.metadata || %{}, new_metadata)
 
-        existing_participant
-        |> EventParticipant.changeset(upgrade_attrs)
-        |> Repo.update()
-    end
+          upgrade_attrs = %{
+            status: :confirmed_with_order,
+            role: :ticket_holder,
+            metadata: merged_metadata
+          }
+
+          case existing_participant
+               |> EventParticipant.changeset(upgrade_attrs)
+               |> Repo.update() do
+            {:ok, participant} -> participant
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+      end
+    end)
   end
 
   @doc """

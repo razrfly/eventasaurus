@@ -197,9 +197,16 @@ defmodule EventasaurusApp.Ticketing do
 
   """
   def count_sold_tickets(ticket_id) do
+    # Only count confirmed orders and pending orders created within the last hour
+    # This prevents abandoned checkouts from blocking inventory indefinitely
+    one_hour_ago = DateTime.add(DateTime.utc_now(), -1, :hour)
+
     Order
     |> where([o], o.ticket_id == ^ticket_id)
-    |> where([o], o.status in ["confirmed", "pending"])
+    |> where([o],
+      o.status == "confirmed" or
+      (o.status == "pending" and o.inserted_at > ^one_hour_ago)
+    )
     |> select([o], sum(o.quantity))
     |> Repo.one()
     |> case do
@@ -315,12 +322,23 @@ defmodule EventasaurusApp.Ticketing do
   def create_order(%User{} = user, %Ticket{} = ticket, attrs \\ %{}) do
     quantity = Map.get(attrs, :quantity, 1)
 
-         with :ok <- validate_ticket_availability(ticket, quantity),
-          {:ok, pricing} <- calculate_order_pricing(ticket, quantity),
-          {:ok, order} <- insert_order(user, ticket, quantity, pricing, attrs) do
-       maybe_broadcast_order_update(order, :created)
-       {:ok, order}
-     end
+        # Use transaction with row locking to prevent overselling
+    case Repo.transaction(fn ->
+      # Lock the ticket row to prevent concurrent modifications
+      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+
+      with :ok <- validate_ticket_availability(locked_ticket, quantity),
+           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity),
+           {:ok, order} <- insert_order(user, locked_ticket, quantity, pricing, attrs) do
+        maybe_broadcast_order_update(order, :created)
+        order
+      else
+        error -> Repo.rollback(error)
+      end
+    end) do
+      {:ok, order} -> {:ok, order}
+      {:error, error} -> error
+    end
   end
 
   @doc """
@@ -539,16 +557,4 @@ defmodule EventasaurusApp.Ticketing do
     Phoenix.PubSub.subscribe(EventasaurusApp.PubSub, @pubsub_topic)
   end
 
-  @doc """
-  Subscribes to ticketing updates for a specific event.
-
-  ## Examples
-
-      iex> subscribe_to_event(event_id)
-      :ok
-
-  """
-  def subscribe_to_event(event_id) do
-    Phoenix.PubSub.subscribe(EventasaurusApp.PubSub, "#{@pubsub_topic}:event:#{event_id}")
-  end
 end
