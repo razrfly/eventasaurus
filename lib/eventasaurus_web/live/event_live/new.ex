@@ -80,6 +80,11 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:default_categories, EventasaurusWeb.Services.DefaultImagesService.get_categories())
           |> assign(:default_images, EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general"))
           |> assign(:supabase_access_token, session["access_token"])
+          # Ticketing assigns
+          |> assign(:tickets, [])
+          |> assign(:show_ticket_form, false)
+          |> assign(:ticket_form_data, %{})
+          |> assign(:editing_ticket_index, nil)
 
         {:ok, socket}
 
@@ -921,15 +926,52 @@ defmodule EventasaurusWeb.EventLive.New do
           event
         end
 
+        # If ticketing is enabled, create the tickets
+        final_event = if Map.get(final_event_params, "is_ticketed", false) && length(socket.assigns.tickets) > 0 do
+          case create_tickets_for_event(event_with_poll, socket.assigns.tickets) do
+            :ok -> event_with_poll
+            {:error, _} -> event_with_poll # Fall back to event without tickets if creation fails
+          end
+        else
+          event_with_poll
+        end
+
         {:noreply,
          socket
          |> put_flash(:info, "Event created successfully")
-         |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
+         |> redirect(to: ~p"/events/#{final_event.slug}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         require Logger
         Logger.error("[submit] Event creation failed with changeset errors: #{inspect(changeset.errors)}")
         {:noreply, assign(socket, form: to_form(changeset))}
+    end
+  end
+
+  # Helper function to create tickets for an event
+  defp create_tickets_for_event(event, tickets) do
+    alias EventasaurusApp.Ticketing
+
+    results = Enum.map(tickets, fn ticket_data ->
+      ticket_attrs = %{
+        title: ticket_data.title,
+        description: ticket_data.description,
+        price_cents: ticket_data.price_cents,
+        quantity: ticket_data.quantity,
+        starts_at: ticket_data.starts_at,
+        ends_at: ticket_data.ends_at,
+        tippable: ticket_data.tippable
+      }
+
+      Ticketing.create_ticket(event, ticket_attrs)
+    end)
+
+    # Check if all tickets were created successfully
+    if Enum.all?(results, fn {status, _} -> status == :ok end) do
+      :ok
+    else
+      failed_results = Enum.filter(results, fn {status, _} -> status == :error end)
+      {:error, failed_results}
     end
   end
 
@@ -962,5 +1004,200 @@ defmodule EventasaurusWeb.EventLive.New do
       changeset
     end
   end
+
+  # ============================================================================
+  # Ticketing Event Handlers
+  # ============================================================================
+
+  @impl true
+  def handle_event("toggle_ticketing", _params, socket) do
+    current_value = Map.get(socket.assigns.form_data, "is_ticketed", false)
+    # Handle both string and boolean values
+    current_bool = current_value in [true, "true"]
+    new_value = !current_bool
+
+    form_data = Map.put(socket.assigns.form_data, "is_ticketed", new_value)
+
+    # Reset ticketing-related assigns when disabling ticketing
+    socket = if new_value do
+      socket
+    else
+      socket
+      |> assign(:tickets, [])
+      |> assign(:show_ticket_form, false)
+      |> assign(:ticket_form_data, %{})
+      |> assign(:editing_ticket_index, nil)
+    end
+
+    socket = assign(socket, :form_data, form_data)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("add_ticket_form", _params, socket) do
+    socket =
+      socket
+      |> assign(:show_ticket_form, true)
+      |> assign(:ticket_form_data, %{})
+      |> assign(:editing_ticket_index, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("edit_ticket", %{"index" => index_str}, socket) do
+    index = String.to_integer(index_str)
+    ticket = Enum.at(socket.assigns.tickets, index)
+
+    if ticket do
+      form_data = %{
+        "title" => ticket.title,
+        "description" => ticket.description || "",
+        "price" => format_price_from_cents(ticket.price_cents),
+        "quantity" => Integer.to_string(ticket.quantity),
+        "starts_at" => format_datetime_for_input(ticket.starts_at),
+        "ends_at" => format_datetime_for_input(ticket.ends_at),
+        "tippable" => ticket.tippable
+      }
+
+      socket =
+        socket
+        |> assign(:show_ticket_form, true)
+        |> assign(:ticket_form_data, form_data)
+        |> assign(:editing_ticket_index, index)
+
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("remove_ticket", %{"index" => index_str}, socket) do
+    index = String.to_integer(index_str)
+    updated_tickets = List.delete_at(socket.assigns.tickets, index)
+
+    socket = assign(socket, :tickets, updated_tickets)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cancel_ticket_form", _params, socket) do
+    socket =
+      socket
+      |> assign(:show_ticket_form, false)
+      |> assign(:ticket_form_data, %{})
+      |> assign(:editing_ticket_index, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("validate_ticket", %{"ticket" => ticket_params}, socket) do
+    # Update the ticket form data, preserving existing values
+    current_data = socket.assigns.ticket_form_data || %{}
+
+    # Handle checkbox properly - if tippable is not in params, it means unchecked
+    updated_data = if Map.has_key?(ticket_params, "tippable") do
+      Map.merge(current_data, ticket_params)
+    else
+      # Checkbox was unchecked, so explicitly set tippable to false
+      ticket_params_with_tippable = Map.put(ticket_params, "tippable", false)
+      Map.merge(current_data, ticket_params_with_tippable)
+    end
+
+    socket = assign(socket, :ticket_form_data, updated_data)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("save_ticket", _params, socket) do
+    ticket_data = socket.assigns.ticket_form_data
+
+    # Validate required fields
+    cond do
+      Map.get(ticket_data, "title", "") |> String.trim() == "" ->
+        socket = put_flash(socket, :error, "Ticket name is required")
+        {:noreply, socket}
+
+      Map.get(ticket_data, "price", "") |> String.trim() == "" ->
+        socket = put_flash(socket, :error, "Ticket price is required")
+        {:noreply, socket}
+
+      Map.get(ticket_data, "quantity", "") |> String.trim() == "" ->
+        socket = put_flash(socket, :error, "Ticket quantity is required")
+        {:noreply, socket}
+
+      true ->
+        # Create ticket struct
+        ticket = %{
+          title: Map.get(ticket_data, "title", ""),
+          description: Map.get(ticket_data, "description"),
+          price_cents: parse_price_to_cents(Map.get(ticket_data, "price", "0")),
+          quantity: String.to_integer(Map.get(ticket_data, "quantity", "0")),
+          starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
+          ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
+          tippable: Map.get(ticket_data, "tippable", false) == true
+        }
+
+        # Add or update ticket in the list
+        updated_tickets = case socket.assigns.editing_ticket_index do
+          nil ->
+            # Adding new ticket
+            socket.assigns.tickets ++ [ticket]
+          index ->
+            # Updating existing ticket
+            List.replace_at(socket.assigns.tickets, index, ticket)
+        end
+
+        socket =
+          socket
+          |> assign(:tickets, updated_tickets)
+          |> assign(:show_ticket_form, false)
+          |> assign(:ticket_form_data, %{})
+          |> assign(:editing_ticket_index, nil)
+          |> put_flash(:info, "Ticket saved successfully")
+
+        {:noreply, socket}
+    end
+  end
+
+  # ============================================================================
+  # Ticketing Helper Functions
+  # ============================================================================
+
+  defp format_price_from_cents(price_cents) when is_integer(price_cents) do
+    Float.to_string(price_cents / 100)
+  end
+  defp format_price_from_cents(_), do: ""
+
+  defp format_datetime_for_input(nil), do: ""
+  defp format_datetime_for_input(%DateTime{} = datetime) do
+    # Format as local datetime string for input
+    datetime
+    |> DateTime.truncate(:second)
+    |> DateTime.to_iso8601()
+    |> String.replace("Z", "")
+    |> String.replace("+00:00", "")
+  end
+  defp format_datetime_for_input(_), do: ""
+
+  defp parse_price_to_cents(price_str) when is_binary(price_str) do
+    case Float.parse(price_str) do
+      {price, _} -> round(price * 100)
+      :error -> 0
+    end
+  end
+  defp parse_price_to_cents(_), do: 0
+
+  defp parse_datetime(nil), do: nil
+  defp parse_datetime(""), do: nil
+  defp parse_datetime(datetime_str) when is_binary(datetime_str) do
+    case DateTime.from_iso8601(datetime_str <> ":00Z") do
+      {:ok, datetime, _} -> datetime
+      {:error, _} -> nil
+    end
+  end
+  defp parse_datetime(_), do: nil
 
 end
