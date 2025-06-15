@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Services.UnsplashService
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Services.DefaultImagesService
+  alias EventasaurusApp.Ticketing
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
@@ -95,8 +96,16 @@ defmodule EventasaurusWeb.EventLive.Edit do
               "selected_poll_dates" => selected_poll_dates,
               "polling_deadline" => if(event.polling_deadline, do: DateTime.to_iso8601(event.polling_deadline), else: ""),
               "polling_deadline_date" => polling_deadline_date,
-              "polling_deadline_time" => polling_deadline_time
+              "polling_deadline_time" => polling_deadline_time,
+              "is_ticketed" => event.is_ticketed
             }
+
+            # Load existing tickets for the event
+            existing_tickets = if event.is_ticketed do
+              Ticketing.list_tickets_for_event(event.id)
+            else
+              []
+            end
 
             # Set up the socket with all required assigns
             socket =
@@ -126,6 +135,11 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
               |> assign(:supabase_access_token, "edit_token_#{user.id}")
+              # Ticketing assigns
+              |> assign(:tickets, existing_tickets)
+              |> assign(:show_ticket_form, false)
+              |> assign(:ticket_form_data, %{})
+              |> assign(:editing_ticket_index, nil)
 
             {:ok, socket}
           else
@@ -255,8 +269,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
     Logger.info("Validation errors: #{inspect(validation_changeset.errors)}")
 
     if validation_changeset.valid? do
-      Logger.info("Validation passed, calling save_event")
-      case save_event(socket, socket.assigns.event, final_event_params) do
+      Logger.info("Validation passed, calling Events.update_event")
+      case Events.update_event(socket.assigns.event, final_event_params) do
         {:ok, event} ->
           {:noreply,
            socket
@@ -265,12 +279,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
         {:error, %Ecto.Changeset{} = changeset} ->
           {:noreply, assign(socket, form: to_form(changeset))}
-
-        {:error, socket_with_error} ->
-          {:noreply, socket_with_error}
       end
     else
-      Logger.info("Validation failed, not calling save_event")
+      Logger.info("Validation failed, not calling Events.update_event")
       {:noreply, assign(socket,
         form: to_form(validation_changeset),
         changeset: validation_changeset
@@ -599,147 +610,345 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, socket}
   end
 
-  # ========== Helper Functions ==========
+  # ============================================================================
+  # Ticketing Event Handlers
+  # ============================================================================
 
-  defp save_event(socket, event, event_params) do
-    require Logger
-    Logger.info("=== SAVE EVENT START ===")
-    Logger.info("Event ID: #{event.id}")
-    Logger.info("Event params keys: #{inspect(Map.keys(event_params))}")
-    Logger.info("Enable date polling: #{inspect(Map.get(event_params, "enable_date_polling"))}")
-    Logger.info("Selected poll dates: #{inspect(Map.get(event_params, "selected_poll_dates"))}")
+  @impl true
+  def handle_event("toggle_ticketing", _params, socket) do
+    current_value = Map.get(socket.assigns.form_data, "is_ticketed", false)
+    # Handle both string and boolean values
+    current_bool = current_value in [true, "true"]
+    new_value = !current_bool
 
-    # First update the event
-    case Events.update_event(event, event_params) do
-      {:ok, updated_event} ->
-        Logger.info("Event update successful")
+    form_data = Map.put(socket.assigns.form_data, "is_ticketed", new_value)
 
-        # Handle date polling updates
-        Logger.info("Starting date polling update...")
-        case handle_date_polling_update(updated_event, event_params, socket.assigns.user) do
-          {:error, changeset} ->
-            Logger.error("Date polling update failed with changeset: #{inspect(changeset)}")
-            socket = put_flash(socket, :error, "We couldn't save the poll dates – please try again.")
-            {:error, socket}
-          result ->
-            Logger.info("Date polling update result: #{inspect(result)}")
-            {:ok, updated_event}
-        end
+    # Reset ticketing-related assigns when disabling ticketing
+    socket = if new_value do
+      socket
+    else
+      socket
+      |> assign(:tickets, [])
+      |> assign(:show_ticket_form, false)
+      |> assign(:ticket_form_data, %{})
+      |> assign(:editing_ticket_index, nil)
+    end
 
-      {:error, changeset} ->
-        Logger.error("Event update failed with changeset: #{inspect(changeset)}")
-        socket = put_flash(socket, :error, "We couldn't save the event – please try again.")
-        {:error, socket}
+    socket = assign(socket, :form_data, form_data)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("add_ticket_form", _params, socket) do
+    socket =
+      socket
+      |> assign(:show_ticket_form, true)
+      |> assign(:ticket_form_data, %{})
+      |> assign(:editing_ticket_index, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("edit_ticket", %{"index" => index_str}, socket) do
+    index = String.to_integer(index_str)
+    ticket = Enum.at(socket.assigns.tickets, index)
+
+    if ticket do
+      form_data = %{
+        "title" => ticket.title,
+        "description" => ticket.description || "",
+        "price" => format_price_from_cents(ticket.price_cents),
+        "quantity" => Integer.to_string(ticket.quantity),
+        "starts_at" => format_datetime_for_input(ticket.starts_at),
+        "ends_at" => format_datetime_for_input(ticket.ends_at),
+        "tippable" => ticket.tippable
+      }
+
+      socket =
+        socket
+        |> assign(:show_ticket_form, true)
+        |> assign(:ticket_form_data, form_data)
+        |> assign(:editing_ticket_index, index)
+
+      {:noreply, socket}
+    else
+      {:noreply, socket}
     end
   end
 
-  # Helper function to handle date polling updates
-  defp handle_date_polling_update(event, params, user) do
+  @impl true
+  def handle_event("remove_ticket", %{"index" => index_str}, socket) do
+    index = String.to_integer(index_str)
+    ticket = Enum.at(socket.assigns.tickets, index)
+
+    if ticket && Map.has_key?(ticket, :id) do
+      # This is an existing ticket in the database, delete it
+      case Ticketing.delete_ticket(ticket) do
+        {:ok, _} ->
+          updated_tickets = List.delete_at(socket.assigns.tickets, index)
+          socket =
+            socket
+            |> assign(:tickets, updated_tickets)
+            |> put_flash(:info, "Ticket deleted successfully")
+          {:noreply, socket}
+        {:error, _} ->
+          socket = put_flash(socket, :error, "Failed to delete ticket")
+          {:noreply, socket}
+      end
+    else
+      # This is a new ticket not yet saved, just remove from list
+      updated_tickets = List.delete_at(socket.assigns.tickets, index)
+      socket = assign(socket, :tickets, updated_tickets)
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_ticket_form", _params, socket) do
+    socket =
+      socket
+      |> assign(:show_ticket_form, false)
+      |> assign(:ticket_form_data, %{})
+      |> assign(:editing_ticket_index, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("validate_ticket", %{"ticket" => ticket_params}, socket) do
+    # Update the ticket form data, preserving existing values
+    current_data = socket.assigns.ticket_form_data || %{}
+
+    # Handle checkbox properly - if tippable is not in params, it means unchecked
+    updated_data = if Map.has_key?(ticket_params, "tippable") do
+      Map.merge(current_data, ticket_params)
+    else
+      # Checkbox was unchecked, so explicitly set tippable to false
+      ticket_params_with_tippable = Map.put(ticket_params, "tippable", false)
+      Map.merge(current_data, ticket_params_with_tippable)
+    end
+
+    socket = assign(socket, :ticket_form_data, updated_data)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("save_ticket", _params, socket) do
+    ticket_data = socket.assigns.ticket_form_data
+
+    # Validate required fields
+    cond do
+      Map.get(ticket_data, "title", "") |> String.trim() == "" ->
+        socket = put_flash(socket, :error, "Ticket name is required")
+        {:noreply, socket}
+
+      Map.get(ticket_data, "price", "") |> String.trim() == "" ->
+        socket = put_flash(socket, :error, "Ticket price is required")
+        {:noreply, socket}
+
+      Map.get(ticket_data, "quantity", "") |> String.trim() == "" ->
+        socket = put_flash(socket, :error, "Ticket quantity is required")
+        {:noreply, socket}
+
+      true ->
+        # Create ticket attributes
+        ticket_attrs = %{
+          title: Map.get(ticket_data, "title", ""),
+          description: Map.get(ticket_data, "description"),
+          price_cents: parse_price_to_cents(Map.get(ticket_data, "price", "0")),
+          quantity: String.to_integer(Map.get(ticket_data, "quantity", "0")),
+          starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
+          ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
+          tippable: Map.get(ticket_data, "tippable", false) == true
+        }
+
+        # Save or update ticket
+        case socket.assigns.editing_ticket_index do
+          nil ->
+            # Adding new ticket
+            case Ticketing.create_ticket(socket.assigns.event, ticket_attrs) do
+              {:ok, ticket} ->
+                updated_tickets = socket.assigns.tickets ++ [ticket]
+                socket =
+                  socket
+                  |> assign(:tickets, updated_tickets)
+                  |> assign(:show_ticket_form, false)
+                  |> assign(:ticket_form_data, %{})
+                  |> assign(:editing_ticket_index, nil)
+                  |> put_flash(:info, "Ticket created successfully")
+
+                {:noreply, socket}
+              {:error, _changeset} ->
+                socket = put_flash(socket, :error, "Failed to create ticket")
+                {:noreply, socket}
+            end
+          index ->
+            # Updating existing ticket
+            existing_ticket = Enum.at(socket.assigns.tickets, index)
+            case Ticketing.update_ticket(existing_ticket, ticket_attrs) do
+              {:ok, updated_ticket} ->
+                updated_tickets = List.replace_at(socket.assigns.tickets, index, updated_ticket)
+                socket =
+                  socket
+                  |> assign(:tickets, updated_tickets)
+                  |> assign(:show_ticket_form, false)
+                  |> assign(:ticket_form_data, %{})
+                  |> assign(:editing_ticket_index, nil)
+                  |> put_flash(:info, "Ticket updated successfully")
+
+                {:noreply, socket}
+              {:error, _changeset} ->
+                socket = put_flash(socket, :error, "Failed to update ticket")
+                {:noreply, socket}
+            end
+        end
+    end
+  end
+
+  # ============================================================================
+  # Ticketing Helper Functions
+  # ============================================================================
+
+  defp format_price_from_cents(price_cents) when is_integer(price_cents) do
+    Float.to_string(price_cents / 100)
+  end
+  defp format_price_from_cents(_), do: ""
+
+  defp format_datetime_for_input(nil), do: ""
+  defp format_datetime_for_input(%DateTime{} = datetime) do
+    # Format as local datetime string for input
+    datetime
+    |> DateTime.truncate(:second)
+    |> DateTime.to_iso8601()
+    |> String.replace("Z", "")
+    |> String.replace("+00:00", "")
+  end
+  defp format_datetime_for_input(_), do: ""
+
+  defp parse_price_to_cents(price_str) when is_binary(price_str) do
+    case Float.parse(price_str) do
+      {price, _} -> round(price * 100)
+      :error -> 0
+    end
+  end
+  defp parse_price_to_cents(_), do: 0
+
+  defp parse_datetime_input(nil), do: nil
+  defp parse_datetime_input(""), do: nil
+  defp parse_datetime_input(datetime_str) when is_binary(datetime_str) do
+    case DateTime.from_iso8601(datetime_str <> ":00Z") do
+      {:ok, datetime, _} -> datetime
+      {:error, _} -> nil
+    end
+  end
+  defp parse_datetime_input(_), do: nil
+
+  # Helper function to parse a datetime into date and time strings
+  defp parse_datetime(nil), do: {nil, nil}
+  defp parse_datetime(datetime) do
+    date = datetime |> DateTime.to_date() |> Date.to_iso8601()
+    time = datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
+    {date, time}
+  end
+
+  # Helper function to parse a datetime into date and time strings with timezone conversion
+  defp parse_datetime_with_timezone(nil, _timezone), do: {nil, nil}
+  defp parse_datetime_with_timezone(datetime, timezone) do
+    # Convert UTC datetime to the event's timezone for display
+    case DateTime.shift_zone(datetime, timezone) do
+      {:ok, shifted_datetime} ->
+        date = shifted_datetime |> DateTime.to_date() |> Date.to_iso8601()
+        time = shifted_datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
+        {date, time}
+      {:error, _} ->
+        # Fallback to UTC if timezone conversion fails
+        parse_datetime(datetime)
+    end
+  end
+
+  # Helper function to validate date polling options
+  defp validate_date_polling(changeset, params) do
     require Logger
-    Logger.info("=== DATE POLLING UPDATE START ===")
+    Logger.info("=== VALIDATE DATE POLLING START ===")
 
     enable_date_polling = Map.get(params, "enable_date_polling", false)
-    Logger.info("Raw enable_date_polling value: #{inspect(enable_date_polling)}")
+    Logger.info("Raw enable_date_polling: #{inspect(enable_date_polling)}")
 
-    # Handle string "true"/"false" from form submissions properly
+    # Handle string "true"/"false" from form submissions
     is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
     Logger.info("Is polling enabled: #{is_polling_enabled}")
 
-    existing_poll = Events.get_event_date_poll(event)
-    Logger.info("Existing poll: #{inspect(existing_poll)}")
+    if is_polling_enabled do
+      selected_dates_string = Map.get(params, "selected_poll_dates", "")
+      Logger.info("Selected dates string: #{inspect(selected_dates_string)}")
 
-    cond do
-      # Case 1: Enabling date polling (create new poll or update existing)
-      is_polling_enabled ->
-        Logger.info("Case 1: Enabling date polling")
-        selected_dates_string = Map.get(params, "selected_poll_dates", "")
-        Logger.info("Selected dates string: #{inspect(selected_dates_string)}")
+      if selected_dates_string == "" do
+        Logger.info("No dates selected, adding error")
+        Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+      else
+        selected_dates =
+          selected_dates_string
+          |> String.split(",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(&(&1 != ""))
 
-        if selected_dates_string != "" do
-          # Parse selected dates
-          selected_dates =
-            selected_dates_string
-            |> String.split(",")
-            |> Enum.map(&String.trim/1)
-            |> Enum.filter(&(&1 != ""))
-            |> Enum.map(fn date_str ->
-              case Date.from_iso8601(date_str) do
-                {:ok, date} -> date
-                {:error, _} -> nil
-              end
-            end)
-            |> Enum.filter(&(&1 != nil))
+        Logger.info("Parsed selected dates: #{inspect(selected_dates)}")
+        Logger.info("Number of dates: #{length(selected_dates)}")
 
-          Logger.info("Parsed selected dates: #{inspect(selected_dates)}")
+        if length(selected_dates) < 2 do
+          Logger.info("Less than 2 dates, adding error")
+          Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+        else
+          Logger.info("Validation passed")
+          changeset
+        end
+      end
+    else
+      Logger.info("Polling not enabled, skipping validation")
+      changeset
+    end
+  end
 
-          if existing_poll do
-            Logger.info("Updating existing poll with ID: #{existing_poll.id}")
-            # Smart update: only add/remove changed date options to preserve existing votes
-            case Events.update_event_date_options(existing_poll, selected_dates) do
-              {:ok, updated_options} ->
-                Logger.info("Date options updated successfully: #{inspect(updated_options)}")
-                # Update event state to polling if not already
-                if event.status != :polling do
-                  Logger.info("Updating event status to polling")
-                  case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
-                    {:ok, _} ->
-                      Logger.info("Event status updated to polling successfully")
-                      :ok
-                    {:error, changeset} ->
-                      Logger.error("Failed to enable polling mode: #{inspect(changeset)}")
-                      {:error, changeset}
-                  end
-                else
-                  Logger.info("Event is already in polling mode")
-                  # Event is already in polling mode, just return success
-                  :ok
-                end
-              {:error, changeset} ->
-                Logger.error("Failed to update date options: #{inspect(changeset)}")
-                # Return error to be handled by caller
-                {:error, changeset}
-            end
+  # Helper function to extract address components
+  defp get_address_component(components, type) do
+    component = Enum.find(components, fn comp ->
+      comp["types"] && Enum.member?(comp["types"], type)
+    end)
+
+    if component, do: component["long_name"], else: ""
+  end
+
+  # Helper function for unified searching (same as new page)
+  defp do_unified_search(socket) do
+    case SearchService.unified_search(
+           socket.assigns.search_query,
+           page: socket.assigns.page,
+           per_page: socket.assigns.per_page
+         ) do
+      %{
+        unsplash: unsplash_results,
+        tmdb: tmdb_results
+      } ->
+        # If this is page 1, replace results, otherwise append for Unsplash; for TMDb, always replace
+        updated_unsplash =
+          if socket.assigns.page == 1 do
+            unsplash_results
           else
-            Logger.info("Creating new poll")
-            # Create new poll
-            case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
-              {:ok, poll} ->
-                Logger.info("New poll created with ID: #{poll.id}")
-                Events.create_date_options_from_list(poll, selected_dates)
-                Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)})
-              {:error, changeset} ->
-                Logger.error("Failed to create new poll: #{inspect(changeset)}")
-                {:error, changeset}
-            end
+            (socket.assigns.search_results[:unsplash] || []) ++ unsplash_results
           end
-        else
-          Logger.info("No selected dates provided")
-          :ok
-        end
 
-      # Case 2: Disabling date polling (keep poll but change event state)
-      existing_poll && !is_polling_enabled ->
-        Logger.info("Case 2: Disabling date polling")
-        # Change event state back to published but keep the poll data
-        if event.status == :polling do
-          Logger.info("Changing event status from polling to confirmed")
-          case Events.update_event(event, %{status: :confirmed, polling_deadline: nil}) do
-            {:ok, _} ->
-              Logger.info("Event status updated to confirmed successfully")
-              :ok
-            {:error, changeset} ->
-              Logger.error("Failed to disable polling mode: #{inspect(changeset)}")
-              {:error, changeset}
-          end
-        else
-          Logger.info("Event is not in polling mode, no status change needed")
-          :ok
-        end
+        updated_tmdb = tmdb_results
 
-      # Case 3: No changes needed
-      true ->
-        Logger.info("Case 3: No changes needed")
-        :ok
+        socket
+        |> assign(:search_results, %{unsplash: updated_unsplash, tmdb: updated_tmdb})
+        |> assign(:loading, false)
+        |> assign(:error, nil)
+
+      _ ->
+        socket
+        |> assign(:loading, false)
+        |> assign(:error, "Error searching APIs.")
     end
   end
 
@@ -866,112 +1075,4 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   defp combine_date_time_to_utc(_, _, _), do: {:error, :invalid_input}
-
-  # Helper function to extract address components
-  defp get_address_component(components, type) do
-    component = Enum.find(components, fn comp ->
-      comp["types"] && Enum.member?(comp["types"], type)
-    end)
-
-    if component, do: component["long_name"], else: ""
-  end
-
-  # Helper function for unified searching (same as new page)
-  defp do_unified_search(socket) do
-    case SearchService.unified_search(
-           socket.assigns.search_query,
-           page: socket.assigns.page,
-           per_page: socket.assigns.per_page
-         ) do
-      %{
-        unsplash: unsplash_results,
-        tmdb: tmdb_results
-      } ->
-        # If this is page 1, replace results, otherwise append for Unsplash; for TMDb, always replace
-        updated_unsplash =
-          if socket.assigns.page == 1 do
-            unsplash_results
-          else
-            (socket.assigns.search_results[:unsplash] || []) ++ unsplash_results
-          end
-
-        updated_tmdb = tmdb_results
-
-        socket
-        |> assign(:search_results, %{unsplash: updated_unsplash, tmdb: updated_tmdb})
-        |> assign(:loading, false)
-        |> assign(:error, nil)
-
-      _ ->
-        socket
-        |> assign(:loading, false)
-        |> assign(:error, "Error searching APIs.")
-    end
-  end
-
-  # Helper function to parse a datetime into date and time strings
-  defp parse_datetime(nil), do: {nil, nil}
-  defp parse_datetime(datetime) do
-    date = datetime |> DateTime.to_date() |> Date.to_iso8601()
-    time = datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
-    {date, time}
-  end
-
-  # Helper function to parse a datetime into date and time strings with timezone conversion
-  defp parse_datetime_with_timezone(nil, _timezone), do: {nil, nil}
-  defp parse_datetime_with_timezone(datetime, timezone) do
-    # Convert UTC datetime to the event's timezone for display
-    case DateTime.shift_zone(datetime, timezone) do
-      {:ok, shifted_datetime} ->
-        date = shifted_datetime |> DateTime.to_date() |> Date.to_iso8601()
-        time = shifted_datetime |> DateTime.to_time() |> Time.to_string() |> String.slice(0, 5)
-        {date, time}
-      {:error, _} ->
-        # Fallback to UTC if timezone conversion fails
-        parse_datetime(datetime)
-    end
-  end
-
-  # Helper function to validate date polling options
-  defp validate_date_polling(changeset, params) do
-    require Logger
-    Logger.info("=== VALIDATE DATE POLLING START ===")
-
-    enable_date_polling = Map.get(params, "enable_date_polling", false)
-    Logger.info("Raw enable_date_polling: #{inspect(enable_date_polling)}")
-
-    # Handle string "true"/"false" from form submissions
-    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
-    Logger.info("Is polling enabled: #{is_polling_enabled}")
-
-    if is_polling_enabled do
-      selected_dates_string = Map.get(params, "selected_poll_dates", "")
-      Logger.info("Selected dates string: #{inspect(selected_dates_string)}")
-
-      if selected_dates_string == "" do
-        Logger.info("No dates selected, adding error")
-        Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
-      else
-        selected_dates =
-          selected_dates_string
-          |> String.split(",")
-          |> Enum.map(&String.trim/1)
-          |> Enum.filter(&(&1 != ""))
-
-        Logger.info("Parsed selected dates: #{inspect(selected_dates)}")
-        Logger.info("Number of dates: #{length(selected_dates)}")
-
-        if length(selected_dates) < 2 do
-          Logger.info("Less than 2 dates, adding error")
-          Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
-        else
-          Logger.info("Validation passed")
-          changeset
-        end
-      end
-    else
-      Logger.info("Polling not enabled, skipping validation")
-      changeset
-    end
-  end
 end
