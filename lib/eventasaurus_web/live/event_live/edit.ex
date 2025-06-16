@@ -142,6 +142,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:show_ticket_modal, false)
               |> assign(:ticket_form_data, %{})
               |> assign(:editing_ticket_index, nil)
+              |> assign(:show_additional_options, false)
 
             {:ok, socket}
           else
@@ -688,18 +689,21 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
+  def handle_event("toggle_additional_options", _params, socket) do
+    current_value = Map.get(socket.assigns, :show_additional_options, false)
+    socket = assign(socket, :show_additional_options, !current_value)
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("validate_ticket", %{"ticket" => ticket_params}, socket) do
     # Update the ticket form data, preserving existing values
     current_data = socket.assigns.ticket_form_data || %{}
 
-    # Handle checkbox properly - normalize tippable value to boolean
-    updated_params = if Map.has_key?(ticket_params, "tippable") do
-      # Checkbox is checked, normalize to boolean true
-      Map.put(ticket_params, "tippable", true)
-    else
-      # Checkbox was unchecked, so explicitly set tippable to false
-      Map.put(ticket_params, "tippable", false)
-    end
+    # Handle checkbox properly - preserve existing value when key is missing
+    updated_params =
+      ticket_params
+      |> Map.update("tippable", Map.get(current_data, "tippable", false), fn _ -> true end)
 
     updated_data = Map.merge(current_data, updated_params)
     socket = assign(socket, :ticket_form_data, updated_data)
@@ -741,18 +745,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
         {:noreply, socket}
 
       true ->
-        # Create ticket attributes
-        ticket_attrs = %{
+        # Create ticket struct
+        ticket = %{
           title: Map.get(ticket_data, "title", ""),
           description: Map.get(ticket_data, "description"),
-          price_cents: parse_currency(Map.get(ticket_data, "price", "0")),
+          price_cents: parse_currency(Map.get(ticket_data, "price", "0")) || 0,
           currency: Map.get(ticket_data, "currency", "usd"),
           quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
             {n, _} when n >= 0 -> n
             _ -> 0
           end,
-          starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
-          ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
+          starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
+          ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
           tippable: Map.get(ticket_data, "tippable", false) == true
         }
 
@@ -760,7 +764,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         case socket.assigns.editing_ticket_index do
           nil ->
             # Adding new ticket
-            case Ticketing.create_ticket(socket.assigns.event, ticket_attrs) do
+            case Ticketing.create_ticket(socket.assigns.event, ticket) do
               {:ok, ticket} ->
                 updated_tickets = socket.assigns.tickets ++ [ticket]
                 socket =
@@ -779,7 +783,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
           index ->
             # Updating existing ticket
             existing_ticket = Enum.at(socket.assigns.tickets, index)
-            case Ticketing.update_ticket(existing_ticket, ticket_attrs) do
+            case Ticketing.update_ticket(existing_ticket, ticket) do
               {:ok, updated_ticket} ->
                 updated_tickets = List.replace_at(socket.assigns.tickets, index, updated_ticket)
                 socket =
