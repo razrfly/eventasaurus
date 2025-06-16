@@ -10,6 +10,7 @@ defmodule EventasaurusApp.Ticketing do
   """
 
   import Ecto.Query, warn: false
+  require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, Ticket, Order}
   alias EventasaurusApp.Accounts.User
@@ -71,7 +72,7 @@ defmodule EventasaurusApp.Ticketing do
 
   ## Examples
 
-      iex> create_ticket(event, %{title: "General Admission", price_cents: 2500})
+      iex> create_ticket(event, %{title: "General Admission", base_price_cents: 2500})
       {:ok, %Ticket{}}
 
       iex> create_ticket(event, %{title: ""})
@@ -374,13 +375,16 @@ defmodule EventasaurusApp.Ticketing do
 
   This function handles the complete order creation process:
   1. Validates ticket availability
-  2. Calculates pricing (subtotal, tax, total)
-  3. Creates the order record
+  2. Calculates pricing (subtotal, tax, total) with flexible pricing support
+  3. Creates the order record with pricing snapshot
   4. Broadcasts real-time updates
 
   ## Examples
 
       iex> create_order(user, ticket, %{quantity: 2})
+      {:ok, %Order{}}
+
+      iex> create_order(user, ticket, %{quantity: 1, custom_price_cents: 2000, tip_cents: 500})
       {:ok, %Order{}}
 
       iex> create_order(user, unavailable_ticket, %{quantity: 1})
@@ -389,14 +393,17 @@ defmodule EventasaurusApp.Ticketing do
   """
   def create_order(%User{} = user, %Ticket{} = ticket, attrs \\ %{}) do
     quantity = Map.get(attrs, :quantity, 1)
+    custom_price_cents = Map.get(attrs, :custom_price_cents)
+    tip_cents = Map.get(attrs, :tip_cents, 0)
 
-            # Use transaction with row locking to prevent overselling
+    # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
       # Lock the ticket row to prevent concurrent modifications
       locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
 
       with :ok <- validate_ticket_availability(locked_ticket, quantity),
-           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity),
+           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
+           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
            {:ok, order} <- insert_order(user, locked_ticket, quantity, pricing, attrs) do
         maybe_broadcast_order_update(order, :created)
         order
@@ -427,6 +434,8 @@ defmodule EventasaurusApp.Ticketing do
   """
   def create_order_with_stripe_connect(%User{} = user, %Ticket{} = ticket, attrs \\ %{}) do
     quantity = Map.get(attrs, :quantity, 1)
+    custom_price_cents = Map.get(attrs, :custom_price_cents)
+    tip_cents = Map.get(attrs, :tip_cents, 0)
 
     # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
@@ -434,7 +443,8 @@ defmodule EventasaurusApp.Ticketing do
       locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
 
       with :ok <- validate_ticket_availability(locked_ticket, quantity),
-           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity),
+           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
+           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
            {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
            {:ok, order} <- insert_order_with_stripe_connect(user, locked_ticket, quantity, pricing, connect_account, attrs),
            {:ok, payment_intent} <- create_stripe_payment_intent(order, connect_account) do
@@ -579,6 +589,56 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   @doc """
+  Gets an order by Stripe session ID.
+
+  ## Examples
+
+      iex> get_order_by_session_id("cs_1234567890")
+      %Order{}
+
+      iex> get_order_by_session_id("nonexistent")
+      nil
+
+  """
+  def get_order_by_session_id(session_id) do
+    Order
+    |> where([o], o.stripe_session_id == ^session_id)
+    |> Repo.one()
+  end
+
+  @doc """
+  Syncs order status with Stripe's current state.
+
+  This is the single source of truth for order status - following t3dotgg pattern.
+  Only confirms orders when Stripe says they're paid.
+
+  ## Examples
+
+      iex> sync_order_with_stripe(order)
+      {:ok, %Order{}}
+
+  """
+  def sync_order_with_stripe(%Order{} = order) do
+    cond do
+      # If already confirmed, no need to sync
+      order.status == "confirmed" ->
+        {:ok, order}
+
+      # If we have a payment intent, check its status
+      order.payment_reference ->
+        sync_order_via_payment_intent(order)
+
+      # If we have a session ID, check the session
+      order.stripe_session_id ->
+        sync_order_via_checkout_session(order)
+
+      # No Stripe reference, can't sync
+      true ->
+        {:ok, order}
+    end
+  end
+
+  @doc """
   Confirms an order without requiring a payment reference (for webhook processing).
 
   ## Examples
@@ -608,29 +668,51 @@ defmodule EventasaurusApp.Ticketing do
     end)
   end
 
-  @doc """
-  Marks an order as failed with a reason.
 
-  ## Examples
 
-      iex> fail_order(order, "Payment failed")
-      {:ok, %Order{}}
+  defp sync_order_via_payment_intent(%Order{} = order) do
+    case EventasaurusApp.Stripe.get_payment_intent(order.payment_reference, nil) do
+      {:ok, %{"status" => "succeeded"}} ->
+        confirm_order(order)
 
-  """
-  def fail_order(%Order{} = order, reason) do
-    order
-    |> Order.changeset(%{
-      status: "failed",
-      failure_reason: reason,
-      failed_at: DateTime.utc_now()
-    })
-    |> Repo.update()
-    |> case do
-      {:ok, failed_order} ->
-        maybe_broadcast_order_update(failed_order, :failed)
-        {:ok, failed_order}
-      error ->
-        error
+      {:ok, %{"status" => status}} ->
+        Logger.info("Payment intent not succeeded, keeping order pending",
+          order_id: order.id,
+          payment_intent_id: order.payment_reference,
+          status: status
+        )
+        {:ok, order}
+
+      {:error, reason} ->
+        Logger.error("Failed to fetch payment intent from Stripe",
+          order_id: order.id,
+          payment_intent_id: order.payment_reference,
+          reason: inspect(reason)
+        )
+        {:ok, order}  # Don't fail the order, just keep it pending
+    end
+  end
+
+  defp sync_order_via_checkout_session(%Order{} = order) do
+    case EventasaurusApp.Stripe.get_checkout_session(order.stripe_session_id) do
+      {:ok, %{"payment_status" => "paid"}} ->
+        confirm_order(order)
+
+      {:ok, %{"payment_status" => status}} ->
+        Logger.info("Checkout session not paid, keeping order pending",
+          order_id: order.id,
+          session_id: order.stripe_session_id,
+          payment_status: status
+        )
+        {:ok, order}
+
+      {:error, reason} ->
+        Logger.error("Failed to fetch checkout session from Stripe",
+          order_id: order.id,
+          session_id: order.stripe_session_id,
+          reason: inspect(reason)
+        )
+        {:ok, order}  # Don't fail the order, just keep it pending
     end
   end
 
@@ -670,7 +752,8 @@ defmodule EventasaurusApp.Ticketing do
       currency: pricing.currency,
       status: "pending",
       stripe_connect_account_id: connect_account.id,
-      application_fee_amount: application_fee_amount
+      application_fee_amount: application_fee_amount,
+      pricing_snapshot: pricing.pricing_snapshot
     })
 
     %Order{}
@@ -696,6 +779,153 @@ defmodule EventasaurusApp.Ticketing do
     )
   end
 
+  @doc """
+  Creates a Stripe Checkout Session with dynamic pricing support.
+
+  This function handles the complete checkout session creation process:
+  1. Validates ticket availability
+  2. Calculates pricing with flexible pricing support
+  3. Creates the order record
+  4. Creates a Stripe checkout session with appropriate pricing
+  5. Returns checkout URL for redirect
+
+  ## Examples
+
+      iex> create_checkout_session(user, ticket, %{quantity: 2, custom_price_cents: 2000})
+      {:ok, %{order: order, checkout_url: url}}
+
+      iex> create_checkout_session(user, ticket, %{pricing_model: "flexible", custom_price_cents: 1500})
+      {:ok, %{order: order, checkout_url: url}}
+
+  """
+  def create_checkout_session(%User{} = user, %Ticket{} = ticket, attrs \\ %{}) do
+    quantity = Map.get(attrs, :quantity, 1)
+    custom_price_cents = Map.get(attrs, :custom_price_cents)
+    tip_cents = Map.get(attrs, :tip_cents, 0)
+
+    # Use transaction with row locking to prevent overselling
+    case Repo.transaction(fn ->
+      # Lock the ticket row to prevent concurrent modifications
+      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+
+      with :ok <- validate_ticket_availability(locked_ticket, quantity),
+           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
+           {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
+           {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
+           {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, quantity, pricing, connect_account, attrs),
+           {:ok, checkout_session} <- create_stripe_checkout_session(order, locked_ticket, connect_account) do
+
+        # Update order with checkout session ID
+        {:ok, updated_order} =
+          order
+          |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+          |> Repo.update()
+
+        maybe_broadcast_order_update(updated_order, :created)
+
+        %{
+          order: updated_order,
+          checkout_url: checkout_session["url"],
+          session_id: checkout_session["id"]
+        }
+      end
+    end) do
+      {:ok, result} -> {:ok, result}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp insert_order_with_checkout_session(%User{} = user, %Ticket{} = ticket, quantity, pricing, connect_account, attrs) do
+    # Calculate platform fee (5% of total)
+    application_fee_amount = Order.calculate_platform_fee(pricing.total_cents)
+
+    order_attrs = Map.merge(attrs, %{
+      user_id: user.id,
+      event_id: ticket.event_id,
+      ticket_id: ticket.id,
+      quantity: quantity,
+      subtotal_cents: pricing.subtotal_cents,
+      tax_cents: pricing.tax_cents,
+      total_cents: pricing.total_cents,
+      currency: pricing.currency,
+      status: "pending",
+      stripe_connect_account_id: connect_account.id,
+      application_fee_amount: application_fee_amount,
+      pricing_snapshot: pricing.pricing_snapshot
+    })
+
+    %Order{}
+    |> Order.changeset(order_attrs)
+    |> Repo.insert()
+  end
+
+  defp create_stripe_checkout_session(%Order{} = order, %Ticket{} = ticket, connect_account) do
+    # Get pricing details from snapshot
+    pricing_snapshot = order.pricing_snapshot || %{}
+    pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
+
+    # Get ticket info for session
+    ticket = Repo.preload(ticket, :event)
+
+    # Generate idempotency key
+    idempotency_key = "order_#{order.id}_#{DateTime.utc_now() |> DateTime.to_unix()}"
+
+    # Build URLs
+    base_url = get_base_url()
+    success_url = "#{base_url}/orders/#{order.id}/success?session_id={CHECKOUT_SESSION_ID}"
+    cancel_url = "#{base_url}/events/#{ticket.event.slug}/tickets"
+
+    metadata = %{
+      "order_id" => to_string(order.id),
+      "user_id" => to_string(order.user_id),
+      "event_id" => to_string(order.event_id),
+      "ticket_id" => to_string(order.ticket_id),
+      "pricing_model" => pricing_model
+    }
+
+    checkout_params = %{
+      amount_cents: order.total_cents,
+      currency: order.currency,
+      connect_account: connect_account,
+      application_fee_amount: order.application_fee_amount,
+      success_url: success_url,
+      cancel_url: cancel_url,
+      metadata: metadata,
+      idempotency_key: idempotency_key,
+      pricing_model: pricing_model,
+      allow_promotion_codes: false,
+      quantity: order.quantity,
+      ticket_name: ticket.title,
+      ticket_description: "#{ticket.event.title} - #{ticket.title}"
+    }
+
+    # Add minimum price for flexible pricing
+    checkout_params = if pricing_model == "flexible" do
+      Map.put(checkout_params, :minimum_price_cents, Map.get(pricing_snapshot, "minimum_price_cents"))
+    else
+      checkout_params
+    end
+
+    EventasaurusApp.Stripe.create_checkout_session(checkout_params)
+  end
+
+  defp get_base_url do
+    # Get base URL from application config or environment
+    case Application.get_env(:eventasaurus_app, EventasaurusAppWeb.Endpoint)[:url] do
+      nil -> "http://localhost:4000"  # Development fallback
+      url_config ->
+        scheme = if url_config[:scheme] == "https", do: "https", else: "http"
+        host = url_config[:host] || "localhost"
+        port = url_config[:port]
+
+        if port && port != 80 && port != 443 do
+          "#{scheme}://#{host}:#{port}"
+        else
+          "#{scheme}://#{host}"
+        end
+    end
+  end
+
   defp validate_ticket_availability(%Ticket{} = ticket, quantity) do
     if ticket_available?(ticket, quantity) do
       :ok
@@ -704,16 +934,42 @@ defmodule EventasaurusApp.Ticketing do
     end
   end
 
-  defp calculate_order_pricing(%Ticket{} = ticket, quantity) do
-    subtotal_cents = ticket.price_cents * quantity
-    tax_cents = calculate_tax(subtotal_cents)
+  defp validate_flexible_pricing(%Ticket{} = ticket, custom_price_cents) do
+    case {ticket.pricing_model, custom_price_cents} do
+      {"flexible", custom_price} when is_integer(custom_price) ->
+        if custom_price >= ticket.minimum_price_cents do
+          :ok
+        else
+          {:error, :price_below_minimum}
+        end
+      {"flexible", nil} ->
+        {:error, :custom_price_required}
+      {_other_model, _} ->
+        :ok
+    end
+  end
+
+  defp calculate_order_pricing(%Ticket{} = ticket, quantity, custom_price_cents, tip_cents) do
+    # Determine effective price per ticket
+    price_per_ticket = case ticket.pricing_model do
+      "flexible" when is_integer(custom_price_cents) -> custom_price_cents
+      _ -> ticket.base_price_cents
+    end
+
+    # Calculate base amounts
+    base_subtotal_cents = price_per_ticket * quantity
+    tip_total_cents = tip_cents * quantity
+    subtotal_cents = base_subtotal_cents + tip_total_cents
+
+    tax_cents = calculate_tax(base_subtotal_cents) # Tax only on ticket price, not tips
     total_cents = subtotal_cents + tax_cents
 
     {:ok, %{
       subtotal_cents: subtotal_cents,
       tax_cents: tax_cents,
       total_cents: total_cents,
-      currency: ticket.currency
+      currency: ticket.currency,
+      pricing_snapshot: Order.create_pricing_snapshot(ticket, custom_price_cents, tip_cents)
     }}
   end
 
@@ -733,7 +989,8 @@ defmodule EventasaurusApp.Ticketing do
       tax_cents: pricing.tax_cents,
       total_cents: pricing.total_cents,
       currency: pricing.currency,
-      status: "pending"
+      status: "pending",
+      pricing_snapshot: pricing.pricing_snapshot
     })
 
     %Order{}

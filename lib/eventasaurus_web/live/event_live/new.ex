@@ -738,7 +738,7 @@ defmodule EventasaurusWeb.EventLive.New do
       form_data = %{
         "title" => ticket.title,
         "description" => ticket.description || "",
-        "price" => format_price_from_cents(ticket.price_cents),
+        "price" => format_price_from_cents(ticket.base_price_cents),
         "currency" => Map.get(ticket, :currency, "usd"),
         "quantity" => Integer.to_string(ticket.quantity),
         "starts_at" => format_datetime_for_input(ticket.starts_at),
@@ -834,10 +834,12 @@ defmodule EventasaurusWeb.EventLive.New do
 
       true ->
         # Create ticket struct
+        price_cents = parse_currency(Map.get(ticket_data, "price", "0")) || 0
         ticket = %{
           title: Map.get(ticket_data, "title", ""),
           description: Map.get(ticket_data, "description"),
-          price_cents: parse_currency(Map.get(ticket_data, "price", "0")) || 0,
+          base_price_cents: price_cents,
+          minimum_price_cents: price_cents,
           currency: Map.get(ticket_data, "currency", "usd"),
           quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
             {n, _} when n >= 0 -> n
@@ -1158,7 +1160,8 @@ defmodule EventasaurusWeb.EventLive.New do
         ticket_attrs = %{
           title: Map.get(ticket_data, :title),
           description: Map.get(ticket_data, :description),
-          price_cents: Map.get(ticket_data, :price_cents),
+          base_price_cents: Map.get(ticket_data, :base_price_cents),
+        minimum_price_cents: Map.get(ticket_data, :minimum_price_cents) || Map.get(ticket_data, :base_price_cents),
           currency: Map.get(ticket_data, :currency, "usd"),
           quantity: Map.get(ticket_data, :quantity),
           starts_at: Map.get(ticket_data, :starts_at),

@@ -238,6 +238,201 @@ defmodule EventasaurusApp.Stripe do
   end
 
   @doc """
+  Creates a Stripe Checkout Session for dynamic pricing with Stripe Connect support.
+
+  Supports:
+  - Fixed pricing (traditional pricing)
+  - Flexible pricing (pay-what-you-want above minimum)
+  - Custom pricing with tips
+  - Idempotency via idempotency_key
+  """
+  def create_checkout_session(%{
+    amount_cents: amount_cents,
+    currency: currency,
+    connect_account: connect_account,
+    application_fee_amount: application_fee_amount,
+    success_url: success_url,
+    cancel_url: cancel_url,
+    metadata: metadata,
+    idempotency_key: idempotency_key,
+    pricing_model: pricing_model,
+    allow_promotion_codes: allow_promotion_codes
+  } = params) do
+
+    Logger.info("Creating Stripe Checkout Session",
+      amount_cents: amount_cents,
+      currency: currency,
+      pricing_model: pricing_model,
+      stripe_user_id: connect_account.stripe_user_id,
+      application_fee_amount: application_fee_amount
+    )
+
+    url = "https://api.stripe.com/v1/checkout/sessions"
+    secret_key = get_stripe_secret_key()
+
+    headers = [
+      {"Content-Type", "application/x-www-form-urlencoded"},
+      {"Authorization", "Bearer #{secret_key}"},
+      {"Idempotency-Key", idempotency_key}
+    ]
+
+    # Build metadata with order and pricing information
+    full_metadata = Map.merge(%{
+      "platform" => "eventasaurus",
+      "connect_account_id" => to_string(connect_account.id),
+      "pricing_model" => pricing_model
+    }, metadata)
+
+    # Base line item configuration
+    line_item = %{
+      "price_data[currency]" => currency,
+      "price_data[product_data][name]" => Map.get(params, :ticket_name, "Event Ticket"),
+      "price_data[product_data][description]" => Map.get(params, :ticket_description, ""),
+      "quantity" => Map.get(params, :quantity, 1)
+    }
+
+    # Configure pricing based on model
+    line_item = case pricing_model do
+      "flexible" ->
+        # For flexible pricing, set minimum and allow adjustment
+        # Note: Stripe doesn't support pay-what-you-want directly in checkout sessions
+        # We'll handle this with custom implementation
+        line_item
+        |> Map.put("price_data[unit_amount]", amount_cents)
+        |> Map.put("adjustable_quantity[enabled]", "false")
+
+      "fixed" ->
+        # Traditional fixed pricing
+        line_item
+        |> Map.put("price_data[unit_amount]", amount_cents)
+        |> Map.put("adjustable_quantity[enabled]", "false")
+
+      _ ->
+        # Default to fixed pricing
+        line_item
+        |> Map.put("price_data[unit_amount]", amount_cents)
+        |> Map.put("adjustable_quantity[enabled]", "false")
+    end
+
+    # Build body parameters
+    body_params = %{
+      "mode" => "payment",
+      "success_url" => success_url,
+      "cancel_url" => cancel_url,
+      "payment_intent_data[application_fee_amount]" => application_fee_amount,
+      "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
+      "allow_promotion_codes" => allow_promotion_codes || false,
+      "expires_at" => DateTime.utc_now() |> DateTime.add(30 * 60) |> DateTime.to_unix(), # 30 minutes
+      "line_items[0][price_data][currency]" => line_item["price_data[currency]"],
+      "line_items[0][price_data][product_data][name]" => line_item["price_data[product_data][name]"],
+      "line_items[0][price_data][unit_amount]" => line_item["price_data[unit_amount]"],
+      "line_items[0][quantity]" => line_item["quantity"]
+    }
+
+    # Add metadata to body params
+    body_params_with_metadata =
+      full_metadata
+      |> Enum.reduce(body_params, fn {key, value}, acc ->
+        Map.put(acc, "metadata[#{key}]", to_string(value))
+      end)
+
+    body = URI.encode_query(body_params_with_metadata)
+
+    case HTTPoison.post(url, body, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, checkout_session} ->
+            Logger.info("Successfully created Checkout Session",
+              session_id: checkout_session["id"],
+              url: checkout_session["url"],
+              expires_at: checkout_session["expires_at"]
+            )
+            {:ok, checkout_session}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode Checkout Session response",
+              error: inspect(decode_error),
+              response_body: redact_secrets(response_body)
+            )
+            {:error, "Invalid response format from Stripe"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, error_data} ->
+            Logger.error("Stripe Checkout Session error",
+              status_code: status_code,
+              error_type: error_data["error"]["type"],
+              error_message: error_data["error"]["message"]
+            )
+            {:error, error_data["error"]["message"] || "Checkout Session creation failed"}
+
+          {:error, _} ->
+            Logger.error("Stripe Checkout Session error with invalid JSON",
+              status_code: status_code,
+              response_body: redact_secrets(response_body)
+            )
+            {:error, "Stripe returned an error: HTTP #{status_code}"}
+        end
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("HTTP error during Checkout Session creation", reason: inspect(reason))
+        {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
+
+      {:error, error} ->
+        Logger.error("Unexpected error during Checkout Session creation", error: inspect(error))
+        {:error, "Unexpected error during Checkout Session creation"}
+    end
+  end
+
+  @doc """
+  Retrieves a Checkout Session by ID.
+  """
+  def get_checkout_session(session_id) do
+    url = "https://api.stripe.com/v1/checkout/sessions/#{session_id}"
+    secret_key = get_stripe_secret_key()
+
+    headers = [
+      {"Authorization", "Bearer #{secret_key}"}
+    ]
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, checkout_session} -> {:ok, checkout_session}
+          {:error, decode_error} ->
+            Logger.error("Failed to decode Checkout Session response",
+              error: inspect(decode_error),
+              response_body: redact_secrets(response_body)
+            )
+            {:error, "Invalid response format from Stripe"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, error_data} ->
+            Logger.error("Stripe Checkout Session retrieval error",
+              status_code: status_code,
+              error_type: error_data["error"]["type"],
+              error_message: error_data["error"]["message"]
+            )
+            {:error, error_data["error"]["message"] || "Checkout Session retrieval failed"}
+
+          {:error, _} ->
+            {:error, "Stripe returned an error: HTTP #{status_code}"}
+        end
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("HTTP error during Checkout Session retrieval", reason: inspect(reason))
+        {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
+
+      {:error, error} ->
+        Logger.error("Unexpected error during Checkout Session retrieval", error: inspect(error))
+        {:error, "Unexpected error during Checkout Session retrieval"}
+    end
+  end
+
+  @doc """
   Retrieves a Payment Intent by ID.
   """
   def get_payment_intent(payment_intent_id, connect_account \\ nil) do
@@ -292,6 +487,10 @@ defmodule EventasaurusApp.Stripe do
         {:error, "Unexpected error during Payment Intent retrieval"}
     end
   end
+
+
+
+
 
   @doc """
   Verifies a Stripe webhook signature to ensure the webhook is authentic.
