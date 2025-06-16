@@ -87,6 +87,7 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:show_ticket_modal, false)
           |> assign(:ticket_form_data, %{})
           |> assign(:editing_ticket_index, nil)
+          |> assign(:show_additional_options, false)
 
         {:ok, socket}
 
@@ -778,6 +779,24 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
+  def handle_event("close_ticket_modal", _params, socket) do
+    socket =
+      socket
+      |> assign(:show_ticket_modal, false)
+      |> assign(:ticket_form_data, %{})
+      |> assign(:editing_ticket_index, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_additional_options", _params, socket) do
+    current_value = Map.get(socket.assigns, :show_additional_options, false)
+    socket = assign(socket, :show_additional_options, !current_value)
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("validate_ticket", %{"ticket" => ticket_params}, socket) do
     # Update the ticket form data, preserving existing values
     current_data = socket.assigns.ticket_form_data || %{}
@@ -818,7 +837,7 @@ defmodule EventasaurusWeb.EventLive.New do
         ticket = %{
           title: Map.get(ticket_data, "title", ""),
           description: Map.get(ticket_data, "description"),
-          price_cents: parse_currency(Map.get(ticket_data, "price", "0")),
+          price_cents: parse_currency(Map.get(ticket_data, "price", "0")) || 0,
           currency: Map.get(ticket_data, "currency", "usd"),
           quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
             {n, _} when n >= 0 -> n
@@ -1140,6 +1159,7 @@ defmodule EventasaurusWeb.EventLive.New do
           title: Map.get(ticket_data, :title),
           description: Map.get(ticket_data, :description),
           price_cents: Map.get(ticket_data, :price_cents),
+          currency: Map.get(ticket_data, :currency, "usd"),
           quantity: Map.get(ticket_data, :quantity),
           starts_at: Map.get(ticket_data, :starts_at),
           ends_at: Map.get(ticket_data, :ends_at),
