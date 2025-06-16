@@ -189,10 +189,5 @@ defmodule EventasaurusWeb.Components.TicketModal do
     """
   end
 
-  # Helper function to check if additional options data exists
-  defp has_additional_options_data?(form_data) do
-    starts_at = Map.get(form_data, "starts_at", "")
-    ends_at = Map.get(form_data, "ends_at", "")
-    starts_at != "" || ends_at != ""
-  end
+
 end
