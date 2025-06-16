@@ -9,11 +9,9 @@ defmodule EventasaurusWeb.Components.TicketModal do
   attr :editing_ticket_index, :integer, default: nil, doc: "index if editing existing ticket"
   attr :on_close, :any, required: true, doc: "event to close modal"
   attr :default_currency, :string, default: "usd", doc: "default currency for tickets"
+  attr :show_additional_options, :boolean, default: false, doc: "whether to show additional options section"
 
   def ticket_modal(assigns) do
-    # Check if additional options should be shown based on form data
-    assigns = assign(assigns, :show_additional_options, has_additional_options_data?(assigns.ticket_form_data))
-
     # Ensure tippable is properly handled as boolean
     tippable_value = case Map.get(assigns.ticket_form_data, "tippable") do
       true -> true
@@ -27,7 +25,6 @@ defmodule EventasaurusWeb.Components.TicketModal do
       id={@id}
       show={@show}
       on_cancel={@on_close}
-      on_confirm={JS.push("save_ticket")}
     >
       <:title>
         <%= if @editing_ticket_index, do: "Edit Ticket", else: "Add New Ticket" %>
@@ -135,7 +132,7 @@ defmodule EventasaurusWeb.Components.TicketModal do
           <div class="border-t pt-4">
             <button
               type="button"
-              phx-click={JS.toggle(to: "#additional-options-#{@id}")}
+              phx-click="toggle_additional_options"
               class="flex items-center space-x-2 text-sm font-medium text-gray-600 hover:text-gray-800"
             >
               <span>Additional Options</span>
