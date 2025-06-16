@@ -25,6 +25,7 @@ defmodule EventasaurusWeb.Components.TicketModal do
       id={@id}
       show={@show}
       on_cancel={@on_close}
+      on_confirm={JS.dispatch("submit", to: "#ticket-form")}
     >
       <:title>
         <%= if @editing_ticket_index, do: "Edit Ticket", else: "Add New Ticket" %>
