@@ -35,7 +35,11 @@ defmodule EventasaurusWeb.CoreComponents do
   ## Examples
 
       <.modal id="confirm-modal">
-        Are you sure?
+        This is a modal.
+      </.modal>
+
+      <.modal id="confirm" on_confirm={JS.push("delete")} on_cancel={JS.patch(~p"/posts")}>
+        This is a modal.
         <:confirm>OK</:confirm>
         <:cancel>Cancel</:cancel>
       </.modal>
@@ -43,8 +47,8 @@ defmodule EventasaurusWeb.CoreComponents do
   """
   attr :id, :string, required: true
   attr :show, :boolean, default: false
-  attr :on_cancel, JS, default: %JS{}
-  attr :on_confirm, JS, default: %JS{}
+  attr :on_cancel, :any, default: nil
+  attr :on_confirm, :any, default: nil
   slot :inner_block, required: true
   slot :title
   slot :confirm
@@ -56,62 +60,57 @@ defmodule EventasaurusWeb.CoreComponents do
       id={@id}
       phx-mounted={@show && show_modal(@id)}
       phx-remove={hide_modal(@id)}
-      data-cancel={JS.exec(@on_cancel, "phx-remove")}
-      data-confirm={JS.exec(@on_confirm, "phx-remove")}
-      class="relative z-50 hidden"
+      class={if @show, do: "relative z-50", else: "relative z-50 hidden"}
+      style={if @show, do: "display: block;", else: "display: none;"}
     >
       <div id={"#{@id}-bg"} class="bg-zinc-50/90 fixed inset-0 transition-opacity" aria-hidden="true" />
-      <div
-        class="fixed inset-0 overflow-y-auto"
-        aria-labelledby={"#{@id}-title"}
-        aria-describedby={"#{@id}-description"}
-        role="dialog"
-        aria-modal="true"
-        tabindex="0"
-      >
+      <div class="fixed inset-0 overflow-y-auto">
         <div class="flex min-h-full items-center justify-center">
           <div class="w-full max-w-3xl p-4 sm:p-6 lg:py-8">
             <div
               id={"#{@id}-container"}
-              phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
+              phx-window-keydown={@on_cancel}
               phx-key="escape"
-              phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
-              class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-white p-8 shadow-lg ring-1 transition"
+              phx-click-away={@on_cancel}
+              class={[
+                "shadow-zinc-700/10 ring-zinc-700/10 relative rounded-2xl bg-white p-8 shadow-lg ring-1 transition",
+                if(@show, do: "block", else: "hidden")
+              ]}
             >
-              <div class="absolute top-6 right-5">
+              <div class="absolute top-6 right-6">
                 <button
-                  phx-click={JS.exec("data-cancel", to: "##{@id}")}
+                  phx-click={@on_cancel}
                   type="button"
                   class="-m-3 flex-none p-3 opacity-20 hover:opacity-40"
                   aria-label={gettext("close")}
                 >
-                  <.icon name="hero-x-mark-solid" class="h-4 w-4" />
+                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
                 </button>
               </div>
               <div id={"#{@id}-content"}>
                 <header :if={@title != []}>
-                  <h1 id={"#{@id}-title"} class="text-lg font-semibold leading-8 text-zinc-800">
+                  <h1 class="text-lg font-semibold leading-8 text-zinc-800">
                     <%= render_slot(@title) %>
                   </h1>
                 </header>
                 <%= render_slot(@inner_block) %>
                 <div :if={@confirm != [] or @cancel != []} class="ml-6 mb-4 flex items-center gap-5">
                   <.button
-                    :if={@confirm != []}
+                    :for={confirm <- @confirm}
                     id={"#{@id}-confirm"}
-                    phx-click={JS.exec("data-confirm", to: "##{@id}")}
+                    phx-click={@on_confirm}
                     phx-disable-with
                     class="py-2 px-3"
                   >
-                    <%= render_slot(@confirm) %>
+                    <%= render_slot(confirm) %>
                   </.button>
-                  <div
-                    :if={@cancel != []}
-                    phx-click={JS.exec("data-cancel", to: "##{@id}")}
-                    class="text-sm font-semibold leading-6 text-zinc-900 hover:text-zinc-700 cursor-pointer"
+                  <.link
+                    :for={cancel <- @cancel}
+                    phx-click={@on_cancel}
+                    class="text-sm font-semibold leading-6 text-zinc-900 hover:text-zinc-700"
                   >
-                    <%= render_slot(@cancel) %>
-                  </div>
+                    <%= render_slot(cancel) %>
+                  </.link>
                 </div>
               </div>
             </div>
