@@ -692,16 +692,33 @@ defmodule EventasaurusWeb.EventLive.Edit do
     # Update the ticket form data, preserving existing values
     current_data = socket.assigns.ticket_form_data || %{}
 
-    # Handle checkbox properly - if tippable is not in params, it means unchecked
-    updated_data = if Map.has_key?(ticket_params, "tippable") do
-      Map.merge(current_data, ticket_params)
+    # Handle checkbox properly - normalize tippable value to boolean
+    updated_params = if Map.has_key?(ticket_params, "tippable") do
+      # Checkbox is checked, normalize to boolean true
+      Map.put(ticket_params, "tippable", true)
     else
       # Checkbox was unchecked, so explicitly set tippable to false
-      ticket_params_with_tippable = Map.put(ticket_params, "tippable", false)
-      Map.merge(current_data, ticket_params_with_tippable)
+      Map.put(ticket_params, "tippable", false)
     end
 
+    updated_data = Map.merge(current_data, updated_params)
     socket = assign(socket, :ticket_form_data, updated_data)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("validate_ticket", %{"_target" => ["ticket", "tippable"]}, socket) do
+    # Handle checkbox unchecked case - when checkbox is unchecked, only _target is sent
+    current_data = socket.assigns.ticket_form_data || %{}
+    updated_data = Map.put(current_data, "tippable", false)
+
+    socket = assign(socket, :ticket_form_data, updated_data)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("validate_ticket", _params, socket) do
+    # Catch-all for any other validate_ticket events
     {:noreply, socket}
   end
 
