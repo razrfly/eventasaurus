@@ -696,26 +696,32 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
-  def handle_event("validate_ticket", %{"ticket" => ticket_params}, socket) do
-    # Update the ticket form data, preserving existing values
-    current_data = socket.assigns.ticket_form_data || %{}
-
-    # Handle checkbox properly - preserve existing value when key is missing
-    updated_params =
-      ticket_params
-      |> Map.update("tippable", Map.get(current_data, "tippable", false), fn _ -> true end)
-
-    updated_data = Map.merge(current_data, updated_params)
-    socket = assign(socket, :ticket_form_data, updated_data)
-    {:noreply, socket}
-  end
-
-  @impl true
   def handle_event("validate_ticket", %{"_target" => ["ticket", "tippable"]}, socket) do
     # Handle checkbox unchecked case - when checkbox is unchecked, only _target is sent
     current_data = socket.assigns.ticket_form_data || %{}
     updated_data = Map.put(current_data, "tippable", false)
 
+    socket = assign(socket, :ticket_form_data, updated_data)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("validate_ticket", %{"ticket" => ticket_params}, socket) do
+    # Update the ticket form data, preserving existing values
+    current_data = socket.assigns.ticket_form_data || %{}
+
+    # Handle checkbox properly - normalize the value based on what's actually sent
+    updated_params = if Map.has_key?(ticket_params, "tippable") do
+      # Checkbox is checked - normalize various truthy values
+      tippable_value = Map.get(ticket_params, "tippable")
+      normalized_tippable = tippable_value in [true, "true", "on"]
+      Map.put(ticket_params, "tippable", normalized_tippable)
+    else
+      # Checkbox key is missing - preserve existing value
+      Map.put(ticket_params, "tippable", Map.get(current_data, "tippable", false))
+    end
+
+    updated_data = Map.merge(current_data, updated_params)
     socket = assign(socket, :ticket_form_data, updated_data)
     {:noreply, socket}
   end
@@ -755,8 +761,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
             {n, _} when n >= 0 -> n
             _ -> 0
           end,
-          starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
-          ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
+          starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
+          ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
           tippable: Map.get(ticket_data, "tippable", false) == true
         }
 

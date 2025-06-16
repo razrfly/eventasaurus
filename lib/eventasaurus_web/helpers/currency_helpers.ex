@@ -29,36 +29,51 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
       iex> format_currency(1250, "usd")
       "$12.50"
 
-      iex> format_currency(999, "eur")
-      "€9.99"
+      iex> format_currency(-500, "eur")
+      "-€5.00"
 
-      iex> format_currency(-500, "usd")
-      "-$5.00"
+      iex> format_currency(0, "gbp")
+      "£0.00"
   """
-  def format_currency(cents, currency \\ "usd")
-
   def format_currency(cents, currency) when is_integer(cents) do
     symbol = Map.get(@currency_symbols, String.downcase(currency), "$")
 
-    # Handle negative values properly
     if cents < 0 do
-      dollars = Decimal.new(abs(cents)) |> Decimal.div(100)
-      "-#{symbol}#{Decimal.to_string(dollars, :normal)}"
+      dollars =
+        Decimal.new(abs(cents))
+        |> Decimal.div(100)
+        |> Decimal.round(2)
+      formatted = format_decimal_to_currency(dollars)
+      "-#{symbol}#{formatted}"
     else
-      dollars = Decimal.new(cents) |> Decimal.div(100)
-      "#{symbol}#{Decimal.to_string(dollars, :normal)}"
+      dollars =
+        Decimal.new(cents)
+        |> Decimal.div(100)
+        |> Decimal.round(2)
+      formatted = format_decimal_to_currency(dollars)
+      "#{symbol}#{formatted}"
     end
   end
 
   def format_currency(_, _), do: "$0.00"
 
   @doc """
+  Helper to format a Decimal to always show 2 decimal places.
+  """
+  defp format_decimal_to_currency(decimal) do
+    # Convert to string and ensure 2 decimal places
+    str = Decimal.to_string(decimal, :normal)
+    case String.split(str, ".") do
+      [whole] -> "#{whole}.00"
+      [whole, fractional] when byte_size(fractional) == 1 -> "#{whole}.#{fractional}0"
+      [whole, fractional] -> "#{whole}.#{String.slice(fractional, 0, 2)}"
+    end
+  end
+
+  @doc """
   Parses a currency string to cents with support for various symbols and thousands separators.
 
   ## Examples
-
-      iex> parse_currency("12.50")
-      1250
 
       iex> parse_currency("$12.50")
       1250
@@ -66,8 +81,8 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
       iex> parse_currency("C$1,234.56")
       123456
 
-      iex> parse_currency("-$5.00")
-      -500
+      iex> parse_currency("€5.99")
+      599
 
       iex> parse_currency("invalid")
       nil
@@ -76,13 +91,14 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
     # Remove currency symbols (including multi-character ones) and thousands separators
     clean_amount =
       amount_str
-      |> String.replace(~r/[$€£¥]|C\$|A\$/u, "")
+      |> String.replace(~r/(C\$|A\$|[$€£¥])/u, "")
       |> String.replace(",", "")
       |> String.trim()
 
     case Float.parse(clean_amount) do
-      {amount, _} -> round(amount * 100)
-      :error -> nil
+      {amount, _} when amount >= 0 -> round(amount * 100)
+      {amount, _} when amount < 0 -> round(amount * 100)  # Allow negative amounts
+      :error -> nil  # Return nil instead of 0 for invalid input
     end
   end
 
@@ -154,19 +170,21 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   def format_price_for_input(_), do: ""
 
   @doc """
-  Formats price from cents for input fields using Decimal for precision.
+  Formats price from cents to decimal string for form inputs.
+  Always shows 2 decimal places.
 
   ## Examples
 
       iex> format_price_from_cents(1250)
       "12.50"
 
-      iex> format_price_from_cents(nil)
-      ""
+      iex> format_price_from_cents(500)
+      "5.00"
+
   """
-  def format_price_from_cents(price_cents) when is_integer(price_cents) do
-    dollars = Decimal.new(price_cents) |> Decimal.div(100)
-    Decimal.to_string(dollars, :normal)
+  def format_price_from_cents(price_cents) when is_integer(price_cents) and price_cents >= 0 do
+    dollars = Decimal.new(price_cents) |> Decimal.div(100) |> Decimal.round(2)
+    format_decimal_to_currency(dollars)
   end
 
   def format_price_from_cents(_), do: ""
