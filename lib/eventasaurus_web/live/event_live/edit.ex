@@ -733,8 +733,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
-  def handle_event("save_ticket", _params, socket) do
-    ticket_data = socket.assigns.ticket_form_data
+  def handle_event("save_ticket", %{"ticket" => ticket_params}, socket) do
+    ticket_data = ticket_params
 
     # Validate required fields
     cond do

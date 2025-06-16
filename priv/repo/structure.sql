@@ -2755,6 +2755,7 @@ CREATE TABLE public.events (
     threshold_count integer,
     canceled_at timestamp(0) without time zone,
     status character varying(255) DEFAULT 'confirmed'::character varying NOT NULL,
+    is_ticketed boolean DEFAULT false NOT NULL,
     CONSTRAINT valid_status CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'polling'::character varying, 'threshold'::character varying, 'confirmed'::character varying, 'canceled'::character varying])::text[]))),
     CONSTRAINT valid_theme_values CHECK (((theme)::text = ANY ((ARRAY['minimal'::character varying, 'cosmic'::character varying, 'velocity'::character varying, 'retro'::character varying, 'celebration'::character varying, 'nature'::character varying, 'professional'::character varying])::text[])))
 );
@@ -2780,6 +2781,55 @@ ALTER SEQUENCE public.events_id_seq OWNED BY public.events.id;
 
 
 --
+-- Name: orders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.orders (
+    id bigint NOT NULL,
+    quantity integer NOT NULL,
+    subtotal_cents integer NOT NULL,
+    tax_cents integer DEFAULT 0 NOT NULL,
+    total_cents integer NOT NULL,
+    currency character varying(255) DEFAULT 'usd'::character varying NOT NULL,
+    status character varying(255) DEFAULT 'pending'::character varying NOT NULL,
+    stripe_session_id character varying(255),
+    payment_reference character varying(255),
+    confirmed_at timestamp(0) without time zone,
+    user_id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    ticket_id bigint NOT NULL,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL,
+    stripe_connect_account_id bigint,
+    application_fee_amount integer DEFAULT 0,
+    CONSTRAINT quantity_positive CHECK ((quantity > 0)),
+    CONSTRAINT subtotal_non_negative CHECK ((subtotal_cents >= 0)),
+    CONSTRAINT tax_non_negative CHECK ((tax_cents >= 0)),
+    CONSTRAINT total_positive CHECK ((total_cents > 0)),
+    CONSTRAINT valid_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'confirmed'::character varying, 'refunded'::character varying, 'canceled'::character varying])::text[])))
+);
+
+
+--
+-- Name: orders_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.orders_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: orders_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.orders_id_seq OWNED BY public.orders.id;
+
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2787,6 +2837,81 @@ CREATE TABLE public.schema_migrations (
     version bigint NOT NULL,
     inserted_at timestamp(0) without time zone
 );
+
+
+--
+-- Name: stripe_connect_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.stripe_connect_accounts (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    stripe_user_id character varying(255) NOT NULL,
+    connected_at timestamp(0) without time zone NOT NULL,
+    disconnected_at timestamp(0) without time zone,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
+-- Name: stripe_connect_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.stripe_connect_accounts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: stripe_connect_accounts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.stripe_connect_accounts_id_seq OWNED BY public.stripe_connect_accounts.id;
+
+
+--
+-- Name: tickets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tickets (
+    id bigint NOT NULL,
+    title character varying(255) NOT NULL,
+    description text,
+    price_cents integer NOT NULL,
+    currency character varying(255) DEFAULT 'usd'::character varying NOT NULL,
+    quantity integer NOT NULL,
+    starts_at timestamp(0) without time zone,
+    ends_at timestamp(0) without time zone,
+    tippable boolean DEFAULT false NOT NULL,
+    event_id bigint NOT NULL,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL,
+    CONSTRAINT price_cents_positive CHECK ((price_cents > 0)),
+    CONSTRAINT quantity_positive CHECK ((quantity > 0))
+);
+
+
+--
+-- Name: tickets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.tickets_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: tickets_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.tickets_id_seq OWNED BY public.tickets.id;
 
 
 --
@@ -3127,6 +3252,27 @@ ALTER TABLE ONLY public.events ALTER COLUMN id SET DEFAULT nextval('public.event
 
 
 --
+-- Name: orders id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.orders ALTER COLUMN id SET DEFAULT nextval('public.orders_id_seq'::regclass);
+
+
+--
+-- Name: stripe_connect_accounts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.stripe_connect_accounts ALTER COLUMN id SET DEFAULT nextval('public.stripe_connect_accounts_id_seq'::regclass);
+
+
+--
+-- Name: tickets id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets ALTER COLUMN id SET DEFAULT nextval('public.tickets_id_seq'::regclass);
+
+
+--
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3396,11 +3542,35 @@ ALTER TABLE ONLY public.events
 
 
 --
+-- Name: orders orders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.orders
+    ADD CONSTRAINT orders_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: stripe_connect_accounts stripe_connect_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.stripe_connect_accounts
+    ADD CONSTRAINT stripe_connect_accounts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tickets tickets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT tickets_pkey PRIMARY KEY (id);
 
 
 --
@@ -3971,6 +4141,69 @@ CREATE INDEX events_venue_id_index ON public.events USING btree (venue_id);
 
 
 --
+-- Name: orders_event_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX orders_event_id_index ON public.orders USING btree (event_id);
+
+
+--
+-- Name: orders_status_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX orders_status_index ON public.orders USING btree (status);
+
+
+--
+-- Name: orders_stripe_connect_account_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX orders_stripe_connect_account_id_index ON public.orders USING btree (stripe_connect_account_id);
+
+
+--
+-- Name: orders_stripe_session_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX orders_stripe_session_id_index ON public.orders USING btree (stripe_session_id) WHERE (stripe_session_id IS NOT NULL);
+
+
+--
+-- Name: orders_ticket_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX orders_ticket_id_index ON public.orders USING btree (ticket_id);
+
+
+--
+-- Name: orders_user_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX orders_user_id_index ON public.orders USING btree (user_id);
+
+
+--
+-- Name: stripe_connect_accounts_stripe_user_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX stripe_connect_accounts_stripe_user_id_index ON public.stripe_connect_accounts USING btree (stripe_user_id);
+
+
+--
+-- Name: stripe_connect_accounts_user_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX stripe_connect_accounts_user_id_index ON public.stripe_connect_accounts USING btree (user_id) WHERE (disconnected_at IS NULL);
+
+
+--
+-- Name: tickets_event_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tickets_event_id_index ON public.tickets USING btree (event_id);
+
+
+--
 -- Name: users_email_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4308,6 +4541,54 @@ ALTER TABLE ONLY public.events
 
 
 --
+-- Name: orders orders_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.orders
+    ADD CONSTRAINT orders_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: orders orders_stripe_connect_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.orders
+    ADD CONSTRAINT orders_stripe_connect_account_id_fkey FOREIGN KEY (stripe_connect_account_id) REFERENCES public.stripe_connect_accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: orders orders_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.orders
+    ADD CONSTRAINT orders_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.tickets(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: orders orders_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.orders
+    ADD CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: stripe_connect_accounts stripe_connect_accounts_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.stripe_connect_accounts
+    ADD CONSTRAINT stripe_connect_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tickets tickets_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT tickets_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE;
+
+
+--
 -- Name: objects objects_bucketId_fkey; Type: FK CONSTRAINT; Schema: storage; Owner: -
 --
 
@@ -4576,3 +4857,8 @@ INSERT INTO public."schema_migrations" (version) VALUES (20250531094707);
 INSERT INTO public."schema_migrations" (version) VALUES (20250531095224);
 INSERT INTO public."schema_migrations" (version) VALUES (20250608104045);
 INSERT INTO public."schema_migrations" (version) VALUES (20250612085356);
+INSERT INTO public."schema_migrations" (version) VALUES (20250614110619);
+INSERT INTO public."schema_migrations" (version) VALUES (20250614110837);
+INSERT INTO public."schema_migrations" (version) VALUES (20250614111845);
+INSERT INTO public."schema_migrations" (version) VALUES (20250615094040);
+INSERT INTO public."schema_migrations" (version) VALUES (20250615094056);
