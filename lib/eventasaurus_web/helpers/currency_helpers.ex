@@ -8,7 +8,8 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
     "eur" => "€",
     "gbp" => "£",
     "cad" => "C$",
-    "aud" => "A$"
+    "aud" => "A$",
+    "jpy" => "¥"
   }
 
   @currency_names %{
@@ -16,11 +17,12 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
     "eur" => "Euro",
     "gbp" => "British Pound",
     "cad" => "Canadian Dollar",
-    "aud" => "Australian Dollar"
+    "aud" => "Australian Dollar",
+    "jpy" => "Japanese Yen"
   }
 
   @doc """
-  Formats cents to currency string with symbol.
+  Formats cents to currency string with symbol using Decimal for precision.
 
   ## Examples
 
@@ -29,19 +31,29 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
 
       iex> format_currency(999, "eur")
       "€9.99"
+
+      iex> format_currency(-500, "usd")
+      "-$5.00"
   """
   def format_currency(cents, currency \\ "usd")
 
-  def format_currency(cents, currency) when is_integer(cents) and cents >= 0 do
+  def format_currency(cents, currency) when is_integer(cents) do
     symbol = Map.get(@currency_symbols, String.downcase(currency), "$")
-    dollars = cents / 100
-    "#{symbol}#{:erlang.float_to_binary(dollars, decimals: 2)}"
+
+    # Handle negative values properly
+    if cents < 0 do
+      dollars = Decimal.new(abs(cents)) |> Decimal.div(100)
+      "-#{symbol}#{Decimal.to_string(dollars, :normal)}"
+    else
+      dollars = Decimal.new(cents) |> Decimal.div(100)
+      "#{symbol}#{Decimal.to_string(dollars, :normal)}"
+    end
   end
 
   def format_currency(_, _), do: "$0.00"
 
   @doc """
-  Parses a currency string to cents.
+  Parses a currency string to cents with support for various symbols and thousands separators.
 
   ## Examples
 
@@ -51,23 +63,30 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
       iex> parse_currency("$12.50")
       1250
 
-      iex> parse_currency("12")
-      1200
+      iex> parse_currency("C$1,234.56")
+      123456
+
+      iex> parse_currency("-$5.00")
+      -500
+
+      iex> parse_currency("invalid")
+      nil
   """
   def parse_currency(amount_str) when is_binary(amount_str) do
-    # Remove currency symbols and whitespace
+    # Remove currency symbols (including multi-character ones) and thousands separators
     clean_amount =
       amount_str
-      |> String.replace(~r/[\$€£]/, "")
+      |> String.replace(~r/[$€£¥]|C\$|A\$/u, "")
+      |> String.replace(",", "")
       |> String.trim()
 
     case Float.parse(clean_amount) do
       {amount, _} -> round(amount * 100)
-      :error -> 0
+      :error -> nil
     end
   end
 
-  def parse_currency(_), do: 0
+  def parse_currency(_), do: nil
 
   @doc """
   Gets the currency symbol for a given currency code.
@@ -112,7 +131,8 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
       {"eur", "Euro (€)"},
       {"gbp", "British Pound (£)"},
       {"cad", "Canadian Dollar (C$)"},
-      {"aud", "Australian Dollar (A$)"}
+      {"aud", "Australian Dollar (A$)"},
+      {"jpy", "Japanese Yen (¥)"}
     ]
   end
 
@@ -134,7 +154,7 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   def format_price_for_input(_), do: ""
 
   @doc """
-  Formats price from cents for input fields.
+  Formats price from cents for input fields using Decimal for precision.
 
   ## Examples
 
@@ -145,7 +165,8 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
       ""
   """
   def format_price_from_cents(price_cents) when is_integer(price_cents) do
-    Float.to_string(price_cents / 100)
+    dollars = Decimal.new(price_cents) |> Decimal.div(100)
+    Decimal.to_string(dollars, :normal)
   end
 
   def format_price_from_cents(_), do: ""
