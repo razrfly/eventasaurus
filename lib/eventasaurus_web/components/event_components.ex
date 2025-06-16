@@ -1,6 +1,7 @@
 defmodule EventasaurusWeb.EventComponents do
   use Phoenix.Component
   import EventasaurusWeb.CoreComponents
+  import EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.TimezoneHelpers
   alias EventasaurusWeb.CalendarComponent
   import Phoenix.HTML.Form
@@ -178,9 +179,6 @@ defmodule EventasaurusWeb.EventComponents do
   attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
   # Ticketing-related attributes
   attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
-  attr :show_ticket_form, :boolean, default: false, doc: "whether to show the ticket creation/edit form"
-  attr :ticket_form_data, :map, default: %{}, doc: "data for the ticket form"
-  attr :editing_ticket_index, :integer, default: nil, doc: "index of ticket being edited, nil for new ticket"
 
   def event_form(assigns) do
     assigns = assign_new(assigns, :id, fn ->
@@ -562,9 +560,9 @@ defmodule EventasaurusWeb.EventComponents do
                     <button
                       type="button"
                       phx-click="add_ticket_form"
-                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
-                      <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
                       Add Ticket
@@ -575,36 +573,61 @@ defmodule EventasaurusWeb.EventComponents do
                   <%= if assigns[:tickets] && length(@tickets) > 0 do %>
                     <div class="space-y-3">
                       <%= for {ticket, index} <- Enum.with_index(@tickets) do %>
-                        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <div class="border border-gray-200 rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
                           <div class="flex items-start justify-between">
                             <div class="flex-1">
-                              <h5 class="text-sm font-medium text-gray-900"><%= ticket.title %></h5>
-                              <%= if ticket.description do %>
-                                <p class="text-xs text-gray-600 mt-1"><%= ticket.description %></p>
+                              <div class="flex items-center space-x-2 mb-1">
+                                <h5 class="text-sm font-semibold text-gray-900"><%= ticket.title %></h5>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  <%= format_currency(ticket.price_cents, Map.get(ticket, :currency, "usd")) %>
+                                </span>
+                              </div>
+                              <%= if ticket.description && ticket.description != "" do %>
+                                <p class="text-xs text-gray-600 mb-2"><%= ticket.description %></p>
                               <% end %>
-                              <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                                <span>Price: $<%= Float.round(ticket.price_cents / 100, 2) %></span>
-                                <span>Quantity: <%= ticket.quantity %></span>
+                              <div class="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                                <span class="flex items-center">
+                                  <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                  </svg>
+                                  <%= ticket.quantity %> available
+                                </span>
                                 <%= if ticket.starts_at do %>
-                                  <span>Sale starts: <%= Calendar.strftime(ticket.starts_at, "%m/%d %I:%M %p") %></span>
+                                  <span class="flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Sale starts: <%= Calendar.strftime(ticket.starts_at, "%m/%d %I:%M %p") %>
+                                  </span>
+                                <% end %>
+                                <%= if ticket.tippable do %>
+                                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    Tips enabled
+                                  </span>
                                 <% end %>
                               </div>
                             </div>
-                            <div class="flex space-x-2">
+                            <div class="flex space-x-2 ml-4">
                               <button
                                 type="button"
                                 phx-click="edit_ticket"
                                 phx-value-index={index}
-                                class="text-blue-600 hover:text-blue-800 text-xs"
+                                class="inline-flex items-center px-2 py-1 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                               >
+                                <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
                                 Edit
                               </button>
                               <button
                                 type="button"
                                 phx-click="remove_ticket"
                                 phx-value-index={index}
-                                class="text-red-600 hover:text-red-800 text-xs"
+                                class="inline-flex items-center px-2 py-1 border border-red-300 rounded text-xs font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                               >
+                                <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
                                 Remove
                               </button>
                             </div>
@@ -612,146 +635,17 @@ defmodule EventasaurusWeb.EventComponents do
                         </div>
                       <% end %>
                     </div>
-                  <% end %>
-
-                  <!-- New/Edit Ticket Form -->
-                  <%= if assigns[:show_ticket_form] do %>
-                    <div class="border border-gray-300 rounded-lg p-4 bg-white">
-                      <div class="flex items-center justify-between mb-3">
-                        <h5 class="text-sm font-medium text-gray-900">
-                          <%= if assigns[:editing_ticket_index], do: "Edit Ticket", else: "New Ticket" %>
-                        </h5>
-                        <button
-                          type="button"
-                          phx-click="cancel_ticket_form"
-                          class="text-gray-400 hover:text-gray-600"
-                        >
-                          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <!-- Ticket Title -->
-                        <div class="sm:col-span-2">
-                          <label class="block text-xs font-medium text-gray-700 mb-1">Ticket Name</label>
-                          <input
-                            type="text"
-                            name="ticket[title]"
-                            value={Map.get(@ticket_form_data || %{}, "title", "")}
-                            placeholder="e.g., General Admission, VIP, Early Bird"
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
-                            phx-change="validate_ticket"
-                          />
-                        </div>
-
-                        <!-- Ticket Description -->
-                        <div class="sm:col-span-2">
-                          <label class="block text-xs font-medium text-gray-700 mb-1">Description (optional)</label>
-                          <textarea
-                            name="ticket[description]"
-                            value={Map.get(@ticket_form_data || %{}, "description", "")}
-                            placeholder="Describe what's included with this ticket..."
-                            rows="2"
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
-                            phx-change="validate_ticket"
-                          ></textarea>
-                        </div>
-
-                        <!-- Price -->
-                        <div>
-                          <label class="block text-xs font-medium text-gray-700 mb-1">Price</label>
-                          <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                              <span class="text-gray-500 text-sm">$</span>
-                            </div>
-                            <input
-                              type="number"
-                              name="ticket[price]"
-                              value={format_price_for_input(@ticket_form_data)}
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              class="block w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
-                              phx-change="validate_ticket"
-                            />
-                          </div>
-                        </div>
-
-                        <!-- Quantity -->
-                        <div>
-                          <label class="block text-xs font-medium text-gray-700 mb-1">Available Tickets</label>
-                          <input
-                            type="number"
-                            name="ticket[quantity]"
-                            value={Map.get(@ticket_form_data || %{}, "quantity", "")}
-                            min="1"
-                            placeholder="100"
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
-                            phx-change="validate_ticket"
-                          />
-                        </div>
-
-                        <!-- Sale Start Time (optional) -->
-                        <div>
-                          <label class="block text-xs font-medium text-gray-700 mb-1">Sale Starts (optional)</label>
-                          <input
-                            type="datetime-local"
-                            name="ticket[starts_at]"
-                            value={Map.get(@ticket_form_data || %{}, "starts_at", "")}
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
-                            phx-change="validate_ticket"
-                          />
-                        </div>
-
-                        <!-- Sale End Time (optional) -->
-                        <div>
-                          <label class="block text-xs font-medium text-gray-700 mb-1">Sale Ends (optional)</label>
-                          <input
-                            type="datetime-local"
-                            name="ticket[ends_at]"
-                            value={Map.get(@ticket_form_data || %{}, "ends_at", "")}
-                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
-                            phx-change="validate_ticket"
-                          />
-                        </div>
-                      </div>
-
-                      <!-- Tippable Option -->
-                      <div class="mt-3">
-                        <label class="flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            name="ticket[tippable]"
-                            value="true"
-                            checked={Map.get(@ticket_form_data || %{}, "tippable", false) == true}
-                            class="h-3 w-3 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                            phx-change="validate_ticket"
-                          />
-                          <span class="ml-2 text-xs text-gray-700">Allow tips on this ticket</span>
-                        </label>
-                      </div>
-
-                      <!-- Form Actions -->
-                      <div class="flex justify-end space-x-2 mt-4 pt-3 border-t border-gray-200">
-                        <button
-                          type="button"
-                          phx-click="cancel_ticket_form"
-                          class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          phx-click="save_ticket"
-                          class="px-3 py-1.5 text-xs font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                        >
-                          <%= if assigns[:editing_ticket_index], do: "Update Ticket", else: "Add Ticket" %>
-                        </button>
-                      </div>
+                  <% else %>
+                    <div class="text-center py-6 text-gray-500">
+                      <svg class="mx-auto h-8 w-8 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      <p class="text-sm">No tickets created yet</p>
+                      <p class="text-xs text-gray-400 mt-1">Click "Add Ticket" to create your first ticket type</p>
                     </div>
                   <% end %>
+
+
 
                   <!-- Help text for ticketing -->
                   <div class="text-xs text-gray-500 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -890,11 +784,5 @@ defmodule EventasaurusWeb.EventComponents do
     end
   end
 
-  defp format_price_for_input(form_data) do
-    case Map.get(form_data, "price") do
-      nil -> ""
-      price_str when is_binary(price_str) -> price_str
-      _ -> ""
-    end
-  end
+
 end

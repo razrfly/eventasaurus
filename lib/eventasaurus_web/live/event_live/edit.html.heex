@@ -21,9 +21,6 @@
     on_image_click="open_image_picker"
     enable_date_polling={@enable_date_polling}
     tickets={@tickets}
-    show_ticket_form={@show_ticket_form}
-    ticket_form_data={@ticket_form_data}
-    editing_ticket_index={@editing_ticket_index}
   />
 </div>
 
@@ -39,4 +36,12 @@
   error={@error}
   supabase_access_token={@supabase_access_token}
   on_close="close_image_picker"
+/>
+
+<.ticket_modal
+  id="ticket-modal"
+  show={@show_ticket_modal}
+  ticket_form_data={@ticket_form_data}
+  editing_ticket_index={@editing_ticket_index}
+  on_close={JS.push("close_ticket_modal")}
 /> 
