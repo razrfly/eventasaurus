@@ -18,9 +18,6 @@
     external_image_data={@external_image_data}
     on_image_click="open_image_picker"
     tickets={@tickets}
-    show_ticket_form={@show_ticket_form}
-    ticket_form_data={@ticket_form_data}
-    editing_ticket_index={@editing_ticket_index}
   />
 </div>
 
@@ -37,3 +34,12 @@
   supabase_access_token={@supabase_access_token}
   on_close="close_image_picker"
 />
+
+<.ticket_modal
+  id="ticket-modal"
+  show={@show_ticket_modal}
+  ticket_form_data={@ticket_form_data}
+  editing_ticket_index={@editing_ticket_index}
+  on_close="cancel_ticket_form"
+/>
+
