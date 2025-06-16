@@ -57,9 +57,7 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
 
   def format_currency(_, _), do: "$0.00"
 
-  @doc """
-  Helper to format a Decimal to always show 2 decimal places.
-  """
+  # Helper to format a Decimal to always show 2 decimal places.
   defp format_decimal_to_currency(decimal) do
     # Convert to string and ensure 2 decimal places
     str = Decimal.to_string(decimal, :normal)
