@@ -11,6 +11,17 @@ defmodule EventasaurusWeb.Components.TicketModal do
   attr :default_currency, :string, default: "usd", doc: "default currency for tickets"
 
   def ticket_modal(assigns) do
+    # Check if additional options should be shown based on form data
+    assigns = assign(assigns, :show_additional_options, has_additional_options_data?(assigns.ticket_form_data))
+
+    # Ensure tippable is properly handled as boolean
+    tippable_value = case Map.get(assigns.ticket_form_data, "tippable") do
+      true -> true
+      "true" -> true
+      _ -> false
+    end
+    assigns = assign(assigns, :tippable_checked, tippable_value)
+
     ~H"""
     <.modal
       id={@id}
@@ -22,154 +33,168 @@ defmodule EventasaurusWeb.Components.TicketModal do
         <%= if @editing_ticket_index, do: "Edit Ticket", else: "Add New Ticket" %>
       </:title>
 
-      <form id="ticket-form" phx-submit="save_ticket">
+      <form id="ticket-form" phx-submit="save_ticket" phx-change="validate_ticket">
         <div class="space-y-4">
-        <!-- Ticket Title -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Ticket Name</label>
-          <input
-            type="text"
-            name="ticket[title]"
-            value={Map.get(@ticket_form_data, "title", "")}
-            placeholder="e.g., General Admission, VIP, Early Bird"
-            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            phx-change="validate_ticket"
-          />
-        </div>
+          <!-- Ticket Name -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Ticket Name *
+            </label>
+            <input
+              type="text"
+              name="ticket[title]"
+              value={Map.get(@ticket_form_data, "title", "")}
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g., General Admission, VIP, Early Bird"
+              required
+            />
+          </div>
 
-        <!-- Ticket Description -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
-          <textarea
-            name="ticket[description]"
-            value={Map.get(@ticket_form_data, "description", "")}
-            placeholder="Describe what's included with this ticket..."
-            rows="3"
-            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            phx-change="validate_ticket"
-          ><%= Map.get(@ticket_form_data, "description", "") %></textarea>
-        </div>
+          <!-- Description -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              name="ticket[description]"
+              rows="2"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Optional description of what's included"
+            ><%= Map.get(@ticket_form_data, "description", "") %></textarea>
+          </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <!-- Price -->
-          <div class="sm:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="text-gray-500 sm:text-sm"><%= currency_symbol(Map.get(@ticket_form_data, "currency", @default_currency)) %></span>
-              </div>
+          <!-- Price and Currency -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Price *
+              </label>
               <input
                 type="number"
                 name="ticket[price]"
                 value={Map.get(@ticket_form_data, "price", "")}
                 step="0.01"
                 min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="0.00"
-                class="block w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                phx-change="validate_ticket"
+                required
               />
             </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Currency
+              </label>
+              <select
+                name="ticket[currency]"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <%= for {code, name} <- supported_currencies() do %>
+                  <option
+                    value={code}
+                    selected={Map.get(@ticket_form_data, "currency", @default_currency) == code}
+                  >
+                    <%= name %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
           </div>
 
-          <!-- Currency -->
+          <!-- Available Tickets -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-            <select
-              name="ticket[currency]"
-              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              phx-change="validate_ticket"
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Available Tickets *
+            </label>
+            <input
+              type="number"
+              name="ticket[quantity]"
+              value={Map.get(@ticket_form_data, "quantity", "")}
+              min="1"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="100"
+              required
+            />
+          </div>
+
+          <!-- Tippable Checkbox -->
+          <div class="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="ticket-tippable"
+              name="ticket[tippable]"
+              value="true"
+              checked={@tippable_checked}
+              class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label for="ticket-tippable" class="text-sm font-medium text-gray-700">
+              Allow tips on this ticket
+            </label>
+          </div>
+
+          <!-- Additional Options Toggle -->
+          <div class="border-t pt-4">
+            <button
+              type="button"
+              phx-click={JS.toggle(to: "#additional-options-#{@id}")}
+              class="flex items-center space-x-2 text-sm font-medium text-gray-600 hover:text-gray-800"
             >
-              <%= for {code, name} <- supported_currencies() do %>
-                <option
-                  value={code}
-                  selected={Map.get(@ticket_form_data, "currency", @default_currency) == code}
-                >
-                  <%= name %>
-                </option>
-              <% end %>
-            </select>
-          </div>
-        </div>
-
-        <!-- Quantity (separate row for better spacing) -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Available Tickets</label>
-          <input
-            type="number"
-            name="ticket[quantity]"
-            value={Map.get(@ticket_form_data, "quantity", "")}
-            min="1"
-            placeholder="100"
-            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            phx-change="validate_ticket"
-          />
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Sale Start Time (optional) -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Sale Starts (optional)</label>
-            <input
-              type="datetime-local"
-              name="ticket[starts_at]"
-              value={Map.get(@ticket_form_data, "starts_at", "")}
-              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              phx-change="validate_ticket"
-            />
-          </div>
-
-          <!-- Sale End Time (optional) -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Sale Ends (optional)</label>
-            <input
-              type="datetime-local"
-              name="ticket[ends_at]"
-              value={Map.get(@ticket_form_data, "ends_at", "")}
-              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              phx-change="validate_ticket"
-            />
-          </div>
-        </div>
-
-        <!-- Tippable Option -->
-        <div class="flex items-center">
-          <input
-            type="checkbox"
-            name="ticket[tippable]"
-            value="true"
-            checked={Map.get(@ticket_form_data, "tippable", false) == true}
-            class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-            phx-change="validate_ticket"
-          />
-          <label class="ml-2 block text-sm text-gray-700">
-            Allow tips on this ticket
-          </label>
-        </div>
-
-        <!-- Help text -->
-        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-          <div class="flex">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+              <span>Additional Options</span>
+              <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
               </svg>
+            </button>
+            <p class="text-xs text-gray-500 mt-1">Set custom sale start and end times</p>
+          </div>
+
+          <!-- Additional Options Content -->
+          <div
+            id={"additional-options-#{@id}"}
+            class={"space-y-4 #{if @show_additional_options, do: "", else: "hidden"}"}
+          >
+            <!-- Sale Start Date -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Sale Starts
+              </label>
+              <input
+                type="datetime-local"
+                name="ticket[starts_at]"
+                value={Map.get(@ticket_form_data, "starts_at", "")}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p class="text-xs text-gray-500 mt-1">When this ticket becomes available for purchase</p>
             </div>
-            <div class="ml-3">
-              <p class="text-sm text-blue-700">
-                Set specific sale times to control when tickets become available. Leave blank to make tickets available immediately.
-              </p>
+
+            <!-- Sale End Date -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Sale Ends
+              </label>
+              <input
+                type="datetime-local"
+                name="ticket[ends_at]"
+                value={Map.get(@ticket_form_data, "ends_at", "")}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p class="text-xs text-gray-500 mt-1">When this ticket stops being available for purchase</p>
             </div>
           </div>
-        </div>
+
+          <!-- Add spacing before buttons -->
+          <div class="mb-6"></div>
         </div>
       </form>
 
-      <:confirm>
-        <%= if @editing_ticket_index, do: "Update Ticket", else: "Add Ticket" %>
-      </:confirm>
-
+      <:confirm><%= if @editing_ticket_index, do: "Update Ticket", else: "Add Ticket" %></:confirm>
       <:cancel>Cancel</:cancel>
     </.modal>
     """
+  end
+
+  # Helper function to check if additional options data exists
+  defp has_additional_options_data?(form_data) do
+    starts_at = Map.get(form_data, "starts_at", "")
+    ends_at = Map.get(form_data, "ends_at", "")
+    starts_at != "" || ends_at != ""
   end
 end
