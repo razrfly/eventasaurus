@@ -15,6 +15,9 @@ defmodule EventasaurusApp.Events.Order do
     field :payment_reference, :string
     field :confirmed_at, :utc_datetime
 
+    # Pricing snapshot for historical tracking
+    field :pricing_snapshot, :map
+
     # Minimal Stripe Connect fields
     field :application_fee_amount, :integer, default: 0
 
@@ -32,7 +35,7 @@ defmodule EventasaurusApp.Events.Order do
     |> cast(attrs, [
       :quantity, :subtotal_cents, :tax_cents, :total_cents, :currency, :status,
       :stripe_session_id, :payment_reference, :confirmed_at, :user_id, :event_id,
-      :ticket_id, :stripe_connect_account_id, :application_fee_amount
+      :ticket_id, :stripe_connect_account_id, :application_fee_amount, :pricing_snapshot
     ])
     |> validate_required([:quantity, :subtotal_cents, :total_cents, :currency, :status, :user_id, :event_id, :ticket_id])
     |> validate_number(:quantity, greater_than: 0, message: "must be greater than 0")
@@ -97,5 +100,72 @@ defmodule EventasaurusApp.Events.Order do
 
   def calculate_platform_fee(total_cents, fee_percentage \\ 0.05) do
     round(total_cents * fee_percentage)
+  end
+
+  @doc """
+  Create a pricing snapshot from ticket and order parameters.
+
+  Example snapshot:
+  %{
+    "base_price_cents" => 1500,
+    "minimum_price_cents" => 1000,
+    "suggested_price_cents" => 1500,
+    "custom_price_cents" => 1800,
+    "tip_cents" => 200,
+    "pricing_model" => "flexible",
+    "ticket_tippable" => true
+  }
+  """
+  def create_pricing_snapshot(ticket, custom_price_cents \\ nil, tip_cents \\ 0) do
+    %{
+      "base_price_cents" => ticket.base_price_cents,
+      "minimum_price_cents" => ticket.minimum_price_cents,
+      "suggested_price_cents" => ticket.suggested_price_cents,
+      "custom_price_cents" => custom_price_cents,
+      "tip_cents" => tip_cents,
+      "pricing_model" => ticket.pricing_model || "fixed",
+      "ticket_tippable" => ticket.tippable || false
+    }
+  end
+
+  @doc """
+  Get the effective ticket price from pricing snapshot.
+  """
+  def get_effective_price_from_snapshot(%__MODULE__{pricing_snapshot: snapshot}) when not is_nil(snapshot) do
+    case snapshot do
+      %{"custom_price_cents" => custom} when not is_nil(custom) -> custom
+      %{"base_price_cents" => base} when not is_nil(base) -> base
+      _ -> 0
+    end
+  end
+  def get_effective_price_from_snapshot(_), do: 0
+
+  @doc """
+  Get the tip amount from pricing snapshot.
+  """
+  def get_tip_from_snapshot(%__MODULE__{pricing_snapshot: snapshot}) when not is_nil(snapshot) do
+    case snapshot do
+      %{"tip_cents" => tip} when not is_nil(tip) -> tip
+      _ -> 0
+    end
+  end
+  def get_tip_from_snapshot(_), do: 0
+
+  @doc """
+  Check if this order used flexible pricing.
+  """
+  def flexible_pricing?(%__MODULE__{pricing_snapshot: snapshot}) when not is_nil(snapshot) do
+    case snapshot do
+      %{"pricing_model" => "flexible"} -> true
+      _ -> false
+    end
+  end
+  def flexible_pricing?(_), do: false
+
+  @doc """
+  Check if this order had tips.
+  """
+  def has_tip?(%__MODULE__{} = order) do
+    get_tip_from_snapshot(order) > 0
   end
 end
