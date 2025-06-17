@@ -14,6 +14,8 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusApp.Venues
   alias EventasaurusWeb.Services.SearchService
 
+  @valid_setup_paths ~w[polling confirmed threshold]
+
   @impl true
   def mount(_params, session, socket) do
     case ensure_user_struct(socket.assigns.auth_user) do
@@ -318,22 +320,29 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("select_setup_path", %{"path" => path}, socket) do
+  def handle_event("select_setup_path", %{"path" => path}, socket) when path in @valid_setup_paths do
     # Update form_data based on the selected path
-    form_data = socket.assigns.form_data
-    |> Map.put("setup_path", path)
-    |> Map.put("enable_date_polling", path == "polling")
-    |> Map.put("is_ticketed", path in ["confirmed", "threshold"])
-    |> Map.put("requires_threshold", path == "threshold")
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("setup_path", path)
+      |> Map.put("enable_date_polling", to_string(path == "polling"))
+      |> Map.put("is_ticketed", to_string(path in ["confirmed", "threshold"]))
+      |> Map.put("requires_threshold", to_string(path == "threshold"))
 
     # Update the socket with the new path and form data
-    socket = socket
-    |> assign(:setup_path, path)
-    |> assign(:enable_date_polling, path == "polling")
-    |> assign(:form_data, form_data)
+    socket =
+      socket
+      |> assign(:setup_path, path)
+      |> assign(:enable_date_polling, path == "polling")
+      |> assign(:is_ticketed, path in ["confirmed", "threshold"])
+      |> assign(:requires_threshold, path == "threshold")
+      |> assign(:form_data, form_data)
 
     {:noreply, socket}
   end
+
+  def handle_event("select_setup_path", _params, socket),
+    do: {:noreply, socket}  # ignore unknown values
 
   @impl true
   def handle_event("toggle_date_polling", _params, socket) do

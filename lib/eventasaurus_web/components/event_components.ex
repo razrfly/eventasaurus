@@ -152,15 +152,14 @@ defmodule EventasaurusWeb.EventComponents do
   @doc """
   Event Setup Path Selector Component
 
-  Presents four distinct setup modes for event creation:
+  Presents three distinct setup modes for event creation:
   1. Planning Stage (Polling) - for users still deciding on date
-  2. Confirmed (No Tickets) - for simple event publishing
-  3. Ticketed (Confirmed with Tickets) - for immediate ticket sales
-  4. Threshold-Based Pre-Sale - for demand validation before committing
+  2. Confirmed (Free/Ticketed) - for standard event publishing with optional ticketing
+  3. Threshold-Based Pre-Sale - for demand validation before committing
   """
   attr :selected_path, :string, default: "confirmed", doc: "the currently selected setup path"
   attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
-  attr :show_stage_transitions, :boolean, default: false, doc: "whether to show full selector in edit mode"
+  attr :show_stage_transitions, :boolean, default: false, values: [true, false], doc: "whether to show full selector in edit mode"
 
   def event_setup_path_selector(assigns) do
     ~H"""
@@ -400,7 +399,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
   attr :setup_path, :string, default: "confirmed", doc: "the selected setup path: polling, confirmed, or threshold"
   attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
-  attr :show_stage_transitions, :boolean, default: false, doc: "whether to show full selector in edit mode"
+  attr :show_stage_transitions, :boolean, default: false, values: [true, false], doc: "whether to show full selector in edit mode"
   # Ticketing-related attributes
   attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
 
@@ -785,7 +784,7 @@ defmodule EventasaurusWeb.EventComponents do
                   <input type="hidden" name="event[requires_threshold]" value="false" />
                 <% end %>
 
-                <%= if @setup_path in ["confirmed", "ticketed", "threshold"] do %>
+                <%= if @setup_path in ["confirmed", "threshold"] do %>
                 <!-- Tickets Management Section -->
                 <div class="space-y-4" id="tickets-section">
                   <div class="flex items-center justify-between">
