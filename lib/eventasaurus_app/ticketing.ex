@@ -532,6 +532,28 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   @doc """
+  Marks an order as failed due to payment failure.
+
+  ## Examples
+
+      iex> mark_order_failed(order)
+      {:ok, %Order{}}
+
+  """
+  def mark_order_failed(%Order{} = order) do
+    order
+    |> Order.changeset(%{status: "failed"})
+    |> Repo.update()
+    |> case do
+      {:ok, failed_order} ->
+        maybe_broadcast_order_update(failed_order, :failed)
+        {:ok, failed_order}
+      error ->
+        error
+    end
+  end
+
+  @doc """
   Refunds an order.
 
   ## Examples
@@ -671,7 +693,7 @@ defmodule EventasaurusApp.Ticketing do
 
 
   defp sync_order_via_payment_intent(%Order{} = order) do
-    case EventasaurusApp.Stripe.get_payment_intent(order.payment_reference, nil) do
+    case stripe_impl().get_payment_intent(order.payment_reference, nil) do
       {:ok, %{"status" => "succeeded"}} ->
         confirm_order(order)
 
@@ -694,7 +716,7 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   defp sync_order_via_checkout_session(%Order{} = order) do
-    case EventasaurusApp.Stripe.get_checkout_session(order.stripe_session_id) do
+    case stripe_impl().get_checkout_session(order.stripe_session_id) do
       {:ok, %{"payment_status" => "paid"}} ->
         confirm_order(order)
 
@@ -823,14 +845,17 @@ defmodule EventasaurusApp.Ticketing do
 
         maybe_broadcast_order_update(updated_order, :created)
 
-        %{
+        {:ok, %{
           order: updated_order,
           checkout_url: checkout_session["url"],
           session_id: checkout_session["id"]
-        }
+        }}
+      else
+        error -> error
       end
     end) do
-      {:ok, result} -> {:ok, result}
+      {:ok, {:ok, result}} -> {:ok, result}
+      {:ok, error} -> error
       {:error, reason} -> {:error, reason}
     end
   end
@@ -906,7 +931,7 @@ defmodule EventasaurusApp.Ticketing do
       checkout_params
     end
 
-    EventasaurusApp.Stripe.create_checkout_session(checkout_params)
+    stripe_impl().create_checkout_session(checkout_params)
   end
 
   defp get_base_url do
@@ -1063,6 +1088,11 @@ defmodule EventasaurusApp.Ticketing do
   """
   def subscribe do
     Phoenix.PubSub.subscribe(EventasaurusApp.PubSub, @pubsub_topic)
+  end
+
+  # Get the configured Stripe implementation (for testing vs production)
+  defp stripe_impl do
+    Application.get_env(:eventasaurus, :stripe_module, EventasaurusApp.Stripe)
   end
 
 end

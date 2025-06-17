@@ -11,6 +11,18 @@ defmodule EventasaurusApp.Stripe do
   require Logger
   import Bitwise
 
+  defmodule Behaviour do
+    @moduledoc """
+    Behaviour for Stripe API operations to enable mocking in tests.
+    """
+
+    @callback verify_webhook_signature(binary(), binary(), binary()) :: {:ok, map()} | {:error, term()}
+    @callback get_payment_intent(binary(), binary() | nil) :: {:ok, map()} | {:error, term()}
+    @callback get_checkout_session(binary()) :: {:ok, map()} | {:error, term()}
+    @callback create_checkout_session(map()) :: {:ok, map()} | {:error, term()}
+    @callback create_payment_intent(map(), binary() | nil) :: {:ok, map()} | {:error, term()}
+  end
+
   @doc """
   Gets a Stripe Connect account for a user.
   """
@@ -322,7 +334,7 @@ defmodule EventasaurusApp.Stripe do
       "payment_intent_data[application_fee_amount]" => application_fee_amount,
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => allow_promotion_codes || false,
-      "expires_at" => DateTime.utc_now() |> DateTime.add(30 * 60) |> DateTime.to_unix(), # 30 minutes
+
       "line_items[0][price_data][currency]" => line_item["price_data[currency]"],
       "line_items[0][price_data][product_data][name]" => line_item["price_data[product_data][name]"],
       "line_items[0][price_data][unit_amount]" => line_item["price_data[unit_amount]"],
@@ -488,10 +500,6 @@ defmodule EventasaurusApp.Stripe do
     end
   end
 
-
-
-
-
   @doc """
   Verifies a Stripe webhook signature to ensure the webhook is authentic.
   """
@@ -595,5 +603,10 @@ defmodule EventasaurusApp.Stripe do
       nil -> "http://localhost:4000"
       host -> "https://#{host}"
     end
+  end
+
+  # Get the configured Stripe implementation (for testing vs production)
+  defp stripe_impl do
+    Application.get_env(:eventasaurus, :stripe_module, __MODULE__)
   end
 end

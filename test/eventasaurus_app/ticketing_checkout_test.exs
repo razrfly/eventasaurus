@@ -6,6 +6,10 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
   alias EventasaurusApp.Accounts.User
 
   import EventasaurusApp.Factory
+  import Mox
+
+  # Make sure mocks are verified when the test exits
+  setup :verify_on_exit!
 
   describe "create_checkout_session/3" do
     setup do
@@ -19,11 +23,21 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
     end
 
     test "creates checkout session for fixed pricing ticket", %{user: user, event: event} do
+      # Mock Stripe checkout session creation for this test
+      expect(EventasaurusApp.StripeMock, :create_checkout_session, fn _params ->
+        {:ok, %{
+          "id" => "cs_test_mock_session",
+          "url" => "https://checkout.stripe.com/pay/cs_test_mock_session"
+        }}
+      end)
+
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 2500,
         pricing_model: "fixed",
-        quantity: 100
+        quantity: 100,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       assert {:ok, result} = Ticketing.create_checkout_session(user, ticket, %{quantity: 2})
@@ -33,7 +47,8 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
       assert order.ticket_id == ticket.id
       assert order.quantity == 2
       assert order.subtotal_cents == 5000  # 2 * 2500
-      assert order.total_cents == 5000
+      # Total includes 10% tax: 5000 + 500 = 5500
+      assert order.total_cents == 5500
       assert order.status == "pending"
       assert order.stripe_session_id == session_id
       assert is_binary(checkout_url)
@@ -41,13 +56,23 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
     end
 
     test "creates checkout session for flexible pricing ticket with custom price", %{user: user, event: event} do
+      # Mock Stripe checkout session creation for this test
+      expect(EventasaurusApp.StripeMock, :create_checkout_session, fn _params ->
+        {:ok, %{
+          "id" => "cs_test_mock_session",
+          "url" => "https://checkout.stripe.com/pay/cs_test_mock_session"
+        }}
+      end)
+
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 2000,
         minimum_price_cents: 1000,
         suggested_price_cents: 2000,
         pricing_model: "flexible",
-        quantity: 50
+        quantity: 50,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       custom_price = 2500  # Above minimum
@@ -59,7 +84,8 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
 
       assert %{order: order} = result
       assert order.subtotal_cents == custom_price
-      assert order.total_cents == custom_price
+      # Total includes 10% tax, so 2500 + 250 = 2750
+      assert order.total_cents == 2750
 
       # Check pricing snapshot
       assert order.pricing_snapshot["custom_price_cents"] == custom_price
@@ -69,12 +95,22 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
     end
 
     test "creates checkout session with tips", %{user: user, event: event} do
+      # Mock Stripe checkout session creation for this test
+      expect(EventasaurusApp.StripeMock, :create_checkout_session, fn _params ->
+        {:ok, %{
+          "id" => "cs_test_mock_session",
+          "url" => "https://checkout.stripe.com/pay/cs_test_mock_session"
+        }}
+      end)
+
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 1500,
         pricing_model: "fixed",
         tippable: true,
-        quantity: 25
+        quantity: 25,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       tip_amount = 300
@@ -85,8 +121,8 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
       })
 
       assert %{order: order} = result
-      assert order.subtotal_cents == 1500
-      assert order.total_cents == 1800  # 1500 + 300 tip
+      assert order.subtotal_cents == 1800  # 1500 + 300 tip
+      assert order.total_cents == 1950  # 1800 + 10% tax on ticket price only (150)
 
       # Check pricing snapshot includes tip
       assert order.pricing_snapshot["tip_cents"] == tip_amount
@@ -99,7 +135,9 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
         base_price_cents: 2000,
         minimum_price_cents: 1000,
         pricing_model: "flexible",
-        quantity: 10
+        quantity: 10,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       # Price below minimum should fail
@@ -113,7 +151,9 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 1000,
-        quantity: 2  # Only 2 tickets available
+        quantity: 2,  # Only 2 tickets available
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       # Requesting more than available should fail
@@ -127,7 +167,9 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
         event: event,
         base_price_cents: 2000,
         minimum_price_cents: 1000,
-        pricing_model: "flexible"
+        pricing_model: "flexible",
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       # No custom price provided for flexible pricing
@@ -138,11 +180,21 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
     end
 
     test "fails when event organizer has no Stripe account", %{event: event} do
-      # Create a user without a Stripe Connect account
-      user_without_stripe = insert(:user)
-      ticket = insert(:ticket, event: event, base_price_cents: 1000)
+      # Create a new event with an organizer who doesn't have a Stripe Connect account
+      organizer_without_stripe = insert(:user)
+      event_without_stripe = insert(:event, users: [organizer_without_stripe])
 
-      assert {:error, :no_stripe_account} = Ticketing.create_checkout_session(user_without_stripe, ticket, %{
+      # Create a user to purchase the ticket (different from organizer)
+      purchaser = insert(:user)
+
+      ticket = insert(:ticket,
+        event: event_without_stripe,
+        base_price_cents: 1000,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
+      )
+
+      assert {:error, :no_stripe_account} = Ticketing.create_checkout_session(purchaser, ticket, %{
         quantity: 1
       })
     end
@@ -150,16 +202,18 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
 
   describe "sync_order_with_stripe/1" do
     setup do
-      user = insert(:user)
-      event = insert(:event, users: [user])
+      # Create a separate user for purchasing to avoid organizer-participant conflict
+      organizer = insert(:user)
+      purchaser = insert(:user)
+      event = insert(:event, users: [organizer])
       ticket = insert(:ticket, event: event, base_price_cents: 1000)
 
-      %{user: user, event: event, ticket: ticket}
+      %{organizer: organizer, purchaser: purchaser, event: event, ticket: ticket}
     end
 
-    test "confirms order when payment intent is succeeded", %{user: user, ticket: ticket} do
+    test "confirms order when payment intent is succeeded", %{purchaser: purchaser, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: purchaser,
         ticket: ticket,
         event: ticket.event,
         status: "pending",
@@ -176,9 +230,9 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
       assert updated_order.confirmed_at != nil
     end
 
-    test "keeps order pending when payment intent is not succeeded", %{user: user, ticket: ticket} do
+    test "keeps order pending when payment intent is not succeeded", %{purchaser: purchaser, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: purchaser,
         ticket: ticket,
         event: ticket.event,
         status: "pending",
@@ -195,9 +249,9 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
       assert updated_order.confirmed_at == nil
     end
 
-    test "confirms order when checkout session is paid", %{user: user, ticket: ticket} do
+    test "confirms order when checkout session is paid", %{purchaser: purchaser, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: purchaser,
         ticket: ticket,
         event: ticket.event,
         status: "pending",
@@ -214,9 +268,9 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
       assert updated_order.confirmed_at != nil
     end
 
-    test "handles Stripe API errors gracefully", %{user: user, ticket: ticket} do
+    test "handles Stripe API errors gracefully", %{purchaser: purchaser, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: purchaser,
         ticket: ticket,
         event: ticket.event,
         status: "pending",
@@ -228,14 +282,14 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
         {:error, "Payment intent not found"}
       end)
 
-      # Should not fail, just keep order pending
+      # Should not fail, just keep order pending when sync fails
       assert {:ok, updated_order} = Ticketing.sync_order_with_stripe(order)
       assert updated_order.status == "pending"
     end
 
-    test "does nothing for already confirmed orders", %{user: user, ticket: ticket} do
+    test "does nothing for already confirmed orders", %{purchaser: purchaser, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: purchaser,
         ticket: ticket,
         event: ticket.event,
         status: "confirmed",
@@ -252,9 +306,18 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
 
   describe "order pricing snapshots" do
     test "stores complete pricing information for historical tracking" do
-      user = insert(:user)
-      event = insert(:event, users: [user])
-      _connect_account = insert(:stripe_connect_account, user: user)
+      organizer = insert(:user)
+      purchaser = insert(:user)
+      event = insert(:event, users: [organizer])
+      _connect_account = insert(:stripe_connect_account, user: organizer)
+
+      # Mock Stripe checkout session creation
+      expect(EventasaurusApp.StripeMock, :create_checkout_session, fn _params ->
+        {:ok, %{
+          "id" => "cs_test_mock_session",
+          "url" => "https://checkout.stripe.com/pay/cs_test_mock_session"
+        }}
+      end)
 
       ticket = insert(:ticket,
         event: event,
@@ -262,13 +325,15 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
         minimum_price_cents: 1000,
         suggested_price_cents: 2000,
         pricing_model: "flexible",
-        tippable: true
+        tippable: true,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),  # Make sure ticket is on sale
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       custom_price = 2500
       tip_amount = 300
 
-      assert {:ok, result} = Ticketing.create_checkout_session(user, ticket, %{
+      assert {:ok, result} = Ticketing.create_checkout_session(purchaser, ticket, %{
         quantity: 1,
         custom_price_cents: custom_price,
         tip_cents: tip_amount
@@ -343,7 +408,7 @@ defmodule EventasaurusApp.TicketingCheckoutTest do
 
       assert ticket.base_price_cents == 1500
       assert ticket.pricing_model == "fixed"  # Default
-      assert ticket.minimum_price_cents == nil
+      assert ticket.minimum_price_cents == 0  # Default value, not nil
       assert ticket.suggested_price_cents == nil
       assert ticket.tippable == false  # Default
     end

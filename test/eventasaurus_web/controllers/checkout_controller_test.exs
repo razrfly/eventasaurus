@@ -36,7 +36,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 2
@@ -81,7 +81,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 1,
@@ -122,7 +122,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 1,
@@ -151,7 +151,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 1,
@@ -175,7 +175,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
     test "validates ticket existence", %{conn: conn, user: user} do
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => "nonexistent",
           "quantity" => 1
@@ -193,7 +193,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 5  # More than available
@@ -228,7 +228,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       assert %{
@@ -261,7 +261,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       assert %{
@@ -297,7 +297,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       assert %{"error" => "Access denied"} = json_response(conn, 403)
@@ -306,7 +306,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
     test "handles nonexistent orders", %{conn: conn, user: user} do
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sync/nonexistent")
 
       assert %{"error" => "Order not found"} = json_response(conn, 404)
@@ -328,7 +328,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       # Should still return current order status
@@ -362,7 +362,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> get(~p"/orders/#{order.id}/success?session_id=cs_test_success_123")
 
       assert html_response(conn, 200)
@@ -380,7 +380,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> get(~p"/orders/#{order.id}/success?session_id=cs_test_wrong_456")
 
       assert redirected_to(conn) == "/"
@@ -389,7 +389,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
     test "handles nonexistent orders", %{conn: conn, user: user} do
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> get(~p"/orders/nonexistent/success?session_id=cs_test_123")
 
       assert redirected_to(conn) == "/"
@@ -402,7 +402,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> log_in_user(user)
+        |> setup_user_session(user)
         |> get(~p"/orders/cancel?session_id=cs_test_cancelled_123")
 
       assert redirected_to(conn) == "/"
@@ -410,7 +410,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
   end
 
   # Helper function to log in a user
-  defp log_in_user(conn, user) do
+  defp setup_user_session(conn, user) do
     conn
     |> assign(:current_user, user)
   end
