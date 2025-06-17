@@ -275,7 +275,8 @@ defmodule EventasaurusApp.Factory do
     %Ticket{
       title: sequence(:ticket_title, &"General Admission #{&1}"),
       description: "Standard event ticket",
-      price_cents: 2500,
+      base_price_cents: 2500,
+      minimum_price_cents: 2500,
       currency: "usd",
       quantity: 100,
       starts_at: DateTime.utc_now() |> DateTime.add(1, :day),
@@ -311,7 +312,8 @@ defmodule EventasaurusApp.Factory do
   def low_cost_ticket_factory do
     build(:ticket, %{
       title: "Early Bird Special",
-      price_cents: 500,
+      base_price_cents: 500,
+      minimum_price_cents: 500,
       tippable: true
     })
   end
@@ -323,7 +325,8 @@ defmodule EventasaurusApp.Factory do
     build(:ticket, %{
       title: "VIP Access",
       description: "Premium access with exclusive benefits",
-      price_cents: 10000,
+      base_price_cents: 10000,
+      minimum_price_cents: 10000,
       quantity: 20
     })
   end
