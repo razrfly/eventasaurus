@@ -326,11 +326,15 @@ defmodule EventasaurusApp.Stripe do
         |> Map.put("adjustable_quantity[enabled]", "false")
     end
 
+    # Calculate expiry time (30 minutes from now)
+    expires_at = DateTime.utc_now() |> DateTime.add(30, :minute) |> DateTime.to_unix()
+
     # Build body parameters
     body_params = %{
       "mode" => "payment",
       "success_url" => success_url,
       "cancel_url" => cancel_url,
+      "expires_at" => expires_at,
       "payment_intent_data[application_fee_amount]" => application_fee_amount,
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => allow_promotion_codes || false,
@@ -605,8 +609,5 @@ defmodule EventasaurusApp.Stripe do
     end
   end
 
-  # Get the configured Stripe implementation (for testing vs production)
-  defp stripe_impl do
-    Application.get_env(:eventasaurus, :stripe_module, __MODULE__)
-  end
+
 end
