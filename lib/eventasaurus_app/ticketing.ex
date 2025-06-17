@@ -852,15 +852,15 @@ defmodule EventasaurusApp.Ticketing do
         }}
       else
         error ->
-          # Force transaction rollback by returning {:error, reason}
+          # Force transaction rollback by calling Repo.rollback
           case error do
-            {:error, reason} -> {:error, reason}
-            atom when is_atom(atom) -> {:error, atom}
-            other -> {:error, other}
+            {:error, reason} -> Repo.rollback(reason)
+            atom when is_atom(atom) -> Repo.rollback(atom)
+            other -> Repo.rollback(other)
           end
       end
     end) do
-      {:ok, result} -> {:ok, result}
+      {:ok, {:ok, result}} -> {:ok, result}
       {:error, reason} -> {:error, reason}
     end
   end
