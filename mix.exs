@@ -34,7 +34,7 @@ defmodule Eventasaurus.MixProject do
   defp deps do
     [
       {:tidewave, "~> 0.1", only: [:dev]},
-      {:igniter, "~> 0.5", only: [:dev, :test]},
+      {:igniter, "~> 0.6", only: [:dev, :test]},
       {:phoenix, "~> 1.7.10"},
       {:phoenix_ecto, "~> 4.4"},
       {:ecto_sql, "~> 3.10"},
@@ -57,7 +57,7 @@ defmodule Eventasaurus.MixProject do
       {:heroicons, "~> 0.5.6"},
       {:nanoid, "~> 2.1.0"},
       {:time_zone_info, "~> 0.7.8"},
-      {:earmark, "~> 1.4"},
+      {:earmark, "~> 1.5.0-pre"},
 
       # HTTP client for API calls (used for Supabase integration)
       {:httpoison, "~> 2.0"},

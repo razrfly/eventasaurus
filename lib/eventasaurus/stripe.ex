@@ -326,8 +326,8 @@ defmodule EventasaurusApp.Stripe do
         |> Map.put("adjustable_quantity[enabled]", "false")
     end
 
-    # Calculate expiry time (30 minutes from now)
-    expires_at = DateTime.utc_now() |> DateTime.add(30, :minute) |> DateTime.to_unix()
+    # Calculate expiry time (30 minutes from now = 1800 seconds)
+    expires_at = DateTime.utc_now() |> DateTime.add(30 * 60, :second) |> DateTime.to_unix()
 
     # Build body parameters
     body_params = %{
