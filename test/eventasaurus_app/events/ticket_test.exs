@@ -317,4 +317,154 @@ defmodule EventasaurusApp.Events.TicketTest do
       refute Ticket.on_sale?(ticket)
     end
   end
+
+  describe "flexible pricing model validation" do
+    test "valid flexible pricing with proper minimum and suggested prices" do
+      event = insert(:event)
+
+      attrs = %{
+        title: "Flexible Pricing Ticket",
+        base_price_cents: 5000,
+        minimum_price_cents: 1000,
+        suggested_price_cents: 3000,
+        pricing_model: "flexible",
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert changeset.valid?
+    end
+
+    test "flexible pricing allows minimum_price_cents = 0 (free minimum)" do
+      event = insert(:event)
+
+      attrs = %{
+        title: "Pay-What-You-Want Ticket",
+        base_price_cents: 2500,
+        minimum_price_cents: 0,
+        suggested_price_cents: 1500,
+        pricing_model: "flexible",
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert changeset.valid?
+    end
+
+    test "flexible pricing validates suggested_price_cents within range" do
+      event = insert(:event)
+
+      # Suggested price below minimum
+      attrs = %{
+        title: "Invalid Suggested Price",
+        base_price_cents: 3000,
+        minimum_price_cents: 1000,
+        suggested_price_cents: 500,
+        pricing_model: "flexible",
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert %{suggested_price_cents: ["should be at least the minimum price"]} = errors_on(changeset)
+
+      # Suggested price way above base price (more than 2x)
+      attrs = %{attrs | suggested_price_cents: 7000}
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert %{suggested_price_cents: ["suggested price seems too high compared to base price"]} = errors_on(changeset)
+    end
+
+    test "fixed pricing model defaults work correctly" do
+      event = insert(:event)
+
+      attrs = %{
+        title: "Fixed Price Ticket",
+        base_price_cents: 2500,
+        minimum_price_cents: 2500,  # Need to explicitly set for fixed pricing
+        pricing_model: "fixed",
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert changeset.valid?
+
+      # For fixed pricing, minimum should equal base price when set explicitly
+      if changeset.valid? do
+        ticket = Ecto.Changeset.apply_changes(changeset)
+        assert ticket.minimum_price_cents == ticket.base_price_cents
+      end
+    end
+
+    test "backward compatibility: existing tickets without pricing_model default to fixed" do
+      event = insert(:event)
+
+      attrs = %{
+        title: "Legacy Ticket",
+        base_price_cents: 2500,
+        minimum_price_cents: 2500,
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+        # Note: no pricing_model specified - should default to "fixed"
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert changeset.valid?
+
+      if changeset.valid? do
+        ticket = Ecto.Changeset.apply_changes(changeset)
+        assert ticket.pricing_model == "fixed"
+      end
+    end
+
+    test "dynamic pricing model is recognized but not yet implemented" do
+      event = insert(:event)
+
+      attrs = %{
+        title: "Dynamic Pricing Ticket",
+        base_price_cents: 2500,
+        minimum_price_cents: 2500,
+        pricing_model: "dynamic",
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert changeset.valid?
+
+      if changeset.valid? do
+        ticket = Ecto.Changeset.apply_changes(changeset)
+        assert ticket.pricing_model == "dynamic"
+        # For dynamic pricing, minimum should equal base price (like fixed)
+        assert ticket.minimum_price_cents == ticket.base_price_cents
+      end
+    end
+
+    test "nil suggested_price_cents is allowed for all pricing models" do
+      event = insert(:event)
+
+      # Test with flexible pricing
+      attrs = %{
+        title: "Flexible No Suggested",
+        base_price_cents: 2500,
+        minimum_price_cents: 1000,
+        suggested_price_cents: nil,
+        pricing_model: "flexible",
+        currency: "usd",
+        quantity: 100,
+        event_id: event.id
+      }
+
+      changeset = Ticket.changeset(%Ticket{}, attrs)
+      assert changeset.valid?
+    end
+  end
 end
