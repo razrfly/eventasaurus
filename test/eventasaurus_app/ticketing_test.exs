@@ -511,4 +511,81 @@ defmodule EventasaurusApp.TicketingTest do
       assert_receive {:order_update, %{order: ^confirmed_order, action: :confirmed}}
     end
   end
+
+  describe "real-time updates" do
+    @tag :real_time_updates
+    test "broadcasts ticket updates when orders are created" do
+      user = insert(:user)
+      event = insert(:event, is_ticketed: true)
+      now = DateTime.utc_now()
+      ticket = insert(:ticket,
+        event: event,
+        quantity: 10,
+        starts_at: DateTime.add(now, -1, :hour),
+        ends_at: DateTime.add(now, 1, :hour)
+      )
+
+      # Subscribe to updates - use the correct PubSub name
+      Ticketing.subscribe()
+
+      # Create an order
+      {:ok, _order} = Ticketing.create_order(user, ticket, %{quantity: 2})
+
+      # Should receive ticket update
+      assert_receive {:ticket_update, %{ticket: updated_ticket, action: :order_created}}, 1000
+      assert updated_ticket.id == ticket.id
+    end
+
+    @tag :real_time_updates
+    test "broadcasts ticket updates when orders are confirmed" do
+      user = insert(:user)
+      event = insert(:event, is_ticketed: true)
+      now = DateTime.utc_now()
+      ticket = insert(:ticket,
+        event: event,
+        quantity: 10,
+        starts_at: DateTime.add(now, -1, :hour),
+        ends_at: DateTime.add(now, 1, :hour)
+      )
+
+      # Create an order first
+      {:ok, order} = Ticketing.create_order(user, ticket, %{quantity: 2})
+
+      # Subscribe to updates - use the correct PubSub name
+      Ticketing.subscribe()
+
+      # Confirm the order
+      {:ok, _confirmed_order} = Ticketing.confirm_order(order, "test_payment_reference")
+
+      # Should receive ticket update
+      assert_receive {:ticket_update, %{ticket: updated_ticket, action: :order_confirmed}}, 1000
+      assert updated_ticket.id == ticket.id
+    end
+
+    @tag :real_time_updates
+    test "broadcasts ticket updates when orders are canceled" do
+      user = insert(:user)
+      event = insert(:event, is_ticketed: true)
+      now = DateTime.utc_now()
+      ticket = insert(:ticket,
+        event: event,
+        quantity: 10,
+        starts_at: DateTime.add(now, -1, :hour),
+        ends_at: DateTime.add(now, 1, :hour)
+      )
+
+      # Create an order first
+      {:ok, order} = Ticketing.create_order(user, ticket, %{quantity: 2})
+
+      # Subscribe to updates - use the correct PubSub name
+      Ticketing.subscribe()
+
+      # Cancel the order
+      {:ok, _canceled_order} = Ticketing.cancel_order(order)
+
+      # Should receive ticket update
+      assert_receive {:ticket_update, %{ticket: updated_ticket, action: :order_canceled}}, 1000
+      assert updated_ticket.id == ticket.id
+    end
+  end
 end

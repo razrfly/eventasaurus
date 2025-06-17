@@ -44,6 +44,11 @@ defmodule EventasaurusWeb.PublicEventLive do
             []
           end
 
+          # Subscribe to real-time ticket updates for ticketed events
+          if event.is_ticketed do
+            Ticketing.subscribe()
+          end
+
           # Determine registration status if user is authenticated
           Logger.debug("PublicEventLive.mount - auth_user: #{inspect(socket.assigns.auth_user)}")
           {registration_status, user} = case ensure_user_struct(socket.assigns.auth_user) do
@@ -101,6 +106,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users
            |> assign(:tickets, tickets)
            |> assign(:selected_tickets, %{})  # Map of ticket_id => quantity
+           |> assign(:ticket_loading, false)
            # Meta tag data for social sharing
            |> assign(:meta_title, event.title)
            |> assign(:meta_description, description)
@@ -381,35 +387,15 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   def handle_info({:registration_success, type, _name, email}, socket) do
     message = case type do
-      :new_registration ->
-        "Registration successful! You're now registered for #{socket.assigns.event.title}. Please check your email for a magic link to create your account."
-      :existing_user_registered ->
-        "Great! You're now registered for #{socket.assigns.event.title}."
-    end
-
-    # Update the user's registration status and local user info
-    # Only set just_registered for new registrations (not existing users)
-    updated_socket = case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
-        socket
-        |> assign(:registration_status, :registered)
-        |> assign(:user, user)
-        |> assign(:just_registered, type == :new_registration)
-
-      {:error, _} ->
-        # For new users who just registered, try to find them by email
-        user = Accounts.get_user_by_email(email)
-        socket
-        |> assign(:registration_status, :registered)
-        |> assign(:user, user)
-        |> assign(:just_registered, true)  # This is always a new registration
+      :registered -> "Successfully registered for #{socket.assigns.event.title}!"
+      :already_registered -> "You are already registered for this event."
     end
 
     {:noreply,
-     updated_socket
-     |> assign(:show_registration_modal, false)
+     socket
      |> put_flash(:info, message)
-    }
+     |> assign(:just_registered, true)
+     |> assign(:show_registration_modal, false)}
   end
 
   def handle_info({:registration_error, reason}, socket) do
@@ -577,9 +563,31 @@ defmodule EventasaurusWeb.PublicEventLive do
         current_quantity
       end
 
-      updated_selection = Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
+      # Only update if quantity actually changed
+      if new_quantity != current_quantity do
+        updated_selection = Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
 
-      {:noreply, assign(socket, :selected_tickets, updated_selection)}
+        socket = socket
+        |> assign(:selected_tickets, updated_selection)
+
+        # Show feedback if at limit
+        socket = if new_quantity == available_quantity do
+          put_flash(socket, :warning, "Maximum available tickets selected for #{ticket.title}")
+        else
+          socket
+        end
+
+        {:noreply, socket}
+      else
+        # At limit - show feedback
+        message = cond do
+          current_quantity >= available_quantity -> "No more #{ticket.title} tickets available"
+          current_quantity >= max_per_order -> "Maximum #{max_per_order} tickets per order"
+          true -> "Cannot increase quantity"
+        end
+
+        {:noreply, put_flash(socket, :warning, message)}
+      end
     else
       {:noreply, socket}
     end
@@ -590,7 +598,6 @@ defmodule EventasaurusWeb.PublicEventLive do
     current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
 
     new_quantity = max(0, current_quantity - 1)
-
     updated_selection = if new_quantity == 0 do
       Map.delete(socket.assigns.selected_tickets, ticket_id)
     else
@@ -602,12 +609,25 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   def handle_event("proceed_to_checkout", _params, socket) do
     if socket.assigns.user do
-      # TODO: Implement checkout flow (Task 7.3)
-      # For now, show a placeholder message
-      {:noreply,
-       socket
-       |> put_flash(:info, "Checkout flow coming soon! Your ticket selection has been saved.")
-      }
+      # Check if any tickets are selected
+      selected_tickets = socket.assigns.selected_tickets
+
+      if map_size(selected_tickets) == 0 do
+        {:noreply,
+         socket
+         |> put_flash(:error, "Please select at least one ticket before proceeding to checkout.")}
+      else
+        # Store selected tickets in session and redirect to checkout
+        # We'll use a temporary storage approach for now
+        ticket_params =
+          selected_tickets
+          |> Enum.map(fn {ticket_id, quantity} -> "#{ticket_id}:#{quantity}" end)
+          |> Enum.join(",")
+
+        {:noreply,
+         socket
+         |> redirect(to: "/events/#{socket.assigns.event.slug}/checkout?tickets=#{ticket_params}")}
+      end
     else
       {:noreply, assign(socket, :show_registration_modal, true)}
     end
@@ -927,6 +947,7 @@ defmodule EventasaurusWeb.PublicEventLive do
               selected_tickets={@selected_tickets}
               event={@event}
               user={@user}
+              loading={@ticket_loading}
             />
           <% end %>
 
@@ -1262,4 +1283,45 @@ defmodule EventasaurusWeb.PublicEventLive do
     Accounts.find_or_create_from_supabase(supabase_user)
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
+
+  # ======== REAL-TIME TICKET UPDATES ========
+
+  def handle_info({:ticket_update, %{ticket: updated_ticket, action: action}}, socket) do
+    # Only update if this is for the current event
+    if updated_ticket.event_id == socket.assigns.event.id do
+      # Set loading state
+      socket = assign(socket, :ticket_loading, true)
+
+      # Refresh tickets to get updated availability
+      updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
+
+      # Update socket with fresh ticket data
+      socket = socket
+      |> assign(:tickets, updated_tickets)
+      |> assign(:ticket_loading, false)
+
+      # Show user-friendly notification for certain actions
+      socket = case action do
+        :order_confirmed ->
+          # Find the ticket name for better UX
+          ticket_name = updated_ticket.title
+          put_flash(socket, :info, "🎫 #{ticket_name} availability updated!")
+        :order_created ->
+          # Someone else is purchasing, show subtle update
+          socket
+        _ ->
+          socket
+      end
+
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:order_update, %{order: _order, action: _action}}, socket) do
+    # Handle order updates if needed for this event
+    # For now, we mainly care about ticket availability changes
+    {:noreply, socket}
+  end
 end
