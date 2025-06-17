@@ -227,10 +227,10 @@ defmodule EventasaurusWeb.OrdersController do
       total_cents: order.total_cents,
       application_fee_amount: order.application_fee_amount,
       stripe_session_id: order.stripe_session_id,
-      ticket: %{
+            ticket: %{
         id: order.ticket.id,
-        name: order.ticket.name,
-                    price_cents: order.ticket.base_price_cents
+        title: order.ticket.title,
+        price_cents: order.ticket.base_price_cents
       },
       event: %{
         id: order.event.id,

@@ -45,6 +45,9 @@ config :phoenix_live_view,
 # Test-specific configuration for Auth.Client mocking
 config :eventasaurus, :auth_client, EventasaurusApp.Auth.TestClient
 
+# Configure Stripe mock for testing
+config :eventasaurus, :stripe_module, EventasaurusApp.StripeMock
+
 # Test Supabase configuration with local demo values
 config :eventasaurus, :supabase,
   url: "http://127.0.0.1:54321",

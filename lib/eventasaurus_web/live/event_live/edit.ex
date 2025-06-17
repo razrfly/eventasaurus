@@ -752,60 +752,66 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
       true ->
         # Create ticket struct
-        price_cents = parse_currency(Map.get(ticket_data, "price", "0")) || 0
-        ticket = %{
-          title: Map.get(ticket_data, "title", ""),
-          description: Map.get(ticket_data, "description"),
-          base_price_cents: price_cents,
-          minimum_price_cents: price_cents,
-          currency: Map.get(ticket_data, "currency", "usd"),
-          quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
-            {n, _} when n >= 0 -> n
-            _ -> 0
-          end,
-          starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
-          ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
-          tippable: Map.get(ticket_data, "tippable", false) == true
-        }
-
-        # Save or update ticket
-        case socket.assigns.editing_ticket_index do
+        case parse_currency(Map.get(ticket_data, "price", "")) do
           nil ->
-            # Adding new ticket
-            case Ticketing.create_ticket(socket.assigns.event, ticket) do
-              {:ok, ticket} ->
-                updated_tickets = socket.assigns.tickets ++ [ticket]
-                socket =
-                  socket
-                  |> assign(:tickets, updated_tickets)
-                  |> assign(:show_ticket_modal, false)
-                  |> assign(:ticket_form_data, %{})
-                  |> assign(:editing_ticket_index, nil)
-                  |> put_flash(:info, "Ticket created successfully")
+            socket = put_flash(socket, :error, "Invalid price format")
+            {:noreply, socket}
 
-                {:noreply, socket}
-              {:error, _changeset} ->
-                socket = put_flash(socket, :error, "Failed to create ticket")
-                {:noreply, socket}
-            end
-          index ->
-            # Updating existing ticket
-            existing_ticket = Enum.at(socket.assigns.tickets, index)
-            case Ticketing.update_ticket(existing_ticket, ticket) do
-              {:ok, updated_ticket} ->
-                updated_tickets = List.replace_at(socket.assigns.tickets, index, updated_ticket)
-                socket =
-                  socket
-                  |> assign(:tickets, updated_tickets)
-                  |> assign(:show_ticket_modal, false)
-                  |> assign(:ticket_form_data, %{})
-                  |> assign(:editing_ticket_index, nil)
-                  |> put_flash(:info, "Ticket updated successfully")
+          price_cents ->
+            ticket = %{
+              title: Map.get(ticket_data, "title", ""),
+              description: Map.get(ticket_data, "description"),
+              base_price_cents: price_cents,
+              minimum_price_cents: price_cents,
+              currency: Map.get(ticket_data, "currency", "usd"),
+              quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
+                {n, _} when n >= 0 -> n
+                _ -> 0
+              end,
+              starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
+              ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
+              tippable: Map.get(ticket_data, "tippable", false) == true
+            }
 
-                {:noreply, socket}
-              {:error, _changeset} ->
-                socket = put_flash(socket, :error, "Failed to update ticket")
-                {:noreply, socket}
+            # Save or update ticket
+            case socket.assigns.editing_ticket_index do
+              nil ->
+                # Adding new ticket
+                case Ticketing.create_ticket(socket.assigns.event, ticket) do
+                  {:ok, ticket} ->
+                    updated_tickets = socket.assigns.tickets ++ [ticket]
+                    socket =
+                      socket
+                      |> assign(:tickets, updated_tickets)
+                      |> assign(:show_ticket_modal, false)
+                      |> assign(:ticket_form_data, %{})
+                      |> assign(:editing_ticket_index, nil)
+                      |> put_flash(:info, "Ticket created successfully")
+
+                    {:noreply, socket}
+                  {:error, _changeset} ->
+                    socket = put_flash(socket, :error, "Failed to create ticket")
+                    {:noreply, socket}
+                end
+              index ->
+                # Updating existing ticket
+                existing_ticket = Enum.at(socket.assigns.tickets, index)
+                case Ticketing.update_ticket(existing_ticket, ticket) do
+                  {:ok, updated_ticket} ->
+                    updated_tickets = List.replace_at(socket.assigns.tickets, index, updated_ticket)
+                    socket =
+                      socket
+                      |> assign(:tickets, updated_tickets)
+                      |> assign(:show_ticket_modal, false)
+                      |> assign(:ticket_form_data, %{})
+                      |> assign(:editing_ticket_index, nil)
+                      |> put_flash(:info, "Ticket updated successfully")
+
+                    {:noreply, socket}
+                  {:error, _changeset} ->
+                    socket = put_flash(socket, :error, "Failed to update ticket")
+                    {:noreply, socket}
+                end
             end
         end
     end

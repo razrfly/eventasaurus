@@ -21,6 +21,7 @@ Mox.defmock(EventasaurusApp.HTTPoison.Mock, for: HTTPoison.Base)
 Mox.defmock(EventasaurusApp.Auth.ClientMock, for: EventasaurusApp.Auth.ClientBehaviour)
 Mox.defmock(EventasaurusWeb.Services.UnsplashServiceMock, for: EventasaurusWeb.Services.UnsplashServiceBehaviour)
 Mox.defmock(EventasaurusWeb.Services.TmdbServiceMock, for: EventasaurusWeb.Services.TmdbServiceBehaviour)
+Mox.defmock(EventasaurusApp.StripeMock, for: EventasaurusApp.Stripe.Behaviour)
 
 # Set global mode for all Mox mocks to private (default behavior)
 Application.put_env(:mox, :verify_on_exit!, true)

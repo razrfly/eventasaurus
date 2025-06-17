@@ -266,14 +266,46 @@ defmodule EventasaurusWeb.StripeWebhookController do
     payment_intent = event["data"]["object"]
     payment_intent_id = payment_intent["id"]
 
-    Logger.info("Processing payment_intent.payment_failed event - no action needed, Stripe handles failure state",
+    Logger.info("Processing payment_intent.payment_failed event",
       payment_intent_id: payment_intent_id,
       event_id: event["id"]
     )
 
-    # Don't store failure state - let Stripe handle it
-    # Orders remain in "pending" state and can be retried
-    :ok
+    case validate_payment_intent(payment_intent) do
+      :ok ->
+        # Mark associated order as failed to prevent inventory blocking
+        with {:ok, order} <- find_order_by_payment_intent(payment_intent_id) do
+          case Ticketing.mark_order_failed(order) do
+            {:ok, updated_order} ->
+              Logger.info("Order marked as failed due to payment failure",
+                order_id: updated_order.id,
+                payment_intent_id: payment_intent_id
+              )
+              :ok
+
+            {:error, reason} ->
+              Logger.error("Failed to mark order as failed",
+                order_id: order.id,
+                payment_intent_id: payment_intent_id,
+                reason: inspect(reason)
+              )
+              :ok  # Don't fail webhook processing
+          end
+        else
+          {:error, :not_found} ->
+            Logger.warning("No order found for failed payment intent",
+              payment_intent_id: payment_intent_id
+            )
+            :ok
+        end
+
+      {:error, reason} ->
+        Logger.error("Invalid payment intent structure",
+          reason: reason,
+          payment_intent_id: payment_intent_id
+        )
+        {:error, reason}
+    end
   end
 
   defp process_webhook_event(%{"type" => "checkout.session.completed"} = event) do
@@ -348,7 +380,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
   defp validate_payment_intent(_), do: {:error, "Payment intent must be a map"}
 
   defp validate_checkout_session(session) when is_map(session) do
-    required_fields = ["id", "payment_status", "customer_details"]
+    required_fields = ["id", "payment_status"]
 
     missing_fields =
       required_fields
