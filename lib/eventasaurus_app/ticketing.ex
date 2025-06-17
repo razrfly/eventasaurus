@@ -851,11 +851,16 @@ defmodule EventasaurusApp.Ticketing do
           session_id: checkout_session["id"]
         }}
       else
-        error -> error
+        error ->
+          # Force transaction rollback by returning {:error, reason}
+          case error do
+            {:error, reason} -> {:error, reason}
+            atom when is_atom(atom) -> {:error, atom}
+            other -> {:error, other}
+          end
       end
     end) do
-      {:ok, {:ok, result}} -> {:ok, result}
-      {:ok, error} -> error
+      {:ok, result} -> {:ok, result}
       {:error, reason} -> {:error, reason}
     end
   end
@@ -1092,7 +1097,7 @@ defmodule EventasaurusApp.Ticketing do
 
   # Get the configured Stripe implementation (for testing vs production)
   defp stripe_impl do
-    Application.get_env(:eventasaurus, :stripe_module, EventasaurusApp.Stripe)
+    Application.get_env(:eventasaurus_app, :stripe_module, EventasaurusApp.Stripe)
   end
 
 end

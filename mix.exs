@@ -81,7 +81,9 @@ defmodule Eventasaurus.MixProject do
       {:machinery, "~> 1.0"},
 
       # Stripe payment processing
-      {:stripity_stripe, "~> 3.2"}
+      {:stripity_stripe, "~> 3.2"},
+
+
     ]
   end
 
