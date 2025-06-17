@@ -33,6 +33,7 @@ defmodule Eventasaurus.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:ecto_erd, "~> 0.5", only: [:dev], runtime: false},
       {:tidewave, "~> 0.1", only: [:dev]},
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:phoenix, "~> 1.7.10"},
@@ -103,6 +104,11 @@ defmodule Eventasaurus.MixProject do
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
         "phx.digest"
+      ],
+      "erd.gen.png": [
+        "ecto.gen.erd",
+        "cmd dot -Tpng ecto_erd.dot -o ecto_erd.png",
+        "cmd rm -f ecto_erd.dot ecto_erd.svg"
       ]
     ]
   end
