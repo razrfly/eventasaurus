@@ -818,7 +818,7 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("save_ticket", ticket_params, socket) do
+  def handle_event("save_ticket", %{"ticket" => ticket_params}, socket) do
     ticket_data = ticket_params
 
     # Validate required fields
@@ -888,6 +888,15 @@ defmodule EventasaurusWeb.EventLive.New do
     end
   end
 
+  # Handle ticket form updates
+  @impl true
+  def handle_event("update_pricing_model", %{"model" => model}, socket) do
+    updated_form_data = Map.put(socket.assigns.ticket_form_data, "pricing_model", model)
+
+    socket = assign(socket, :ticket_form_data, updated_form_data)
+    {:noreply, socket}
+  end
+
   # Validation helper for flexible pricing
   defp validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
     case pricing_model do
@@ -923,14 +932,6 @@ defmodule EventasaurusWeb.EventLive.New do
         # For fixed/dynamic pricing, minimum equals base price
         {:ok, price_cents, price_cents}
     end
-  end
-
-  # Handle ticket form updates
-  def handle_event("update_pricing_model", %{"model" => model}, socket) do
-    updated_form_data = Map.put(socket.assigns.ticket_form_data, "pricing_model", model)
-
-    socket = assign(socket, :ticket_form_data, updated_form_data)
-    {:noreply, socket}
   end
 
   # ============================================================================
@@ -1221,8 +1222,10 @@ defmodule EventasaurusWeb.EventLive.New do
         ticket_attrs = %{
           title: Map.get(ticket_data, :title),
           description: Map.get(ticket_data, :description),
+          pricing_model: Map.get(ticket_data, :pricing_model, "fixed"),
           base_price_cents: Map.get(ticket_data, :base_price_cents),
-        minimum_price_cents: Map.get(ticket_data, :minimum_price_cents) || Map.get(ticket_data, :base_price_cents),
+          minimum_price_cents: Map.get(ticket_data, :minimum_price_cents) || Map.get(ticket_data, :base_price_cents),
+          suggested_price_cents: Map.get(ticket_data, :suggested_price_cents),
           currency: Map.get(ticket_data, :currency, "usd"),
           quantity: Map.get(ticket_data, :quantity),
           starts_at: Map.get(ticket_data, :starts_at),
