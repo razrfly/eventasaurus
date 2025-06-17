@@ -164,101 +164,61 @@ defmodule EventasaurusWeb.EventComponents do
   def event_setup_path_selector(assigns) do
     ~H"""
     <%= if @mode == "compact" do %>
-      <!-- Compact version for edit forms -->
+      <!-- Stage indicator for edit forms -->
       <div class="bg-white rounded-lg border border-gray-200 p-4 mb-4 shadow-sm">
-        <div class="mb-3">
-          <h3 class="text-lg font-medium text-gray-900 mb-1">Event Type</h3>
-          <p class="text-sm text-gray-600">Change your event setup if needed</p>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-2">
+              <div class={stage_icon_class(@selected_path)}>
+                <%= Phoenix.HTML.raw(stage_icon(@selected_path)) %>
+              </div>
+              <div>
+                <h3 class="text-sm font-medium text-gray-900"><%= stage_title(@selected_path) %></h3>
+                <p class="text-xs text-gray-500"><%= stage_description(@selected_path) %></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transition button if transitions are available -->
+          <%= if has_valid_transitions?(@selected_path) do %>
+            <button
+              type="button"
+              phx-click="show_stage_transitions"
+              class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              Change Stage
+            </button>
+          <% else %>
+            <div class="text-xs text-gray-400 font-medium">
+              <%= lock_reason(@selected_path) %>
+            </div>
+          <% end %>
         </div>
 
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <!-- Planning Stage (Polling) -->
-          <label class="relative cursor-pointer group">
-            <input
-              type="radio"
-              name="setup_path"
-              value="polling"
-              checked={@selected_path == "polling"}
-              phx-click="select_setup_path"
-              phx-value-path="polling"
-              class="sr-only peer"
-            />
-            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 hover:border-gray-300 hover:shadow-sm">
-              <div class="w-8 h-8 mb-2 text-blue-600 peer-checked:text-blue-700">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <span class="text-sm font-medium text-gray-900 text-center">Planning</span>
-              <span class="text-xs text-gray-500 text-center">Polling</span>
-            </div>
-          </label>
+        <!-- Progress indicator -->
+        <div class="mt-3">
+          <div class="flex items-center space-x-2">
+            <div class="flex-1">
+              <div class="flex items-center space-x-1">
+                <!-- Planning Stage -->
+                <div class={["w-3 h-3 rounded-full", if(@selected_path in ["polling"], do: "bg-blue-500", else: "bg-gray-300")]}></div>
+                <div class={["flex-1 h-0.5", if(@selected_path in ["confirmed", "threshold"], do: "bg-gray-400", else: "bg-gray-200")]}></div>
 
-          <!-- Confirmed (No Tickets) -->
-          <label class="relative cursor-pointer group">
-            <input
-              type="radio"
-              name="setup_path"
-              value="confirmed"
-              checked={@selected_path == "confirmed"}
-              phx-click="select_setup_path"
-              phx-value-path="confirmed"
-              class="sr-only peer"
-            />
-            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-green-500 peer-checked:bg-green-50 hover:border-gray-300 hover:shadow-sm">
-              <div class="w-8 h-8 mb-2 text-green-600 peer-checked:text-green-700">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <span class="text-sm font-medium text-gray-900 text-center">Confirmed</span>
-              <span class="text-xs text-gray-500 text-center">No Tickets</span>
-            </div>
-          </label>
+                <!-- Confirmed Stage -->
+                <div class={["w-3 h-3 rounded-full", if(@selected_path in ["confirmed", "threshold"], do: "bg-green-500", else: "bg-gray-300")]}></div>
+                <div class={["flex-1 h-0.5", if(@selected_path in ["threshold"], do: "bg-gray-400", else: "bg-gray-200")]}></div>
 
-          <!-- Ticketed -->
-          <label class="relative cursor-pointer group">
-            <input
-              type="radio"
-              name="setup_path"
-              value="ticketed"
-              checked={@selected_path == "ticketed"}
-              phx-click="select_setup_path"
-              phx-value-path="ticketed"
-              class="sr-only peer"
-            />
-            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 hover:border-gray-300 hover:shadow-sm">
-              <div class="w-8 h-8 mb-2 text-purple-600 peer-checked:text-purple-700">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM4 8a1 1 0 000 2h1v3a1 1 0 001 1h8a1 1 0 001-1v-3h1a1 1 0 100-2H4z" />
-                </svg>
+                <!-- Threshold Stage -->
+                <div class={["w-3 h-3 rounded-full", if(@selected_path in ["threshold"], do: stage_final_color(@selected_path), else: "bg-gray-300")]}></div>
               </div>
-              <span class="text-sm font-medium text-gray-900 text-center">Ticketed</span>
-              <span class="text-xs text-gray-500 text-center">Sell Tickets</span>
             </div>
-          </label>
-
-          <!-- Threshold Pre-Sale -->
-          <label class="relative cursor-pointer group">
-            <input
-              type="radio"
-              name="setup_path"
-              value="threshold"
-              checked={@selected_path == "threshold"}
-              phx-click="select_setup_path"
-              phx-value-path="threshold"
-              class="sr-only peer"
-            />
-            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-orange-500 peer-checked:bg-orange-50 hover:border-gray-300 hover:shadow-sm">
-              <div class="w-8 h-8 mb-2 text-orange-600 peer-checked:text-orange-700">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <span class="text-sm font-medium text-gray-900 text-center">Threshold</span>
-              <span class="text-xs text-gray-500 text-center">Pre-Sale</span>
+            <div class="text-xs text-gray-500 ml-2">
+              <%= progress_text(@selected_path) %>
             </div>
-          </label>
+          </div>
         </div>
       </div>
     <% else %>
@@ -269,40 +229,12 @@ defmodule EventasaurusWeb.EventComponents do
           <p class="text-gray-600">Choose the setup that best matches your event planning needs.</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Planning Stage (Polling) -->
-          <label class="relative cursor-pointer group">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4" id="setup-path-selector" phx-hook="SetupPathSelector" data-selected-path={@selected_path}>
+          <!-- Confirmed Event (Default) - Now First -->
+          <label class="relative cursor-pointer group" title="Date is set, just collect RSVPs - ticketing available as free by default">
             <input
               type="radio"
-              name="setup_path"
-              value="polling"
-              checked={@selected_path == "polling"}
-              phx-click="select_setup_path"
-              phx-value-path="polling"
-              class="sr-only peer"
-            />
-            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
-              <div class="flex items-start space-x-4">
-                <div class="flex-shrink-0">
-                  <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center peer-checked:bg-blue-200">
-                    <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-1">✨ Planning Stage</h3>
-                  <p class="text-sm text-gray-600 mb-2">Still deciding on the date? Let attendees vote!</p>
-                  <p class="text-xs text-gray-500">Perfect for when you have multiple date options and want community input.</p>
-                </div>
-              </div>
-            </div>
-          </label>
-
-          <!-- Confirmed (No Tickets) -->
-          <label class="relative cursor-pointer group">
-            <input
-              type="radio"
+              id="setup_path_confirmed"
               name="setup_path"
               value="confirmed"
               checked={@selected_path == "confirmed"}
@@ -310,57 +242,71 @@ defmodule EventasaurusWeb.EventComponents do
               phx-value-path="confirmed"
               class="sr-only peer"
             />
-            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-green-500 peer-checked:bg-green-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
-              <div class="flex items-start space-x-4">
+            <div class={[
+              "p-4 border-2 rounded-lg transition-all duration-300 hover:shadow-sm group-hover:scale-[1.01] min-h-[120px] flex flex-col",
+              if(@selected_path == "confirmed", do: "border-green-500 bg-green-50 shadow-md", else: "border-gray-200 hover:border-gray-300")
+            ]}>
+              <div class="flex items-start space-x-3 flex-1">
                 <div class="flex-shrink-0">
-                  <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center peer-checked:bg-green-200">
-                    <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <div class={[
+                    "w-10 h-10 rounded-lg flex items-center justify-center",
+                    if(@selected_path == "confirmed", do: "bg-green-200", else: "bg-green-100")
+                  ]}>
+                    <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                   </div>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-1">✅ Confirmed Event</h3>
-                  <p class="text-sm text-gray-600 mb-2">Date is set, just collect interest and RSVPs</p>
-                  <p class="text-xs text-gray-500">Great for meetups, parties, and free community events.</p>
+                  <h3 class="text-base font-semibold text-gray-900 mb-1">✅ Confirmed Event</h3>
+                  <p class="text-sm text-gray-600 mb-2">Date is set, just collect RSVPs</p>
+                  <p class="text-xs text-gray-500">Free tickets by default. Add paid tickets if needed.</p>
                 </div>
               </div>
             </div>
           </label>
 
-          <!-- Ticketed -->
-          <label class="relative cursor-pointer group">
+          <!-- Planning Stage (Polling) -->
+          <label class="relative cursor-pointer group" title="Let attendees vote on multiple date options">
             <input
               type="radio"
+              id="setup_path_polling"
               name="setup_path"
-              value="ticketed"
-              checked={@selected_path == "ticketed"}
+              value="polling"
+              checked={@selected_path == "polling"}
               phx-click="select_setup_path"
-              phx-value-path="ticketed"
+              phx-value-path="polling"
               class="sr-only peer"
             />
-            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-purple-500 peer-checked:bg-purple-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
-              <div class="flex items-start space-x-4">
+            <div class={[
+              "p-4 border-2 rounded-lg transition-all duration-300 hover:shadow-sm group-hover:scale-[1.01] min-h-[120px] flex flex-col",
+              if(@selected_path == "polling", do: "border-blue-500 bg-blue-50 shadow-md", else: "border-gray-200 hover:border-gray-300")
+            ]}>
+              <div class="flex items-start space-x-3 flex-1">
                 <div class="flex-shrink-0">
-                  <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center peer-checked:bg-purple-200">
-                    <svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM4 8a1 1 0 000 2h1v3a1 1 0 001 1h8a1 1 0 001-1v-3h1a1 1 0 100-2H4z" />
+                  <div class={[
+                    "w-10 h-10 rounded-lg flex items-center justify-center",
+                    if(@selected_path == "polling", do: "bg-blue-200", else: "bg-blue-100")
+                  ]}>
+                    <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
                     </svg>
                   </div>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-1">🎟️ Ticketed Event</h3>
-                  <p class="text-sm text-gray-600 mb-2">Ready to sell tickets immediately</p>
-                  <p class="text-xs text-gray-500">Perfect for conferences, workshops, and paid experiences.</p>
+                  <h3 class="text-base font-semibold text-gray-900 mb-1">✨ Planning Stage</h3>
+                  <p class="text-sm text-gray-600 mb-2">Let attendees vote on dates</p>
+                  <p class="text-xs text-gray-500">Perfect when you have multiple date options and want community input.</p>
                 </div>
               </div>
             </div>
           </label>
 
           <!-- Threshold Pre-Sale -->
-          <label class="relative cursor-pointer group">
+          <label class="relative cursor-pointer group" title="Event only happens if enough people sign up - great for testing ideas">
             <input
               type="radio"
+              id="setup_path_threshold"
               name="setup_path"
               value="threshold"
               checked={@selected_path == "threshold"}
@@ -368,19 +314,25 @@ defmodule EventasaurusWeb.EventComponents do
               phx-value-path="threshold"
               class="sr-only peer"
             />
-            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
-              <div class="flex items-start space-x-4">
+            <div class={[
+              "p-4 border-2 rounded-lg transition-all duration-300 hover:shadow-sm group-hover:scale-[1.01] min-h-[120px] flex flex-col",
+              if(@selected_path == "threshold", do: "border-orange-500 bg-orange-50 shadow-md", else: "border-gray-200 hover:border-gray-300")
+            ]}>
+              <div class="flex items-start space-x-3 flex-1">
                 <div class="flex-shrink-0">
-                  <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center peer-checked:bg-orange-200">
-                    <svg class="w-6 h-6 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                  <div class={[
+                    "w-10 h-10 rounded-lg flex items-center justify-center",
+                    if(@selected_path == "threshold", do: "bg-orange-200", else: "bg-orange-100")
+                  ]}>
+                    <svg class="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
                     </svg>
                   </div>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-1">🚦 Threshold Pre-Sale</h3>
+                  <h3 class="text-base font-semibold text-gray-900 mb-1">🚦 Threshold Pre-Sale</h3>
                   <p class="text-sm text-gray-600 mb-2">Validate demand before committing</p>
-                  <p class="text-xs text-gray-500">Event only happens if enough people sign up. Great for testing ideas.</p>
+                  <p class="text-xs text-gray-500">Event only happens if minimum signups reached.</p>
                 </div>
               </div>
             </div>
@@ -423,7 +375,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :on_image_click, :string, default: nil, doc: "event name to trigger when clicking on the image picker"
   attr :id, :string, default: nil, doc: "unique id for the form element, required for hooks"
   attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
-  attr :setup_path, :string, default: "confirmed", doc: "the selected setup path: polling, confirmed, ticketed, or threshold"
+  attr :setup_path, :string, default: "confirmed", doc: "the selected setup path: polling, confirmed, or threshold"
   attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
   # Ticketing-related attributes
   attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
@@ -440,7 +392,7 @@ defmodule EventasaurusWeb.EventComponents do
 
     ~H"""
     <!-- Event Setup Path Selector -->
-    <.event_setup_path_selector selected_path={@setup_path} mode={Map.get(assigns, :mode, "full")} />
+    <.event_setup_path_selector selected_path={Map.get(assigns, :setup_path, "confirmed")} mode={Map.get(assigns, :mode, "full")} />
 
     <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
       <!-- Responsive layout: Mobile stacked, Desktop two-column -->
@@ -530,23 +482,8 @@ defmodule EventasaurusWeb.EventComponents do
             <div class="mb-4">
               <h3 class="text-sm font-semibold text-gray-700 mb-2">When</h3>
 
-              <!-- Date Polling Toggle -->
-              <div class="flex items-center mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <label class="flex items-start cursor-pointer w-full">
-                  <input
-                    type="checkbox"
-                    name="event[enable_date_polling]"
-                    value="true"
-                    checked={@enable_date_polling}
-                    phx-click="toggle_date_polling"
-                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 mr-3"
-                  />
-                  <div>
-                    <span class="text-sm font-medium text-blue-900">Let attendees vote on the date</span>
-                    <p class="text-xs text-blue-700 mt-1">Create a poll for attendees to choose their preferred dates</p>
-                  </div>
-                </label>
-              </div>
+              <!-- Hidden input for date polling - controlled by setup path selector -->
+              <input type="hidden" name="event[enable_date_polling]" value={if @enable_date_polling, do: "true", else: "false"} />
 
               <%= if @enable_date_polling do %>
                 <!-- Time inputs for polling -->
@@ -781,29 +718,46 @@ defmodule EventasaurusWeb.EventComponents do
               </details>
             </div>
 
-            <!-- Ticketing Section -->
-            <div class="mb-4">
-              <h3 class="text-sm font-semibold text-gray-700 mb-3">Ticketing</h3>
+            <!-- Ticketing Section - Only show for confirmed and threshold events -->
+            <%= if Map.get(@form_data, "setup_path", "confirmed") != "polling" do %>
+              <div class="mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Ticketing</h3>
 
-              <!-- Enable Ticketing Toggle -->
-              <div class="flex items-center mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <label class="flex items-start cursor-pointer w-full">
-                  <input
-                    type="checkbox"
-                    name="event[is_ticketed]"
-                    value="true"
-                    checked={Map.get(@form_data, "is_ticketed", false) in [true, "true"]}
-                    phx-click="toggle_ticketing"
-                    class="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500 mt-0.5 mr-3"
-                  />
-                  <div>
-                    <span class="text-sm font-medium text-green-900">Enable Ticketing</span>
-                    <p class="text-xs text-green-700 mt-1">Collect payments and manage attendee registration</p>
+                <!-- Hidden input for ticketing - controlled by setup path selector -->
+                <input type="hidden" name="event[is_ticketed]" value={if Map.get(@form_data, "is_ticketed", false) in [true, "true"], do: "true", else: "false"} />
+
+                <!-- Threshold-specific fields -->
+                <%= if Map.get(@form_data, "setup_path", "confirmed") == "threshold" do %>
+                  <div class="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <h4 class="text-sm font-medium text-orange-800 mb-3">Threshold Pre-Sale Settings</h4>
+                    <div class="space-y-3">
+                      <div>
+                        <label for="threshold_count" class="block text-sm font-medium text-gray-700 mb-1">
+                          Minimum Attendees Required
+                        </label>
+                        <input
+                          type="number"
+                          id="threshold_count"
+                          name="event[threshold_count]"
+                          value={Map.get(@form_data, "threshold_count", "")}
+                          min="1"
+                          placeholder="e.g., 50"
+                          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm"
+                        />
+                        <p class="text-xs text-gray-500 mt-1">
+                          Event will only be confirmed if this many people buy tickets
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </label>
-              </div>
+                  <!-- Hidden field for requires_threshold -->
+                  <input type="hidden" name="event[requires_threshold]" value="true" />
+                <% else %>
+                  <!-- Hidden field for requires_threshold -->
+                  <input type="hidden" name="event[requires_threshold]" value="false" />
+                <% end %>
 
-              <%= if Map.get(@form_data, "is_ticketed", false) in [true, "true"] do %>
+                <%= if @setup_path in ["confirmed", "ticketed", "threshold"] do %>
                 <!-- Tickets Management Section -->
                 <div class="space-y-4" id="tickets-section">
                   <div class="flex items-center justify-between">
@@ -895,12 +849,15 @@ defmodule EventasaurusWeb.EventComponents do
                       <svg class="mx-auto h-8 w-8 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
-                      <p class="text-sm">No tickets created yet</p>
-                      <p class="text-xs text-gray-400 mt-1">Click "Add Ticket" to create your first ticket type</p>
+                      <%= if @setup_path == "confirmed" do %>
+                        <p class="text-sm">Free tickets</p>
+                        <p class="text-xs text-gray-400 mt-1">No paid tickets required. Click "Add Ticket" to create paid options if needed.</p>
+                      <% else %>
+                        <p class="text-sm">No tickets created yet</p>
+                        <p class="text-xs text-gray-400 mt-1">Click "Add Ticket" to create your first ticket type</p>
+                      <% end %>
                     </div>
                   <% end %>
-
-
 
                   <!-- Help text for ticketing -->
                   <div class="text-xs text-gray-500 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -920,7 +877,8 @@ defmodule EventasaurusWeb.EventComponents do
                   </div>
                 </div>
               <% end %>
-            </div>
+              </div>
+            <% end %>
           </div>
         </div>
       </div>
@@ -1039,5 +997,101 @@ defmodule EventasaurusWeb.EventComponents do
     end
   end
 
+  # ======== STAGE INDICATOR HELPERS ========
+
+  defp stage_icon_class(path) do
+    base_classes = "w-10 h-10 rounded-lg flex items-center justify-center"
+    case path do
+      "polling" -> "#{base_classes} bg-blue-100"
+      "confirmed" -> "#{base_classes} bg-green-100"
+
+      "threshold" -> "#{base_classes} bg-orange-100"
+      _ -> "#{base_classes} bg-gray-100"
+    end
+  end
+
+  defp stage_icon(path) do
+    case path do
+      "polling" ->
+        """
+        <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
+        </svg>
+        """
+      "confirmed" ->
+        """
+        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+        </svg>
+        """
+
+      "threshold" ->
+        """
+        <svg class="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+        </svg>
+        """
+      _ ->
+        """
+        <svg class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+        </svg>
+        """
+    end
+  end
+
+  defp stage_title(path) do
+    case path do
+      "polling" -> "Planning Stage"
+      "confirmed" -> "Confirmed Event"
+
+      "threshold" -> "Threshold Pre-Sale"
+      _ -> "Unknown Stage"
+    end
+  end
+
+  defp stage_description(path) do
+    case path do
+      "polling" -> "Collecting date votes from attendees"
+      "confirmed" -> "Event date is set, collecting RSVPs"
+
+      "threshold" -> "Pre-sale validation in progress"
+      _ -> "Status unknown"
+    end
+  end
+
+  defp has_valid_transitions?(path) do
+    case path do
+      "polling" -> true  # Can go to confirmed or threshold
+      "confirmed" -> true  # Can go to threshold
+      "threshold" -> false  # No further transitions (managed by system)
+      _ -> false
+    end
+  end
+
+  defp lock_reason(path) do
+    case path do
+
+      "threshold" -> "Pre-sale locked"
+      _ -> "No changes"
+    end
+  end
+
+  defp stage_final_color(path) do
+    case path do
+
+      "threshold" -> "bg-orange-500"
+      _ -> "bg-gray-300"
+    end
+  end
+
+  defp progress_text(path) do
+    case path do
+      "polling" -> "Step 1 of 3"
+      "confirmed" -> "Step 2 of 3"
+      "threshold" -> "Final Stage"
+      _ -> "Unknown"
+    end
+  end
 
 end
