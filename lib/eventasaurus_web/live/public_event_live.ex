@@ -45,8 +45,11 @@ defmodule EventasaurusWeb.PublicEventLive do
           end
 
           # Subscribe to real-time ticket updates for ticketed events
-          if event.is_ticketed do
+          subscribed_to_tickets = if event.is_ticketed do
             Ticketing.subscribe()
+            true
+          else
+            false
           end
 
           # Determine registration status if user is authenticated
@@ -107,6 +110,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:tickets, tickets)
            |> assign(:selected_tickets, %{})  # Map of ticket_id => quantity
            |> assign(:ticket_loading, false)
+           |> assign(:subscribed_to_tickets, subscribed_to_tickets)
            # Meta tag data for social sharing
            |> assign(:meta_title, event.title)
            |> assign(:meta_description, description)
@@ -115,6 +119,15 @@ defmodule EventasaurusWeb.PublicEventLive do
           }
       end
     end
+  end
+
+  @impl true
+  def terminate(_reason, socket) do
+    # Clean up PubSub subscription when LiveView terminates
+    if socket.assigns[:subscribed_to_tickets] do
+      Ticketing.unsubscribe()
+    end
+    :ok
   end
 
   def handle_event("show_registration_modal", _params, socket) do
