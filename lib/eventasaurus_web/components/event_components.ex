@@ -160,14 +160,28 @@ defmodule EventasaurusWeb.EventComponents do
   attr :selected_tickets, :map, default: %{}, doc: "map of ticket_id => quantity"
   attr :event, :map, required: true, doc: "the event these tickets belong to"
   attr :user, :map, default: nil, doc: "current user (nil if not authenticated)"
+  attr :loading, :boolean, default: false, doc: "whether tickets are being updated"
 
   def ticket_selection_component(assigns) do
     ~H"""
-    <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+    <div class="relative bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+      <!-- Loading Overlay -->
+      <%= if @loading do %>
+        <div class="absolute inset-0 bg-white bg-opacity-75 rounded-xl flex items-center justify-center z-10">
+          <div class="flex items-center space-x-2 text-gray-600">
+            <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-sm">Updating availability...</span>
+          </div>
+        </div>
+      <% end %>
+
       <div class="flex items-center justify-between mb-6">
         <h3 class="text-lg font-semibold text-gray-900">Select Tickets</h3>
         <div class="text-sm text-gray-500">
-          <%= if Enum.any?(@tickets, &(&1.base_price_cents > 0)) do %>
+          <%= if Enum.any?(@tickets, &(&1.base_price_cents && &1.base_price_cents > 0)) do %>
             Prices in USD
           <% else %>
             Free Event
@@ -185,83 +199,79 @@ defmodule EventasaurusWeb.EventComponents do
       <% else %>
         <div class="space-y-4">
           <%= for ticket <- @tickets do %>
-            <% quantity = Map.get(@selected_tickets, ticket.id, 0) %>
             <% available = EventasaurusApp.Ticketing.available_quantity(ticket) %>
+            <% selected_qty = Map.get(@selected_tickets, ticket.id, 0) %>
 
             <div class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
-              <div class="flex items-start justify-between">
-                <!-- Ticket Info -->
-                <div class="flex-1 min-w-0 pr-4">
-                  <h4 class="text-base font-medium text-gray-900 mb-1"><%= ticket.title %></h4>
-                  <%= if ticket.description do %>
-                    <p class="text-sm text-gray-600 mb-2"><%= ticket.description %></p>
-                  <% end %>
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h4 class="font-semibold text-gray-900"><%= ticket.title %></h4>
+                  <p class="text-sm text-gray-600 mt-1"><%= ticket.description %></p>
 
-                  <!-- Price Display -->
-                  <div class="flex items-center space-x-2 mb-2">
-                    <%= if ticket.base_price_cents == 0 do %>
-                      <span class="text-lg font-semibold text-green-600">Free</span>
-                    <% else %>
-                      <span class="text-lg font-semibold text-gray-900">
-                        $<%= :erlang.float_to_binary(ticket.base_price_cents / 100, decimals: 2) %>
+                  <div class="flex items-center gap-4 mt-2">
+                    <!-- Price Display -->
+                    <%= if ticket.base_price_cents && ticket.base_price_cents > 0 do %>
+                      <span class="text-lg font-bold text-gray-900">
+                        <%= format_currency(ticket.base_price_cents, Map.get(ticket, :currency, "usd")) %>
                       </span>
                       <%= if ticket.pricing_model == "flexible" do %>
-                        <span class="text-sm text-gray-500">or more</span>
+                        <span class="text-xs text-gray-500">(minimum)</span>
                       <% end %>
-                    <% end %>
-                  </div>
-
-                  <!-- Availability -->
-                  <div class="text-xs text-gray-500">
-                    <%= if available > 0 do %>
-                      <%= available %> available
                     <% else %>
-                      <span class="text-red-600 font-medium">Sold out</span>
+                      <span class="text-lg font-bold text-green-600">Free</span>
+                    <% end %>
+
+                    <!-- Availability Display -->
+                    <%= if available > 0 do %>
+                      <span class="text-sm text-gray-500">
+                        <%= available %> available
+                      </span>
+                    <% else %>
+                      <span class="text-sm font-medium text-red-600">
+                        Sold Out
+                      </span>
                     <% end %>
                   </div>
                 </div>
 
                 <!-- Quantity Controls -->
-                <div class="flex-shrink-0">
-                  <%= if available > 0 do %>
-                    <div class="flex items-center space-x-3">
-                      <!-- Decrease Button -->
-                      <button
-                        type="button"
-                        phx-click="decrease_ticket_quantity"
-                        phx-value-ticket_id={ticket.id}
-                        disabled={quantity == 0}
-                        class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-                        </svg>
-                      </button>
+                <%= if available > 0 do %>
+                  <div class="flex items-center space-x-3">
+                    <button
+                      type="button"
+                      phx-click="decrease_ticket_quantity"
+                      phx-value-ticket_id={ticket.id}
+                      class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={selected_qty == 0}
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                      </svg>
+                    </button>
 
-                      <!-- Quantity Display -->
-                      <span class="w-8 text-center text-sm font-medium text-gray-900">
-                        <%= quantity %>
-                      </span>
+                    <span class="w-8 text-center font-medium text-gray-900">
+                      <%= selected_qty %>
+                    </span>
 
-                      <!-- Increase Button -->
-                      <button
-                        type="button"
-                        phx-click="increase_ticket_quantity"
-                        phx-value-ticket_id={ticket.id}
-                        disabled={quantity >= available or quantity >= 10}
-                        class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                      </button>
-                    </div>
-                  <% else %>
-                    <div class="text-xs text-red-600 font-medium">
-                      Sold Out
-                    </div>
-                  <% end %>
-                </div>
+                    <% can_increase = selected_qty < available and selected_qty < 10 %>
+                    <button
+                      type="button"
+                      phx-click="increase_ticket_quantity"
+                      phx-value-ticket_id={ticket.id}
+                      class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!can_increase}
+                      title={if !can_increase, do: "Maximum quantity reached", else: "Add ticket"}
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                      </svg>
+                    </button>
+                  </div>
+                <% else %>
+                  <div class="text-sm font-medium text-red-600">
+                    Sold Out
+                  </div>
+                <% end %>
               </div>
             </div>
           <% end %>
@@ -281,7 +291,7 @@ defmodule EventasaurusWeb.EventComponents do
                 <%= if total_amount == 0 do %>
                   Free
                 <% else %>
-                  $<%= :erlang.float_to_binary(total_amount / 100, decimals: 2) %>
+                  <%= format_currency(total_amount, "usd") %>
                 <% end %>
               </div>
             </div>
