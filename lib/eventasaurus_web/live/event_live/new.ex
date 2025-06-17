@@ -738,7 +738,10 @@ defmodule EventasaurusWeb.EventLive.New do
       form_data = %{
         "title" => ticket.title,
         "description" => ticket.description || "",
+        "pricing_model" => Map.get(ticket, :pricing_model, "fixed"),
         "price" => format_price_from_cents(ticket.base_price_cents),
+        "minimum_price" => format_price_from_cents(Map.get(ticket, :minimum_price_cents, 0)),
+        "suggested_price" => format_price_from_cents(Map.get(ticket, :suggested_price_cents, ticket.base_price_cents)),
         "currency" => Map.get(ticket, :currency, "usd"),
         "quantity" => Integer.to_string(ticket.quantity),
         "starts_at" => format_datetime_for_input(ticket.starts_at),
@@ -815,7 +818,7 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("save_ticket", %{"ticket" => ticket_params}, socket) do
+  def handle_event("save_ticket", ticket_params, socket) do
     ticket_data = ticket_params
 
     # Validate required fields
@@ -833,43 +836,101 @@ defmodule EventasaurusWeb.EventLive.New do
         {:noreply, socket}
 
       true ->
-        # Create ticket struct
+        # Parse pricing data
         price_cents = parse_currency(Map.get(ticket_data, "price", "0")) || 0
-        ticket = %{
-          title: Map.get(ticket_data, "title", ""),
-          description: Map.get(ticket_data, "description"),
-          base_price_cents: price_cents,
-          minimum_price_cents: price_cents,
-          currency: Map.get(ticket_data, "currency", "usd"),
-          quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
-            {n, _} when n >= 0 -> n
-            _ -> 0
-          end,
-          starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
-          ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
-          tippable: Map.get(ticket_data, "tippable", false) == true
-        }
+        pricing_model = Map.get(ticket_data, "pricing_model", "fixed")
 
-        # Add or update ticket in the list
-        updated_tickets = case socket.assigns.editing_ticket_index do
-          nil ->
-            # Adding new ticket
-            socket.assigns.tickets ++ [ticket]
-          index ->
-            # Updating existing ticket
-            List.replace_at(socket.assigns.tickets, index, ticket)
+        # Validate flexible pricing fields
+        case validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
+          {:ok, minimum_price_cents, suggested_price_cents} ->
+            # Create ticket struct
+            ticket = %{
+              title: Map.get(ticket_data, "title", ""),
+              description: Map.get(ticket_data, "description"),
+              pricing_model: pricing_model,
+              base_price_cents: price_cents,
+              minimum_price_cents: minimum_price_cents,
+              suggested_price_cents: suggested_price_cents,
+              currency: Map.get(ticket_data, "currency", "usd"),
+              quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
+                {n, _} when n >= 0 -> n
+                _ -> 0
+              end,
+              starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
+              ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
+              tippable: Map.get(ticket_data, "tippable", false) == true
+            }
+
+            # Add or update ticket in the list
+            updated_tickets = case socket.assigns.editing_ticket_index do
+              nil ->
+                # Adding new ticket
+                socket.assigns.tickets ++ [ticket]
+              index ->
+                # Updating existing ticket
+                List.replace_at(socket.assigns.tickets, index, ticket)
+            end
+
+            socket =
+              socket
+              |> assign(:tickets, updated_tickets)
+              |> assign(:show_ticket_modal, false)
+              |> assign(:ticket_form_data, %{})
+              |> assign(:editing_ticket_index, nil)
+              |> put_flash(:info, "Ticket saved successfully")
+
+            {:noreply, socket}
+
+          {:error, message} ->
+            socket = put_flash(socket, :error, message)
+            {:noreply, socket}
+        end
+    end
+  end
+
+  # Validation helper for flexible pricing
+  defp validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
+    case pricing_model do
+      "flexible" ->
+        minimum_price_cents = case parse_currency(Map.get(ticket_data, "minimum_price", "0")) do
+          nil -> 0
+          cents -> cents
         end
 
-        socket =
-          socket
-          |> assign(:tickets, updated_tickets)
-          |> assign(:show_ticket_modal, false)
-          |> assign(:ticket_form_data, %{})
-          |> assign(:editing_ticket_index, nil)
-          |> put_flash(:info, "Ticket saved successfully")
+        suggested_price_cents = case parse_currency(Map.get(ticket_data, "suggested_price", "")) do
+          nil -> price_cents  # Default to base price if not provided
+          cents -> cents
+        end
 
-        {:noreply, socket}
+        cond do
+          minimum_price_cents < 0 ->
+            {:error, "Minimum price cannot be negative"}
+
+          minimum_price_cents > price_cents ->
+            {:error, "Minimum price cannot be higher than base price"}
+
+          suggested_price_cents < minimum_price_cents ->
+            {:error, "Suggested price cannot be lower than minimum price"}
+
+          suggested_price_cents > price_cents ->
+            {:error, "Suggested price cannot be higher than base price"}
+
+          true ->
+            {:ok, minimum_price_cents, suggested_price_cents}
+        end
+
+      _ ->
+        # For fixed/dynamic pricing, minimum equals base price
+        {:ok, price_cents, price_cents}
     end
+  end
+
+  # Handle ticket form updates
+  def handle_event("update_pricing_model", %{"model" => model}, socket) do
+    updated_form_data = Map.put(socket.assigns.ticket_form_data, "pricing_model", model)
+
+    socket = assign(socket, :ticket_form_data, updated_form_data)
+    {:noreply, socket}
   end
 
   # ============================================================================

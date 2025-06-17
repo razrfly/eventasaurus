@@ -39,6 +39,7 @@
   id="ticket-modal"
   show={@show_ticket_modal}
   ticket_form_data={@ticket_form_data}
+  pricing_model={Map.get(@ticket_form_data, "pricing_model", "fixed")}
   editing_ticket_index={@editing_ticket_index}
   show_additional_options={@show_additional_options}
   on_close="cancel_ticket_form"
