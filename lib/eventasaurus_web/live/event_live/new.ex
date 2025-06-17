@@ -77,6 +77,7 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:per_page, 20)
           |> assign(:image_tab, "search") # Changed from "unsplash" to unified search
           |> assign(:enable_date_polling, false)
+          |> assign(:setup_path, "confirmed") # default to confirmed for new events
           # New unified picker assigns
           |> assign(:selected_category, "general")
           |> assign(:default_categories, EventasaurusWeb.Services.DefaultImagesService.get_categories())
@@ -314,6 +315,24 @@ defmodule EventasaurusWeb.EventLive.New do
      socket
      |> assign(:is_virtual, is_virtual)
      |> assign(:form_data, form_data)}
+  end
+
+  @impl true
+  def handle_event("select_setup_path", %{"path" => path}, socket) do
+    # Update form_data based on the selected path
+    form_data = socket.assigns.form_data
+    |> Map.put("setup_path", path)
+    |> Map.put("enable_date_polling", path == "polling")
+    |> Map.put("is_ticketed", path in ["ticketed", "threshold"])
+    |> Map.put("requires_threshold", path == "threshold")
+
+    # Update the socket with the new path and form data
+    socket = socket
+    |> assign(:setup_path, path)
+    |> assign(:enable_date_polling, path == "polling")
+    |> assign(:form_data, form_data)
+
+    {:noreply, socket}
   end
 
   @impl true

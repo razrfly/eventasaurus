@@ -147,6 +147,252 @@ defmodule EventasaurusWeb.EventComponents do
     """
   end
 
+  # ======== EVENT SETUP PATH SELECTOR ========
+
+  @doc """
+  Event Setup Path Selector Component
+
+  Presents four distinct setup modes for event creation:
+  1. Planning Stage (Polling) - for users still deciding on date
+  2. Confirmed (No Tickets) - for simple event publishing
+  3. Ticketed (Confirmed with Tickets) - for immediate ticket sales
+  4. Threshold-Based Pre-Sale - for demand validation before committing
+  """
+  attr :selected_path, :string, default: "confirmed", doc: "the currently selected setup path"
+  attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
+
+  def event_setup_path_selector(assigns) do
+    ~H"""
+    <%= if @mode == "compact" do %>
+      <!-- Compact version for edit forms -->
+      <div class="bg-white rounded-lg border border-gray-200 p-4 mb-4 shadow-sm">
+        <div class="mb-3">
+          <h3 class="text-lg font-medium text-gray-900 mb-1">Event Type</h3>
+          <p class="text-sm text-gray-600">Change your event setup if needed</p>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <!-- Planning Stage (Polling) -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="polling"
+              checked={@selected_path == "polling"}
+              phx-click="select_setup_path"
+              phx-value-path="polling"
+              class="sr-only peer"
+            />
+            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 hover:border-gray-300 hover:shadow-sm">
+              <div class="w-8 h-8 mb-2 text-blue-600 peer-checked:text-blue-700">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <span class="text-sm font-medium text-gray-900 text-center">Planning</span>
+              <span class="text-xs text-gray-500 text-center">Polling</span>
+            </div>
+          </label>
+
+          <!-- Confirmed (No Tickets) -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="confirmed"
+              checked={@selected_path == "confirmed"}
+              phx-click="select_setup_path"
+              phx-value-path="confirmed"
+              class="sr-only peer"
+            />
+            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-green-500 peer-checked:bg-green-50 hover:border-gray-300 hover:shadow-sm">
+              <div class="w-8 h-8 mb-2 text-green-600 peer-checked:text-green-700">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <span class="text-sm font-medium text-gray-900 text-center">Confirmed</span>
+              <span class="text-xs text-gray-500 text-center">No Tickets</span>
+            </div>
+          </label>
+
+          <!-- Ticketed -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="ticketed"
+              checked={@selected_path == "ticketed"}
+              phx-click="select_setup_path"
+              phx-value-path="ticketed"
+              class="sr-only peer"
+            />
+            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 hover:border-gray-300 hover:shadow-sm">
+              <div class="w-8 h-8 mb-2 text-purple-600 peer-checked:text-purple-700">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM4 8a1 1 0 000 2h1v3a1 1 0 001 1h8a1 1 0 001-1v-3h1a1 1 0 100-2H4z" />
+                </svg>
+              </div>
+              <span class="text-sm font-medium text-gray-900 text-center">Ticketed</span>
+              <span class="text-xs text-gray-500 text-center">Sell Tickets</span>
+            </div>
+          </label>
+
+          <!-- Threshold Pre-Sale -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="threshold"
+              checked={@selected_path == "threshold"}
+              phx-click="select_setup_path"
+              phx-value-path="threshold"
+              class="sr-only peer"
+            />
+            <div class="flex flex-col items-center p-3 border-2 border-gray-200 rounded-lg transition-all duration-200 peer-checked:border-orange-500 peer-checked:bg-orange-50 hover:border-gray-300 hover:shadow-sm">
+              <div class="w-8 h-8 mb-2 text-orange-600 peer-checked:text-orange-700">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <span class="text-sm font-medium text-gray-900 text-center">Threshold</span>
+              <span class="text-xs text-gray-500 text-center">Pre-Sale</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    <% else %>
+      <!-- Full version for new events -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
+        <div class="mb-6">
+          <h2 class="text-xl font-semibold text-gray-900 mb-2">What type of event are you creating?</h2>
+          <p class="text-gray-600">Choose the setup that best matches your event planning needs.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Planning Stage (Polling) -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="polling"
+              checked={@selected_path == "polling"}
+              phx-click="select_setup_path"
+              phx-value-path="polling"
+              class="sr-only peer"
+            />
+            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
+              <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0">
+                  <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center peer-checked:bg-blue-200">
+                    <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-1">✨ Planning Stage</h3>
+                  <p class="text-sm text-gray-600 mb-2">Still deciding on the date? Let attendees vote!</p>
+                  <p class="text-xs text-gray-500">Perfect for when you have multiple date options and want community input.</p>
+                </div>
+              </div>
+            </div>
+          </label>
+
+          <!-- Confirmed (No Tickets) -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="confirmed"
+              checked={@selected_path == "confirmed"}
+              phx-click="select_setup_path"
+              phx-value-path="confirmed"
+              class="sr-only peer"
+            />
+            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-green-500 peer-checked:bg-green-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
+              <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0">
+                  <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center peer-checked:bg-green-200">
+                    <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-1">✅ Confirmed Event</h3>
+                  <p class="text-sm text-gray-600 mb-2">Date is set, just collect interest and RSVPs</p>
+                  <p class="text-xs text-gray-500">Great for meetups, parties, and free community events.</p>
+                </div>
+              </div>
+            </div>
+          </label>
+
+          <!-- Ticketed -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="ticketed"
+              checked={@selected_path == "ticketed"}
+              phx-click="select_setup_path"
+              phx-value-path="ticketed"
+              class="sr-only peer"
+            />
+            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-purple-500 peer-checked:bg-purple-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
+              <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0">
+                  <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center peer-checked:bg-purple-200">
+                    <svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM4 8a1 1 0 000 2h1v3a1 1 0 001 1h8a1 1 0 001-1v-3h1a1 1 0 100-2H4z" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-1">🎟️ Ticketed Event</h3>
+                  <p class="text-sm text-gray-600 mb-2">Ready to sell tickets immediately</p>
+                  <p class="text-xs text-gray-500">Perfect for conferences, workshops, and paid experiences.</p>
+                </div>
+              </div>
+            </div>
+          </label>
+
+          <!-- Threshold Pre-Sale -->
+          <label class="relative cursor-pointer group">
+            <input
+              type="radio"
+              name="setup_path"
+              value="threshold"
+              checked={@selected_path == "threshold"}
+              phx-click="select_setup_path"
+              phx-value-path="threshold"
+              class="sr-only peer"
+            />
+            <div class="p-6 border-2 border-gray-200 rounded-xl transition-all duration-300 peer-checked:border-orange-500 peer-checked:bg-orange-50 peer-checked:shadow-md hover:border-gray-300 hover:shadow-sm group-hover:scale-[1.02]">
+              <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0">
+                  <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center peer-checked:bg-orange-200">
+                    <svg class="w-6 h-6 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-1">🚦 Threshold Pre-Sale</h3>
+                  <p class="text-sm text-gray-600 mb-2">Validate demand before committing</p>
+                  <p class="text-xs text-gray-500">Event only happens if enough people sign up. Great for testing ideas.</p>
+                </div>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+    <% end %>
+    """
+  end
+
+  # ======== EXISTING EVENT FORM ========
+
   @doc """
   Renders an event form that can be used for both new and edit views.
 
@@ -177,6 +423,8 @@ defmodule EventasaurusWeb.EventComponents do
   attr :on_image_click, :string, default: nil, doc: "event name to trigger when clicking on the image picker"
   attr :id, :string, default: nil, doc: "unique id for the form element, required for hooks"
   attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
+  attr :setup_path, :string, default: "confirmed", doc: "the selected setup path: polling, confirmed, ticketed, or threshold"
+  attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
   # Ticketing-related attributes
   attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
 
@@ -191,6 +439,9 @@ defmodule EventasaurusWeb.EventComponents do
     end)
 
     ~H"""
+    <!-- Event Setup Path Selector -->
+    <.event_setup_path_selector selected_path={@setup_path} mode={Map.get(assigns, :mode, "full")} />
+
     <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
       <!-- Responsive layout: Mobile stacked, Desktop two-column -->
       <div class="bg-white shadow-md rounded-lg p-4 sm:p-6 mb-6 border border-gray-200">
