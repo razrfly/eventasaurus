@@ -352,4 +352,15 @@ defmodule EventasaurusApp.Factory do
       confirmed_at: DateTime.utc_now() |> DateTime.add(-1, :day)
     })
   end
+
+  @doc """
+  Factory for StripeConnectAccount schema
+  """
+  def stripe_connect_account_factory do
+    %EventasaurusApp.Stripe.StripeConnectAccount{
+      stripe_user_id: sequence(:stripe_user_id, &"acct_test_#{&1}"),
+      connected_at: DateTime.utc_now(),
+      user: build(:user)
+    }
+  end
 end
