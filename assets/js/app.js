@@ -8,6 +8,26 @@ import topbar from "../vendor/topbar";
 import SupabaseImageUpload from "./supabase_upload";
 let Hooks = {};
 
+// SetupPathSelector hook to sync radio button states
+Hooks.SetupPathSelector = {
+  mounted() {
+    this.syncRadioButtons();
+  },
+
+  updated() {
+    this.syncRadioButtons();
+  },
+
+  syncRadioButtons() {
+    const selectedPath = this.el.dataset.selectedPath;
+    const radioButtons = this.el.querySelectorAll('input[type="radio"][name="setup_path"]');
+    
+    radioButtons.forEach(radio => {
+      radio.checked = radio.value === selectedPath;
+    });
+  }
+};
+
 // ImagePicker hook for pushing image_selected event
 Hooks.ImagePicker = {
   mounted() {

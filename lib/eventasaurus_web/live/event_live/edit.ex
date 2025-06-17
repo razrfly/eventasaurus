@@ -81,7 +81,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
             setup_path = cond do
               enable_date_polling -> "polling"
               event.is_ticketed && Map.get(event, :requires_threshold, false) -> "threshold"
-              event.is_ticketed -> "ticketed"
+              event.is_ticketed && !Map.get(event, :requires_threshold, false) -> "confirmed"
               true -> "confirmed"
             end
 
@@ -145,6 +145,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
                           |> assign(:enable_date_polling, enable_date_polling)
             |> assign(:setup_path, setup_path)
             |> assign(:mode, "compact")
+            |> assign(:show_stage_transitions, false)
               |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
@@ -189,7 +190,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     form_data = socket.assigns.form_data
     |> Map.put("setup_path", path)
     |> Map.put("enable_date_polling", path == "polling")
-    |> Map.put("is_ticketed", path in ["ticketed", "threshold"])
+    |> Map.put("is_ticketed", path in ["confirmed", "threshold"])
     |> Map.put("requires_threshold", path == "threshold")
 
     # Update the socket with the new path and form data
@@ -197,6 +198,34 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> assign(:setup_path, path)
     |> assign(:enable_date_polling, path == "polling")
     |> assign(:form_data, form_data)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("show_stage_transitions", _params, socket) do
+    {:noreply, assign(socket, :show_stage_transitions, true)}
+  end
+
+  @impl true
+  def handle_event("hide_stage_transitions", _params, socket) do
+    {:noreply, assign(socket, :show_stage_transitions, false)}
+  end
+
+  @impl true
+  def handle_event("transition_to_stage", %{"stage" => stage}, socket) do
+    # Update form_data and socket state for the new stage
+    form_data = socket.assigns.form_data
+    |> Map.put("setup_path", stage)
+    |> Map.put("enable_date_polling", stage == "polling")
+    |> Map.put("is_ticketed", stage in ["threshold"])
+    |> Map.put("requires_threshold", stage == "threshold")
+
+    socket = socket
+    |> assign(:setup_path, stage)
+    |> assign(:enable_date_polling, stage == "polling")
+    |> assign(:form_data, form_data)
+    |> assign(:show_stage_transitions, false)
 
     {:noreply, socket}
   end
