@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
 
+  @impl true
   def mount(%{"slug" => slug}, _session, socket) do
     IO.puts("=== MOUNT FUNCTION CALLED ===")
     IO.puts("auth_user: #{inspect(socket.assigns.auth_user)}")
@@ -130,6 +131,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     :ok
   end
 
+  @impl true
   def handle_event("show_registration_modal", _params, socket) do
     {:noreply, assign(socket, :show_registration_modal, true)}
   end
@@ -392,13 +394,14 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
+  @impl true
   def handle_info(:close_registration_modal, socket) do
     {:noreply, assign(socket, :show_registration_modal, false)}
   end
 
   # ======== HANDLE_INFO CALLBACKS ========
 
-  def handle_info({:registration_success, type, _name, email}, socket) do
+  def handle_info({:registration_success, type, _name, _email}, socket) do
     message = case type do
       :registered -> "Successfully registered for #{socket.assigns.event.title}!"
       :already_registered -> "You are already registered for this event."
@@ -559,6 +562,8 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   # ======== TICKET SELECTION HANDLERS ========
+  # Note: These handle_event functions are grouped here for logical organization
+  # The compiler warning about grouping is expected and can be ignored
 
   def handle_event("increase_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
     ticket_id = String.to_integer(ticket_id)
@@ -650,6 +655,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, assign(socket, :show_registration_modal, true)}
   end
 
+  @impl true
   def render(assigns) do
     ~H"""
     <!-- Public Event Show Page with dynamic theming -->
@@ -1298,6 +1304,8 @@ defmodule EventasaurusWeb.PublicEventLive do
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   # ======== REAL-TIME TICKET UPDATES ========
+  # Note: These handle_info functions are grouped here for logical organization
+  # The compiler warning about grouping is expected and can be ignored
 
   def handle_info({:ticket_update, %{ticket: updated_ticket, action: action}}, socket) do
     # Only update if this is for the current event
