@@ -160,10 +160,11 @@ defmodule EventasaurusWeb.EventComponents do
   """
   attr :selected_path, :string, default: "confirmed", doc: "the currently selected setup path"
   attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
+  attr :show_stage_transitions, :boolean, default: false, doc: "whether to show full selector in edit mode"
 
   def event_setup_path_selector(assigns) do
     ~H"""
-    <%= if @mode == "compact" do %>
+    <%= if @mode == "compact" && !@show_stage_transitions do %>
       <!-- Stage indicator for edit forms -->
       <div class="bg-white rounded-lg border border-gray-200 p-4 mb-4 shadow-sm">
         <div class="flex items-center justify-between">
@@ -222,11 +223,33 @@ defmodule EventasaurusWeb.EventComponents do
         </div>
       </div>
     <% else %>
-      <!-- Full version for new events -->
+      <!-- Full version for new events or expanded edit mode -->
       <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
         <div class="mb-6">
-          <h2 class="text-xl font-semibold text-gray-900 mb-2">What type of event are you creating?</h2>
-          <p class="text-gray-600">Choose the setup that best matches your event planning needs.</p>
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-xl font-semibold text-gray-900 mb-2">
+                <%= if @mode == "compact" do %>
+                  Change Event Type
+                <% else %>
+                  What type of event are you creating?
+                <% end %>
+              </h2>
+              <p class="text-gray-600">Choose the setup that best matches your event planning needs.</p>
+            </div>
+            <%= if @mode == "compact" do %>
+              <button
+                type="button"
+                phx-click="hide_stage_transitions"
+                class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Close
+              </button>
+            <% end %>
+          </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4" id="setup-path-selector" phx-hook="SetupPathSelector" data-selected-path={@selected_path}>
@@ -377,6 +400,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :enable_date_polling, :boolean, default: false, doc: "whether date polling is enabled"
   attr :setup_path, :string, default: "confirmed", doc: "the selected setup path: polling, confirmed, or threshold"
   attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
+  attr :show_stage_transitions, :boolean, default: false, doc: "whether to show full selector in edit mode"
   # Ticketing-related attributes
   attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
 
@@ -392,7 +416,11 @@ defmodule EventasaurusWeb.EventComponents do
 
     ~H"""
     <!-- Event Setup Path Selector -->
-    <.event_setup_path_selector selected_path={Map.get(assigns, :setup_path, "confirmed")} mode={Map.get(assigns, :mode, "full")} />
+            <.event_setup_path_selector
+          selected_path={Map.get(assigns, :setup_path, "confirmed")}
+          mode={Map.get(assigns, :mode, "full")}
+          show_stage_transitions={Map.get(assigns, :show_stage_transitions, false)}
+        />
 
     <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
       <!-- Responsive layout: Mobile stacked, Desktop two-column -->
