@@ -54,6 +54,109 @@ Hooks.TimezoneDetectionHook = {
   }
 };
 
+// Pricing Validator Hook - Real-time validation for flexible pricing
+Hooks.PricingValidator = {
+  mounted() {
+    this.validatePricing = this.validatePricing.bind(this);
+    
+    // Add event listeners for input changes
+    this.el.addEventListener('input', this.validatePricing);
+    this.el.addEventListener('blur', this.validatePricing);
+    
+    // Initial validation
+    setTimeout(this.validatePricing, 100);
+  },
+
+  destroyed() {
+    this.el.removeEventListener('input', this.validatePricing);
+    this.el.removeEventListener('blur', this.validatePricing);
+  },
+
+  validatePricing() {
+    const form = this.el.closest('form');
+    if (!form) return;
+
+    // Get all pricing inputs
+    const basePriceInput = form.querySelector('#base-price-input');
+    const minimumPriceInput = form.querySelector('#minimum-price-input');
+    const suggestedPriceInput = form.querySelector('#suggested-price-input');
+
+    // Get error elements
+    const basePriceError = form.querySelector('#base-price-error');
+    const minimumPriceError = form.querySelector('#minimum-price-error');
+    const suggestedPriceError = form.querySelector('#suggested-price-error');
+
+    if (!basePriceInput || !basePriceError) return;
+
+    // Parse values
+    const basePrice = parseFloat(basePriceInput.value) || 0;
+    const minimumPrice = minimumPriceInput ? (parseFloat(minimumPriceInput.value) || 0) : 0;
+    const suggestedPrice = suggestedPriceInput ? parseFloat(suggestedPriceInput.value) : null;
+
+    // Clear all errors first
+    this.clearError(basePriceError);
+    if (minimumPriceError) this.clearError(minimumPriceError);
+    if (suggestedPriceError) this.clearError(suggestedPriceError);
+
+    // Only validate if flexible pricing fields are visible
+    if (!minimumPriceInput || !suggestedPriceInput) return;
+
+    // Validation logic
+    let hasErrors = false;
+
+    // Base price validation
+    if (basePrice <= 0) {
+      this.showError(basePriceError, 'Base price must be greater than 0');
+      hasErrors = true;
+    }
+
+    // Minimum price validation
+    if (minimumPrice < 0) {
+      this.showError(minimumPriceError, 'Minimum price cannot be negative');
+      hasErrors = true;
+    } else if (minimumPrice > basePrice) {
+      this.showError(minimumPriceError, 'Minimum price cannot exceed base price');
+      hasErrors = true;
+    }
+
+    // Suggested price validation
+    if (suggestedPrice !== null && !isNaN(suggestedPrice)) {
+      if (suggestedPrice < minimumPrice) {
+        this.showError(suggestedPriceError, 'Suggested price cannot be lower than minimum price');
+        hasErrors = true;
+      } else if (suggestedPrice > basePrice) {
+        this.showError(suggestedPriceError, 'Suggested price cannot exceed base price');
+        hasErrors = true;
+      }
+    }
+
+    // Update input styling
+    this.updateInputStyling(basePriceInput, !hasErrors);
+    if (minimumPriceInput) this.updateInputStyling(minimumPriceInput, !hasErrors);
+    if (suggestedPriceInput) this.updateInputStyling(suggestedPriceInput, !hasErrors);
+  },
+
+  showError(errorElement, message) {
+    errorElement.textContent = message;
+    errorElement.classList.remove('hidden');
+  },
+
+  clearError(errorElement) {
+    errorElement.textContent = '';
+    errorElement.classList.add('hidden');
+  },
+
+  updateInputStyling(input, isValid) {
+    if (isValid) {
+      input.classList.remove('border-red-500', 'focus:ring-red-500');
+      input.classList.add('border-gray-300', 'focus:ring-blue-500');
+    } else {
+      input.classList.remove('border-gray-300', 'focus:ring-blue-500');
+      input.classList.add('border-red-500', 'focus:ring-red-500');
+    }
+  }
+};
+
 // DateTimeSync Hook - Keeps end date/time in sync with start date/time
 Hooks.DateTimeSync = {
   mounted() {
