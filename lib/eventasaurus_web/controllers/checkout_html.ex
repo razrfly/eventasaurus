@@ -10,9 +10,9 @@ defmodule EventasaurusWeb.CheckoutHTML do
   """
   def format_price(amount_cents, currency \\ "usd") do
     case currency do
-      "usd" -> "$#{amount_cents / 100}"
-      "eur" -> "€#{amount_cents / 100}"
-      _ -> "#{amount_cents / 100} #{String.upcase(currency)}"
+      "usd" -> "$#{:erlang.float_to_binary(amount_cents / 100, decimals: 2)}"
+      "eur" -> "€#{:erlang.float_to_binary(amount_cents / 100, decimals: 2)}"
+      _ -> "#{:erlang.float_to_binary(amount_cents / 100, decimals: 2)} #{String.upcase(currency)}"
     end
   end
 
