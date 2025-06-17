@@ -368,8 +368,6 @@ defmodule EventasaurusApp.Ticketing do
     Repo.all(query)
   end
 
-
-
   @doc """
   Creates an order for a ticket purchase.
 
@@ -406,6 +404,7 @@ defmodule EventasaurusApp.Ticketing do
            {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
            {:ok, order} <- insert_order(user, locked_ticket, quantity, pricing, attrs) do
         maybe_broadcast_order_update(order, :created)
+        maybe_broadcast_ticket_update(locked_ticket, :order_created)
         order
       else
         {:error, reason} -> Repo.rollback(reason)
@@ -456,6 +455,7 @@ defmodule EventasaurusApp.Ticketing do
           |> Repo.update()
 
         maybe_broadcast_order_update(updated_order, :created)
+        maybe_broadcast_ticket_update(locked_ticket, :order_created)
 
         %{order: updated_order, payment_intent: payment_intent}
       else
@@ -485,6 +485,9 @@ defmodule EventasaurusApp.Ticketing do
   """
   def confirm_order(%Order{} = order, payment_reference) do
     Repo.transaction(fn ->
+      # Preload ticket for broadcasting
+      order_with_ticket = Repo.preload(order, :ticket)
+
       # Update order
       {:ok, confirmed_order} =
         order
@@ -500,6 +503,7 @@ defmodule EventasaurusApp.Ticketing do
 
       # Broadcast updates
       maybe_broadcast_order_update(confirmed_order, :confirmed)
+      maybe_broadcast_ticket_update(order_with_ticket.ticket, :order_confirmed)
 
       confirmed_order
     end)
@@ -516,12 +520,16 @@ defmodule EventasaurusApp.Ticketing do
   """
   def cancel_order(%Order{} = order) do
     if Order.can_cancel?(order) do
+      # Preload ticket for broadcasting
+      order_with_ticket = Repo.preload(order, :ticket)
+
       order
       |> Order.changeset(%{status: "canceled"})
       |> Repo.update()
       |> case do
         {:ok, canceled_order} ->
           maybe_broadcast_order_update(canceled_order, :canceled)
+          maybe_broadcast_ticket_update(order_with_ticket.ticket, :order_canceled)
           {:ok, canceled_order}
         error ->
           error
@@ -541,12 +549,16 @@ defmodule EventasaurusApp.Ticketing do
 
   """
   def mark_order_failed(%Order{} = order) do
+    # Preload ticket for broadcasting
+    order_with_ticket = Repo.preload(order, :ticket)
+
     order
     |> Order.changeset(%{status: "failed"})
     |> Repo.update()
     |> case do
       {:ok, failed_order} ->
         maybe_broadcast_order_update(failed_order, :failed)
+        maybe_broadcast_ticket_update(order_with_ticket.ticket, :order_failed)
         {:ok, failed_order}
       error ->
         error
@@ -689,8 +701,6 @@ defmodule EventasaurusApp.Ticketing do
       confirmed_order
     end)
   end
-
-
 
   defp sync_order_via_payment_intent(%Order{} = order) do
     case stripe_impl().get_payment_intent(order.payment_reference, nil) do
@@ -1058,7 +1068,7 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   defp pubsub_available?() do
-    case Process.whereis(EventasaurusApp.PubSub) do
+    case Process.whereis(Eventasaurus.PubSub) do
       nil -> false
       _pid -> true
     end
@@ -1068,7 +1078,7 @@ defmodule EventasaurusApp.Ticketing do
 
   defp broadcast_ticket_update(%Ticket{} = ticket, action) do
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       @pubsub_topic,
       {:ticket_update, %{ticket: ticket, action: action}}
     )
@@ -1076,7 +1086,7 @@ defmodule EventasaurusApp.Ticketing do
 
   defp broadcast_order_update(%Order{} = order, action) do
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       @pubsub_topic,
       {:order_update, %{order: order, action: action}}
     )
@@ -1092,7 +1102,7 @@ defmodule EventasaurusApp.Ticketing do
 
   """
   def subscribe do
-    Phoenix.PubSub.subscribe(EventasaurusApp.PubSub, @pubsub_topic)
+    Phoenix.PubSub.subscribe(Eventasaurus.PubSub, @pubsub_topic)
   end
 
   # Get the configured Stripe implementation (for testing vs production)

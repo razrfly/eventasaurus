@@ -92,6 +92,7 @@ defmodule EventasaurusWeb.Router do
 
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
+      live "/events/:event_slug/checkout", CheckoutLive
     end
   end
 
