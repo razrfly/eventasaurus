@@ -16,6 +16,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Services.DefaultImagesService
   alias EventasaurusApp.Ticketing
 
+  @valid_setup_paths ~w[polling confirmed threshold]
+
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
     event = Events.get_event_by_slug(slug)
@@ -107,9 +109,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
               "polling_deadline" => if(event.polling_deadline, do: DateTime.to_iso8601(event.polling_deadline), else: ""),
               "polling_deadline_date" => polling_deadline_date,
               "polling_deadline_time" => polling_deadline_time,
-              "is_ticketed" => event.is_ticketed,
+              "is_ticketed" => to_string(event.is_ticketed),
               "setup_path" => setup_path,
-              "requires_threshold" => Map.get(event, :requires_threshold, false)
+              "requires_threshold" => to_string(Map.get(event, :requires_threshold, false))
             }
 
             # Load existing tickets for the event
@@ -185,23 +187,31 @@ defmodule EventasaurusWeb.EventLive.Edit do
   # ========== Event Handlers ==========
 
   @impl true
-  def handle_event("select_setup_path", %{"path" => path}, socket) do
+  def handle_event("select_setup_path", %{"path" => path}, socket) when path in @valid_setup_paths do
     # Update form_data based on the selected path
-    form_data = socket.assigns.form_data
-    |> Map.put("setup_path", path)
-    |> Map.put("enable_date_polling", path == "polling")
-    |> Map.put("is_ticketed", path in ["confirmed", "threshold"])
-    |> Map.put("requires_threshold", path == "threshold")
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("setup_path", path)
+      |> Map.put("enable_date_polling", to_string(path == "polling"))
+      |> Map.put("is_ticketed", to_string(path in ["confirmed", "threshold"]))
+      |> Map.put("requires_threshold", to_string(path == "threshold"))
 
     # Update the socket with the new path and form data, and hide the transition selector
-    socket = socket
-    |> assign(:setup_path, path)
-    |> assign(:enable_date_polling, path == "polling")
-    |> assign(:form_data, form_data)
-    |> assign(:show_stage_transitions, false)
+    socket =
+      socket
+      |> assign(:setup_path, path)
+      |> assign(:enable_date_polling, path == "polling")
+      |> assign(:is_ticketed, path in ["confirmed", "threshold"])
+      |> assign(:requires_threshold, path == "threshold")
+      |> assign(:form_data, form_data)
+      |> assign(:show_stage_transitions, false)
+      |> maybe_reset_ticketing(path)
 
     {:noreply, socket}
   end
+
+  def handle_event("select_setup_path", _params, socket),
+    do: {:noreply, socket}  # ignore unknown values
 
   @impl true
   def handle_event("show_stage_transitions", _params, socket) do
@@ -214,22 +224,30 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
-  def handle_event("transition_to_stage", %{"stage" => stage}, socket) do
+  def handle_event("transition_to_stage", %{"stage" => stage}, socket) when stage in @valid_setup_paths do
     # Update form_data and socket state for the new stage
-    form_data = socket.assigns.form_data
-    |> Map.put("setup_path", stage)
-    |> Map.put("enable_date_polling", stage == "polling")
-    |> Map.put("is_ticketed", stage in ["threshold"])
-    |> Map.put("requires_threshold", stage == "threshold")
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("setup_path", stage)
+      |> Map.put("enable_date_polling", to_string(stage == "polling"))
+      |> Map.put("is_ticketed", to_string(stage in ["confirmed", "threshold"]))
+      |> Map.put("requires_threshold", to_string(stage == "threshold"))
 
-    socket = socket
-    |> assign(:setup_path, stage)
-    |> assign(:enable_date_polling, stage == "polling")
-    |> assign(:form_data, form_data)
-    |> assign(:show_stage_transitions, false)
+    socket =
+      socket
+      |> assign(:setup_path, stage)
+      |> assign(:enable_date_polling, stage == "polling")
+      |> assign(:is_ticketed, stage in ["confirmed", "threshold"])
+      |> assign(:requires_threshold, stage == "threshold")
+      |> assign(:form_data, form_data)
+      |> assign(:show_stage_transitions, false)
+      |> maybe_reset_ticketing(stage)
 
     {:noreply, socket}
   end
+
+  def handle_event("transition_to_stage", _params, socket),
+    do: {:noreply, socket}  # ignore unknown values
 
   @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
@@ -1294,6 +1312,16 @@ defmodule EventasaurusWeb.EventLive.Edit do
           end
       end
     end
+  end
+
+  # Helper — clears ticket state unless the path is ticket-centric
+  defp maybe_reset_ticketing(socket, path) when path in ["confirmed", "threshold"], do: socket
+  defp maybe_reset_ticketing(socket, _path) do
+    socket
+    |> assign(:tickets, [])
+    |> assign(:show_ticket_modal, false)
+    |> assign(:ticket_form_data, %{})
+    |> assign(:editing_ticket_index, nil)
   end
 
   # Validation helper for flexible pricing
