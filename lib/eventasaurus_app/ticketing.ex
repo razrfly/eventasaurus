@@ -403,15 +403,18 @@ defmodule EventasaurusApp.Ticketing do
            :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
            {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
            {:ok, order} <- insert_order(user, locked_ticket, quantity, pricing, attrs) do
-        maybe_broadcast_order_update(order, :created)
-        maybe_broadcast_ticket_update(locked_ticket, :order_created)
-        order
+        # Return both order and ticket for post-commit broadcasting
+        {order, locked_ticket}
       else
         {:error, reason} -> Repo.rollback(reason)
         error -> Repo.rollback(error)
       end
     end) do
-      {:ok, order} -> {:ok, order}
+      {:ok, {order, ticket}} ->
+        # Broadcast after transaction commits to ensure data visibility
+        maybe_broadcast_order_update(order, :created)
+        maybe_broadcast_ticket_update(ticket, :order_created)
+        {:ok, order}
       {:error, error} -> {:error, error}
     end
   end
@@ -454,16 +457,18 @@ defmodule EventasaurusApp.Ticketing do
           |> Order.changeset(%{stripe_session_id: payment_intent["id"]})
           |> Repo.update()
 
-        maybe_broadcast_order_update(updated_order, :created)
-        maybe_broadcast_ticket_update(locked_ticket, :order_created)
-
-        %{order: updated_order, payment_intent: payment_intent}
+        # Return order, ticket, and payment intent for post-commit broadcasting
+        {updated_order, locked_ticket, payment_intent}
       else
         {:error, reason} -> Repo.rollback(reason)
         error -> Repo.rollback(error)
       end
     end) do
-      {:ok, result} -> {:ok, result}
+      {:ok, {order, ticket, payment_intent}} ->
+        # Broadcast after transaction commits to ensure data visibility
+        maybe_broadcast_order_update(order, :created)
+        maybe_broadcast_ticket_update(ticket, :order_created)
+        {:ok, %{order: order, payment_intent: payment_intent}}
       {:error, error} -> {:error, error}
     end
   end
@@ -484,7 +489,7 @@ defmodule EventasaurusApp.Ticketing do
 
   """
   def confirm_order(%Order{} = order, payment_reference) do
-    Repo.transaction(fn ->
+    case Repo.transaction(fn ->
       # Preload ticket for broadcasting
       order_with_ticket = Repo.preload(order, :ticket)
 
@@ -501,12 +506,16 @@ defmodule EventasaurusApp.Ticketing do
       # Create EventParticipant record
       {:ok, _participant} = create_event_participant(confirmed_order)
 
-      # Broadcast updates
-      maybe_broadcast_order_update(confirmed_order, :confirmed)
-      maybe_broadcast_ticket_update(order_with_ticket.ticket, :order_confirmed)
-
-      confirmed_order
-    end)
+      # Return order and ticket for post-commit broadcasting
+      {confirmed_order, order_with_ticket.ticket}
+    end) do
+      {:ok, {confirmed_order, ticket}} ->
+        # Broadcast updates after transaction commits
+        maybe_broadcast_order_update(confirmed_order, :confirmed)
+        maybe_broadcast_ticket_update(ticket, :order_confirmed)
+        {:ok, confirmed_order}
+      {:error, error} -> {:error, error}
+    end
   end
 
   @doc """
@@ -1103,6 +1112,19 @@ defmodule EventasaurusApp.Ticketing do
   """
   def subscribe do
     Phoenix.PubSub.subscribe(Eventasaurus.PubSub, @pubsub_topic)
+  end
+
+  @doc """
+  Unsubscribes from ticketing updates.
+
+  ## Examples
+
+      iex> unsubscribe()
+      :ok
+
+  """
+  def unsubscribe do
+    Phoenix.PubSub.unsubscribe(Eventasaurus.PubSub, @pubsub_topic)
   end
 
   # Get the configured Stripe implementation (for testing vs production)
