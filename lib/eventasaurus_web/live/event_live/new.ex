@@ -323,7 +323,7 @@ defmodule EventasaurusWeb.EventLive.New do
     form_data = socket.assigns.form_data
     |> Map.put("setup_path", path)
     |> Map.put("enable_date_polling", path == "polling")
-    |> Map.put("is_ticketed", path in ["ticketed", "threshold"])
+    |> Map.put("is_ticketed", path in ["confirmed", "threshold"])
     |> Map.put("requires_threshold", path == "threshold")
 
     # Update the socket with the new path and form data
