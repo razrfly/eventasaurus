@@ -144,7 +144,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
           </div>
           <div class="text-right">
             <div class="text-lg font-semibold text-gray-900">
-              <%= CurrencyHelpers.format_currency(@order.total_amount_cents, @order.currency) %>
+              <%= CurrencyHelpers.format_currency(@order.total_cents, @order.currency) %>
             </div>
           </div>
         </div>
@@ -171,7 +171,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
                 Processing...
               </div>
             <% else %>
-              Pay <%= CurrencyHelpers.format_currency(@order.total_amount_cents, @order.currency) %>
+              Pay <%= CurrencyHelpers.format_currency(@order.total_cents, @order.currency) %>
             <% end %>
           </button>
         </div>
@@ -196,7 +196,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
       <% end %>
 
       <div class="mt-6 text-center">
-        <.link navigate={"/checkout/#{@event.slug}?tickets=#{@order.ticket.id}:#{@order.quantity}"}
+        <.link navigate={"/events/#{@event.slug}/checkout?tickets=#{@order.ticket.id}:#{@order.quantity}"}
               class="text-gray-600 hover:text-gray-700 text-sm">
           ← Back to checkout
         </.link>
@@ -245,13 +245,13 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
 
           if (error) {
             // Payment failed
-            window.liveSocket.pushEvent('payment_failed', { error: error });
+            window.liveSocket.pushEvent('#stripe-submit-button', 'payment_failed', { error: error });
 
             submitButton.disabled = false;
-            submitButton.innerHTML = 'Pay <%= CurrencyHelpers.format_currency(@order.total_amount_cents, @order.currency) %>';
+            submitButton.innerHTML = 'Pay <%= CurrencyHelpers.format_currency(@order.total_cents, @order.currency) %>';
           } else {
             // Payment succeeded
-            window.liveSocket.pushEvent('payment_succeeded', {
+            window.liveSocket.pushEvent('#stripe-submit-button', 'payment_succeeded', {
               payment_intent_id: '<%= @payment_intent_id %>'
             });
           }
