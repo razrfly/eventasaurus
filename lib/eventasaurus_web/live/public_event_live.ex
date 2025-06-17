@@ -1,12 +1,15 @@
 defmodule EventasaurusWeb.PublicEventLive do
-  use EventasaurusWeb, :live_view
+    use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Accounts
+  alias EventasaurusApp.Ticketing
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.ReservedSlugs
+
+  import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
 
   def mount(%{"slug" => slug}, _session, socket) do
     IO.puts("=== MOUNT FUNCTION CALLED ===")
@@ -33,6 +36,13 @@ defmodule EventasaurusWeb.PublicEventLive do
           # Load venue if needed
           venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
           organizers = Events.list_event_organizers(event)
+
+          # Load tickets for ticketed events
+          tickets = if event.is_ticketed do
+            Ticketing.list_tickets_for_event(event.id)
+          else
+            []
+          end
 
           # Determine registration status if user is authenticated
           Logger.debug("PublicEventLive.mount - auth_user: #{inspect(socket.assigns.auth_user)}")
@@ -89,6 +99,8 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:pending_vote, nil)
            |> assign(:show_vote_modal, false)
            |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users
+           |> assign(:tickets, tickets)
+           |> assign(:selected_tickets, %{})  # Map of ticket_id => quantity
            # Meta tag data for social sharing
            |> assign(:meta_title, event.title)
            |> assign(:meta_description, description)
@@ -365,6 +377,8 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, assign(socket, :show_registration_modal, false)}
   end
 
+  # ======== HANDLE_INFO CALLBACKS ========
+
   def handle_info({:registration_success, type, _name, email}, socket) do
     message = case type do
       :new_registration ->
@@ -543,6 +557,64 @@ defmodule EventasaurusWeb.PublicEventLive do
          |> put_flash(:error, error_message)
         }
     end
+  end
+
+  # ======== TICKET SELECTION HANDLERS ========
+
+  def handle_event("increase_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
+    ticket_id = String.to_integer(ticket_id)
+    tickets = socket.assigns.tickets
+    ticket = Enum.find(tickets, &(&1.id == ticket_id))
+
+    if ticket do
+      current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
+      available_quantity = Ticketing.available_quantity(ticket)
+      max_per_order = 10  # Set reasonable limit
+
+      new_quantity = if current_quantity < available_quantity and current_quantity < max_per_order do
+        current_quantity + 1
+      else
+        current_quantity
+      end
+
+      updated_selection = Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
+
+      {:noreply, assign(socket, :selected_tickets, updated_selection)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("decrease_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
+    ticket_id = String.to_integer(ticket_id)
+    current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
+
+    new_quantity = max(0, current_quantity - 1)
+
+    updated_selection = if new_quantity == 0 do
+      Map.delete(socket.assigns.selected_tickets, ticket_id)
+    else
+      Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
+    end
+
+    {:noreply, assign(socket, :selected_tickets, updated_selection)}
+  end
+
+  def handle_event("proceed_to_checkout", _params, socket) do
+    if socket.assigns.user do
+      # TODO: Implement checkout flow (Task 7.3)
+      # For now, show a placeholder message
+      {:noreply,
+       socket
+       |> put_flash(:info, "Checkout flow coming soon! Your ticket selection has been saved.")
+      }
+    else
+      {:noreply, assign(socket, :show_registration_modal, true)}
+    end
+  end
+
+  def handle_event("show_auth_modal", _params, socket) do
+    {:noreply, assign(socket, :show_registration_modal, true)}
   end
 
   def render(assigns) do
@@ -848,6 +920,16 @@ defmodule EventasaurusWeb.PublicEventLive do
 
         <!-- Right sidebar -->
         <div class="lg:col-span-1">
+          <!-- Ticket Selection Section (for ticketed events) -->
+          <%= if @event.is_ticketed and @event.status in [:confirmed] do %>
+            <.ticket_selection_component
+              tickets={@tickets}
+              selected_tickets={@selected_tickets}
+              event={@event}
+              user={@user}
+            />
+          <% end %>
+
           <!-- Registration Card -->
           <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
             <h3 class="text-lg font-semibold mb-4 text-gray-900">

@@ -150,6 +150,189 @@ defmodule EventasaurusWeb.EventComponents do
   # ======== EVENT SETUP PATH SELECTOR ========
 
   @doc """
+  Ticket Selection Component
+
+  Displays available tickets for an event with quantity selection, pricing,
+  and availability information. Handles both free and paid tickets with
+  different pricing models.
+  """
+  attr :tickets, :list, required: true, doc: "list of available tickets"
+  attr :selected_tickets, :map, default: %{}, doc: "map of ticket_id => quantity"
+  attr :event, :map, required: true, doc: "the event these tickets belong to"
+  attr :user, :map, default: nil, doc: "current user (nil if not authenticated)"
+
+  def ticket_selection_component(assigns) do
+    ~H"""
+    <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-semibold text-gray-900">Select Tickets</h3>
+        <div class="text-sm text-gray-500">
+          <%= if Enum.any?(@tickets, &(&1.base_price_cents > 0)) do %>
+            Prices in USD
+          <% else %>
+            Free Event
+          <% end %>
+        </div>
+      </div>
+
+      <%= if @tickets == [] do %>
+        <div class="text-center py-8 text-gray-500">
+          <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+          </svg>
+          <p class="text-sm">No tickets available at this time</p>
+        </div>
+      <% else %>
+        <div class="space-y-4">
+          <%= for ticket <- @tickets do %>
+            <% quantity = Map.get(@selected_tickets, ticket.id, 0) %>
+            <% available = EventasaurusApp.Ticketing.available_quantity(ticket) %>
+
+            <div class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
+              <div class="flex items-start justify-between">
+                <!-- Ticket Info -->
+                <div class="flex-1 min-w-0 pr-4">
+                  <h4 class="text-base font-medium text-gray-900 mb-1"><%= ticket.title %></h4>
+                  <%= if ticket.description do %>
+                    <p class="text-sm text-gray-600 mb-2"><%= ticket.description %></p>
+                  <% end %>
+
+                  <!-- Price Display -->
+                  <div class="flex items-center space-x-2 mb-2">
+                    <%= if ticket.base_price_cents == 0 do %>
+                      <span class="text-lg font-semibold text-green-600">Free</span>
+                    <% else %>
+                      <span class="text-lg font-semibold text-gray-900">
+                        $<%= :erlang.float_to_binary(ticket.base_price_cents / 100, decimals: 2) %>
+                      </span>
+                      <%= if ticket.pricing_model == "flexible" do %>
+                        <span class="text-sm text-gray-500">or more</span>
+                      <% end %>
+                    <% end %>
+                  </div>
+
+                  <!-- Availability -->
+                  <div class="text-xs text-gray-500">
+                    <%= if available > 0 do %>
+                      <%= available %> available
+                    <% else %>
+                      <span class="text-red-600 font-medium">Sold out</span>
+                    <% end %>
+                  </div>
+                </div>
+
+                <!-- Quantity Controls -->
+                <div class="flex-shrink-0">
+                  <%= if available > 0 do %>
+                    <div class="flex items-center space-x-3">
+                      <!-- Decrease Button -->
+                      <button
+                        type="button"
+                        phx-click="decrease_ticket_quantity"
+                        phx-value-ticket_id={ticket.id}
+                        disabled={quantity == 0}
+                        class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                        </svg>
+                      </button>
+
+                      <!-- Quantity Display -->
+                      <span class="w-8 text-center text-sm font-medium text-gray-900">
+                        <%= quantity %>
+                      </span>
+
+                      <!-- Increase Button -->
+                      <button
+                        type="button"
+                        phx-click="increase_ticket_quantity"
+                        phx-value-ticket_id={ticket.id}
+                        disabled={quantity >= available or quantity >= 10}
+                        class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </button>
+                    </div>
+                  <% else %>
+                    <div class="text-xs text-red-600 font-medium">
+                      Sold Out
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Checkout Summary -->
+        <%= if map_size(@selected_tickets) > 0 do %>
+          <% total_amount = calculate_total_amount(@tickets, @selected_tickets) %>
+          <% total_tickets = Enum.sum(Map.values(@selected_tickets)) %>
+
+          <div class="mt-6 pt-6 border-t border-gray-200">
+            <div class="flex items-center justify-between mb-4">
+              <div class="text-sm text-gray-600">
+                <%= total_tickets %> ticket<%= if total_tickets != 1, do: "s" %>
+              </div>
+              <div class="text-lg font-semibold text-gray-900">
+                <%= if total_amount == 0 do %>
+                  Free
+                <% else %>
+                  $<%= :erlang.float_to_binary(total_amount / 100, decimals: 2) %>
+                <% end %>
+              </div>
+            </div>
+
+            <%= if @user do %>
+              <button
+                type="button"
+                phx-click="proceed_to_checkout"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+              >
+                <%= if total_amount == 0 do %>
+                  Reserve Free Tickets
+                <% else %>
+                  Proceed to Checkout
+                <% end %>
+              </button>
+            <% else %>
+              <button
+                type="button"
+                phx-click="show_auth_modal"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+              >
+                Sign In to Continue
+              </button>
+            <% end %>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Helper function to calculate total amount for selected tickets
+  defp calculate_total_amount(tickets, selected_tickets) do
+    tickets
+    |> Enum.reduce(0, fn ticket, acc ->
+      quantity = Map.get(selected_tickets, ticket.id, 0)
+      if quantity > 0 do
+        case ticket.pricing_model do
+          "fixed" -> acc + (ticket.base_price_cents * quantity)
+          "flexible" -> acc + (ticket.minimum_price_cents * quantity)  # Use minimum for calculation
+          "dynamic" -> acc + (ticket.base_price_cents * quantity)
+          _ -> acc
+        end
+      else
+        acc
+      end
+    end)
+  end
+
+  @doc """
   Event Setup Path Selector Component
 
   Presents three distinct setup modes for event creation:
