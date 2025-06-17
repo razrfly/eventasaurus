@@ -77,6 +77,14 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 {nil, nil}
               end
 
+            # Determine setup path based on existing event properties
+            setup_path = cond do
+              enable_date_polling -> "polling"
+              event.is_ticketed && Map.get(event, :requires_threshold, false) -> "threshold"
+              event.is_ticketed -> "ticketed"
+              true -> "confirmed"
+            end
+
             # Prepare form data
             form_data = %{
               "start_date" => start_date,
@@ -99,7 +107,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
               "polling_deadline" => if(event.polling_deadline, do: DateTime.to_iso8601(event.polling_deadline), else: ""),
               "polling_deadline_date" => polling_deadline_date,
               "polling_deadline_time" => polling_deadline_time,
-              "is_ticketed" => event.is_ticketed
+              "is_ticketed" => event.is_ticketed,
+              "setup_path" => setup_path,
+              "requires_threshold" => Map.get(event, :requires_threshold, false)
             }
 
             # Load existing tickets for the event
@@ -132,7 +142,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:page, 1)
               |> assign(:per_page, 20)
               |> assign_new(:image_tab, fn -> "unsplash" end)
-              |> assign(:enable_date_polling, enable_date_polling)
+                          |> assign(:enable_date_polling, enable_date_polling)
+            |> assign(:setup_path, setup_path)
+            |> assign(:mode, "compact")
               |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
@@ -170,6 +182,24 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   # ========== Event Handlers ==========
+
+  @impl true
+  def handle_event("select_setup_path", %{"path" => path}, socket) do
+    # Update form_data based on the selected path
+    form_data = socket.assigns.form_data
+    |> Map.put("setup_path", path)
+    |> Map.put("enable_date_polling", path == "polling")
+    |> Map.put("is_ticketed", path in ["ticketed", "threshold"])
+    |> Map.put("requires_threshold", path == "threshold")
+
+    # Update the socket with the new path and form data
+    socket = socket
+    |> assign(:setup_path, path)
+    |> assign(:enable_date_polling, path == "polling")
+    |> assign(:form_data, form_data)
+
+    {:noreply, socket}
+  end
 
   @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
