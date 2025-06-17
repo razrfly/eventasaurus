@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.CheckoutLive do
   require Logger
 
   @impl true
-  def mount(%{"event_slug" => event_slug} = params, _session, socket) do
+  def mount(%{"slug" => event_slug} = params, _session, socket) do
     # User is already assigned by the auth hook since we're in the :authenticated live_session
 
     case get_event_by_slug(event_slug) do
@@ -273,21 +273,42 @@ defmodule EventasaurusWeb.CheckoutLive do
           orders = Enum.map(results, fn {:ok, order} -> order end)
 
           # Confirm all orders (free tickets)
-          confirmed_orders = Enum.map(orders, fn order ->
-            {:ok, confirmed_order} = Ticketing.confirm_order(order, "free_ticket")
-            confirmed_order
+          confirmation_results = Enum.map(orders, fn order ->
+            case Ticketing.confirm_order(order, "free_ticket") do
+              {:ok, confirmed_order} -> {:ok, confirmed_order}
+              {:error, reason} -> {:error, {order.id, reason}}
+            end
           end)
 
-          Logger.info("Free ticket orders created and confirmed",
-            user_id: user.id,
-            event_id: socket.assigns.event.id,
-            order_count: length(confirmed_orders)
-          )
+          # Check if all confirmations were successful
+          case Enum.find(confirmation_results, fn result -> match?({:error, _}, result) end) do
+            nil ->
+              # All confirmations successful
+              confirmed_orders = Enum.map(confirmation_results, fn {:ok, order} -> order end)
 
-          {:noreply,
-           socket
-           |> put_flash(:success, "Your free tickets have been reserved successfully!")
-           |> redirect(to: "/events/#{socket.assigns.event.slug}")}
+              Logger.info("Free ticket orders created and confirmed",
+                user_id: user.id,
+                event_id: socket.assigns.event.id,
+                order_count: length(confirmed_orders)
+              )
+
+              {:noreply,
+               socket
+               |> put_flash(:success, "Your free tickets have been reserved successfully!")
+               |> redirect(to: "/events/#{socket.assigns.event.slug}")}
+
+            {:error, {order_id, reason}} ->
+              Logger.error("Failed to confirm free ticket order",
+                user_id: user.id,
+                order_id: order_id,
+                reason: inspect(reason)
+              )
+
+              {:noreply,
+               socket
+               |> assign(:processing, false)
+               |> put_flash(:error, "Failed to confirm ticket reservation. Please try again.")}
+          end
 
         {:error, reason} ->
           Logger.error("Failed to create free ticket orders",
@@ -316,13 +337,169 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-  defp handle_paid_ticket_checkout(socket, _user, _order_items) do
-    # For paid tickets, we'll integrate with Stripe in the next task
-    # For now, show a placeholder
+  defp handle_paid_ticket_checkout(socket, user, order_items) do
+    # For paid tickets with multiple ticket types, we need to create separate orders
+    # Each order will have its own Stripe payment intent
+
+    # For simplicity, we'll handle multiple ticket orders by redirecting to the first ticket's checkout
+    # In a production system, you might combine into a single order or handle each separately
+
+    case order_items do
+      [single_item] ->
+        # Single ticket type - create payment intent directly
+        create_stripe_checkout_session(socket, user, single_item)
+
+      multiple_items ->
+        # Multiple ticket types - for now, combine into a single checkout
+        # This is a simplified approach; production might handle differently
+        total_amount = calculate_total_amount(multiple_items)
+
+        # Create a combined order description
+        description = multiple_items
+        |> Enum.map(fn item -> "#{item.quantity}x #{item.ticket.title}" end)
+        |> Enum.join(", ")
+
+        # Use the first ticket's event for organization context
+        first_ticket = hd(multiple_items).ticket
+
+        # For multiple items, we'll need to create orders separately but redirect to a combined payment
+        create_combined_stripe_checkout(socket, user, multiple_items, total_amount, description, first_ticket)
+    end
+  end
+
+  defp create_stripe_checkout_session(socket, user, order_item) do
+    try do
+      case Ticketing.create_order_with_stripe_connect(user, order_item.ticket, %{quantity: order_item.quantity}) do
+        {:ok, %{order: order, payment_intent: payment_intent}} ->
+          Logger.info("Stripe payment intent created",
+            user_id: user.id,
+            order_id: order.id,
+            payment_intent_id: payment_intent["id"],
+            amount: payment_intent["amount"]
+          )
+
+          # Redirect to Stripe Checkout or handle client-side payment
+          redirect_to_stripe_checkout(socket, order, payment_intent)
+
+        {:error, :no_stripe_account} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+
+        {:error, :ticket_unavailable} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Sorry, these tickets are no longer available.")}
+
+        {:error, reason} when is_binary(reason) ->
+          Logger.error("Stripe checkout creation failed",
+            user_id: user.id,
+            ticket_id: order_item.ticket.id,
+            reason: reason
+          )
+
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Payment processing is temporarily unavailable. Please try again.")}
+
+        {:error, reason} ->
+          Logger.error("Order creation failed",
+            user_id: user.id,
+            ticket_id: order_item.ticket.id,
+            reason: inspect(reason)
+          )
+
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Unable to process payment. Please try again.")}
+      end
+    rescue
+      error ->
+        Logger.error("Exception during Stripe checkout creation",
+          user_id: user.id,
+          ticket_id: order_item.ticket.id,
+          error: inspect(error)
+        )
+
+        {:noreply,
+         socket
+         |> assign(:processing, false)
+         |> put_flash(:error, "An error occurred. Please try again.")}
+    end
+  end
+
+  defp create_combined_stripe_checkout(socket, user, order_items, total_amount, description, first_ticket) do
+    # For multiple ticket types, we need to create orders for each ticket type
+    # then create a combined payment intent (this is a simplified approach)
+
+    try do
+      # Create orders for each ticket type
+      order_results = Enum.map(order_items, fn item ->
+        Logger.info("Creating order for ticket type",
+          user_id: user.id,
+          ticket_id: item.ticket.id,
+          quantity: item.quantity
+        )
+
+        Ticketing.create_order_with_stripe_connect(user, item.ticket, %{quantity: item.quantity})
+      end)
+
+      # Check if any order creation failed
+      case Enum.find(order_results, fn result -> match?({:error, _}, result) end) do
+        nil ->
+          # All orders created successfully
+          orders_and_intents = Enum.map(order_results, fn {:ok, result} -> result end)
+          orders = Enum.map(orders_and_intents, fn %{order: order} -> order end)
+
+          # For now, redirect to the first order's payment intent
+          # In production, you might want to create a consolidated payment
+          first_result = hd(orders_and_intents)
+
+          Logger.info("Multiple orders created, redirecting to first payment",
+            user_id: user.id,
+            total_orders: length(orders),
+            first_order_id: first_result.order.id
+          )
+
+          redirect_to_stripe_checkout(socket, first_result.order, first_result.payment_intent)
+
+        {:error, reason} ->
+          Logger.error("Failed to create multiple orders",
+            user_id: user.id,
+            reason: inspect(reason)
+          )
+
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Unable to process multiple ticket orders. Please try purchasing one ticket type at a time.")}
+      end
+    rescue
+      error ->
+        Logger.error("Exception during multiple order creation",
+          user_id: user.id,
+          error: inspect(error)
+        )
+
+        {:noreply,
+         socket
+         |> assign(:processing, false)
+         |> put_flash(:error, "An error occurred. Please try again.")}
+    end
+  end
+
+  defp redirect_to_stripe_checkout(socket, order, payment_intent) do
+    # Redirect to our payment page with Stripe Elements
+    checkout_url = "/checkout/payment?order_id=#{order.id}&payment_intent=#{payment_intent["id"]}&client_secret=#{payment_intent["client_secret"]}"
+
     {:noreply,
      socket
      |> assign(:processing, false)
-     |> put_flash(:info, "Paid ticket checkout will be implemented in the next task.")}
+     |> redirect(to: checkout_url)}
   end
 
   @impl true
