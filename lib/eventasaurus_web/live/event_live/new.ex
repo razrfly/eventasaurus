@@ -891,7 +891,10 @@ defmodule EventasaurusWeb.EventLive.New do
   # Handle ticket form updates
   @impl true
   def handle_event("update_pricing_model", %{"model" => model}, socket) do
-    updated_form_data = Map.put(socket.assigns.ticket_form_data, "pricing_model", model)
+    valid_models = ["fixed", "flexible", "donation"]
+    validated_model = if model in valid_models, do: model, else: "fixed"
+
+    updated_form_data = Map.put(socket.assigns.ticket_form_data, "pricing_model", validated_model)
 
     socket = assign(socket, :ticket_form_data, updated_form_data)
     {:noreply, socket}
