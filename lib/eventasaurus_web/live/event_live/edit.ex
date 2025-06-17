@@ -193,11 +193,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> Map.put("is_ticketed", path in ["confirmed", "threshold"])
     |> Map.put("requires_threshold", path == "threshold")
 
-    # Update the socket with the new path and form data
+    # Update the socket with the new path and form data, and hide the transition selector
     socket = socket
     |> assign(:setup_path, path)
     |> assign(:enable_date_polling, path == "polling")
     |> assign(:form_data, form_data)
+    |> assign(:show_stage_transitions, false)
 
     {:noreply, socket}
   end
