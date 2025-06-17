@@ -266,19 +266,58 @@ defmodule EventasaurusWeb.StripeWebhookController do
     payment_intent = event["data"]["object"]
     payment_intent_id = payment_intent["id"]
 
-    Logger.info("Processing payment_intent.payment_failed event",
+    Logger.info("Processing payment_intent.payment_failed event - no action needed, Stripe handles failure state",
       payment_intent_id: payment_intent_id,
       event_id: event["id"]
     )
 
-    case validate_payment_intent(payment_intent) do
+    # Don't store failure state - let Stripe handle it
+    # Orders remain in "pending" state and can be retried
+    :ok
+  end
+
+  defp process_webhook_event(%{"type" => "checkout.session.completed"} = event) do
+    session = event["data"]["object"]
+    session_id = session["id"]
+
+    Logger.info("Processing checkout.session.completed event",
+      session_id: session_id,
+      amount_total: session["amount_total"],
+      payment_status: session["payment_status"],
+      event_id: event["id"]
+    )
+
+    # Validate checkout session structure
+    case validate_checkout_session(session) do
       :ok ->
-        process_payment_failure(payment_intent_id, payment_intent)
+        process_checkout_session_completed(session_id, session)
 
       {:error, reason} ->
-        Logger.error("Invalid payment intent structure",
+        Logger.error("Invalid checkout session structure",
           reason: reason,
-          payment_intent_id: payment_intent_id
+          session_id: session_id
+        )
+        {:error, reason}
+    end
+  end
+
+  defp process_webhook_event(%{"type" => "checkout.session.expired"} = event) do
+    session = event["data"]["object"]
+    session_id = session["id"]
+
+    Logger.info("Processing checkout.session.expired event",
+      session_id: session_id,
+      event_id: event["id"]
+    )
+
+    case validate_checkout_session(session) do
+      :ok ->
+        process_checkout_session_expired(session_id, session)
+
+      {:error, reason} ->
+        Logger.error("Invalid checkout session structure",
+          reason: reason,
+          session_id: session_id
         )
         {:error, reason}
     end
@@ -308,28 +347,48 @@ defmodule EventasaurusWeb.StripeWebhookController do
 
   defp validate_payment_intent(_), do: {:error, "Payment intent must be a map"}
 
+  defp validate_checkout_session(session) when is_map(session) do
+    required_fields = ["id", "payment_status", "customer_details"]
+
+    missing_fields =
+      required_fields
+      |> Enum.filter(fn field -> not Map.has_key?(session, field) end)
+
+    if Enum.empty?(missing_fields) do
+      :ok
+    else
+      {:error, "Missing required checkout session fields: #{Enum.join(missing_fields, ", ")}"}
+    end
+  end
+
+  defp validate_checkout_session(_), do: {:error, "Checkout session must be a map"}
+
   defp process_payment_success(payment_intent_id, payment_intent) do
     case find_order_by_payment_intent(payment_intent_id) do
       {:ok, order} ->
-        case Ticketing.confirm_order(order) do
-          {:ok, confirmed_order} ->
-            Logger.info("Order confirmed successfully",
-              order_id: confirmed_order.id,
+        # Use sync function to let Stripe be the source of truth
+        case Ticketing.sync_order_with_stripe(order) do
+          {:ok, updated_order} ->
+            Logger.info("Order synced via payment intent webhook",
+              order_id: updated_order.id,
               payment_intent_id: payment_intent_id,
+              status: updated_order.status,
               amount: payment_intent["amount"]
             )
 
-            # Broadcast order update to LiveViews
-            broadcast_order_update(confirmed_order)
+            # Broadcast order update to LiveViews if status changed
+            if updated_order.status != order.status do
+              broadcast_order_update(updated_order)
+            end
             :ok
 
           {:error, reason} ->
-            Logger.error("Failed to confirm order",
+            Logger.error("Failed to sync order",
               order_id: order.id,
               payment_intent_id: payment_intent_id,
               reason: inspect(reason)
             )
-            {:error, "Order confirmation failed"}
+            {:error, "Order sync failed"}
         end
 
       {:error, :not_found} ->
@@ -355,66 +414,81 @@ defmodule EventasaurusWeb.StripeWebhookController do
       {:error, "Processing exception"}
   end
 
-  defp process_payment_failure(payment_intent_id, payment_intent) do
-    failure_reason = extract_failure_reason(payment_intent)
 
-    case find_order_by_payment_intent(payment_intent_id) do
+
+  defp process_checkout_session_completed(session_id, session) do
+    case find_order_by_session_id(session_id) do
       {:ok, order} ->
-        case Ticketing.fail_order(order, failure_reason) do
-          {:ok, failed_order} ->
-            Logger.info("Order marked as failed",
-              order_id: failed_order.id,
-              payment_intent_id: payment_intent_id,
-              reason: failure_reason
+        # Use sync function to let Stripe be the source of truth
+        case Ticketing.sync_order_with_stripe(order) do
+          {:ok, updated_order} ->
+            Logger.info("Order synced via checkout session webhook",
+              order_id: updated_order.id,
+              session_id: session_id,
+              status: updated_order.status,
+              amount_total: session["amount_total"]
             )
 
-            # Broadcast order update to LiveViews
-            broadcast_order_update(failed_order)
+            # Broadcast order update to LiveViews if status changed
+            if updated_order.status != order.status do
+              broadcast_order_update(updated_order)
+            end
             :ok
 
           {:error, reason} ->
-            Logger.error("Failed to mark order as failed",
+            Logger.error("Failed to sync order via checkout session",
               order_id: order.id,
-              payment_intent_id: payment_intent_id,
+              session_id: session_id,
               reason: inspect(reason)
             )
-            {:error, "Order failure update failed"}
+            {:error, "Order sync failed"}
         end
 
       {:error, :not_found} ->
-        Logger.warning("No order found for payment intent",
-          payment_intent_id: payment_intent_id
+        Logger.warning("No order found for checkout session",
+          session_id: session_id
         )
-        :ok  # Not an error - might be a different payment
+        :ok  # Not an error - might be a different checkout
 
       {:error, reason} ->
-        Logger.error("Error finding order for payment intent",
-          payment_intent_id: payment_intent_id,
+        Logger.error("Error finding order for checkout session",
+          session_id: session_id,
           reason: inspect(reason)
         )
         {:error, "Database error"}
     end
   rescue
     error ->
-      Logger.error("Exception during payment failure processing",
-        payment_intent_id: payment_intent_id,
+      Logger.error("Exception during checkout session processing",
+        session_id: session_id,
         error: inspect(error),
         stacktrace: Exception.format_stacktrace(__STACKTRACE__)
       )
       {:error, "Processing exception"}
   end
 
-  defp extract_failure_reason(payment_intent) do
-    case payment_intent do
-      %{"last_payment_error" => %{"message" => message}} when is_binary(message) ->
-        "Payment failed: #{message}"
+  defp process_checkout_session_expired(session_id, _session) do
+    Logger.info("Checkout session expired - no action needed, order remains pending",
+      session_id: session_id
+    )
 
-      %{"last_payment_error" => %{"code" => code}} when is_binary(code) ->
-        "Payment failed: #{code}"
+    # Don't update order state - let it remain pending
+    # User can retry checkout if needed
+    :ok
+  end
 
-      _ ->
-        "Payment failed"
+  defp find_order_by_session_id(session_id) do
+    case Ticketing.get_order_by_session_id(session_id) do
+      nil -> {:error, :not_found}
+      order -> {:ok, order}
     end
+  rescue
+    error ->
+      Logger.error("Database error finding order by session ID",
+        session_id: session_id,
+        error: inspect(error)
+      )
+      {:error, error}
   end
 
   defp find_order_by_payment_intent(payment_intent_id) do

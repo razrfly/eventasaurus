@@ -230,7 +230,7 @@ defmodule EventasaurusWeb.OrdersController do
       ticket: %{
         id: order.ticket.id,
         name: order.ticket.name,
-        price_cents: order.ticket.price_cents
+                    price_cents: order.ticket.base_price_cents
       },
       event: %{
         id: order.event.id,

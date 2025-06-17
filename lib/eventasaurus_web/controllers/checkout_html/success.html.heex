@@ -1,0 +1,147 @@
+<div class="max-w-2xl mx-auto px-4 py-8">
+  <div class="text-center mb-8">
+    <!-- Success Icon -->
+    <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+      <svg class="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+    
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
+    <p class="text-lg text-gray-600">Your ticket purchase has been confirmed.</p>
+  </div>
+
+  <!-- Order Details Card -->
+  <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+      <h2 class="text-lg font-semibold text-gray-900">Order Details</h2>
+    </div>
+    
+    <div class="px-6 py-4 space-y-4">
+      <!-- Order ID -->
+      <div class="flex justify-between items-center">
+        <span class="text-sm font-medium text-gray-500">Order ID:</span>
+        <span class="text-sm text-gray-900 font-mono">#<%= @order.id %></span>
+      </div>
+
+      <!-- Event Info -->
+      <%= if @order.event do %>
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-medium text-gray-500">Event:</span>
+          <span class="text-sm text-gray-900"><%= @order.event.title %></span>
+        </div>
+      <% end %>
+
+      <!-- Ticket Info -->
+      <%= if @order.ticket do %>
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-medium text-gray-500">Ticket Type:</span>
+          <span class="text-sm text-gray-900"><%= @order.ticket.title %></span>
+        </div>
+      <% end %>
+
+      <!-- Quantity -->
+      <div class="flex justify-between items-center">
+        <span class="text-sm font-medium text-gray-500">Quantity:</span>
+        <span class="text-sm text-gray-900"><%= @order.quantity %></span>
+      </div>
+
+      <!-- Pricing Details -->
+      <%= if flexible_pricing?(@order) do %>
+        <!-- Flexible Pricing Details -->
+        <div class="border-t border-gray-200 pt-4">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-medium text-gray-500">Pricing Model:</span>
+            <span class="text-sm text-gray-900 bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Flexible</span>
+          </div>
+          
+          <%= if custom_price_cents(@order) do %>
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-500">Amount Chosen:</span>
+              <span class="text-sm text-gray-900"><%= format_price(custom_price_cents(@order), @order.currency) %></span>
+            </div>
+          <% end %>
+          
+          <%= if tip_cents(@order) > 0 do %>
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-500">Tip:</span>
+              <span class="text-sm text-gray-900"><%= format_price(tip_cents(@order), @order.currency) %></span>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <!-- Fixed Pricing -->
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-medium text-gray-500">Pricing Model:</span>
+          <span class="text-sm text-gray-900 bg-gray-100 text-gray-800 px-2 py-1 rounded-full">Fixed</span>
+        </div>
+      <% end %>
+
+      <!-- Total Amount -->
+      <div class="border-t border-gray-200 pt-4">
+        <div class="flex justify-between items-center">
+          <span class="text-base font-semibold text-gray-900">Total Paid:</span>
+          <span class="text-base font-semibold text-gray-900"><%= format_price(@order.total_cents, @order.currency) %></span>
+        </div>
+      </div>
+
+      <!-- Payment Status -->
+      <div class="flex justify-between items-center">
+        <span class="text-sm font-medium text-gray-500">Payment Status:</span>
+        <span class="text-sm text-green-600 bg-green-100 px-2 py-1 rounded-full">
+          <%= if @order.status == "confirmed", do: "Confirmed", else: "Processing" %>
+        </span>
+      </div>
+
+      <!-- Session ID (for debugging) -->
+      <%= if @session_id do %>
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-medium text-gray-500">Session ID:</span>
+          <span class="text-xs text-gray-500 font-mono"><%= @session_id %></span>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <!-- What's Next Section -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+    <h3 class="text-lg font-semibold text-blue-900 mb-2">What's Next?</h3>
+    <ul class="text-sm text-blue-800 space-y-2">
+      <li class="flex items-start">
+        <svg class="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        You'll receive a confirmation email with your ticket details shortly.
+      </li>
+      <li class="flex items-start">
+        <svg class="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Save the date and mark your calendar for the event.
+      </li>
+      <li class="flex items-start">
+        <svg class="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Keep this confirmation for your records.
+      </li>
+    </ul>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="flex flex-col sm:flex-row gap-4 justify-center">
+    <a href="/orders" class="inline-flex items-center justify-center px-6 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+      <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+      View All Orders
+    </a>
+    
+    <a href="/" class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+      <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+      Back to Home
+    </a>
+  </div>
+</div> 

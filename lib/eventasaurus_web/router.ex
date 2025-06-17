@@ -204,6 +204,22 @@ defmodule EventasaurusWeb.Router do
     post "/confirm-payment", StripePaymentController, :confirm_payment
   end
 
+  # Stripe checkout API routes (require authentication and HTTPS)
+  scope "/api/checkout", EventasaurusWeb do
+    pipe_through [:secure_api, :api_authenticated]
+
+    post "/sessions", CheckoutController, :create_session
+    post "/sync/:order_id", CheckoutController, :sync_after_success
+  end
+
+  # Checkout success/cancel routes (browser, require authentication)
+  scope "/orders", EventasaurusWeb do
+    pipe_through [:browser, :authenticated]
+
+    get "/:order_id/success", CheckoutController, :success
+    get "/cancel", CheckoutController, :cancel
+  end
+
   # Order management API routes (require authentication)
   scope "/api/orders", EventasaurusWeb do
     pipe_through [:api, :api_authenticated]

@@ -579,7 +579,7 @@ defmodule EventasaurusWeb.EventComponents do
                               <div class="flex items-center space-x-2 mb-1">
                                 <h5 class="text-sm font-semibold text-gray-900"><%= ticket.title %></h5>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                  <%= format_currency(ticket.price_cents, Map.get(ticket, :currency, "usd")) %>
+                                  <%= format_currency(ticket.base_price_cents, Map.get(ticket, :currency, "usd")) %>
                                 </span>
                               </div>
                               <%= if ticket.description && ticket.description != "" do %>

@@ -48,7 +48,7 @@ defmodule EventasaurusApp.TicketingTest do
       valid_attrs = %{
         title: "General Admission",
         description: "Standard entry ticket",
-        price_cents: 2500,
+        base_price_cents: 2500,
         quantity: 100,
         starts_at: DateTime.add(now, 1, :hour),
         ends_at: DateTime.add(now, 7, :day)
@@ -57,7 +57,7 @@ defmodule EventasaurusApp.TicketingTest do
       assert {:ok, %Ticket{} = ticket} = Ticketing.create_ticket(event, valid_attrs)
       assert ticket.title == "General Admission"
       assert ticket.description == "Standard entry ticket"
-      assert ticket.price_cents == 2500
+      assert ticket.base_price_cents == 2500
       assert ticket.quantity == 100
       assert ticket.event_id == event.id
     end
@@ -68,11 +68,11 @@ defmodule EventasaurusApp.TicketingTest do
 
     test "update_ticket/2 with valid data updates the ticket", %{event: event} do
       ticket = insert(:ticket, event: event)
-      update_attrs = %{title: "VIP Access", price_cents: 5000}
+      update_attrs = %{title: "VIP Access", base_price_cents: 5000}
 
       assert {:ok, %Ticket{} = updated_ticket} = Ticketing.update_ticket(ticket, update_attrs)
       assert updated_ticket.title == "VIP Access"
-      assert updated_ticket.price_cents == 5000
+              assert updated_ticket.base_price_cents == 5000
     end
 
     test "update_ticket/2 with invalid data returns error changeset", %{event: event} do
@@ -197,7 +197,7 @@ defmodule EventasaurusApp.TicketingTest do
       now = DateTime.utc_now()
       ticket = insert(:ticket,
         event: event,
-        price_cents: 2500,
+        base_price_cents: 2500,
         starts_at: DateTime.add(now, -1, :hour),
         ends_at: DateTime.add(now, 1, :day)
       )
@@ -410,7 +410,7 @@ defmodule EventasaurusApp.TicketingTest do
       now = DateTime.utc_now()
       ticket = insert(:ticket,
         event: event,
-        price_cents: 1000,
+        base_price_cents: 1000,
         starts_at: DateTime.add(now, -1, :hour),
         ends_at: DateTime.add(now, 1, :day)
       )
@@ -428,7 +428,7 @@ defmodule EventasaurusApp.TicketingTest do
       now = DateTime.utc_now()
       ticket = insert(:ticket,
         event: event,
-        price_cents: 1500,
+        base_price_cents: 1500,
         starts_at: DateTime.add(now, -1, :hour),
         ends_at: DateTime.add(now, 1, :day)
       )
@@ -446,7 +446,7 @@ defmodule EventasaurusApp.TicketingTest do
       now = DateTime.utc_now()
       ticket = insert(:ticket,
         event: event,
-        price_cents: 2000,
+        base_price_cents: 2000,
         currency: "eur",
         starts_at: DateTime.add(now, -1, :hour),
         ends_at: DateTime.add(now, 1, :day)
@@ -467,7 +467,7 @@ defmodule EventasaurusApp.TicketingTest do
              now = DateTime.utc_now()
        {:ok, ticket} = Ticketing.create_ticket(event, %{
          title: "Test Ticket",
-         price_cents: 1000,
+         base_price_cents: 1000,
          quantity: 10,
          starts_at: DateTime.add(now, 1, :hour),
          ends_at: DateTime.add(now, 1, :day)
