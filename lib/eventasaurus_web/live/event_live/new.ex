@@ -325,9 +325,9 @@ defmodule EventasaurusWeb.EventLive.New do
     form_data =
       socket.assigns.form_data
       |> Map.put("setup_path", path)
-      |> Map.put("enable_date_polling", to_string(path == "polling"))
-      |> Map.put("is_ticketed", to_string(path in ["confirmed", "threshold"]))
-      |> Map.put("requires_threshold", to_string(path == "threshold"))
+      |> Map.put("enable_date_polling", path == "polling")
+      |> Map.put("is_ticketed", path in ["confirmed", "threshold"])
+      |> Map.put("requires_threshold", path == "threshold")
 
     # Update the socket with the new path and form data
     socket =
@@ -337,6 +337,7 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:is_ticketed, path in ["confirmed", "threshold"])
       |> assign(:requires_threshold, path == "threshold")
       |> assign(:form_data, form_data)
+      |> maybe_reset_ticketing(path)
 
     {:noreply, socket}
   end
@@ -1345,5 +1346,15 @@ defmodule EventasaurusWeb.EventLive.New do
     end
   end
   defp parse_datetime(_), do: nil
+
+  # Helper — clears ticket state unless the path is ticket-centric
+  defp maybe_reset_ticketing(socket, path) when path in ["confirmed", "threshold"], do: socket
+  defp maybe_reset_ticketing(socket, _path) do
+    socket
+    |> assign(:tickets, [])
+    |> assign(:show_ticket_modal, false)
+    |> assign(:ticket_form_data, %{})
+    |> assign(:editing_ticket_index, nil)
+  end
 
 end
