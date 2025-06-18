@@ -61,7 +61,7 @@ defmodule EventasaurusWeb.CheckoutLive do
   def handle_event("proceed_with_checkout", _params, socket) do
     %{
       user: user,
-      event: event,
+      event: _event,
       order_items: order_items,
       total_amount: total_amount
     } = socket.assigns
@@ -432,7 +432,7 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-  defp create_combined_stripe_checkout(socket, user, order_items, total_amount, description, first_ticket) do
+  defp create_combined_stripe_checkout(socket, user, order_items, _total_amount, _description, _first_ticket) do
     # For multiple ticket types, we need to create orders for each ticket type
     # then create a combined payment intent (this is a simplified approach)
 
@@ -494,7 +494,12 @@ defmodule EventasaurusWeb.CheckoutLive do
 
   defp redirect_to_stripe_checkout(socket, order, payment_intent) do
     # Redirect to our payment page with Stripe Elements
-    checkout_url = "/checkout/payment?order_id=#{order.id}&payment_intent=#{payment_intent["id"]}&client_secret=#{payment_intent["client_secret"]}"
+    query_params = URI.encode_query(%{
+      "order_id" => order.id,
+      "payment_intent" => payment_intent["id"],
+      "client_secret" => payment_intent["client_secret"]
+    })
+    checkout_url = "/checkout/payment?" <> query_params
 
     {:noreply,
      socket
