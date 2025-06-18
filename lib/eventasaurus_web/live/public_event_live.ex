@@ -394,6 +394,98 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
+  # ======== TICKET SELECTION HANDLERS ========
+
+  def handle_event("increase_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
+    ticket_id = String.to_integer(ticket_id)
+    tickets = socket.assigns.tickets
+    ticket = Enum.find(tickets, &(&1.id == ticket_id))
+
+    if ticket do
+      current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
+      available_quantity = Ticketing.available_quantity(ticket)
+      max_per_order = 10  # Set reasonable limit
+
+      new_quantity = if current_quantity < available_quantity and current_quantity < max_per_order do
+        current_quantity + 1
+      else
+        current_quantity
+      end
+
+      # Only update if quantity actually changed
+      if new_quantity != current_quantity do
+        updated_selection = Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
+
+        socket = socket
+        |> assign(:selected_tickets, updated_selection)
+
+        # Show feedback if at limit
+        socket = if new_quantity == available_quantity do
+          put_flash(socket, :warning, "Maximum available tickets selected for #{ticket.title}")
+        else
+          socket
+        end
+
+        {:noreply, socket}
+      else
+        # At limit - show feedback
+        message = cond do
+          current_quantity >= available_quantity -> "No more #{ticket.title} tickets available"
+          current_quantity >= max_per_order -> "Maximum #{max_per_order} tickets per order"
+          true -> "Cannot increase quantity"
+        end
+
+        {:noreply, put_flash(socket, :warning, message)}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("decrease_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
+    ticket_id = String.to_integer(ticket_id)
+    current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
+
+    new_quantity = max(0, current_quantity - 1)
+    updated_selection = if new_quantity == 0 do
+      Map.delete(socket.assigns.selected_tickets, ticket_id)
+    else
+      Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
+    end
+
+    {:noreply, assign(socket, :selected_tickets, updated_selection)}
+  end
+
+  def handle_event("proceed_to_checkout", _params, socket) do
+    if socket.assigns.user do
+      # Check if any tickets are selected
+      selected_tickets = socket.assigns.selected_tickets
+
+      if map_size(selected_tickets) == 0 do
+        {:noreply,
+         socket
+         |> put_flash(:error, "Please select at least one ticket before proceeding to checkout.")}
+      else
+        # Store selected tickets in session and redirect to checkout
+        # We'll use a temporary storage approach for now
+        ticket_params =
+          selected_tickets
+          |> Enum.map(fn {ticket_id, quantity} -> "#{ticket_id}:#{quantity}" end)
+          |> Enum.join(",")
+
+        {:noreply,
+         socket
+         |> redirect(to: "/events/#{socket.assigns.event.slug}/checkout?tickets=#{ticket_params}")}
+      end
+    else
+      {:noreply, assign(socket, :show_registration_modal, true)}
+    end
+  end
+
+  def handle_event("show_auth_modal", _params, socket) do
+    {:noreply, assign(socket, :show_registration_modal, true)}
+  end
+
   @impl true
   def handle_info(:close_registration_modal, socket) do
     {:noreply, assign(socket, :show_registration_modal, false)}
@@ -561,98 +653,45 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
-  # ======== TICKET SELECTION HANDLERS ========
-  # Note: These handle_event functions are grouped here for logical organization
-  # The compiler warning about grouping is expected and can be ignored
+  # ======== REAL-TIME TICKET UPDATES ========
 
-  def handle_event("increase_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
-    ticket_id = String.to_integer(ticket_id)
-    tickets = socket.assigns.tickets
-    ticket = Enum.find(tickets, &(&1.id == ticket_id))
+  def handle_info({:ticket_update, %{ticket: updated_ticket, action: action}}, socket) do
+    # Only update if this is for the current event
+    if updated_ticket.event_id == socket.assigns.event.id do
+      # Set loading state
+      socket = assign(socket, :ticket_loading, true)
 
-    if ticket do
-      current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
-      available_quantity = Ticketing.available_quantity(ticket)
-      max_per_order = 10  # Set reasonable limit
+      # Refresh tickets to get updated availability
+      updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
 
-      new_quantity = if current_quantity < available_quantity and current_quantity < max_per_order do
-        current_quantity + 1
-      else
-        current_quantity
-      end
+      # Update socket with fresh ticket data
+      socket = socket
+      |> assign(:tickets, updated_tickets)
+      |> assign(:ticket_loading, false)
 
-      # Only update if quantity actually changed
-      if new_quantity != current_quantity do
-        updated_selection = Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
-
-        socket = socket
-        |> assign(:selected_tickets, updated_selection)
-
-        # Show feedback if at limit
-        socket = if new_quantity == available_quantity do
-          put_flash(socket, :warning, "Maximum available tickets selected for #{ticket.title}")
-        else
+      # Show user-friendly notification for certain actions
+      socket = case action do
+        :order_confirmed ->
+          # Find the ticket name for better UX
+          ticket_name = updated_ticket.title
+          put_flash(socket, :info, "🎫 #{ticket_name} availability updated!")
+        :order_created ->
+          # Someone else is purchasing, show subtle update
           socket
-        end
-
-        {:noreply, socket}
-      else
-        # At limit - show feedback
-        message = cond do
-          current_quantity >= available_quantity -> "No more #{ticket.title} tickets available"
-          current_quantity >= max_per_order -> "Maximum #{max_per_order} tickets per order"
-          true -> "Cannot increase quantity"
-        end
-
-        {:noreply, put_flash(socket, :warning, message)}
+        _ ->
+          socket
       end
+
+      {:noreply, socket}
     else
       {:noreply, socket}
     end
   end
 
-  def handle_event("decrease_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
-    ticket_id = String.to_integer(ticket_id)
-    current_quantity = Map.get(socket.assigns.selected_tickets, ticket_id, 0)
-
-    new_quantity = max(0, current_quantity - 1)
-    updated_selection = if new_quantity == 0 do
-      Map.delete(socket.assigns.selected_tickets, ticket_id)
-    else
-      Map.put(socket.assigns.selected_tickets, ticket_id, new_quantity)
-    end
-
-    {:noreply, assign(socket, :selected_tickets, updated_selection)}
-  end
-
-  def handle_event("proceed_to_checkout", _params, socket) do
-    if socket.assigns.user do
-      # Check if any tickets are selected
-      selected_tickets = socket.assigns.selected_tickets
-
-      if map_size(selected_tickets) == 0 do
-        {:noreply,
-         socket
-         |> put_flash(:error, "Please select at least one ticket before proceeding to checkout.")}
-      else
-        # Store selected tickets in session and redirect to checkout
-        # We'll use a temporary storage approach for now
-        ticket_params =
-          selected_tickets
-          |> Enum.map(fn {ticket_id, quantity} -> "#{ticket_id}:#{quantity}" end)
-          |> Enum.join(",")
-
-        {:noreply,
-         socket
-         |> redirect(to: "/events/#{socket.assigns.event.slug}/checkout?tickets=#{ticket_params}")}
-      end
-    else
-      {:noreply, assign(socket, :show_registration_modal, true)}
-    end
-  end
-
-  def handle_event("show_auth_modal", _params, socket) do
-    {:noreply, assign(socket, :show_registration_modal, true)}
+  def handle_info({:order_update, %{order: _order, action: _action}}, socket) do
+    # Handle order updates if needed for this event
+    # For now, we mainly care about ticket availability changes
+    {:noreply, socket}
   end
 
   @impl true
@@ -1303,46 +1342,5 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
-  # ======== REAL-TIME TICKET UPDATES ========
-  # Note: These handle_info functions are grouped here for logical organization
-  # The compiler warning about grouping is expected and can be ignored
 
-  def handle_info({:ticket_update, %{ticket: updated_ticket, action: action}}, socket) do
-    # Only update if this is for the current event
-    if updated_ticket.event_id == socket.assigns.event.id do
-      # Set loading state
-      socket = assign(socket, :ticket_loading, true)
-
-      # Refresh tickets to get updated availability
-      updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
-
-      # Update socket with fresh ticket data
-      socket = socket
-      |> assign(:tickets, updated_tickets)
-      |> assign(:ticket_loading, false)
-
-      # Show user-friendly notification for certain actions
-      socket = case action do
-        :order_confirmed ->
-          # Find the ticket name for better UX
-          ticket_name = updated_ticket.title
-          put_flash(socket, :info, "🎫 #{ticket_name} availability updated!")
-        :order_created ->
-          # Someone else is purchasing, show subtle update
-          socket
-        _ ->
-          socket
-      end
-
-      {:noreply, socket}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_info({:order_update, %{order: _order, action: _action}}, socket) do
-    # Handle order updates if needed for this event
-    # For now, we mainly care about ticket availability changes
-    {:noreply, socket}
-  end
 end
