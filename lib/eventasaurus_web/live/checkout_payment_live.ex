@@ -12,25 +12,34 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
 
     case get_order_for_user(order_id, socket.assigns.user.id) do
       {:ok, order} ->
-        payment_intent_id = Map.get(params, "payment_intent")
-        client_secret = Map.get(params, "client_secret")
-
-        if payment_intent_id && client_secret do
+        # Check if order is already confirmed
+        if order.status == "confirmed" do
           event = Events.get_event!(order.ticket.event_id)
-
           {:ok,
            socket
-           |> assign(:order, order)
-           |> assign(:event, event)
-           |> assign(:payment_intent_id, payment_intent_id)
-           |> assign(:client_secret, client_secret)
-           |> assign(:processing, false)
-           |> assign(:payment_status, :pending)}
+           |> put_flash(:success, "This order has already been completed.")
+           |> redirect(to: "/events/#{event.slug}")}
         else
-          {:ok,
-           socket
-           |> put_flash(:error, "Invalid payment session.")
-           |> redirect(to: "/")}
+          payment_intent_id = Map.get(params, "payment_intent")
+          client_secret = Map.get(params, "client_secret")
+
+          if payment_intent_id && client_secret do
+            event = Events.get_event!(order.ticket.event_id)
+
+            {:ok,
+             socket
+             |> assign(:order, order)
+             |> assign(:event, event)
+             |> assign(:payment_intent_id, payment_intent_id)
+             |> assign(:client_secret, client_secret)
+             |> assign(:processing, false)
+             |> assign(:payment_status, :pending)}
+          else
+            {:ok,
+             socket
+             |> put_flash(:error, "Invalid payment session.")
+             |> redirect(to: "/")}
+          end
         end
 
       {:error, :not_found} ->

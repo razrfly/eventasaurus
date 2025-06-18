@@ -149,29 +149,31 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-  defp parse_tickets_from_params(params) do
-    # Parse tickets from URL parameter format: "ticket_id:quantity,ticket_id:quantity"
-    case Map.get(params, "tickets") do
-      nil -> %{}
-      "" -> %{}
-      ticket_string ->
-        ticket_string
-        |> String.split(",")
-        |> Enum.reduce(%{}, fn pair, acc ->
-          case String.split(pair, ":") do
-            [ticket_id_str, quantity_str] ->
-              with {ticket_id, ""} <- Integer.parse(ticket_id_str),
-                   {quantity, ""} <- Integer.parse(quantity_str),
-                   true <- quantity > 0 do
-                Map.put(acc, ticket_id, quantity)
-              else
-                _ -> acc
-              end
-            _ -> acc
-          end
-        end)
+      defp parse_tickets_from_params(params) do
+    # Parse tickets from new URI-encoded format where ticket IDs are parameter keys
+    # Remove known non-ticket parameters like "slug"
+    known_params = ["slug"]
+
+    params
+    |> Enum.reject(fn {key, _value} -> key in known_params end)
+    |> Enum.reduce(%{}, fn {ticket_id_str, quantity_value}, acc ->
+      case {Integer.parse(ticket_id_str), parse_quantity(quantity_value)} do
+        {{ticket_id, ""}, quantity} when is_integer(quantity) and quantity > 0 ->
+          Map.put(acc, ticket_id, quantity)
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  defp parse_quantity(value) when is_integer(value) and value > 0, do: value
+  defp parse_quantity(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {quantity, ""} when quantity > 0 -> quantity
+      _ -> nil
     end
   end
+  defp parse_quantity(_), do: nil
 
   defp validate_selected_tickets(tickets, selected_tickets) do
     # Create a map of ticket_id -> ticket for quick lookup
