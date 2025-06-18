@@ -467,15 +467,16 @@ defmodule EventasaurusWeb.PublicEventLive do
          |> put_flash(:error, "Please select at least one ticket before proceeding to checkout.")}
       else
         # Store selected tickets in session and redirect to checkout
-        # We'll use a temporary storage approach for now
-        ticket_params =
+        # Use proper URI encoding for ticket parameters
+        query =
           selected_tickets
-          |> Enum.map(fn {ticket_id, quantity} -> "#{ticket_id}:#{quantity}" end)
-          |> Enum.join(",")
+          |> Enum.map(fn {id, qty} -> {Integer.to_string(id), qty} end)
+          |> URI.encode_query()
 
         {:noreply,
-         socket
-         |> redirect(to: "/events/#{socket.assigns.event.slug}/checkout?tickets=#{ticket_params}")}
+         redirect(socket,
+           to: "/events/#{socket.assigns.event.slug}/checkout?" <> query
+         )}
       end
     else
       {:noreply, assign(socket, :show_registration_modal, true)}
