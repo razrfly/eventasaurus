@@ -856,7 +856,13 @@ defmodule EventasaurusWeb.PublicEventLive do
                           phx-click="cast_vote"
                           phx-value-option_id={option.id}
                           phx-value-vote_type="yes"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 #{if user_vote && user_vote.vote_type == :yes, do: "bg-green-600 text-white", else: "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"}"}
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
+                            if user_vote && user_vote.vote_type == :yes do
+                              "bg-green-600 text-white"
+                            else
+                              "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                            end
+                          }
                         >
                           Yes
                         </button>
@@ -864,7 +870,13 @@ defmodule EventasaurusWeb.PublicEventLive do
                           phx-click="cast_vote"
                           phx-value-option_id={option.id}
                           phx-value-vote_type="if_need_be"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 #{if user_vote && user_vote.vote_type == :if_need_be, do: "bg-yellow-500 text-white", else: "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"}"}
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
+                            if user_vote && user_vote.vote_type == :if_need_be do
+                              "bg-yellow-500 text-white"
+                            else
+                              "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"
+                            end
+                          }
                         >
                           If needed
                         </button>
@@ -872,7 +884,13 @@ defmodule EventasaurusWeb.PublicEventLive do
                           phx-click="cast_vote"
                           phx-value-option_id={option.id}
                           phx-value-vote_type="no"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 #{if user_vote && user_vote.vote_type == :no, do: "bg-red-600 text-white", else: "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"}"}
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
+                            if user_vote && user_vote.vote_type == :no do
+                              "bg-red-600 text-white"
+                            else
+                              "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                            end
+                          }
                         >
                           No
                         </button>
@@ -908,15 +926,15 @@ defmodule EventasaurusWeb.PublicEventLive do
                           phx-click="cast_vote"
                           phx-value-option_id={option.id}
                           phx-value-vote_type="yes"
-                          class={"px-3 py-2 text-sm font-medium rounded-md transition-colors " <>
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
                             if temp_vote == :yes do
-                              "bg-green-100 text-green-800 border-2 border-green-300"
+                              "bg-green-600 text-white"
                             else
-                              "bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100"
+                              "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
                             end
                           }
                         >
-                          👍 Yes
+                          Yes
                         </button>
 
                         <button
@@ -924,15 +942,15 @@ defmodule EventasaurusWeb.PublicEventLive do
                           phx-click="cast_vote"
                           phx-value-option_id={option.id}
                           phx-value-vote_type="if_need_be"
-                          class={"px-3 py-2 text-sm font-medium rounded-md transition-colors " <>
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
                             if temp_vote == :if_need_be do
-                              "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
+                              "bg-yellow-500 text-white"
                             else
-                              "bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100"
+                              "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"
                             end
                           }
                         >
-                          🤷 If need be
+                          If needed
                         </button>
 
                         <button
@@ -940,15 +958,15 @@ defmodule EventasaurusWeb.PublicEventLive do
                           phx-click="cast_vote"
                           phx-value-option_id={option.id}
                           phx-value-vote_type="no"
-                          class={"px-3 py-2 text-sm font-medium rounded-md transition-colors " <>
+                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
                             if temp_vote == :no do
-                              "bg-red-100 text-red-800 border-2 border-red-300"
+                              "bg-red-600 text-white"
                             else
-                              "bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100"
+                              "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
                             end
                           }
                         >
-                          👎 No
+                          No
                         </button>
                       </div>
                     </div>
