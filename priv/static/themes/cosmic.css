@@ -244,4 +244,80 @@ body.theme-cosmic :is(.main-content, .event-content, .dashboard-content, .user-c
   body.theme-cosmic::before {
     animation: none;
   }
+}
+
+/* ============================================================================
+   VOTING BUTTON OVERRIDES FOR COSMIC THEME  
+   Target voting buttons directly under body.theme-cosmic
+   ============================================================================ */
+
+/* Unselected voting buttons - darker base colors with subtle borders for better hierarchy */
+body.theme-cosmic .bg-green-50 {
+  background-color: rgba(5, 150, 105, 0.4) !important; /* emerald-600 with low opacity */
+  color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(5, 150, 105, 0.6) !important;
+}
+
+body.theme-cosmic .text-green-700 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body.theme-cosmic .hover\:bg-green-100:hover {
+  background-color: rgba(5, 150, 105, 0.6) !important; /* emerald-600 with medium opacity on hover */
+}
+
+body.theme-cosmic .border-green-200 {
+  border-color: rgba(5, 150, 105, 0.6) !important;
+}
+
+body.theme-cosmic .bg-yellow-50 {
+  background-color: rgba(217, 119, 6, 0.4) !important; /* amber-600 with low opacity */
+  color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(217, 119, 6, 0.6) !important;
+}
+
+body.theme-cosmic .text-yellow-700 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body.theme-cosmic .hover\:bg-yellow-100:hover {
+  background-color: rgba(217, 119, 6, 0.6) !important; /* amber-600 with medium opacity on hover */
+}
+
+body.theme-cosmic .border-yellow-200 {
+  border-color: rgba(217, 119, 6, 0.6) !important;
+}
+
+body.theme-cosmic .bg-red-50 {
+  background-color: rgba(220, 38, 38, 0.4) !important; /* red-600 with low opacity */
+  color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(220, 38, 38, 0.6) !important;
+}
+
+body.theme-cosmic .text-red-700 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body.theme-cosmic .hover\:bg-red-100:hover {
+  background-color: rgba(220, 38, 38, 0.6) !important; /* red-600 with medium opacity on hover */
+}
+
+body.theme-cosmic .border-red-200 {
+  border-color: rgba(220, 38, 38, 0.6) !important;
+}
+
+/* Selected voting buttons - bright and fully opaque for strong contrast */
+body.theme-cosmic .bg-green-600 {
+  background-color: rgb(5, 150, 105) !important; /* emerald-600 - full opacity for selected state */
+  color: white !important;
+}
+
+body.theme-cosmic .bg-yellow-500 {
+  background-color: rgb(217, 119, 6) !important; /* amber-600 - full opacity for selected state */
+  color: white !important;
+}
+
+body.theme-cosmic .bg-red-600 {
+  background-color: rgb(220, 38, 38) !important; /* red-600 - full opacity for selected state */
+  color: white !important;
 } 
