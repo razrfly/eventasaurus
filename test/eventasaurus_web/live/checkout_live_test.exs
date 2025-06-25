@@ -199,7 +199,7 @@ defmodule EventasaurusWeb.CheckoutLiveTest do
       assert flash["info"] =~ "confirmed"
 
       # Verify order was created and confirmed
-      order = Ticketing.get_orders_for_user(user) |> List.first()
+      order = Ticketing.list_orders_for_user(user) |> List.first()
       assert order != nil
       assert order.status == "confirmed"
       assert order.total_cents == 0
@@ -222,7 +222,7 @@ defmodule EventasaurusWeb.CheckoutLiveTest do
       |> render_click()
 
       participant = Events.get_event_participant_by_event_and_user(event, user)
-      order = Ticketing.get_orders_for_user(user) |> List.first()
+      order = Ticketing.list_orders_for_user(user) |> List.first()
 
       assert participant.metadata["order_id"] == order.id
       assert participant.metadata["ticket_id"] == ticket.id
@@ -307,10 +307,10 @@ defmodule EventasaurusWeb.CheckoutLiveTest do
       |> render_click()
 
       # Should redirect to payment page with payment intent
-      assert_redirected(view, ~p"/checkout/payment?order_id=#{:erlang.term_to_binary("mock_order_id")}")
+      assert_redirected(view, ~r"/checkout/payment\?order_id=\d+")
 
       # Verify pending order was created
-      order = Ticketing.get_orders_for_user(user) |> List.first()
+      order = Ticketing.list_orders_for_user(user) |> List.first()
       assert order != nil
       assert order.status == "pending"
       assert order.stripe_session_id != nil
