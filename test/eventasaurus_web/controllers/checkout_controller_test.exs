@@ -11,19 +11,22 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
   describe "create_session/2" do
     setup do
-      user = insert(:user)
-      event = insert(:event, users: [user])
-      _connect_account = insert(:stripe_connect_account, user: user)
+      organizer = insert(:user)
+      buyer = insert(:user)
+      event = insert(:event, users: [organizer])
+      _connect_account = insert(:stripe_connect_account, user: organizer)
 
-      %{user: user, event: event}
+      %{organizer: organizer, buyer: buyer, event: event}
     end
 
-    test "creates checkout session for valid ticket", %{conn: conn, user: user, event: event} do
+    test "creates checkout session for valid ticket", %{conn: conn, buyer: buyer, event: event} do
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 2500,
         pricing_model: "fixed",
-        quantity: 100
+        quantity: 100,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       # Mock successful Stripe checkout session creation
@@ -36,7 +39,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 2
@@ -55,20 +58,22 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       # Verify order was created
       order = Ticketing.get_order!(order_id)
-      assert order.user_id == user.id
+      assert order.user_id == buyer.id
       assert order.ticket_id == ticket.id
       assert order.quantity == 2
       assert order.status == "pending"
       assert order.stripe_session_id == session_id
     end
 
-    test "creates checkout session with flexible pricing", %{conn: conn, user: user, event: event} do
+    test "creates checkout session with flexible pricing", %{conn: conn, buyer: buyer, event: event} do
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 2000,
         minimum_price_cents: 1000,
         pricing_model: "flexible",
-        quantity: 50
+        quantity: 50,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       # Mock successful Stripe checkout session creation
@@ -81,7 +86,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 1,
@@ -103,13 +108,15 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
       assert order.pricing_snapshot["pricing_model"] == "flexible"
     end
 
-    test "creates checkout session with tips", %{conn: conn, user: user, event: event} do
+    test "creates checkout session with tips", %{conn: conn, buyer: buyer, event: event} do
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 1500,
         pricing_model: "fixed",
         tippable: true,
-        quantity: 25
+        quantity: 25,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       # Mock successful Stripe checkout session creation
@@ -122,7 +129,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 1,
@@ -141,17 +148,19 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
       assert order.pricing_snapshot["tip_cents"] == 300
     end
 
-    test "validates minimum price for flexible pricing", %{conn: conn, user: user, event: event} do
+    test "validates minimum price for flexible pricing", %{conn: conn, buyer: buyer, event: event} do
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 2000,
         minimum_price_cents: 1000,
-        pricing_model: "flexible"
+        pricing_model: "flexible",
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 1,
@@ -172,28 +181,33 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
       assert json_response(conn, 401)
     end
 
-    test "validates ticket existence", %{conn: conn, user: user} do
+        test "validates ticket existence", %{conn: conn, buyer: buyer} do
+      # Use a non-existent integer ID
+      nonexistent_id = 999999
+
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sessions", %{
-          "ticket_id" => "nonexistent",
+          "ticket_id" => nonexistent_id,
           "quantity" => 1
         })
 
       assert %{"error" => "Ticket not found"} = json_response(conn, 404)
     end
 
-    test "validates ticket availability", %{conn: conn, user: user, event: event} do
+    test "validates ticket availability", %{conn: conn, buyer: buyer, event: event} do
       ticket = insert(:ticket,
         event: event,
         base_price_cents: 1000,
-        quantity: 2  # Only 2 available
+        quantity: 2,  # Only 2 available
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
       )
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sessions", %{
           "ticket_id" => ticket.id,
           "quantity" => 5  # More than available
@@ -205,16 +219,20 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
   describe "sync_after_success/2" do
     setup do
-      user = insert(:user)
-      event = insert(:event, users: [user])
-      ticket = insert(:ticket, event: event, base_price_cents: 1000)
+      organizer = insert(:user)
+      buyer = insert(:user)
+      event = insert(:event, users: [organizer])
+      _connect_account = insert(:stripe_connect_account, user: organizer)
+      ticket = insert(:ticket, event: event, base_price_cents: 1000,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day))
 
-      %{user: user, event: event, ticket: ticket}
+      %{organizer: organizer, buyer: buyer, event: event, ticket: ticket}
     end
 
-    test "syncs order status after successful payment", %{conn: conn, user: user, ticket: ticket} do
+    test "syncs order status after successful payment", %{conn: conn, buyer: buyer, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: buyer,
         ticket: ticket,
         event: ticket.event,
         status: "pending",
@@ -228,7 +246,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       assert %{
@@ -245,9 +263,9 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
       assert updated_order.confirmed_at != nil
     end
 
-    test "returns current status when payment is still pending", %{conn: conn, user: user, ticket: ticket} do
+    test "returns current status when payment is still pending", %{conn: conn, buyer: buyer, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: buyer,
         ticket: ticket,
         event: ticket.event,
         status: "pending",
@@ -261,7 +279,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       assert %{
@@ -273,9 +291,9 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
       assert order_id == order.id
     end
 
-    test "requires authentication", %{conn: conn, user: user, ticket: ticket} do
+    test "requires authentication", %{conn: conn, buyer: buyer, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: buyer,
         ticket: ticket,
         event: ticket.event,
         status: "pending"
@@ -286,7 +304,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
       assert json_response(conn, 401)
     end
 
-    test "validates order ownership", %{conn: conn, user: user, ticket: ticket} do
+    test "validates order ownership", %{conn: conn, buyer: buyer, ticket: ticket} do
       other_user = insert(:user)
       order = insert(:order,
         user: other_user,  # Different user
@@ -297,24 +315,27 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       assert %{"error" => "Access denied"} = json_response(conn, 403)
     end
 
-    test "handles nonexistent orders", %{conn: conn, user: user} do
+        test "handles nonexistent orders", %{conn: conn, buyer: buyer} do
+      # Use a non-existent integer ID
+      nonexistent_id = 999999
+
       conn =
         conn
-        |> setup_user_session(user)
-        |> post(~p"/api/checkout/sync/nonexistent")
+        |> setup_user_session(buyer)
+        |> post(~p"/api/checkout/sync/#{nonexistent_id}")
 
       assert %{"error" => "Order not found"} = json_response(conn, 404)
     end
 
-    test "handles Stripe API errors gracefully", %{conn: conn, user: user, ticket: ticket} do
+    test "handles Stripe API errors gracefully", %{conn: conn, buyer: buyer, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: buyer,
         ticket: ticket,
         event: ticket.event,
         status: "pending",
@@ -328,7 +349,7 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> post(~p"/api/checkout/sync/#{order.id}")
 
       # Should still return current order status
@@ -344,34 +365,41 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
   describe "success/2" do
     setup do
-      user = insert(:user)
-      event = insert(:event, users: [user])
-      ticket = insert(:ticket, event: event, base_price_cents: 1000)
+      organizer = insert(:user)
+      buyer = insert(:user)
+      event = insert(:event, users: [organizer])
+      _connect_account = insert(:stripe_connect_account, user: organizer)
+      ticket = insert(:ticket, event: event, base_price_cents: 1000,
+        starts_at: DateTime.utc_now() |> DateTime.add(-1, :day),
+        ends_at: DateTime.utc_now() |> DateTime.add(30, :day))
 
-      %{user: user, event: event, ticket: ticket}
+      %{organizer: organizer, buyer: buyer, event: event, ticket: ticket}
     end
 
-    test "displays success page for valid order and session", %{conn: conn, user: user, ticket: ticket} do
+    test "displays success page for valid order and session", %{conn: conn, buyer: buyer, ticket: ticket} do
+      # Insert order with proper associations
       order = insert(:order,
-        user: user,
+        user: buyer,
         ticket: ticket,
         event: ticket.event,
         status: "confirmed",
         stripe_session_id: "cs_test_success_123"
       )
+      # Reload with associations for the controller
+      order = EventasaurusApp.Ticketing.get_order!(order.id)
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> get(~p"/orders/#{order.id}/success?session_id=cs_test_success_123")
 
       assert html_response(conn, 200)
       assert conn.resp_body =~ "Payment Successful"
     end
 
-    test "handles session ID mismatch", %{conn: conn, user: user, ticket: ticket} do
+    test "handles session ID mismatch", %{conn: conn, buyer: buyer, ticket: ticket} do
       order = insert(:order,
-        user: user,
+        user: buyer,
         ticket: ticket,
         event: ticket.event,
         status: "confirmed",
@@ -380,17 +408,20 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> get(~p"/orders/#{order.id}/success?session_id=cs_test_wrong_456")
 
       assert redirected_to(conn) == "/"
     end
 
-    test "handles nonexistent orders", %{conn: conn, user: user} do
+        test "handles nonexistent orders", %{conn: conn, buyer: buyer} do
+      # Use a non-existent integer ID
+      nonexistent_id = 999999
+
       conn =
         conn
-        |> setup_user_session(user)
-        |> get(~p"/orders/nonexistent/success?session_id=cs_test_123")
+        |> setup_user_session(buyer)
+        |> get(~p"/orders/#{nonexistent_id}/success?session_id=cs_test_123")
 
       assert redirected_to(conn) == "/"
     end
@@ -398,11 +429,11 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
   describe "cancel/2" do
     test "handles checkout cancellation", %{conn: conn} do
-      user = insert(:user)
+      buyer = insert(:user)
 
       conn =
         conn
-        |> setup_user_session(user)
+        |> setup_user_session(buyer)
         |> get(~p"/orders/cancel?session_id=cs_test_cancelled_123")
 
       assert redirected_to(conn) == "/"
@@ -411,7 +442,6 @@ defmodule EventasaurusWeb.CheckoutControllerTest do
 
   # Helper function to log in a user
   defp setup_user_session(conn, user) do
-    conn
-    |> assign(:current_user, user)
+    log_in_user(conn, user)
   end
 end
