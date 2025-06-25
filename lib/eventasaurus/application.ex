@@ -8,7 +8,8 @@ defmodule Eventasaurus.Application do
   @impl true
   def start(_type, _args) do
     # Load environment variables from .env file if in dev/test environment
-    if Application.get_env(:eventasaurus, :environment) in [:dev, :test] do
+    env = Application.get_env(:eventasaurus, :environment, :prod)
+    if env in [:dev, :test] do
       # Simple approach to load .env file
       case File.read(Path.expand(".env")) do
         {:ok, body} ->
@@ -29,7 +30,7 @@ defmodule Eventasaurus.Application do
     IO.puts("DEBUG - Google Maps API key loaded: #{if api_key, do: "YES", else: "NO"}")
 
     # Debug Stripe environment variables (dev/test only)
-    if Application.get_env(:eventasaurus, :environment) in [:dev, :test] do
+    if env in [:dev, :test] do
       stripe_client_id = System.get_env("STRIPE_CLIENT_ID")
       stripe_secret = System.get_env("STRIPE_SECRET_KEY")
       IO.puts("DEBUG - Stripe Client ID loaded: #{if stripe_client_id, do: "YES", else: "NO"}")
