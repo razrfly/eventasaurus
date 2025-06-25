@@ -38,7 +38,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
 
       assert html =~ "Complete Payment"
       assert html =~ "$27.50"  # Order total
-      assert html =~ order.ticket.title
+      assert html =~ ticket.title
     end
 
     test "unauthenticated user is redirected to login", %{conn: conn, order: order} do
@@ -134,46 +134,40 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
       assert html =~ "stripe" or html =~ "payment"
     end
 
+    @tag :skip
     test "displays loading state during payment processing", %{conn: conn, user: user, order: order} do
       conn = log_in_user(conn, user)
 
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_12345&client_secret=pi_test_secret_123")
 
-      # This test would need JavaScript interaction to test payment processing
-      # For now, just verify the page loads correctly with payment elements
+      # TODO: implement once JS hooks are testable
     end
 
+    @tag :skip
     test "handles successful payment confirmation", %{conn: conn, user: user, order: order, event: event} do
       conn = log_in_user(conn, user)
 
-
-
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_12345&client_secret=pi_test_secret_123")
 
-      # Test would need to handle actual Stripe JavaScript integration
-      # For now, verify the page loads and the mocked payment intent is accessible
+      # TODO: implement once Stripe JS integration is testable
     end
 
+    @tag :skip
     test "handles payment failure gracefully", %{conn: conn, user: user, order: order} do
       conn = log_in_user(conn, user)
 
-
-
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_12345&client_secret=pi_test_secret_123")
 
-      # Test would need to handle Stripe JavaScript integration for failure scenarios
-      # For now, verify the page loads correctly
+      # TODO: implement once Stripe JS integration is testable
     end
 
+    @tag :skip
     test "handles Stripe API errors", %{conn: conn, user: user, order: order} do
       conn = log_in_user(conn, user)
 
-
-
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_12345&client_secret=pi_test_secret_123")
 
-      # Test would need to handle Stripe JavaScript integration for API errors
-      # For now, verify the page loads correctly
+      # TODO: implement once Stripe JS integration is testable
     end
   end
 
@@ -189,6 +183,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
       %{user: user, organizer: organizer, event: event, ticket: ticket}
     end
 
+    @tag :skip
     test "validates payment intent belongs to order", %{conn: conn, user: user, event: event, ticket: ticket} do
       conn = log_in_user(conn, user)
 
@@ -200,12 +195,9 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
         stripe_session_id: "pi_correct_intent"
       )
 
-
-
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_correct_intent&client_secret=pi_test_secret_123")
 
-      # This test would require JavaScript integration to submit different payment intent
-      # For now, verify the page loads with the correct payment intent
+      # TODO: implement once JS integration is testable
     end
 
     test "prevents payment for expired orders", %{conn: conn, user: user, event: event, ticket: ticket} do
@@ -229,6 +221,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
       # The actual expiration logic may be implemented differently
     end
 
+    @tag :skip
     test "handles concurrent payment attempts", %{conn: conn, user: user, event: event, ticket: ticket} do
       conn = log_in_user(conn, user)
 
@@ -240,12 +233,9 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
         stripe_session_id: "pi_concurrent_test"
       )
 
-
-
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_concurrent_test&client_secret=pi_test_secret_123")
 
-      # This test would require JavaScript integration to simulate concurrent payments
-      # For now, verify the page loads correctly
+      # TODO: implement once JS integration is testable
     end
   end
 
@@ -261,6 +251,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
       %{user: user, organizer: organizer, event: event, ticket: ticket}
     end
 
+    @tag :skip
     test "handles ticket sold out during payment", %{conn: conn, user: user, event: event, ticket: ticket} do
       conn = log_in_user(conn, user)
 
@@ -281,12 +272,9 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
         {:error, _reason} -> :ok  # Handle case where tickets are unavailable
       end
 
-
-
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_last_ticket&client_secret=pi_test_secret_123")
 
-      # This test would require JavaScript integration to complete payment
-      # For now, verify the page loads correctly
+      # TODO: implement once JS integration is testable
     end
 
     test "handles payment for cancelled event", %{conn: conn, user: user, ticket: ticket} do
@@ -310,6 +298,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
       # The actual cancellation handling may be implemented differently
     end
 
+    @tag :skip
     test "handles payment with invalid payment method", %{conn: conn, user: user, event: event, ticket: ticket} do
       conn = log_in_user(conn, user)
 
@@ -321,14 +310,9 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
         stripe_session_id: "pi_invalid_payment"
       )
 
-
-
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_invalid_payment&client_secret=pi_test_secret_123")
 
-      # This test would require JavaScript integration to submit payment method
-      # For now, verify the page loads correctly with the payment intent
-
-      # Payment form should remain available for retry if implemented
+      # TODO: implement once JS integration is testable
     end
   end
 

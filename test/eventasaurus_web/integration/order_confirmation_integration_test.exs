@@ -75,7 +75,7 @@ defmodule EventasaurusWeb.OrderConfirmationIntegrationTest do
       conn = log_in_user(conn, user)
 
       # Load checkout page with pre-selected ticket
-      {:ok, _checkout_view, html} = live(conn, "/events/#{event.slug}/checkout?tickets=#{ticket.id}:1")
+      {:ok, _checkout_view, html} = live(conn, "/events/#{event.slug}/checkout?#{URI.encode_query(%{"#{ticket.id}" => 1})}")
 
       # Verify page content
       assert html =~ "Checkout"
@@ -161,6 +161,7 @@ defmodule EventasaurusWeb.OrderConfirmationIntegrationTest do
       # Both users try to buy 2 tickets each (total 4, but only 2 available)
       tasks = [
         Task.async(fn ->
+          Ecto.Adapters.SQL.Sandbox.allow(EventasaurusApp.Repo, self(), self())
           case Ticketing.create_order(user1, limited_ticket, %{quantity: 2}) do
             {:ok, order1} ->
               Ticketing.confirm_order(order1, "pi_user1_test")
@@ -169,6 +170,7 @@ defmodule EventasaurusWeb.OrderConfirmationIntegrationTest do
           end
         end),
         Task.async(fn ->
+          Ecto.Adapters.SQL.Sandbox.allow(EventasaurusApp.Repo, self(), self())
           # Small delay to create race condition
           Process.sleep(50)
 
