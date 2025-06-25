@@ -31,7 +31,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
       %{user: user, organizer: organizer, event: event, ticket: ticket, order: order}
     end
 
-    test "authenticated user can access payment page with valid order", %{conn: conn, user: user, order: order} do
+    test "authenticated user can access payment page with valid order", %{conn: conn, user: user, order: order, ticket: ticket} do
       conn = log_in_user(conn, user)
 
       {:ok, _view, html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_intent&client_secret=pi_test_secret_123")

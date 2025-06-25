@@ -92,7 +92,7 @@ defmodule EventasaurusWeb.CheckoutController do
   """
     def success(conn, %{"order_id" => order_id, "session_id" => session_id}) do
     try do
-      order = Ticketing.get_order!(order_id)
+      order = Ticketing.get_order!(order_id) |> EventasaurusApp.Repo.preload([:event, :ticket])
 
       # Verify the session matches our order
       if order.stripe_session_id == session_id do
@@ -146,13 +146,22 @@ defmodule EventasaurusWeb.CheckoutController do
   # Private helper functions
 
   defp get_current_user(conn) do
-    case conn.assigns[:current_user] do
+    case conn.assigns[:user] do
       %User{} = user -> {:ok, user}
       _ -> {:error, :no_user}
     end
   end
 
   defp get_ticket(ticket_id) when is_binary(ticket_id) do
+    try do
+      ticket = Ticketing.get_ticket!(ticket_id)
+      {:ok, ticket}
+    rescue
+      Ecto.NoResultsError -> {:error, :ticket_not_found}
+    end
+  end
+
+  defp get_ticket(ticket_id) when is_integer(ticket_id) do
     try do
       ticket = Ticketing.get_ticket!(ticket_id)
       {:ok, ticket}
@@ -214,7 +223,7 @@ defmodule EventasaurusWeb.CheckoutController do
   Called from frontend after successful checkout to ensure order is confirmed.
   """
   def sync_after_success(conn, %{"order_id" => order_id}) do
-    current_user = conn.assigns[:current_user]
+    current_user = conn.assigns[:user]
 
     try do
       order = Ticketing.get_order!(order_id)
