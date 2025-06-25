@@ -2,7 +2,6 @@ defmodule EventasaurusWeb.StripeWebhookController do
   use EventasaurusWeb, :controller
 
   alias EventasaurusApp.Ticketing
-  alias EventasaurusApp.Stripe
 
   require Logger
 
@@ -110,7 +109,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
     # First validate timestamp to prevent replay attacks
     case validate_webhook_timestamp(signature) do
       :ok ->
-        case Stripe.verify_webhook_signature(raw_body, signature, webhook_secret) do
+        case stripe_impl().verify_webhook_signature(raw_body, signature, webhook_secret) do
           {:ok, event} ->
             # Validate event structure
                     case validate_event_structure(event) do
@@ -601,5 +600,10 @@ defmodule EventasaurusWeb.StripeWebhookController do
         Logger.error("STRIPE_WEBHOOK_SECRET environment variable is empty")
         raise "STRIPE_WEBHOOK_SECRET environment variable is empty"
     end
+  end
+
+  # Get the configured Stripe implementation (for testing vs production)
+  defp stripe_impl do
+    Application.get_env(:eventasaurus, :stripe_module, EventasaurusApp.Stripe)
   end
 end
