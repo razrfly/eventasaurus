@@ -108,7 +108,7 @@ defmodule EventasaurusApp.Auth do
     if access_token do
       Client.update_user_password(access_token, new_password)
     else
-      {:error, "No authentication token found"}
+      {:error, :no_authentication_token}
     end
   end
 
