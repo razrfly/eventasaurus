@@ -92,8 +92,8 @@ ENV MIX_ENV="prod"
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/eventasaurus ./
 
-# Also copy static images from the build stage
-COPY --from=builder --chown=nobody:root /app/priv/static/images ./priv/static/images
+# Also copy all compiled static assets from the build stage (including CSS, JS, and images)
+COPY --from=builder --chown=nobody:root /app/priv/static ./priv/static
 
 USER nobody
 
