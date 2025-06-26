@@ -496,6 +496,8 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   def handle_info({:registration_success, type, _name, _email}, socket) do
     message = case type do
+      :new_registration -> "Successfully registered for #{socket.assigns.event.title}! Please check your email for a magic link to create your account."
+      :existing_user_registered -> "Successfully registered for #{socket.assigns.event.title}!"
       :registered -> "Successfully registered for #{socket.assigns.event.title}!"
       :already_registered -> "You are already registered for this event."
     end
