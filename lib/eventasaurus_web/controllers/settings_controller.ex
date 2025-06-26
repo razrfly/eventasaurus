@@ -64,9 +64,9 @@ defmodule EventasaurusWeb.SettingsController do
       {:ok, user} ->
         case Accounts.update_user(user, user_params) do
           {:ok, updated_user} ->
-                    conn
-        |> put_flash(:info, "Account updated successfully.")
-        |> redirect(to: ~p"/settings/account")
+            conn
+            |> put_flash(:info, "Account updated successfully.")
+            |> redirect(to: ~p"/settings/account")
 
           {:error, %Ecto.Changeset{} = changeset} ->
             conn
@@ -87,7 +87,7 @@ defmodule EventasaurusWeb.SettingsController do
   end
 
   @doc """
-  Update user password via Supabase.
+  Update user password.
   """
   def update_password(conn, %{"password" => password_params} = _params) do
     case ensure_user_struct(conn.assigns[:auth_user]) do
@@ -113,11 +113,32 @@ defmodule EventasaurusWeb.SettingsController do
             |> redirect(to: ~p"/settings/account")
 
           true ->
-            # TODO: Implement Supabase password update
-            # For now, show a placeholder message
-            conn
-            |> put_flash(:info, "Password update functionality will be implemented with Supabase integration.")
-            |> redirect(to: ~p"/settings/account")
+            # First verify current password by attempting to authenticate
+            case EventasaurusApp.Auth.authenticate(user.email, current_password) do
+              {:ok, _auth_data} ->
+                # Current password is correct, update to new password
+                case EventasaurusApp.Auth.update_current_user_password(conn, new_password) do
+                  {:ok, _result} ->
+                    conn
+                    |> put_flash(:info, "Password updated successfully.")
+                    |> redirect(to: ~p"/settings/account")
+
+                  {:error, reason} ->
+                    error_message = case reason do
+                      :no_authentication_token -> "Authentication session expired. Please log in again."
+                      _ -> "Failed to update password. Please try again."
+                    end
+
+                    conn
+                    |> put_flash(:error, error_message)
+                    |> redirect(to: ~p"/settings/account")
+                end
+
+              {:error, _reason} ->
+                conn
+                |> put_flash(:error, "Current password is incorrect.")
+                |> redirect(to: ~p"/settings/account")
+            end
         end
 
       {:error, _} ->
