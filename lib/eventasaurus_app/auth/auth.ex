@@ -27,16 +27,25 @@ defmodule EventasaurusApp.Auth do
   end
 
   @doc """
-  Stores authentication data in the session.
+  Stores authentication data in the session with configurable duration.
 
   Returns `{:ok, conn}` on success or `{:error, reason}` on failure.
+
+  When remember_me is true, sessions persist for 30 days.
+  When remember_me is false, sessions expire when browser closes.
   """
-  def store_session(conn, auth_data) do
+  def store_session(conn, auth_data, remember_me \\ true) do
     # Extract token from auth_data, handling potential formats
     token = extract_token(auth_data)
+    refresh_token = extract_refresh_token(auth_data)
 
     if token do
-      {:ok, Conn.put_session(conn, :access_token, token)}
+      conn = conn
+      |> Conn.put_session(:access_token, token)
+      |> maybe_put_refresh_token(refresh_token)
+      |> configure_session_duration(remember_me)
+
+      {:ok, conn}
     else
       {:error, :invalid_token}
     end
@@ -136,6 +145,36 @@ defmodule EventasaurusApp.Auth do
         auth_data["access_token"]
       true ->
         nil
+    end
+  end
+
+  # Helper function to extract refresh token from auth data
+  defp extract_refresh_token(auth_data) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, :refresh_token) ->
+        auth_data.refresh_token
+      is_map(auth_data) && Map.has_key?(auth_data, "refresh_token") ->
+        auth_data["refresh_token"]
+      true ->
+        nil
+    end
+  end
+
+  # Helper function to store refresh token if available
+  defp maybe_put_refresh_token(conn, nil), do: conn
+  defp maybe_put_refresh_token(conn, refresh_token) do
+    Conn.put_session(conn, :refresh_token, refresh_token)
+  end
+
+  # Helper function to configure session duration based on remember_me preference
+  defp configure_session_duration(conn, remember_me) do
+    if remember_me do
+      # Remember me: persistent session for 30 days
+      max_age = 30 * 24 * 60 * 60  # 30 days in seconds
+      Conn.configure_session(conn, max_age: max_age, renew: true)
+    else
+      # Don't remember: session cookie (expires when browser closes)
+      Conn.configure_session(conn, max_age: nil, renew: true)
     end
   end
 end
