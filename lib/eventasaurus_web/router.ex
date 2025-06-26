@@ -170,6 +170,7 @@ defmodule EventasaurusWeb.Router do
 
       get "/", PageController, :home
       get "/about", PageController, :about
+      get "/our-story", PageController, :our_story
       get "/whats-new", PageController, :whats_new
       get "/components", PageController, :components
       get "/privacy", PageController, :privacy

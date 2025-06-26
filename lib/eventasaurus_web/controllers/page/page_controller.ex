@@ -15,6 +15,10 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :about)
   end
 
+  def our_story(conn, _params) do
+    render(conn, :our_story)
+  end
+
   def whats_new(conn, _params) do
     render(conn, :whats_new)
   end
