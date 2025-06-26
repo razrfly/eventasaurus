@@ -63,9 +63,6 @@ defmodule EventasaurusWeb.Router do
 
   # Pipeline for redirect if authenticated (but allows password recovery)
   pipeline :redirect_if_authenticated_except_recovery do
-    plug :fetch_session
-    plug :fetch_auth_user
-    plug :assign_user_struct
     plug :redirect_if_user_is_authenticated_except_recovery
   end
 
@@ -81,15 +78,7 @@ defmodule EventasaurusWeb.Router do
     post "/forgot-password", Auth.AuthController, :request_password_reset
     get "/reset-password", Auth.AuthController, :reset_password
     post "/reset-password", Auth.AuthController, :update_password
-  end
-
-  # Auth callback and logout (no redirect needed)
-  scope "/auth", EventasaurusWeb do
-    pipe_through :browser
-
     get "/callback", Auth.AuthController, :callback
-    post "/callback", Auth.AuthController, :callback
-    get "/logout", Auth.AuthController, :logout
     post "/logout", Auth.AuthController, :logout
   end
 
