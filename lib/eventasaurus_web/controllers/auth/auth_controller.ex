@@ -24,15 +24,23 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Process the login form submission.
   """
-  def authenticate(conn, %{"user" => %{"email" => email, "password" => password}}) do
+  def authenticate(conn, %{"user" => %{"email" => email, "password" => password} = user_params}) do
     require Logger
     Logger.debug("Attempting login for email: #{email}")
+
+    # Extract remember_me preference, defaulting to true for better UX
+    remember_me = case Map.get(user_params, "remember_me") do
+      "false" -> false
+      _ -> true  # Default to true - most users prefer to stay logged in
+    end
+
+    Logger.debug("Remember me preference: #{remember_me}")
 
     case Auth.authenticate(email, password) do
       {:ok, auth_data} ->
         Logger.debug("Authentication successful, auth_data: #{inspect(auth_data)}")
 
-        case Auth.store_session(conn, auth_data) do
+        case Auth.store_session(conn, auth_data, remember_me) do
           {:ok, conn} ->
             # Fetch current user for the session
             user = Auth.get_current_user(conn)
@@ -85,7 +93,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   # Fallback for flat parameters (backward compatibility)
   def authenticate(conn, %{"email" => email, "password" => password}) do
-    authenticate(conn, %{"user" => %{"email" => email, "password" => password}})
+    authenticate(conn, %{"user" => %{"email" => email, "password" => password, "remember_me" => "true"}})
   end
 
   @doc """
