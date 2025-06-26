@@ -119,15 +119,27 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
     <div class="mx-auto max-w-sm">
       <.header class="text-center">
         Reset Password
+        <:subtitle>Enter your new password below</:subtitle>
       </.header>
 
       <.simple_form :let={f} for={@conn.params["user"] || %{}} as={:user} action={~p"/auth/reset-password"}>
+        <%= if assigns[:token] do %>
+          <input type="hidden" name="token" value={@token} />
+        <% end %>
+
         <.input field={f[:password]} type="password" label="New password" required />
         <.input field={f[:password_confirmation]} type="password" label="Confirm new password" required />
+
         <:actions>
           <.button phx-disable-with="Resetting..." class="w-full">
             Reset password
           </.button>
+        </:actions>
+
+        <:actions>
+          <.link href={~p"/auth/login"} class="text-sm font-semibold">
+            <span aria-hidden="true">&larr;</span> Back to sign in
+          </.link>
         </:actions>
       </.simple_form>
     </div>

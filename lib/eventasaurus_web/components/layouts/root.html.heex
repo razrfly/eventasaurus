@@ -137,7 +137,7 @@
   supabase_api_key = supabase_config[:api_key] || raise("Missing Supabase API key configuration")
   supabase_bucket = supabase_config[:bucket] || "event-images"
 %>
-  <body class={[
+  <body id="app-body" class={[
       "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
       # Apply theme class to body for universal background application
       assigns[:theme] && EventasaurusWeb.ThemeHelpers.theme_class(assigns[:theme])
@@ -146,6 +146,7 @@
     data-supabase-url={supabase_url}
     data-supabase-api-key={supabase_api_key}
     data-supabase-bucket={supabase_bucket}
+    phx-hook="SupabaseAuthHandler"
   >
     <!-- Gradient Background for pages that need it -->
     <%= unless assigns[:hide_gradient] do %>

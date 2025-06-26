@@ -61,9 +61,17 @@ defmodule EventasaurusWeb.Router do
     plug :assign_user_struct
   end
 
+  # Pipeline for redirect if authenticated (but allows password recovery)
+  pipeline :redirect_if_authenticated_except_recovery do
+    plug :fetch_session
+    plug :fetch_auth_user
+    plug :assign_user_struct
+    plug :redirect_if_user_is_authenticated_except_recovery
+  end
+
   # Authentication routes - placing these BEFORE the catch-all public routes
   scope "/auth", EventasaurusWeb do
-    pipe_through [:browser, :redirect_if_authenticated]
+    pipe_through [:browser, :redirect_if_authenticated_except_recovery]
 
     get "/login", Auth.AuthController, :login
     post "/login", Auth.AuthController, :authenticate
