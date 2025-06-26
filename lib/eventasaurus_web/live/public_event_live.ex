@@ -38,6 +38,9 @@ defmodule EventasaurusWeb.PublicEventLive do
           venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
           organizers = Events.list_event_organizers(event)
 
+          # Load participants for social proof
+          participants = Events.list_event_participants(event)
+
           # Load tickets for ticketed events
           tickets = if event.is_ticketed do
             Ticketing.list_tickets_for_event(event.id)
@@ -96,6 +99,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:event, event)
            |> assign(:venue, venue)
            |> assign(:organizers, organizers)
+           |> assign(:participants, participants)
            |> assign(:registration_status, registration_status)
            |> assign(:user, user)
            |> assign(:theme, theme)
@@ -502,11 +506,15 @@ defmodule EventasaurusWeb.PublicEventLive do
       :already_registered -> "You are already registered for this event."
     end
 
+    # Reload participants to show updated count
+    updated_participants = Events.list_event_participants(socket.assigns.event)
+
     {:noreply,
      socket
      |> put_flash(:info, message)
      |> assign(:just_registered, true)
-     |> assign(:show_registration_modal, false)}
+     |> assign(:show_registration_modal, false)
+     |> assign(:participants, updated_participants)}
   end
 
   def handle_info({:registration_error, reason}, socket) do
@@ -1013,6 +1021,36 @@ defmodule EventasaurusWeb.PublicEventLive do
               <% end %>
             </div>
           </div>
+
+          <!-- Participants section -->
+          <%= if length(@participants) > 0 do %>
+            <div class="border-t border-gray-200 pt-6 mt-6">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">
+                  <%= length(@participants) %> Going
+                </h3>
+              </div>
+
+              <div class="space-y-3">
+                <%= for participant <- @participants do %>
+                  <div class="flex items-center space-x-3">
+                    <%= avatar_img_size(participant.user, :md, class: "border border-gray-200") %>
+                    <div>
+                      <div class="font-medium text-gray-900 text-sm"><%= participant.user.name %></div>
+                      <div class="text-xs text-gray-500">
+                        <%= case participant.status do %>
+                          <% :pending -> %>Registered
+                          <% :accepted -> %>Going
+                          <% :confirmed_with_order -> %>Going
+                          <% _ -> %>Registered
+                        <% end %>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
         </div>
 
                  <!-- Right sidebar -->
