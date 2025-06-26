@@ -24,7 +24,7 @@ defmodule EventasaurusWeb.StripeConnectController do
           _existing_account ->
             conn
             |> put_flash(:info, "You already have a connected Stripe account.")
-            |> redirect(to: ~p"/dashboard")
+            |> redirect(to: ~p"/settings/payments")
         end
 
       {:error, _} ->
@@ -58,26 +58,26 @@ defmodule EventasaurusWeb.StripeConnectController do
 
       conn
       |> put_flash(:info, "Successfully connected your Stripe account! You can now receive payments.")
-      |> redirect(to: ~p"/stripe/status")
+      |> redirect(to: ~p"/settings/payments")
 
     else
       :error ->
         Logger.error("Invalid user ID in state parameter", user_id_string: user_id_string)
         conn
         |> put_flash(:error, "Invalid callback parameters.")
-        |> redirect(to: ~p"/dashboard")
+        |> redirect(to: ~p"/settings/payments")
 
       nil ->
         Logger.error("User not found for Stripe Connect callback", user_id_string: user_id_string)
         conn
         |> put_flash(:error, "User not found. Please try connecting again.")
-        |> redirect(to: ~p"/dashboard")
+        |> redirect(to: ~p"/settings/payments")
 
       {:error, %{"error" => error_type, "error_description" => description}} ->
         Logger.error("Stripe OAuth error", error_type: error_type, description: description)
         conn
         |> put_flash(:error, "Stripe connection failed: #{description}")
-        |> redirect(to: ~p"/dashboard")
+        |> redirect(to: ~p"/settings/payments")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
@@ -88,25 +88,25 @@ defmodule EventasaurusWeb.StripeConnectController do
         Logger.error("Database error creating Stripe Connect account", errors: errors)
         conn
         |> put_flash(:error, "Failed to save your Stripe connection. Please try again.")
-        |> redirect(to: ~p"/dashboard")
+        |> redirect(to: ~p"/settings/payments")
 
       {:error, reason} when is_binary(reason) ->
         Logger.error("Stripe Connect callback error", reason: reason)
         conn
         |> put_flash(:error, "Connection failed: #{reason}")
-        |> redirect(to: ~p"/dashboard")
+        |> redirect(to: ~p"/settings/payments")
 
       false ->
         Logger.error("Invalid stripe_user_id received from Stripe OAuth response")
         conn
         |> put_flash(:error, "Invalid response from Stripe. Please try again.")
-        |> redirect(to: ~p"/dashboard")
+        |> redirect(to: ~p"/settings/payments")
 
       error ->
         Logger.error("Unexpected error in Stripe Connect callback", error: inspect(error))
         conn
         |> put_flash(:error, "Something went wrong connecting your Stripe account.")
-        |> redirect(to: ~p"/dashboard")
+        |> redirect(to: ~p"/settings/payments")
     end
   end
 
@@ -120,7 +120,7 @@ defmodule EventasaurusWeb.StripeConnectController do
 
     conn
     |> put_flash(:error, "Stripe connection was cancelled or failed: #{error_description}")
-    |> redirect(to: ~p"/dashboard")
+    |> redirect(to: ~p"/settings/payments")
   end
 
   def callback(conn, params) do
@@ -128,7 +128,7 @@ defmodule EventasaurusWeb.StripeConnectController do
 
     conn
     |> put_flash(:error, "Invalid callback parameters.")
-    |> redirect(to: ~p"/dashboard")
+    |> redirect(to: ~p"/settings/payments")
   end
 
   @doc """
@@ -141,7 +141,7 @@ defmodule EventasaurusWeb.StripeConnectController do
           nil ->
             conn
             |> put_flash(:info, "No Stripe account to disconnect.")
-            |> redirect(to: ~p"/dashboard")
+            |> redirect(to: ~p"/settings/payments")
 
           connect_account ->
             case Stripe.disconnect_connect_account(connect_account) do
@@ -153,7 +153,7 @@ defmodule EventasaurusWeb.StripeConnectController do
 
                 conn
                 |> put_flash(:info, "Successfully disconnected your Stripe account.")
-                |> redirect(to: ~p"/dashboard")
+                |> redirect(to: ~p"/settings/payments")
 
               {:error, changeset} ->
                 Logger.error("Failed to disconnect Stripe account",
@@ -163,7 +163,7 @@ defmodule EventasaurusWeb.StripeConnectController do
 
                 conn
                 |> put_flash(:error, "Failed to disconnect your Stripe account.")
-                |> redirect(to: ~p"/dashboard")
+                |> redirect(to: ~p"/settings/payments")
             end
         end
 
