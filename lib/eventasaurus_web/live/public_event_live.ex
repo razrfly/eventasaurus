@@ -698,10 +698,10 @@ defmodule EventasaurusWeb.PublicEventLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <!-- Public Event Show Page with dynamic theming -->
-    <div class="container mx-auto px-6 py-12 max-w-7xl">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
-        <div class="lg:col-span-2">
+         <!-- Public Event Show Page with mobile-first layout -->
+     <div class="container mx-auto px-4 sm:px-6 py-6 sm:py-12 max-w-7xl">
+       <div class="event-page-grid grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-12">
+                 <div class="main-content lg:col-span-2">
           <!-- Date/time and main info -->
           <div class="flex items-start gap-4 mb-8">
             <div class="bg-white border border-gray-200 rounded-lg p-3 w-16 h-16 flex flex-col items-center justify-center text-center font-medium shadow-sm">
@@ -782,9 +782,9 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
           <% end %>
 
-          <!-- Date Voting Interface (only show for polling events) -->
-          <%= if @event.status == :polling and not is_nil(@date_poll) and @date_options != [] do %>
-            <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm" data-testid="voting-interface">
+                     <!-- Date Voting Interface (only show for polling events) -->
+           <%= if @event.status == :polling and not is_nil(@date_poll) and @date_options != [] do %>
+             <div class="mobile-voting-simplified bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm" data-testid="voting-interface">
               <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -850,8 +850,8 @@ defmodule EventasaurusWeb.PublicEventLive do
                         </div>
                       </div>
 
-                      <!-- Voting buttons -->
-                      <div class="flex gap-2">
+                                             <!-- Voting buttons -->
+                       <div class="voting-buttons flex gap-2">
                         <button
                           phx-click="cast_vote"
                           phx-value-option_id={option.id}
@@ -1015,8 +1015,8 @@ defmodule EventasaurusWeb.PublicEventLive do
           </div>
         </div>
 
-        <!-- Right sidebar -->
-        <div class="lg:col-span-1">
+                 <!-- Right sidebar -->
+         <div class="sidebar-content lg:col-span-1">
           <!-- Ticket Selection Section (for ticketed events) -->
           <%= if @event.is_ticketed and @event.status in [:confirmed] do %>
             <.ticket_selection_component
@@ -1028,8 +1028,8 @@ defmodule EventasaurusWeb.PublicEventLive do
             />
           <% end %>
 
-          <!-- Registration Card -->
-          <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+                     <!-- Registration Card -->
+           <div class="mobile-register-card bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
             <h3 class="text-lg font-semibold mb-4 text-gray-900">
               <%= case @registration_status do %>
                 <% :registered -> %>Registration
@@ -1188,15 +1188,26 @@ defmodule EventasaurusWeb.PublicEventLive do
                 </div>
             <% end %>
 
-            <%= if @registration_status in [:not_authenticated, :not_registered] do %>
-              <div class="mt-3 text-center text-sm text-gray-500">
-                <div>Limited spots available</div>
-              </div>
-            <% end %>
-          </div>
+                         <%= if @registration_status in [:not_authenticated, :not_registered] do %>
+               <div class="mt-3 text-center text-sm text-gray-500">
+                 <div>Limited spots available</div>
+               </div>
+             <% end %>
 
-          <!-- Share buttons -->
-          <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-4">
+             <!-- Mobile Show More Button -->
+             <button
+               onclick="toggleMobileSecondaryActions()"
+               class="lg:hidden w-full mt-4 py-2 px-4 text-sm text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+             >
+               <span id="show-more-text">Show sharing options</span>
+               <svg id="show-more-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+               </svg>
+             </button>
+           </div>
+
+                     <!-- Share buttons -->
+           <div class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-4">
             <h3 class="text-base font-semibold mb-3 text-gray-900">Share this event</h3>
             <div class="flex space-x-3">
               <a href={"https://twitter.com/intent/tweet?text=Check out #{@event.title}&url=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" class="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors duration-200">
@@ -1216,8 +1227,8 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
           </div>
 
-          <!-- Add to calendar -->
-          <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                     <!-- Add to calendar -->
+           <div class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
             <h3 class="text-base font-semibold mb-3 text-gray-900">Add to calendar</h3>
             <div class="flex flex-col space-y-2">
               <a href="#" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
@@ -1262,16 +1273,41 @@ defmodule EventasaurusWeb.PublicEventLive do
       />
     <% end %>
 
-    <script>
-      // Simple clipboard functionality
-      document.getElementById('copy-link-btn').addEventListener('click', function() {
-        const url = this.getAttribute('data-clipboard-text');
-        navigator.clipboard.writeText(url).then(function() {
-          alert('Link copied to clipboard!');
-        }).catch(function(err) {
-          console.error('Could not copy text: ', err);
-        });
-      });
+         <script>
+       // Simple clipboard functionality
+       document.getElementById('copy-link-btn').addEventListener('click', function() {
+         const url = this.getAttribute('data-clipboard-text');
+         navigator.clipboard.writeText(url).then(function() {
+           alert('Link copied to clipboard!');
+         }).catch(function(err) {
+           console.error('Could not copy text: ', err);
+         });
+       });
+
+       // Mobile secondary actions toggle
+       function toggleMobileSecondaryActions() {
+         const secondaryActions = document.querySelectorAll('.mobile-secondary-actions');
+         const showMoreText = document.getElementById('show-more-text');
+         const showMoreIcon = document.getElementById('show-more-icon');
+
+         const isVisible = secondaryActions[0] && secondaryActions[0].classList.contains('show');
+
+         secondaryActions.forEach(action => {
+           if (isVisible) {
+             action.classList.remove('show');
+           } else {
+             action.classList.add('show');
+           }
+         });
+
+         if (isVisible) {
+           showMoreText.textContent = 'Show sharing options';
+           showMoreIcon.style.transform = 'rotate(0deg)';
+         } else {
+           showMoreText.textContent = 'Hide sharing options';
+           showMoreIcon.style.transform = 'rotate(180deg)';
+         }
+       }
 
       // Theme switching functionality
       window.addEventListener("phx:switch-theme-css", (e) => {
