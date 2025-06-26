@@ -1022,7 +1022,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
           </div>
 
-          <!-- Participants section -->
+                    <!-- Participants section -->
           <%= if length(@participants) > 0 do %>
             <div class="border-t border-gray-200 pt-6 mt-6">
               <div class="flex items-center justify-between mb-4">
@@ -1031,24 +1031,50 @@ defmodule EventasaurusWeb.PublicEventLive do
                 </h3>
               </div>
 
-              <div class="space-y-3">
-                <%= for participant <- @participants do %>
-                  <div class="flex items-center space-x-3">
-                    <%= avatar_img_size(participant.user, :md, class: "border border-gray-200") %>
-                    <div>
-                      <div class="font-medium text-gray-900 text-sm"><%= participant.user.name %></div>
-                      <div class="text-xs text-gray-500">
-                        <%= case participant.status do %>
-                          <% :pending -> %>Registered
-                          <% :accepted -> %>Going
-                          <% :confirmed_with_order -> %>Going
-                          <% _ -> %>Registered
-                        <% end %>
-                      </div>
+                                          <!-- Stacked Avatars -->
+              <div class="flex items-center mb-3">
+                <%= for {participant, index} <- Enum.with_index(@participants) do %>
+                  <div class={[
+                    "relative group",
+                    if(index > 0, do: "-ml-2", else: "")
+                  ]} title={participant.user.name}>
+                    <%= avatar_img_size(participant.user, :md,
+                          class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
+                        ) %>
+
+                    <!-- Tooltip on hover -->
+                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                      <%= participant.user.name %>
+                      <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                     </div>
                   </div>
                 <% end %>
+
+                <%= if length(@participants) > 10 do %>
+                  <div class="relative ml-2 w-10 h-10 bg-gray-100 rounded-full border-2 border-white flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm">
+                    +<%= length(@participants) - 10 %>
+                  </div>
+                <% end %>
               </div>
+
+              <!-- Participant Names -->
+              <%= if length(@participants) > 0 do %>
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                  <%=
+                    # Randomly select 3 participants to show by name
+                    shown_participants = @participants |> Enum.take_random(min(3, length(@participants)))
+                    remaining_count = length(@participants) - length(shown_participants)
+
+                    names = shown_participants |> Enum.map(& &1.user.name) |> Enum.join(", ")
+
+                    if remaining_count > 0 do
+                      names <> " and #{remaining_count} others"
+                    else
+                      names
+                    end
+                  %>
+                </div>
+              <% end %>
             </div>
           <% end %>
         </div>
