@@ -131,34 +131,34 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
   def render(assigns) do
     ~H"""
-    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" phx-click="close" phx-target={@myself}>
-      <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" phx-click="stop_propagation" phx-target={@myself}>
+    <div class="fixed inset-0 bg-gray-900 bg-opacity-75 overflow-y-auto h-full w-full z-50" phx-click="close" phx-target={@myself}>
+      <div class="relative top-20 mx-auto p-5 border border-gray-200 dark:border-gray-700 w-96 shadow-lg rounded-md bg-white dark:bg-gray-800" phx-click="stop_propagation" phx-target={@myself}>
         <div class="mt-3">
-          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
-            <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-600">
+            <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
           </div>
 
-          <h3 class="text-lg font-medium text-gray-900 text-center mt-4">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white text-center mt-4">
             Save Your Votes
           </h3>
 
           <!-- Vote Summary -->
-          <div class="mt-4 p-3 bg-gray-50 rounded-lg">
-            <h4 class="text-sm font-medium text-gray-900 mb-2">Your votes:</h4>
+          <div class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+            <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Your votes:</h4>
             <%= for {option_id, vote_type} <- @temp_votes do %>
               <% option = Enum.find(@date_options, &(&1.id == option_id)) %>
               <%= if option do %>
                 <div class="flex justify-between items-center text-sm py-1">
-                  <span class="text-gray-700">
+                  <span class="text-gray-700 dark:text-gray-300">
                     <%= Calendar.strftime(option.date, "%b %d") %>
                   </span>
                   <span class={"font-medium " <>
                     case vote_type do
-                      :yes -> "text-green-700"
-                      :if_need_be -> "text-yellow-700"
-                      :no -> "text-red-700"
+                      :yes -> "text-green-600 dark:text-green-400"
+                      :if_need_be -> "text-yellow-600 dark:text-yellow-400"
+                      :no -> "text-red-600 dark:text-red-400"
                     end
                   }>
                     <%= case vote_type do
@@ -172,13 +172,13 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
             <% end %>
           </div>
 
-          <p class="text-sm text-gray-500 text-center mt-4">
+          <p class="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
             Enter your details to save these votes. You'll receive a magic link via email to create your account.
           </p>
 
           <form phx-submit="submit" phx-target={@myself} class="mt-4">
             <div class="mb-4">
-              <label for="voter_name" class="block text-sm font-medium text-gray-700">Name</label>
+              <label for="voter_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
               <input
                 type="text"
                 name="voter[name]"
@@ -187,13 +187,13 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
                 phx-change="validate"
                 phx-target={@myself}
                 required
-                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                class="mt-1 block w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="Your full name"
               />
             </div>
 
             <div class="mb-4">
-              <label for="voter_email" class="block text-sm font-medium text-gray-700">Email</label>
+              <label for="voter_email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
               <input
                 type="email"
                 name="voter[email]"
@@ -202,13 +202,13 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
                 phx-change="validate"
                 phx-target={@myself}
                 required
-                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                class="mt-1 block w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="your@email.com"
               />
             </div>
 
             <%= if @errors != [] do %>
-              <div class="mb-4 text-red-600 text-sm">
+              <div class="mb-4 text-red-600 dark:text-red-400 text-sm">
                 <%= for error <- @errors do %>
                   <p><%= error %></p>
                 <% end %>
@@ -220,7 +220,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
                 type="button"
                 phx-click="close"
                 phx-target={@myself}
-                class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded"
+                class="flex-1 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded transition-colors"
                 disabled={@loading}
               >
                 Cancel
@@ -228,7 +228,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
               <button
                 type="submit"
-                class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded disabled:opacity-50"
+                class="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium py-2 px-4 rounded disabled:opacity-50 transition-colors"
                 disabled={@loading}
               >
                 <%= if @loading, do: "Saving...", else: "Save All Votes" %>
