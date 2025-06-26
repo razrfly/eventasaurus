@@ -42,7 +42,7 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
           <.input field={f[:password]} type="password" label="Password" required />
 
           <:actions :let={f}>
-            <.input field={f[:remember_me]} type="checkbox" label="Keep me logged in" />
+            <.input field={f[:remember_me]} type="checkbox" label="Keep me logged in" checked={true} />
             <.link href={~p"/auth/forgot-password"} class="text-sm font-semibold">
               Forgot your password?
             </.link>

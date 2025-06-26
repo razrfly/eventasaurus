@@ -7,8 +7,12 @@ defmodule EventasaurusWeb.Endpoint do
   @session_options [
     store: :cookie,
     key: "_eventasaurus_key",
-    signing_salt: "xixtRlae",
-    same_site: "Lax"
+    signing_salt: "ouM7Fmf1",
+    # Configure session for persistent login support
+    max_age: 30 * 24 * 60 * 60,  # 30 days default (can be overridden per session)
+    same_site: "Lax",             # Better security for modern browsers (CSRF protection)
+    secure: Application.compile_env(:eventasaurus, :environment) == :prod,  # HTTPS only in production
+    http_only: true               # Prevent XSS attacks by blocking JavaScript access
   ]
 
   socket "/live", Phoenix.LiveView.Socket,
