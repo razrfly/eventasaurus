@@ -1064,7 +1064,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
                                           <!-- Stacked Avatars -->
               <div class="flex items-center mb-3">
-                <%# Show only the first 10 valid participants %>
+                <%!-- Show only the first 10 valid participants --%>
                 <%= for {participant, index} <- Enum.with_index(displayed_avatars) do %>
                   <div class={[
                     "relative group",
@@ -1089,7 +1089,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                   </div>
                 <% end %>
 
-                <%# Show overflow indicator only if there are more valid participants than displayed %>
+                <%!-- Show overflow indicator only if there are more valid participants than displayed --%>
                 <%= if remaining_count > 0 do %>
                   <div class="relative -ml-2 w-10 h-10 bg-gray-100 rounded-full border-2 border-white flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm">
                     +<%= remaining_count %>
