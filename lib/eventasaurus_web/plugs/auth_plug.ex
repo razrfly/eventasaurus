@@ -158,21 +158,35 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   @doc """
-  Redirects authenticated users away from authentication pages,
-  except during password recovery flow.
+  Redirects authenticated users away from auth pages, but allows password recovery.
 
-  Useful for login/register pages that shouldn't be accessible to already
-  authenticated users, but allows password recovery flow to continue.
+  This plug redirects authenticated users who try to access authentication pages
+  (like login, register) back to the dashboard, except when they are in a
+  password recovery session where they need to reset their password.
 
   ## Usage
 
       plug :redirect_if_user_is_authenticated_except_recovery
   """
   def redirect_if_user_is_authenticated_except_recovery(conn, _opts) do
-    if conn.assigns[:auth_user] && !is_password_recovery_session?(conn) do
-      conn
-      |> redirect(to: ~p"/dashboard")
-      |> halt()
+    if conn.assigns[:auth_user] do
+      if is_password_recovery_session?(conn) do
+        # User is in password recovery - allow access to reset password page only
+        if conn.request_path == "/auth/reset-password" do
+          conn
+        else
+          # Redirect to reset password if they're trying to go elsewhere during recovery
+          conn
+          |> put_flash(:info, "Please complete your password reset first.")
+          |> redirect(to: ~p"/auth/reset-password")
+          |> halt()
+        end
+      else
+        # Normal authenticated user - redirect away from auth pages
+        conn
+        |> redirect(to: ~p"/dashboard")
+        |> halt()
+      end
     else
       conn
     end
@@ -296,15 +310,10 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   # Helper function to detect password recovery sessions
   defp is_password_recovery_session?(conn) do
-    # Check for recovery state in session
+    # Check for recovery state in session (set by callback)
     recovery_state = get_session(conn, :password_recovery)
 
-    # Also check for recovery tokens or parameters that indicate password recovery
-    recovery_token = conn.params["token"] || get_session(conn, :recovery_token)
-
-    # Check if we're on a password recovery related path
-    recovery_path = conn.request_path =~ ~r/reset-password|password-recovery/
-
-    recovery_state == true || recovery_token != nil || recovery_path
+    # Only allow recovery if explicitly set in session and user is authenticated
+    recovery_state == true && conn.assigns[:auth_user] != nil
   end
 end

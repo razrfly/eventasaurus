@@ -328,6 +328,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   # Fallback for old format (backward compatibility)
   def update_password(conn, %{"token" => token, "password" => password}) do
-    update_password(conn, %{"user" => %{"password" => password, "password_confirmation" => password}, "token" => token})
+    require Logger
+    Logger.warning("Deprecated password reset format used. Please include password_confirmation in requests.")
+
+    # For backward compatibility, use password as confirmation if not provided
+    update_password(conn, %{
+      "user" => %{
+        "password" => password,
+        "password_confirmation" => password
+      },
+      "token" => token
+    })
   end
 end
