@@ -452,4 +452,25 @@ body[class*="theme-"] .theme-card:hover {
    THEME BASE ARCHITECTURE
    ============================================================================ */
 
+/* ============================================================================
+   MOBILE SECONDARY ACTIONS TOGGLE
+   ============================================================================ */
+
+/* Mobile secondary actions visibility control */
+@media (max-width: 1023px) {
+  .mobile-secondary-actions {
+    display: none !important;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .mobile-secondary-actions.show {
+    display: block !important;
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
 /* Custom CSS can go here */ 
