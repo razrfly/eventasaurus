@@ -78,7 +78,15 @@ defmodule EventasaurusWeb.Router do
     post "/forgot-password", Auth.AuthController, :request_password_reset
     get "/reset-password", Auth.AuthController, :reset_password
     post "/reset-password", Auth.AuthController, :update_password
+  end
+
+  # Auth callback and logout routes (no redirect needed - these need to work for all users)
+  scope "/auth", EventasaurusWeb do
+    pipe_through :browser
+
     get "/callback", Auth.AuthController, :callback
+    post "/callback", Auth.AuthController, :callback
+    get "/logout", Auth.AuthController, :logout
     post "/logout", Auth.AuthController, :logout
   end
 
