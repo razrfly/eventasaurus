@@ -8,6 +8,53 @@ import topbar from "../vendor/topbar";
 import SupabaseImageUpload from "./supabase_upload";
 let Hooks = {};
 
+// SupabaseAuthHandler hook to handle auth tokens from URL fragments
+Hooks.SupabaseAuthHandler = {
+  mounted() {
+    this.handleAuthTokens();
+  },
+
+  handleAuthTokens() {
+    // Check for auth tokens in URL fragment (Supabase sends tokens this way)
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      // Parse the URL fragment
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const tokenType = params.get('type');
+      const error = params.get('error');
+      const errorDescription = params.get('error_description');
+
+      if (error) {
+        // Handle auth errors
+        console.error('Auth error:', error, errorDescription);
+        window.location.href = `/auth/callback?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription || '')}`;
+      } else if (accessToken) {
+        // Build callback URL with tokens
+        let callbackUrl = '/auth/callback?access_token=' + encodeURIComponent(accessToken);
+        
+        if (refreshToken) {
+          callbackUrl += '&refresh_token=' + encodeURIComponent(refreshToken);
+        }
+        
+        if (tokenType) {
+          callbackUrl += '&type=' + encodeURIComponent(tokenType);
+        }
+
+        // Clear the fragment from URL and redirect to callback
+        if (history.replaceState) {
+          const url = window.location.href.split('#')[0];
+          history.replaceState(null, '', url);
+        }
+        
+        // Redirect to auth callback to process tokens
+        window.location.href = callbackUrl;
+      }
+    }
+  }
+};
+
 // SetupPathSelector hook to sync radio button states
 Hooks.SetupPathSelector = {
   mounted() {

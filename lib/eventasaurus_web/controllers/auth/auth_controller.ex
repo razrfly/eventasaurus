@@ -186,35 +186,6 @@ defmodule EventasaurusWeb.Auth.AuthController do
   end
 
   @doc """
-  Show the reset password form.
-  """
-  def reset_password(conn, %{"token" => token}) do
-    render(conn, :reset_password, token: token)
-  end
-
-  @doc """
-  Process the reset password form submission.
-  """
-  def update_password(conn, %{"token" => token, "password" => password}) do
-    case Auth.update_user_password(token, password) do
-      {:ok, _} ->
-        conn
-        |> put_flash(:info, "Password updated successfully!")
-        |> redirect(to: ~p"/auth/login")
-
-      {:error, %{"message" => message}} ->
-        conn
-        |> put_flash(:error, message)
-        |> render(:reset_password, token: token)
-
-      {:error, _} ->
-        conn
-        |> put_flash(:error, "Unable to update password")
-        |> render(:reset_password, token: token)
-    end
-  end
-
-  @doc """
   Handle callback routes for authentication flows, such as OAuth or email confirmations.
   """
   def callback(conn, params) do
@@ -222,6 +193,23 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.info("Auth callback received: #{inspect(params)}")
 
     case params do
+      %{"access_token" => access_token, "refresh_token" => refresh_token, "type" => "recovery"} ->
+        Logger.info("Password recovery callback with tokens - setting recovery session")
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_session(:refresh_token, refresh_token)
+        |> put_session(:password_recovery, true)
+        |> put_flash(:info, "Please set your new password below.")
+        |> redirect(to: ~p"/auth/reset-password")
+
+      %{"access_token" => access_token, "type" => "recovery"} ->
+        Logger.info("Password recovery callback with access token - setting recovery session")
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_session(:password_recovery, true)
+        |> put_flash(:info, "Please set your new password below.")
+        |> redirect(to: ~p"/auth/reset-password")
+
       %{"access_token" => access_token, "refresh_token" => refresh_token} ->
         Logger.info("Callback with tokens - storing session")
         conn
@@ -256,5 +244,90 @@ defmodule EventasaurusWeb.Auth.AuthController do
         |> put_flash(:info, "Email confirmed! Please sign in.")
         |> redirect(to: ~p"/auth/login")
     end
+  end
+
+  @doc """
+  Show the reset password form.
+  """
+  def reset_password(conn, params) do
+    # Handle both token-based and session-based password recovery
+    cond do
+      # Token from URL parameter (legacy support)
+      Map.has_key?(params, "token") ->
+        render(conn, :reset_password, token: params["token"])
+
+      # Recovery session with authenticated user
+      conn.assigns[:auth_user] && get_session(conn, :password_recovery) ->
+        render(conn, :reset_password, token: nil)
+
+      # No recovery context - redirect to forgot password
+      true ->
+        conn
+        |> put_flash(:error, "Invalid or expired password reset link. Please request a new one.")
+        |> redirect(to: ~p"/auth/forgot-password")
+    end
+  end
+
+  @doc """
+  Process the reset password form submission.
+  """
+  def update_password(conn, %{"user" => %{"password" => password, "password_confirmation" => password_confirmation}} = params) do
+    if password != password_confirmation do
+      conn
+      |> put_flash(:error, "Passwords do not match.")
+      |> render(:reset_password, token: params["token"])
+    else
+      cond do
+        # Token-based password reset (legacy)
+        Map.has_key?(params, "token") && params["token"] ->
+          case Auth.update_user_password(params["token"], password) do
+            {:ok, _} ->
+              conn
+              |> put_flash(:info, "Password updated successfully!")
+              |> redirect(to: ~p"/auth/login")
+
+            {:error, %{"message" => message}} ->
+              conn
+              |> put_flash(:error, message)
+              |> render(:reset_password, token: params["token"])
+
+            {:error, _} ->
+              conn
+              |> put_flash(:error, "Unable to update password")
+              |> render(:reset_password, token: params["token"])
+          end
+
+        # Session-based password recovery (new flow)
+        conn.assigns[:auth_user] && get_session(conn, :password_recovery) ->
+          case Auth.update_current_user_password(conn, password) do
+            {:ok, _} ->
+              conn
+              |> delete_session(:password_recovery)
+              |> put_flash(:info, "Password updated successfully! You are now logged in.")
+              |> redirect(to: ~p"/dashboard")
+
+            {:error, %{"message" => message}} ->
+              conn
+              |> put_flash(:error, message)
+              |> render(:reset_password, token: nil)
+
+            {:error, _} ->
+              conn
+              |> put_flash(:error, "Unable to update password")
+              |> render(:reset_password, token: nil)
+          end
+
+        # No valid context
+        true ->
+          conn
+          |> put_flash(:error, "Invalid password reset session. Please request a new password reset.")
+          |> redirect(to: ~p"/auth/forgot-password")
+      end
+    end
+  end
+
+  # Fallback for old format (backward compatibility)
+  def update_password(conn, %{"token" => token, "password" => password}) do
+    update_password(conn, %{"user" => %{"password" => password, "password_confirmation" => password}, "token" => token})
   end
 end

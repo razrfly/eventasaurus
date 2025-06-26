@@ -5,8 +5,8 @@ defmodule EventasaurusApp.Auth do
   and retrieve the current user.
   """
 
+  import Plug.Conn
   alias EventasaurusApp.Auth.{AuthHelper, Client}
-  alias Plug.Conn
 
   @doc """
   Registers a new user with email, password, and name.
@@ -41,7 +41,7 @@ defmodule EventasaurusApp.Auth do
 
     if token do
       conn = conn
-      |> Conn.put_session(:access_token, token)
+      |> put_session(:access_token, token)
       |> maybe_put_refresh_token(refresh_token)
       |> configure_session_duration(remember_me)
 
@@ -55,7 +55,7 @@ defmodule EventasaurusApp.Auth do
   Clears all session data.
   """
   def clear_session(conn) do
-    Conn.configure_session(conn, drop: true)
+    configure_session(conn, drop: true)
   end
 
   @doc """
@@ -64,7 +64,7 @@ defmodule EventasaurusApp.Auth do
   Returns user data or nil if not authenticated.
   """
   def get_current_user(conn) do
-    case Conn.get_session(conn, :access_token) do
+    case get_session(conn, :access_token) do
       nil -> nil
       token ->
         case AuthHelper.get_current_user(token) do
@@ -95,9 +95,27 @@ defmodule EventasaurusApp.Auth do
   end
 
   @doc """
+  Updates the current authenticated user's password.
+
+  This function is used during password recovery when the user is temporarily
+  authenticated via a recovery token.
+
+  Returns `{:ok, result}` on success or `{:error, reason}` on failure.
+  """
+  def update_current_user_password(conn, new_password) do
+    access_token = get_session(conn, :access_token)
+
+    if access_token do
+      Client.update_user_password(access_token, new_password)
+    else
+      {:error, "No authentication token found"}
+    end
+  end
+
+  @doc """
   Resets a password using a reset token.
 
-  Returns `{:ok, _}` on success or `{:error, reason}` on failure.
+  Returns `{:ok, result}` on success or `{:error, reason}` on failure.
   """
   def reset_password(token, new_password) do
     Client.update_password(token, new_password)
@@ -163,7 +181,7 @@ defmodule EventasaurusApp.Auth do
   # Helper function to store refresh token if available
   defp maybe_put_refresh_token(conn, nil), do: conn
   defp maybe_put_refresh_token(conn, refresh_token) do
-    Conn.put_session(conn, :refresh_token, refresh_token)
+    put_session(conn, :refresh_token, refresh_token)
   end
 
   # Helper function to configure session duration based on remember_me preference
@@ -171,10 +189,10 @@ defmodule EventasaurusApp.Auth do
     if remember_me do
       # Remember me: persistent session for 30 days
       max_age = 30 * 24 * 60 * 60  # 30 days in seconds
-      Conn.configure_session(conn, max_age: max_age, renew: true)
+      configure_session(conn, max_age: max_age, renew: true)
     else
       # Don't remember: session cookie (expires when browser closes)
-      Conn.configure_session(conn, max_age: nil, renew: true)
+      configure_session(conn, max_age: nil, renew: true)
     end
   end
 end

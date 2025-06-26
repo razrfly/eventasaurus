@@ -133,6 +133,52 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   @doc """
+  Detects password recovery flow and handles appropriate redirects.
+
+  This plug checks if the user is in a password recovery session and redirects
+  them to the password reset form if needed. This handles the case where users
+  click a password reset link from their email.
+
+  ## Usage
+
+      plug :handle_password_recovery
+  """
+  def handle_password_recovery(conn, _opts) do
+    # Check if user is authenticated and in password recovery state
+    if conn.assigns[:auth_user] && is_password_recovery_session?(conn) do
+      # User is logged in temporarily for password recovery
+      # Redirect them to the reset password form
+      conn
+      |> put_flash(:info, "Please set your new password below.")
+      |> redirect(to: ~p"/auth/reset-password")
+      |> halt()
+    else
+      conn
+    end
+  end
+
+  @doc """
+  Redirects authenticated users away from authentication pages,
+  except during password recovery flow.
+
+  Useful for login/register pages that shouldn't be accessible to already
+  authenticated users, but allows password recovery flow to continue.
+
+  ## Usage
+
+      plug :redirect_if_user_is_authenticated_except_recovery
+  """
+  def redirect_if_user_is_authenticated_except_recovery(conn, _opts) do
+    if conn.assigns[:auth_user] && !is_password_recovery_session?(conn) do
+      conn
+      |> redirect(to: ~p"/dashboard")
+      |> halt()
+    else
+      conn
+    end
+  end
+
+  @doc """
   Attempts to refresh the access token if it's near expiration.
 
   Returns the updated connection with new tokens if refreshed,
@@ -247,4 +293,18 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     EventasaurusApp.Accounts.find_or_create_from_supabase(supabase_user)
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
+
+  # Helper function to detect password recovery sessions
+  defp is_password_recovery_session?(conn) do
+    # Check for recovery state in session
+    recovery_state = get_session(conn, :password_recovery)
+
+    # Also check for recovery tokens or parameters that indicate password recovery
+    recovery_token = conn.params["token"] || get_session(conn, :recovery_token)
+
+    # Check if we're on a password recovery related path
+    recovery_path = conn.request_path =~ ~r/reset-password|password-recovery/
+
+    recovery_state == true || recovery_token != nil || recovery_path
+  end
 end

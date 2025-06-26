@@ -177,6 +177,18 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Update the current user's password using their access token.
+
+  This is an alias for update_password/2 but with clearer naming for
+  password recovery flows where the user is temporarily authenticated.
+
+  Returns {:ok, %{}} on success or {:error, reason} on failure.
+  """
+  def update_user_password(access_token, new_password) do
+    update_password(access_token, new_password)
+  end
+
+  @doc """
   Refresh an expired access token using a refresh token.
 
   Returns {:ok, tokens} on success or {:error, reason} on failure.
