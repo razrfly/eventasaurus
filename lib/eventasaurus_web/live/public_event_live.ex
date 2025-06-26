@@ -715,14 +715,16 @@ defmodule EventasaurusWeb.PublicEventLive do
               <% end %>
 
               <!-- When Section -->
-              <div class="mb-4">
+              <div class="mb-3">
                 <h3 class="font-semibold text-gray-900 mb-1">When</h3>
-                <div class="text-lg text-gray-700 font-medium">
-                  <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%A, %B %d · %I:%M %p") |> String.replace(" 0", " ") %>
+                <div class="text-gray-700">
+                  <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%a, %b %d") %>
                   <%= if @event.ends_at do %>
-                    - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
+                    · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %> - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
+                  <% else %>
+                    · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
                   <% end %>
-                  <span class="text-gray-500 ml-1"><%= @event.timezone %></span>
+                  <span class="text-gray-500"><%= @event.timezone %></span>
                 </div>
               </div>
 
@@ -743,14 +745,10 @@ defmodule EventasaurusWeb.PublicEventLive do
                 <div>
                   <h3 class="font-semibold text-gray-900 mb-1">Where</h3>
                   <%= if @event.venue_id == nil do %>
-                    <p class="text-gray-700 font-medium">Virtual Event</p>
+                    <p class="text-gray-700">Virtual Event</p>
                   <% else %>
                     <%= if @venue do %>
-                      <p class="text-gray-700 font-medium"><%= @venue.name %></p>
-                      <p class="text-gray-600 text-sm">
-                        <%= @venue.address %><br>
-                        <%= @venue.city %><%= if @venue.state && @venue.state != "", do: ", #{@venue.state}" %>
-                      </p>
+                      <p class="text-gray-700"><%= @venue.address %></p>
                     <% else %>
                       <p class="text-gray-600">Location details not available</p>
                     <% end %>
@@ -786,8 +784,8 @@ defmodule EventasaurusWeb.PublicEventLive do
            <%= if @event.status == :polling and not is_nil(@date_poll) and @date_options != [] do %>
              <div class="mobile-voting-simplified bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm" data-testid="voting-interface">
               <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
@@ -1094,8 +1092,8 @@ defmodule EventasaurusWeb.PublicEventLive do
                     <div class="border-t border-gray-200 pt-4 mt-4 mb-4">
                       <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
                         <div class="flex items-center justify-center mb-2">
-                          <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
                           </div>
@@ -1194,10 +1192,13 @@ defmodule EventasaurusWeb.PublicEventLive do
                </div>
              <% end %>
 
-             <!-- Mobile Show More Button -->
-             <button
-               onclick="toggleMobileSecondaryActions()"
-               class="lg:hidden w-full mt-4 py-2 px-4 text-sm text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                          <!-- Mobile Show More Button -->
+                          <button
+               id="mobile-toggle-btn"
+               class="lg:hidden w-full mt-2 py-2 px-4 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 border border-gray-200"
+               aria-expanded="false"
+               aria-controls="mobile-secondary-actions"
+               aria-label="Toggle sharing and calendar options"
              >
                <span id="show-more-text">Show sharing options</span>
                <svg id="show-more-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1207,7 +1208,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            </div>
 
                      <!-- Share buttons -->
-           <div class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-4">
+           <div id="mobile-secondary-actions" class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-4">
             <h3 class="text-base font-semibold mb-3 text-gray-900">Share this event</h3>
             <div class="flex space-x-3">
               <a href={"https://twitter.com/intent/tweet?text=Check out #{@event.title}&url=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" class="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors duration-200">
@@ -1284,30 +1285,40 @@ defmodule EventasaurusWeb.PublicEventLive do
          });
        });
 
-       // Mobile secondary actions toggle
-       function toggleMobileSecondaryActions() {
-         const secondaryActions = document.querySelectorAll('.mobile-secondary-actions');
-         const showMoreText = document.getElementById('show-more-text');
-         const showMoreIcon = document.getElementById('show-more-icon');
+              // Mobile secondary actions toggle
+       document.addEventListener('DOMContentLoaded', function() {
+         const toggleBtn = document.getElementById('mobile-toggle-btn');
 
-         const isVisible = secondaryActions[0] && secondaryActions[0].classList.contains('show');
+         if (toggleBtn) {
+           toggleBtn.addEventListener('click', function() {
+             const secondaryActions = document.querySelectorAll('.mobile-secondary-actions');
+             const showMoreText = document.getElementById('show-more-text');
+             const showMoreIcon = document.getElementById('show-more-icon');
 
-         secondaryActions.forEach(action => {
-           if (isVisible) {
-             action.classList.remove('show');
-           } else {
-             action.classList.add('show');
-           }
-         });
+             // Check if all required elements exist
+             if (!secondaryActions.length || !showMoreText || !showMoreIcon) {
+               console.warn('Mobile toggle: Missing required DOM elements');
+               return;
+             }
 
-         if (isVisible) {
-           showMoreText.textContent = 'Show sharing options';
-           showMoreIcon.style.transform = 'rotate(0deg)';
-         } else {
-           showMoreText.textContent = 'Hide sharing options';
-           showMoreIcon.style.transform = 'rotate(180deg)';
+             const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+
+             // Toggle visibility with proper animation
+             secondaryActions.forEach(action => {
+               if (isExpanded) {
+                 action.classList.remove('show');
+               } else {
+                 action.classList.add('show');
+               }
+             });
+
+             // Update accessibility attributes and UI
+             toggleBtn.setAttribute('aria-expanded', !isExpanded);
+             showMoreText.textContent = isExpanded ? 'Show sharing options' : 'Hide sharing options';
+             showMoreIcon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
+           });
          }
-       }
+       });
 
       // Theme switching functionality
       window.addEventListener("phx:switch-theme-css", (e) => {
