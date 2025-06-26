@@ -166,18 +166,23 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Handle password reset requests.
   """
-  def request_password_reset(conn, %{"email" => email}) do
+  def request_password_reset(conn, %{"user" => %{"email" => email}}) do
     case Auth.request_password_reset(email) do
       {:ok, _} ->
         conn
         |> put_flash(:info, "If your email exists in our system, you will receive password reset instructions shortly.")
-        |> redirect(to: ~p"/login")
+        |> redirect(to: ~p"/auth/login")
 
       {:error, _reason} ->
         conn
         |> put_flash(:error, "There was an error processing your request. Please try again.")
-        |> redirect(to: ~p"/forgot-password")
+        |> redirect(to: ~p"/auth/forgot-password")
     end
+  end
+
+  # Fallback for direct email parameter (backward compatibility)
+  def request_password_reset(conn, %{"email" => email}) do
+    request_password_reset(conn, %{"user" => %{"email" => email}})
   end
 
   @doc """
