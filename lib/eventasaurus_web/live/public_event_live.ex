@@ -1043,55 +1043,64 @@ defmodule EventasaurusWeb.PublicEventLive do
           </div>
 
                     <!-- Participants section -->
-          <%= if length(@participants) > 0 do %>
+          <%
+            # Filter valid participants once for consistency across all UI elements
+            valid_participants = Enum.filter(@participants, fn participant ->
+              participant.user && participant.user.name
+            end)
+          %>
+          <%= if length(valid_participants) > 0 do %>
             <div class="border-t border-gray-200 pt-6 mt-6">
+              <%
+                displayed_avatars = Enum.take(valid_participants, 10)
+                remaining_count = length(valid_participants) - length(displayed_avatars)
+              %>
+
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900">
-                  <%= length(@participants) %> Going
+                  <%= length(valid_participants) %> Going
                 </h3>
               </div>
 
                                           <!-- Stacked Avatars -->
               <div class="flex items-center mb-3">
-                <%# Show only the first 10 participants %>
-                <%= for {participant, index} <- Enum.with_index(Enum.take(@participants, 10)) do %>
-                  <%= if participant.user && participant.user.name do %>
-                    <div class={[
-                      "relative group",
-                      if(index > 0, do: "-ml-2", else: "")
-                    ]}
-                      role="img"
-                      aria-label={participant.user.name}
-                      aria-describedby={"tooltip-#{participant.id}"}
-                      tabindex="0">
-                      <%= avatar_img_size(participant.user, :md,
-                            class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
-                          ) %>
+                <%# Show only the first 10 valid participants %>
+                <%= for {participant, index} <- Enum.with_index(displayed_avatars) do %>
+                  <div class={[
+                    "relative group",
+                    if(index > 0, do: "-ml-2", else: "")
+                  ]}
+                    role="img"
+                    aria-label={participant.user.name}
+                    aria-describedby={"tooltip-#{participant.id}"}
+                    tabindex="0">
+                    <%= avatar_img_size(participant.user, :md,
+                          class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
+                        ) %>
 
-                      <!-- Tooltip on hover -->
-                      <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
-                           role="tooltip"
-                           id={"tooltip-#{participant.id}"}
-                           aria-hidden="true">
-                        <%= participant.user.name %>
-                        <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                      </div>
+                    <!-- Tooltip on hover -->
+                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
+                         role="tooltip"
+                         id={"tooltip-#{participant.id}"}
+                         aria-hidden="true">
+                      <%= participant.user.name %>
+                      <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                     </div>
-                  <% end %>
+                  </div>
                 <% end %>
 
-                <%# Show overflow indicator only if there are more than 10 participants %>
-                <%= if length(@participants) > 10 do %>
+                <%# Show overflow indicator only if there are more valid participants than displayed %>
+                <%= if remaining_count > 0 do %>
                   <div class="relative -ml-2 w-10 h-10 bg-gray-100 rounded-full border-2 border-white flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm">
-                    +<%= length(@participants) - 10 %>
+                    +<%= remaining_count %>
                   </div>
                 <% end %>
               </div>
 
               <!-- Participant Names -->
-              <%= if length(@participants) > 0 do %>
+              <%= if length(valid_participants) > 0 do %>
                 <div class="text-sm text-gray-600 dark:text-gray-400">
-                  <%= format_participant_summary(@participants) %>
+                  <%= format_participant_summary(valid_participants) %>
                 </div>
               <% end %>
             </div>
