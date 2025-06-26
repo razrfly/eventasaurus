@@ -107,6 +107,11 @@ defmodule EventasaurusWeb.Router do
     pipe_through [:browser, :authenticated]
 
     get "/dashboard", DashboardController, :index
+    get "/settings", SettingsController, :index
+    get "/settings/account", SettingsController, :account
+    get "/settings/payments", SettingsController, :payments
+    post "/settings/account", SettingsController, :update_account
+    post "/settings/password", SettingsController, :update_password
   end
 
   # Protected LiveView routes that require authentication
