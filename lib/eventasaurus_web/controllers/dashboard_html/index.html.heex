@@ -3,89 +3,32 @@
     <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
     
     <div class="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded">
-      <div class="flex items-center gap-4">
-        <%= avatar_img_size(@user, :lg, class: "border-2 border-green-400") %>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <%= avatar_img_size(@user, :lg, class: "border-2 border-green-400") %>
+          <div>
+            <p class="font-semibold">You are logged in successfully!</p>
+            <p class="mt-1">
+              <strong>Email:</strong> <%= @user.email %>
+            </p>
+            <p class="mt-1">
+              <strong>Name:</strong> <%= @user.name || "Not provided" %>
+            </p>
+          </div>
+        </div>
         <div>
-          <p class="font-semibold">You are logged in successfully!</p>
-          <p class="mt-1">
-            <strong>Email:</strong> <%= @user.email %>
-          </p>
-          <p class="mt-1">
-            <strong>Name:</strong> <%= @user.name || "Not provided" %>
-          </p>
+          <a href="/settings" class="inline-flex items-center px-3 py-2 border border-green-300 shadow-sm text-sm leading-4 font-medium rounded-md text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            Settings
+          </a>
         </div>
       </div>
     </div>
 
-    <!-- Payment Settings Section -->
-    <div class="mt-8">
-      <div class="bg-white border border-gray-200 rounded-lg p-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-xl font-semibold text-gray-900">Payment Settings</h2>
-            <p class="mt-1 text-sm text-gray-600">Manage your Stripe Connect account to receive payments for paid events</p>
-          </div>
-          <div class="flex items-center">
-            <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
-            </svg>
-          </div>
-        </div>
-        
-        <%= if EventasaurusApp.Stripe.user_has_stripe_account?(@user) do %>
-          <!-- Connected State -->
-          <div class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <svg class="w-5 h-5 text-green-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-              </div>
-              <div class="ml-3 flex-1">
-                <h3 class="text-sm font-medium text-green-800">Stripe Account Connected</h3>
-                <p class="mt-1 text-sm text-green-700">You can now receive payments for your paid events.</p>
-                <div class="mt-3 flex space-x-3">
-                  <a href="/stripe/status" class="inline-flex items-center px-3 py-2 border border-green-300 shadow-sm text-sm leading-4 font-medium rounded-md text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                    View Details
-                  </a>
-                  <.form for={%{}} action="/stripe/disconnect" method="post" data-confirm="Are you sure you want to disconnect your Stripe account? You won't be able to receive payments until you reconnect.">
-                    <button type="submit" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                      Disconnect
-                    </button>
-                  </.form>
-                </div>
-              </div>
-            </div>
-          </div>
-        <% else %>
-          <!-- Not Connected State -->
-          <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-              </div>
-              <div class="ml-3 flex-1">
-                <h3 class="text-sm font-medium text-blue-800">Connect Stripe Account</h3>
-                <p class="mt-1 text-sm text-blue-700">Connect your Stripe account to receive payments for paid events directly.</p>
-                <div class="mt-3">
-                  <a href="/stripe/connect" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-                    </svg>
-                    Connect with Stripe
-                  </a>
-                </div>
-                <p class="mt-2 text-xs text-blue-600">
-                  ℹ️ Connecting with Stripe allows you to create paid events and receive payments directly to your bank account.
-                </p>
-              </div>
-            </div>
-          </div>
-        <% end %>
-      </div>
-    </div>
+
     
     <div class="mt-8">
       <h2 class="text-xl font-semibold mb-4">Your Events</h2>
