@@ -163,10 +163,14 @@ defmodule EventasaurusWeb.PublicEventLive do
       {:ok, user} ->
         case Events.one_click_register(socket.assigns.event, user) do
           {:ok, _participant} ->
+            # Reload participants to show updated count and list
+            updated_participants = Events.list_event_participants(socket.assigns.event)
+
             {:noreply,
              socket
              |> assign(:registration_status, :registered)
              |> assign(:just_registered, false)  # Existing users don't need email verification
+             |> assign(:participants, updated_participants)
              |> put_flash(:info, "You're now registered for #{socket.assigns.event.title}!")
             }
 
@@ -202,10 +206,14 @@ defmodule EventasaurusWeb.PublicEventLive do
       {:ok, user} ->
         case Events.cancel_user_registration(socket.assigns.event, user) do
           {:ok, _participant} ->
+            # Reload participants to show updated count and list
+            updated_participants = Events.list_event_participants(socket.assigns.event)
+
             {:noreply,
              socket
              |> assign(:registration_status, :cancelled)
              |> assign(:just_registered, false)
+             |> assign(:participants, updated_participants)
              |> put_flash(:info, "Your registration has been cancelled.")
             }
 
@@ -235,10 +243,14 @@ defmodule EventasaurusWeb.PublicEventLive do
       {:ok, user} ->
         case Events.reregister_user_for_event(socket.assigns.event, user) do
           {:ok, _participant} ->
+            # Reload participants to show updated count and list
+            updated_participants = Events.list_event_participants(socket.assigns.event)
+
             {:noreply,
              socket
              |> assign(:registration_status, :registered)
              |> assign(:just_registered, false)  # Existing users don't need email verification
+             |> assign(:participants, updated_participants)
              |> put_flash(:info, "Welcome back! You're now registered for #{socket.assigns.event.title}.")
             }
 
@@ -509,10 +521,18 @@ defmodule EventasaurusWeb.PublicEventLive do
     # Reload participants to show updated count
     updated_participants = Events.list_event_participants(socket.assigns.event)
 
+    # Only show email verification for truly new registrations
+    just_registered = case type do
+      :new_registration -> true
+      :existing_user_registered -> false
+      :registered -> true
+      :already_registered -> false
+    end
+
     {:noreply,
      socket
      |> put_flash(:info, message)
-     |> assign(:just_registered, true)
+     |> assign(:just_registered, just_registered)
      |> assign(:show_registration_modal, false)
      |> assign(:participants, updated_participants)}
   end
@@ -1033,25 +1053,36 @@ defmodule EventasaurusWeb.PublicEventLive do
 
                                           <!-- Stacked Avatars -->
               <div class="flex items-center mb-3">
-                <%= for {participant, index} <- Enum.with_index(@participants) do %>
-                  <div class={[
-                    "relative group",
-                    if(index > 0, do: "-ml-2", else: "")
-                  ]} title={participant.user.name}>
-                    <%= avatar_img_size(participant.user, :md,
-                          class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
-                        ) %>
+                <%# Show only the first 10 participants %>
+                <%= for {participant, index} <- Enum.with_index(Enum.take(@participants, 10)) do %>
+                  <%= if participant.user && participant.user.name do %>
+                    <div class={[
+                      "relative group",
+                      if(index > 0, do: "-ml-2", else: "")
+                    ]}
+                      role="img"
+                      aria-label={participant.user.name}
+                      aria-describedby={"tooltip-#{participant.id}"}
+                      tabindex="0">
+                      <%= avatar_img_size(participant.user, :md,
+                            class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
+                          ) %>
 
-                    <!-- Tooltip on hover -->
-                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      <%= participant.user.name %>
-                      <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                      <!-- Tooltip on hover -->
+                      <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
+                           role="tooltip"
+                           id={"tooltip-#{participant.id}"}
+                           aria-hidden="true">
+                        <%= participant.user.name %>
+                        <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                      </div>
                     </div>
-                  </div>
+                  <% end %>
                 <% end %>
 
+                <%# Show overflow indicator only if there are more than 10 participants %>
                 <%= if length(@participants) > 10 do %>
-                  <div class="relative ml-2 w-10 h-10 bg-gray-100 rounded-full border-2 border-white flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm">
+                  <div class="relative -ml-2 w-10 h-10 bg-gray-100 rounded-full border-2 border-white flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm">
                     +<%= length(@participants) - 10 %>
                   </div>
                 <% end %>
@@ -1060,19 +1091,7 @@ defmodule EventasaurusWeb.PublicEventLive do
               <!-- Participant Names -->
               <%= if length(@participants) > 0 do %>
                 <div class="text-sm text-gray-600 dark:text-gray-400">
-                  <%=
-                    # Randomly select 3 participants to show by name
-                    shown_participants = @participants |> Enum.take_random(min(3, length(@participants)))
-                    remaining_count = length(@participants) - length(shown_participants)
-
-                    names = shown_participants |> Enum.map(& &1.user.name) |> Enum.join(", ")
-
-                    if remaining_count > 0 do
-                      names <> " and #{remaining_count} others"
-                    else
-                      names
-                    end
-                  %>
+                  <%= format_participant_summary(@participants) %>
                 </div>
               <% end %>
             </div>
@@ -1474,5 +1493,30 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
+  # Helper function to format participant summary consistently
+  defp format_participant_summary(participants) when length(participants) <= 3 do
+    participants
+    |> Enum.filter(fn participant -> participant.user && participant.user.name end)
+    |> Enum.map(& &1.user.name)
+    |> Enum.join(", ")
+  end
+
+  defp format_participant_summary(participants) do
+    # Take first 3 for consistency instead of random selection
+    valid_participants = Enum.filter(participants, fn participant ->
+      participant.user && participant.user.name
+    end)
+
+    shown_participants = Enum.take(valid_participants, 3)
+    remaining_count = length(valid_participants) - 3
+
+    names = shown_participants |> Enum.map(& &1.user.name) |> Enum.join(", ")
+
+    if remaining_count > 0 do
+      "#{names} and #{remaining_count} others"
+    else
+      names
+    end
+  end
 
 end
