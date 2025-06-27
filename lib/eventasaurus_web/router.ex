@@ -3,6 +3,11 @@ defmodule EventasaurusWeb.Router do
 
   import EventasaurusWeb.Plugs.AuthPlug
 
+  # Development-only route for hot-reloading themes
+  if Mix.env() == :dev do
+    get "/themes/:theme_name", EventasaurusWeb.ThemeController, :show
+  end
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
