@@ -61,15 +61,14 @@
   opacity: 0.6;
   pointer-events: none;
   background-image: 
-    radial-gradient(circle at 15% 25%, transparent 8px, transparent 9px),
-    radial-gradient(circle at 35% 45%, transparent 8px, transparent 9px),
-    radial-gradient(circle at 55% 15%, transparent 8px, transparent 9px),
-    radial-gradient(circle at 75% 35%, transparent 8px, transparent 9px),
-    radial-gradient(circle at 85% 65%, transparent 8px, transparent 9px),
-    radial-gradient(circle at 25% 75%, transparent 8px, transparent 9px),
-    radial-gradient(circle at 45% 85%, transparent 8px, transparent 9px),
-    radial-gradient(circle at 65% 55%, transparent 8px, transparent 9px);
-  animation: dinosaurFloat 20s infinite linear;
+    url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23059669' fill-opacity='0.03'%3E%3Cpath d='M20 20c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10 0c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature::before {
+    animation: dinosaurFloat 20s infinite linear;
+  }
 }
 
 /* Individual dinosaur emojis with independent movements */
@@ -82,114 +81,216 @@
   z-index: -1;
   pointer-events: none;
   opacity: 0.7;
-  animation: dino1Float 45s infinite ease-in-out;
 }
 
-/* Create multiple floating dinosaurs */
-.theme-nature .main-content::before,
-.theme-nature .event-content::before,
-.theme-nature .dashboard-content::before {
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature::after {
+    animation: dino1Float 120s infinite ease-in-out;
+  }
+}
+
+/* Create multiple floating dinosaurs with unique positions */
+.theme-nature .main-content::before {
   content: '🦖';
   position: fixed;
-  top: 20%;
-  right: 15%;
+  top: 25%;
+  right: 20%;
   font-size: 5.04rem;
   z-index: -1;
   pointer-events: none;
   opacity: 0.6;
-  animation: dino2Float 50s infinite ease-in-out 3s;
 }
 
-.theme-nature .main-content::after,
-.theme-nature .event-content::after,
-.theme-nature .dashboard-content::after {
-  content: '🦕';
-  position: fixed;
-  bottom: 25%;
-  left: 25%;
-  font-size: 6.16rem;
-  z-index: -1;
-  pointer-events: none;
-  opacity: 0.65;
-  animation: dino3Float 48s infinite ease-in-out 4s;
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .main-content::before {
+    animation: dino2Float 120s infinite ease-in-out 15s;
+  }
 }
 
-/* Additional dinosaurs using body pseudo-elements */
-body.theme-nature::before {
+.theme-nature .event-content::before {
   content: '🦖';
   position: fixed;
-  top: 50%;
-  left: 50%;
-  font-size: 6.4rem;
-  z-index: -1;
-  pointer-events: none;
-  opacity: 0.55;
-  animation: dino4Float 22s infinite ease-in-out 1s;
-}
-
-body.theme-nature::after {
-  content: '🦕';
-  position: fixed;
-  bottom: 15%;
-  right: 25%;
-  font-size: 8.4rem;
+  top: 35%;
+  right: 10%;
+  font-size: 5.04rem;
   z-index: -1;
   pointer-events: none;
   opacity: 0.6;
-  animation: dino5Float 20s infinite ease-in-out 3s;
 }
 
-/* More dinosaurs using header pseudo-elements */
-.theme-nature header::before {
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .event-content::before {
+    animation: dino2Float 120s infinite ease-in-out 15s;
+  }
+}
+
+.theme-nature .dashboard-content::before {
   content: '🦖';
   position: fixed;
-  top: 75%;
-  left: 5%;
-  font-size: 4.76rem;
+  top: 45%;
+  right: 30%;
+  font-size: 5.04rem;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.58;
-  animation: dino6Float 58s infinite ease-in-out 2.5s;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .dashboard-content::before {
+    animation: dino2Float 120s infinite ease-in-out 15s;
+  }
+}
+
+.theme-nature .main-content::after {
+  content: '🦕';
+  position: fixed;
+  bottom: 30%;
+  left: 20%;
+  font-size: 4.48rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .main-content::after {
+    animation: dino3Float 120s infinite ease-in-out 30s;
+  }
+}
+
+.theme-nature .event-content::after {
+  content: '🦕';
+  position: fixed;
+  bottom: 20%;
+  left: 35%;
+  font-size: 4.48rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .event-content::after {
+    animation: dino3Float 120s infinite ease-in-out 30s;
+  }
+}
+
+.theme-nature .dashboard-content::after {
+  content: '🦕';
+  position: fixed;
+  bottom: 40%;
+  left: 15%;
+  font-size: 4.48rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .dashboard-content::after {
+    animation: dino3Float 120s infinite ease-in-out 30s;
+  }
+}
+
+/* Additional floating dinosaurs */
+.theme-nature nav::after {
+  content: '🦖';
+  position: fixed;
+  top: 5%;
+  right: 40%;
+  font-size: 4.2rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature nav::after {
+    animation: dino4Float 120s infinite ease-in-out 45s;
+  }
+}
+
+.theme-nature footer::before {
+  content: '🦕';
+  position: fixed;
+  bottom: 5%;
+  right: 25%;
+  font-size: 6.16rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature footer::before {
+    animation: dino5Float 120s infinite ease-in-out 60s;
+  }
 }
 
 .theme-nature header::after {
-  content: '🦕';
-  position: fixed;
-  top: 35%;
-  left: 60%;
-  font-size: 5.88rem;
-  z-index: -1;
-  pointer-events: none;
-  opacity: 0.62;
-  animation: dino7Float 60s infinite ease-in-out 5s;
-}
-
-/* Last dinosaur using footer pseudo-element */
-.theme-nature footer::before {
   content: '🦖';
   position: fixed;
-  bottom: 45%;
+  top: 60%;
+  left: 5%;
+  font-size: 5.32rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature header::after {
+    animation: dino6Float 120s infinite ease-in-out 75s;
+  }
+}
+
+.theme-nature body::before {
+  content: '🦕';
+  position: fixed;
+  top: 80%;
   right: 5%;
+  font-size: 4.76rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature body::before {
+    animation: dino7Float 120s infinite ease-in-out 90s;
+  }
+}
+
+.theme-nature html::after {
+  content: '🦖';
+  position: fixed;
+  bottom: 60%;
+  right: 50%;
   font-size: 6.44rem;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.67;
-  animation: dino8Float 65s infinite ease-in-out 7s;
+  opacity: 0.55;
 }
 
-/* Gentle space-like floating animations */
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature html::after {
+    animation: dino8Float 120s infinite ease-in-out 105s;
+  }
+}
+
+/* Gentle space-like floating animations - all very small movements */
 @keyframes dino1Float {
   0%, 100% { 
     transform: translate(0px, 0px) rotate(0deg); 
   }
   25% { 
-    transform: translate(8px, -5px) rotate(90deg); 
+    transform: translate(1px, -1px) rotate(90deg); 
   }
   50% { 
-    transform: translate(-3px, 10px) rotate(180deg); 
+    transform: translate(-1px, 2px) rotate(180deg); 
   }
   75% { 
-    transform: translate(5px, -8px) rotate(270deg); 
+    transform: translate(1px, -1px) rotate(270deg); 
   }
 }
 
@@ -198,10 +299,10 @@ body.theme-nature::after {
     transform: translate(0px, 0px) rotate(0deg); 
   }
   33% { 
-    transform: translate(-6px, 8px) rotate(120deg); 
+    transform: translate(-1px, 1px) rotate(120deg); 
   }
   66% { 
-    transform: translate(10px, -4px) rotate(240deg); 
+    transform: translate(2px, -1px) rotate(240deg); 
   }
 }
 
@@ -210,16 +311,16 @@ body.theme-nature::after {
     transform: translate(0px, 0px) rotate(0deg); 
   }
   20% { 
-    transform: translate(4px, 6px) rotate(72deg); 
+    transform: translate(1px, 1px) rotate(72deg); 
   }
   40% { 
-    transform: translate(-8px, -3px) rotate(144deg); 
+    transform: translate(-1px, -1px) rotate(144deg); 
   }
   60% { 
-    transform: translate(7px, 9px) rotate(216deg); 
+    transform: translate(2px, 0px) rotate(216deg); 
   }
   80% { 
-    transform: translate(-5px, 4px) rotate(288deg); 
+    transform: translate(0px, -2px) rotate(288deg); 
   }
 }
 
@@ -228,7 +329,7 @@ body.theme-nature::after {
     transform: translate(0px, 0px) rotate(0deg); 
   }
   50% { 
-    transform: translate(-12px, 8px) rotate(180deg); 
+    transform: translate(1px, 1px) rotate(180deg); 
   }
 }
 
@@ -236,14 +337,20 @@ body.theme-nature::after {
   0%, 100% { 
     transform: translate(0px, 0px) rotate(0deg); 
   }
-  25% { 
-    transform: translate(-7px, -6px) rotate(-90deg); 
+  16% { 
+    transform: translate(1px, -1px) rotate(60deg); 
+  }
+  33% { 
+    transform: translate(-1px, 1px) rotate(120deg); 
   }
   50% { 
-    transform: translate(9px, 5px) rotate(-180deg); 
+    transform: translate(1px, 1px) rotate(180deg); 
   }
-  75% { 
-    transform: translate(3px, -10px) rotate(-270deg); 
+  66% { 
+    transform: translate(-1px, -1px) rotate(240deg); 
+  }
+  83% { 
+    transform: translate(2px, 0px) rotate(300deg); 
   }
 }
 
@@ -251,11 +358,14 @@ body.theme-nature::after {
   0%, 100% { 
     transform: translate(0px, 0px) rotate(0deg); 
   }
-  30% { 
-    transform: translate(6px, -8px) rotate(108deg); 
+  25% { 
+    transform: translate(-1px, 2px) rotate(90deg); 
   }
-  70% { 
-    transform: translate(-4px, 7px) rotate(252deg); 
+  50% { 
+    transform: translate(1px, -1px) rotate(180deg); 
+  }
+  75% { 
+    transform: translate(-1px, -1px) rotate(270deg); 
   }
 }
 
@@ -263,20 +373,23 @@ body.theme-nature::after {
   0%, 100% { 
     transform: translate(0px, 0px) rotate(0deg); 
   }
-  16% { 
-    transform: translate(-5px, 4px) rotate(60deg); 
+  14% { 
+    transform: translate(1px, 1px) rotate(50deg); 
   }
-  32% { 
-    transform: translate(8px, -6px) rotate(120deg); 
+  28% { 
+    transform: translate(-1px, 2px) rotate(100deg); 
   }
-  48% { 
-    transform: translate(-3px, 9px) rotate(180deg); 
+  42% { 
+    transform: translate(2px, -1px) rotate(150deg); 
   }
-  64% { 
-    transform: translate(7px, -2px) rotate(240deg); 
+  56% { 
+    transform: translate(-1px, 0px) rotate(200deg); 
   }
-  80% { 
-    transform: translate(-9px, 5px) rotate(300deg); 
+  70% { 
+    transform: translate(1px, 1px) rotate(250deg); 
+  }
+  84% { 
+    transform: translate(-2px, 1px) rotate(300deg); 
   }
 }
 
@@ -284,11 +397,14 @@ body.theme-nature::after {
   0%, 100% { 
     transform: translate(0px, 0px) rotate(0deg); 
   }
-  40% { 
-    transform: translate(11px, 6px) rotate(144deg); 
+  30% { 
+    transform: translate(1px, -2px) rotate(108deg); 
   }
-  80% { 
-    transform: translate(-8px, -4px) rotate(288deg); 
+  60% { 
+    transform: translate(-1px, 1px) rotate(216deg); 
+  }
+  90% { 
+    transform: translate(1px, 1px) rotate(324deg); 
   }
 }
 
