@@ -99,10 +99,11 @@ defmodule Eventasaurus.MixProject do
       setup: ["deps.get", "assets.setup", "assets.build"],
       test: ["test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus"],
+      "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus", "copy_assets"],
       "assets.deploy": [
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
+        "copy_assets",
         "phx.digest"
       ],
       "erd.gen.png": [
