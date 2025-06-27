@@ -378,8 +378,7 @@ p[role="alert"][class*="emerald"],
 p[role="alert"][class*="green"] {
   background-color: #ecfdf5 !important; /* emerald-50 */
   color: #047857 !important; /* emerald-800 */
-  border-color: #10b981 !important; /* emerald-500 */
-  border: 1px solid #10b981 !important;
+  border: 1px solid #10b981 !important; /* emerald-500 */
 }
 
 /* Error flash messages - enforce red color scheme */
@@ -393,8 +392,7 @@ p[role="alert"][class*="rose"],
 p[role="alert"][class*="red"] {
   background-color: #fef2f2 !important; /* rose-50 */
   color: #991b1b !important; /* rose-800 */
-  border-color: #f87171 !important; /* rose-400 */
-  border: 1px solid #f87171 !important;
+  border: 1px solid #f87171 !important; /* rose-400 */
 }
 
 /* Warning flash messages */
@@ -407,8 +405,7 @@ p[role="alert"][class*="amber"],
 p[role="alert"][class*="yellow"] {
   background-color: #fffbeb !important; /* amber-50 */
   color: #92400e !important; /* amber-800 */
-  border-color: #f59e0b !important; /* amber-500 */
-  border: 1px solid #f59e0b !important;
+  border: 1px solid #f59e0b !important; /* amber-500 */
 }
 
 /* Icon color protection in flash messages */
