@@ -20,8 +20,8 @@
   --color-heading: var(--color-text);
   
   /* Typography variables (applied selectively) */
-  --font-family: 'Montserrat', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-heading: 'Montserrat', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family: 'Bebas Neue', 'Arial Narrow', Arial, sans-serif;
+  --font-family-heading: 'Bebas Neue', 'Arial Narrow', Arial, sans-serif;
   --font-weight-heading: 600;
   --body-size: 16px;
   --body-weight: 400;
@@ -63,6 +63,17 @@
   font-weight: var(--font-weight-heading);
   color: var(--color-heading);
   letter-spacing: -0.02em;
+}
+
+/* Larger H1 and H2 headings */
+.theme-professional :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) h1 {
+  font-size: 3rem; /* 48px */
+  line-height: 1.1;
+}
+
+.theme-professional :is(.main-content, .event-content, .dashboard-content, .user-content, .auth-content) h2 {
+  font-size: 2.25rem; /* 36px */
+  line-height: 1.2;
 }
 
 /* ============================================================================

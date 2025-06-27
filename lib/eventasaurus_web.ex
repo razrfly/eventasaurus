@@ -17,7 +17,14 @@ defmodule EventasaurusWeb do
   those modules here.
   """
 
-  def static_paths, do: ~w(assets fonts images themes favicon.ico robots.txt)
+  def static_paths do
+    base_paths = ~w(assets fonts images favicon.ico robots.txt)
+    if Mix.env() == :dev do
+      base_paths  # No themes in dev - handled by route
+    else
+      ["themes" | base_paths]  # Include themes in prod - served from priv/static
+    end
+  end
 
   def router do
     quote do
