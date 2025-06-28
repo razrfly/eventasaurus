@@ -309,13 +309,13 @@ defmodule EventasaurusWeb.SettingsController do
       # Split JWT into parts
       case String.split(token, ".") do
         [_header, payload, _signature] ->
-          Logger.debug("DEBUG: JWT payload part: #{String.slice(payload, 0, 50)}...")
+          Logger.debug("DEBUG: JWT payload received (length=#{String.length(payload)})")
           # Decode base64 payload (add padding if needed)
           padded_payload = payload <> String.duplicate("=", rem(4 - rem(String.length(payload), 4), 4))
 
           case Base.url_decode64(padded_payload) do
             {:ok, json_string} ->
-              Logger.debug("DEBUG: Decoded JSON string: #{String.slice(json_string, 0, 200)}...")
+              Logger.debug("DEBUG: Decoded JSON (length=#{String.length(json_string)})")
               case Jason.decode(json_string) do
                 {:ok, data} ->
                   Logger.debug("DEBUG: Successfully parsed JWT payload")
