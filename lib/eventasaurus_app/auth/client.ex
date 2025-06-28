@@ -370,6 +370,118 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Sign in with Facebook OAuth using authorization code.
+  This method exchanges the authorization code for access tokens.
+
+  Returns {:ok, auth_data} on success or {:error, reason} on failure.
+  """
+  def sign_in_with_facebook_oauth(code) do
+    url = "#{get_auth_url()}/token?grant_type=authorization_code"
+
+    body = Jason.encode!(%{
+      code: code,
+      redirect_uri: get_facebook_redirect_uri()
+    })
+
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        Logger.debug("Facebook OAuth authentication successful")
+        {:ok, response}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        Logger.error("Facebook OAuth failed with status #{code}: #{inspect(error)}")
+        {:error, %{status: code, message: error["message"] || "Facebook authentication failed"}}
+
+      {:error, %HTTPoison.Error{reason: :nxdomain} = _error} ->
+        Logger.error("DNS resolution failed for Supabase URL: #{get_url()}")
+        {:error, %{status: 503, message: "Authentication service unavailable"}}
+
+      {:error, error} ->
+        Logger.error("Facebook OAuth request failed: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Generate the Facebook OAuth login URL for redirecting users.
+  """
+  def get_facebook_oauth_url(state \\ nil) do
+    base_url = "#{get_auth_url()}/authorize"
+    redirect_uri = get_facebook_redirect_uri()
+
+    params = [
+      {"provider", "facebook"},
+      {"redirect_to", redirect_uri}
+    ]
+
+    params = if state, do: [{"state", state} | params], else: params
+    query_string = URI.encode_query(params)
+
+    "#{base_url}?#{query_string}"
+  end
+
+  @doc """
+  Link a Facebook account to an existing authenticated user.
+
+  Returns {:ok, user_data} on success or {:error, reason} on failure.
+  """
+  def link_facebook_account(access_token, facebook_oauth_code) do
+    url = "#{get_auth_url()}/user/identities"
+
+    body = Jason.encode!(%{
+      provider: "facebook",
+      access_token: facebook_oauth_code
+    })
+
+    case HTTPoison.post(url, body, auth_headers(access_token)) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        Logger.debug("Facebook account linked successfully")
+        {:ok, response}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        Logger.error("Facebook account linking failed with status #{code}: #{inspect(error)}")
+        {:error, %{status: code, message: error["message"] || "Failed to link Facebook account"}}
+
+      {:error, error} ->
+        Logger.error("Facebook account linking request failed: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Unlink a Facebook account from an authenticated user.
+
+  Returns {:ok, %{}} on success or {:error, reason} on failure.
+  """
+  def unlink_facebook_account(access_token, identity_id) do
+    url = "#{get_auth_url()}/user/identities/#{identity_id}"
+
+    case HTTPoison.delete(url, auth_headers(access_token)) do
+      {:ok, %{status_code: 200}} ->
+        Logger.debug("Facebook account unlinked successfully")
+        {:ok, %{}}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        Logger.error("Facebook account unlinking failed with status #{code}: #{inspect(error)}")
+        {:error, %{status: code, message: error["message"] || "Failed to unlink Facebook account"}}
+
+      {:error, error} ->
+        Logger.error("Facebook account unlinking request failed: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  defp get_facebook_redirect_uri do
+    site_url = get_config()[:site_url] || "http://localhost:4000"
+    "#{site_url}/auth/callback"
+  end
+
+  @doc """
   Get a user by email using admin API.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
