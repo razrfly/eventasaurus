@@ -186,6 +186,7 @@ defmodule EventasaurusWeb.SettingsController do
           {:error, reason} ->
             error_message = case reason do
               :no_authentication_token -> "Authentication session expired. Please log in again."
+              :manual_linking_disabled -> "Account unlinking is currently disabled. Please contact support if you need to disconnect your Facebook account."
               _ -> "Failed to disconnect Facebook account. Please try again."
             end
 

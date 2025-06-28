@@ -420,27 +420,33 @@ defmodule EventasaurusWeb.Auth.AuthController do
   end
 
   defp handle_successful_facebook_auth(conn, auth_data) do
-    %{
-      "user" => user_data,
-      "access_token" => access_token,
-      "refresh_token" => refresh_token
-    } = auth_data
+    # Safely extract required data with fallbacks
+    user_data = Map.get(auth_data, "user")
+    access_token = Map.get(auth_data, "access_token")
+    refresh_token = Map.get(auth_data, "refresh_token")
 
-    # Sync user with local database (using existing pattern)
-    case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
-      {:ok, user} ->
-        conn
-        |> put_session(:access_token, access_token)
-        |> put_session(:refresh_token, refresh_token)
-        |> put_session(:current_user_id, user.id)
-        |> put_flash(:info, "Successfully signed in with Facebook!")
-        |> redirect(to: ~p"/dashboard")
+    if user_data && access_token do
+      # Sync user with local database (using existing pattern)
+      case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
+        {:ok, user} ->
+          conn
+          |> put_session(:access_token, access_token)
+          |> put_session(:refresh_token, refresh_token)
+          |> put_session(:current_user_id, user.id)
+          |> put_flash(:info, "Successfully signed in with Facebook!")
+          |> redirect(to: ~p"/dashboard")
 
-      {:error, reason} ->
-        Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
-        conn
-        |> put_flash(:error, "Authentication failed - unable to create account.")
-        |> redirect(to: ~p"/auth/login")
+        {:error, reason} ->
+          Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
+          conn
+          |> put_flash(:error, "Authentication failed - unable to create account.")
+          |> redirect(to: ~p"/auth/login")
+      end
+    else
+      Logger.error("Facebook OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      conn
+      |> put_flash(:error, "Facebook authentication failed - incomplete data received.")
+      |> redirect(to: ~p"/auth/login")
     end
   end
 end
