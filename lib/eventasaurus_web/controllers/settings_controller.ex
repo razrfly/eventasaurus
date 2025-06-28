@@ -74,7 +74,7 @@ defmodule EventasaurusWeb.SettingsController do
     case ensure_user_struct(conn.assigns[:auth_user]) do
       {:ok, user} ->
         case Accounts.update_user(user, user_params) do
-          {:ok, updated_user} ->
+          {:ok, _updated_user} ->
             conn
             |> put_flash(:info, "Account updated successfully.")
             |> redirect(to: ~p"/settings/account")
