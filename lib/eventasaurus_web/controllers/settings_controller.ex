@@ -184,22 +184,19 @@ defmodule EventasaurusWeb.SettingsController do
   @doc """
   Get user's linked identities (for displaying connected accounts).
   """
-  def get_user_identities(conn) do
+  defp get_user_identities(conn) do
     case Auth.get_user_identities(conn) do
       {:ok, response} ->
         # Extract identities array from response
         identities = Map.get(response, "identities", [])
 
-        # Transform into our format and find Facebook identity
-        Enum.map(identities, fn identity ->
-          provider = Map.get(identity, "provider")
-
-          %{
-            provider: provider,
-            connected: true,
-            display_name: String.capitalize(provider)
-          }
+        # Find specifically the Facebook identity
+        facebook_identities = Enum.filter(identities, fn identity ->
+          Map.get(identity, "provider") == "facebook"
         end)
+
+        # Return Facebook identities with proper format
+        facebook_identities
 
       {:error, reason} ->
         Logger.error("Failed to retrieve user identities for settings page: #{inspect(reason)}")

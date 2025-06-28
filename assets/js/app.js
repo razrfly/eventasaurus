@@ -10,12 +10,36 @@ let supabaseClient = null;
 // Initialize Supabase client if needed
 function initSupabaseClient() {
   if (!supabaseClient && typeof window !== 'undefined') {
-    // Get Supabase config from meta tags
-    const supabaseUrl = document.querySelector('meta[name="supabase-url"]')?.content;
-    const supabaseAnonKey = document.querySelector('meta[name="supabase-anon-key"]')?.content;
-    
-    if (supabaseUrl && supabaseAnonKey && window.supabase) {
-      supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+    try {
+      // Get Supabase config from meta tags or data attributes
+      let supabaseUrl = document.querySelector('meta[name="supabase-url"]')?.content;
+      let supabaseAnonKey = document.querySelector('meta[name="supabase-anon-key"]')?.content;
+      
+      // Fallback to body data attributes if meta tags not found
+      if (!supabaseUrl || !supabaseAnonKey) {
+        const body = document.body;
+        supabaseUrl = body.dataset.supabaseUrl;
+        supabaseAnonKey = body.dataset.supabaseApiKey;
+      }
+      
+      console.log('Supabase config found:', { 
+        hasUrl: !!supabaseUrl, 
+        hasKey: !!supabaseAnonKey,
+        hasSupabaseGlobal: !!window.supabase 
+      });
+      
+      if (supabaseUrl && supabaseAnonKey && window.supabase) {
+        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+        console.log('Supabase client initialized successfully');
+      } else {
+        console.error('Missing Supabase configuration or library:', {
+          supabaseUrl: !!supabaseUrl,
+          supabaseAnonKey: !!supabaseAnonKey,
+          supabaseLibrary: !!window.supabase
+        });
+      }
+    } catch (error) {
+      console.error('Error initializing Supabase client:', error);
     }
   }
   return supabaseClient;
@@ -31,7 +55,9 @@ window.FacebookIdentityManager = {
     }
     
     try {
+      console.log('Attempting to get user identities...');
       const { data, error } = await client.auth.getUserIdentities();
+      console.log('getUserIdentities result:', { data, error });
       return { data, error };
     } catch (err) {
       console.error('Error getting user identities:', err);
@@ -40,27 +66,32 @@ window.FacebookIdentityManager = {
   },
 
   async unlinkFacebookAccount() {
+    console.log('Facebook unlinking requested...');
+    
     const client = initSupabaseClient();
     if (!client) {
-      alert('Authentication service not available');
+      alert('Authentication service not available. Facebook unlinking must be done from the Supabase dashboard.');
       return false;
     }
 
     try {
+      console.log('Getting user identities...');
       // First get all user identities
       const { data: identities, error: identitiesError } = await this.getUserIdentities();
       
       if (identitiesError) {
         console.error('Failed to get user identities:', identitiesError);
-        alert('Failed to retrieve account information');
+        alert('Failed to retrieve account information. This feature may not be available in this environment.');
         return false;
       }
+
+      console.log('User identities response:', identities);
 
       // Find Facebook identity
       const facebookIdentity = identities.identities?.find(identity => identity.provider === 'facebook');
       
       if (!facebookIdentity) {
-        alert('No Facebook account found to unlink');
+        alert('No Facebook account found to unlink. Your account may not have Facebook connected.');
         return false;
       }
 
@@ -68,6 +99,8 @@ window.FacebookIdentityManager = {
       if (!confirm('Are you sure you want to disconnect your Facebook account?')) {
         return false;
       }
+
+      console.log('Attempting to unlink Facebook identity:', facebookIdentity);
 
       // Unlink the Facebook identity
       const { data, error } = await client.auth.unlinkIdentity(facebookIdentity);
