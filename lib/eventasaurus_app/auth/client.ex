@@ -453,15 +453,90 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
-  Unlink a Facebook account from an authenticated user using Supabase client method.
-  Note: This should be called from the frontend using supabase.auth.unlinkIdentity()
+  Unlink a Facebook account from an authenticated user using Supabase Admin API.
 
   Returns {:ok, %{}} on success or {:error, reason} on failure.
   """
-  def unlink_facebook_account(_access_token, _identity_id) do
-    # For server-side implementation, we need to call this via the JavaScript client
-    # This is a placeholder - in practice, we'll call this from the frontend
-    {:error, %{status: 501, message: "Use frontend supabase.auth.unlinkIdentity() method"}}
+  def unlink_facebook_account(access_token, identity_id) do
+    # First, get the user ID from the access token
+    case decode_jwt_payload(access_token) do
+      {:ok, payload} ->
+        user_id = Map.get(payload, "sub")
+
+        if user_id do
+          # Use admin API to unlink the identity
+          url = "#{get_auth_url()}/admin/users/#{user_id}/identities/#{identity_id}"
+
+          Logger.error("DEBUG: Attempting to unlink Facebook identity #{identity_id} for user #{user_id}")
+          Logger.error("DEBUG: Using URL: #{url}")
+          Logger.error("DEBUG: Service role key present: #{!is_nil(System.get_env("SUPABASE_API_SECRET"))}")
+          
+          # Check current identities before unlinking
+          case get_real_user_identities(access_token) do
+            {:ok, %{"identities" => identities}} ->
+              Logger.error("DEBUG: User has #{length(identities)} identities: #{inspect(identities)}")
+            _ ->
+              Logger.error("DEBUG: Could not fetch user identities")
+          end
+
+          Logger.error("DEBUG: Making DELETE request to unlink...")
+          
+          case HTTPoison.delete(url, admin_headers(), [timeout: 30000, recv_timeout: 30000]) do
+            {:ok, %{status_code: 200, body: response_body}} ->
+              Logger.error("DEBUG: Unlink succeeded with 200")
+              response = Jason.decode!(response_body)
+              Logger.debug("Facebook account unlinked successfully")
+              {:ok, response}
+
+            {:ok, %{status_code: 404, body: response_body}} ->
+              Logger.error("DEBUG: Unlink failed with 404: #{response_body}")
+              
+              # Try to decode JSON response and check for special cases
+              case Jason.decode(response_body) do
+                {:ok, error_json} -> 
+                  message = error_json["message"] || "Identity not found"
+                  cond do
+                    String.contains?(message, "manual_linking_disabled") ->
+                      Logger.error("DEBUG: Manual linking disabled error, trying user API instead")
+                      # Try alternative user API method
+                      try_user_api_unlink(access_token, identity_id)
+                    String.contains?(message, "minimum_identity_count") ->
+                      {:error, %{status: 422, message: "minimum_identity_count"}}
+                    true ->
+                      {:error, %{status: 404, message: message}}
+                  end
+                {:error, _} -> 
+                  # Not JSON, probably HTML 404 page - try user API instead
+                  Logger.error("DEBUG: HTML 404 response, trying user API fallback")
+                  try_user_api_unlink(access_token, identity_id)
+              end
+
+            {:ok, %{status_code: 422, body: response_body}} ->
+              Logger.error("DEBUG: Unlink failed with 422: #{response_body}")
+              error = Jason.decode!(response_body)
+              Logger.error("Facebook account unlinking failed - validation error: #{inspect(error)}")
+              {:error, %{status: 422, message: error["message"] || "Cannot unlink last authentication method"}}
+
+            {:ok, %{status_code: code, body: response_body}} ->
+              Logger.error("DEBUG: Unlink failed with status #{code}: #{response_body}")
+              error = Jason.decode!(response_body)
+              Logger.error("Facebook account unlinking failed with status #{code}: #{inspect(error)}")
+              {:error, %{status: code, message: error["message"] || "Failed to unlink Facebook account"}}
+
+            {:error, error} ->
+              Logger.error("DEBUG: Unlink request error: #{inspect(error)}")
+              Logger.error("Facebook account unlinking request failed: #{inspect(error)}")
+              {:error, error}
+          end
+        else
+          Logger.error("Could not extract user ID from access token")
+          {:error, %{status: 401, message: "Invalid access token"}}
+        end
+
+      {:error, reason} ->
+        Logger.error("Failed to decode access token for unlinking: #{inspect(reason)}")
+        {:error, %{status: 401, message: "Invalid access token"}}
+    end
   end
 
   defp get_facebook_redirect_uri do
@@ -520,6 +595,42 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Get real user identities from Supabase API (not just JWT parsing).
+
+  Returns {:ok, identities} on success or {:error, reason} on failure.
+  """
+  def get_real_user_identities(access_token) do
+    url = "#{get_auth_url()}/user"
+
+    case HTTPoison.get(url, auth_headers(access_token)) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        Logger.debug("Real user identities retrieved successfully")
+        # Extract identities from user response and format like the expected structure
+        identities = Map.get(response, "identities", [])
+        {:ok, %{"identities" => identities}}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        Logger.error("Failed to get real user identities with status #{code}: #{response_body}")
+        
+        # Try to decode JSON response, but handle cases where it's HTML/plain text
+        error_message = case Jason.decode(response_body) do
+          {:ok, error_json} -> 
+            error_json["message"] || "Failed to get user identities"
+          {:error, _} -> 
+            # Not JSON, probably HTML 404 page
+            "API endpoint not available (status #{code})"
+        end
+        
+        {:error, %{status: code, message: error_message}}
+
+      {:error, error} ->
+        Logger.error("Real user identities request failed: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
   Get user providers from JWT token app_metadata.
 
   Returns {:ok, providers} on success or {:error, reason} on failure.
@@ -554,6 +665,60 @@ defmodule EventasaurusApp.Auth.Client do
         Logger.error("Error parsing JWT for user identities: #{inspect(error)}")
         {:error, %{status: 500, message: "Failed to parse authentication token"}}
     end
+  end
+
+  # Alternative method using user API instead of admin API
+  defp try_user_api_unlink(access_token, identity_id) do
+    # Try multiple possible endpoints for user identity unlinking
+    urls_to_try = [
+      "#{get_auth_url()}/user/identities/#{identity_id}",
+      "#{get_auth_url()}/user/identities",
+      "#{get_auth_url()}/user"
+    ]
+    
+    try_user_api_endpoints(access_token, identity_id, urls_to_try)
+  end
+  
+  defp try_user_api_endpoints(access_token, identity_id, [url | remaining_urls]) do
+    Logger.error("DEBUG: Trying user API unlinking with URL: #{url}")
+    
+    case HTTPoison.delete(url, auth_headers(access_token), [timeout: 30000, recv_timeout: 30000]) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        Logger.error("DEBUG: User API unlinking succeeded")
+        {:ok, response}
+      
+      {:ok, %{status_code: code, body: response_body}} ->
+        Logger.error("DEBUG: User API unlinking failed with status #{code}: #{response_body}")
+        
+        # If this endpoint failed, try the next one
+        if length(remaining_urls) > 0 do
+          Logger.error("DEBUG: Trying next endpoint...")
+          try_user_api_endpoints(access_token, identity_id, remaining_urls)
+        else
+          error_message = case Jason.decode(response_body) do
+            {:ok, error_json} -> error_json["message"] || "User API unlinking failed"
+            {:error, _} -> "User API unlinking failed (status #{code})"
+          end
+          {:error, %{status: code, message: error_message}}
+        end
+      
+      {:error, error} ->
+        Logger.error("DEBUG: User API unlinking request failed: #{inspect(error)}")
+        
+        # If this endpoint failed, try the next one
+        if length(remaining_urls) > 0 do
+          Logger.error("DEBUG: Trying next endpoint due to request error...")
+          try_user_api_endpoints(access_token, identity_id, remaining_urls)
+        else
+          {:error, error}
+        end
+    end
+  end
+  
+  defp try_user_api_endpoints(_access_token, _identity_id, []) do
+    Logger.error("DEBUG: All user API endpoints failed")
+    {:error, %{status: 404, message: "No working user API endpoint found"}}
   end
 
   # Helper function to decode JWT payload
