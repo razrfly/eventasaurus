@@ -466,65 +466,42 @@ defmodule EventasaurusApp.Auth.Client do
         if user_id do
           # Use admin API to unlink the identity
           url = "#{get_auth_url()}/admin/users/#{user_id}/identities/#{identity_id}"
-
-          Logger.error("DEBUG: Attempting to unlink Facebook identity #{identity_id} for user #{user_id}")
-          Logger.error("DEBUG: Using URL: #{url}")
-          Logger.error("DEBUG: Service role key present: #{!is_nil(System.get_env("SUPABASE_API_SECRET"))}")
-          
-          # Check current identities before unlinking
-          case get_real_user_identities(access_token) do
-            {:ok, %{"identities" => identities}} ->
-              Logger.error("DEBUG: User has #{length(identities)} identities: #{inspect(identities)}")
-            _ ->
-              Logger.error("DEBUG: Could not fetch user identities")
-          end
-
-          Logger.error("DEBUG: Making DELETE request to unlink...")
           
           case HTTPoison.delete(url, admin_headers(), [timeout: 30000, recv_timeout: 30000]) do
             {:ok, %{status_code: 200, body: response_body}} ->
-              Logger.error("DEBUG: Unlink succeeded with 200")
               response = Jason.decode!(response_body)
               Logger.debug("Facebook account unlinked successfully")
               {:ok, response}
 
             {:ok, %{status_code: 404, body: response_body}} ->
-              Logger.error("DEBUG: Unlink failed with 404: #{response_body}")
-              
-              # Try to decode JSON response and check for special cases
+              # Admin API failed, try user API fallback
               case Jason.decode(response_body) do
                 {:ok, error_json} -> 
                   message = error_json["message"] || "Identity not found"
                   cond do
                     String.contains?(message, "manual_linking_disabled") ->
-                      Logger.error("DEBUG: Manual linking disabled error, trying user API instead")
-                      # Try alternative user API method
                       try_user_api_unlink(access_token, identity_id)
                     String.contains?(message, "minimum_identity_count") ->
                       {:error, %{status: 422, message: "minimum_identity_count"}}
                     true ->
-                      {:error, %{status: 404, message: message}}
+                      try_user_api_unlink(access_token, identity_id)
                   end
                 {:error, _} -> 
                   # Not JSON, probably HTML 404 page - try user API instead
-                  Logger.error("DEBUG: HTML 404 response, trying user API fallback")
                   try_user_api_unlink(access_token, identity_id)
               end
 
             {:ok, %{status_code: 422, body: response_body}} ->
-              Logger.error("DEBUG: Unlink failed with 422: #{response_body}")
               error = Jason.decode!(response_body)
               Logger.error("Facebook account unlinking failed - validation error: #{inspect(error)}")
               {:error, %{status: 422, message: error["message"] || "Cannot unlink last authentication method"}}
 
             {:ok, %{status_code: code, body: response_body}} ->
-              Logger.error("DEBUG: Unlink failed with status #{code}: #{response_body}")
               error = Jason.decode!(response_body)
               Logger.error("Facebook account unlinking failed with status #{code}: #{inspect(error)}")
               {:error, %{status: code, message: error["message"] || "Failed to unlink Facebook account"}}
 
             {:error, error} ->
-              Logger.error("DEBUG: Unlink request error: #{inspect(error)}")
               Logger.error("Facebook account unlinking request failed: #{inspect(error)}")
               {:error, error}
           end
@@ -669,55 +646,44 @@ defmodule EventasaurusApp.Auth.Client do
 
   # Alternative method using user API instead of admin API
   defp try_user_api_unlink(access_token, identity_id) do
-    # Try multiple possible endpoints for user identity unlinking
+    # Try the most likely working endpoint first
     urls_to_try = [
       "#{get_auth_url()}/user/identities/#{identity_id}",
       "#{get_auth_url()}/user/identities",
       "#{get_auth_url()}/user"
     ]
     
-    try_user_api_endpoints(access_token, identity_id, urls_to_try)
+    try_user_api_endpoints(access_token, urls_to_try)
   end
   
-  defp try_user_api_endpoints(access_token, identity_id, [url | remaining_urls]) do
-    Logger.error("DEBUG: Trying user API unlinking with URL: #{url}")
-    
+  defp try_user_api_endpoints(access_token, [url | remaining_urls]) do
     case HTTPoison.delete(url, auth_headers(access_token), [timeout: 30000, recv_timeout: 30000]) do
       {:ok, %{status_code: 200, body: response_body}} ->
         response = Jason.decode!(response_body)
-        Logger.error("DEBUG: User API unlinking succeeded")
+        Logger.debug("User API unlinking succeeded")
         {:ok, response}
       
+      {:ok, %{status_code: _code, body: _response_body}} when length(remaining_urls) > 0 ->
+        # Try next endpoint
+        try_user_api_endpoints(access_token, remaining_urls)
+      
       {:ok, %{status_code: code, body: response_body}} ->
-        Logger.error("DEBUG: User API unlinking failed with status #{code}: #{response_body}")
-        
-        # If this endpoint failed, try the next one
-        if length(remaining_urls) > 0 do
-          Logger.error("DEBUG: Trying next endpoint...")
-          try_user_api_endpoints(access_token, identity_id, remaining_urls)
-        else
-          error_message = case Jason.decode(response_body) do
-            {:ok, error_json} -> error_json["message"] || "User API unlinking failed"
-            {:error, _} -> "User API unlinking failed (status #{code})"
-          end
-          {:error, %{status: code, message: error_message}}
+        error_message = case Jason.decode(response_body) do
+          {:ok, error_json} -> error_json["message"] || "User API unlinking failed"
+          {:error, _} -> "User API unlinking failed (status #{code})"
         end
+        {:error, %{status: code, message: error_message}}
+      
+      {:error, _error} when length(remaining_urls) > 0 ->
+        # Try next endpoint
+        try_user_api_endpoints(access_token, remaining_urls)
       
       {:error, error} ->
-        Logger.error("DEBUG: User API unlinking request failed: #{inspect(error)}")
-        
-        # If this endpoint failed, try the next one
-        if length(remaining_urls) > 0 do
-          Logger.error("DEBUG: Trying next endpoint due to request error...")
-          try_user_api_endpoints(access_token, identity_id, remaining_urls)
-        else
-          {:error, error}
-        end
+        {:error, error}
     end
   end
   
-  defp try_user_api_endpoints(_access_token, _identity_id, []) do
-    Logger.error("DEBUG: All user API endpoints failed")
+  defp try_user_api_endpoints(_access_token, []) do
     {:error, %{status: 404, message: "No working user API endpoint found"}}
   end
 
