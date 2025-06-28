@@ -227,35 +227,35 @@ defmodule EventasaurusWeb.SettingsController do
       # Get the access token from the session
       access_token = get_session(conn, :access_token)
 
-      Logger.error("DEBUG: Access token present: #{!is_nil(access_token)}")
+      Logger.debug("DEBUG: Access token present: #{!is_nil(access_token)}")
 
       if access_token do
         # First check if user has Facebook provider in JWT
         case decode_jwt_payload(access_token) do
           {:ok, payload} ->
             providers = get_in(payload, ["app_metadata", "providers"]) || []
-            Logger.error("DEBUG: Providers from JWT: #{inspect(providers)}")
+            Logger.debug("DEBUG: Providers from JWT: #{inspect(providers)}")
 
             if "facebook" in providers do
-              Logger.error("DEBUG: Facebook found in providers, creating identity")
+              Logger.debug("DEBUG: Facebook found in providers, creating identity")
               # User has Facebook connected - we know this from the providers list
               # Try to get actual identity details, but fall back gracefully if API fails
               facebook_identity = case EventasaurusApp.Auth.Client.get_real_user_identities(access_token) do
                 {:ok, %{"identities" => identities}} when is_list(identities) ->
-                  Logger.error("DEBUG: Successfully fetched #{length(identities)} identities")
+                  Logger.debug("DEBUG: Successfully fetched #{length(identities)} identities")
                   # Find the Facebook identity with the real identity_id
                   Enum.find(identities, fn identity ->
                     identity["provider"] == "facebook"
                   end)
 
                 {:error, reason} ->
-                  Logger.error("DEBUG: Failed to fetch identities: #{inspect(reason)}")
+                  Logger.debug("DEBUG: Failed to fetch identities: #{inspect(reason)}")
                   nil
               end
 
               # Return Facebook identity (real or fallback)
               if facebook_identity do
-                Logger.error("DEBUG: Using real Facebook identity")
+                Logger.debug("DEBUG: Using real Facebook identity")
                 %{
                   "id" => facebook_identity["id"],
                   "provider" => "facebook",
@@ -263,7 +263,7 @@ defmodule EventasaurusWeb.SettingsController do
                   "identity_id" => facebook_identity["identity_id"] || facebook_identity["id"]
                 }
               else
-                Logger.error("DEBUG: Using fallback Facebook identity")
+                Logger.debug("DEBUG: Using fallback Facebook identity")
                 # Fallback - we know Facebook is connected from providers list
                 %{
                   "id" => "facebook-identity",
@@ -272,22 +272,22 @@ defmodule EventasaurusWeb.SettingsController do
                   "identity_id" => get_in(payload, ["user_metadata", "provider_id"]) || "facebook"
                 }
               end
-            else
-              Logger.error("DEBUG: Facebook NOT found in providers")
+                        else
+              Logger.debug("DEBUG: Facebook NOT found in providers")
               nil
             end
 
           {:error, reason} ->
-            Logger.error("DEBUG: JWT decode failed: #{inspect(reason)}")
+            Logger.debug("DEBUG: JWT decode failed: #{inspect(reason)}")
             nil
         end
       else
-        Logger.error("DEBUG: No access token in session")
+        Logger.debug("DEBUG: No access token in session")
         nil
       end
     rescue
-      error -> 
-        Logger.error("DEBUG: Exception in get_facebook_identity_from_session: #{inspect(error)}")
+      error ->
+        Logger.debug("DEBUG: Exception in get_facebook_identity_from_session: #{inspect(error)}")
         nil
     end
   end
@@ -303,40 +303,40 @@ defmodule EventasaurusWeb.SettingsController do
   #
   # TODO: Consider using a proper JWT library (JOSE, Joken) for signature verification
   # in future security improvements for defense-in-depth.
-  defp decode_jwt_payload(token) do
+    defp decode_jwt_payload(token) do
     try do
-      Logger.error("DEBUG: Decoding JWT token of length: #{String.length(token)}")
+      Logger.debug("DEBUG: Decoding JWT token of length: #{String.length(token)}")
       # Split JWT into parts
       case String.split(token, ".") do
         [_header, payload, _signature] ->
-          Logger.error("DEBUG: JWT payload part: #{String.slice(payload, 0, 50)}...")
+          Logger.debug("DEBUG: JWT payload part: #{String.slice(payload, 0, 50)}...")
           # Decode base64 payload (add padding if needed)
           padded_payload = payload <> String.duplicate("=", rem(4 - rem(String.length(payload), 4), 4))
 
           case Base.url_decode64(padded_payload) do
             {:ok, json_string} ->
-              Logger.error("DEBUG: Decoded JSON string: #{String.slice(json_string, 0, 200)}...")
+              Logger.debug("DEBUG: Decoded JSON string: #{String.slice(json_string, 0, 200)}...")
               case Jason.decode(json_string) do
-                {:ok, data} -> 
-                  Logger.error("DEBUG: Successfully parsed JWT payload")
+                {:ok, data} ->
+                  Logger.debug("DEBUG: Successfully parsed JWT payload")
                   {:ok, data}
-                {:error, reason} -> 
-                  Logger.error("DEBUG: JSON decode failed: #{inspect(reason)}")
+                {:error, reason} ->
+                  Logger.debug("DEBUG: JSON decode failed: #{inspect(reason)}")
                   {:error, :invalid_json}
               end
 
-            :error -> 
-              Logger.error("DEBUG: Base64 decode failed")
+            :error ->
+              Logger.debug("DEBUG: Base64 decode failed")
               {:error, :invalid_base64}
           end
 
-        parts -> 
-          Logger.error("DEBUG: Invalid JWT format, got #{length(parts)} parts")
+        parts ->
+          Logger.debug("DEBUG: Invalid JWT format, got #{length(parts)} parts")
           {:error, :invalid_jwt_format}
       end
     rescue
-      error -> 
-        Logger.error("DEBUG: JWT decode exception: #{inspect(error)}")
+      error ->
+        Logger.debug("DEBUG: JWT decode exception: #{inspect(error)}")
         {:error, :decode_error}
     end
   end
