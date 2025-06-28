@@ -1,5 +1,6 @@
 defmodule EventasaurusWeb.Auth.AuthController do
   use EventasaurusWeb, :controller
+  require Logger
 
   alias EventasaurusApp.Auth
 
@@ -370,7 +371,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
     |> redirect(to: ~p"/auth/login")
   end
 
-  defp handle_facebook_oauth_callback(conn, code, state, params) do
+  defp handle_facebook_oauth_callback(conn, code, state, _params) do
     stored_state = get_session(conn, :oauth_state)
     oauth_action = get_session(conn, :oauth_action) || "login"
 
