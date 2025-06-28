@@ -131,41 +131,34 @@
               </div>
               <div>
                 <h3 class="text-lg font-medium text-gray-900">Facebook</h3>
-                <%= if @facebook_identity do %>
-                  <p class="text-sm text-green-600">Connected</p>
-                  <p class="text-xs text-gray-500">
-                    Connected on
-                    <%= case @facebook_identity["created_at"] do %>
-                      <% nil -> %>
-                        unknown date
-                      <% created_at when is_binary(created_at) -> %>
-                        <%= case Date.from_iso8601(String.slice(created_at, 0, 10)) do %>
-                          <% {:ok, date} -> %>
-                            <%= Calendar.strftime(date, "%B %d, %Y") %>
-                          <% {:error, _} -> %>
-                            unknown date
-                        <% end %>
-                      <% _ -> %>
-                        unknown date
+                <div id="facebook-status">
+                  <%= if @facebook_identity do %>
+                    <p class="text-sm text-green-600">Connected</p>
+                    <%= if @facebook_identity["created_at"] && @facebook_identity["created_at"] != "Unknown" do %>
+                      <p class="text-xs text-gray-500">Connected on <%= format_connection_date(@facebook_identity["created_at"]) %></p>
+                    <% else %>
+                      <p class="text-xs text-gray-500">Connection verified</p>
                     <% end %>
-                  </p>
-                <% else %>
-                  <p class="text-sm text-gray-500">Not connected</p>
-                <% end %>
+                  <% else %>
+                    <p class="text-sm text-gray-500">Not connected</p>
+                  <% end %>
+                </div>
               </div>
             </div>
-            <div>
+            <div id="facebook-action">
               <%= if @facebook_identity do %>
+                <!-- Facebook is connected - show disconnect button -->
                 <button 
                   type="button"
-                  onclick="FacebookIdentityManager.unlinkFacebookAccount()"
+                  onclick="disconnectFacebook()"
                   class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 >
                   Disconnect
                 </button>
               <% else %>
+                <!-- Facebook is not connected - show connect button -->
                 <a
-                  href={~p"/settings/facebook/link"}
+                  href="/settings/facebook/link"
                   class="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Connect
@@ -173,6 +166,28 @@
               <% end %>
             </div>
           </div>
+
+          <!-- JavaScript fallback for disconnection functionality -->
+          <script type="text/javascript">
+            async function disconnectFacebook() {
+              // Check if FacebookIdentityManager is available for client-side unlinking
+              if (typeof FacebookIdentityManager !== 'undefined') {
+                try {
+                  const success = await FacebookIdentityManager.unlinkFacebookAccount();
+                  if (success) {
+                    // Refresh the page to show updated status
+                    window.location.reload();
+                  }
+                } catch (err) {
+                  console.error('Error disconnecting Facebook:', err);
+                  alert('Failed to disconnect Facebook account. Please try again or contact support.');
+                }
+              } else {
+                // Fallback: inform user about alternative method
+                alert('Facebook account management requires client-side authentication. Please contact support for assistance.');
+              }
+            }
+          </script>
         </div>
       </div>
     <% end %>

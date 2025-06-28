@@ -4,7 +4,6 @@ defmodule EventasaurusWeb.SettingsController do
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Stripe
-  alias EventasaurusApp.Auth
 
   require Logger
 
@@ -39,14 +38,8 @@ defmodule EventasaurusWeb.SettingsController do
         # Get Stripe Connect account for payments tab
         connect_account = if tab == "payments", do: Stripe.get_connect_account(user.id), else: nil
 
-        # Get Facebook identity for account tab
-        facebook_identity = if tab == "account" do
-          identities = get_user_identities(conn)
-          # Get the first Facebook identity (should only be one)
-          List.first(identities)
-        else
-          nil
-        end
+        # Get Facebook identity from the user's session token
+        facebook_identity = get_facebook_identity_from_session(conn)
 
         render(conn, :index,
           user: user,
@@ -174,35 +167,11 @@ defmodule EventasaurusWeb.SettingsController do
   @doc """
   Unlink Facebook account from the current user.
   """
-  def unlink_facebook(conn, %{"identity_id" => identity_id}) do
+  def unlink_facebook(conn, %{"identity_id" => _identity_id}) do
     # Facebook unlinking must be done from frontend using supabase.auth.unlinkIdentity()
     conn
     |> put_flash(:error, "Account unlinking must be done using the client-side method. Please use the JavaScript implementation.")
     |> redirect(to: ~p"/settings/account")
-  end
-
-  @doc """
-  Get user's linked identities (for displaying connected accounts).
-  """
-  defp get_user_identities(conn) do
-    case Auth.get_user_identities(conn) do
-      {:ok, response} ->
-        # Extract identities array from response
-        identities = Map.get(response, "identities", [])
-
-        # Find specifically the Facebook identity
-        facebook_identities = Enum.filter(identities, fn identity ->
-          Map.get(identity, "provider") == "facebook"
-        end)
-
-        # Return Facebook identities with proper format
-        facebook_identities
-
-      {:error, reason} ->
-        Logger.error("Failed to retrieve user identities for settings page: #{inspect(reason)}")
-        # Return empty list so page doesn't crash
-        []
-    end
   end
 
   # Helper function to ensure we have a proper User struct
@@ -212,4 +181,64 @@ defmodule EventasaurusWeb.SettingsController do
     Accounts.find_or_create_from_supabase(supabase_user)
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
+
+  defp get_facebook_identity_from_session(conn) do
+    try do
+      # Get the access token from the session
+      access_token = get_session(conn, :access_token)
+
+      if access_token do
+        # Decode the JWT to get user metadata (basic decode without verification for metadata only)
+        case decode_jwt_payload(access_token) do
+          {:ok, payload} ->
+            # Check app_metadata.providers for facebook
+            providers = get_in(payload, ["app_metadata", "providers"]) || []
+
+            if "facebook" in providers do
+              # Return a basic facebook identity structure
+              %{
+                "id" => "facebook-identity",
+                "provider" => "facebook",
+                "created_at" => get_in(payload, ["user_metadata", "iss"]) || "Unknown",
+                "identity_id" => get_in(payload, ["user_metadata", "provider_id"]) || "facebook"
+              }
+            else
+              nil
+            end
+
+          {:error, _reason} ->
+            nil
+        end
+      else
+        nil
+      end
+    rescue
+      _ -> nil
+    end
+  end
+
+  defp decode_jwt_payload(token) do
+    try do
+      # Split JWT into parts
+      case String.split(token, ".") do
+        [_header, payload, _signature] ->
+          # Decode base64 payload (add padding if needed)
+          padded_payload = payload <> String.duplicate("=", rem(4 - rem(String.length(payload), 4), 4))
+
+                    case Base.url_decode64(padded_payload) do
+            {:ok, json_string} ->
+              case Jason.decode(json_string) do
+                {:ok, data} -> {:ok, data}
+                {:error, _} -> {:error, :invalid_json}
+              end
+
+            :error -> {:error, :invalid_base64}
+          end
+
+        _ -> {:error, :invalid_jwt_format}
+      end
+    rescue
+      _ -> {:error, :decode_error}
+    end
+  end
 end
