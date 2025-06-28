@@ -231,7 +231,11 @@ defmodule EventasaurusWeb.SettingsController do
           []
         end
 
-      {:error, _reason} ->
+      {:error, reason} ->
+        # Log the error but don't crash the page
+        require Logger
+        Logger.error("Failed to retrieve user identities for settings page: #{inspect(reason)}")
+        # Return empty list so the page still loads
         []
     end
   end
