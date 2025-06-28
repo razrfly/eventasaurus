@@ -200,6 +200,19 @@ defmodule EventasaurusApp.Auth do
     end
   end
 
+  @doc """
+  Get all identities linked to the authenticated user.
+  """
+  def get_user_identities(conn) do
+    access_token = get_session(conn, :access_token)
+
+    if access_token do
+      Client.get_user_identities(access_token)
+    else
+      {:error, :no_authentication_token}
+    end
+  end
+
   # Helper function to extract the token from different formats
   defp extract_token(auth_data) do
     cond do

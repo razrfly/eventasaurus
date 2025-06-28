@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.SettingsController do
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.Stripe
+  alias EventasaurusApp.Auth
 
   require Logger
 
@@ -40,10 +41,9 @@ defmodule EventasaurusWeb.SettingsController do
 
         # Get Facebook identity for account tab
         facebook_identity = if tab == "account" do
-          case get_user_identities(conn) do
-            {:ok, identity} -> identity
-            {:error, _} -> nil
-          end
+          identities = get_user_identities(conn)
+          # Get the first Facebook identity (should only be one)
+          List.first(identities)
         else
           nil
         end
@@ -175,30 +175,31 @@ defmodule EventasaurusWeb.SettingsController do
   Unlink Facebook account from the current user.
   """
   def unlink_facebook(conn, %{"identity_id" => identity_id}) do
-    case ensure_user_struct(conn.assigns[:auth_user]) do
-      {:ok, _user} ->
-        case EventasaurusApp.Auth.unlink_facebook_account(conn, identity_id) do
-          {:ok, _result} ->
-            conn
-            |> put_flash(:info, "Facebook account disconnected successfully.")
-            |> redirect(to: ~p"/settings/account")
-
-          {:error, reason} ->
-            error_message = case reason do
-              :no_authentication_token -> "Authentication session expired. Please log in again."
-              :manual_linking_disabled -> "Account unlinking is currently disabled. Please contact support if you need to disconnect your Facebook account."
-              _ -> "Failed to disconnect Facebook account. Please try again."
-            end
-
-            conn
-            |> put_flash(:error, error_message)
-            |> redirect(to: ~p"/settings/account")
-        end
-
-      {:error, _} ->
+    case Auth.unlink_facebook_account(conn, identity_id) do
+      {:ok, _result} ->
         conn
-        |> put_flash(:error, "You must be logged in to manage account connections.")
+        |> put_flash(:info, "Facebook account disconnected successfully!")
+        |> redirect(to: ~p"/settings/account")
+
+      {:error, :manual_linking_disabled} ->
+        conn
+        |> put_flash(:error, "Account unlinking is currently disabled. Please enable 'Manual Linking' in your Supabase Dashboard under Authentication → Settings to allow account unlinking.")
+        |> redirect(to: ~p"/settings/account")
+
+      {:error, :no_authentication_token} ->
+        conn
+        |> put_flash(:error, "Authentication session expired. Please log in again.")
         |> redirect(to: ~p"/auth/login")
+
+      {:error, %{message: message}} when is_binary(message) ->
+        conn
+        |> put_flash(:error, message)
+        |> redirect(to: ~p"/settings/account")
+
+      {:error, _reason} ->
+        conn
+        |> put_flash(:error, "Failed to disconnect Facebook account. Please try again.")
+        |> redirect(to: ~p"/settings/account")
     end
   end
 
@@ -206,22 +207,32 @@ defmodule EventasaurusWeb.SettingsController do
   Get user's linked identities (for displaying connected accounts).
   """
   def get_user_identities(conn) do
-    access_token = get_session(conn, :access_token)
+    case Auth.get_user_identities(conn) do
+      {:ok, response} ->
+        # Extract identities array from response
+        identities = Map.get(response, "identities", [])
 
-    if access_token do
-      case EventasaurusApp.Auth.Client.get_user(access_token) do
-        {:ok, user_data} ->
-          identities = Map.get(user_data, "identities", [])
-          facebook_identity = Enum.find(identities, fn identity ->
-            Map.get(identity, "provider") == "facebook"
-          end)
-          {:ok, facebook_identity}
+        # Find Facebook identity
+        facebook_identity = Enum.find(identities, fn identity ->
+          Map.get(identity, "provider") == "facebook"
+        end)
 
-        {:error, _reason} ->
-          {:error, :failed_to_get_user}
-      end
-    else
-      {:error, :no_authentication_token}
+        if facebook_identity do
+          [
+            %{
+              provider: "facebook",
+              identity_id: Map.get(facebook_identity, "identity_id"),
+              user_id: Map.get(facebook_identity, "user_id"),
+              identity_data: Map.get(facebook_identity, "identity_data", %{}),
+              provider_type: "oauth"
+            }
+          ]
+        else
+          []
+        end
+
+      {:error, _reason} ->
+        []
     end
   end
 
