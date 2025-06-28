@@ -458,7 +458,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, %{}} on success or {:error, reason} on failure.
   """
-  def unlink_facebook_account(access_token, identity_id) do
+  def unlink_facebook_account(_access_token, _identity_id) do
     # For server-side implementation, we need to call this via the JavaScript client
     # This is a placeholder - in practice, we'll call this from the frontend
     {:error, %{status: 501, message: "Use frontend supabase.auth.unlinkIdentity() method"}}
