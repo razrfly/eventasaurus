@@ -466,7 +466,7 @@ defmodule EventasaurusApp.Auth.Client do
         if user_id do
           # Use admin API to unlink the identity
           url = "#{get_auth_url()}/admin/users/#{user_id}/identities/#{identity_id}"
-          
+
           case HTTPoison.delete(url, admin_headers(), [timeout: 30000, recv_timeout: 30000]) do
             {:ok, %{status_code: 200, body: response_body}} ->
               response = Jason.decode!(response_body)
@@ -476,7 +476,7 @@ defmodule EventasaurusApp.Auth.Client do
             {:ok, %{status_code: 404, body: response_body}} ->
               # Admin API failed, try user API fallback
               case Jason.decode(response_body) do
-                {:ok, error_json} -> 
+                {:ok, error_json} ->
                   message = error_json["message"] || "Identity not found"
                   cond do
                     String.contains?(message, "manual_linking_disabled") ->
@@ -486,7 +486,7 @@ defmodule EventasaurusApp.Auth.Client do
                     true ->
                       try_user_api_unlink(access_token, identity_id)
                   end
-                {:error, _} -> 
+                {:error, _} ->
                   # Not JSON, probably HTML 404 page - try user API instead
                   try_user_api_unlink(access_token, identity_id)
               end
@@ -589,16 +589,16 @@ defmodule EventasaurusApp.Auth.Client do
 
       {:ok, %{status_code: code, body: response_body}} ->
         Logger.error("Failed to get real user identities with status #{code}: #{response_body}")
-        
+
         # Try to decode JSON response, but handle cases where it's HTML/plain text
         error_message = case Jason.decode(response_body) do
-          {:ok, error_json} -> 
+          {:ok, error_json} ->
             error_json["message"] || "Failed to get user identities"
-          {:error, _} -> 
+          {:error, _} ->
             # Not JSON, probably HTML 404 page
             "API endpoint not available (status #{code})"
         end
-        
+
         {:error, %{status: code, message: error_message}}
 
       {:error, error} ->
@@ -652,37 +652,37 @@ defmodule EventasaurusApp.Auth.Client do
       "#{get_auth_url()}/user/identities",
       "#{get_auth_url()}/user"
     ]
-    
+
     try_user_api_endpoints(access_token, urls_to_try)
   end
-  
+
   defp try_user_api_endpoints(access_token, [url | remaining_urls]) do
     case HTTPoison.delete(url, auth_headers(access_token), [timeout: 30000, recv_timeout: 30000]) do
       {:ok, %{status_code: 200, body: response_body}} ->
         response = Jason.decode!(response_body)
         Logger.debug("User API unlinking succeeded")
         {:ok, response}
-      
-      {:ok, %{status_code: _code, body: _response_body}} when length(remaining_urls) > 0 ->
+
+            {:ok, %{status_code: _code, body: _response_body}} when remaining_urls != [] ->
         # Try next endpoint
         try_user_api_endpoints(access_token, remaining_urls)
-      
+
       {:ok, %{status_code: code, body: response_body}} ->
         error_message = case Jason.decode(response_body) do
           {:ok, error_json} -> error_json["message"] || "User API unlinking failed"
           {:error, _} -> "User API unlinking failed (status #{code})"
         end
         {:error, %{status: code, message: error_message}}
-      
-      {:error, _error} when length(remaining_urls) > 0 ->
+
+      {:error, _error} when remaining_urls != [] ->
         # Try next endpoint
         try_user_api_endpoints(access_token, remaining_urls)
-      
+
       {:error, error} ->
         {:error, error}
     end
   end
-  
+
   defp try_user_api_endpoints(_access_token, []) do
     {:error, %{status: 404, message: "No working user API endpoint found"}}
   end
