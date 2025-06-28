@@ -113,6 +113,60 @@
             </div>
           </.form>
         </div>
+
+        <!-- Connected Accounts -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+          <div class="mb-6">
+            <h2 class="text-xl font-semibold">Connected Accounts</h2>
+            <p class="text-gray-600">Manage your social media and authentication connections.</p>
+          </div>
+
+          <!-- Facebook Connection -->
+          <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+            <div class="flex items-center space-x-4">
+              <div class="flex-shrink-0">
+                <svg class="w-8 h-8 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-gray-900">Facebook</h3>
+                <%= if @facebook_identity do %>
+                  <p class="text-sm text-green-600">Connected</p>
+                  <p class="text-xs text-gray-500">Connected on <%= Date.from_iso8601!(String.slice(@facebook_identity["created_at"], 0, 10)) |> Calendar.strftime("%B %d, %Y") %></p>
+                <% else %>
+                  <p class="text-sm text-gray-500">Not connected</p>
+                <% end %>
+              </div>
+            </div>
+            <div>
+              <%= if @facebook_identity do %>
+                <.form 
+                  for={%{}} 
+                  action={~p"/settings/facebook/unlink"} 
+                  method="post" 
+                  class="inline"
+                >
+                  <input type="hidden" name="identity_id" value={@facebook_identity["id"]} />
+                  <.button 
+                    type="submit" 
+                    onclick="return confirm('Are you sure you want to disconnect your Facebook account?')"
+                    class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    Disconnect
+                  </.button>
+                </.form>
+              <% else %>
+                <a
+                  href={~p"/settings/facebook/link"}
+                  class="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Connect
+                </a>
+              <% end %>
+            </div>
+          </div>
+        </div>
       </div>
     <% end %>
 

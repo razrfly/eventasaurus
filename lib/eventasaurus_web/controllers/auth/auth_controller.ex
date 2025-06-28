@@ -193,6 +193,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.info("Auth callback received: #{inspect(params)}")
 
     case params do
+      # Facebook OAuth callback with state verification
+      %{"code" => code, "state" => state} when not is_nil(code) ->
+        handle_facebook_oauth_callback(conn, code, state, params)
+
       %{"access_token" => access_token, "refresh_token" => refresh_token, "type" => "recovery"} ->
         Logger.info("Password recovery callback with tokens - setting recovery session")
         conn
@@ -339,5 +343,114 @@ defmodule EventasaurusWeb.Auth.AuthController do
       },
       "token" => token
     })
+  end
+
+  @doc """
+  Redirect user to Facebook OAuth login.
+  """
+  def facebook_login(conn, _params) do
+    # Generate CSRF state token for security
+    state = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+
+    # Store state in session for verification
+    conn = put_session(conn, :oauth_state, state)
+
+    # Get Facebook OAuth URL and redirect
+    facebook_url = Auth.get_facebook_oauth_url(state)
+    redirect(conn, external: facebook_url)
+  end
+
+  @doc """
+  Handle Facebook OAuth error callback.
+  """
+  def facebook_callback(conn, %{"error" => error, "error_description" => description}) do
+    Logger.error("Facebook OAuth error: #{error} - #{description}")
+    conn
+    |> put_flash(:error, "Facebook authentication was cancelled or failed.")
+    |> redirect(to: ~p"/auth/login")
+  end
+
+  defp handle_facebook_oauth_callback(conn, code, state, params) do
+    stored_state = get_session(conn, :oauth_state)
+    oauth_action = get_session(conn, :oauth_action) || "login"
+
+    if state == stored_state do
+      # Clear the OAuth state and action from session
+      conn = conn
+      |> delete_session(:oauth_state)
+      |> delete_session(:oauth_action)
+
+      case oauth_action do
+        "link" ->
+          # User is trying to link Facebook account to existing account
+          handle_facebook_account_linking(conn, code)
+
+        "login" ->
+          # User is trying to sign in with Facebook
+          case Auth.sign_in_with_facebook_oauth(code) do
+            {:ok, auth_data} ->
+              Logger.info("Facebook OAuth successful")
+              handle_successful_facebook_auth(conn, auth_data)
+
+            {:error, error} ->
+              Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
+              conn
+              |> put_flash(:error, "Facebook authentication failed. Please try again.")
+              |> redirect(to: ~p"/auth/login")
+          end
+      end
+    else
+      Logger.error("OAuth state mismatch - possible CSRF attack")
+      conn
+      |> put_flash(:error, "Authentication failed - security error.")
+      |> redirect(to: ~p"/auth/login")
+    end
+  end
+
+  defp handle_facebook_account_linking(conn, code) do
+    case Auth.link_facebook_account(conn, code) do
+      {:ok, _result} ->
+        Logger.info("Facebook account linked successfully")
+        conn
+        |> put_flash(:info, "Facebook account connected successfully!")
+        |> redirect(to: ~p"/settings/account")
+
+      {:error, reason} ->
+        Logger.error("Facebook account linking failed: #{inspect(reason)}")
+        error_message = case reason do
+          :no_authentication_token -> "Authentication session expired. Please log in again."
+          %{message: message} when is_binary(message) -> message
+          _ -> "Failed to connect Facebook account. Please try again."
+        end
+
+        conn
+        |> put_flash(:error, error_message)
+        |> redirect(to: ~p"/settings/account")
+    end
+  end
+
+  defp handle_successful_facebook_auth(conn, auth_data) do
+    %{
+      "user" => user_data,
+      "access_token" => access_token,
+      "refresh_token" => refresh_token
+    } = auth_data
+
+    # Sync user with local database (using existing pattern)
+    case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
+      {:ok, user} ->
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_session(:refresh_token, refresh_token)
+        |> put_session(:current_user_id, user.id)
+        |> put_flash(:info, "Successfully signed in with Facebook!")
+        |> redirect(to: ~p"/dashboard")
+
+      {:error, reason} ->
+        Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
+        conn
+        |> put_flash(:error, "Authentication failed - unable to create account.")
+        |> redirect(to: ~p"/auth/login")
+    end
   end
 end

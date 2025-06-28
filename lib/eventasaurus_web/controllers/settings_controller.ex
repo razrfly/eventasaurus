@@ -38,10 +38,21 @@ defmodule EventasaurusWeb.SettingsController do
         # Get Stripe Connect account for payments tab
         connect_account = if tab == "payments", do: Stripe.get_connect_account(user.id), else: nil
 
+        # Get Facebook identity for account tab
+        facebook_identity = if tab == "account" do
+          case get_user_identities(conn) do
+            {:ok, identity} -> identity
+            {:error, _} -> nil
+          end
+        else
+          nil
+        end
+
         render(conn, :index,
           user: user,
           active_tab: tab,
-          connect_account: connect_account
+          connect_account: connect_account,
+          facebook_identity: facebook_identity
         )
 
       {:error, _} ->
@@ -145,6 +156,76 @@ defmodule EventasaurusWeb.SettingsController do
         conn
         |> put_flash(:error, "You must be logged in to update your password.")
         |> redirect(to: ~p"/auth/login")
+    end
+  end
+
+  @doc """
+  Link Facebook account to the current user.
+  """
+  def link_facebook(conn, _params) do
+    # Generate CSRF state token for security
+    state = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+
+    # Store state in session for verification along with a marker that this is for linking
+    conn = conn
+    |> put_session(:oauth_state, state)
+    |> put_session(:oauth_action, "link")
+
+    # Get Facebook OAuth URL and redirect
+    facebook_url = EventasaurusApp.Auth.get_facebook_oauth_url(state)
+    redirect(conn, external: facebook_url)
+  end
+
+  @doc """
+  Unlink Facebook account from the current user.
+  """
+  def unlink_facebook(conn, %{"identity_id" => identity_id}) do
+    case ensure_user_struct(conn.assigns[:auth_user]) do
+      {:ok, _user} ->
+        case EventasaurusApp.Auth.unlink_facebook_account(conn, identity_id) do
+          {:ok, _result} ->
+            conn
+            |> put_flash(:info, "Facebook account disconnected successfully.")
+            |> redirect(to: ~p"/settings/account")
+
+          {:error, reason} ->
+            error_message = case reason do
+              :no_authentication_token -> "Authentication session expired. Please log in again."
+              _ -> "Failed to disconnect Facebook account. Please try again."
+            end
+
+            conn
+            |> put_flash(:error, error_message)
+            |> redirect(to: ~p"/settings/account")
+        end
+
+      {:error, _} ->
+        conn
+        |> put_flash(:error, "You must be logged in to manage account connections.")
+        |> redirect(to: ~p"/auth/login")
+    end
+  end
+
+  @doc """
+  Get user's linked identities (for displaying connected accounts).
+  """
+  def get_user_identities(conn) do
+    access_token = get_session(conn, :access_token)
+
+    if access_token do
+      case EventasaurusApp.Auth.Client.get_user(access_token) do
+        {:ok, user_data} ->
+          identities = Map.get(user_data, "identities", [])
+          facebook_identity = Enum.find(identities, fn identity ->
+            Map.get(identity, "provider") == "facebook"
+          end)
+          {:ok, facebook_identity}
+
+        {:error, _reason} ->
+          {:error, :failed_to_get_user}
+      end
+    else
+      {:error, :no_authentication_token}
     end
   end
 

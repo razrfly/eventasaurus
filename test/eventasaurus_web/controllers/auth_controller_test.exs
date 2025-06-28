@@ -124,4 +124,38 @@ defmodule EventasaurusWeb.AuthControllerTest do
       assert get_flash(conn, :info) == "You have been logged in successfully."
     end
   end
+
+  describe "Facebook OAuth" do
+    test "facebook_login redirects to Facebook OAuth URL", %{conn: conn} do
+      conn = get(conn, ~p"/auth/facebook")
+
+      assert redirected_to(conn) =~ "supabase.co/auth/v1/authorize"
+      assert redirected_to(conn) =~ "provider=facebook"
+
+      # Check that OAuth state is stored in session
+      assert get_session(conn, :oauth_state) != nil
+    end
+
+    test "facebook_callback with error shows error message", %{conn: conn} do
+      conn = get(conn, ~p"/auth/callback", %{
+        "error" => "access_denied",
+        "error_description" => "User denied the request"
+      })
+
+      assert redirected_to(conn) == ~p"/auth/login"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Facebook authentication was cancelled"
+    end
+
+    test "facebook_callback with invalid state shows security error", %{conn: conn} do
+      conn = conn
+      |> init_test_session(%{oauth_state: "valid_state"})
+      |> get(~p"/auth/callback", %{
+        "code" => "test_code",
+        "state" => "invalid_state"
+      })
+
+      assert redirected_to(conn) == ~p"/auth/login"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "security error"
+    end
+  end
 end
