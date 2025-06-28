@@ -471,11 +471,11 @@ defmodule EventasaurusApp.Auth.Client do
         # Check if this is the manual linking disabled error
         case error do
           %{"error_code" => "manual_linking_disabled"} ->
-            Logger.error("Facebook account unlinking failed: manual linking disabled in Supabase")
+            Logger.error("Facebook account unlinking failed: manual linking disabled in Supabase dashboard")
             {:error, :manual_linking_disabled}
           _ ->
             Logger.error("Facebook account unlinking failed with status 404: #{inspect(error)}")
-            {:error, %{status: 404, message: error["message"] || "Failed to unlink Facebook account"}}
+            {:error, %{status: 404, message: error["message"] || "Identity not found"}}
         end
 
       {:ok, %{status_code: code, body: response_body}} ->
@@ -540,6 +540,43 @@ defmodule EventasaurusApp.Auth.Client do
 
       {:error, error} ->
         Logger.error("admin_get_user_by_email: Request error: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Get all identities linked to the authenticated user.
+
+  Returns {:ok, identities} on success or {:error, reason} on failure.
+  """
+  def get_user_identities(access_token) do
+    url = "#{get_auth_url()}/user/identities"
+
+    case HTTPoison.get(url, auth_headers(access_token)) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        try do
+          response = Jason.decode!(response_body)
+          Logger.debug("User identities retrieved successfully")
+          {:ok, response}
+        rescue
+          Jason.DecodeError ->
+            Logger.error("Invalid JSON response from user identities endpoint: #{inspect(response_body)}")
+            {:error, %{status: 500, message: "Invalid response format from authentication service"}}
+        end
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        try do
+          error = Jason.decode!(response_body)
+          Logger.error("Failed to get user identities with status #{code}: #{inspect(error)}")
+          {:error, %{status: code, message: error["message"] || "Failed to get user identities"}}
+        rescue
+          Jason.DecodeError ->
+            Logger.error("Failed to get user identities with status #{code}, non-JSON response: #{inspect(response_body)}")
+            {:error, %{status: code, message: "Authentication service error"}}
+        end
+
+      {:error, error} ->
+        Logger.error("Failed to get user identities: #{inspect(error)}")
         {:error, error}
     end
   end
