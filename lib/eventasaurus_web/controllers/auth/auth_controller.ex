@@ -1,5 +1,6 @@
 defmodule EventasaurusWeb.Auth.AuthController do
   use EventasaurusWeb, :controller
+  require Logger
 
   alias EventasaurusApp.Auth
 
@@ -193,6 +194,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.info("Auth callback received: #{inspect(params)}")
 
     case params do
+      # Facebook OAuth callback
+      %{"code" => code} when not is_nil(code) ->
+        handle_facebook_oauth_callback(conn, code, params)
+
       %{"access_token" => access_token, "refresh_token" => refresh_token, "type" => "recovery"} ->
         Logger.info("Password recovery callback with tokens - setting recovery session")
         conn
@@ -339,5 +344,103 @@ defmodule EventasaurusWeb.Auth.AuthController do
       },
       "token" => token
     })
+  end
+
+  @doc """
+  Redirect user to Facebook OAuth login.
+  """
+  def facebook_login(conn, _params) do
+    # Store action type (let Supabase handle CSRF state)
+    conn = put_session(conn, :oauth_action, "login")
+
+    # Get Facebook OAuth URL and redirect
+    facebook_url = Auth.get_facebook_oauth_url()
+    redirect(conn, external: facebook_url)
+  end
+
+  @doc """
+  Handle Facebook OAuth error callback.
+  """
+  def facebook_callback(conn, %{"error" => error, "error_description" => description}) do
+    Logger.error("Facebook OAuth error: #{error} - #{description}")
+    conn
+    |> put_flash(:error, "Facebook authentication was cancelled or failed.")
+    |> redirect(to: ~p"/auth/login")
+  end
+
+  defp handle_facebook_oauth_callback(conn, code, _params) do
+    oauth_action = get_session(conn, :oauth_action) || "login"
+
+    Logger.info("Facebook OAuth callback - OAuth action: #{inspect(oauth_action)}")
+
+    # Clear the OAuth action from session
+    conn = delete_session(conn, :oauth_action)
+
+    case oauth_action do
+      "link" ->
+        # User is trying to link Facebook account to existing account
+        handle_facebook_account_linking(conn, code)
+
+      "login" ->
+        # User is trying to sign in with Facebook
+        case Auth.sign_in_with_facebook_oauth(code) do
+          {:ok, auth_data} ->
+            Logger.info("Facebook OAuth successful")
+            handle_successful_facebook_auth(conn, auth_data)
+
+          {:error, error} ->
+            Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
+            conn
+            |> put_flash(:error, "Facebook authentication failed. Please try again.")
+            |> redirect(to: ~p"/auth/login")
+        end
+    end
+  end
+
+  defp handle_facebook_account_linking(conn, code) do
+    case Auth.link_facebook_account(conn, code) do
+      {:ok, _result} ->
+        Logger.info("Facebook account linked successfully")
+        conn
+        |> put_flash(:info, "Facebook account connected successfully!")
+        |> redirect(to: ~p"/settings/account")
+
+      {:error, reason} ->
+        Logger.error("Facebook account linking failed: #{inspect(reason)}")
+        error_message = case reason do
+          :no_authentication_token -> "Authentication session expired. Please log in again."
+          %{message: message} when is_binary(message) -> message
+          _ -> "Failed to connect Facebook account. Please try again."
+        end
+
+        conn
+        |> put_flash(:error, error_message)
+        |> redirect(to: ~p"/settings/account")
+    end
+  end
+
+  defp handle_successful_facebook_auth(conn, auth_data) do
+    %{
+      "user" => user_data,
+      "access_token" => access_token,
+      "refresh_token" => refresh_token
+    } = auth_data
+
+    # Sync user with local database (using existing pattern)
+    case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
+      {:ok, user} ->
+        conn
+        |> put_session(:access_token, access_token)
+        |> put_session(:refresh_token, refresh_token)
+        |> put_session(:current_user_id, user.id)
+        |> put_flash(:info, "Successfully signed in with Facebook!")
+        |> redirect(to: ~p"/dashboard")
+
+      {:error, reason} ->
+        Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
+        conn
+        |> put_flash(:error, "Authentication failed - unable to create account.")
+        |> redirect(to: ~p"/auth/login")
+    end
   end
 end

@@ -152,6 +152,54 @@ defmodule EventasaurusApp.Auth do
     authenticate(email, password)
   end
 
+  @doc """
+  Sign in with Facebook OAuth using authorization code.
+
+  Returns `{:ok, auth_data}` on success or `{:error, reason}` on failure.
+  """
+  def sign_in_with_facebook_oauth(code) do
+    Client.sign_in_with_facebook_oauth(code)
+  end
+
+  @doc """
+  Generate Facebook OAuth login URL.
+
+  Returns the URL string to redirect users to Facebook authentication.
+  """
+  def get_facebook_oauth_url do
+    Client.get_facebook_oauth_url()
+  end
+
+  @doc """
+  Link a Facebook account to the current authenticated user.
+
+  Returns `{:ok, user_data}` on success or `{:error, reason}` on failure.
+  """
+  def link_facebook_account(conn, facebook_oauth_code) do
+    access_token = get_session(conn, :access_token)
+
+    if access_token do
+      Client.link_facebook_account(access_token, facebook_oauth_code)
+    else
+      {:error, :no_authentication_token}
+    end
+  end
+
+  @doc """
+  Unlink a Facebook account from the current authenticated user.
+
+  Returns `{:ok, %{}}` on success or `{:error, reason}` on failure.
+  """
+  def unlink_facebook_account(conn, identity_id) do
+    access_token = get_session(conn, :access_token)
+
+    if access_token do
+      Client.unlink_facebook_account(access_token, identity_id)
+    else
+      {:error, :no_authentication_token}
+    end
+  end
+
   # Helper function to extract the token from different formats
   defp extract_token(auth_data) do
     cond do

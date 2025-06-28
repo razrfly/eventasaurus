@@ -83,6 +83,7 @@ defmodule EventasaurusWeb.Router do
     post "/forgot-password", Auth.AuthController, :request_password_reset
     get "/reset-password", Auth.AuthController, :reset_password
     post "/reset-password", Auth.AuthController, :update_password
+    get "/facebook", Auth.AuthController, :facebook_login
   end
 
   # Auth callback and logout routes (no redirect needed - these need to work for all users)
@@ -117,6 +118,8 @@ defmodule EventasaurusWeb.Router do
     get "/settings/payments", SettingsController, :payments
     post "/settings/account", SettingsController, :update_account
     post "/settings/password", SettingsController, :update_password
+    get "/settings/facebook/link", SettingsController, :link_facebook
+    post "/settings/facebook/unlink", SettingsController, :unlink_facebook
   end
 
   # Protected LiveView routes that require authentication
