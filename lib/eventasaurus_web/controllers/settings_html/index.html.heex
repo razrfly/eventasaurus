@@ -133,7 +133,22 @@
                 <h3 class="text-lg font-medium text-gray-900">Facebook</h3>
                 <%= if @facebook_identity do %>
                   <p class="text-sm text-green-600">Connected</p>
-                  <p class="text-xs text-gray-500">Connected on <%= Date.from_iso8601!(String.slice(@facebook_identity["created_at"], 0, 10)) |> Calendar.strftime("%B %d, %Y") %></p>
+                  <p class="text-xs text-gray-500">
+                    Connected on
+                    <%= case @facebook_identity["created_at"] do %>
+                      <% nil -> %>
+                        unknown date
+                      <% created_at when is_binary(created_at) -> %>
+                        <%= case Date.from_iso8601(String.slice(created_at, 0, 10)) do %>
+                          <% {:ok, date} -> %>
+                            <%= Calendar.strftime(date, "%B %d, %Y") %>
+                          <% {:error, _} -> %>
+                            unknown date
+                        <% end %>
+                      <% _ -> %>
+                        unknown date
+                    <% end %>
+                  </p>
                 <% else %>
                   <p class="text-sm text-gray-500">Not connected</p>
                 <% end %>

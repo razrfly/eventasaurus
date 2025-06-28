@@ -431,7 +431,8 @@ defmodule EventasaurusApp.Auth.Client do
 
     body = Jason.encode!(%{
       provider: "facebook",
-      access_token: facebook_oauth_code
+      code: facebook_oauth_code,
+      redirect_uri: get_facebook_redirect_uri()
     })
 
     case HTTPoison.post(url, body, auth_headers(access_token)) do
