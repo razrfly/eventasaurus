@@ -166,8 +166,8 @@ defmodule EventasaurusApp.Auth do
 
   Returns the URL string to redirect users to Facebook authentication.
   """
-  def get_facebook_oauth_url(state \\ nil) do
-    Client.get_facebook_oauth_url(state)
+  def get_facebook_oauth_url do
+    Client.get_facebook_oauth_url()
   end
 
   @doc """
