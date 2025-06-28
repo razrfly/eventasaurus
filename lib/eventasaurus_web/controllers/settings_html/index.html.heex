@@ -147,14 +147,17 @@
             </div>
             <div id="facebook-action">
               <%= if @facebook_identity do %>
-                <!-- Facebook is connected - show disconnect button -->
-                <button 
-                  type="button"
-                  onclick="disconnectFacebook()"
-                  class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                >
-                  Disconnect
-                </button>
+                <!-- Facebook is connected - show disconnect form -->
+                <.form for={%{}} action={~p"/settings/facebook/unlink"} method="post" class="inline">
+                  <input type="hidden" name="identity_id" value={@facebook_identity["identity_id"]} />
+                  <button 
+                    type="submit"
+                    class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    onclick="return confirm('Are you sure you want to disconnect your Facebook account? This will remove Facebook as a login option for your account.')"
+                  >
+                    Disconnect
+                  </button>
+                </.form>
               <% else %>
                 <!-- Facebook is not connected - show connect button -->
                 <a
@@ -166,28 +169,6 @@
               <% end %>
             </div>
           </div>
-
-          <!-- JavaScript fallback for disconnection functionality -->
-          <script type="text/javascript">
-            async function disconnectFacebook() {
-              // Check if FacebookIdentityManager is available for client-side unlinking
-              if (typeof FacebookIdentityManager !== 'undefined') {
-                try {
-                  const success = await FacebookIdentityManager.unlinkFacebookAccount();
-                  if (success) {
-                    // Refresh the page to show updated status
-                    window.location.reload();
-                  }
-                } catch (err) {
-                  console.error('Error disconnecting Facebook:', err);
-                  alert('Failed to disconnect Facebook account. Please try again or contact support.');
-                }
-              } else {
-                // Fallback: inform user about alternative method
-                alert('Facebook account management requires client-side authentication. Please contact support for assistance.');
-              }
-            }
-          </script>
         </div>
       </div>
     <% end %>
