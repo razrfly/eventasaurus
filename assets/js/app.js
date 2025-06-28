@@ -4,6 +4,94 @@ import {Socket} from "phoenix";
 import {LiveSocket} from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 
+// Supabase client setup for identity management
+let supabaseClient = null;
+
+// Initialize Supabase client if needed
+function initSupabaseClient() {
+  if (!supabaseClient && typeof window !== 'undefined') {
+    // Get Supabase config from meta tags
+    const supabaseUrl = document.querySelector('meta[name="supabase-url"]')?.content;
+    const supabaseAnonKey = document.querySelector('meta[name="supabase-anon-key"]')?.content;
+    
+    if (supabaseUrl && supabaseAnonKey && window.supabase) {
+      supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+    }
+  }
+  return supabaseClient;
+}
+
+// Facebook identity management functions
+window.FacebookIdentityManager = {
+  async getUserIdentities() {
+    const client = initSupabaseClient();
+    if (!client) {
+      console.error('Supabase client not available');
+      return { data: null, error: { message: 'Supabase client not initialized' } };
+    }
+    
+    try {
+      const { data, error } = await client.auth.getUserIdentities();
+      return { data, error };
+    } catch (err) {
+      console.error('Error getting user identities:', err);
+      return { data: null, error: err };
+    }
+  },
+
+  async unlinkFacebookAccount() {
+    const client = initSupabaseClient();
+    if (!client) {
+      alert('Authentication service not available');
+      return false;
+    }
+
+    try {
+      // First get all user identities
+      const { data: identities, error: identitiesError } = await this.getUserIdentities();
+      
+      if (identitiesError) {
+        console.error('Failed to get user identities:', identitiesError);
+        alert('Failed to retrieve account information');
+        return false;
+      }
+
+      // Find Facebook identity
+      const facebookIdentity = identities.identities?.find(identity => identity.provider === 'facebook');
+      
+      if (!facebookIdentity) {
+        alert('No Facebook account found to unlink');
+        return false;
+      }
+
+      // Confirm unlinking
+      if (!confirm('Are you sure you want to disconnect your Facebook account?')) {
+        return false;
+      }
+
+      // Unlink the Facebook identity
+      const { data, error } = await client.auth.unlinkIdentity(facebookIdentity);
+      
+      if (error) {
+        console.error('Failed to unlink Facebook account:', error);
+        alert(`Failed to disconnect Facebook account: ${error.message}`);
+        return false;
+      }
+
+      alert('Facebook account disconnected successfully!');
+      
+      // Reload the page to reflect changes
+      window.location.reload();
+      return true;
+      
+    } catch (err) {
+      console.error('Error unlinking Facebook account:', err);
+      alert('An unexpected error occurred while disconnecting your Facebook account');
+      return false;
+    }
+  }
+};
+
 // Define LiveView hooks here
 import SupabaseImageUpload from "./supabase_upload";
 let Hooks = {};

@@ -7,6 +7,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
+    
+    <%
+      supabase_config = Application.get_env(:eventasaurus, :supabase)
+      supabase_url = supabase_config[:url] || raise("Missing Supabase URL configuration")
+      supabase_api_key = supabase_config[:api_key] || raise("Missing Supabase API key configuration")
+      supabase_bucket = supabase_config[:bucket] || "event-images"
+    %>
+    
     <.live_title suffix=" · Eventasaurus">
       <%= assigns[:page_title] || "Home" %>
     </.live_title>
@@ -54,6 +62,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Knewave&display=swap" rel="stylesheet">
+    
+    <!-- Supabase JavaScript library for identity management -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <!-- Supabase configuration meta tags -->
+    <meta name="supabase-url" content={supabase_url} />
+    <meta name="supabase-anon-key" content={supabase_api_key} />
     
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
@@ -131,12 +146,6 @@
       });
     </script>
   </head>
-<%
-  supabase_config = Application.get_env(:eventasaurus, :supabase)
-  supabase_url = supabase_config[:url] || raise("Missing Supabase URL configuration")
-  supabase_api_key = supabase_config[:api_key] || raise("Missing Supabase API key configuration")
-  supabase_bucket = supabase_config[:bucket] || "event-images"
-%>
   <body id="app-body" class={[
       "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
       # Apply theme class to body for universal background application
