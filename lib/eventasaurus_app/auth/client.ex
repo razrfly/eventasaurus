@@ -407,7 +407,7 @@ defmodule EventasaurusApp.Auth.Client do
   @doc """
   Generate the Facebook OAuth login URL for redirecting users.
   """
-  def get_facebook_oauth_url(state \\ nil) do
+  def get_facebook_oauth_url do
     base_url = "#{get_auth_url()}/authorize"
     redirect_uri = get_facebook_redirect_uri()
 
@@ -416,7 +416,6 @@ defmodule EventasaurusApp.Auth.Client do
       {"redirect_to", redirect_uri}
     ]
 
-    params = if state, do: [{"state", state} | params], else: params
     query_string = URI.encode_query(params)
 
     "#{base_url}?#{query_string}"

@@ -163,16 +163,11 @@ defmodule EventasaurusWeb.SettingsController do
   Link Facebook account to the current user.
   """
   def link_facebook(conn, _params) do
-    # Generate CSRF state token for security
-    state = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+    # Store marker that this is for linking (let Supabase handle CSRF state)
+    conn = put_session(conn, :oauth_action, "link")
 
-    # Store state in session for verification along with a marker that this is for linking
-    conn = conn
-    |> put_session(:oauth_state, state)
-    |> put_session(:oauth_action, "link")
-
-    # Get Facebook OAuth URL and redirect
-    facebook_url = EventasaurusApp.Auth.get_facebook_oauth_url(state)
+    # Get Facebook OAuth URL and redirect (without custom state)
+    facebook_url = EventasaurusApp.Auth.get_facebook_oauth_url()
     redirect(conn, external: facebook_url)
   end
 

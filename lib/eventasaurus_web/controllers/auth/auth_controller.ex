@@ -194,9 +194,9 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.info("Auth callback received: #{inspect(params)}")
 
     case params do
-      # Facebook OAuth callback with state verification
-      %{"code" => code, "state" => state} when not is_nil(code) ->
-        handle_facebook_oauth_callback(conn, code, state, params)
+      # Facebook OAuth callback
+      %{"code" => code} when not is_nil(code) ->
+        handle_facebook_oauth_callback(conn, code, params)
 
       %{"access_token" => access_token, "refresh_token" => refresh_token, "type" => "recovery"} ->
         Logger.info("Password recovery callback with tokens - setting recovery session")
@@ -350,14 +350,11 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Redirect user to Facebook OAuth login.
   """
   def facebook_login(conn, _params) do
-    # Generate CSRF state token for security
-    state = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
-
-    # Store state in session for verification
-    conn = put_session(conn, :oauth_state, state)
+    # Store action type (let Supabase handle CSRF state)
+    conn = put_session(conn, :oauth_action, "login")
 
     # Get Facebook OAuth URL and redirect
-    facebook_url = Auth.get_facebook_oauth_url(state)
+    facebook_url = Auth.get_facebook_oauth_url()
     redirect(conn, external: facebook_url)
   end
 
@@ -371,40 +368,32 @@ defmodule EventasaurusWeb.Auth.AuthController do
     |> redirect(to: ~p"/auth/login")
   end
 
-  defp handle_facebook_oauth_callback(conn, code, state, _params) do
-    stored_state = get_session(conn, :oauth_state)
+  defp handle_facebook_oauth_callback(conn, code, _params) do
     oauth_action = get_session(conn, :oauth_action) || "login"
 
-    if state == stored_state do
-      # Clear the OAuth state and action from session
-      conn = conn
-      |> delete_session(:oauth_state)
-      |> delete_session(:oauth_action)
+    Logger.info("Facebook OAuth callback - OAuth action: #{inspect(oauth_action)}")
 
-      case oauth_action do
-        "link" ->
-          # User is trying to link Facebook account to existing account
-          handle_facebook_account_linking(conn, code)
+    # Clear the OAuth action from session
+    conn = delete_session(conn, :oauth_action)
 
-        "login" ->
-          # User is trying to sign in with Facebook
-          case Auth.sign_in_with_facebook_oauth(code) do
-            {:ok, auth_data} ->
-              Logger.info("Facebook OAuth successful")
-              handle_successful_facebook_auth(conn, auth_data)
+    case oauth_action do
+      "link" ->
+        # User is trying to link Facebook account to existing account
+        handle_facebook_account_linking(conn, code)
 
-            {:error, error} ->
-              Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
-              conn
-              |> put_flash(:error, "Facebook authentication failed. Please try again.")
-              |> redirect(to: ~p"/auth/login")
-          end
-      end
-    else
-      Logger.error("OAuth state mismatch - possible CSRF attack")
-      conn
-      |> put_flash(:error, "Authentication failed - security error.")
-      |> redirect(to: ~p"/auth/login")
+      "login" ->
+        # User is trying to sign in with Facebook
+        case Auth.sign_in_with_facebook_oauth(code) do
+          {:ok, auth_data} ->
+            Logger.info("Facebook OAuth successful")
+            handle_successful_facebook_auth(conn, auth_data)
+
+          {:error, error} ->
+            Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
+            conn
+            |> put_flash(:error, "Facebook authentication failed. Please try again.")
+            |> redirect(to: ~p"/auth/login")
+        end
     end
   end
 
