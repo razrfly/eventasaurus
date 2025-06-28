@@ -454,6 +454,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   @doc """
   Unlink a Facebook account from an authenticated user.
+  Note: This requires manual linking to be enabled in Supabase.
 
   Returns {:ok, %{}} on success or {:error, reason} on failure.
   """
@@ -464,6 +465,18 @@ defmodule EventasaurusApp.Auth.Client do
       {:ok, %{status_code: 200}} ->
         Logger.debug("Facebook account unlinked successfully")
         {:ok, %{}}
+
+      {:ok, %{status_code: 404, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        # Check if this is the manual linking disabled error
+        case error do
+          %{"error_code" => "manual_linking_disabled"} ->
+            Logger.error("Facebook account unlinking failed: manual linking disabled in Supabase")
+            {:error, :manual_linking_disabled}
+          _ ->
+            Logger.error("Facebook account unlinking failed with status 404: #{inspect(error)}")
+            {:error, %{status: 404, message: error["message"] || "Failed to unlink Facebook account"}}
+        end
 
       {:ok, %{status_code: code, body: response_body}} ->
         error = Jason.decode!(response_body)
