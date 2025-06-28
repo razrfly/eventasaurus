@@ -175,32 +175,10 @@ defmodule EventasaurusWeb.SettingsController do
   Unlink Facebook account from the current user.
   """
   def unlink_facebook(conn, %{"identity_id" => identity_id}) do
-    case Auth.unlink_facebook_account(conn, identity_id) do
-      {:ok, _result} ->
-        conn
-        |> put_flash(:info, "Facebook account disconnected successfully!")
-        |> redirect(to: ~p"/settings/account")
-
-      {:error, :manual_linking_disabled} ->
-        conn
-        |> put_flash(:error, "Account unlinking is currently disabled. Please enable 'Manual Linking' in your Supabase Dashboard under Authentication → Settings to allow account unlinking.")
-        |> redirect(to: ~p"/settings/account")
-
-      {:error, :no_authentication_token} ->
-        conn
-        |> put_flash(:error, "Authentication session expired. Please log in again.")
-        |> redirect(to: ~p"/auth/login")
-
-      {:error, %{message: message}} when is_binary(message) ->
-        conn
-        |> put_flash(:error, message)
-        |> redirect(to: ~p"/settings/account")
-
-      {:error, _reason} ->
-        conn
-        |> put_flash(:error, "Failed to disconnect Facebook account. Please try again.")
-        |> redirect(to: ~p"/settings/account")
-    end
+    # Facebook unlinking must be done from frontend using supabase.auth.unlinkIdentity()
+    conn
+    |> put_flash(:error, "Account unlinking must be done using the client-side method. Please use the JavaScript implementation.")
+    |> redirect(to: ~p"/settings/account")
   end
 
   @doc """
@@ -212,30 +190,20 @@ defmodule EventasaurusWeb.SettingsController do
         # Extract identities array from response
         identities = Map.get(response, "identities", [])
 
-        # Find Facebook identity
-        facebook_identity = Enum.find(identities, fn identity ->
-          Map.get(identity, "provider") == "facebook"
+        # Transform into our format and find Facebook identity
+        Enum.map(identities, fn identity ->
+          provider = Map.get(identity, "provider")
+
+          %{
+            provider: provider,
+            connected: true,
+            display_name: String.capitalize(provider)
+          }
         end)
 
-        if facebook_identity do
-          [
-            %{
-              provider: "facebook",
-              identity_id: Map.get(facebook_identity, "identity_id"),
-              user_id: Map.get(facebook_identity, "user_id"),
-              identity_data: Map.get(facebook_identity, "identity_data", %{}),
-              provider_type: "oauth"
-            }
-          ]
-        else
-          []
-        end
-
       {:error, reason} ->
-        # Log the error but don't crash the page
-        require Logger
         Logger.error("Failed to retrieve user identities for settings page: #{inspect(reason)}")
-        # Return empty list so the page still loads
+        # Return empty list so page doesn't crash
         []
     end
   end

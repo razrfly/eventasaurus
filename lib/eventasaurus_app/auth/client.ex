@@ -453,40 +453,15 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
-  Unlink a Facebook account from an authenticated user.
-  Note: This requires manual linking to be enabled in Supabase.
+  Unlink a Facebook account from an authenticated user using Supabase client method.
+  Note: This should be called from the frontend using supabase.auth.unlinkIdentity()
 
   Returns {:ok, %{}} on success or {:error, reason} on failure.
   """
   def unlink_facebook_account(access_token, identity_id) do
-    url = "#{get_auth_url()}/user/identities/#{identity_id}"
-
-    case HTTPoison.delete(url, auth_headers(access_token)) do
-      {:ok, %{status_code: 200}} ->
-        Logger.debug("Facebook account unlinked successfully")
-        {:ok, %{}}
-
-      {:ok, %{status_code: 404, body: response_body}} ->
-        error = Jason.decode!(response_body)
-        # Check if this is the manual linking disabled error
-        case error do
-          %{"error_code" => "manual_linking_disabled"} ->
-            Logger.error("Facebook account unlinking failed: manual linking disabled in Supabase dashboard")
-            {:error, :manual_linking_disabled}
-          _ ->
-            Logger.error("Facebook account unlinking failed with status 404: #{inspect(error)}")
-            {:error, %{status: 404, message: error["message"] || "Identity not found"}}
-        end
-
-      {:ok, %{status_code: code, body: response_body}} ->
-        error = Jason.decode!(response_body)
-        Logger.error("Facebook account unlinking failed with status #{code}: #{inspect(error)}")
-        {:error, %{status: code, message: error["message"] || "Failed to unlink Facebook account"}}
-
-      {:error, error} ->
-        Logger.error("Facebook account unlinking request failed: #{inspect(error)}")
-        {:error, error}
-    end
+    # For server-side implementation, we need to call this via the JavaScript client
+    # This is a placeholder - in practice, we'll call this from the frontend
+    {:error, %{status: 501, message: "Use frontend supabase.auth.unlinkIdentity() method"}}
   end
 
   defp get_facebook_redirect_uri do
@@ -545,39 +520,66 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
-  Get all identities linked to the authenticated user.
+  Get user providers from JWT token app_metadata.
 
-  Returns {:ok, identities} on success or {:error, reason} on failure.
+  Returns {:ok, providers} on success or {:error, reason} on failure.
   """
   def get_user_identities(access_token) do
-    url = "#{get_auth_url()}/user/identities"
+    try do
+      # Decode JWT token to extract app_metadata
+      case decode_jwt_payload(access_token) do
+        {:ok, payload} ->
+          app_metadata = Map.get(payload, "app_metadata", %{})
+          providers = Map.get(app_metadata, "providers", [])
 
-    case HTTPoison.get(url, auth_headers(access_token)) do
-      {:ok, %{status_code: 200, body: response_body}} ->
-        try do
-          response = Jason.decode!(response_body)
-          Logger.debug("User identities retrieved successfully")
-          {:ok, response}
-        rescue
-          Jason.DecodeError ->
-            Logger.error("Invalid JSON response from user identities endpoint: #{inspect(response_body)}")
-            {:error, %{status: 500, message: "Invalid response format from authentication service"}}
-        end
+          Logger.debug("User providers extracted from JWT: #{inspect(providers)}")
 
-      {:ok, %{status_code: code, body: response_body}} ->
-        try do
-          error = Jason.decode!(response_body)
-          Logger.error("Failed to get user identities with status #{code}: #{inspect(error)}")
-          {:error, %{status: code, message: error["message"] || "Failed to get user identities"}}
-        rescue
-          Jason.DecodeError ->
-            Logger.error("Failed to get user identities with status #{code}, non-JSON response: #{inspect(response_body)}")
-            {:error, %{status: code, message: "Authentication service error"}}
-        end
+          # Transform providers into identity-like format for compatibility
+          identities = Enum.map(providers, fn provider ->
+            %{
+              "provider" => provider,
+              "provider_type" => provider,
+              "id" => "#{provider}_identity"
+            }
+          end)
 
-      {:error, error} ->
-        Logger.error("Failed to get user identities: #{inspect(error)}")
-        {:error, error}
+          {:ok, %{"identities" => identities}}
+
+        {:error, reason} ->
+          Logger.error("Failed to decode JWT for user identities: #{inspect(reason)}")
+          {:error, %{status: 401, message: "Invalid authentication token"}}
+      end
+    rescue
+      error ->
+        Logger.error("Error parsing JWT for user identities: #{inspect(error)}")
+        {:error, %{status: 500, message: "Failed to parse authentication token"}}
+    end
+  end
+
+  # Helper function to decode JWT payload
+  defp decode_jwt_payload(jwt_token) do
+    try do
+      # Split JWT token into parts
+      case String.split(jwt_token, ".") do
+        [_header, payload, _signature] ->
+          # Decode base64 payload
+          case Base.url_decode64(payload, padding: false) do
+            {:ok, decoded_payload} ->
+              case Jason.decode(decoded_payload) do
+                {:ok, json_payload} ->
+                  {:ok, json_payload}
+                {:error, reason} ->
+                  {:error, {:json_decode_error, reason}}
+              end
+            :error ->
+              {:error, :base64_decode_error}
+          end
+        _ ->
+          {:error, :invalid_jwt_format}
+      end
+    rescue
+      error ->
+        {:error, {:decode_error, error}}
     end
   end
 end
