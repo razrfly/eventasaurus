@@ -41,6 +41,8 @@ defmodule EventasaurusWeb.SettingsController do
         # Get Facebook identity from the user's session token
         facebook_identity = get_facebook_identity_from_session(conn)
 
+
+
         render(conn, :index,
           user: user,
           active_tab: tab,
@@ -167,11 +169,49 @@ defmodule EventasaurusWeb.SettingsController do
   @doc """
   Unlink Facebook account from the current user.
   """
-  def unlink_facebook(conn, %{"identity_id" => _identity_id}) do
-    # Facebook unlinking must be done from frontend using supabase.auth.unlinkIdentity()
-    conn
-    |> put_flash(:error, "Account unlinking must be done using the client-side method. Please use the JavaScript implementation.")
-    |> redirect(to: ~p"/settings/account")
+  def unlink_facebook(conn, %{"identity_id" => identity_id}) do
+    try do
+      case EventasaurusApp.Auth.unlink_facebook_account(conn, identity_id) do
+        {:ok, _result} ->
+          conn
+          |> put_flash(:info, "Facebook account disconnected successfully!")
+          |> redirect(to: ~p"/settings/account")
+
+        {:error, %{status: 404, message: message}} ->
+          if String.contains?(message, "manual_linking_disabled") do
+            conn
+            |> put_flash(:error, "Account unlinking is currently disabled. Please contact support or enable manual linking in your project settings.")
+            |> redirect(to: ~p"/settings/account")
+          else
+            conn
+            |> put_flash(:error, "Failed to disconnect Facebook account. Please try again or contact support.")
+            |> redirect(to: ~p"/settings/account")
+          end
+
+        {:error, %{message: message}} ->
+          if String.contains?(message, "minimum_identity_count") do
+            conn
+            |> put_flash(:error, "Cannot disconnect Facebook account. You must have at least one other login method before disconnecting Facebook.")
+            |> redirect(to: ~p"/settings/account")
+          else
+            conn
+            |> put_flash(:error, "Failed to disconnect Facebook account. Please try again or contact support.")
+            |> redirect(to: ~p"/settings/account")
+          end
+
+        {:error, reason} ->
+          Logger.error("Failed to unlink Facebook account: #{inspect(reason)}")
+          conn
+          |> put_flash(:error, "Failed to disconnect Facebook account. Please try again or contact support.")
+          |> redirect(to: ~p"/settings/account")
+      end
+    rescue
+      error ->
+        Logger.error("Exception during Facebook unlinking: #{inspect(error)}")
+        conn
+        |> put_flash(:error, "An unexpected error occurred. Please try again or contact support.")
+        |> redirect(to: ~p"/settings/account")
+    end
   end
 
   # Helper function to ensure we have a proper User struct
@@ -187,58 +227,117 @@ defmodule EventasaurusWeb.SettingsController do
       # Get the access token from the session
       access_token = get_session(conn, :access_token)
 
+      Logger.error("DEBUG: Access token present: #{!is_nil(access_token)}")
+
       if access_token do
-        # Decode the JWT to get user metadata (basic decode without verification for metadata only)
+        # First check if user has Facebook provider in JWT
         case decode_jwt_payload(access_token) do
           {:ok, payload} ->
-            # Check app_metadata.providers for facebook
             providers = get_in(payload, ["app_metadata", "providers"]) || []
+            Logger.error("DEBUG: Providers from JWT: #{inspect(providers)}")
 
             if "facebook" in providers do
-              # Return a basic facebook identity structure
-              %{
-                "id" => "facebook-identity",
-                "provider" => "facebook",
-                "created_at" => get_in(payload, ["user_metadata", "iss"]) || "Unknown",
-                "identity_id" => get_in(payload, ["user_metadata", "provider_id"]) || "facebook"
-              }
+              Logger.error("DEBUG: Facebook found in providers, creating identity")
+              # User has Facebook connected - we know this from the providers list
+              # Try to get actual identity details, but fall back gracefully if API fails
+              facebook_identity = case EventasaurusApp.Auth.Client.get_real_user_identities(access_token) do
+                {:ok, %{"identities" => identities}} when is_list(identities) ->
+                  Logger.error("DEBUG: Successfully fetched #{length(identities)} identities")
+                  # Find the Facebook identity with the real identity_id
+                  Enum.find(identities, fn identity ->
+                    identity["provider"] == "facebook"
+                  end)
+
+                {:error, reason} ->
+                  Logger.error("DEBUG: Failed to fetch identities: #{inspect(reason)}")
+                  nil
+              end
+
+              # Return Facebook identity (real or fallback)
+              if facebook_identity do
+                Logger.error("DEBUG: Using real Facebook identity")
+                %{
+                  "id" => facebook_identity["id"],
+                  "provider" => "facebook",
+                  "created_at" => facebook_identity["created_at"],
+                  "identity_id" => facebook_identity["identity_id"] || facebook_identity["id"]
+                }
+              else
+                Logger.error("DEBUG: Using fallback Facebook identity")
+                # Fallback - we know Facebook is connected from providers list
+                %{
+                  "id" => "facebook-identity",
+                  "provider" => "facebook",
+                  "created_at" => get_in(payload, ["created_at"]) || "Unknown",
+                  "identity_id" => get_in(payload, ["user_metadata", "provider_id"]) || "facebook"
+                }
+              end
             else
+              Logger.error("DEBUG: Facebook NOT found in providers")
               nil
             end
 
-          {:error, _reason} ->
+          {:error, reason} ->
+            Logger.error("DEBUG: JWT decode failed: #{inspect(reason)}")
             nil
         end
       else
+        Logger.error("DEBUG: No access token in session")
         nil
       end
     rescue
-      _ -> nil
+      error -> 
+        Logger.error("DEBUG: Exception in get_facebook_identity_from_session: #{inspect(error)}")
+        nil
     end
   end
 
+
+
+  # SECURITY NOTE: This function decodes JWT payloads without signature verification.
+  # This is acceptable in our context because:
+  # 1. The tokens are stored in server-side sessions after successful Supabase authentication
+  # 2. We only extract metadata (providers list) for UI display purposes
+  # 3. The tokens originated from our trusted Supabase authentication service
+  # 4. This is not used for authorization decisions - only for UI state
+  #
+  # TODO: Consider using a proper JWT library (JOSE, Joken) for signature verification
+  # in future security improvements for defense-in-depth.
   defp decode_jwt_payload(token) do
     try do
+      Logger.error("DEBUG: Decoding JWT token of length: #{String.length(token)}")
       # Split JWT into parts
       case String.split(token, ".") do
         [_header, payload, _signature] ->
+          Logger.error("DEBUG: JWT payload part: #{String.slice(payload, 0, 50)}...")
           # Decode base64 payload (add padding if needed)
           padded_payload = payload <> String.duplicate("=", rem(4 - rem(String.length(payload), 4), 4))
 
-                    case Base.url_decode64(padded_payload) do
+          case Base.url_decode64(padded_payload) do
             {:ok, json_string} ->
+              Logger.error("DEBUG: Decoded JSON string: #{String.slice(json_string, 0, 200)}...")
               case Jason.decode(json_string) do
-                {:ok, data} -> {:ok, data}
-                {:error, _} -> {:error, :invalid_json}
+                {:ok, data} -> 
+                  Logger.error("DEBUG: Successfully parsed JWT payload")
+                  {:ok, data}
+                {:error, reason} -> 
+                  Logger.error("DEBUG: JSON decode failed: #{inspect(reason)}")
+                  {:error, :invalid_json}
               end
 
-            :error -> {:error, :invalid_base64}
+            :error -> 
+              Logger.error("DEBUG: Base64 decode failed")
+              {:error, :invalid_base64}
           end
 
-        _ -> {:error, :invalid_jwt_format}
+        parts -> 
+          Logger.error("DEBUG: Invalid JWT format, got #{length(parts)} parts")
+          {:error, :invalid_jwt_format}
       end
     rescue
-      _ -> {:error, :decode_error}
+      error -> 
+        Logger.error("DEBUG: JWT decode exception: #{inspect(error)}")
+        {:error, :decode_error}
     end
   end
 end
