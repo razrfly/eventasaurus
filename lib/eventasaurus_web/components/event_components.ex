@@ -296,27 +296,17 @@ defmodule EventasaurusWeb.EventComponents do
               </div>
             </div>
 
-            <%= if @user do %>
-              <button
-                type="button"
-                phx-click="proceed_to_checkout"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
-              >
-                <%= if total_amount == 0 do %>
-                  Reserve Free Tickets
-                <% else %>
-                  Proceed to Checkout
-                <% end %>
-              </button>
-            <% else %>
-              <button
-                type="button"
-                phx-click="show_auth_modal"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
-              >
-                Sign In to Continue
-              </button>
-            <% end %>
+            <button
+              type="button"
+              phx-click="proceed_to_checkout"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+            >
+              <%= if total_amount == 0 do %>
+                Reserve Free Tickets
+              <% else %>
+                Proceed to Checkout
+              <% end %>
+            </button>
           </div>
         <% end %>
       <% end %>

@@ -103,7 +103,6 @@ defmodule EventasaurusWeb.Router do
 
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
-      live "/events/:slug/checkout", CheckoutLive
       live "/checkout/payment", CheckoutPaymentLive
     end
   end
@@ -197,6 +196,9 @@ defmodule EventasaurusWeb.Router do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
+      # Guest-accessible checkout
+      live "/events/:slug/checkout", CheckoutLive
+
       # Public event page with embedded registration (catch-all route should be last)
       live "/:slug", PublicEventLive
     end
@@ -225,17 +227,17 @@ defmodule EventasaurusWeb.Router do
     post "/confirm-payment", StripePaymentController, :confirm_payment
   end
 
-  # Stripe checkout API routes (require authentication and HTTPS)
+  # Stripe checkout API routes (public for guest checkout support, but still secure)
   scope "/api/checkout", EventasaurusWeb do
-    pipe_through [:secure_api, :api_authenticated]
+    pipe_through :secure_api
 
     post "/sessions", CheckoutController, :create_session
     post "/sync/:order_id", CheckoutController, :sync_after_success
   end
 
-  # Checkout success/cancel routes (browser, require authentication)
+  # Checkout success/cancel routes (public for guest checkout support)
   scope "/orders", EventasaurusWeb do
-    pipe_through [:browser, :authenticated]
+    pipe_through :browser
 
     get "/:order_id/success", CheckoutController, :success
     get "/cancel", CheckoutController, :cancel
