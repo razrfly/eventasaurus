@@ -489,23 +489,18 @@ defmodule EventasaurusWeb.CheckoutLive do
   end
 
   defp create_combined_stripe_checkout(socket, user, order_items, _total_amount, _description, _first_ticket) do
-    # For multiple ticket types, we need to create orders for each ticket type
-    # then create a combined payment intent (this is a simplified approach)
+    # For multiple ticket types, we need to create a combined Stripe checkout session
+    # with multiple line items for all selected tickets
 
     try do
-      # For multiple ticket types, handle the first one with Stripe hosted checkout
-      # In production, you might want to handle all types or combine them
-      first_item = hd(order_items)
-
-      Logger.info("Creating hosted checkout session for first ticket type",
+      Logger.info("Creating hosted checkout session for multiple ticket types",
         user_id: user.id,
-        ticket_id: first_item.ticket.id,
-        quantity: first_item.quantity
+        ticket_count: length(order_items)
       )
 
-      case Ticketing.create_checkout_session(user, first_item.ticket, %{quantity: first_item.quantity}) do
+      case Ticketing.create_multi_ticket_checkout_session(user, order_items) do
         {:ok, %{checkout_url: checkout_url, session_id: session_id}} ->
-          Logger.info("Multiple ticket types - created hosted checkout for first type",
+          Logger.info("Successfully created multi-ticket hosted checkout",
             user_id: user.id,
             session_id: session_id
           )
@@ -527,7 +522,7 @@ defmodule EventasaurusWeb.CheckoutLive do
            socket
            |> assign(:processing, false)
            |> preserve_auth_state()
-           |> put_flash(:error, "Sorry, these tickets are no longer available.")}
+           |> put_flash(:error, "Sorry, some of these tickets are no longer available.")}
 
         {:error, reason} ->
           Logger.error("Failed to create hosted checkout for multiple tickets",
@@ -539,7 +534,7 @@ defmodule EventasaurusWeb.CheckoutLive do
            socket
            |> assign(:processing, false)
            |> preserve_auth_state()
-           |> put_flash(:error, "Unable to process multiple ticket orders. Please try purchasing one ticket type at a time.")}
+           |> put_flash(:error, "Unable to process your order. Please try again.")}
       end
     rescue
       error ->
@@ -566,7 +561,7 @@ defmodule EventasaurusWeb.CheckoutLive do
 
     errors = if name == "", do: ["Name is required" | errors], else: errors
     errors = if email == "", do: ["Email is required" | errors], else: errors
-    errors = if email != "" and not valid_email?(email), do: ["Email format is invalid" | errors], else: errors
+    # Email format validation handled by HTML5 type="email" + Supabase Auth API
 
     case errors do
       [] -> {:ok, %{name: name, email: email}}
@@ -574,10 +569,11 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-  def valid_email?(email) do
-    email_regex = ~r/^[^\s]+@[^\s]+\.[^\s]+$/
-    Regex.match?(email_regex, email)
-  end
+  # Use same email validation approach as auth forms:
+  # 1. HTML5 type="email" validation (client-side)
+  # 2. Supabase Auth API validation (server-side)
+  # No need for custom regex patterns
+  def valid_email?(_email), do: true
 
   defp proceed_with_guest_checkout(socket, guest_info, order_items, total_amount) do
     Logger.info("Proceed with guest checkout",
@@ -686,11 +682,9 @@ defmodule EventasaurusWeb.CheckoutLive do
           create_guest_stripe_checkout_session(socket, guest_info, single_item)
 
         multiple_items ->
-          # Multiple ticket types - for now, handle the first one
-          # In production, you might want to combine or handle separately
-          Logger.info("Multiple ticket types for guest checkout, processing first item")
-          first_item = hd(multiple_items)
-          create_guest_stripe_checkout_session(socket, guest_info, first_item)
+          # Multiple ticket types - create multi-ticket guest checkout session
+          Logger.info("Multiple ticket types selected for guest checkout")
+          create_guest_multi_ticket_checkout_session(socket, guest_info, multiple_items)
       end
     rescue
       error ->
@@ -768,6 +762,70 @@ defmodule EventasaurusWeb.CheckoutLive do
         Logger.error("Exception during guest Stripe checkout creation",
           email: guest_info.email,
           ticket_id: order_item.ticket.id,
+          error: inspect(error)
+        )
+
+        {:noreply,
+         socket
+         |> assign(:processing, false)
+         |> put_flash(:error, "An error occurred. Please try again.")}
+    end
+  end
+
+  defp create_guest_multi_ticket_checkout_session(socket, guest_info, order_items) do
+    try do
+      case Ticketing.create_guest_multi_ticket_checkout_session(guest_info.name, guest_info.email, order_items) do
+        {:ok, %{orders: orders, checkout_url: checkout_url, session_id: session_id, user: _user}} ->
+          Logger.info("Guest multi-ticket Stripe checkout session created",
+            orders_count: length(orders),
+            session_id: session_id,
+            email: guest_info.email
+          )
+
+          # Redirect to Stripe Checkout
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> redirect(external: checkout_url)}
+
+        {:error, :no_stripe_account} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+
+        {:error, :ticket_unavailable} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Sorry, some of these tickets are no longer available.")}
+
+        {:error, reason} when is_binary(reason) ->
+          Logger.error("Guest multi-ticket Stripe checkout creation failed",
+            email: guest_info.email,
+            reason: reason
+          )
+
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Payment processing is temporarily unavailable. Please try again.")}
+
+        {:error, reason} ->
+          Logger.error("Guest multi-ticket order creation failed",
+            email: guest_info.email,
+            reason: inspect(reason)
+          )
+
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Unable to process payment. Please try again.")}
+      end
+    rescue
+      error ->
+        Logger.error("Exception during guest multi-ticket Stripe checkout creation",
+          email: guest_info.email,
           error: inspect(error)
         )
 

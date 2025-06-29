@@ -575,8 +575,8 @@ defmodule EventasaurusApp.Events do
                           {:error, :user_confirmation_required} ->
                 # User was created via OTP but email confirmation is required
                 Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
-                # Create user with temporary supabase_id - will be updated when they confirm email
-                temp_supabase_id = "temp_#{Ecto.UUID.generate()}"
+                # Create user with pending confirmation ID - TODO: implement cleanup for unconfirmed users
+                temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
                 case Accounts.create_user(%{
                   email: email,
                   name: name,
