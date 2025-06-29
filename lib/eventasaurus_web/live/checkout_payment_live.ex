@@ -137,6 +137,9 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <script>
+      window.stripePublishableKey = '<%= EventasaurusApp.Stripe.get_publishable_key() %>';
+    </script>
     <div class="container mx-auto px-6 py-8 max-w-2xl">
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">Complete Payment</h1>
@@ -160,7 +163,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLive do
       </div>
 
       <%= if @payment_status == :pending do %>
-        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <div id="stripe-payment-container" class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm" phx-hook="StripePaymentElements">
           <h3 class="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
 
           <!-- Stripe Elements will be mounted here -->
