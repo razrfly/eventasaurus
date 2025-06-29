@@ -768,8 +768,9 @@ Hooks.StripePaymentElements = {
     const urlParams = new URLSearchParams(window.location.search);
     const clientSecret = urlParams.get('client_secret');
     
-    if (!clientSecret) {
-      console.error("No client_secret found in URL");
+    if (!clientSecret || clientSecret.length < 10) {
+      console.error("No valid client_secret found in URL");
+      this.pushEvent("payment_failed", {error: {message: "Missing or invalid payment session"}});
       return;
     }
     
@@ -821,7 +822,7 @@ Hooks.StripePaymentElements = {
           const {error, paymentIntent} = await stripe.confirmPayment({
             elements,
             confirmParams: {
-              return_url: `${window.location.origin}/checkout/payment/success`
+              return_url: window.location.href
             },
             redirect: 'if_required'
           });
