@@ -85,18 +85,21 @@ defmodule EventasaurusWeb.GuestCheckoutTest do
   end
 
   describe "email validation behavior" do
-    test "uses same validation approach as auth forms" do
+    test "validates email format on server side" do
       alias EventasaurusWeb.CheckoutLive
 
-      # Email validation now follows the same pattern as login/register forms:
-      # - HTML5 type="email" validation on the client side
-      # - Supabase Auth API validation on the server side
-      # - No custom regex validation needed
+      # Basic server-side email validation with HTML5 + Supabase Auth API as additional layers
+      assert CheckoutLive.valid_email?("valid@email.com") == true
+      assert CheckoutLive.valid_email?("user@domain.org") == true
+      assert CheckoutLive.valid_email?("test.email@subdomain.example.com") == true
 
-      # The valid_email? function now always returns true since validation
-      # is handled by the browser and Supabase Auth API
-      assert CheckoutLive.valid_email?("any@email.com") == true
-      assert CheckoutLive.valid_email?("invalid-format") == true
+      # Invalid formats should be rejected
+      assert CheckoutLive.valid_email?("invalid-format") == false
+      assert CheckoutLive.valid_email?("missing-at-sign") == false
+      assert CheckoutLive.valid_email?("@missing-user.com") == false
+      assert CheckoutLive.valid_email?("user@") == false
+      assert CheckoutLive.valid_email?("") == false
+      assert CheckoutLive.valid_email?(nil) == false
     end
   end
 end

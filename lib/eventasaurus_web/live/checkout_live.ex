@@ -402,18 +402,18 @@ defmodule EventasaurusWeb.CheckoutLive do
       multiple_items ->
         # Multiple ticket types - for now, combine into a single checkout
         # This is a simplified approach; production might handle differently
-        total_amount = calculate_total_amount(multiple_items)
+        _total_amount = calculate_total_amount(multiple_items)
 
         # Create a combined order description
-        description = multiple_items
+        _description = multiple_items
         |> Enum.map(fn item -> "#{item.quantity}x #{item.ticket.title}" end)
         |> Enum.join(", ")
 
         # Use the first ticket's event for organization context
-        first_ticket = hd(multiple_items).ticket
+        _first_ticket = hd(multiple_items).ticket
 
         # For multiple items, we'll need to create orders separately but redirect to a combined payment
-        create_combined_stripe_checkout(socket, user, multiple_items, total_amount, description, first_ticket)
+        create_combined_stripe_checkout(socket, user, multiple_items)
     end
   end
 
@@ -488,7 +488,7 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-  defp create_combined_stripe_checkout(socket, user, order_items, _total_amount, _description, _first_ticket) do
+  defp create_combined_stripe_checkout(socket, user, order_items) do
     # For multiple ticket types, we need to create a combined Stripe checkout session
     # with multiple line items for all selected tickets
 
@@ -569,11 +569,11 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-  # Use same email validation approach as auth forms:
-  # 1. HTML5 type="email" validation (client-side)
-  # 2. Supabase Auth API validation (server-side)
-  # No need for custom regex patterns
-  def valid_email?(_email), do: true
+  # Basic server-side email validation with HTML5 + Supabase Auth API as additional layers
+  def valid_email?(email) when is_binary(email) do
+    String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/)
+  end
+  def valid_email?(_), do: false
 
   defp proceed_with_guest_checkout(socket, guest_info, order_items, total_amount) do
     Logger.info("Proceed with guest checkout",
