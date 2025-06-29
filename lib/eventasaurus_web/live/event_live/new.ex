@@ -1129,55 +1129,34 @@ defmodule EventasaurusWeb.EventLive.New do
 
   # Helper function to create date poll and options for an event
   defp create_date_poll_for_event(event, form_data, user) do
-    # Check if we have selected poll dates (new calendar approach)
-    case Map.get(form_data, "selected_poll_dates") do
-      dates_string when is_binary(dates_string) and dates_string != "" ->
-        # Parse the comma-separated date strings
-        selected_dates =
-          dates_string
-          |> String.split(",")
-          |> Enum.map(&String.trim/1)
-          |> Enum.filter(&(&1 != ""))
-          |> Enum.map(&Date.from_iso8601!/1)
-          |> Enum.sort()
+    # Only create date polls if polling is explicitly enabled
+    enable_date_polling = Map.get(form_data, "enable_date_polling", false)
+    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
 
-        # Create the date poll
-        case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
-          {:ok, poll} ->
-            # Create date options for each selected date
-                          case Events.create_date_options_from_list(poll, selected_dates) do
-                {:ok, _options} ->
-                  # Update event state to 'polling'
-                  case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
-                  {:ok, updated_event} ->
-                    {:ok, updated_event}
-                  {:error, reason} ->
-                    {:error, reason}
-                end
-              {:error, reason} ->
-                {:error, reason}
-            end
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      _ ->
-        # Fall back to old date range approach if no selected dates
-        start_date_str = Map.get(form_data, "start_date")
-        end_date_str = Map.get(form_data, "ends_date")
-
-        if start_date_str && end_date_str do
-          start_date = Date.from_iso8601!(start_date_str)
-          end_date = Date.from_iso8601!(end_date_str)
+    unless is_polling_enabled do
+      # If polling is not enabled, just return the original event
+      {:ok, event}
+    else
+      # Check if we have selected poll dates (new calendar approach)
+      case Map.get(form_data, "selected_poll_dates") do
+        dates_string when is_binary(dates_string) and dates_string != "" ->
+          # Parse the comma-separated date strings
+          selected_dates =
+            dates_string
+            |> String.split(",")
+            |> Enum.map(&String.trim/1)
+            |> Enum.filter(&(&1 != ""))
+            |> Enum.map(&Date.from_iso8601!/1)
+            |> Enum.sort()
 
           # Create the date poll
           case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
             {:ok, poll} ->
-              # Create date options for each day in the range
-              case Events.create_date_options_from_range(poll, start_date, end_date) do
-                {:ok, _options} ->
-                  # Update event state to 'polling'
-                  case Events.update_event(event, %{status: :polling, polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
+              # Create date options for each selected date
+                            case Events.create_date_options_from_list(poll, selected_dates) do
+                  {:ok, _options} ->
+                    # Update event state to 'polling'
+                    case Events.update_event(event, %{status: "polling", polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
                     {:ok, updated_event} ->
                       {:ok, updated_event}
                     {:error, reason} ->
@@ -1189,15 +1168,60 @@ defmodule EventasaurusWeb.EventLive.New do
             {:error, reason} ->
               {:error, reason}
           end
-        else
-          {:error, :missing_date_data}
-        end
+
+        _ ->
+          # Fall back to old date range approach if no selected dates
+          start_date_str = Map.get(form_data, "start_date")
+          end_date_str = Map.get(form_data, "ends_date")
+
+          if start_date_str && end_date_str do
+            start_date = Date.from_iso8601!(start_date_str)
+            end_date = Date.from_iso8601!(end_date_str)
+
+            # Create the date poll
+            case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
+              {:ok, poll} ->
+                # Create date options for each day in the range
+                case Events.create_date_options_from_range(poll, start_date, end_date) do
+                  {:ok, _options} ->
+                    # Update event state to 'polling'
+                    case Events.update_event(event, %{status: "polling", polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
+                      {:ok, updated_event} ->
+                        {:ok, updated_event}
+                      {:error, reason} ->
+                        {:error, reason}
+                    end
+                  {:error, reason} ->
+                    {:error, reason}
+                end
+              {:error, reason} ->
+                {:error, reason}
+            end
+          else
+            {:error, :missing_date_data}
+          end
+      end
     end
   end
 
   # Helper function to create event with proper error handling
   defp create_event_with_validation(final_event_params, socket) do
-    case Events.create_event_with_organizer(final_event_params, socket.assigns.user) do
+    # Set the correct status based on setup path
+    setup_path = Map.get(socket.assigns.form_data, "setup_path", "confirmed")
+    enable_date_polling = Map.get(final_event_params, "enable_date_polling", false)
+    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
+
+    # Determine the correct status
+    final_status = cond do
+      is_polling_enabled or setup_path == "polling" -> "polling"
+      setup_path == "threshold" -> "threshold"
+      true -> "confirmed"  # Default for confirmed events
+    end
+
+    # Ensure the status is correctly set in the event params
+    final_event_params_with_status = Map.put(final_event_params, "status", final_status)
+
+    case Events.create_event_with_organizer(final_event_params_with_status, socket.assigns.user) do
       {:ok, event} ->
         # If date polling is enabled, create the date poll and options
         event_with_poll = if Map.get(final_event_params, "enable_date_polling", false) do
