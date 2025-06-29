@@ -1069,7 +1069,7 @@ defmodule EventasaurusApp.Ticketing do
     # Build URLs
     base_url = get_base_url()
     success_url = "#{base_url}/orders/#{order.id}/success?session_id={CHECKOUT_SESSION_ID}"
-    cancel_url = "#{base_url}/events/#{ticket.event.slug}/tickets"
+    cancel_url = "#{base_url}/#{ticket.event.slug}"
 
     metadata = %{
       "order_id" => to_string(order.id),
