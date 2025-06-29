@@ -569,11 +569,11 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-  # Basic server-side email validation with HTML5 + Supabase Auth API as additional layers
-  def valid_email?(email) when is_binary(email) do
-    String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/)
-  end
-  def valid_email?(_), do: false
+  # Use same email validation approach as auth forms:
+  # 1. HTML5 type="email" validation (client-side)
+  # 2. Supabase Auth API validation (server-side)
+  # No need for custom regex patterns
+  def valid_email?(_email), do: true
 
   defp proceed_with_guest_checkout(socket, guest_info, order_items, total_amount) do
     Logger.info("Proceed with guest checkout",
