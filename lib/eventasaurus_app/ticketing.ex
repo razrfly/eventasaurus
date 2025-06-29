@@ -884,6 +884,153 @@ defmodule EventasaurusApp.Ticketing do
     end
   end
 
+  @doc """
+  Creates a checkout session for a guest user with a ticket.
+
+  This function follows the same pattern as Events.register_user_for_event/3
+  but for ticket purchases. It will:
+  - Find or create a Supabase user via OTP
+  - Sync the user to the local database
+  - Create the order and checkout session
+  - Register the user for the event when the order is confirmed
+
+  ## Examples
+
+      iex> create_guest_checkout_session(ticket, "John Doe", "john@example.com", %{quantity: 2})
+      {:ok, %{order: %Order{}, checkout_url: "https://checkout.stripe.com/...", session_id: "cs_...", user: %User{}}}
+
+  """
+  def create_guest_checkout_session(%Ticket{} = ticket, name, email, attrs \\ %{}) do
+    alias EventasaurusApp.Auth.SupabaseSync
+    alias EventasaurusApp.Accounts
+    alias EventasaurusApp.Events
+    require Logger
+
+    Logger.info("Starting guest checkout session creation", %{
+      ticket_id: ticket.id,
+      email: email,
+      name: name
+    })
+
+    quantity = Map.get(attrs, :quantity, 1)
+    custom_price_cents = Map.get(attrs, :custom_price_cents)
+    tip_cents = Map.get(attrs, :tip_cents, 0)
+
+    # Use transaction to ensure atomicity
+    case Repo.transaction(fn ->
+      # Lock the ticket row to prevent concurrent modifications
+      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+
+      # Validate ticket availability first
+      with :ok <- validate_ticket_availability(locked_ticket, quantity),
+           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents) do
+
+        # Check if user exists in our local database first
+        existing_user = Accounts.get_user_by_email(email)
+
+        if existing_user do
+          Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
+        else
+          Logger.debug("No existing user found in local database")
+        end
+
+        user = case existing_user do
+          nil ->
+            # User doesn't exist locally, check Supabase and create if needed
+            Logger.info("User not found locally, attempting Supabase user creation/lookup")
+            case Events.create_or_find_supabase_user(email, name) do
+              {:ok, supabase_user} ->
+                Logger.info("Successfully created/found user in Supabase")
+                # Sync with local database
+                case SupabaseSync.sync_user(supabase_user) do
+                  {:ok, user} ->
+                    Logger.info("Successfully synced user to local database", %{user_id: user.id})
+                    user
+                  {:error, reason} ->
+                    Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+                    Repo.rollback(reason)
+                end
+              {:error, :user_confirmation_required} ->
+                # User was created via OTP but email confirmation is required
+                Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
+                # Create user with temporary supabase_id - will be updated when they confirm email
+                temp_supabase_id = "temp_#{Ecto.UUID.generate()}"
+                case Accounts.create_user(%{
+                  email: email,
+                  name: name,
+                  supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
+                }) do
+                  {:ok, user} ->
+                    Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
+                    user
+                  {:error, reason} ->
+                    Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
+                    Repo.rollback(reason)
+                end
+              {:error, :invalid_user_data} ->
+                Logger.error("Invalid user data from Supabase after OTP creation")
+                Repo.rollback(:invalid_user_data)
+              {:error, reason} ->
+                Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
+                Repo.rollback(reason)
+            end
+
+          user ->
+            # User exists locally
+            Logger.debug("Using existing local user", %{user_id: user.id})
+            user
+        end
+
+        # Now proceed with order creation using the standard flow
+        with {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
+             {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
+             {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, quantity, pricing, connect_account, Map.put(attrs, :guest_metadata, %{name: name, email: email})),
+             {:ok, checkout_session} <- create_stripe_checkout_session(order, locked_ticket, connect_account) do
+
+          # Update order with checkout session ID
+          {:ok, updated_order} =
+            order
+            |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+            |> Repo.update()
+
+          maybe_broadcast_order_update(updated_order, :created)
+
+          Logger.info("Successfully created guest checkout session", %{
+            order_id: updated_order.id,
+            user_id: user.id,
+            session_id: checkout_session["id"]
+          })
+
+          {:ok, %{
+            order: updated_order,
+            checkout_url: checkout_session["url"],
+            session_id: checkout_session["id"],
+            user: user
+          }}
+        else
+          error ->
+            # Force transaction rollback by calling Repo.rollback
+            case error do
+              {:error, reason} -> Repo.rollback(reason)
+              atom when is_atom(atom) -> Repo.rollback(atom)
+              other -> Repo.rollback(other)
+            end
+        end
+      else
+        error ->
+          # Force transaction rollback by calling Repo.rollback
+          case error do
+            {:error, reason} -> Repo.rollback(reason)
+            atom when is_atom(atom) -> Repo.rollback(atom)
+            other -> Repo.rollback(other)
+          end
+      end
+    end) do
+      {:ok, {:ok, result}} -> {:ok, result}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp insert_order_with_checkout_session(%User{} = user, %Ticket{} = ticket, quantity, pricing, connect_account, attrs) do
     # Calculate platform fee (5% of total)
     application_fee_amount = Order.calculate_platform_fee(pricing.total_cents)
