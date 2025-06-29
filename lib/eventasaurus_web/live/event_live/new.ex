@@ -759,7 +759,7 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("edit_ticket", %{"id" => ticket_id_str} = params, socket) do
+  def handle_event("edit_ticket", %{"id" => ticket_id_str} = _params, socket) do
     # Handle both ID-based (for tickets with IDs) and index-based (for temporary tickets)
     tickets = socket.assigns.tickets || []
 
