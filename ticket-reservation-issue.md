@@ -138,6 +138,211 @@ end
 - [ ] Add tests for new reservation states
 - [ ] Update API responses to include reservation information
 
+## Background Cleanup Implementation
+
+For the recommended Option 1, here are the detailed approaches for implementing the "cleanup expired reservations every 5 minutes" functionality:
+
+### Approach 1: Oban Background Jobs ⭐ (Recommended)
+
+**Add Oban dependency:**
+```elixir
+# mix.exs
+defp deps do
+  [
+    {:oban, "~> 2.17"},
+    # ... existing deps
+  ]
+end
+```
+
+**Create cleanup worker:**
+```elixir
+# lib/eventasaurus_app/workers/reservation_cleanup_worker.ex
+defmodule EventasaurusApp.Workers.ReservationCleanupWorker do
+  use Oban.Worker, queue: :cleanup, max_attempts: 3
+
+  alias EventasaurusApp.Ticketing
+  alias EventasaurusApp.Repo
+  alias EventasaurusApp.Events.Order
+  require Logger
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{}) do
+    Logger.info("Starting reservation cleanup")
+    
+    # Find expired reservations (older than 15 minutes)
+    fifteen_minutes_ago = DateTime.add(DateTime.utc_now(), -15, :minute)
+    
+    expired_orders = 
+      Order
+      |> where([o], o.status == "pending")
+      |> where([o], o.inserted_at < ^fifteen_minutes_ago)
+      |> where([o], is_nil(o.stripe_session_id) or o.stripe_session_id == "")
+      |> Repo.all()
+
+    count = length(expired_orders)
+    
+    if count > 0 do
+      # Update expired orders to "expired" status
+      Enum.each(expired_orders, fn order ->
+        case Ticketing.expire_order(order) do
+          {:ok, _} -> 
+            Logger.debug("Expired order #{order.id}")
+          {:error, reason} -> 
+            Logger.error("Failed to expire order #{order.id}: #{inspect(reason)}")
+        end
+      end)
+      
+      Logger.info("Cleaned up #{count} expired reservations")
+    end
+
+    :ok
+  end
+end
+```
+
+**Configure Oban with cron scheduling:**
+```elixir
+# config/config.exs
+config :eventasaurus_app, Oban,
+  repo: EventasaurusApp.Repo,
+  plugins: [
+    Oban.Plugins.Pruner,
+    {Oban.Plugins.Cron, 
+     crontab: [
+       {"*/5 * * * *", EventasaurusApp.Workers.ReservationCleanupWorker}
+     ]}
+  ],
+  queues: [cleanup: 2]
+```
+
+**Add expire_order function to Ticketing context:**
+```elixir
+# In lib/eventasaurus_app/ticketing.ex
+def expire_order(%Order{} = order) do
+  case Repo.transaction(fn ->
+    # Preload ticket for broadcasting
+    order_with_ticket = Repo.preload(order, :ticket)
+
+    # Update order status
+    {:ok, expired_order} =
+      order
+      |> Order.changeset(%{status: "expired"})
+      |> Repo.update()
+
+    # Broadcast updates
+    maybe_broadcast_order_update(expired_order, :expired)
+    maybe_broadcast_ticket_update(order_with_ticket.ticket, :order_expired)
+
+    expired_order
+  end) do
+    {:ok, expired_order} -> {:ok, expired_order}
+    {:error, reason} -> {:error, reason}
+  end
+end
+```
+
+**Why Oban is recommended:**
+- **Battle-tested** - Standard for Phoenix background jobs
+- **Reliability** - Built-in retries, error handling, and monitoring
+- **Observability** - Web UI to monitor job execution
+- **Scalability** - Handles increasing load as app grows
+- **Database-backed** - Jobs persist across restarts
+
+### Approach 2: GenServer with Scheduled Messages
+
+**Create cleanup GenServer:**
+```elixir
+# lib/eventasaurus_app/reservation_cleanup.ex
+defmodule EventasaurusApp.ReservationCleanup do
+  use GenServer
+  require Logger
+
+  @cleanup_interval :timer.minutes(5)
+
+  def start_link(_opts) do
+    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  end
+
+  @impl true
+  def init(state) do
+    schedule_cleanup()
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_info(:cleanup, state) do
+    perform_cleanup()
+    schedule_cleanup()
+    {:noreply, state}
+  end
+
+  defp schedule_cleanup do
+    Process.send_after(self(), :cleanup, @cleanup_interval)
+  end
+
+  defp perform_cleanup do
+    Logger.info("Running reservation cleanup")
+    # Same cleanup logic as Oban worker
+    # ... cleanup implementation
+  end
+end
+```
+
+**Add to supervision tree:**
+```elixir
+# lib/eventasaurus_app/application.ex
+def start(_type, _args) do
+  children = [
+    # ... existing children
+    EventasaurusApp.ReservationCleanup
+  ]
+end
+```
+
+### Approach 3: Quantum Scheduler (Cron-like)
+
+**Add Quantum dependency:**
+```elixir
+# mix.exs
+{:quantum, "~> 3.0"}
+```
+
+**Create scheduler:**
+```elixir
+# lib/eventasaurus_app/scheduler.ex
+defmodule EventasaurusApp.Scheduler do
+  use Quantum, otp_app: :eventasaurus_app
+end
+
+# config/config.exs
+config :eventasaurus_app, EventasaurusApp.Scheduler,
+  jobs: [
+    cleanup_reservations: [
+      schedule: "*/5 * * * *",
+      task: {EventasaurusApp.Ticketing, :cleanup_expired_reservations, []}
+    ]
+  ]
+end
+```
+
+### Cleanup Logic Details
+
+The cleanup process should:
+
+1. **Find expired reservations** (15 minutes old, configurable)
+2. **Update status** from "pending" to "expired" 
+3. **Broadcast updates** so UI reflects availability changes
+4. **Log activity** for monitoring and debugging
+5. **Handle errors gracefully** with retries
+
+**Key considerations:**
+- Only expire orders without Stripe session IDs (never started payment)
+- Preserve orders that have begun payment processing
+- Use database transactions for consistency
+- Broadcast availability changes for real-time UI updates
+- Monitor cleanup performance and success rates
+
 ## Files That Need Changes
 
 - `/lib/eventasaurus_app/ticketing.ex` - Core ticketing logic
