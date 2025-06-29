@@ -89,7 +89,7 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:tickets, [])
           |> assign(:show_ticket_modal, false)
           |> assign(:ticket_form_data, %{})
-          |> assign(:editing_ticket_index, nil)
+          |> assign(:editing_ticket_id, nil)
           |> assign(:show_additional_options, false)
 
         {:ok, socket}
@@ -740,7 +740,7 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:tickets, [])
       |> assign(:show_ticket_modal, false)
       |> assign(:ticket_form_data, %{})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
     end
 
     socket = assign(socket, :form_data, form_data)
@@ -753,15 +753,44 @@ defmodule EventasaurusWeb.EventLive.New do
       socket
       |> assign(:show_ticket_modal, true)
       |> assign(:ticket_form_data, %{"currency" => "usd"})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("edit_ticket", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    ticket = Enum.at(socket.assigns.tickets, index)
+  def handle_event("edit_ticket", %{"id" => ticket_id_str} = params, socket) do
+    # Handle both ID-based (for tickets with IDs) and index-based (for temporary tickets)
+    tickets = socket.assigns.tickets || []
+
+    {ticket, ticket_id} = cond do
+      # Try to find by ID first (for tickets that have been saved)
+      String.starts_with?(ticket_id_str, "temp_") ->
+        ticket = Enum.find(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+        {ticket, ticket_id_str}
+
+      # Handle numeric strings - could be either index or ID
+      String.match?(ticket_id_str, ~r/^\d+$/) ->
+        case Integer.parse(ticket_id_str) do
+          {num, ""} ->
+            # Try as index first (for backward compatibility)
+            if num >= 0 and num < length(tickets) do
+              ticket = Enum.at(tickets, num)
+              {ticket, Map.get(ticket, :id, ticket_id_str)}
+            else
+              # Try as ID
+              ticket = Enum.find(tickets, &(Map.get(&1, :id) == num))
+              {ticket, ticket_id_str}
+            end
+          _ ->
+            {nil, nil}
+        end
+
+      true ->
+        # Try to find by ID
+        ticket = Enum.find(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+        {ticket, ticket_id_str}
+    end
 
     if ticket do
       form_data = %{
@@ -778,11 +807,11 @@ defmodule EventasaurusWeb.EventLive.New do
         "tippable" => ticket.tippable
       }
 
-      socket =
+              socket =
         socket
         |> assign(:show_ticket_modal, true)
         |> assign(:ticket_form_data, form_data)
-        |> assign(:editing_ticket_index, index)
+        |> assign(:editing_ticket_id, ticket_id)
 
       {:noreply, socket}
     else
@@ -791,9 +820,34 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("remove_ticket", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    updated_tickets = List.delete_at(socket.assigns.tickets, index)
+  def handle_event("remove_ticket", %{"id" => ticket_id_str}, socket) do
+    tickets = socket.assigns.tickets || []
+
+    # Find the ticket to remove - handle both ID and index-based removal
+    updated_tickets = cond do
+      # Handle temporary IDs
+      String.starts_with?(ticket_id_str, "temp_") ->
+        Enum.reject(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+
+      # Handle numeric strings (could be index or ID)
+      String.match?(ticket_id_str, ~r/^\d+$/) ->
+        case Integer.parse(ticket_id_str) do
+          {num, ""} ->
+            # Try removing by index first (for backward compatibility)
+            if num >= 0 and num < length(tickets) do
+              List.delete_at(tickets, num)
+            else
+              # Try removing by ID
+              Enum.reject(tickets, &(Map.get(&1, :id) == num))
+            end
+          _ ->
+            tickets
+        end
+
+      true ->
+        # Remove by ID
+        Enum.reject(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+    end
 
     socket = assign(socket, :tickets, updated_tickets)
     {:noreply, socket}
@@ -805,7 +859,7 @@ defmodule EventasaurusWeb.EventLive.New do
       socket
       |> assign(:show_ticket_modal, false)
       |> assign(:ticket_form_data, %{})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
 
     {:noreply, socket}
   end
@@ -816,7 +870,7 @@ defmodule EventasaurusWeb.EventLive.New do
       socket
       |> assign(:show_ticket_modal, false)
       |> assign(:ticket_form_data, %{})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
 
     {:noreply, socket}
   end
@@ -891,13 +945,20 @@ defmodule EventasaurusWeb.EventLive.New do
             }
 
             # Add or update ticket in the list
-            updated_tickets = case socket.assigns.editing_ticket_index do
+            updated_tickets = case socket.assigns.editing_ticket_id do
               nil ->
-                # Adding new ticket
-                socket.assigns.tickets ++ [ticket]
-              index ->
-                # Updating existing ticket
-                List.replace_at(socket.assigns.tickets, index, ticket)
+                # Adding new ticket - assign a temporary ID for consistency
+                ticket_with_id = Map.put(ticket, :id, "temp_#{System.unique_integer([:positive])}")
+                socket.assigns.tickets ++ [ticket_with_id]
+              ticket_id ->
+                # Updating existing ticket - find by ID and replace
+                Enum.map(socket.assigns.tickets, fn existing_ticket ->
+                  if Map.get(existing_ticket, :id) == ticket_id do
+                    Map.put(ticket, :id, ticket_id)
+                  else
+                    existing_ticket
+                  end
+                end)
             end
 
             socket =
@@ -905,7 +966,7 @@ defmodule EventasaurusWeb.EventLive.New do
               |> assign(:tickets, updated_tickets)
               |> assign(:show_ticket_modal, false)
               |> assign(:ticket_form_data, %{})
-              |> assign(:editing_ticket_index, nil)
+              |> assign(:editing_ticket_id, nil)
               |> put_flash(:info, "Ticket saved successfully")
 
             {:noreply, socket}
@@ -1378,7 +1439,7 @@ defmodule EventasaurusWeb.EventLive.New do
     |> assign(:tickets, [])
     |> assign(:show_ticket_modal, false)
     |> assign(:ticket_form_data, %{})
-    |> assign(:editing_ticket_index, nil)
+    |> assign(:editing_ticket_id, nil)
   end
 
 end

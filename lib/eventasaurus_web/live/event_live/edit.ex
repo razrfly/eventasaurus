@@ -155,7 +155,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:tickets, existing_tickets)
               |> assign(:show_ticket_modal, false)
               |> assign(:ticket_form_data, %{})
-              |> assign(:editing_ticket_index, nil)
+              |> assign(:editing_ticket_id, nil)
               |> assign(:show_additional_options, false)
 
             {:ok, socket}
@@ -660,7 +660,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:tickets, [])
       |> assign(:show_ticket_modal, false)
       |> assign(:ticket_form_data, %{})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
     end
 
     socket = assign(socket, :form_data, form_data)
@@ -676,16 +676,16 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket
       |> assign(:show_ticket_modal, true)
       |> assign(:ticket_form_data, %{"currency" => "usd"})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
 
     Logger.debug("show_ticket_modal is now: #{socket.assigns.show_ticket_modal}")
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("edit_ticket", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    ticket = Enum.at(socket.assigns.tickets, index)
+  def handle_event("edit_ticket", %{"id" => ticket_id_str}, socket) do
+    ticket_id = String.to_integer(ticket_id_str)
+    ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
 
     if ticket do
       form_data = %{
@@ -706,7 +706,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         socket
         |> assign(:show_ticket_modal, true)
         |> assign(:ticket_form_data, form_data)
-        |> assign(:editing_ticket_index, index)
+        |> assign(:editing_ticket_id, ticket_id)
 
       {:noreply, socket}
     else
@@ -715,9 +715,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
-  def handle_event("remove_ticket", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    ticket = Enum.at(socket.assigns.tickets, index)
+  def handle_event("remove_ticket", %{"id" => ticket_id_str}, socket) do
+    ticket_id = String.to_integer(ticket_id_str)
+    ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
 
     if ticket && Map.has_key?(ticket, :id) do
       # This is an existing ticket in the database, delete it
@@ -735,8 +735,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
           {:noreply, socket}
       end
     else
-      # This is a new ticket not yet saved, just remove from list
-      updated_tickets = List.delete_at(socket.assigns.tickets, index)
+      # This is a new ticket not yet saved, just remove from list (shouldn't happen with ID-based approach)
+      updated_tickets = Enum.reject(socket.assigns.tickets, &(&1.id == ticket_id))
       socket = assign(socket, :tickets, updated_tickets)
       {:noreply, socket}
     end
@@ -748,7 +748,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket
       |> assign(:show_ticket_modal, false)
       |> assign(:ticket_form_data, %{})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
 
     {:noreply, socket}
   end
@@ -759,7 +759,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       socket
       |> assign(:show_ticket_modal, false)
       |> assign(:ticket_form_data, %{})
-      |> assign(:editing_ticket_index, nil)
+      |> assign(:editing_ticket_id, nil)
 
     {:noreply, socket}
   end
@@ -856,18 +856,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 }
 
                 # Create or update ticket in the database
-                result = case socket.assigns.editing_ticket_index do
+                result = case socket.assigns.editing_ticket_id do
                   nil ->
                     # Creating new ticket - persist to database immediately
                     EventasaurusApp.Ticketing.create_ticket(socket.assigns.event, ticket_attrs)
-                  index ->
-                    # Updating existing ticket - get the ticket from our current list and update it
-                    existing_ticket = Enum.at(socket.assigns.tickets, index)
+                  ticket_id ->
+                    # Updating existing ticket - find it by ID and update it
+                    existing_ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
                     if existing_ticket && Map.has_key?(existing_ticket, :id) do
                       # This is a persisted ticket, update it in the database
                       EventasaurusApp.Ticketing.update_ticket(existing_ticket, ticket_attrs)
                     else
-                      # This was a temporary ticket, create it now
+                      # This shouldn't happen with ID-based approach, but create as fallback
                       EventasaurusApp.Ticketing.create_ticket(socket.assigns.event, ticket_attrs)
                     end
                 end
@@ -882,16 +882,22 @@ defmodule EventasaurusWeb.EventLive.Edit do
                       |> assign(:tickets, updated_tickets)
                       |> assign(:show_ticket_modal, false)
                       |> assign(:ticket_form_data, %{})
-                      |> assign(:editing_ticket_index, nil)
+                      |> assign(:editing_ticket_id, nil)
                       |> put_flash(:info, "🎉 Success! Ticket saved successfully")
 
                     {:noreply, socket}
 
                   {:error, changeset} ->
-                    error_message = case changeset.errors do
-                      [{field, {msg, _}} | _] -> "#{field} #{msg}"
-                      _ -> "Failed to save ticket"
-                    end
+                    error_message =
+                      changeset
+                      |> Ecto.Changeset.traverse_errors(&EventasaurusWeb.ErrorHelpers.translate_error/1)
+                      |> Enum.flat_map(fn {field, msgs} ->
+                        Enum.map(msgs, &("#{field} #{&1}"))
+                      end)
+                      |> case do
+                        [] -> "Failed to save ticket"
+                        errors -> Enum.join(errors, ", ")
+                      end
 
                     socket = put_flash(socket, :error, "❌ Error: #{error_message}")
                     {:noreply, socket}
@@ -1338,7 +1344,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> assign(:tickets, [])
     |> assign(:show_ticket_modal, false)
     |> assign(:ticket_form_data, %{})
-    |> assign(:editing_ticket_index, nil)
+    |> assign(:editing_ticket_id, nil)
   end
 
   # Helper function to apply setup path changes to both form_data and socket assigns

@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.Components.TicketModal do
   attr :show, :boolean, default: false, doc: "whether to show the modal"
   attr :ticket_form_data, :map, default: %{}, doc: "current ticket form data"
   attr :pricing_model, :string, default: "fixed", doc: "current pricing model selection"
-  attr :editing_ticket_index, :integer, default: nil, doc: "index if editing existing ticket"
+  attr :editing_ticket_id, :any, default: nil, doc: "ID if editing existing ticket"
   attr :on_close, :any, required: true, doc: "event to close modal"
   attr :default_currency, :string, default: "usd", doc: "default currency for tickets"
   attr :show_additional_options, :boolean, default: false, doc: "whether to show additional options section"
@@ -34,7 +34,7 @@ defmodule EventasaurusWeb.Components.TicketModal do
       on_confirm={JS.dispatch("submit", to: "#ticket-form")}
     >
       <:title>
-        <%= if @editing_ticket_index, do: "Edit Ticket", else: "Add New Ticket" %>
+        <%= if @editing_ticket_id, do: "Edit Ticket", else: "Add New Ticket" %>
       </:title>
 
       <form id="ticket-form" phx-submit="save_ticket" phx-change="validate_ticket">
@@ -307,7 +307,7 @@ defmodule EventasaurusWeb.Components.TicketModal do
         </div>
       </form>
 
-      <:confirm><%= if @editing_ticket_index, do: "Update Ticket", else: "Add Ticket" %></:confirm>
+              <:confirm><%= if @editing_ticket_id, do: "Update Ticket", else: "Add Ticket" %></:confirm>
       <:cancel>Cancel</:cancel>
     </.modal>
     """

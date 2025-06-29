@@ -1040,7 +1040,7 @@ defmodule EventasaurusWeb.EventComponents do
                               <button
                                 type="button"
                                 phx-click="edit_ticket"
-                                phx-value-index={index}
+                                phx-value-id={Map.get(ticket, :id, index)}
                                 class="inline-flex items-center px-2 py-1 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                               >
                                 <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1051,7 +1051,7 @@ defmodule EventasaurusWeb.EventComponents do
                               <button
                                 type="button"
                                 phx-click="remove_ticket"
-                                phx-value-index={index}
+                                phx-value-id={ticket.id}
                                 class="inline-flex items-center px-2 py-1 border border-red-300 rounded text-xs font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                               >
                                 <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
