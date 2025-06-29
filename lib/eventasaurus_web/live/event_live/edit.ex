@@ -133,7 +133,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:is_virtual, is_virtual)
               |> assign(:selected_venue_name, venue_name)
               |> assign(:selected_venue_address, venue_address)
-              |> assign(:show_all_timezones, true)
               |> assign(:cover_image_url, event.cover_image_url)
               |> assign(:external_image_data, event.external_image_data)
               |> assign(:show_image_picker, false)
@@ -323,14 +322,14 @@ defmodule EventasaurusWeb.EventLive.Edit do
     final_event_params = case Map.get(final_event_params, "enable_date_polling") do
       polling when polling == true or polling == "true" ->
         # Switching to or staying in polling mode
-        Map.put(final_event_params, "status", :polling)
+        Map.put(final_event_params, "status", "polling")
       _ ->
         # Switching to or staying in confirmed mode
         # Remove polling-specific fields that are no longer needed
         final_event_params
-        |> Map.put("status", :confirmed)
+        |> Map.put("status", "confirmed")
         |> Map.put("polling_deadline", nil)
-        |> Map.put("selected_poll_dates", nil)
+        |> Map.delete("selected_poll_dates")  # Remove form-only field from params
     end
 
     # Validate date polling before saving
@@ -724,14 +723,15 @@ defmodule EventasaurusWeb.EventLive.Edit do
       # This is an existing ticket in the database, delete it
       case Ticketing.delete_ticket(ticket) do
         {:ok, _} ->
-          updated_tickets = List.delete_at(socket.assigns.tickets, index)
+          # Reload tickets from database to ensure consistency
+          updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
           socket =
             socket
             |> assign(:tickets, updated_tickets)
-            |> put_flash(:info, "Ticket deleted successfully")
+            |> put_flash(:info, "🗑️ Ticket deleted successfully")
           {:noreply, socket}
         {:error, _} ->
-          socket = put_flash(socket, :error, "Failed to delete ticket")
+          socket = put_flash(socket, :error, "❌ Failed to delete ticket")
           {:noreply, socket}
       end
     else
@@ -838,7 +838,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
             # Validate flexible pricing fields
             case validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
               {:ok, minimum_price_cents, suggested_price_cents} ->
-                ticket = %{
+                ticket_attrs = %{
                   title: Map.get(ticket_data, "title", ""),
                   description: Map.get(ticket_data, "description"),
                   pricing_model: pricing_model,
@@ -855,25 +855,47 @@ defmodule EventasaurusWeb.EventLive.Edit do
                   tippable: Map.get(ticket_data, "tippable", false) == true
                 }
 
-                # Add or update ticket
-                updated_tickets = case socket.assigns.editing_ticket_index do
+                # Create or update ticket in the database
+                result = case socket.assigns.editing_ticket_index do
                   nil ->
-                    # Adding new ticket
-                    socket.assigns.tickets ++ [ticket]
+                    # Creating new ticket - persist to database immediately
+                    EventasaurusApp.Ticketing.create_ticket(socket.assigns.event, ticket_attrs)
                   index ->
-                    # Updating existing ticket
-                    List.replace_at(socket.assigns.tickets, index, ticket)
+                    # Updating existing ticket - get the ticket from our current list and update it
+                    existing_ticket = Enum.at(socket.assigns.tickets, index)
+                    if existing_ticket && Map.has_key?(existing_ticket, :id) do
+                      # This is a persisted ticket, update it in the database
+                      EventasaurusApp.Ticketing.update_ticket(existing_ticket, ticket_attrs)
+                    else
+                      # This was a temporary ticket, create it now
+                      EventasaurusApp.Ticketing.create_ticket(socket.assigns.event, ticket_attrs)
+                    end
                 end
 
-                socket =
-                  socket
-                  |> assign(:tickets, updated_tickets)
-                  |> assign(:show_ticket_modal, false)
-                  |> assign(:ticket_form_data, %{})
-                  |> assign(:editing_ticket_index, nil)
-                  |> put_flash(:info, "Ticket saved successfully")
+                case result do
+                  {:ok, _ticket} ->
+                    # Reload tickets from database to ensure consistency
+                    updated_tickets = EventasaurusApp.Ticketing.list_tickets_for_event(socket.assigns.event.id)
 
-                {:noreply, socket}
+                    socket =
+                      socket
+                      |> assign(:tickets, updated_tickets)
+                      |> assign(:show_ticket_modal, false)
+                      |> assign(:ticket_form_data, %{})
+                      |> assign(:editing_ticket_index, nil)
+                      |> put_flash(:info, "🎉 Success! Ticket saved successfully")
+
+                    {:noreply, socket}
+
+                  {:error, changeset} ->
+                    error_message = case changeset.errors do
+                      [{field, {msg, _}} | _] -> "#{field} #{msg}"
+                      _ -> "Failed to save ticket"
+                    end
+
+                    socket = put_flash(socket, :error, "❌ Error: #{error_message}")
+                    {:noreply, socket}
+                end
 
               {:error, message} ->
                 socket = put_flash(socket, :error, message)

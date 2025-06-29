@@ -759,6 +759,102 @@ Hooks.CalendarKeyboardNav = {
 // Supabase image upload hook for file input
 Hooks.SupabaseImageUpload = SupabaseImageUpload;
 
+// Stripe Payment Elements Hook
+Hooks.StripePaymentElements = {
+  mounted() {
+    console.log("Stripe Payment Elements hook mounted");
+    
+    // Get client secret from the page URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const clientSecret = urlParams.get('client_secret');
+    
+    if (!clientSecret) {
+      console.error("No client_secret found in URL");
+      return;
+    }
+    
+    if (!window.Stripe) {
+      console.error("Stripe.js not loaded");
+      return;
+    }
+    
+    // Initialize Stripe with publishable key
+    if (!window.stripePublishableKey) {
+      console.error("Stripe publishable key not found");
+      return;
+    }
+    
+    const stripe = Stripe(window.stripePublishableKey);
+    
+    const elements = stripe.elements({
+      clientSecret: clientSecret,
+      appearance: {
+        theme: 'stripe',
+        variables: {
+          colorPrimary: '#2563eb',
+          colorBackground: '#ffffff',
+          colorText: '#111827',
+          colorDanger: '#dc2626',
+          fontFamily: 'system-ui, sans-serif',
+          spacingUnit: '6px',
+          borderRadius: '8px'
+        }
+      }
+    });
+    
+    // Create and mount the Payment Element
+    const paymentElement = elements.create('payment');
+    paymentElement.mount('#stripe-payment-element');
+    
+    // Handle form submission
+    const submitButton = document.getElementById('stripe-submit-button');
+    if (submitButton) {
+      submitButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        if (submitButton.disabled) return;
+        
+        // Disable submit button
+        submitButton.disabled = true;
+        
+        try {
+          const {error, paymentIntent} = await stripe.confirmPayment({
+            elements,
+            confirmParams: {
+              return_url: `${window.location.origin}/checkout/payment/success`
+            },
+            redirect: 'if_required'
+          });
+          
+          if (error) {
+            console.error("Payment failed:", error);
+            this.pushEvent("payment_failed", {error: error});
+            submitButton.disabled = false;
+          } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+            console.log("Payment succeeded:", paymentIntent);
+            this.pushEvent("payment_succeeded", {payment_intent_id: paymentIntent.id});
+          }
+        } catch (err) {
+          console.error("Payment error:", err);
+          submitButton.disabled = false;
+        }
+      });
+    }
+    
+    // Store references for cleanup
+    this.stripe = stripe;
+    this.elements = elements;
+    this.paymentElement = paymentElement;
+  },
+  
+  destroyed() {
+    console.log("Stripe Payment Elements hook destroyed");
+    if (this.paymentElement) {
+      this.paymentElement.unmount();
+    }
+  }
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
