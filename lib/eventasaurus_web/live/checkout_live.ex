@@ -8,9 +8,6 @@ defmodule EventasaurusWeb.CheckoutLive do
 
   @impl true
   def mount(%{"slug" => event_slug} = params, _session, socket) do
-    # User may or may not be assigned depending on authentication status
-    user = socket.assigns[:user]
-
     case get_event_by_slug(event_slug) do
       {:ok, event} ->
         # Get selected tickets from URL parameters
@@ -32,6 +29,10 @@ defmodule EventasaurusWeb.CheckoutLive do
               order_items = build_order_items(tickets, validated_selection)
               total_amount = calculate_total_amount(order_items)
 
+                                          # Get user from socket assigns (set by auth hook)
+              user = socket.assigns[:user]
+              is_guest = is_nil(user)
+
               {:ok,
                socket
                |> assign(:event, event)
@@ -41,10 +42,10 @@ defmodule EventasaurusWeb.CheckoutLive do
                |> assign(:total_amount, total_amount)
                |> assign(:processing, false)
                |> assign(:errors, [])
-               |> assign(:user, user)  # May be nil for guests
-               |> assign(:is_guest, is_nil(user))
-               |> assign(:guest_form, %{"name" => "", "email" => ""})  # Guest information form
-               |> assign(:show_guest_form, is_nil(user))}  # Show guest form if not authenticated
+               |> assign(:user, user)
+               |> assign(:is_guest, is_guest)
+               |> assign(:guest_form, %{"name" => "", "email" => ""})
+               |> assign(:show_guest_form, is_guest)}
 
             {:error, message} ->
               {:ok,
@@ -297,6 +298,7 @@ defmodule EventasaurusWeb.CheckoutLive do
      |> assign(:selected_tickets, updated_selection)
      |> assign(:order_items, order_items)
      |> assign(:total_amount, total_amount)
+     |> preserve_auth_state()
      |> clear_flash()}
   end
 
@@ -417,28 +419,31 @@ defmodule EventasaurusWeb.CheckoutLive do
 
   defp create_stripe_checkout_session(socket, user, order_item) do
     try do
-      case Ticketing.create_order_with_stripe_connect(user, order_item.ticket, %{quantity: order_item.quantity}) do
-        {:ok, %{order: order, payment_intent: payment_intent}} ->
-          Logger.info("Stripe payment intent created",
+      case Ticketing.create_checkout_session(user, order_item.ticket, %{quantity: order_item.quantity}) do
+        {:ok, %{checkout_url: checkout_url, session_id: session_id}} ->
+          Logger.info("Stripe hosted checkout session created",
             user_id: user.id,
-            order_id: order.id,
-            payment_intent_id: payment_intent["id"],
-            amount: payment_intent["amount"]
+            session_id: session_id
           )
 
-          # Redirect to Stripe Checkout or handle client-side payment
-          redirect_to_stripe_checkout(socket, order, payment_intent)
+          # Redirect to Stripe hosted checkout
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> redirect(external: checkout_url)}
 
         {:error, :no_stripe_account} ->
           {:noreply,
            socket
            |> assign(:processing, false)
+           |> preserve_auth_state()
            |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
 
         {:error, :ticket_unavailable} ->
           {:noreply,
            socket
            |> assign(:processing, false)
+           |> preserve_auth_state()
            |> put_flash(:error, "Sorry, these tickets are no longer available.")}
 
         {:error, reason} when is_binary(reason) ->
@@ -451,6 +456,7 @@ defmodule EventasaurusWeb.CheckoutLive do
           {:noreply,
            socket
            |> assign(:processing, false)
+           |> preserve_auth_state()
            |> put_flash(:error, "Payment processing is temporarily unavailable. Please try again.")}
 
         {:error, reason} ->
@@ -463,6 +469,7 @@ defmodule EventasaurusWeb.CheckoutLive do
           {:noreply,
            socket
            |> assign(:processing, false)
+           |> preserve_auth_state()
            |> put_flash(:error, "Unable to process payment. Please try again.")}
       end
     rescue
@@ -476,6 +483,7 @@ defmodule EventasaurusWeb.CheckoutLive do
         {:noreply,
          socket
          |> assign(:processing, false)
+         |> preserve_auth_state()
          |> put_flash(:error, "An error occurred. Please try again.")}
     end
   end
@@ -485,38 +493,44 @@ defmodule EventasaurusWeb.CheckoutLive do
     # then create a combined payment intent (this is a simplified approach)
 
     try do
-      # Create orders for each ticket type
-      order_results = Enum.map(order_items, fn item ->
-        Logger.info("Creating order for ticket type",
-          user_id: user.id,
-          ticket_id: item.ticket.id,
-          quantity: item.quantity
-        )
+      # For multiple ticket types, handle the first one with Stripe hosted checkout
+      # In production, you might want to handle all types or combine them
+      first_item = hd(order_items)
 
-        Ticketing.create_order_with_stripe_connect(user, item.ticket, %{quantity: item.quantity})
-      end)
+      Logger.info("Creating hosted checkout session for first ticket type",
+        user_id: user.id,
+        ticket_id: first_item.ticket.id,
+        quantity: first_item.quantity
+      )
 
-      # Check if any order creation failed
-      case Enum.find(order_results, fn result -> match?({:error, _}, result) end) do
-        nil ->
-          # All orders created successfully
-          orders_and_intents = Enum.map(order_results, fn {:ok, result} -> result end)
-          orders = Enum.map(orders_and_intents, fn %{order: order} -> order end)
-
-          # For now, redirect to the first order's payment intent
-          # In production, you might want to create a consolidated payment
-          first_result = hd(orders_and_intents)
-
-          Logger.info("Multiple orders created, redirecting to first payment",
+      case Ticketing.create_checkout_session(user, first_item.ticket, %{quantity: first_item.quantity}) do
+        {:ok, %{checkout_url: checkout_url, session_id: session_id}} ->
+          Logger.info("Multiple ticket types - created hosted checkout for first type",
             user_id: user.id,
-            total_orders: length(orders),
-            first_order_id: first_result.order.id
+            session_id: session_id
           )
 
-          redirect_to_stripe_checkout(socket, first_result.order, first_result.payment_intent)
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> redirect(external: checkout_url)}
+
+        {:error, :no_stripe_account} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> preserve_auth_state()
+           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+
+        {:error, :ticket_unavailable} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> preserve_auth_state()
+           |> put_flash(:error, "Sorry, these tickets are no longer available.")}
 
         {:error, reason} ->
-          Logger.error("Failed to create multiple orders",
+          Logger.error("Failed to create hosted checkout for multiple tickets",
             user_id: user.id,
             reason: inspect(reason)
           )
@@ -524,6 +538,7 @@ defmodule EventasaurusWeb.CheckoutLive do
           {:noreply,
            socket
            |> assign(:processing, false)
+           |> preserve_auth_state()
            |> put_flash(:error, "Unable to process multiple ticket orders. Please try purchasing one ticket type at a time.")}
       end
     rescue
@@ -536,24 +551,12 @@ defmodule EventasaurusWeb.CheckoutLive do
         {:noreply,
          socket
          |> assign(:processing, false)
+         |> preserve_auth_state()
          |> put_flash(:error, "An error occurred. Please try again.")}
     end
   end
 
-  defp redirect_to_stripe_checkout(socket, order, payment_intent) do
-    # Redirect to our payment page with Stripe Elements
-    query_params = URI.encode_query(%{
-      "order_id" => order.id,
-      "payment_intent" => payment_intent["id"],
-      "client_secret" => payment_intent["client_secret"]
-    })
-    checkout_url = "/checkout/payment?" <> query_params
 
-    {:noreply,
-     socket
-     |> assign(:processing, false)
-     |> redirect(to: checkout_url)}
-  end
 
   def validate_guest_form(guest_form) do
     name = String.trim(guest_form["name"] || "")
@@ -1104,5 +1107,16 @@ defmodule EventasaurusWeb.CheckoutLive do
       </div>
     </div>
     """
+  end
+
+  # Helper function to preserve authentication state during error handling
+  defp preserve_auth_state(socket) do
+    user = socket.assigns[:user]
+    is_guest = is_nil(user)
+
+    socket
+    |> assign(:user, user)
+    |> assign(:is_guest, is_guest)
+    |> assign(:show_guest_form, is_guest)
   end
 end
