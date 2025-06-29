@@ -1,6 +1,8 @@
 defmodule EventasaurusWeb.PublicEventLive do
     use EventasaurusWeb, :live_view
 
+  require Logger
+
   alias EventasaurusApp.Events
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Accounts
@@ -481,22 +483,103 @@ defmodule EventasaurusWeb.PublicEventLive do
        socket
        |> put_flash(:error, "Please select at least one ticket before proceeding to checkout.")}
     else
-      # Store selected tickets in session and redirect to checkout
-      # Use proper URI encoding for ticket parameters
-      query =
-        selected_tickets
-        |> Enum.map(fn {id, qty} -> {Integer.to_string(id), qty} end)
-        |> URI.encode_query()
+      # Check if user is logged in - if so, skip checkout page and go directly to Stripe
+      case socket.assigns.user do
+        nil ->
+          # User not logged in - redirect to checkout page as before
+          query =
+            selected_tickets
+            |> Enum.map(fn {id, qty} -> {Integer.to_string(id), qty} end)
+            |> URI.encode_query()
 
-      {:noreply,
-       redirect(socket,
-         to: "/events/#{socket.assigns.event.slug}/checkout?" <> query
-       )}
+          {:noreply,
+           redirect(socket,
+             to: "/events/#{socket.assigns.event.slug}/checkout?" <> query
+           )}
+
+        user ->
+          # User is logged in - create Stripe hosted checkout session directly
+          create_authenticated_stripe_checkout(socket, user, selected_tickets)
+      end
     end
   end
 
   def handle_event("show_auth_modal", _params, socket) do
     {:noreply, assign(socket, :show_registration_modal, true)}
+  end
+
+  # Authenticated user Stripe hosted checkout
+  defp create_authenticated_stripe_checkout(socket, user, selected_tickets) do
+    # For now, handle single ticket type only (can be extended for multiple types)
+    case get_single_ticket_selection(socket.assigns.tickets, selected_tickets) do
+      {:ok, ticket, quantity} ->
+        Logger.info("Creating Stripe hosted checkout for authenticated user",
+          user_id: user.id,
+          event_slug: socket.assigns.event.slug,
+          ticket_id: ticket.id,
+          quantity: quantity
+        )
+
+        case Ticketing.create_checkout_session(user, ticket, %{quantity: quantity}) do
+          {:ok, %{checkout_url: checkout_url, session_id: session_id}} ->
+            Logger.info("Stripe hosted checkout session created",
+              user_id: user.id,
+              session_id: session_id
+            )
+
+            # Redirect to Stripe hosted checkout
+            {:noreply,
+             socket
+             |> redirect(external: checkout_url)}
+
+          {:error, :no_stripe_account} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+
+          {:error, :ticket_unavailable} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Sorry, these tickets are no longer available.")}
+
+          {:error, reason} ->
+            Logger.error("Failed to create authenticated checkout session",
+              user_id: user.id,
+              ticket_id: ticket.id,
+              reason: inspect(reason)
+            )
+            {:noreply,
+             socket
+             |> put_flash(:error, "Unable to process payment. Please try again.")}
+        end
+
+      {:error, :multiple_ticket_types} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Please purchase one ticket type at a time for now.")}
+
+      {:error, :no_tickets_selected} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Please select at least one ticket before proceeding.")}
+    end
+  end
+
+  defp get_single_ticket_selection(tickets, selected_tickets) do
+    selected_items =
+      selected_tickets
+      |> Enum.filter(fn {_id, qty} -> qty > 0 end)
+      |> Enum.map(fn {ticket_id, quantity} ->
+        ticket = Enum.find(tickets, &(&1.id == ticket_id))
+        {ticket, quantity}
+      end)
+      |> Enum.filter(fn {ticket, _qty} -> ticket != nil end)
+
+    case selected_items do
+      [] -> {:error, :no_tickets_selected}
+      [{ticket, quantity}] -> {:ok, ticket, quantity}
+      _ -> {:error, :multiple_ticket_types}
+    end
   end
 
   @impl true
