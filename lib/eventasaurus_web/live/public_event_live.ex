@@ -562,6 +562,8 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
+  # TEMPORARY compatibility shim: when multiple tickets are selected, only the first is returned.
+  # TODO: Remove once all callers support multi-ticket flows.
   defp get_single_ticket_selection(tickets, selected_tickets) do
     selected_items =
       selected_tickets
@@ -576,7 +578,10 @@ defmodule EventasaurusWeb.PublicEventLive do
       [] -> {:error, :no_tickets_selected}
       # Multiple ticket types are now supported - we only use this function for legacy compatibility
       [{ticket, quantity}] -> {:ok, ticket, quantity}
-      multiple_items -> {:ok, hd(multiple_items) |> elem(0), hd(multiple_items) |> elem(1)} # Return first item for compatibility
+      multiple_items ->
+        # TEMPORARY: returning only the first ticket for legacy compatibility
+        Logger.warning("get_single_ticket_selection called with multiple items; returning first for compatibility")
+        {:ok, hd(multiple_items) |> elem(0), hd(multiple_items) |> elem(1)}
     end
   end
 
