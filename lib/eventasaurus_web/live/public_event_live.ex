@@ -553,10 +553,7 @@ defmodule EventasaurusWeb.PublicEventLive do
              |> put_flash(:error, "Unable to process payment. Please try again.")}
         end
 
-      {:error, :multiple_ticket_types} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Please purchase one ticket type at a time for now.")}
+      # Multiple ticket types are now supported in both checkout flows
 
       {:error, :no_tickets_selected} ->
         {:noreply,
@@ -577,8 +574,9 @@ defmodule EventasaurusWeb.PublicEventLive do
 
     case selected_items do
       [] -> {:error, :no_tickets_selected}
+      # Multiple ticket types are now supported - we only use this function for legacy compatibility
       [{ticket, quantity}] -> {:ok, ticket, quantity}
-      _ -> {:error, :multiple_ticket_types}
+      multiple_items -> {:ok, hd(multiple_items) |> elem(0), hd(multiple_items) |> elem(1)} # Return first item for compatibility
     end
   end
 

@@ -271,6 +271,9 @@ defmodule EventasaurusApp.Stripe do
     allow_promotion_codes: allow_promotion_codes
   } = params) do
 
+    # Extract customer information for pre-filling
+    customer_email = Map.get(params, :customer_email)
+
     Logger.info("Creating Stripe Checkout Session",
       amount_cents: amount_cents,
       currency: currency,
@@ -345,6 +348,13 @@ defmodule EventasaurusApp.Stripe do
       "line_items[0][quantity]" => line_item["quantity"]
     }
 
+    # Add customer information for pre-filling if available
+    body_params = if customer_email do
+      Map.put(body_params, "customer_email", customer_email)
+    else
+      body_params
+    end
+
     # Add metadata to body params
     body_params_with_metadata =
       full_metadata
@@ -398,6 +408,140 @@ defmodule EventasaurusApp.Stripe do
       {:error, error} ->
         Logger.error("Unexpected error during Checkout Session creation", error: inspect(error))
         {:error, "Unexpected error during Checkout Session creation"}
+    end
+  end
+
+  @doc """
+  Creates a Stripe Checkout Session with multiple line items for multi-ticket purchases.
+
+  ## Examples
+
+      iex> line_items = [%{price_data: %{...}, quantity: 2}, %{price_data: %{...}, quantity: 1}]
+      iex> create_multi_line_checkout_session(%{line_items: line_items, connect_account: account, ...})
+      {:ok, %{"id" => "cs_...", "url" => "https://checkout.stripe.com/..."}}
+
+  """
+  def create_multi_line_checkout_session(%{
+    line_items: line_items,
+    connect_account: connect_account,
+    application_fee_amount: application_fee_amount,
+    success_url: success_url,
+    cancel_url: cancel_url,
+    metadata: metadata,
+    idempotency_key: idempotency_key
+  } = params) do
+
+    # Extract customer information for pre-filling
+    customer_email = Map.get(params, :customer_email)
+
+    Logger.info("Creating Multi-Line Stripe Checkout Session",
+      line_items_count: length(line_items),
+      stripe_user_id: connect_account.stripe_user_id,
+      application_fee_amount: application_fee_amount
+    )
+
+    url = "https://api.stripe.com/v1/checkout/sessions"
+    secret_key = get_stripe_secret_key()
+
+    headers = [
+      {"Content-Type", "application/x-www-form-urlencoded"},
+      {"Authorization", "Bearer #{secret_key}"},
+      {"Idempotency-Key", idempotency_key}
+    ]
+
+    # Build metadata with order and pricing information
+    full_metadata = Map.merge(%{
+      "platform" => "eventasaurus",
+      "connect_account_id" => to_string(connect_account.id)
+    }, metadata)
+
+    # Calculate expiry time (30 minutes from now = 1800 seconds)
+    expires_at = DateTime.utc_now() |> DateTime.add(30 * 60, :second) |> DateTime.to_unix()
+
+    # Build base body parameters
+    body_params = %{
+      "mode" => "payment",
+      "success_url" => success_url,
+      "cancel_url" => cancel_url,
+      "expires_at" => expires_at,
+      "payment_intent_data[application_fee_amount]" => application_fee_amount,
+      "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
+      "allow_promotion_codes" => false
+    }
+
+    # Add customer information for pre-filling if available
+    body_params = if customer_email do
+      Map.put(body_params, "customer_email", customer_email)
+    else
+      body_params
+    end
+
+    # Add line items to body parameters
+    body_params_with_line_items =
+      line_items
+      |> Enum.with_index()
+      |> Enum.reduce(body_params, fn {line_item, index}, acc ->
+        acc
+        |> Map.put("line_items[#{index}][price_data][currency]", line_item.price_data.currency)
+        |> Map.put("line_items[#{index}][price_data][product_data][name]", line_item.price_data.product_data.name)
+        |> Map.put("line_items[#{index}][price_data][product_data][description]", line_item.price_data.product_data.description)
+        |> Map.put("line_items[#{index}][price_data][unit_amount]", line_item.price_data.unit_amount)
+        |> Map.put("line_items[#{index}][quantity]", line_item.quantity)
+      end)
+
+    # Add metadata to body params
+    body_params_with_metadata =
+      full_metadata
+      |> Enum.reduce(body_params_with_line_items, fn {key, value}, acc ->
+        Map.put(acc, "metadata[#{key}]", to_string(value))
+      end)
+
+    body = URI.encode_query(body_params_with_metadata)
+
+    case HTTPoison.post(url, body, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, checkout_session} ->
+            Logger.info("Successfully created Multi-Line Checkout Session",
+              session_id: checkout_session["id"],
+              url: checkout_session["url"],
+              expires_at: checkout_session["expires_at"]
+            )
+            {:ok, checkout_session}
+
+          {:error, decode_error} ->
+            Logger.error("Failed to decode Multi-Line Checkout Session response",
+              error: inspect(decode_error),
+              response_body: redact_secrets(response_body)
+            )
+            {:error, "Invalid response format from Stripe"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, error_data} ->
+            Logger.error("Stripe Multi-Line Checkout Session error",
+              status_code: status_code,
+              error_type: error_data["error"]["type"],
+              error_message: error_data["error"]["message"]
+            )
+            {:error, error_data["error"]["message"] || "Multi-Line Checkout Session creation failed"}
+
+          {:error, _} ->
+            Logger.error("Stripe Multi-Line Checkout Session error with invalid JSON",
+              status_code: status_code,
+              response_body: redact_secrets(response_body)
+            )
+            {:error, "Stripe returned an error: HTTP #{status_code}"}
+        end
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("HTTP error during Multi-Line Checkout Session creation", reason: inspect(reason))
+        {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
+
+      {:error, error} ->
+        Logger.error("Unexpected error during Multi-Line Checkout Session creation", error: inspect(error))
+        {:error, "Unexpected error during Multi-Line Checkout Session creation"}
     end
   end
 

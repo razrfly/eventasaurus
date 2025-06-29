@@ -885,6 +885,85 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   @doc """
+  Creates a combined checkout session for multiple ticket types.
+
+  This function handles purchasing multiple different ticket types in a single
+  Stripe checkout session. It:
+  1. Validates availability for all ticket types
+  2. Creates separate orders for each ticket type
+  3. Creates a single Stripe checkout session with multiple line items
+  4. Returns checkout URL for redirect
+
+  ## Examples
+
+      iex> order_items = [%{ticket: ticket1, quantity: 2}, %{ticket: ticket2, quantity: 1}]
+      iex> create_multi_ticket_checkout_session(user, order_items)
+      {:ok, %{orders: [order1, order2], checkout_url: url, session_id: session_id}}
+
+  """
+  def create_multi_ticket_checkout_session(%User{} = user, order_items) when is_list(order_items) and length(order_items) > 0 do
+    require Logger
+
+    Logger.info("Creating multi-ticket checkout session", %{
+      user_id: user.id,
+      ticket_count: length(order_items)
+    })
+
+    # Use transaction to ensure atomicity for all tickets
+    case Repo.transaction(fn ->
+      # First, validate all tickets and get connect account
+      # All tickets must be from the same event for a single checkout session
+      event_ids = order_items |> Enum.map(& &1.ticket.event_id) |> Enum.uniq()
+
+      if length(event_ids) > 1 do
+        Repo.rollback(:multiple_events_not_supported)
+      else
+        event_id = hd(event_ids)
+
+        with {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
+             {:ok, {orders, total_amount, line_items}} <- create_orders_and_line_items(user, order_items, connect_account),
+             {:ok, checkout_session} <- create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id) do
+
+          # Update all orders with checkout session ID
+          updated_orders = Enum.map(orders, fn order ->
+            {:ok, updated_order} =
+              order
+              |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+              |> Repo.update()
+
+            maybe_broadcast_order_update(updated_order, :created)
+            updated_order
+          end)
+
+          Logger.info("Successfully created multi-ticket checkout session", %{
+            user_id: user.id,
+            session_id: checkout_session["id"],
+            total_amount: total_amount,
+            order_count: length(updated_orders)
+          })
+
+          {:ok, %{
+            orders: updated_orders,
+            checkout_url: checkout_session["url"],
+            session_id: checkout_session["id"]
+          }}
+        else
+          error ->
+            # Force transaction rollback by calling Repo.rollback
+            case error do
+              {:error, reason} -> Repo.rollback(reason)
+              atom when is_atom(atom) -> Repo.rollback(atom)
+              other -> Repo.rollback(other)
+            end
+        end
+      end
+    end) do
+      {:ok, {:ok, result}} -> {:ok, result}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
   Creates a checkout session for a guest user with a ticket.
 
   This function follows the same pattern as Events.register_user_for_event/3
@@ -901,9 +980,6 @@ defmodule EventasaurusApp.Ticketing do
 
   """
   def create_guest_checkout_session(%Ticket{} = ticket, name, email, attrs \\ %{}) do
-    alias EventasaurusApp.Auth.SupabaseSync
-    alias EventasaurusApp.Accounts
-    alias EventasaurusApp.Events
     require Logger
 
     Logger.info("Starting guest checkout session creation", %{
@@ -912,27 +988,63 @@ defmodule EventasaurusApp.Ticketing do
       name: name
     })
 
-    quantity = Map.get(attrs, :quantity, 1)
-    custom_price_cents = Map.get(attrs, :custom_price_cents)
-    tip_cents = Map.get(attrs, :tip_cents, 0)
+    Repo.transaction(fn ->
+      with {:ok, ticket} <- lock_and_validate_ticket(ticket, attrs),
+           {:ok, user} <- find_or_create_guest_user(email, name),
+           {:ok, order} <- create_guest_order(user, ticket, attrs, name, email),
+           {:ok, session} <- create_checkout_session_for_order(order, ticket) do
+        {:ok, %{order: order, checkout_url: session["url"], session_id: session["id"], user: user}}
+      else
+        error -> handle_transaction_error(error)
+      end
+    end)
+    |> case do
+      {:ok, {:ok, result}} -> {:ok, result}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Creates a combined checkout session for multiple ticket types for a guest user.
+
+  This function follows the same pattern as create_guest_checkout_session but handles
+  multiple different ticket types in a single Stripe checkout session. It:
+  - Finds or creates a Supabase user via OTP
+  - Syncs the user to the local database
+  - Creates multiple orders and a combined checkout session
+  - Registers the user for the event when the order is confirmed
+
+  ## Examples
+
+      iex> order_items = [%{ticket: ticket1, quantity: 2}, %{ticket: ticket2, quantity: 1}]
+      iex> create_guest_multi_ticket_checkout_session("John Doe", "john@example.com", order_items)
+      {:ok, %{orders: [order1, order2], checkout_url: "https://checkout.stripe.com/...", session_id: "cs_...", user: %User{}}}
+
+  """
+  def create_guest_multi_ticket_checkout_session(name, email, order_items) when is_list(order_items) and length(order_items) > 0 do
+    alias EventasaurusApp.Auth.SupabaseSync
+    alias EventasaurusApp.Accounts
+    alias EventasaurusApp.Events
+    require Logger
+
+    Logger.info("Starting guest multi-ticket checkout session creation", %{
+      email: email,
+      name: name,
+      ticket_count: length(order_items)
+    })
 
     # Use transaction to ensure atomicity
     case Repo.transaction(fn ->
-      # Lock the ticket row to prevent concurrent modifications
-      locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+      # Validate all tickets are from the same event
+      event_ids = order_items |> Enum.map(& &1.ticket.event_id) |> Enum.uniq()
 
-      # Validate ticket availability first
-      with :ok <- validate_ticket_availability(locked_ticket, quantity),
-           :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents) do
+      if length(event_ids) > 1 do
+        Repo.rollback(:multiple_events_not_supported)
+      else
+        event_id = hd(event_ids)
 
         # Check if user exists in our local database first
         existing_user = Accounts.get_user_by_email(email)
-
-        if existing_user do
-          Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
-        else
-          Logger.debug("No existing user found in local database")
-        end
 
         user = case existing_user do
           nil ->
@@ -954,7 +1066,7 @@ defmodule EventasaurusApp.Ticketing do
                 # User was created via OTP but email confirmation is required
                 Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
                 # Create user with temporary supabase_id - will be updated when they confirm email
-                temp_supabase_id = "temp_#{Ecto.UUID.generate()}"
+                temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
                 case Accounts.create_user(%{
                   email: email,
                   name: name,
@@ -981,28 +1093,31 @@ defmodule EventasaurusApp.Ticketing do
             user
         end
 
-        # Now proceed with order creation using the standard flow
-        with {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
-             {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
-             {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, quantity, pricing, connect_account, Map.put(attrs, :guest_metadata, %{name: name, email: email})),
-             {:ok, checkout_session} <- create_stripe_checkout_session(order, locked_ticket, connect_account) do
+        # Now create the multi-ticket checkout session
+        with {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
+             {:ok, {orders, total_amount, line_items}} <- create_guest_orders_and_line_items(user, order_items, connect_account, name, email),
+             {:ok, checkout_session} <- create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id, customer_email: email) do
 
-          # Update order with checkout session ID
-          {:ok, updated_order} =
-            order
-            |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
-            |> Repo.update()
+          # Update all orders with checkout session ID
+          updated_orders = Enum.map(orders, fn order ->
+            {:ok, updated_order} =
+              order
+              |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+              |> Repo.update()
 
-          maybe_broadcast_order_update(updated_order, :created)
+            maybe_broadcast_order_update(updated_order, :created)
+            updated_order
+          end)
 
-          Logger.info("Successfully created guest checkout session", %{
-            order_id: updated_order.id,
+          Logger.info("Successfully created guest multi-ticket checkout session", %{
             user_id: user.id,
-            session_id: checkout_session["id"]
+            session_id: checkout_session["id"],
+            total_amount: total_amount,
+            order_count: length(updated_orders)
           })
 
           {:ok, %{
-            order: updated_order,
+            orders: updated_orders,
             checkout_url: checkout_session["url"],
             session_id: checkout_session["id"],
             user: user
@@ -1016,14 +1131,6 @@ defmodule EventasaurusApp.Ticketing do
               other -> Repo.rollback(other)
             end
         end
-      else
-        error ->
-          # Force transaction rollback by calling Repo.rollback
-          case error do
-            {:error, reason} -> Repo.rollback(reason)
-            atom when is_atom(atom) -> Repo.rollback(atom)
-            other -> Repo.rollback(other)
-          end
       end
     end) do
       {:ok, {:ok, result}} -> {:ok, result}
@@ -1055,13 +1162,19 @@ defmodule EventasaurusApp.Ticketing do
     |> Repo.insert()
   end
 
-  defp create_stripe_checkout_session(%Order{} = order, %Ticket{} = ticket, connect_account) do
+  defp create_stripe_checkout_session(%Order{} = order, %Ticket{} = ticket, connect_account, opts \\ []) do
     # Get pricing details from snapshot
     pricing_snapshot = order.pricing_snapshot || %{}
     pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
 
     # Get ticket info for session
     ticket = Repo.preload(ticket, :event)
+
+    # Get user information for pre-filling Stripe checkout
+    user = Repo.get!(User, order.user_id)
+
+    # Use provided customer info from opts, or fall back to user record
+    customer_email = Keyword.get(opts, :customer_email, user.email)
 
     # Generate idempotency key
     idempotency_key = "order_#{order.id}_#{DateTime.utc_now() |> DateTime.to_unix()}"
@@ -1092,7 +1205,9 @@ defmodule EventasaurusApp.Ticketing do
       allow_promotion_codes: false,
       quantity: order.quantity,
       ticket_name: ticket.title,
-      ticket_description: "#{ticket.event.title} - #{ticket.title}"
+      ticket_description: "#{ticket.event.title} - #{ticket.title}",
+      # Pre-fill customer information
+      customer_email: customer_email
     }
 
     # Add minimum price for flexible pricing
@@ -1227,6 +1342,254 @@ defmodule EventasaurusApp.Ticketing do
     case Process.whereis(Eventasaurus.PubSub) do
       nil -> false
       _pid -> true
+    end
+  end
+
+  # Guest checkout helper functions
+
+  defp lock_and_validate_ticket(%Ticket{} = ticket, attrs) do
+    quantity = Map.get(attrs, :quantity, 1)
+    custom_price_cents = Map.get(attrs, :custom_price_cents)
+
+    # Lock the ticket row to prevent concurrent modifications
+    locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+
+    # Validate ticket availability
+    with :ok <- validate_ticket_availability(locked_ticket, quantity),
+         :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents) do
+      {:ok, locked_ticket}
+    end
+  end
+
+  defp find_or_create_guest_user(email, name) do
+    alias EventasaurusApp.Auth.SupabaseSync
+    alias EventasaurusApp.Accounts
+    alias EventasaurusApp.Events
+
+    # Check if user exists in our local database first
+    existing_user = Accounts.get_user_by_email(email)
+
+    if existing_user do
+      Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
+      {:ok, existing_user}
+    else
+      Logger.debug("No existing user found in local database")
+
+      # User doesn't exist locally, check Supabase and create if needed
+      Logger.info("User not found locally, attempting Supabase user creation/lookup")
+      case Events.create_or_find_supabase_user(email, name) do
+        {:ok, supabase_user} ->
+          Logger.info("Successfully created/found user in Supabase")
+          # Sync with local database
+          case SupabaseSync.sync_user(supabase_user) do
+            {:ok, user} ->
+              Logger.info("Successfully synced user to local database", %{user_id: user.id})
+              {:ok, user}
+            {:error, reason} ->
+              Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+              {:error, reason}
+          end
+        {:error, :user_confirmation_required} ->
+          # User was created via OTP but email confirmation is required
+          Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
+          # Create user with pending confirmation ID - TODO: implement cleanup for unconfirmed users
+          temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
+          case Accounts.create_user(%{
+            email: email,
+            name: name,
+            supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
+          }) do
+            {:ok, user} ->
+              Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
+              {:ok, user}
+            {:error, reason} ->
+              Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
+              {:error, reason}
+          end
+        {:error, :invalid_user_data} ->
+          Logger.error("Invalid user data from Supabase after OTP creation")
+          {:error, :invalid_user_data}
+        {:error, reason} ->
+          Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
+          {:error, reason}
+      end
+    end
+  end
+
+  defp create_guest_order(user, ticket, attrs, name, email) do
+    quantity = Map.get(attrs, :quantity, 1)
+    custom_price_cents = Map.get(attrs, :custom_price_cents)
+    tip_cents = Map.get(attrs, :tip_cents, 0)
+
+    # Proceed with order creation using the standard flow
+    with {:ok, pricing} <- calculate_order_pricing(ticket, quantity, custom_price_cents, tip_cents),
+         {:ok, connect_account} <- get_event_organizer_stripe_account(ticket.event_id),
+         {:ok, order} <- insert_order_with_checkout_session(user, ticket, quantity, pricing, connect_account, Map.put(attrs, :guest_metadata, %{name: name, email: email})) do
+      {:ok, order}
+    end
+  end
+
+  defp create_checkout_session_for_order(order, ticket) do
+    # Extract guest metadata if this is a guest order
+    guest_metadata = get_in(order, [Access.key(:guest_metadata), Access.all()]) || %{}
+    guest_email = Map.get(guest_metadata, :email) || Map.get(guest_metadata, "email")
+
+    # Prepare customer options if we have guest data
+    customer_opts = []
+    customer_opts = if guest_email, do: [{:customer_email, guest_email} | customer_opts], else: customer_opts
+
+    with {:ok, connect_account} <- get_event_organizer_stripe_account(ticket.event_id),
+         {:ok, checkout_session} <- create_stripe_checkout_session(order, ticket, connect_account, customer_opts) do
+
+      # Update order with checkout session ID
+      {:ok, updated_order} =
+        order
+        |> Order.changeset(%{stripe_session_id: checkout_session["id"]})
+        |> Repo.update()
+
+      maybe_broadcast_order_update(updated_order, :created)
+
+      Logger.info("Successfully created guest checkout session", %{
+        order_id: updated_order.id,
+        user_id: order.user_id,
+        session_id: checkout_session["id"]
+      })
+
+      {:ok, checkout_session}
+    end
+  end
+
+  defp handle_transaction_error(error) do
+    # Force transaction rollback by calling Repo.rollback
+    case error do
+      {:error, reason} -> Repo.rollback(reason)
+      atom when is_atom(atom) -> Repo.rollback(atom)
+      other -> Repo.rollback(other)
+    end
+  end
+
+  # Multi-ticket checkout helper functions
+
+  defp create_orders_and_line_items(user, order_items, connect_account) do
+    # Process each ticket type and create orders + line items
+    case Enum.reduce_while(order_items, {:ok, {[], 0, []}}, fn order_item, {:ok, {orders_acc, total_acc, line_items_acc}} ->
+      # Lock the ticket row to prevent concurrent modifications
+      locked_ticket = Repo.get!(Ticket, order_item.ticket.id, lock: "FOR UPDATE")
+
+      with :ok <- validate_ticket_availability(locked_ticket, order_item.quantity),
+           :ok <- validate_flexible_pricing(locked_ticket, order_item[:custom_price_cents]),
+           {:ok, pricing} <- calculate_order_pricing(locked_ticket, order_item.quantity, order_item[:custom_price_cents], order_item[:tip_cents] || 0),
+           {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, order_item.quantity, pricing, connect_account, %{}) do
+
+        # Create line item for Stripe
+        line_item = create_line_item_for_order(order, locked_ticket)
+
+        {:cont, {:ok, {[order | orders_acc], total_acc + order.total_cents, [line_item | line_items_acc]}}}
+      else
+        error -> {:halt, error}
+      end
+    end) do
+      {:ok, {orders, total_amount, line_items}} ->
+        {:ok, {Enum.reverse(orders), total_amount, Enum.reverse(line_items)}}
+      error -> error
+    end
+  end
+
+  defp create_line_item_for_order(order, ticket) do
+    ticket = Repo.preload(ticket, :event)
+    pricing_snapshot = order.pricing_snapshot || %{}
+    pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
+
+    %{
+      price_data: %{
+        currency: order.currency,
+        unit_amount: div(order.total_cents, order.quantity), # Price per ticket
+        product_data: %{
+          name: ticket.title,
+          description: "#{ticket.event.title} - #{ticket.title}"
+        }
+      },
+      quantity: order.quantity,
+      metadata: %{
+        "order_id" => to_string(order.id),
+        "ticket_id" => to_string(order.ticket_id),
+        "pricing_model" => pricing_model
+      }
+    }
+  end
+
+  defp create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id, opts \\ []) do
+    # Get event for cancel URL
+    event = Repo.get!(Event, event_id)
+
+    # Calculate total application fee from all orders
+    total_application_fee = Enum.reduce(orders, 0, fn order, acc ->
+      acc + (order.application_fee_amount || 0)
+    end)
+
+        # Use the first order's ID for the session metadata and success URL
+    primary_order = hd(orders)
+
+    # Get user information for pre-filling Stripe checkout
+    user = Repo.get!(User, primary_order.user_id)
+
+    # Use provided customer info from opts, or fall back to user record
+    customer_email = Keyword.get(opts, :customer_email, user.email)
+
+    # Generate idempotency key
+    order_ids = orders |> Enum.map(&to_string(&1.id)) |> Enum.join("_")
+    idempotency_key = "multi_order_#{order_ids}_#{DateTime.utc_now() |> DateTime.to_unix()}"
+
+    # Build URLs
+    base_url = get_base_url()
+    success_url = "#{base_url}/orders/#{primary_order.id}/success?session_id={CHECKOUT_SESSION_ID}&multi_order=true"
+    cancel_url = "#{base_url}/#{event.slug}"
+
+    metadata = %{
+      "primary_order_id" => to_string(primary_order.id),
+      "order_ids" => order_ids,
+      "user_id" => to_string(primary_order.user_id),
+      "event_id" => to_string(event_id),
+      "multi_ticket_purchase" => "true"
+    }
+
+    checkout_params = %{
+      line_items: line_items,
+      connect_account: connect_account,
+      application_fee_amount: total_application_fee,
+      success_url: success_url,
+      cancel_url: cancel_url,
+      metadata: metadata,
+      idempotency_key: idempotency_key,
+      # Pre-fill customer information
+      customer_email: customer_email
+    }
+
+    stripe_impl().create_multi_line_checkout_session(checkout_params)
+  end
+
+  defp create_guest_orders_and_line_items(user, order_items, connect_account, name, email) do
+    # Process each ticket type and create orders + line items for guest checkout
+    case Enum.reduce_while(order_items, {:ok, {[], 0, []}}, fn order_item, {:ok, {orders_acc, total_acc, line_items_acc}} ->
+      # Lock the ticket row to prevent concurrent modifications
+      locked_ticket = Repo.get!(Ticket, order_item.ticket.id, lock: "FOR UPDATE")
+
+      with :ok <- validate_ticket_availability(locked_ticket, order_item.quantity),
+           :ok <- validate_flexible_pricing(locked_ticket, order_item[:custom_price_cents]),
+           {:ok, pricing} <- calculate_order_pricing(locked_ticket, order_item.quantity, order_item[:custom_price_cents], order_item[:tip_cents] || 0),
+           {:ok, order} <- insert_order_with_checkout_session(user, locked_ticket, order_item.quantity, pricing, connect_account, %{guest_metadata: %{name: name, email: email}}) do
+
+        # Create line item for Stripe
+        line_item = create_line_item_for_order(order, locked_ticket)
+
+        {:cont, {:ok, {[order | orders_acc], total_acc + order.total_cents, [line_item | line_items_acc]}}}
+      else
+        error -> {:halt, error}
+      end
+    end) do
+      {:ok, {orders, total_amount, line_items}} ->
+        {:ok, {Enum.reverse(orders), total_amount, Enum.reverse(line_items)}}
+      error -> error
     end
   end
 
