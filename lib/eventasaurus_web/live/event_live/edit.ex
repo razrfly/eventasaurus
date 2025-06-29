@@ -684,8 +684,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("edit_ticket", %{"id" => ticket_id_str}, socket) do
-    ticket_id = String.to_integer(ticket_id_str)
-    ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
+    ticket = case Integer.parse(ticket_id_str) do
+      {id, ""} -> Enum.find(socket.assigns.tickets, &(&1.id == id))
+      _ -> Enum.find(socket.assigns.tickets, &(to_string(&1.id) == ticket_id_str))
+    end
 
     if ticket do
       form_data = %{
@@ -706,7 +708,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         socket
         |> assign(:show_ticket_modal, true)
         |> assign(:ticket_form_data, form_data)
-        |> assign(:editing_ticket_id, ticket_id)
+        |> assign(:editing_ticket_id, ticket.id)
 
       {:noreply, socket}
     else
@@ -716,8 +718,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("remove_ticket", %{"id" => ticket_id_str}, socket) do
-    ticket_id = String.to_integer(ticket_id_str)
-    ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
+    ticket = case Integer.parse(ticket_id_str) do
+      {id, ""} -> Enum.find(socket.assigns.tickets, &(&1.id == id))
+      _ -> Enum.find(socket.assigns.tickets, &(to_string(&1.id) == ticket_id_str))
+    end
 
     if ticket && Map.has_key?(ticket, :id) do
       # This is an existing ticket in the database, delete it
@@ -736,7 +740,11 @@ defmodule EventasaurusWeb.EventLive.Edit do
       end
     else
       # This is a new ticket not yet saved, just remove from list (shouldn't happen with ID-based approach)
-      updated_tickets = Enum.reject(socket.assigns.tickets, &(&1.id == ticket_id))
+      updated_tickets = if ticket do
+        Enum.reject(socket.assigns.tickets, &(&1 == ticket))
+      else
+        socket.assigns.tickets
+      end
       socket = assign(socket, :tickets, updated_tickets)
       {:noreply, socket}
     end
