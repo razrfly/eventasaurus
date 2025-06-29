@@ -133,7 +133,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:is_virtual, is_virtual)
               |> assign(:selected_venue_name, venue_name)
               |> assign(:selected_venue_address, venue_address)
-              |> assign(:show_all_timezones, false)
+              |> assign(:show_all_timezones, true)
               |> assign(:cover_image_url, event.cover_image_url)
               |> assign(:external_image_data, event.external_image_data)
               |> assign(:show_image_picker, false)
@@ -189,6 +189,14 @@ defmodule EventasaurusWeb.EventLive.Edit do
   @impl true
   def handle_event("select_setup_path", %{"path" => path}, socket) when path in @valid_setup_paths do
     socket = apply_setup_path(socket, path) |> assign(:show_stage_transitions, false)
+
+    # Update the changeset with the new form data to ensure the form component reflects the changes
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(socket.assigns.form_data)
+      |> Map.put(:action, :validate)
+
+    socket = assign(socket, form: to_form(changeset))
     {:noreply, socket}
   end
 
@@ -208,6 +216,14 @@ defmodule EventasaurusWeb.EventLive.Edit do
   @impl true
   def handle_event("transition_to_stage", %{"stage" => stage}, socket) when stage in @valid_setup_paths do
     socket = apply_setup_path(socket, stage) |> assign(:show_stage_transitions, false)
+
+    # Update the changeset with the new form data to ensure the form component reflects the changes
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(socket.assigns.form_data)
+      |> Map.put(:action, :validate)
+
+    socket = assign(socket, form: to_form(changeset))
     {:noreply, socket}
   end
 
@@ -302,6 +318,20 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> Map.drop(["venue_name", "venue_address", "venue_city", "venue_state",
                  "venue_country", "venue_latitude", "venue_longitude", "is_virtual",
                  "start_date", "start_time", "ends_date", "ends_time"])
+
+    # Handle status transition based on enable_date_polling
+    final_event_params = case Map.get(final_event_params, "enable_date_polling") do
+      polling when polling == true or polling == "true" ->
+        # Switching to or staying in polling mode
+        Map.put(final_event_params, "status", :polling)
+      _ ->
+        # Switching to or staying in confirmed mode
+        # Remove polling-specific fields that are no longer needed
+        final_event_params
+        |> Map.put("status", :confirmed)
+        |> Map.put("polling_deadline", nil)
+        |> Map.put("selected_poll_dates", nil)
+    end
 
     # Validate date polling before saving
     validation_changeset =
