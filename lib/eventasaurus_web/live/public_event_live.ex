@@ -473,29 +473,25 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   def handle_event("proceed_to_checkout", _params, socket) do
-    if socket.assigns.user do
-      # Check if any tickets are selected
-      selected_tickets = socket.assigns.selected_tickets
+    # Check if any tickets are selected
+    selected_tickets = socket.assigns.selected_tickets
 
-      if map_size(selected_tickets) == 0 do
-        {:noreply,
-         socket
-         |> put_flash(:error, "Please select at least one ticket before proceeding to checkout.")}
-      else
-        # Store selected tickets in session and redirect to checkout
-        # Use proper URI encoding for ticket parameters
-        query =
-          selected_tickets
-          |> Enum.map(fn {id, qty} -> {Integer.to_string(id), qty} end)
-          |> URI.encode_query()
-
-        {:noreply,
-         redirect(socket,
-           to: "/events/#{socket.assigns.event.slug}/checkout?" <> query
-         )}
-      end
+    if map_size(selected_tickets) == 0 do
+      {:noreply,
+       socket
+       |> put_flash(:error, "Please select at least one ticket before proceeding to checkout.")}
     else
-      {:noreply, assign(socket, :show_registration_modal, true)}
+      # Store selected tickets in session and redirect to checkout
+      # Use proper URI encoding for ticket parameters
+      query =
+        selected_tickets
+        |> Enum.map(fn {id, qty} -> {Integer.to_string(id), qty} end)
+        |> URI.encode_query()
+
+      {:noreply,
+       redirect(socket,
+         to: "/events/#{socket.assigns.event.slug}/checkout?" <> query
+       )}
     end
   end
 

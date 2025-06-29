@@ -8,7 +8,8 @@ defmodule EventasaurusWeb.CheckoutLive do
 
   @impl true
   def mount(%{"slug" => event_slug} = params, _session, socket) do
-    # User is already assigned by the auth hook since we're in the :authenticated live_session
+    # User may or may not be assigned depending on authentication status
+    user = socket.assigns[:user]
 
     case get_event_by_slug(event_slug) do
       {:ok, event} ->
@@ -39,7 +40,11 @@ defmodule EventasaurusWeb.CheckoutLive do
                |> assign(:order_items, order_items)
                |> assign(:total_amount, total_amount)
                |> assign(:processing, false)
-               |> assign(:errors, [])}
+               |> assign(:errors, [])
+               |> assign(:user, user)  # May be nil for guests
+               |> assign(:is_guest, is_nil(user))
+               |> assign(:guest_form, %{"name" => "", "email" => ""})  # Guest information form
+               |> assign(:show_guest_form, is_nil(user))}  # Show guest form if not authenticated
 
             {:error, message} ->
               {:ok,
@@ -63,27 +68,43 @@ defmodule EventasaurusWeb.CheckoutLive do
       user: user,
       event: _event,
       order_items: order_items,
-      total_amount: total_amount
+      total_amount: total_amount,
+      is_guest: is_guest,
+      guest_form: guest_form
     } = socket.assigns
 
-    Logger.info("Proceed with checkout clicked",
-      user_id: user.id,
-      total_amount: total_amount,
-      order_items_count: length(order_items)
-    )
+    # Validate guest information if user is not authenticated
+    if is_guest do
+      case validate_guest_form(guest_form) do
+        {:ok, guest_info} ->
+          proceed_with_guest_checkout(socket, guest_info, order_items, total_amount)
+        {:error, errors} ->
+          {:noreply,
+           socket
+           |> assign(:errors, errors)
+           |> put_flash(:error, "Please complete all required fields.")}
+      end
+    else
+      # Authenticated user flow
+      Logger.info("Proceed with checkout clicked",
+        user_id: user.id,
+        total_amount: total_amount,
+        order_items_count: length(order_items)
+      )
 
-    socket = assign(socket, :processing, true)
+      socket = assign(socket, :processing, true)
 
-    case total_amount do
-      0 ->
-        # Free tickets - create orders directly
-        Logger.info("Processing free ticket checkout")
-        handle_free_ticket_checkout(socket, user, order_items)
+      case total_amount do
+        0 ->
+          # Free tickets - create orders directly
+          Logger.info("Processing free ticket checkout")
+          handle_free_ticket_checkout(socket, user, order_items)
 
-      _ ->
-        # Paid tickets - create Stripe checkout session
-        Logger.info("Processing paid ticket checkout")
-        handle_paid_ticket_checkout(socket, user, order_items)
+        _ ->
+          # Paid tickets - create Stripe checkout session
+          Logger.info("Processing paid ticket checkout")
+          handle_paid_ticket_checkout(socket, user, order_items)
+      end
     end
   end
 
@@ -140,6 +161,31 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
+  @impl true
+  def handle_event("show_guest_form", _params, socket) do
+    {:noreply, assign(socket, :show_guest_form, true)}
+  end
+
+  @impl true
+  def handle_event("update_guest_form", %{"value" => value} = params, socket) do
+    field = case params do
+      %{"field" => field} -> field
+      _ -> nil
+    end
+
+    if field do
+      updated_form = Map.put(socket.assigns.guest_form, field, value)
+      # Clear validation errors when user starts typing
+      {:noreply,
+       socket
+       |> assign(:guest_form, updated_form)
+       |> assign(:errors, [])
+       |> clear_flash()}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # Private helper functions
 
   defp get_event_by_slug(slug) do
@@ -149,7 +195,7 @@ defmodule EventasaurusWeb.CheckoutLive do
     end
   end
 
-      defp parse_tickets_from_params(params) do
+  defp parse_tickets_from_params(params) do
     # Parse tickets from new URI-encoded format where ticket IDs are parameter keys
     # Remove known non-ticket parameters like "slug"
     known_params = ["slug"]
@@ -509,163 +555,552 @@ defmodule EventasaurusWeb.CheckoutLive do
      |> redirect(to: checkout_url)}
   end
 
+  def validate_guest_form(guest_form) do
+    name = String.trim(guest_form["name"] || "")
+    email = String.trim(guest_form["email"] || "")
+
+    errors = []
+
+    errors = if name == "", do: ["Name is required" | errors], else: errors
+    errors = if email == "", do: ["Email is required" | errors], else: errors
+    errors = if email != "" and not valid_email?(email), do: ["Email format is invalid" | errors], else: errors
+
+    case errors do
+      [] -> {:ok, %{name: name, email: email}}
+      _ -> {:error, errors}
+    end
+  end
+
+  def valid_email?(email) do
+    email_regex = ~r/^[^\s]+@[^\s]+\.[^\s]+$/
+    Regex.match?(email_regex, email)
+  end
+
+  defp proceed_with_guest_checkout(socket, guest_info, order_items, total_amount) do
+    Logger.info("Proceed with guest checkout",
+      name: guest_info.name,
+      email: guest_info.email,
+      total_amount: total_amount,
+      order_items_count: length(order_items)
+    )
+
+    socket = assign(socket, :processing, true)
+
+    case total_amount do
+      0 ->
+        # Free tickets - handle guest free ticket checkout
+        Logger.info("Processing guest free ticket checkout")
+        handle_guest_free_ticket_checkout(socket, guest_info, order_items)
+
+      _ ->
+        # Paid tickets - create guest Stripe checkout session
+        Logger.info("Processing guest paid ticket checkout")
+        handle_guest_paid_ticket_checkout(socket, guest_info, order_items)
+    end
+  end
+
+  defp handle_guest_free_ticket_checkout(socket, guest_info, order_items) do
+    try do
+      # For free tickets, we'll use the first ticket to create the user
+      # then create orders for all ticket types
+      case order_items do
+        [] ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "No tickets selected.")}
+
+        [_first_item | _rest] ->
+          # Create/find user first using Events.register_user_for_event pattern
+          case Events.register_user_for_event(socket.assigns.event.id, guest_info.name, guest_info.email) do
+            {:ok, :new_registration, _participant} ->
+              # User was created and registered, now process tickets
+              process_guest_free_tickets(socket, guest_info.email, order_items)
+
+            {:ok, :existing_user_registered, _participant} ->
+              # User existed and was registered, now process tickets
+              process_guest_free_tickets(socket, guest_info.email, order_items)
+
+            {:error, :already_registered} ->
+              # User is already registered, just process tickets
+              process_guest_free_tickets(socket, guest_info.email, order_items)
+
+            {:error, reason} ->
+              Logger.error("Failed to register guest user for event",
+                email: guest_info.email,
+                event_id: socket.assigns.event.id,
+                reason: inspect(reason)
+              )
+
+              {:noreply,
+               socket
+               |> assign(:processing, false)
+               |> put_flash(:error, "Failed to process registration. Please try again.")}
+          end
+      end
+    rescue
+      error ->
+        Logger.error("Exception during guest free ticket checkout",
+          email: guest_info.email,
+          event_id: socket.assigns.event.id,
+          error: inspect(error)
+        )
+
+        {:noreply,
+         socket
+         |> assign(:processing, false)
+         |> put_flash(:error, "An error occurred. Please try again.")}
+    end
+  end
+
+  defp process_guest_free_tickets(socket, email, order_items) do
+    # Get the user from database
+    case EventasaurusApp.Accounts.get_user_by_email(email) do
+      nil ->
+        {:noreply,
+         socket
+         |> assign(:processing, false)
+         |> put_flash(:error, "User account not found. Please try again.")}
+
+      user ->
+        handle_free_ticket_checkout(socket, user, order_items)
+    end
+  end
+
+  defp handle_guest_paid_ticket_checkout(socket, guest_info, order_items) do
+    try do
+      # For paid tickets, create separate checkout sessions for each ticket type
+      # For simplicity, we'll handle the first ticket type first
+      case order_items do
+        [] ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "No tickets selected.")}
+
+        [single_item] ->
+          # Single ticket type - create guest checkout session
+          create_guest_stripe_checkout_session(socket, guest_info, single_item)
+
+        multiple_items ->
+          # Multiple ticket types - for now, handle the first one
+          # In production, you might want to combine or handle separately
+          Logger.info("Multiple ticket types for guest checkout, processing first item")
+          first_item = hd(multiple_items)
+          create_guest_stripe_checkout_session(socket, guest_info, first_item)
+      end
+    rescue
+      error ->
+        Logger.error("Exception during guest paid ticket checkout",
+          email: guest_info.email,
+          error: inspect(error)
+        )
+
+        {:noreply,
+         socket
+         |> assign(:processing, false)
+         |> put_flash(:error, "An error occurred. Please try again.")}
+    end
+  end
+
+  defp create_guest_stripe_checkout_session(socket, guest_info, order_item) do
+    try do
+      case Ticketing.create_guest_checkout_session(
+        order_item.ticket,
+        guest_info.name,
+        guest_info.email,
+        %{quantity: order_item.quantity}
+      ) do
+        {:ok, %{order: order, checkout_url: checkout_url, session_id: session_id, user: _user}} ->
+          Logger.info("Guest Stripe checkout session created",
+            order_id: order.id,
+            session_id: session_id,
+            email: guest_info.email
+          )
+
+          # Redirect to Stripe Checkout
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> redirect(external: checkout_url)}
+
+        {:error, :no_stripe_account} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+
+        {:error, :ticket_unavailable} ->
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Sorry, these tickets are no longer available.")}
+
+        {:error, reason} when is_binary(reason) ->
+          Logger.error("Guest Stripe checkout creation failed",
+            email: guest_info.email,
+            ticket_id: order_item.ticket.id,
+            reason: reason
+          )
+
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Payment processing is temporarily unavailable. Please try again.")}
+
+        {:error, reason} ->
+          Logger.error("Guest order creation failed",
+            email: guest_info.email,
+            ticket_id: order_item.ticket.id,
+            reason: inspect(reason)
+          )
+
+          {:noreply,
+           socket
+           |> assign(:processing, false)
+           |> put_flash(:error, "Unable to process payment. Please try again.")}
+      end
+    rescue
+      error ->
+        Logger.error("Exception during guest Stripe checkout creation",
+          email: guest_info.email,
+          ticket_id: order_item.ticket.id,
+          error: inspect(error)
+        )
+
+        {:noreply,
+         socket
+         |> assign(:processing, false)
+         |> put_flash(:error, "An error occurred. Please try again.")}
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="container mx-auto px-6 py-8 max-w-4xl">
-      <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">Checkout</h1>
-        <p class="text-gray-600">Review your ticket selection for <span class="font-medium"><%= @event.title %></span></p>
-      </div>
+    <div class="min-h-screen bg-gray-50">
+      <div class="container mx-auto px-6 py-8 max-w-6xl">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-gray-900 mb-2">Checkout</h1>
+          <p class="text-gray-600">Complete your purchase for <span class="font-medium"><%= @event.title %></span></p>
+        </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Order Summary -->
-        <div class="lg:col-span-2">
-          <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h2 class="text-xl font-semibold text-gray-900 mb-6">Order Summary</h2>
+        <%= if @order_items == [] do %>
+          <div class="bg-white rounded-xl p-8 text-center">
+            <p class="text-gray-500 mb-4">No tickets selected</p>
+            <.link navigate={"/events/#{@event.slug}"} class="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium">
+              ← Back to event
+            </.link>
+          </div>
+        <% else %>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Main Content Area -->
+            <div class="lg:col-span-2 space-y-6">
+              <!-- Authentication Choice (for guests) -->
+              <%= if @is_guest do %>
+                <div class="bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
+                  <%= if @show_guest_form do %>
+                    <!-- Guest Checkout Form -->
+                    <div class="text-center mb-8">
+                      <h2 class="text-2xl font-bold text-gray-900 mb-2">Complete Your Purchase</h2>
+                      <p class="text-gray-600">Enter your information to get your tickets</p>
+                    </div>
 
-            <%= if @order_items == [] do %>
-              <div class="text-center py-8">
-                <p class="text-gray-500">No tickets selected</p>
-                <.link navigate={"/events/#{@event.slug}"} class="text-blue-600 hover:text-blue-700 font-medium">
-                  ← Back to event
-                </.link>
-              </div>
-            <% else %>
-              <div class="space-y-4">
-                <%= for item <- @order_items do %>
-                  <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div class="flex-1">
-                      <h3 class="font-medium text-gray-900"><%= item.ticket.title %></h3>
-                      <p class="text-sm text-gray-600"><%= item.ticket.description %></p>
+                    <%= if @errors != [] do %>
+                      <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <ul class="text-sm text-red-600 space-y-1">
+                          <%= for error <- @errors do %>
+                            <li><%= error %></li>
+                          <% end %>
+                        </ul>
+                      </div>
+                    <% end %>
 
-                      <div class="flex items-center gap-4 mt-2">
-                        <div class="flex items-center space-x-2">
-                          <button
-                            type="button"
-                            phx-click="update_quantity"
-                            phx-value-ticket_id={item.ticket.id}
-                            phx-value-quantity={item.quantity - 1}
-                            class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                            disabled={@processing}
-                          >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
-                            </svg>
-                          </button>
-
-                          <span class="w-8 text-center font-medium"><%= item.quantity %></span>
-
-                          <button
-                            type="button"
-                            phx-click="update_quantity"
-                            phx-value-ticket_id={item.ticket.id}
-                            phx-value-quantity={item.quantity + 1}
-                            class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                            disabled={@processing}
-                          >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
-                          </button>
-                        </div>
-
-                        <button
-                          type="button"
-                          phx-click="remove_ticket"
-                          phx-value-ticket_id={item.ticket.id}
-                          class="text-red-600 hover:text-red-700 text-sm font-medium"
+                    <div class="max-w-md mx-auto space-y-6">
+                      <div>
+                        <label for="guest_name" class="block text-lg font-medium text-gray-900 mb-3">
+                          Full Name <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          id="guest_name"
+                          value={@guest_form["name"]}
+                          phx-keyup="update_guest_form"
+                          phx-value-field="name"
+                          phx-debounce="300"
+                          class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          placeholder="Enter your full name"
                           disabled={@processing}
+                        />
+                      </div>
+
+                      <div>
+                        <label for="guest_email" class="block text-lg font-medium text-gray-900 mb-3">
+                          Email Address <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          id="guest_email"
+                          value={@guest_form["email"]}
+                          phx-keyup="update_guest_form"
+                          phx-value-field="email"
+                          phx-debounce="300"
+                          class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          placeholder="Enter your email address"
+                          disabled={@processing}
+                        />
+                      </div>
+
+                      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p class="text-sm text-blue-800">
+                          <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                          </svg>
+                          We'll create an account for you and send your tickets to this email address.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        phx-click="proceed_with_checkout"
+                        class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-4 px-6 rounded-lg transition-colors duration-200 text-lg"
+                        disabled={@processing}
+                      >
+                        <%= if @processing do %>
+                          <div class="flex items-center justify-center">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing...
+                          </div>
+                        <% else %>
+                          <%= if @total_amount == 0 do %>
+                            Reserve Free Tickets
+                          <% else %>
+                            Proceed to Payment
+                          <% end %>
+                        <% end %>
+                      </button>
+
+                      <!-- Alternative Options -->
+                      <div class="relative">
+                        <div class="absolute inset-0 flex items-center">
+                          <div class="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                          <span class="px-2 bg-white text-gray-500">or</span>
+                        </div>
+                      </div>
+
+                      <div class="space-y-3">
+                        <a
+                          href="/auth/login"
+                          class="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center block"
                         >
-                          Remove
-                        </button>
+                          Already have an account? Sign In
+                        </a>
+
+                        <a
+                          href="/auth/facebook"
+                          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center block flex items-center justify-center"
+                        >
+                          <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                          </svg>
+                          Continue with Facebook
+                        </a>
                       </div>
                     </div>
-
-                    <div class="text-right ml-4">
-                      <%= if item.unit_price == 0 do %>
-                        <div class="text-lg font-semibold text-green-600">Free</div>
-                      <% else %>
-                        <div class="text-lg font-semibold text-gray-900">
-                          <%= CurrencyHelpers.format_currency(item.total_price, "usd") %>
-                        </div>
-                        <div class="text-sm text-gray-500">
-                          <%= CurrencyHelpers.format_currency(item.unit_price, "usd") %> each
-                        </div>
-                      <% end %>
+                  <% else %>
+                    <!-- Authentication Options (shown initially) -->
+                    <div class="text-center mb-8">
+                      <h2 class="text-2xl font-bold text-gray-900 mb-2">How would you like to continue?</h2>
+                      <p class="text-gray-600">Choose an option to complete your purchase</p>
                     </div>
-                  </div>
-                <% end %>
-              </div>
-            <% end %>
-          </div>
-        </div>
 
-        <!-- Payment Summary -->
-        <div class="lg:col-span-1">
-          <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm sticky top-8">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Payment Summary</h3>
+                    <div class="max-w-md mx-auto space-y-4">
+                      <button
+                        type="button"
+                        phx-click="show_guest_form"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 px-6 rounded-lg transition-colors duration-200 text-lg"
+                      >
+                        Continue as Guest
+                      </button>
 
-            <div class="space-y-3 mb-6">
-              <%= for item <- @order_items do %>
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-600"><%= item.ticket.title %> × <%= item.quantity %></span>
-                  <span class="text-gray-900">
-                    <%= if item.total_price == 0 do %>
-                      Free
+                      <div class="relative">
+                        <div class="absolute inset-0 flex items-center">
+                          <div class="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                          <span class="px-2 bg-white text-gray-500">or</span>
+                        </div>
+                      </div>
+
+                      <a
+                        href="/auth/login"
+                        class="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center block"
+                      >
+                        Sign In to Your Account
+                      </a>
+
+                      <a
+                        href="/auth/facebook"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center block flex items-center justify-center"
+                      >
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                        Continue with Facebook
+                      </a>
+                    </div>
+                  <% end %>
+                </div>
+              <% else %>
+                <!-- Authenticated User - Direct to Payment -->
+                <div class="bg-white border border-gray-200 rounded-xl p-8 shadow-sm text-center">
+                  <h2 class="text-2xl font-bold text-gray-900 mb-4">Ready to Complete Your Purchase</h2>
+                  <p class="text-gray-600 mb-6">Signed in as <%= @user.email %></p>
+
+                  <button
+                    type="button"
+                    phx-click="proceed_with_checkout"
+                    class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-4 px-8 rounded-lg transition-colors duration-200 text-lg"
+                    disabled={@processing}
+                  >
+                    <%= if @processing do %>
+                      <div class="flex items-center justify-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </div>
                     <% else %>
-                      <%= CurrencyHelpers.format_currency(item.total_price, "usd") %>
+                      <%= if @total_amount == 0 do %>
+                        Reserve Free Tickets
+                      <% else %>
+                        Proceed to Payment
+                      <% end %>
                     <% end %>
-                  </span>
+                  </button>
                 </div>
               <% end %>
-            </div>
 
-            <div class="border-t border-gray-200 pt-4 mb-6">
-              <div class="flex justify-between items-center">
-                <span class="text-lg font-semibold text-gray-900">Total</span>
-                <span class="text-xl font-bold text-gray-900">
-                  <%= if @total_amount == 0 do %>
-                    Free
-                  <% else %>
-                    <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>
+              <!-- Order Summary (Detailed) -->
+              <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                <h3 class="text-xl font-semibold text-gray-900 mb-6">Order Details</h3>
+
+                <div class="space-y-4">
+                  <%= for item <- @order_items do %>
+                    <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                      <div class="flex-1">
+                        <h4 class="font-medium text-gray-900"><%= item.ticket.title %></h4>
+                        <p class="text-sm text-gray-600"><%= item.ticket.description %></p>
+
+                        <div class="flex items-center gap-4 mt-2">
+                          <div class="flex items-center space-x-2">
+                            <button
+                              type="button"
+                              phx-click="update_quantity"
+                              phx-value-ticket_id={item.ticket.id}
+                              phx-value-quantity={item.quantity - 1}
+                              class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                              disabled={@processing}
+                            >
+                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                              </svg>
+                            </button>
+
+                            <span class="w-8 text-center font-medium"><%= item.quantity %></span>
+
+                            <button
+                              type="button"
+                              phx-click="update_quantity"
+                              phx-value-ticket_id={item.ticket.id}
+                              phx-value-quantity={item.quantity + 1}
+                              class="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                              disabled={@processing}
+                            >
+                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                              </svg>
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            phx-click="remove_ticket"
+                            phx-value-ticket_id={item.ticket.id}
+                            class="text-red-600 hover:text-red-700 text-sm font-medium"
+                            disabled={@processing}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="text-right ml-4">
+                        <%= if item.unit_price == 0 do %>
+                          <div class="text-lg font-semibold text-green-600">Free</div>
+                        <% else %>
+                          <div class="text-lg font-semibold text-gray-900">
+                            <%= CurrencyHelpers.format_currency(item.total_price, "usd") %>
+                          </div>
+                          <div class="text-sm text-gray-500">
+                            <%= CurrencyHelpers.format_currency(item.unit_price, "usd") %> each
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
                   <% end %>
-                </span>
+                </div>
               </div>
             </div>
 
-            <%= if @order_items != [] do %>
-              <button
-                type="button"
-                phx-click="proceed_with_checkout"
-                class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
-                disabled={@processing}
-              >
-                <%= if @processing do %>
-                  <div class="flex items-center justify-center">
-                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                  </div>
-                <% else %>
-                  <%= if @total_amount == 0 do %>
-                    Reserve Free Tickets
-                  <% else %>
-                    Proceed to Payment
-                  <% end %>
-                <% end %>
-              </button>
-            <% end %>
+            <!-- Sidebar Summary -->
+            <div class="lg:col-span-1">
+              <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm sticky top-8">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
 
-            <div class="mt-4 text-center">
-              <.link navigate={"/events/#{@event.slug}"} class="text-gray-600 hover:text-gray-700 text-sm">
-                ← Back to event
-              </.link>
+                <div class="space-y-3 mb-6">
+                  <%= for item <- @order_items do %>
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600"><%= item.ticket.title %> × <%= item.quantity %></span>
+                      <span class="text-gray-900">
+                        <%= if item.total_price == 0 do %>
+                          Free
+                        <% else %>
+                          <%= CurrencyHelpers.format_currency(item.total_price, "usd") %>
+                        <% end %>
+                      </span>
+                    </div>
+                  <% end %>
+                </div>
+
+                <div class="border-t border-gray-200 pt-4 mb-6">
+                  <div class="flex justify-between items-center">
+                    <span class="text-lg font-semibold text-gray-900">Total</span>
+                    <span class="text-xl font-bold text-gray-900">
+                      <%= if @total_amount == 0 do %>
+                        Free
+                      <% else %>
+                        <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>
+                      <% end %>
+                    </span>
+                  </div>
+                </div>
+
+                <div class="text-center">
+                  <.link navigate={"/events/#{@event.slug}"} class="text-gray-600 hover:text-gray-700 text-sm">
+                    ← Back to event
+                  </.link>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        <% end %>
       </div>
     </div>
     """

@@ -765,7 +765,19 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  defp create_or_find_supabase_user(email, name) do
+  @doc """
+  Creates or finds a Supabase user by email and name.
+
+  This function is used by both event registration and ticket purchase flows
+  to ensure consistent user creation patterns.
+
+  Returns:
+  - {:ok, supabase_user} - User found or created successfully
+  - {:error, :user_confirmation_required} - User created but email confirmation required
+  - {:error, :invalid_user_data} - Invalid user data returned from Supabase
+  - {:error, reason} - Other errors
+  """
+  def create_or_find_supabase_user(email, name) do
     alias EventasaurusApp.Auth.Client
     require Logger
 
