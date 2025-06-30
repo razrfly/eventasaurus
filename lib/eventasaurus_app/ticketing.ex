@@ -1501,23 +1501,15 @@ defmodule EventasaurusApp.Ticketing do
     pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
 
     # Calculate unit amount properly to avoid precision loss and division by zero
-        unit_amount = case order.quantity do
+    # Use order.total_cents to include all pricing components (base price, tips, taxes)
+    unit_amount = case order.quantity do
       0 ->
         Logger.error("Order quantity is zero for order #{order.id}")
         0
-      _quantity ->
-        # Use the base price from pricing snapshot to maintain precision
-        base_price = Map.get(pricing_snapshot, "base_price_cents") || ticket.base_price_cents
-        custom_price = Map.get(pricing_snapshot, "custom_price_cents")
-        tip_amount = Map.get(pricing_snapshot, "tip_cents", 0)
-
-        effective_price = case pricing_model do
-          "flexible" when not is_nil(custom_price) -> custom_price
-          _ -> base_price
-        end
-
-        # Unit amount should be the ticket price plus tip per ticket
-        effective_price + tip_amount
+      quantity ->
+        # Use total_cents to include all pricing components (base price, tips, taxes)
+        # Handle precision by rounding to nearest cent instead of truncating
+        round(order.total_cents / quantity)
     end
 
     %{
