@@ -23,7 +23,11 @@
             <% end %>
           </p>
           <p class="text-gray-600">
-            📅 <%= Calendar.strftime(@order.event.start_at, "%B %d, %Y at %I:%M %p") %>
+            📅 <%= if @order.event.start_at do %>
+              <%= Calendar.strftime(@order.event.start_at, "%B %d, %Y at %I:%M %p") %>
+            <% else %>
+              Date and time to be determined
+            <% end %>
           </p>
         </div>
       </div>
