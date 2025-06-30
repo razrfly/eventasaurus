@@ -27,30 +27,62 @@ defmodule EventasaurusWeb.TicketController do
   end
 
   defp verify_ticket(ticket_id, order_id) when is_binary(ticket_id) and is_binary(order_id) do
-    # Extract order ID from ticket format: EVT-{order_id}-{hash}
-    case extract_order_id_from_ticket(ticket_id) do
-      ^order_id ->
-        case Ticketing.get_order(order_id) do
-          nil -> {:error, :not_found}
-          order ->
-            if order.status == "confirmed" do
-              {:ok, order}
-            else
-              {:error, :not_found}
-            end
-        end
+    # Parse order_id to integer for database lookup
+    with {parsed_order_id, ""} <- Integer.parse(order_id),
+         {:ok, extracted_order_id, provided_hash} <- extract_ticket_components(ticket_id),
+         true <- extracted_order_id == parsed_order_id,
+         {:ok, order} <- get_order_with_validation(parsed_order_id),
+         true <- validate_ticket_hash(order, provided_hash) do
+      {:ok, order}
+    else
       _ -> {:error, :invalid_ticket}
     end
   end
 
   defp verify_ticket(_, _), do: {:error, :invalid_ticket}
 
-  defp extract_order_id_from_ticket("EVT-" <> rest) do
+  defp extract_ticket_components("EVT-" <> rest) do
     case String.split(rest, "-", parts: 2) do
-      [order_id, _hash] -> order_id
-      _ -> nil
+      [order_id_str, hash] when byte_size(hash) == 8 ->
+        case Integer.parse(order_id_str) do
+          {order_id, ""} -> {:ok, order_id, hash}
+          _ -> {:error, :invalid_format}
+        end
+      _ -> {:error, :invalid_format}
     end
   end
 
-  defp extract_order_id_from_ticket(_), do: nil
+  defp extract_ticket_components(_), do: {:error, :invalid_format}
+
+  defp get_order_with_validation(order_id) do
+    case Ticketing.get_order(order_id) do
+      nil -> {:error, :not_found}
+      order ->
+        if order.status == "confirmed" do
+          {:ok, order}
+        else
+          {:error, :not_confirmed}
+        end
+    end
+  end
+
+  defp validate_ticket_hash(order, provided_hash) do
+    # Generate expected hash using the same method as dashboard_live.ex
+    expected_hash = generate_secure_hash_for_order(order)
+    # Use constant-time comparison to prevent timing attacks
+    secure_compare(provided_hash, expected_hash)
+  end
+
+  defp generate_secure_hash_for_order(order) do
+    # Create deterministic hash based on order data that can't be easily forged
+    data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
+    :crypto.hash(:sha256, data)
+    |> Base.url_encode64(padding: false)
+    |> String.slice(0, 8)
+  end
+
+  defp secure_compare(a, b) when byte_size(a) != byte_size(b), do: false
+  defp secure_compare(a, b) do
+    :crypto.hash_equals(a, b)
+  end
 end
