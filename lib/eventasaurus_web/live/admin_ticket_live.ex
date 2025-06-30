@@ -56,53 +56,63 @@ defmodule EventasaurusWeb.AdminTicketLive do
 
   @impl true
   def handle_event("edit_ticket", %{"id" => ticket_id_str}, socket) do
-    {ticket_id, ""} = Integer.parse(ticket_id_str)
-    ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
+    case Integer.parse(ticket_id_str) do
+      {ticket_id, ""} ->
+        ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
 
-    if ticket do
-      form_data = %{
-        "title" => ticket.title,
-        "description" => ticket.description || "",
-        "pricing_model" => ticket.pricing_model || "fixed",
-        "price" => CurrencyHelpers.format_price_from_cents(ticket.base_price_cents),
-        "minimum_price" => CurrencyHelpers.format_price_from_cents(ticket.minimum_price_cents || 0),
-        "suggested_price" => CurrencyHelpers.format_price_from_cents(ticket.suggested_price_cents || ticket.base_price_cents),
-        "currency" => ticket.currency || "usd",
-        "quantity" => Integer.to_string(ticket.quantity),
-        "starts_at" => format_datetime_for_input(ticket.starts_at),
-        "ends_at" => format_datetime_for_input(ticket.ends_at),
-        "tippable" => ticket.tippable || false
-      }
+        if ticket do
+          form_data = %{
+            "title" => ticket.title,
+            "description" => ticket.description || "",
+            "pricing_model" => ticket.pricing_model || "fixed",
+            "price" => CurrencyHelpers.format_price_from_cents(ticket.base_price_cents),
+            "minimum_price" => CurrencyHelpers.format_price_from_cents(ticket.minimum_price_cents || 0),
+            "suggested_price" => CurrencyHelpers.format_price_from_cents(ticket.suggested_price_cents || ticket.base_price_cents),
+            "currency" => ticket.currency || "usd",
+            "quantity" => Integer.to_string(ticket.quantity),
+            "starts_at" => format_datetime_for_input(ticket.starts_at),
+            "ends_at" => format_datetime_for_input(ticket.ends_at),
+            "tippable" => ticket.tippable || false
+          }
 
-      {:noreply,
-       socket
-       |> assign(:show_ticket_modal, true)
-       |> assign(:ticket_form_data, form_data)
-       |> assign(:editing_ticket_id, ticket.id)}
-    else
-      {:noreply, put_flash(socket, :error, "Ticket not found")}
+          {:noreply,
+           socket
+           |> assign(:show_ticket_modal, true)
+           |> assign(:ticket_form_data, form_data)
+           |> assign(:editing_ticket_id, ticket.id)}
+        else
+          {:noreply, put_flash(socket, :error, "Ticket not found")}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid ticket ID")}
     end
   end
 
   @impl true
   def handle_event("delete_ticket", %{"id" => ticket_id_str}, socket) do
-    {ticket_id, ""} = Integer.parse(ticket_id_str)
-    ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
+    case Integer.parse(ticket_id_str) do
+      {ticket_id, ""} ->
+        ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
 
-    if ticket do
-      case Ticketing.delete_ticket(ticket) do
-        {:ok, _} ->
-          updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
-          {:noreply,
-           socket
-           |> assign(:tickets, updated_tickets)
-           |> put_flash(:info, "Ticket deleted successfully")}
+        if ticket do
+          case Ticketing.delete_ticket(ticket) do
+            {:ok, _} ->
+              updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
+              {:noreply,
+               socket
+               |> assign(:tickets, updated_tickets)
+               |> put_flash(:info, "Ticket deleted successfully")}
 
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Failed to delete ticket")}
-      end
-    else
-      {:noreply, put_flash(socket, :error, "Ticket not found")}
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, "Failed to delete ticket")}
+          end
+        else
+          {:noreply, put_flash(socket, :error, "Ticket not found")}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid ticket ID")}
     end
   end
 
@@ -181,12 +191,22 @@ defmodule EventasaurusWeb.AdminTicketLive do
   defp parse_and_validate_ticket_data(params) do
     with {:ok, base_price_cents} <- parse_price_cents(params["price"]),
          {:ok, quantity} <- parse_quantity(params["quantity"]) do
+      minimum_price_cents = case parse_price_cents(params["minimum_price"]) do
+        {:ok, cents} -> cents
+        {:error, _} -> 0
+      end
+
+      suggested_price_cents = case parse_price_cents(params["suggested_price"]) do
+        {:ok, cents} -> cents
+        {:error, _} -> base_price_cents
+      end
+
       processed = %{
         title: String.trim(params["title"] || ""),
         description: params["description"],
         base_price_cents: base_price_cents,
-        minimum_price_cents: parse_price_cents(params["minimum_price"]) |> elem(1),
-        suggested_price_cents: parse_price_cents(params["suggested_price"]) |> elem(1),
+        minimum_price_cents: minimum_price_cents,
+        suggested_price_cents: suggested_price_cents,
         pricing_model: params["pricing_model"] || "fixed",
         currency: params["currency"] || "usd",
         quantity: quantity,

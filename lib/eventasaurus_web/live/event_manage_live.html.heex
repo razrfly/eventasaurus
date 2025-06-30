@@ -193,7 +193,12 @@
                 <div class="border-t border-gray-200 pt-6">
                   <h3 class="font-semibold text-gray-900 mb-3">About this event</h3>
                   <div class="prose max-w-none text-gray-700">
-                    <%= Earmark.as_html!(@event.description) |> raw() %>
+                    <%= 
+                      @event.description
+                      |> Earmark.as_html!()
+                      |> HtmlSanitizeEx.basic_html()
+                      |> raw()
+                    %>
                   </div>
                 </div>
               <% end %>
@@ -450,12 +455,10 @@
                           <% end %>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <% ticket_orders = Enum.filter(@orders, &(&1.ticket_id == ticket.id and &1.status == "confirmed")) %>
-                          <%= Enum.sum(Enum.map(ticket_orders, & &1.quantity)) %>
+                          <%= get_tickets_sold(ticket, @orders) %>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <% ticket_sold = Enum.sum(Enum.map(ticket_orders, & &1.quantity)) %>
-                          <%= max(0, ticket.quantity - ticket_sold) %> / <%= ticket.quantity %>
+                          <%= get_tickets_available(ticket, @orders) %> / <%= ticket.quantity %>
                         </td>
                       </tr>
                     <% end %>
