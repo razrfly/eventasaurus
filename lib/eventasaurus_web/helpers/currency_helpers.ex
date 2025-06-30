@@ -186,4 +186,28 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   end
 
   def format_price_from_cents(_), do: ""
+
+  @doc """
+  Parses a price string to cents.
+
+  ## Examples
+
+      iex> parse_price_to_cents("12.50")
+      {:ok, 1250}
+
+      iex> parse_price_to_cents("5")
+      {:ok, 500}
+
+      iex> parse_price_to_cents("invalid")
+      :error
+  """
+  def parse_price_to_cents(price_str) when is_binary(price_str) do
+    case Float.parse(String.trim(price_str)) do
+      {amount, _} when amount >= 0 -> {:ok, round(amount * 100)}
+      {amount, _} when amount < 0 -> {:ok, round(amount * 100)}
+      :error -> :error
+    end
+  end
+
+  def parse_price_to_cents(_), do: :error
 end
