@@ -157,14 +157,4 @@
   </div>
 </div>
 
-<!-- Ticket Modal -->
-<.live_component
-  module={EventasaurusWeb.Components.TicketModal}
-  id="ticket-modal"
-  show={@show_ticket_modal}
-  ticket_form_data={@ticket_form_data}
-  pricing_model={Map.get(@ticket_form_data, "pricing_model", "fixed")}
-  editing_ticket_id={@editing_ticket_id}
-  show_additional_options={false}
-  on_close={JS.push("close_ticket_modal")}
-/> 
+ 
