@@ -104,8 +104,6 @@ defmodule EventasaurusWeb.Router do
       live "/dashboard", DashboardLive, :index
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
-      live "/events/:slug/tickets", AdminTicketLive, :index
-      live "/events/:slug/orders", AdminOrderLive, :index
       live "/checkout/payment", CheckoutPaymentLive
     end
   end
@@ -153,6 +151,8 @@ defmodule EventasaurusWeb.Router do
       pipe_through :browser
 
       live "/:slug", EventManageLive, :show
+      live "/:slug/tickets", AdminTicketLive, :index
+      live "/:slug/orders", AdminOrderLive, :index
     end
   end
 
