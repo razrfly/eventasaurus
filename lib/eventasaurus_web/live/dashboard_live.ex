@@ -2,7 +2,7 @@ defmodule EventasaurusWeb.DashboardLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.{Events, Ticketing}
-  alias EventasaurusWeb.Helpers.CurrencyHelpers
+  alias EventasaurusWeb.Helpers.{CurrencyHelpers, TicketCrypto}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -187,24 +187,11 @@ defmodule EventasaurusWeb.DashboardLive do
     # Generate a cryptographically secure ticket ID using HMAC
     base = "EVT-#{order.id}"
     # Use HMAC with server secret for secure hash generation
-    secret_key = get_ticket_secret_key()
+    secret_key = TicketCrypto.get_ticket_secret_key()
     data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
     hash = :crypto.mac(:hmac, :sha256, secret_key, data)
     |> Base.url_encode64(padding: false)
     |> String.slice(0, 16)  # Increased entropy to 16 chars
     "#{base}-#{hash}"
-  end
-
-  defp get_ticket_secret_key do
-    # Use Phoenix secret key base as entropy source for ticket signatures
-    secret_base = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)[:secret_key_base]
-
-    # Add nil check with fallback
-    if secret_base do
-      :crypto.hash(:sha256, secret_base <> "ticket_signing")
-    else
-      # Fallback: generate deterministic key from app name
-      :crypto.hash(:sha256, "eventasaurus_ticket_signing_fallback_key")
-    end
   end
 end
