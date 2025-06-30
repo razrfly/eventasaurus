@@ -474,47 +474,38 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   @doc """
-  Confirms an order after successful payment.
+  Confirms an order without payment reference (e.g., for free tickets).
 
-  This function:
-  1. Updates order status to "confirmed"
-  2. Sets confirmed_at timestamp
-  3. Creates EventParticipant record for ticket holder
-  4. Broadcasts updates
+  For orders with Stripe checkout sessions, this syncs amounts from Stripe.
+  For legacy orders, this simply marks the order as confirmed.
 
   ## Examples
 
-      iex> confirm_order(order, "pi_stripe_payment_intent")
-      {:ok, %Order{}}
+      iex> confirm_order(order)
+      {:ok, %Order{status: "confirmed"}}
 
   """
-  def confirm_order(%Order{} = order, payment_reference) do
-    case Repo.transaction(fn ->
-      # Preload ticket for broadcasting
-      order_with_ticket = Repo.preload(order, :ticket)
+  def confirm_order(%Order{} = order) do
+    # If this order has a Stripe session, use the new sync flow
+    if order.stripe_session_id do
+      sync_order_with_stripe(order)
+    else
+      # Legacy flow for non-Stripe orders
+      case order
+           |> Order.changeset(%{
+             status: "confirmed",
+             confirmed_at: DateTime.utc_now()
+           })
+           |> Repo.update() do
+        {:ok, updated_order} ->
+          create_event_participant(updated_order)
+          maybe_broadcast_order_update(updated_order, :confirmed)
+          {:ok, updated_order}
 
-      # Update order
-      {:ok, confirmed_order} =
-        order
-        |> Order.changeset(%{
-          status: "confirmed",
-          payment_reference: payment_reference,
-          confirmed_at: DateTime.utc_now()
-        })
-        |> Repo.update()
-
-      # Create EventParticipant record
-      {:ok, _participant} = create_event_participant(confirmed_order)
-
-      # Return order and ticket for post-commit broadcasting
-      {confirmed_order, order_with_ticket.ticket}
-    end) do
-      {:ok, {confirmed_order, ticket}} ->
-        # Broadcast updates after transaction commits
-        maybe_broadcast_order_update(confirmed_order, :confirmed)
-        maybe_broadcast_ticket_update(ticket, :order_confirmed)
-        {:ok, confirmed_order}
-      {:error, error} -> {:error, error}
+        {:error, changeset} ->
+          Logger.error("Failed to confirm order", order_id: order.id, errors: inspect(changeset.errors))
+          {:error, changeset}
+      end
     end
   end
 
@@ -682,23 +673,35 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   @doc """
-  Confirms an order without requiring a payment reference (for webhook processing).
+  Confirms an order with a payment reference (e.g., payment intent ID or "free_ticket").
 
   ## Examples
 
-      iex> confirm_order(order)
+      iex> confirm_order(order, "pi_1234567890")
+      {:ok, %Order{}}
+
+      iex> confirm_order(order, "free_ticket")
       {:ok, %Order{}}
 
   """
-  def confirm_order(%Order{} = order) do
+  def confirm_order(%Order{} = order, payment_reference) do
     Repo.transaction(fn ->
-      # Update order
+      # Update order with payment reference
+      attrs = %{
+        status: "confirmed",
+        confirmed_at: DateTime.utc_now()
+      }
+
+      # Add payment reference if it's not a free ticket
+      attrs = if payment_reference != "free_ticket" do
+        Map.put(attrs, :payment_reference, payment_reference)
+      else
+        attrs
+      end
+
       {:ok, confirmed_order} =
         order
-        |> Order.changeset(%{
-          status: "confirmed",
-          confirmed_at: DateTime.utc_now()
-        })
+        |> Order.changeset(attrs)
         |> Repo.update()
 
       # Create EventParticipant record
@@ -736,8 +739,55 @@ defmodule EventasaurusApp.Ticketing do
 
   defp sync_order_via_checkout_session(%Order{} = order) do
     case stripe_impl().get_checkout_session(order.stripe_session_id) do
-      {:ok, %{"payment_status" => "paid"}} ->
-        confirm_order(order)
+      {:ok, %{"payment_status" => "paid"} = session} ->
+        # Extract final amounts from Stripe including tax
+        amount_subtotal = Map.get(session, "amount_subtotal", order.subtotal_cents)
+        amount_tax = Map.get(session, "amount_tax", 0)
+        amount_total = Map.get(session, "amount_total", order.total_cents)
+
+        # Update order with Stripe's calculated amounts
+        updated_attrs = %{
+          status: "confirmed",
+          confirmed_at: DateTime.utc_now(),
+          # Sync final amounts from Stripe
+          subtotal_cents: amount_subtotal,
+          tax_cents: amount_tax,
+          total_cents: amount_total
+        }
+
+        # If we have a payment_intent from the session, store it
+        updated_attrs = case Map.get(session, "payment_intent") do
+          nil -> updated_attrs
+          payment_intent_id when is_binary(payment_intent_id) ->
+            Map.put(updated_attrs, :payment_reference, payment_intent_id)
+          %{"id" => payment_intent_id} ->
+            Map.put(updated_attrs, :payment_reference, payment_intent_id)
+          _ -> updated_attrs
+        end
+
+        case order
+             |> Order.changeset(updated_attrs)
+             |> Repo.update() do
+          {:ok, updated_order} ->
+            Logger.info("Order confirmed with Stripe amounts",
+              order_id: updated_order.id,
+              original_total: order.total_cents,
+              stripe_total: amount_total,
+              stripe_tax: amount_tax
+            )
+
+            # Create event participant for confirmed orders
+            create_event_participant(updated_order)
+            maybe_broadcast_order_update(updated_order, :confirmed)
+            {:ok, updated_order}
+
+          {:error, changeset} ->
+            Logger.error("Failed to update order with Stripe amounts",
+              order_id: order.id,
+              errors: inspect(changeset.errors)
+            )
+            {:error, changeset}
+        end
 
       {:ok, %{"payment_status" => status}} ->
         Logger.info("Checkout session not paid, keeping order pending",
@@ -779,8 +829,8 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   defp insert_order_with_stripe_connect(%User{} = user, %Ticket{} = ticket, quantity, pricing, connect_account, attrs) do
-    # Calculate platform fee (5% of total)
-    application_fee_amount = EventasaurusApp.Events.Order.calculate_platform_fee(pricing.total_cents)
+    # Calculate platform fee (5% of base amount before tax)
+    application_fee_amount = calculate_application_fee(pricing.subtotal_cents)
 
     order_attrs = Map.merge(attrs, %{
       user_id: user.id,
@@ -1139,8 +1189,8 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   defp insert_order_with_checkout_session(%User{} = user, %Ticket{} = ticket, quantity, pricing, connect_account, attrs) do
-    # Calculate platform fee (5% of total)
-    application_fee_amount = Order.calculate_platform_fee(pricing.total_cents)
+    # Calculate application fee based on the base amount (before tax)
+    application_fee_amount = calculate_application_fee(pricing.subtotal_cents)
 
     order_attrs = Map.merge(attrs, %{
       user_id: user.id,
@@ -1152,9 +1202,9 @@ defmodule EventasaurusApp.Ticketing do
       total_cents: pricing.total_cents,
       currency: pricing.currency,
       status: "pending",
+      pricing_snapshot: pricing.pricing_snapshot,
       stripe_connect_account_id: connect_account.id,
-      application_fee_amount: application_fee_amount,
-      pricing_snapshot: pricing.pricing_snapshot
+      application_fee_amount: application_fee_amount
     })
 
     %Order{}
@@ -1192,11 +1242,15 @@ defmodule EventasaurusApp.Ticketing do
       "pricing_model" => pricing_model
     }
 
+    # Calculate application fee as a percentage of the base amount (before tax)
+    application_fee_amount = calculate_application_fee(order.subtotal_cents)
+
     checkout_params = %{
-      amount_cents: order.total_cents,
+      # Use subtotal (base amount) - Stripe will add tax automatically
+      amount_cents: order.subtotal_cents,
       currency: order.currency,
       connect_account: connect_account,
-      application_fee_amount: order.application_fee_amount,
+      application_fee_amount: application_fee_amount,
       success_url: success_url,
       cancel_url: cancel_url,
       metadata: metadata,
@@ -1267,27 +1321,22 @@ defmodule EventasaurusApp.Ticketing do
       _ -> ticket.base_price_cents
     end
 
-    # Calculate base amounts
+    # Calculate base amounts (no tax - let Stripe handle tax calculation)
     base_subtotal_cents = price_per_ticket * quantity
     tip_total_cents = tip_cents * quantity
     subtotal_cents = base_subtotal_cents + tip_total_cents
 
-    tax_cents = calculate_tax(base_subtotal_cents) # Tax only on ticket price, not tips
-    total_cents = subtotal_cents + tax_cents
+    # No tax calculation - Stripe will handle this automatically
+    # Store the subtotal as the total since tax will be calculated by Stripe
+    total_cents = subtotal_cents
 
     {:ok, %{
       subtotal_cents: subtotal_cents,
-      tax_cents: tax_cents,
+      tax_cents: 0, # Tax will be calculated by Stripe
       total_cents: total_cents,
       currency: ticket.currency,
       pricing_snapshot: Order.create_pricing_snapshot(ticket, custom_price_cents, tip_cents)
     }}
-  end
-
-  defp calculate_tax(subtotal_cents) do
-    # Simple tax calculation - 10% for now
-    # In a real app, this would be more sophisticated based on location, etc.
-    round(subtotal_cents * 0.10)
   end
 
   defp insert_order(%User{} = user, %Ticket{} = ticket, quantity, pricing, attrs) do
@@ -1500,32 +1549,16 @@ defmodule EventasaurusApp.Ticketing do
     pricing_snapshot = order.pricing_snapshot || %{}
     pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
 
-    # Calculate unit amount properly to avoid precision loss and division by zero
+    # Use subtotal (base amount before tax) for unit amount calculation
+    # Let Stripe handle tax calculation automatically
     unit_amount = case order.quantity do
       0 ->
         Logger.error("Order quantity is zero for order #{order.id}")
         0
       quantity ->
-                # Calculate unit amount to ensure exact total matching
-        # The issue: total_cents includes tax calculated with rounding, so simply
-        # dividing by quantity can cause unit_amount * quantity != total_cents
-
-        # Use integer division to get base unit amount and remainder
-        base_unit_amount = div(order.total_cents, quantity)
-        remainder = rem(order.total_cents, quantity)
-
-        # Strategy: distribute remainder across unit amount to ensure exact total
-        # This ensures unit_amount * quantity exactly equals order.total_cents
-        if remainder == 0 do
-          # Perfect division, no adjustment needed
-          base_unit_amount
-        else
-          # Add 1 cent to unit amount to account for remainder
-          # This ensures we don't undercharge the customer
-          # Example: 1001 cents ÷ 3 = 333 remainder 2, so unit = 334
-          # Result: 334 * 3 = 1002 (1 cent over, but guaranteed exact or slightly over)
-          base_unit_amount + 1
-        end
+        # Use subtotal which is the base amount before tax
+        # Stripe will add tax automatically during checkout
+        div(order.subtotal_cents, quantity)
     end
 
     %{
@@ -1550,9 +1583,9 @@ defmodule EventasaurusApp.Ticketing do
     # Get event for cancel URL
     event = Repo.get!(Event, event_id)
 
-    # Calculate total application fee from all orders
+    # Calculate total application fee from base amounts (before tax)
     total_application_fee = Enum.reduce(orders, 0, fn order, acc ->
-      acc + (order.application_fee_amount || 0)
+      acc + calculate_application_fee(order.subtotal_cents)
     end)
 
         # Use the first order's ID for the session metadata and success URL
@@ -1668,6 +1701,12 @@ defmodule EventasaurusApp.Ticketing do
   # Get the configured Stripe implementation (for testing vs production)
   defp stripe_impl do
     Application.get_env(:eventasaurus_app, :stripe_module, EventasaurusApp.Stripe)
+  end
+
+  # Calculate application fee as a percentage of the base amount (before tax)
+  # This is more accurate than applying fee to the total amount including tax
+  defp calculate_application_fee(base_amount_cents, fee_percentage \\ 0.05) do
+    round(base_amount_cents * fee_percentage)
   end
 
 end

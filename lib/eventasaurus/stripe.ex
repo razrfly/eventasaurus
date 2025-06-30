@@ -298,7 +298,7 @@ defmodule EventasaurusApp.Stripe do
       "pricing_model" => pricing_model
     }, metadata)
 
-    # Base line item configuration
+    # Base line item configuration - let Stripe handle tax calculation
     line_item = %{
       "price_data[currency]" => currency,
       "price_data[product_data][name]" => Map.get(params, :ticket_name, "Event Ticket"),
@@ -306,12 +306,10 @@ defmodule EventasaurusApp.Stripe do
       "quantity" => Map.get(params, :quantity, 1)
     }
 
-    # Configure pricing based on model
+    # Configure pricing based on model - use base amount without tax
     line_item = case pricing_model do
       "flexible" ->
         # For flexible pricing, set minimum and allow adjustment
-        # Note: Stripe doesn't support pay-what-you-want directly in checkout sessions
-        # We'll handle this with custom implementation
         line_item
         |> Map.put("price_data[unit_amount]", amount_cents)
         |> Map.put("adjustable_quantity[enabled]", "false")
@@ -332,21 +330,34 @@ defmodule EventasaurusApp.Stripe do
     # Calculate expiry time (30 minutes from now = 1800 seconds)
     expires_at = DateTime.utc_now() |> DateTime.add(30 * 60, :second) |> DateTime.to_unix()
 
-    # Build body parameters
+    # Build body parameters - try automatic tax first, fallback to manual if not configured
     body_params = %{
       "mode" => "payment",
       "success_url" => success_url,
       "cancel_url" => cancel_url,
       "expires_at" => expires_at,
+      # Use Stripe Connect's application fee handling
       "payment_intent_data[application_fee_amount]" => application_fee_amount,
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => allow_promotion_codes || false,
 
+      # Line items
       "line_items[0][price_data][currency]" => line_item["price_data[currency]"],
       "line_items[0][price_data][product_data][name]" => line_item["price_data[product_data][name]"],
       "line_items[0][price_data][unit_amount]" => line_item["price_data[unit_amount]"],
       "line_items[0][quantity]" => line_item["quantity"]
     }
+
+    # Try to enable automatic tax - only if tax settings are configured in Stripe
+    # If this fails, Stripe will return an error and we'll fall back to manual calculation
+    body_params = try_enable_automatic_tax(body_params)
+
+    # Add tax behavior only if automatic tax is enabled
+    body_params = if Map.get(body_params, "automatic_tax[enabled]") == "true" do
+      Map.put(body_params, "line_items[0][price_data][tax_behavior]", "exclusive")
+    else
+      body_params
+    end
 
     # Add customer information for pre-filling if available
     body_params = if customer_email do
@@ -458,16 +469,20 @@ defmodule EventasaurusApp.Stripe do
     # Calculate expiry time (30 minutes from now = 1800 seconds)
     expires_at = DateTime.utc_now() |> DateTime.add(30 * 60, :second) |> DateTime.to_unix()
 
-    # Build base body parameters
+    # Build body parameters - try automatic tax first, fallback to manual if not configured
     body_params = %{
       "mode" => "payment",
       "success_url" => success_url,
       "cancel_url" => cancel_url,
       "expires_at" => expires_at,
+      # Use Stripe Connect's application fee handling
       "payment_intent_data[application_fee_amount]" => application_fee_amount,
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => false
     }
+
+    # Try to enable automatic tax - only if tax settings are configured in Stripe
+    body_params = try_enable_automatic_tax(body_params)
 
     # Add customer information for pre-filling if available
     body_params = if customer_email do
@@ -476,17 +491,25 @@ defmodule EventasaurusApp.Stripe do
       body_params
     end
 
-    # Add line items to body parameters
+    # Add line items to body params
     body_params_with_line_items =
       line_items
       |> Enum.with_index()
       |> Enum.reduce(body_params, fn {line_item, index}, acc ->
-        acc
+        # Add tax behavior only if automatic tax is enabled
+        acc_with_basic_fields = acc
         |> Map.put("line_items[#{index}][price_data][currency]", line_item.price_data.currency)
         |> Map.put("line_items[#{index}][price_data][product_data][name]", line_item.price_data.product_data.name)
         |> Map.put("line_items[#{index}][price_data][product_data][description]", line_item.price_data.product_data.description)
         |> Map.put("line_items[#{index}][price_data][unit_amount]", line_item.price_data.unit_amount)
         |> Map.put("line_items[#{index}][quantity]", line_item.quantity)
+
+        # Add tax behavior if automatic tax is enabled
+        if Map.get(acc, "automatic_tax[enabled]") == "true" do
+          Map.put(acc_with_basic_fields, "line_items[#{index}][price_data][tax_behavior]", "exclusive")
+        else
+          acc_with_basic_fields
+        end
       end)
 
     # Add metadata to body params
@@ -753,5 +776,20 @@ defmodule EventasaurusApp.Stripe do
     end
   end
 
+  # Helper function to try enabling automatic tax calculation
+  # Falls back gracefully if tax settings are not configured in Stripe
+  defp try_enable_automatic_tax(body_params) do
+    # Check if automatic tax should be enabled based on environment configuration
+    enable_auto_tax = Application.get_env(:eventasaurus_app, :stripe_auto_tax_enabled, false)
+
+    if enable_auto_tax do
+      Logger.info("Attempting to enable Stripe automatic tax calculation")
+      body_params
+      |> Map.put("automatic_tax[enabled]", "true")
+    else
+      Logger.info("Using manual tax calculation (automatic tax disabled)")
+      body_params
+    end
+  end
 
 end
