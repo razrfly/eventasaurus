@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.TicketController do
   use EventasaurusWeb, :controller
 
   alias EventasaurusApp.Ticketing
+  alias EventasaurusWeb.Helpers.TicketCrypto
 
   def verify(conn, %{"ticket_id" => ticket_id} = params) do
     order_id = params["order"]
@@ -109,24 +110,11 @@ defmodule EventasaurusWeb.TicketController do
 
   defp generate_secure_hash_for_order(order) do
     # Use HMAC with server secret for cryptographically secure hash generation
-    secret_key = get_ticket_secret_key()
+    secret_key = TicketCrypto.get_ticket_secret_key()
     data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
     :crypto.mac(:hmac, :sha256, secret_key, data)
     |> Base.url_encode64(padding: false)
     |> String.slice(0, 16)  # Increased entropy to 16 chars
-  end
-
-  defp get_ticket_secret_key do
-    # Use Phoenix secret key base as entropy source for ticket signatures
-    secret_base = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)[:secret_key_base]
-
-    # Add nil check with fallback
-    if secret_base do
-      :crypto.hash(:sha256, secret_base <> "ticket_signing")
-    else
-      # Fallback: generate deterministic key from app name
-      :crypto.hash(:sha256, "eventasaurus_ticket_signing_fallback_key")
-    end
   end
 
   defp secure_compare(a, b) when byte_size(a) != byte_size(b), do: false
