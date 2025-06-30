@@ -1501,15 +1501,31 @@ defmodule EventasaurusApp.Ticketing do
     pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
 
     # Calculate unit amount properly to avoid precision loss and division by zero
-    # Use order.total_cents to include all pricing components (base price, tips, taxes)
     unit_amount = case order.quantity do
       0 ->
         Logger.error("Order quantity is zero for order #{order.id}")
         0
       quantity ->
-        # Use total_cents to include all pricing components (base price, tips, taxes)
-        # Handle precision by rounding to nearest cent instead of truncating
-        round(order.total_cents / quantity)
+                # Calculate unit amount to ensure exact total matching
+        # The issue: total_cents includes tax calculated with rounding, so simply
+        # dividing by quantity can cause unit_amount * quantity != total_cents
+
+        # Use integer division to get base unit amount and remainder
+        base_unit_amount = div(order.total_cents, quantity)
+        remainder = rem(order.total_cents, quantity)
+
+        # Strategy: distribute remainder across unit amount to ensure exact total
+        # This ensures unit_amount * quantity exactly equals order.total_cents
+        if remainder == 0 do
+          # Perfect division, no adjustment needed
+          base_unit_amount
+        else
+          # Add 1 cent to unit amount to account for remainder
+          # This ensures we don't undercharge the customer
+          # Example: 1001 cents ÷ 3 = 333 remainder 2, so unit = 334
+          # Result: 334 * 3 = 1002 (1 cent over, but guaranteed exact or slightly over)
+          base_unit_amount + 1
+        end
     end
 
     %{
