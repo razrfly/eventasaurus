@@ -97,15 +97,23 @@ defmodule EventasaurusWeb.AdminOrderLive do
   defp filter_orders_by_date(orders, "today") do
     today = Date.utc_today()
     Enum.filter(orders, fn order ->
-      order_date = extract_date(order.inserted_at)
-      Date.compare(order_date, today) == :eq
+      case order.inserted_at do
+        nil -> false  # Exclude orders with nil timestamps
+        timestamp ->
+          order_date = extract_date(timestamp)
+          Date.compare(order_date, today) == :eq
+      end
     end)
   end
   defp filter_orders_by_date(orders, "week") do
     week_ago = Date.add(Date.utc_today(), -7)
     Enum.filter(orders, fn order ->
-      order_date = extract_date(order.inserted_at)
-      Date.compare(order_date, week_ago) != :lt
+      case order.inserted_at do
+        nil -> false  # Exclude orders with nil timestamps
+        timestamp ->
+          order_date = extract_date(timestamp)
+          Date.compare(order_date, week_ago) != :lt
+      end
     end)
   end
   defp filter_orders_by_date(orders, "month") do
@@ -113,8 +121,12 @@ defmodule EventasaurusWeb.AdminOrderLive do
     days_in_month = Calendar.ISO.days_in_month(today.year, today.month)
     month_ago = Date.add(today, -days_in_month)
     Enum.filter(orders, fn order ->
-      order_date = extract_date(order.inserted_at)
-      Date.compare(order_date, month_ago) != :lt
+      case order.inserted_at do
+        nil -> false  # Exclude orders with nil timestamps
+        timestamp ->
+          order_date = extract_date(timestamp)
+          Date.compare(order_date, month_ago) != :lt
+      end
     end)
   end
 
