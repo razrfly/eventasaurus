@@ -97,13 +97,15 @@ defmodule EventasaurusWeb.AdminOrderLive do
   defp filter_orders_by_date(orders, "today") do
     today = Date.utc_today()
     Enum.filter(orders, fn order ->
-      Date.compare(DateTime.to_date(order.inserted_at), today) == :eq
+      order_date = extract_date(order.inserted_at)
+      Date.compare(order_date, today) == :eq
     end)
   end
   defp filter_orders_by_date(orders, "week") do
     week_ago = Date.add(Date.utc_today(), -7)
     Enum.filter(orders, fn order ->
-      Date.compare(DateTime.to_date(order.inserted_at), week_ago) != :lt
+      order_date = extract_date(order.inserted_at)
+      Date.compare(order_date, week_ago) != :lt
     end)
   end
   defp filter_orders_by_date(orders, "month") do
@@ -111,16 +113,25 @@ defmodule EventasaurusWeb.AdminOrderLive do
     days_in_month = Calendar.ISO.days_in_month(today.year, today.month)
     month_ago = Date.add(today, -days_in_month)
     Enum.filter(orders, fn order ->
-      Date.compare(DateTime.to_date(order.inserted_at), month_ago) != :lt
+      order_date = extract_date(order.inserted_at)
+      Date.compare(order_date, month_ago) != :lt
     end)
   end
+
+  defp extract_date(%NaiveDateTime{} = naive_datetime), do: NaiveDateTime.to_date(naive_datetime)
+  defp extract_date(%DateTime{} = datetime), do: DateTime.to_date(datetime)
 
   defp format_order_total(order) do
     total_cents = order.quantity * order.ticket.base_price_cents
     CurrencyHelpers.format_currency(total_cents, order.ticket.currency)
   end
 
-  defp format_order_date(datetime) do
+  defp format_order_date(nil), do: "N/A"
+  defp format_order_date(%NaiveDateTime{} = naive_datetime) do
+    naive_datetime
+    |> Calendar.strftime("%m/%d/%Y at %I:%M %p")
+  end
+  defp format_order_date(%DateTime{} = datetime) do
     datetime
     |> DateTime.shift_zone!("Etc/UTC")
     |> Calendar.strftime("%m/%d/%Y at %I:%M %p")
