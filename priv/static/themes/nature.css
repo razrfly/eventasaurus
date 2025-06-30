@@ -57,11 +57,364 @@
   left: 0;
   width: 100%;
   height: 100%;
+  z-index: -1;
+  opacity: 0.6;
+  pointer-events: none;
   background-image: 
     url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23059669' fill-opacity='0.03'%3E%3Cpath d='M20 20c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10 0c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature::before {
+    animation: dinosaurFloat 20s infinite linear;
+  }
+}
+
+/* Individual dinosaur emojis with independent movements */
+.theme-nature::after {
+  content: '🦕';
+  position: fixed;
+  top: 15%;
+  left: 10%;
+  font-size: 5.6rem;
   z-index: -1;
-  opacity: 0.3;
   pointer-events: none;
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature::after {
+    animation: dino1Float 120s infinite ease-in-out;
+  }
+}
+
+/* Create multiple floating dinosaurs with unique positions */
+.theme-nature .main-content::before {
+  content: '🦖';
+  position: fixed;
+  top: 25%;
+  right: 20%;
+  font-size: 5.04rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .main-content::before {
+    animation: dino2Float 120s infinite ease-in-out 15s;
+  }
+}
+
+.theme-nature .event-content::before {
+  content: '🦖';
+  position: fixed;
+  top: 35%;
+  right: 10%;
+  font-size: 5.04rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .event-content::before {
+    animation: dino2Float 120s infinite ease-in-out 15s;
+  }
+}
+
+.theme-nature .dashboard-content::before {
+  content: '🦖';
+  position: fixed;
+  top: 45%;
+  right: 30%;
+  font-size: 5.04rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .dashboard-content::before {
+    animation: dino2Float 120s infinite ease-in-out 15s;
+  }
+}
+
+.theme-nature .main-content::after {
+  content: '🦕';
+  position: fixed;
+  bottom: 30%;
+  left: 20%;
+  font-size: 4.48rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .main-content::after {
+    animation: dino3Float 120s infinite ease-in-out 30s;
+  }
+}
+
+.theme-nature .event-content::after {
+  content: '🦕';
+  position: fixed;
+  bottom: 20%;
+  left: 35%;
+  font-size: 4.48rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .event-content::after {
+    animation: dino3Float 120s infinite ease-in-out 30s;
+  }
+}
+
+.theme-nature .dashboard-content::after {
+  content: '🦕';
+  position: fixed;
+  bottom: 40%;
+  left: 15%;
+  font-size: 4.48rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature .dashboard-content::after {
+    animation: dino3Float 120s infinite ease-in-out 30s;
+  }
+}
+
+/* Additional floating dinosaurs */
+.theme-nature nav::after {
+  content: '🦖';
+  position: fixed;
+  top: 5%;
+  right: 40%;
+  font-size: 4.2rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature nav::after {
+    animation: dino4Float 120s infinite ease-in-out 45s;
+  }
+}
+
+.theme-nature footer::before {
+  content: '🦕';
+  position: fixed;
+  bottom: 5%;
+  right: 25%;
+  font-size: 6.16rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature footer::before {
+    animation: dino5Float 120s infinite ease-in-out 60s;
+  }
+}
+
+.theme-nature header::after {
+  content: '🦖';
+  position: fixed;
+  top: 60%;
+  left: 5%;
+  font-size: 5.32rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature header::after {
+    animation: dino6Float 120s infinite ease-in-out 75s;
+  }
+}
+
+.theme-nature body::before {
+  content: '🦕';
+  position: fixed;
+  top: 80%;
+  right: 5%;
+  font-size: 4.76rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature body::before {
+    animation: dino7Float 120s infinite ease-in-out 90s;
+  }
+}
+
+.theme-nature html::after {
+  content: '🦖';
+  position: fixed;
+  bottom: 60%;
+  right: 50%;
+  font-size: 6.44rem;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-nature html::after {
+    animation: dino8Float 120s infinite ease-in-out 105s;
+  }
+}
+
+/* Gentle space-like floating animations - all very small movements */
+@keyframes dino1Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  25% { 
+    transform: translate(1px, -1px) rotate(90deg); 
+  }
+  50% { 
+    transform: translate(-1px, 2px) rotate(180deg); 
+  }
+  75% { 
+    transform: translate(1px, -1px) rotate(270deg); 
+  }
+}
+
+@keyframes dino2Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  33% { 
+    transform: translate(-1px, 1px) rotate(120deg); 
+  }
+  66% { 
+    transform: translate(2px, -1px) rotate(240deg); 
+  }
+}
+
+@keyframes dino3Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  20% { 
+    transform: translate(1px, 1px) rotate(72deg); 
+  }
+  40% { 
+    transform: translate(-1px, -1px) rotate(144deg); 
+  }
+  60% { 
+    transform: translate(2px, 0px) rotate(216deg); 
+  }
+  80% { 
+    transform: translate(0px, -2px) rotate(288deg); 
+  }
+}
+
+@keyframes dino4Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  50% { 
+    transform: translate(1px, 1px) rotate(180deg); 
+  }
+}
+
+@keyframes dino5Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  16% { 
+    transform: translate(1px, -1px) rotate(60deg); 
+  }
+  33% { 
+    transform: translate(-1px, 1px) rotate(120deg); 
+  }
+  50% { 
+    transform: translate(1px, 1px) rotate(180deg); 
+  }
+  66% { 
+    transform: translate(-1px, -1px) rotate(240deg); 
+  }
+  83% { 
+    transform: translate(2px, 0px) rotate(300deg); 
+  }
+}
+
+@keyframes dino6Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  25% { 
+    transform: translate(-1px, 2px) rotate(90deg); 
+  }
+  50% { 
+    transform: translate(1px, -1px) rotate(180deg); 
+  }
+  75% { 
+    transform: translate(-1px, -1px) rotate(270deg); 
+  }
+}
+
+@keyframes dino7Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  14% { 
+    transform: translate(1px, 1px) rotate(50deg); 
+  }
+  28% { 
+    transform: translate(-1px, 2px) rotate(100deg); 
+  }
+  42% { 
+    transform: translate(2px, -1px) rotate(150deg); 
+  }
+  56% { 
+    transform: translate(-1px, 0px) rotate(200deg); 
+  }
+  70% { 
+    transform: translate(1px, 1px) rotate(250deg); 
+  }
+  84% { 
+    transform: translate(-2px, 1px) rotate(300deg); 
+  }
+}
+
+@keyframes dino8Float {
+  0%, 100% { 
+    transform: translate(0px, 0px) rotate(0deg); 
+  }
+  30% { 
+    transform: translate(1px, -2px) rotate(108deg); 
+  }
+  60% { 
+    transform: translate(-1px, 1px) rotate(216deg); 
+  }
+  90% { 
+    transform: translate(1px, 1px) rotate(324deg); 
+  }
+}
+
+/* Base animation for the background gradient */
+@keyframes dinosaurFloat {
+  0% { transform: translateX(-5%) translateY(-5%); }
+  25% { transform: translateX(2%) translateY(-8%); }
+  50% { transform: translateX(5%) translateY(-2%); }
+  75% { transform: translateX(-2%) translateY(5%); }
+  100% { transform: translateX(-5%) translateY(-5%); }
 }
 
 /* ============================================================================
