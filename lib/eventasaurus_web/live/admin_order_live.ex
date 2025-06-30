@@ -107,7 +107,9 @@ defmodule EventasaurusWeb.AdminOrderLive do
     end)
   end
   defp filter_orders_by_date(orders, "month") do
-    month_ago = Date.add(Date.utc_today(), -30)
+    today = Date.utc_today()
+    days_in_month = Calendar.ISO.days_in_month(today.year, today.month)
+    month_ago = Date.add(today, -days_in_month)
     Enum.filter(orders, fn order ->
       Date.compare(DateTime.to_date(order.inserted_at), month_ago) != :lt
     end)

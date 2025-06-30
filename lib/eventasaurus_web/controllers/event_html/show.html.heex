@@ -180,7 +180,12 @@
             <div class="border-t border-gray-200 pt-6">
               <h3 class="font-semibold text-gray-900 mb-3">About this event</h3>
               <div class="prose max-w-none text-gray-700">
-                <%= Earmark.as_html!(@event.description) |> raw() %>
+                <%= 
+                @event.description
+                |> Earmark.as_html!()
+                |> HtmlSanitizeEx.basic_html()
+                |> raw()
+              %>
               </div>
             </div>
           <% end %>
