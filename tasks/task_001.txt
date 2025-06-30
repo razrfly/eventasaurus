@@ -1,0 +1,11 @@
+# Task ID: 1
+# Title: Update Event Model Schema
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Modify the existing Event model to include the new 'state' field for polling functionality.
+# Details:
+Add a 'state' field of type string to the Event model in the database schema. Use Ecto to define the field with allowed values 'confirmed' and 'polling'. Ensure that the 'start_at' and 'end_at' fields are still required. Update any relevant Ecto schemas and migrations. Use Ecto.Enum for the state field to ensure type safety.
+
+# Test Strategy:
+Write unit tests to verify the new field is correctly added and validates the allowed states. Test that 'start_at' and 'end_at' remain required fields.

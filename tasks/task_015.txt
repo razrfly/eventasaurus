@@ -1,0 +1,11 @@
+# Task ID: 15
+# Title: Implement Access Control
+# Status: pending
+# Dependencies: 7, 9
+# Priority: high
+# Description: Develop access control mechanisms for different user roles.
+# Details:
+Use Phoenix's built-in Plug system to implement access control. Create plugs for authenticating organizers and participants. Implement role-based access control using a library like Canada (version 2.0). Ensure organizer-only actions are properly protected.
+
+# Test Strategy:
+Write unit tests for individual plugs. Create integration tests to verify access control across different user roles and actions. Test both allowed and disallowed scenarios.

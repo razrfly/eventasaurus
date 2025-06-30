@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
   use EventasaurusWeb, :controller
 
   alias EventasaurusApp.Ticketing
+  alias Eventasaurus.Services.PosthogService
 
   require Logger
 
@@ -280,6 +281,18 @@ defmodule EventasaurusWeb.StripeWebhookController do
                 order_id: updated_order.id,
                 payment_intent_id: payment_intent_id
               )
+
+              # Track payment failure with PostHog
+              PosthogService.track_event(updated_order.user_id, "payment_failed", %{
+                "order_id" => updated_order.id,
+                "event_id" => updated_order.event_id,
+                "amount" => updated_order.amount_cents,
+                "currency" => updated_order.currency,
+                "payment_processor" => "stripe",
+                "stripe_payment_intent_id" => payment_intent_id,
+                "failure_reason" => payment_intent["last_payment_error"]["message"] || "unknown"
+              })
+
               :ok
 
             {:error, reason} ->
@@ -406,6 +419,26 @@ defmodule EventasaurusWeb.StripeWebhookController do
               status: updated_order.status,
               amount: payment_intent["amount"]
             )
+
+            # Track payment success with PostHog
+            if updated_order.status == :paid do
+              PosthogService.track_event(updated_order.user_id, "ticket_purchased", %{
+                "order_id" => updated_order.id,
+                "event_id" => updated_order.event_id,
+                "amount" => updated_order.amount_cents,
+                "currency" => updated_order.currency,
+                "payment_method" => "stripe",
+                "stripe_payment_intent_id" => payment_intent_id
+              })
+
+              PosthogService.track_event(updated_order.user_id, "payment_succeeded", %{
+                "order_id" => updated_order.id,
+                "event_id" => updated_order.event_id,
+                "amount" => updated_order.amount_cents,
+                "currency" => updated_order.currency,
+                "payment_processor" => "stripe"
+              })
+            end
 
             # Broadcast order update to LiveViews if status changed
             if updated_order.status != order.status do

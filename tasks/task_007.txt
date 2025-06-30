@@ -1,0 +1,11 @@
+# Task ID: 7
+# Title: Develop Organizer Dashboard
+# Status: pending
+# Dependencies: 5, 6
+# Priority: medium
+# Description: Create a dashboard for organizers to monitor vote counts and view a heatmap summary.
+# Details:
+Implement a new Phoenix LiveView for the organizer dashboard. Use Ecto queries to fetch and aggregate vote data. Implement a heatmap visualization using a JavaScript library like Chart.js (version 3.9.1) or D3.js (version 7.8.2). Use Phoenix PubSub to enable real-time updates of vote counts.
+
+# Test Strategy:
+Write integration tests for the organizer dashboard using Phoenix.LiveViewTest. Test data loading, vote count updates, and heatmap rendering.

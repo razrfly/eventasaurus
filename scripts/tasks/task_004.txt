@@ -1,0 +1,134 @@
+# Task ID: 4
+# Title: Theme Application to Public Event Pages
+# Status: pending
+# Dependencies: 1, 2, 3
+# Priority: high
+# Description: Implement the mechanism to apply the selected theme and customizations to public event pages.
+# Details:
+Modify the PublicEventLive LiveView to apply the selected theme and customizations to the public event page. This includes loading the appropriate CSS and applying theme-specific classes and styles.
+
+1. Update the PublicEventLive module:
+```elixir
+defmodule EventasaurusAppWeb.PublicEventLive do
+  use EventasaurusAppWeb, :live_view
+  alias EventasaurusApp.Events
+  alias EventasaurusApp.Themes
+  
+  # Existing code...
+  
+  @impl true
+  def mount(%{"slug" => slug}, _session, socket) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        {:ok, socket |> put_flash(:error, "Event not found") |> redirect(to: "/")}
+      event ->
+        theme_data = Events.get_event_theme_data(event)
+        theme_class = Themes.get_theme_css_class(event.theme)
+        
+        {:ok, 
+         socket
+         |> assign(:event, event)
+         |> assign(:page_title, event.title)
+         |> assign(:theme_class, theme_class)
+         |> assign(:theme_data, theme_data)}
+    end
+  end
+  
+  # Existing code...
+end
+```
+
+2. Update the PublicEventLive template to apply the theme class and custom styles:
+```heex
+<div class={["event-page", @theme_class]}>
+  <!-- Existing template code... -->
+</div>
+
+<style>
+  :root {
+    /* Apply custom theme properties from theme_data */
+    --theme-primary-color: <%= @theme_data["colors"]["primary"] %>;
+    --theme-secondary-color: <%= @theme_data["colors"]["secondary"] %>;
+    --theme-accent-color: <%= @theme_data["colors"]["accent"] %>;
+    --theme-background-color: <%= @theme_data["colors"]["background"] %>;
+    --theme-text-color: <%= @theme_data["colors"]["text"] %>;
+    
+    --theme-font-family: <%= @theme_data["typography"]["font_family"] %>;
+    --theme-heading-weight: <%= @theme_data["typography"]["heading_weight"] %>;
+    --theme-body-size: <%= @theme_data["typography"]["body_size"] %>;
+    
+    --theme-border-radius: <%= @theme_data["layout"]["border_radius"] %>;
+    /* Other custom properties... */
+  }
+</style>
+```
+
+3. Update the root layout to include theme CSS files:
+```elixir
+defmodule EventasaurusAppWeb.Layouts do
+  use EventasaurusAppWeb, :html
+  
+  # Existing code...
+  
+  def public_event(assigns) do
+    ~H"""
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <!-- Existing head content... -->
+        <link rel="stylesheet" href={~p"/assets/css/public.css"} />
+        <link rel="stylesheet" href={~p"/assets/css/themes/base.css"} />
+        <!-- Theme-specific CSS will be loaded dynamically -->
+      </head>
+      <body>
+        <%= @inner_content %>
+      </body>
+    </html>
+    """
+  end
+end
+```
+
+4. Create a helper function to dynamically load theme-specific CSS:
+```elixir
+defmodule EventasaurusAppWeb.ThemeHelpers do
+  @doc """
+  Returns the theme CSS path for a given theme.
+  """
+  def theme_css_path(theme) do
+    "/assets/css/themes/#{theme}.css"
+  end
+  
+  @doc """
+  Generates inline CSS for theme customizations.
+  """
+  def generate_theme_css(theme_data) do
+    # Generate CSS custom properties from theme_data
+    # This is an alternative to the inline style approach
+  end
+end
+```
+
+5. Update the app.js to handle theme mode toggling (light/dark):
+```javascript
+// Theme mode handling
+document.addEventListener('DOMContentLoaded', () => {
+  const eventPage = document.querySelector('.event-page');
+  if (eventPage) {
+    const themeMode = eventPage.dataset.themeMode || 'light';
+    if (themeMode === 'dark') {
+      eventPage.classList.add('theme-dark');
+    }
+  }
+});
+```
+
+# Test Strategy:
+1. Test that the correct theme class is applied to the public event page
+2. Verify that theme customizations are correctly applied as CSS custom properties
+3. Test theme application with each of the 7 themes
+4. Test light and dark mode variations
+5. Verify that theme switching works correctly
+6. Test that the theme CSS is loaded correctly
+7. Measure performance impact of theme application
+8. Test accessibility of themed pages with screen readers and keyboard navigation

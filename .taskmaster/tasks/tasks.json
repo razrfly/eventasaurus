@@ -1,0 +1,76 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 29,
+        "title": "Setup PostHog Dependencies and Configuration",
+        "description": "Add PostHog HTTP client dependency and configure environment variables for both server-side and client-side tracking",
+        "details": "1. Add PostHog HTTP client to mix.exs: `{:posthog, \"~> 0.1\"}` or `{:httpoison, \"~> 2.0\"}` for custom HTTP client\n2. Configure environment variables in config/config.exs:\n```elixir\nconfig :eventasaurus, :posthog,\n  api_key: System.get_env(\"POSTHOG_API_KEY\"),\n  host: \"https://eu.i.posthog.com\"\n```\n3. Add runtime configuration in config/runtime.exs for production:\n```elixir\nif config_env() == :prod do\n  config :eventasaurus, :posthog,\n    api_key: System.get_env(\"POSTHOG_API_KEY\") || raise(\"POSTHOG_API_KEY not set\")\nend\n```\n4. Run `mix deps.get` to install dependencies",
+        "testStrategy": "Verify dependency installation with `mix deps.tree`, test configuration loading in different environments, ensure POSTHOG_API_KEY environment variable is properly read",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 30,
+        "title": "Initialize PostHog JavaScript SDK and Client-Side Setup",
+        "description": "Add PostHog JavaScript SDK to the Phoenix application layout and initialize client-side tracking",
+        "details": "1. Add PostHog script tag to lib/eventasaurus_web/components/layouts/root.html.heex before closing </head>:\n```html\n<script>\n  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(\".\");2==o.length&&(t=t[o[0]],e=o[1]);var n=t;if(\"undefined\"!=typeof e)n=t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))};else for(var p=0;p<o.length;p++)n=n[o[p]]=function(){n.push([o[p]].concat(Array.prototype.slice.call(arguments,0)))};}(p=t.createElement(\"script\")).type=\"text/javascript\",p.async=!0,p.src=s.api_host+\"/static/array.js\",(r=t.getElementsByTagName(\"script\")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a=\"posthog\",u.people=u.people||[],u.toString=function(t){var e=\"posthog\";return\"posthog\"!==a&&(e+='.'+a),e},g(u,\"init capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys\".split(\" \")),u.init(i,s,a)},e.__SV=1)}(document,window.posthog||[]);\n  posthog.init('<%= Application.get_env(:eventasaurus, :posthog)[:api_key] %>', {api_host: 'https://eu.i.posthog.com'})\n</script>\n```\n2. Initialize PostHog in assets/js/app.js after the existing imports:\n```javascript\n// PostHog client-side tracking helpers\nwindow.trackEvent = function(eventName, properties = {}) {\n  if (window.posthog) {\n    posthog.capture(eventName, properties);\n  }\n};\n```",
+        "testStrategy": "Verify PostHog script loads without errors in browser console, test that window.posthog object is available, confirm events are sent to PostHog EU endpoint using browser network tab",
+        "priority": "high",
+        "dependencies": [
+          29
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 31,
+        "title": "Create PostHog Service Module for Server-Side Tracking",
+        "description": "Implement a PostHog service module to handle server-side event tracking with proper error handling and async processing",
+        "details": "1. Create lib/eventasaurus_app/services/posthog_service.ex:\n```elixir\ndefmodule EventasaurusApp.Services.PosthogService do\n  @moduledoc \"Service for tracking events to PostHog\"\n  \n  require Logger\n  \n  @posthog_config Application.compile_env(:eventasaurus, :posthog)\n  @api_key @posthog_config[:api_key]\n  @host @posthog_config[:host]\n  \n  def track_event(distinct_id, event_name, properties \\\\ %{}) do\n    if @api_key do\n      Task.start(fn -> send_event(distinct_id, event_name, properties) end)\n    else\n      Logger.warn(\"PostHog API key not configured, skipping event: #{event_name}\")\n    end\n  end\n  \n  def identify_user(distinct_id, properties \\\\ %{}) do\n    if @api_key do\n      Task.start(fn -> send_identify(distinct_id, properties) end)\n    end\n  end\n  \n  defp send_event(distinct_id, event_name, properties) do\n    payload = %{\n      api_key: @api_key,\n      event: event_name,\n      distinct_id: distinct_id,\n      properties: Map.merge(properties, %{timestamp: DateTime.utc_now()})\n    }\n    \n    case HTTPoison.post(\"#{@host}/capture/\", Jason.encode!(payload), headers()) do\n      {:ok, %{status_code: 200}} -> :ok\n      {:error, reason} -> Logger.error(\"PostHog tracking failed: #{inspect(reason)}\")\n    end\n  end\n  \n  defp send_identify(distinct_id, properties) do\n    payload = %{\n      api_key: @api_key,\n      distinct_id: distinct_id,\n      \"$set\": properties\n    }\n    \n    HTTPoison.post(\"#{@host}/engage/\", Jason.encode!(payload), headers())\n  end\n  \n  defp headers, do: [{\"Content-Type\", \"application/json\"}]\nend\n```",
+        "testStrategy": "Unit test the service module with mock HTTP responses, verify async task execution doesn't block calling process, test error handling when PostHog is unavailable, validate JSON payload structure",
+        "priority": "medium",
+        "dependencies": [
+          29
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 32,
+        "title": "Implement User Identification and Authentication Event Tracking",
+        "description": "Add user identification logic and track authentication events (login, logout, registration) using both server-side and client-side tracking",
+        "details": "1. Add user identification to authentication flow. In the authentication controller/live view:\n```elixir\n# After successful login\nPosthogService.identify_user(user.id, %{\n  email: user.email,\n  created_at: user.inserted_at\n})\nPosthogService.track_event(user.id, \"user_logged_in\", %{\n  login_method: \"email\"\n})\n```\n2. Track registration events:\n```elixir\n# After successful registration\nPosthogService.track_event(user.id, \"user_registered\", %{\n  registration_method: \"email\"\n})\n```\n3. Track logout events:\n```elixir\n# Before logout\nPosthogService.track_event(user.id, \"user_logged_out\")\n```\n4. Add client-side identification in JavaScript:\n```javascript\n// In app.js or relevant LiveView hook\nif (window.posthog && userId) {\n  posthog.identify(userId);\n}\n```\n5. Handle anonymous users with session-based identifiers using Phoenix session ID",
+        "testStrategy": "Test user identification on login/logout, verify events are sent to PostHog with correct user IDs, test anonymous user tracking with session IDs, validate event properties are correctly formatted",
+        "priority": "high",
+        "dependencies": [
+          30,
+          31
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 33,
+        "title": "Implement Core Business Event Tracking",
+        "description": "Add tracking for critical business events including event management, ticket purchases, payments, and basic engagement metrics",
+        "details": "1. Track event management actions in relevant controllers/live views:\n```elixir\n# Event creation\nPosthogService.track_event(user_id, \"event_created\", %{\n  event_id: event.id,\n  event_type: event.type\n})\n\n# Event publishing\nPosthogService.track_event(user_id, \"event_published\", %{\n  event_id: event.id\n})\n\n# Theme changes\nPosthogService.track_event(user_id, \"event_theme_changed\", %{\n  event_id: event.id,\n  new_theme: theme\n})\n```\n2. Track payment and ticket events:\n```elixir\n# Ticket purchase\nPosthogService.track_event(user_id, \"ticket_purchased\", %{\n  event_id: event.id,\n  ticket_type: ticket.type,\n  amount: ticket.price\n})\n\n# Payment success/failure\nPosthogService.track_event(user_id, \"payment_succeeded\", %{\n  amount: payment.amount,\n  payment_method: payment.method\n})\n```\n3. Track engagement events:\n```elixir\n# Event views\nPosthogService.track_event(user_id || session_id, \"event_viewed\", %{\n  event_id: event.id\n})\n\n# Dashboard visits\nPosthogService.track_event(user_id, \"dashboard_visited\")\n```\n4. Add client-side tracking for page views and interactions using LiveView hooks",
+        "testStrategy": "Test each event type is tracked correctly, verify event properties contain relevant business data, test both authenticated and anonymous user tracking, validate events appear in PostHog dashboard with correct timestamps and properties",
+        "priority": "medium",
+        "dependencies": [
+          31,
+          32
+        ],
+        "status": "done",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-06-15T12:13:13.418Z",
+      "updated": "2025-06-30T18:35:46.942Z",
+      "description": "Tasks for master context"
+    }
+  }
+}

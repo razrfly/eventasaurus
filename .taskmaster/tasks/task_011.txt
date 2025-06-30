@@ -1,0 +1,61 @@
+# Task ID: 11
+# Title: Implement Event Creation UI Redesign with Four Setup Paths
+# Status: pending
+# Dependencies: 6
+# Priority: high
+# Description: Create a streamlined event creation flow with dynamic form sections that adapt to user intent: polling, confirmed, ticketed, or threshold-based presales.
+# Details:
+Redesign the event creation UI to provide four distinct setup paths based on event type and user intent. Implement a multi-step wizard interface using Phoenix LiveView with dynamic form sections that show/hide based on selected path. Path 1: Polling Events - Simple form with question, options, and voting period. Path 2: Confirmed Events - Basic event details with fixed attendance. Path 3: Ticketed Events - Integration with existing ticketing system (Task 6) for standard ticket sales. Path 4: Threshold-based Presales - New functionality for events that only proceed if minimum attendance/sales threshold is met, with refund logic if threshold not reached. Create reusable LiveView components for each path section. Implement form validation specific to each path type. Add progress indicators and navigation between steps. Store draft state to allow users to save progress. Integrate with existing Event schema and add new fields for threshold-based events (minimum_threshold, threshold_deadline, refund_policy). Use Alpine.js for smooth transitions between form sections.
+
+# Test Strategy:
+Write comprehensive UI tests for each of the four event creation paths. Test form validation for path-specific requirements. Verify dynamic form section visibility based on selected path. Test draft saving and restoration functionality. Create integration tests for threshold-based presale logic including threshold checking and refund processing. Test navigation between wizard steps and form state persistence. Verify integration with existing ticketing system for ticketed events path. Test responsive design across different screen sizes.
+
+# Subtasks:
+## 1. Create Event Setup Path Selector Component [pending]
+### Dependencies: None
+### Description: Build the initial UI component that presents the four setup options to users
+### Details:
+Create a LiveView component that displays four distinct setup paths: Planning Stage (Polling), Confirmed (No Tickets), Ticketed, and Threshold-Based Pre-Sale. Include visual icons, descriptions, and selection state management. Should be the first step in the event creation flow.
+
+## 2. Update Event Schema for Threshold Fields [pending]
+### Dependencies: None
+### Description: Add database fields to support threshold-based presales
+### Details:
+Add new fields to Event schema: requires_threshold (boolean), threshold_minimum_attendees (integer), threshold_deadline (datetime), threshold_status (enum: pending/met/failed). Create migration file and update changeset validations. Ensure backward compatibility with existing events.
+
+## 3. Implement Dynamic Form Rendering Logic [pending]
+### Dependencies: 11.1
+### Description: Create form sections that show/hide based on selected setup path
+### Details:
+Build the dynamic form logic that shows appropriate form sections based on user's selected path. Planning shows polling fields, Confirmed shows basic event fields, Ticketed shows ticketing fields, Threshold shows both threshold and ticketing fields. Use LiveView assigns and HEEx conditionals for reactive UI.
+
+## 4. Build Threshold-Based Presale Form Section [pending]
+### Dependencies: 11.2
+### Description: Create the UI form section specific to threshold-based presales
+### Details:
+Build form inputs for minimum attendees, threshold deadline, and payment method selection (authorize-only vs delayed capture). Include validation rules and help text to guide users. Integrate with existing ticketing form components where applicable.
+
+## 5. Implement Backend Logic for Threshold Events [pending]
+### Dependencies: 11.2
+### Description: Add server-side logic to handle threshold-based event lifecycle
+### Details:
+Create functions to check threshold status, handle threshold deadline expiration, and manage event state transitions from :threshold to :confirmed or :cancelled. Include background job scheduling for threshold deadline monitoring and automatic refund processing when thresholds aren't met.
+
+## 6. Update Form Validation for Each Path [pending]
+### Dependencies: 11.3, 11.4
+### Description: Implement path-specific validation rules for the event creation form
+### Details:
+Update the Event changeset to handle validation based on selected setup path. Planning path requires polling fields, Confirmed requires basic event info, Ticketed requires ticket data, Threshold requires both threshold and ticket data. Ensure proper error messages and field requirements for each path.
+
+## 7. Integrate with Existing Ticketing System [pending]
+### Dependencies: 11.6, 11.5
+### Description: Connect threshold and ticketed paths with existing ticket infrastructure
+### Details:
+Modify the existing ticket creation flow to support threshold-based events. Update ticket purchasing logic to handle authorize-only payments for threshold events. Ensure proper integration with Stripe payment processing for both regular and threshold ticket sales.
+
+## 8. Add Comprehensive Testing Coverage [pending]
+### Dependencies: 11.6, 11.7
+### Description: Create tests for all four event creation paths and threshold functionality
+### Details:
+Write LiveView tests for each setup path selection and form behavior. Add unit tests for threshold logic and event state transitions. Create integration tests for the complete event creation flow for each path. Test edge cases like threshold deadline expiration and refund processing.
+

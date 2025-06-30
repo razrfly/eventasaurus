@@ -1,0 +1,61 @@
+# Task ID: 1
+# Title: Database Schema Updates for Theme Support
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Update the Event model schema to include theme and theme_customizations fields as specified in the PRD.
+# Details:
+Create a migration to add the theme enum field and theme_customizations JSONB field to the Event schema. The theme field should be an Ecto.Enum with values [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional] with a default of :minimal. The theme_customizations field should be a map with a default empty map. Update existing events to use the 'minimal' theme.
+
+Example migration:
+```elixir
+defmodule EventasaurusApp.Repo.Migrations.AddThemeFieldsToEvents do
+  use Ecto.Migration
+
+  def change do
+    alter table(:events) do
+      add :theme, :string, default: "minimal"
+      add :theme_customizations, :map, default: %{}
+    end
+
+    create index(:events, [:theme])
+    
+    # Update existing events
+    execute "UPDATE events SET theme = 'minimal' WHERE theme IS NULL"
+  end
+end
+```
+
+Update Event schema:
+```elixir
+defmodule EventasaurusApp.Events.Event do
+  # existing schema code...
+  
+  schema "events" do
+    # existing fields...
+    field :theme, Ecto.Enum, values: [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional], default: :minimal
+    field :theme_customizations, :map, default: %{}
+    # remaining fields...
+  end
+  
+  # Update changeset function to handle theme fields
+  def changeset(event, attrs) do
+    event
+    |> cast(attrs, [...existing_fields..., :theme, :theme_customizations])
+    |> validate_required([...existing_required_fields...])
+    |> validate_theme_customizations()
+  end
+  
+  defp validate_theme_customizations(changeset) do
+    # Add validation logic for theme customizations
+    changeset
+  end
+end
+```
+
+# Test Strategy:
+1. Write unit tests to verify the Event schema correctly defines theme and theme_customizations fields
+2. Test that the changeset validation works correctly for valid and invalid theme values
+3. Write a migration test to ensure existing events are properly updated
+4. Test that the default values are correctly applied
+5. Verify that the database indexes are created correctly

@@ -1,0 +1,11 @@
+# Task ID: 12
+# Title: Implement Participant List Display
+# Status: pending
+# Dependencies: 10
+# Priority: low
+# Description: Create a component to display the list of participants who have registered or voted.
+# Details:
+Implement a Phoenix LiveView component to display the participant list. Use Ecto queries to fetch participant data. Implement pagination using Scrivener (version 2.7.2) if the list may be long. Consider using Phoenix.LiveView.JS for dynamic updates to the list.
+
+# Test Strategy:
+Write integration tests using Phoenix.LiveViewTest to verify the participant list displays correctly. Test pagination if implemented. Verify real-time updates work as expected.

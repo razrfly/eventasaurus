@@ -1,0 +1,142 @@
+# Task ID: 2
+# Title: Themes Context Implementation
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: Create a Themes context module with utility functions for theme validation, customization merging, and default theme values.
+# Details:
+Implement the Themes context module as specified in REQ-4.3.1 with functions for theme validation, customization merging, and retrieving default theme values.
+
+```elixir
+defmodule EventasaurusApp.Themes do
+  @moduledoc """
+  The Themes context provides utilities for working with event themes.
+  """
+  
+  @theme_values [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
+  
+  @doc """
+  Validates if a theme is valid.
+  """
+  @spec valid_theme?(atom()) :: boolean()
+  def valid_theme?(theme) when theme in @theme_values, do: true
+  def valid_theme?(_), do: false
+  
+  @doc """
+  Merges custom theme settings with base theme defaults.
+  """
+  @spec merge_customizations(atom(), map()) :: map()
+  def merge_customizations(theme, customizations) do
+    Map.merge(get_default_customizations(theme), customizations || %{})
+  end
+  
+  @doc """
+  Validates theme customizations for proper structure and values.
+  """
+  @spec validate_customizations(map()) :: {:ok, map()} | {:error, String.t()}
+  def validate_customizations(customizations) do
+    # Implement validation logic for customization structure
+    # Check color formats, font values, etc.
+    {:ok, customizations}
+  end
+  
+  @doc """
+  Returns the CSS class name for a given theme.
+  """
+  @spec get_theme_css_class(atom()) :: String.t()
+  def get_theme_css_class(theme) when theme in @theme_values do
+    "theme-#{theme}"
+  end
+  def get_theme_css_class(_), do: "theme-minimal"
+  
+  @doc """
+  Returns the default customizations for a given theme.
+  """
+  @spec get_default_customizations(atom()) :: map()
+  def get_default_customizations(:minimal) do
+    %{
+      "colors" => %{
+        "primary" => "#000000",
+        "secondary" => "#333333",
+        "accent" => "#0066cc",
+        "background" => "#ffffff",
+        "text" => "#000000"
+      },
+      "typography" => %{
+        "font_family" => "Inter",
+        "heading_weight" => "600",
+        "body_size" => "16px"
+      },
+      "layout" => %{
+        "border_radius" => "4px",
+        "shadow_style" => "soft"
+      },
+      "mode" => "light"
+    }
+  end
+  
+  # Implement default customizations for other themes
+  def get_default_customizations(:cosmic) do
+    # Cosmic theme defaults
+  end
+  
+  # Add remaining theme default implementations
+  
+  # Fallback for unknown themes
+  def get_default_customizations(_), do: get_default_customizations(:minimal)
+end
+```
+
+Also update the Events context to include theme-related functions:
+
+```elixir
+defmodule EventasaurusApp.Events do
+  # Existing context code...
+  
+  alias EventasaurusApp.Themes
+  
+  @doc """
+  Updates an event's theme.
+  """
+  def update_event_theme(event, theme) when is_atom(theme) do
+    if Themes.valid_theme?(theme) do
+      event
+      |> Event.changeset(%{theme: theme})
+      |> Repo.update()
+    else
+      {:error, "Invalid theme"}
+    end
+  end
+  
+  @doc """
+  Updates an event's theme customizations.
+  """
+  def update_event_theme_customizations(event, customizations) do
+    case Themes.validate_customizations(customizations) do
+      {:ok, valid_customizations} ->
+        event
+        |> Event.changeset(%{theme_customizations: valid_customizations})
+        |> Repo.update()
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+  
+  @doc """
+  Gets the complete theme data for an event, merging defaults with customizations.
+  """
+  def get_event_theme_data(event) do
+    Themes.merge_customizations(event.theme, event.theme_customizations)
+  end
+end
+```
+
+# Test Strategy:
+1. Write unit tests for each function in the Themes context
+2. Test valid_theme? with valid and invalid themes
+3. Test merge_customizations with various customization scenarios
+4. Test validate_customizations with valid and invalid customization data
+5. Test get_theme_css_class returns correct class names
+6. Test get_default_customizations returns proper defaults for each theme
+7. Test the Events context theme-related functions
+8. Verify theme validation works correctly in the Events context

@@ -1,0 +1,182 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Setup and Configure Project Environment",
+      "description": "Add the missing `is_ticketed` boolean field to the existing Event schema and configure Stripe dependencies for ticketing functionality.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "The Event schema currently has all required fields (id, title, start_at, ends_at, status, canceled_at, threshold_count, polling_deadline) but is missing the `is_ticketed` boolean field. This task involves: 1) Creating a database migration to add the `is_ticketed` boolean field to the events table with default value false, 2) Updating the Event schema module to include the new field, 3) Modifying the changeset to cast and validate the new field, 4) Adding stripity_stripe dependency to mix.exs for future Stripe integration, and 5) Ensuring all changes are properly tested.",
+      "testStrategy": "Run the new migration and verify the `is_ticketed` field is added to the events table with correct default value. Test Event changeset with the new field included. Verify existing event creation and update functionality still works. Run full test suite to ensure no regressions.",
+      "subtasks": [
+        {
+          "id": "1.1",
+          "title": "Create migration for is_ticketed field",
+          "description": "Generate and implement a migration to add the `is_ticketed` boolean field to the events table",
+          "status": "done"
+        },
+        {
+          "id": "1.2",
+          "title": "Update Event schema module",
+          "description": "Add `is_ticketed` field to the Event schema struct and update field definitions",
+          "status": "done"
+        },
+        {
+          "id": "1.3",
+          "title": "Update Event changeset",
+          "description": "Modify the Event changeset to cast the `is_ticketed` field and add any necessary validation",
+          "status": "done"
+        },
+        {
+          "id": "1.4",
+          "title": "Add Stripe dependency",
+          "description": "Add stripity_stripe (v3.0+) to mix.exs dependencies for future ticketing integration",
+          "status": "done"
+        },
+        {
+          "id": "1.5",
+          "title": "Test schema changes",
+          "description": "Write and run tests to verify the new field works correctly with existing Event functionality",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Design and Implement Ticket Schema and Migration",
+      "description": "Create the new Ticket data model and corresponding database migration.",
+      "details": "Define Ticket schema with fields: id, event_id (FK), title, description, price_cents, currency (default: usd), quantity, quantity_sold, starts_at, ends_at, tippable (boolean, default: false), created_at, updated_at. Generate and run Ecto migration. Add validation for price, quantity, and availability window. Use Ecto 3.10+ for schema and migration.",
+      "testStrategy": "Write unit tests for schema validation. Test migration rollback and forward. Verify constraints (e.g., price_cents > 0, quantity >= quantity_sold).",
+      "priority": "high",
+      "dependencies": [
+        1
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 3,
+      "title": "Design and Implement Order Schema and Migration",
+      "description": "Create the new Order data model and corresponding database migration.",
+      "details": "Define Order schema with fields: id, user_id (FK), event_id (FK), ticket_id (FK), quantity, subtotal_cents, tax_cents, total_cents, currency, status (pending, confirmed, refunded, canceled), stripe_session_id, payment_reference, created_at, updated_at, confirmed_at. Generate and run Ecto migration. Add validation for quantity, status transitions, and payment references.",
+      "testStrategy": "Write unit tests for schema validation and status transitions. Test migration rollback and forward. Verify foreign key constraints.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 4,
+      "title": "Add Ticketing Context and Business Logic",
+      "description": "Implement core ticketing business logic and context module.",
+      "details": "Create a new Ticketing context module. Implement functions for creating tickets, updating availability, and managing orders. Handle ticket availability checks, order creation, and status updates. Integrate with existing EventParticipant system to create ticket_holder records on successful order confirmation. Use Phoenix PubSub for real-time updates if needed[3][5].",
+      "testStrategy": "Write unit and integration tests for ticket and order lifecycle. Test integration with EventParticipant. Test real-time updates if PubSub is used.",
+      "priority": "high",
+      "dependencies": [
+        2,
+        3
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 5,
+      "title": "Integrate Stripe Payment Processing",
+      "description": "Add Stripe checkout and webhook handling for secure payment processing.",
+      "details": "Integrate stripity_stripe (v3.0+) for Stripe API calls. Implement checkout session creation for paid tickets. Add webhook endpoint for payment confirmation. Store stripe_session_id and payment_reference in orders. Only confirm orders after webhook success. Handle idempotency and security best practices as per Stripe recommendations.",
+      "testStrategy": "Write integration tests for checkout flow. Mock Stripe API responses. Test webhook handling and order confirmation. Verify idempotency and security.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        3,
+        4
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 6,
+      "title": "Enhance Event Management UI for Ticketing",
+      "description": "Add ticketing controls to the event management dashboard and creation/edit forms.",
+      "details": "Modify existing event management UI to allow organizers to enable ticketing and manage ticket types. Add forms for ticket creation and editing. Update event schema with is_ticketed boolean. Use Phoenix LiveView for real-time updates and form handling[2][4].",
+      "testStrategy": "Write UI tests for ticket management forms. Test enabling/disabling ticketing. Verify real-time updates and form validation.",
+      "priority": "medium",
+      "dependencies": [
+        2,
+        4
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 7,
+      "title": "Implement Ticket Purchase UI and Flow",
+      "description": "Add ticket purchase section to event show page and implement checkout flow.",
+      "details": "Add ticket selection interface to event show page. Implement checkout flow UI for both free and paid tickets. Use Phoenix LiveView for real-time updates and form handling. Redirect to Stripe Checkout for paid tickets. Handle order confirmation and EventParticipant creation.",
+      "testStrategy": "Write UI and integration tests for ticket purchase flow. Test free and paid ticket scenarios. Verify order confirmation and participant creation.",
+      "priority": "high",
+      "dependencies": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 8,
+      "title": "Add User Dashboard for Ticket Management",
+      "description": "Display purchased tickets and order history in user dashboard.",
+      "details": "Enhance user dashboard to show purchased tickets and order history. Add UI components for viewing order details and status. Use Phoenix LiveView for real-time updates.",
+      "testStrategy": "Write UI tests for user dashboard. Test display of order history and ticket details. Verify real-time updates.",
+      "priority": "medium",
+      "dependencies": [
+        3,
+        4,
+        7
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 9,
+      "title": "Implement Admin Ticket and Order Management",
+      "description": "Add admin interfaces for ticket type and order management.",
+      "details": "Create admin UI for managing ticket types and viewing orders. Add filtering and search for orders. Integrate with existing event analytics. Use Phoenix LiveView for real-time updates.",
+      "testStrategy": "Write UI tests for admin interfaces. Test filtering, search, and analytics integration. Verify real-time updates.",
+      "priority": "medium",
+      "dependencies": [
+        2,
+        3,
+        6
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 10,
+      "title": "Extend Test Coverage and Validation",
+      "description": "Expand test suite to cover new ticketing features and integration points.",
+      "details": "Extend existing test factories with ticket and order fixtures. Add integration tests for full user flow (browse event → purchase ticket → confirmation). Test free vs paid ticket flows, Stripe webhook integration, and integration with EventParticipant. Add unit tests for order lifecycle, ticket availability, and time-based sales.",
+      "testStrategy": "Run full test suite. Verify coverage for new features. Test edge cases and integration points.",
+      "priority": "medium",
+      "dependencies": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "status": "pending",
+      "subtasks": []
+    }
+  ]
+}

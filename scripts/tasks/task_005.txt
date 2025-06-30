@@ -1,0 +1,181 @@
+# Task ID: 5
+# Title: Theme Selection UI Component
+# Status: pending
+# Dependencies: 2, 3
+# Priority: medium
+# Description: Create a theme picker component that displays visual thumbnails for each theme and allows single-click selection.
+# Details:
+Implement a ThemePickerComponent that displays visual thumbnails for each of the 7 themes and allows users to select a theme with a single click. This component should be integrated into both event creation and edit forms.
+
+1. Create a LiveComponent for the theme picker:
+```elixir
+defmodule EventasaurusAppWeb.ThemePickerComponent do
+  use EventasaurusAppWeb, :live_component
+  alias EventasaurusApp.Themes
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="theme-picker">
+      <h3>Choose a theme</h3>
+      <div class="theme-options">
+        <%= for theme <- available_themes() do %>
+          <div class={["theme-option", @selected_theme == theme && "selected"]} 
+               phx-click="select-theme" 
+               phx-value-theme={theme} 
+               phx-target={@myself}>
+            <div class={["theme-thumbnail", "theme-#{theme}"]}>
+              <!-- Theme preview thumbnail -->
+              <div class="thumbnail-header"></div>
+              <div class="thumbnail-content"></div>
+              <div class="thumbnail-button"></div>
+            </div>
+            <div class="theme-name"><%= theme_display_name(theme) %></div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+  
+  @impl true
+  def handle_event("select-theme", %{"theme" => theme_string}, socket) do
+    theme = String.to_existing_atom(theme_string)
+    
+    if Themes.valid_theme?(theme) do
+      send(self(), {:theme_selected, theme})
+      {:noreply, assign(socket, selected_theme: theme)}
+    else
+      {:noreply, socket}
+    end
+  end
+  
+  defp available_themes do
+    [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
+  end
+  
+  defp theme_display_name(:minimal), do: "Minimal"
+  defp theme_display_name(:cosmic), do: "Cosmic"
+  defp theme_display_name(:velocity), do: "Velocity"
+  defp theme_display_name(:retro), do: "Retro"
+  defp theme_display_name(:celebration), do: "Celebration"
+  defp theme_display_name(:nature), do: "Nature"
+  defp theme_display_name(:professional), do: "Professional"
+end
+```
+
+2. Add CSS for the theme picker component:
+```css
+.theme-picker {
+  margin-bottom: 2rem;
+}
+
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.theme-option {
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.2s;
+}
+
+.theme-option:hover {
+  transform: translateY(-5px);
+}
+
+.theme-option.selected {
+  outline: 2px solid var(--theme-primary-color);
+  border-radius: 8px;
+}
+
+.theme-thumbnail {
+  height: 100px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  border: 1px solid #eaeaea;
+}
+
+/* Theme-specific thumbnail styles */
+.theme-thumbnail.theme-minimal {
+  background-color: white;
+}
+
+.theme-thumbnail.theme-cosmic {
+  background-color: #1a1a2e;
+  background-image: linear-gradient(to bottom right, #1a1a2e, #16213e);
+}
+
+/* Add styles for other theme thumbnails */
+
+.theme-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+```
+
+3. Integrate the theme picker into the event form:
+```elixir
+defmodule EventasaurusAppWeb.EventLive.FormComponent do
+  use EventasaurusAppWeb, :live_component
+  
+  # Existing code...
+  
+  @impl true
+  def update(%{event: event} = assigns, socket) do
+    changeset = Events.change_event(event)
+    
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(:changeset, changeset)
+     |> assign(:selected_theme, event.theme)}
+  end
+  
+  @impl true
+  def handle_info({:theme_selected, theme}, socket) do
+    # Update the event with the selected theme
+    {:ok, event} = Events.update_event_theme(socket.assigns.event, theme)
+    
+    {:noreply,
+     socket
+     |> assign(:event, event)
+     |> assign(:selected_theme, theme)
+     |> put_flash(:info, "Theme updated successfully")}
+  end
+  
+  # Existing code...
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div>
+      <!-- Existing form content... -->
+      
+      <section class="theme-section">
+        <.live_component
+          module={EventasaurusAppWeb.ThemePickerComponent}
+          id="theme-picker"
+          selected_theme={@selected_theme}
+        />
+      </section>
+      
+      <!-- Remaining form content... -->
+    </div>
+    """
+  end
+end
+```
+
+# Test Strategy:
+1. Test that all 7 themes are displayed in the theme picker
+2. Verify that clicking a theme correctly selects it
+3. Test that the selected theme is visually indicated
+4. Verify that theme selection is saved to the database
+5. Test the integration with event creation and edit forms
+6. Test the component's responsive behavior on different screen sizes
+7. Verify that theme thumbnails accurately represent the actual themes

@@ -1,0 +1,11 @@
+# Task ID: 18
+# Title: Perform Security Audit
+# Status: pending
+# Dependencies: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+# Priority: high
+# Description: Conduct a comprehensive security audit of the polling feature.
+# Details:
+Use static analysis tools like Sobelow (version 0.11.1) for Phoenix-specific security checks. Implement CSRF protection using Phoenix's built-in mechanisms. Ensure proper input validation and sanitization. Review and update Content Security Policy. Conduct penetration testing focusing on common vulnerabilities like XSS and CSRF.
+
+# Test Strategy:
+Run automated security scans using Sobelow. Implement security-focused integration tests. Conduct manual penetration testing. Verify CSRF token usage in forms and API requests.

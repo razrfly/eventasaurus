@@ -1,0 +1,285 @@
+# Task ID: 9
+# Title: Accessibility and Performance Optimization
+# Status: pending
+# Dependencies: 3, 4, 7
+# Priority: high
+# Description: Ensure all themes meet accessibility standards and optimize performance for theme switching and loading.
+# Details:
+Implement accessibility checks and performance optimizations for the theming system to ensure all themes meet WCAG 2.1 AA standards and have minimal performance impact.
+
+1. Create an accessibility validation module:
+```elixir
+defmodule EventasaurusApp.Themes.AccessibilityValidator do
+  @moduledoc """
+  Validates theme customizations for accessibility compliance.
+  """
+  
+  @doc """
+  Validates color contrast for accessibility.
+  Returns :ok if contrast is sufficient, or {:error, reason} if not.
+  """
+  def validate_color_contrast(foreground, background) do
+    contrast_ratio = calculate_contrast_ratio(foreground, background)
+    
+    if contrast_ratio >= 4.5 do
+      :ok
+    else
+      {:error, "Contrast ratio #{Float.round(contrast_ratio, 2)} is below WCAG AA minimum of 4.5"}
+    end
+  end
+  
+  @doc """
+  Validates a complete theme for accessibility issues.
+  """
+  def validate_theme(theme_data) do
+    with :ok <- validate_text_contrast(theme_data),
+         :ok <- validate_button_contrast(theme_data) do
+      :ok
+    end
+  end
+  
+  defp validate_text_contrast(theme_data) do
+    text_color = theme_data["colors"]["text"]
+    background_color = theme_data["colors"]["background"]
+    
+    validate_color_contrast(text_color, background_color)
+  end
+  
+  defp validate_button_contrast(theme_data) do
+    primary_color = theme_data["colors"]["primary"]
+    button_text_color = "#FFFFFF" # Assuming white text on buttons
+    
+    validate_color_contrast(button_text_color, primary_color)
+  end
+  
+  # Calculate contrast ratio between two colors
+  # Based on WCAG 2.1 formula: https://www.w3.org/TR/WCAG21/#contrast-minimum
+  defp calculate_contrast_ratio(color1, color2) do
+    l1 = relative_luminance(color1)
+    l2 = relative_luminance(color2)
+    
+    # Ensure lighter color is l1
+    {l1, l2} = if l1 > l2, do: {l1, l2}, else: {l2, l1}
+    
+    (l1 + 0.05) / (l2 + 0.05)
+  end
+  
+  # Calculate relative luminance of a color
+  # Based on WCAG 2.1 formula: https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
+  defp relative_luminance(hex_color) do
+    {r, g, b} = hex_to_rgb(hex_color)
+    
+    r_srgb = r / 255
+    g_srgb = g / 255
+    b_srgb = b / 255
+    
+    r_linear = if r_srgb <= 0.03928, do: r_srgb / 12.92, else: :math.pow((r_srgb + 0.055) / 1.055, 2.4)
+    g_linear = if g_srgb <= 0.03928, do: g_srgb / 12.92, else: :math.pow((g_srgb + 0.055) / 1.055, 2.4)
+    b_linear = if b_srgb <= 0.03928, do: b_srgb / 12.92, else: :math.pow((b_srgb + 0.055) / 1.055, 2.4)
+    
+    0.2126 * r_linear + 0.7152 * g_linear + 0.0722 * b_linear
+  end
+  
+  # Convert hex color to RGB values
+  defp hex_to_rgb(hex) do
+    hex = String.replace_leading(hex, "#", "")
+    
+    {r, g, b} = case String.length(hex) do
+      3 -> # #RGB format
+        r = String.slice(hex, 0, 1)
+        g = String.slice(hex, 1, 1)
+        b = String.slice(hex, 2, 1)
+        {r <> r, g <> g, b <> b}
+      6 -> # #RRGGBB format
+        r = String.slice(hex, 0, 2)
+        g = String.slice(hex, 2, 2)
+        b = String.slice(hex, 4, 2)
+        {r, g, b}
+    end
+    
+    {String.to_integer(r, 16), String.to_integer(g, 16), String.to_integer(b, 16)}
+  end
+end
+```
+
+2. Update the Themes context to use the accessibility validator:
+```elixir
+defmodule EventasaurusApp.Themes do
+  # Existing code...
+  
+  alias EventasaurusApp.Themes.AccessibilityValidator
+  
+  @doc """
+  Validates theme customizations for proper structure and accessibility.
+  """
+  def validate_customizations(customizations) do
+    # First validate structure
+    with {:ok, valid_customizations} <- validate_customization_structure(customizations),
+         # Then validate accessibility
+         :ok <- AccessibilityValidator.validate_theme(valid_customizations) do
+      {:ok, valid_customizations}
+    end
+  end
+  
+  defp validate_customization_structure(customizations) do
+    # Implement validation logic for customization structure
+    # Check required keys, value types, etc.
+    {:ok, customizations}
+  end
+end
+```
+
+3. Implement performance optimizations for theme CSS loading:
+```elixir
+defmodule EventasaurusAppWeb.ThemeOptimizer do
+  @moduledoc """
+  Optimizes theme loading and application for performance.
+  """
+  
+  @doc """
+  Returns optimized CSS for a theme with only the necessary styles.
+  """
+  def get_optimized_theme_css(theme) do
+    # In a real implementation, this could:
+    # 1. Use a CDN for theme assets
+    # 2. Generate minimal CSS with only the required properties
+    # 3. Cache theme CSS for reuse
+    "assets/css/themes/#{theme}.css"
+  end
+  
+  @doc """
+  Preloads theme assets for faster switching.
+  """
+  def preload_theme_assets(conn, themes) do
+    # Generate preload link tags for theme assets
+    preload_links = for theme <- themes do
+      "<link rel=\"preload\" href=\"/#{get_optimized_theme_css(theme)}\" as=\"style\">"
+    end
+    
+    # Add preload links to response headers
+    Plug.Conn.put_resp_header(conn, "Link", Enum.join(preload_links, ", "))
+  end
+end
+```
+
+4. Add performance monitoring for theme switching:
+```elixir
+defmodule EventasaurusAppWeb.ThemePerformanceMonitor do
+  @moduledoc """
+  Monitors and logs theme performance metrics.
+  """
+  
+  require Logger
+  
+  @doc """
+  Logs theme switching performance.
+  """
+  def log_theme_switch(from_theme, to_theme, duration_ms) do
+    Logger.info("Theme switch: #{from_theme} -> #{to_theme} in #{duration_ms}ms")
+    
+    # In a real implementation, this could send metrics to a monitoring service
+    if duration_ms > 100 do
+      Logger.warn("Theme switch exceeded performance target: #{duration_ms}ms")
+    end
+  end
+  
+  @doc """
+  Measures theme loading performance.
+  """
+  def measure_theme_load(theme, fun) do
+    start_time = System.monotonic_time(:millisecond)
+    result = fun.()
+    end_time = System.monotonic_time(:millisecond)
+    
+    duration_ms = end_time - start_time
+    Logger.info("Theme load: #{theme} in #{duration_ms}ms")
+    
+    {result, duration_ms}
+  end
+end
+```
+
+5. Update the public event page to include accessibility features:
+```heex
+<div class={["event-page", @theme_class]} role="main" aria-label="Event details">
+  <header class="event-header">
+    <h1 id="event-title"><%= @event.title %></h1>
+    <p class="event-date" aria-labelledby="event-title">Dec 15, 2023 • 7:00 PM</p>
+  </header>
+  
+  <section class="event-description" aria-label="Event description">
+    <%= @event.description %>
+  </section>
+  
+  <section class="event-registration" aria-label="Registration">
+    <button class="register-btn" aria-label="Register for event">Register Now</button>
+  </section>
+  
+  <!-- Add keyboard navigation support -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add keyboard navigation support
+      const focusableElements = document.querySelectorAll('button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      
+      // Ensure proper tab order
+      Array.from(focusableElements).forEach(function(element) {
+        element.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            element.click();
+          }
+        });
+      });
+    });
+  </script>
+</div>
+```
+
+6. Optimize CSS loading in the layout:
+```elixir
+defmodule EventasaurusAppWeb.Layouts do
+  use EventasaurusAppWeb, :html
+  
+  # Existing code...
+  
+  def public_event(assigns) do
+    ~H"""
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <!-- Existing head content... -->
+        <link rel="stylesheet" href={~p"/assets/css/public.css"} />
+        <link rel="stylesheet" href={~p"/assets/css/themes/base.css"} />
+        
+        <!-- Optimized theme CSS loading -->
+        <link rel="stylesheet" href={~p"/assets/css/themes/#{@theme}.css"} />
+        
+        <!-- Preload other common themes for faster switching -->
+        <link rel="preload" href={~p"/assets/css/themes/minimal.css"} as="style" />
+        
+        <!-- Add meta tags for accessibility -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </head>
+      <body>
+        <%= @inner_content %>
+        
+        <!-- Defer non-critical JavaScript -->
+        <script defer src={~p"/assets/js/app.js"}></script>
+      </body>
+    </html>
+    """
+  end
+end
+```
+
+# Test Strategy:
+1. Test all themes against WCAG 2.1 AA standards using automated tools
+2. Verify color contrast validation works correctly for various color combinations
+3. Test screen reader compatibility for all themes
+4. Verify keyboard navigation works correctly across all themes
+5. Measure theme switching performance and ensure it's under 100ms
+6. Test theme loading performance on various devices and network conditions
+7. Verify that CSS bundle size meets the requirements (<50KB total)
+8. Test performance with Chrome Lighthouse and ensure good scores
+9. Verify that accessibility validation prevents inaccessible color combinations
+10. Test with actual assistive technology devices

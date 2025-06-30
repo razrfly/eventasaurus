@@ -87,6 +87,11 @@ config :eventasaurus, :avatars,
     backgroundBorderRadius: 50
   }
 
+# PostHog analytics configuration
+config :eventasaurus, :posthog,
+  api_key: System.get_env("POSTHOG_API_KEY"),
+  host: "https://eu.i.posthog.com"
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

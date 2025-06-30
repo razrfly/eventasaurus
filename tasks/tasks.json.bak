@@ -1,0 +1,277 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Update Event Model Schema",
+      "description": "Modify the existing Event model to include the new 'state' field for polling functionality.",
+      "details": "Add a 'state' field of type string to the Event model in the database schema. Use Ecto to define the field with allowed values 'confirmed' and 'polling'. Ensure that the 'start_at' and 'end_at' fields are still required. Update any relevant Ecto schemas and migrations. Use Ecto.Enum for the state field to ensure type safety.",
+      "testStrategy": "Write unit tests to verify the new field is correctly added and validates the allowed states. Test that 'start_at' and 'end_at' remain required fields.",
+      "priority": "high",
+      "dependencies": [],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 2,
+      "title": "Create EventDatePoll Model",
+      "description": "Implement the EventDatePoll model to manage polling for event dates.",
+      "details": "Create a new Ecto schema for EventDatePoll with fields: id (primary key), event_id (foreign key to events), created_by_id (foreign key to users), voting_deadline (utc_datetime, optional), and finalized_date (date). Use Ecto associations to link with the Event model. Implement any necessary validations using Ecto.Changeset.",
+      "testStrategy": "Write unit tests for the EventDatePoll model, including association tests with Event and User models. Test CRUD operations and validations.",
+      "priority": "high",
+      "dependencies": [
+        1
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 3,
+      "title": "Implement EventDateOption Model",
+      "description": "Create the EventDateOption model to represent individual date options for polling.",
+      "details": "Define an Ecto schema for EventDateOption with fields: id (primary key), event_date_poll_id (foreign key to event_date_polls), and date (date type). Use Ecto associations to link with the EventDatePoll model. Implement any necessary validations using Ecto.Changeset.",
+      "testStrategy": "Create unit tests for the EventDateOption model, including association tests with EventDatePoll. Verify CRUD operations and date validations.",
+      "priority": "high",
+      "dependencies": [
+        2
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 4,
+      "title": "Develop EventDateVote Model",
+      "description": "Implement the EventDateVote model to store user votes for date options.",
+      "details": "Create an Ecto schema for EventDateVote with fields: id (primary key), event_date_option_id (foreign key to event_date_options), user_id (foreign key to users), and vote_type (Ecto.Enum with values :yes, :if_need_be, :no). Implement a unique constraint on (event_date_option_id, user_id) to ensure one vote per user per date. Use Ecto associations to link with EventDateOption and User models.",
+      "testStrategy": "Write unit tests for the EventDateVote model, including association tests and unique constraint validation. Test CRUD operations and enum validations for vote_type.",
+      "priority": "high",
+      "dependencies": [
+        3
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 5,
+      "title": "Update Event Creation Flow",
+      "description": "Modify the event creation process to include the option for polling.",
+      "details": "Update the Phoenix controller and template for event creation. Add a checkbox or toggle for 'Let attendees vote on the date.' When selected, set event.state to 'polling'. Ensure start_at and end_at are treated as the poll range. Use Phoenix.HTML.Form helpers for form creation. Implement server-side logic to create EventDateOption entries for each date in the range.",
+      "testStrategy": "Write integration tests using Phoenix.ConnTest to verify the new event creation flow. Test both standard and polling event creation. Verify EventDateOption entries are correctly created for polling events.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 6,
+      "title": "Implement Date Range Generation",
+      "description": "Create a function to generate date options within the specified range.",
+      "details": "Implement a Phoenix context function that takes start_at and end_at as inputs and returns a list of dates within that range. Use the Elixir Date module for date manipulation. Consider using the Timex library (version ~> 3.7) for more advanced date operations if needed.",
+      "testStrategy": "Write unit tests for the date generation function, covering various scenarios including different date ranges, leap years, and edge cases.",
+      "priority": "medium",
+      "dependencies": [
+        5
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 7,
+      "title": "Develop Organizer Dashboard",
+      "description": "Create a dashboard for organizers to monitor vote counts and view a heatmap summary.",
+      "details": "Implement a new Phoenix LiveView for the organizer dashboard. Use Ecto queries to fetch and aggregate vote data. Implement a heatmap visualization using a JavaScript library like Chart.js (version 3.9.1) or D3.js (version 7.8.2). Use Phoenix PubSub to enable real-time updates of vote counts.",
+      "testStrategy": "Write integration tests for the organizer dashboard using Phoenix.LiveViewTest. Test data loading, vote count updates, and heatmap rendering.",
+      "priority": "medium",
+      "dependencies": [
+        5,
+        6
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 8,
+      "title": "Implement Date Finalization",
+      "description": "Allow organizers to finalize a date, updating the event state and start date.",
+      "details": "Add a 'Finalize Date' action to the organizer dashboard. Implement a Phoenix controller action that updates the event.state to 'confirmed', sets event.start_at to the selected date, and optionally archives vote data. Use Ecto.Multi for transactional updates across multiple models.",
+      "testStrategy": "Create integration tests for the date finalization process. Verify that the event state and start date are correctly updated, and that vote data is properly handled.",
+      "priority": "high",
+      "dependencies": [
+        7
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 9,
+      "title": "Develop Participant Voting Interface",
+      "description": "Create an interface for participants to vote on date options.",
+      "details": "Implement a Phoenix LiveView for the voting interface. Display date options with buttons for Yes, If need be, and No. Use Phoenix.HTML.Form for form elements. Implement client-side state management to track votes before submission. Consider using Alpine.js (version 3.x) for enhanced interactivity.",
+      "testStrategy": "Write integration tests using Phoenix.LiveViewTest to verify the voting interface functionality. Test vote selection, deselection, and submission processes.",
+      "priority": "high",
+      "dependencies": [
+        4,
+        6
+      ],
+      "status": "done",
+      "subtasks": []
+    },
+    {
+      "id": 10,
+      "title": "Implement User Identity Handling",
+      "description": "Develop and refine the logic for handling user identity during the voting process, addressing current issues and completing the implementation. Major bug fixes for anonymous voting flow and N+1 query issue have been applied.",
+      "status": "in-progress",
+      "dependencies": [
+        9
+      ],
+      "priority": "high",
+      "details": "The core components of user identity handling have been implemented, including the UserIdentityComponent, PublicEventLive voting flow, UserAuth JavaScript hook, vote data preservation, and authentication flow integration. A major bug in the anonymous voting flow has been fixed, allowing anonymous users to vote as intended. Additionally, a critical N+1 query issue and ArgumentError have been resolved, significantly improving performance and stability. Focus now on integrating these fixes, resolving remaining identified issues, completing the implementation, and ensuring all components work seamlessly together.",
+      "testStrategy": "Write unit tests for the user identity handling logic, including the newly fixed anonymous voting flow and optimized vote tally function. Create integration tests to verify the full flow from vote selection to user creation/login and vote submission for both anonymous and authenticated users. Perform end-to-end testing with a real Supabase instance to ensure all components work together correctly, paying special attention to the anonymous voting process and performance improvements. Conduct load testing to verify the elimination of N+1 queries.",
+      "subtasks": []
+    },
+    {
+      "id": 11,
+      "title": "Develop Heatmap Visualization",
+      "description": "Create a heatmap visualization of aggregated voting results.",
+      "details": "Implement a reusable component for the heatmap visualization. Use a JavaScript library like D3.js (version 7.8.2) for advanced visualizations or Chart.js (version 3.9.1) for simpler implementations. Create a Phoenix function to aggregate vote data. Use CSS for styling the intensity-based visual indicators.",
+      "testStrategy": "Write unit tests for the vote aggregation function. Create integration tests to verify the heatmap renders correctly with various data scenarios. Test responsiveness and accessibility of the visualization.",
+      "priority": "medium",
+      "dependencies": [
+        7,
+        9
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 12,
+      "title": "Implement Participant List Display",
+      "description": "Create a component to display the list of participants who have registered or voted.",
+      "details": "Implement a Phoenix LiveView component to display the participant list. Use Ecto queries to fetch participant data. Implement pagination using Scrivener (version 2.7.2) if the list may be long. Consider using Phoenix.LiveView.JS for dynamic updates to the list.",
+      "testStrategy": "Write integration tests using Phoenix.LiveViewTest to verify the participant list displays correctly. Test pagination if implemented. Verify real-time updates work as expected.",
+      "priority": "low",
+      "dependencies": [
+        10
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 13,
+      "title": "Implement Vote Persistence",
+      "description": "Develop the backend logic to persist votes in the database.",
+      "details": "Create a Phoenix context function to handle vote submission. Use Ecto.Multi for transactional insertion of votes. Implement conflict resolution for the unique constraint on (event_date_option_id, user_id). Use Ecto.Repo.insert_all for bulk insertion if submitting multiple votes at once.",
+      "testStrategy": "Write unit tests for the vote persistence function. Test various scenarios including new votes, vote updates, and conflict resolution. Verify database constraints are properly enforced.",
+      "priority": "high",
+      "dependencies": [
+        4,
+        10
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 14,
+      "title": "Develop Email Notifications",
+      "description": "Implement email notifications for various events in the polling process.",
+      "details": "Use Bamboo (version 2.2.0) for handling email notifications. Create email templates for scenarios like: vote confirmation, poll closing reminder, and date finalization. Implement background job processing using Oban (version 2.13) to handle email sending asynchronously.",
+      "testStrategy": "Write unit tests for email content generation. Use ExVCR (version 0.13.3) to mock HTTP requests in tests. Implement integration tests to verify email sending process, including Oban job execution.",
+      "priority": "low",
+      "dependencies": [
+        8,
+        13
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 15,
+      "title": "Implement Access Control",
+      "description": "Develop access control mechanisms for different user roles.",
+      "details": "Use Phoenix's built-in Plug system to implement access control. Create plugs for authenticating organizers and participants. Implement role-based access control using a library like Canada (version 2.0). Ensure organizer-only actions are properly protected.",
+      "testStrategy": "Write unit tests for individual plugs. Create integration tests to verify access control across different user roles and actions. Test both allowed and disallowed scenarios.",
+      "priority": "high",
+      "dependencies": [
+        7,
+        9
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 16,
+      "title": "Develop API Endpoints",
+      "description": "Create RESTful API endpoints for poll-related operations.",
+      "details": "Implement Phoenix controllers for API endpoints. Use Phoenix.Router to define API routes. Implement JSON serialization using Jason (version 1.3). Consider using JSON:API specification for standardized responses. Implement proper error handling and status codes.",
+      "testStrategy": "Write controller tests using Phoenix.ConnTest. Verify correct JSON responses, error handling, and status codes. Test API versioning if implemented.",
+      "priority": "medium",
+      "dependencies": [
+        13,
+        15
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 17,
+      "title": "Implement Frontend State Management",
+      "description": "Develop a robust state management solution for the frontend.",
+      "details": "Use Phoenix LiveView's built-in state management capabilities. For more complex state, consider using a JavaScript solution like Zustand (version 4.3) or Recoil (version 0.7) if needed. Implement optimistic UI updates for improved user experience.",
+      "testStrategy": "Write unit tests for state management logic. Implement integration tests using Phoenix.LiveViewTest to verify state consistency across user interactions.",
+      "priority": "medium",
+      "dependencies": [
+        9,
+        11,
+        12
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 18,
+      "title": "Perform Security Audit",
+      "description": "Conduct a comprehensive security audit of the polling feature.",
+      "details": "Use static analysis tools like Sobelow (version 0.11.1) for Phoenix-specific security checks. Implement CSRF protection using Phoenix's built-in mechanisms. Ensure proper input validation and sanitization. Review and update Content Security Policy. Conduct penetration testing focusing on common vulnerabilities like XSS and CSRF.",
+      "testStrategy": "Run automated security scans using Sobelow. Implement security-focused integration tests. Conduct manual penetration testing. Verify CSRF token usage in forms and API requests.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 19,
+      "title": "Test Anonymous Voting Flow Optimization",
+      "description": "Verify the N+1 query optimization and ArgumentError fixes in the anonymous voting flow by conducting thorough testing on the polling event page.",
+      "details": "1. Set up a test environment with a polling event that has multiple date options.\n2. Ensure the database is properly seeded with test data.\n3. Implement test cases using ExUnit for Elixir/Phoenix:\n   a. Test anonymous user access to the polling event page.\n   b. Verify the UserIdentityComponent modal appears when an anonymous user attempts to vote.\n   c. Test the voting process for anonymous users, ensuring votes are properly recorded.\n   d. Implement database query logging to monitor for N+1 query issues.\n   e. Use tools like `ExProf` or `AppSignal` to profile the application and check for performance improvements.\n4. Implement browser-based tests using Wallaby or Hound:\n   a. Simulate clicking voting buttons for different date options.\n   b. Verify the UserIdentityComponent modal behavior.\n   c. Complete the anonymous voting process and check for successful submission.\n5. Stress test the system:\n   a. Simulate multiple concurrent anonymous users voting.\n   b. Monitor database performance and application response times.\n6. Error handling tests:\n   a. Attempt to trigger the previous ArgumentError and verify it no longer occurs.\n   b. Test edge cases like rapid multiple votes or invalid input.\n7. Review and analyze test results:\n   a. Confirm absence of N+1 query issues.\n   b. Verify no ArgumentErrors or unexpected crashes occur.\n   c. Ensure voting data integrity and accuracy.\n8. Document any remaining issues or areas for further optimization.",
+      "testStrategy": "1. Unit Tests:\n   - Write ExUnit tests for the backend logic handling anonymous votes.\n   - Mock the database calls and verify correct behavior of the optimized queries.\n   - Test error handling to ensure ArgumentErrors are properly caught and managed.\n\n2. Integration Tests:\n   - Set up a test database with sample polling events and date options.\n   - Use ExUnit to test the entire flow from accessing the event page to submitting a vote.\n   - Verify that votes are correctly recorded in the database for anonymous users.\n\n3. Performance Testing:\n   - Use `ExProf` to profile the application during the voting process.\n   - Monitor database query execution times and counts.\n   - Compare performance metrics before and after the optimization.\n\n4. Browser Tests:\n   - Implement Wallaby tests to simulate user interactions:\n     a. Visit the polling event page as an anonymous user.\n     b. Click on voting buttons for different date options.\n     c. Interact with the UserIdentityComponent modal.\n     d. Complete the voting process.\n   - Assert that the UI behaves correctly and no errors are displayed.\n\n5. Load Testing:\n   - Use a tool like k6 or Apache JMeter to simulate multiple concurrent anonymous users.\n   - Monitor server response times and database performance under load.\n   - Verify that the system remains stable and responsive.\n\n6. Manual Testing:\n   - Perform a series of manual tests covering various scenarios:\n     a. Vote as an anonymous user on different browsers and devices.\n     b. Attempt rapid voting and verify rate limiting if implemented.\n     c. Test with network throttling to simulate poor connections.\n\n7. Logging and Monitoring:\n   - Review application logs during all test phases.\n   - Use APM tools to monitor for any unexpected errors or performance issues.\n\n8. Regression Testing:\n   - Ensure that the fixes haven't introduced new bugs in related functionality.\n   - Verify that authenticated user voting still works correctly.\n\n9. Acceptance Criteria:\n   - No N+1 query issues detected in logs or profiling tools.\n   - No ArgumentErrors occur during any test scenario.\n   - Anonymous voting flow completes successfully with votes recorded accurately.\n   - Performance metrics show improvement compared to pre-optimization state.\n   - UserIdentityComponent modal appears and functions as expected for anonymous users.",
+      "status": "pending",
+      "dependencies": [
+        10
+      ],
+      "priority": "high",
+      "subtasks": []
+    }
+  ]
+}

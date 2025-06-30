@@ -1,0 +1,467 @@
+# Task ID: 10
+# Title: Integration Testing and Documentation
+# Status: pending
+# Dependencies: 1, 2, 3, 4, 5, 6, 7, 8, 9
+# Priority: medium
+# Description: Create comprehensive tests for the theming system and document the implementation for developers and users.
+# Details:
+Implement comprehensive tests for the theming system and create documentation for both developers and users. This includes unit tests, integration tests, and end-to-end tests, as well as user guides and developer documentation.
+
+1. Create unit tests for the Themes context:
+```elixir
+defmodule EventasaurusApp.ThemesTest do
+  use EventasaurusApp.DataCase
+  
+  alias EventasaurusApp.Themes
+  
+  describe "theme validation" do
+    test "valid_theme?/1 returns true for valid themes" do
+      assert Themes.valid_theme?(:minimal)
+      assert Themes.valid_theme?(:cosmic)
+      assert Themes.valid_theme?(:velocity)
+      assert Themes.valid_theme?(:retro)
+      assert Themes.valid_theme?(:celebration)
+      assert Themes.valid_theme?(:nature)
+      assert Themes.valid_theme?(:professional)
+    end
+    
+    test "valid_theme?/1 returns false for invalid themes" do
+      refute Themes.valid_theme?(:invalid_theme)
+      refute Themes.valid_theme?("minimal")
+      refute Themes.valid_theme?(nil)
+    end
+  end
+  
+  describe "theme customizations" do
+    test "merge_customizations/2 correctly merges with defaults" do
+      theme = :minimal
+      customizations = %{"colors" => %{"primary" => "#FF0000"}}
+      
+      result = Themes.merge_customizations(theme, customizations)
+      
+      assert result["colors"]["primary"] == "#FF0000"
+      assert result["colors"]["secondary"] == Themes.get_default_customizations(theme)["colors"]["secondary"]
+    end
+    
+    test "validate_customizations/1 validates color contrast" do
+      # Test with accessible colors
+      good_customizations = %{
+        "colors" => %{
+          "text" => "#000000",
+          "background" => "#FFFFFF"
+        }
+      }
+      
+      assert {:ok, _} = Themes.validate_customizations(good_customizations)
+      
+      # Test with inaccessible colors
+      bad_customizations = %{
+        "colors" => %{
+          "text" => "#777777",
+          "background" => "#888888"
+        }
+      }
+      
+      assert {:error, _} = Themes.validate_customizations(bad_customizations)
+    end
+  end
+  
+  describe "theme CSS classes" do
+    test "get_theme_css_class/1 returns correct class name" do
+      assert Themes.get_theme_css_class(:minimal) == "theme-minimal"
+      assert Themes.get_theme_css_class(:cosmic) == "theme-cosmic"
+    end
+    
+    test "get_theme_css_class/1 returns default for invalid theme" do
+      assert Themes.get_theme_css_class(:invalid) == "theme-minimal"
+    end
+  end
+  
+  describe "default customizations" do
+    test "get_default_customizations/1 returns complete theme data" do
+      result = Themes.get_default_customizations(:minimal)
+      
+      assert is_map(result)
+      assert is_map(result["colors"])
+      assert is_map(result["typography"])
+      assert is_map(result["layout"])
+    end
+  end
+end
+```
+
+2. Create integration tests for theme application:
+```elixir
+defmodule EventasaurusAppWeb.ThemeIntegrationTest do
+  use EventasaurusAppWeb.ConnCase
+  
+  import Phoenix.LiveViewTest
+  alias EventasaurusApp.Events
+  
+  setup do
+    # Create a test user and event
+    user = insert(:user)
+    event = insert(:event, organizer: user, theme: :minimal)
+    
+    %{user: user, event: event}
+  end
+  
+  describe "theme application" do
+    test "public event page applies the correct theme", %{event: event} do
+      {:ok, _view, html} = live(build_conn(), ~p"/events/#{event.slug}")
+      
+      assert html =~ "theme-minimal"
+    end
+    
+    test "changing theme updates the event page", %{user: user, event: event} do
+      # Log in as the event organizer
+      conn = log_in_user(build_conn(), user)
+      
+      # Navigate to event edit page
+      {:ok, view, _html} = live(conn, ~p"/events/#{event.id}/edit")
+      
+      # Select a different theme
+      view
+      |> element("[phx-target='#theme-picker'][phx-value-theme='cosmic']")
+      |> render_click()
+      
+      # Apply the theme
+      view
+      |> element("button", "Apply Theme")
+      |> render_click()
+      
+      # Verify the event was updated
+      updated_event = Events.get_event!(event.id)
+      assert updated_event.theme == :cosmic
+      
+      # Visit the public page and verify the theme is applied
+      {:ok, _view, html} = live(build_conn(), ~p"/events/#{event.slug}")
+      assert html =~ "theme-cosmic"
+    end
+  end
+  
+  describe "theme customization" do
+    test "customizing colors updates the event", %{user: user, event: event} do
+      # Log in as the event organizer
+      conn = log_in_user(build_conn(), user)
+      
+      # Navigate to event edit page
+      {:ok, view, _html} = live(conn, ~p"/events/#{event.id}/edit")
+      
+      # Update primary color
+      view
+      |> element("[phx-target='#theme-customization'][phx-value-color='primary']")
+      |> render_change(%{value: "#FF0000"})
+      
+      # Verify the event was updated
+      updated_event = Events.get_event!(event.id)
+      assert updated_event.theme_customizations["colors"]["primary"] == "#FF0000"
+    end
+  end
+  
+  describe "theme performance" do
+    test "theme switching is fast", %{user: user, event: event} do
+      # Log in as the event organizer
+      conn = log_in_user(build_conn(), user)
+      
+      # Navigate to event edit page
+      {:ok, view, _html} = live(conn, ~p"/events/#{event.id}/edit")
+      
+      # Measure time to switch theme
+      start_time = System.monotonic_time(:millisecond)
+      
+      view
+      |> element("[phx-target='#theme-picker'][phx-value-theme='cosmic']")
+      |> render_click()
+      
+      view
+      |> element("button", "Apply Theme")
+      |> render_click()
+      
+      end_time = System.monotonic_time(:millisecond)
+      duration = end_time - start_time
+      
+      # Theme switching should be under 100ms (adjust for test environment)
+      assert duration < 500
+    end
+  end
+end
+```
+
+3. Create end-to-end tests with Wallaby or similar:
+```elixir
+defmodule EventasaurusAppWeb.ThemeFeatureTest do
+  use EventasaurusAppWeb.FeatureCase
+  
+  import Wallaby.Query
+  
+  setup do
+    # Create a test user and event
+    user = insert(:user)
+    event = insert(:event, organizer: user, theme: :minimal)
+    
+    %{user: user, event: event}
+  end
+  
+  feature "organizer can change event theme", %{user: user, event: event, session: session} do
+    # Log in
+    session
+    |> visit("/login")
+    |> fill_in(text_field("Email"), with: user.email)
+    |> fill_in(text_field("Password"), with: "password")
+    |> click(button("Log in"))
+    
+    # Navigate to event edit page
+    session
+    |> visit("/events/#{event.id}/edit")
+    
+    # Select a theme
+    session
+    |> click(css(".theme-option[data-theme='cosmic']"))
+    
+    # Apply the theme
+    session
+    |> click(button("Apply Theme"))
+    
+    # Verify success message
+    session
+    |> assert_has(css(".alert-info", text: "Theme updated successfully"))
+    
+    # Visit public page to verify theme
+    session
+    |> visit("/events/#{event.slug}")
+    
+    # Verify theme is applied
+    session
+    |> assert_has(css(".theme-cosmic"))
+  end
+  
+  feature "organizer can customize theme colors", %{user: user, event: event, session: session} do
+    # Similar test for color customization
+  end
+  
+  feature "theme is accessible", %{event: event, session: session} do
+    # Visit public page
+    session
+    |> visit("/events/#{event.slug}")
+    
+    # Test keyboard navigation
+    session
+    |> send_keys([:tab, :tab, :space])
+    
+    # Verify expected action occurred
+    session
+    |> assert_has(css(".registration-form"))
+  end
+end
+```
+
+4. Create developer documentation:
+```markdown
+# Eventasaurus Theming System - Developer Documentation
+
+## Overview
+
+The Eventasaurus Theming System allows event organizers to customize the visual appearance of their event pages using predefined themes and custom styling options.
+
+## Architecture
+
+### Database Schema
+
+Themes are stored in the `events` table with two fields:
+- `theme`: An Ecto.Enum field with values [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
+- `theme_customizations`: A JSONB field storing customization options
+
+### CSS Architecture
+
+The theming system uses a modular CSS architecture:
+- `base.css`: Contains shared theme foundation and CSS custom properties
+- Theme-specific CSS files: Override CSS custom properties for each theme
+- CSS custom properties are used for all themeable values
+
+### Context Modules
+
+- `EventasaurusApp.Themes`: Core theme utilities and validation
+- `EventasaurusApp.Events`: Event-related theme operations
+- `EventasaurusApp.Themes.AccessibilityValidator`: Ensures themes meet accessibility standards
+
+## Implementation Guide
+
+### Adding a New Theme
+
+1. Add the theme to the Event schema enum
+2. Create a new CSS file for the theme
+3. Add default customizations to the Themes context
+4. Add a thumbnail for the theme picker
+5. Update tests to include the new theme
+
+### Theme Customization Structure
+
+```json
+{
+  "colors": {
+    "primary": "#hex_color",
+    "secondary": "#hex_color",
+    "accent": "#hex_color",
+    "background": "#hex_color",
+    "text": "#hex_color"
+  },
+  "typography": {
+    "font_family": "font_name",
+    "heading_weight": "weight_value",
+    "body_size": "size_value"
+  },
+  "layout": {
+    "border_radius": "radius_value",
+    "shadow_style": "style_name"
+  },
+  "mode": "light|dark"
+}
+```
+
+### Performance Considerations
+
+- Theme CSS is loaded only when needed
+- Theme switching is optimized for performance
+- CSS custom properties allow for efficient theme changes
+
+### Accessibility Requirements
+
+- All themes must pass WCAG 2.1 AA standards
+- Color contrast is validated automatically
+- Keyboard navigation is supported across all themes
+
+## API Reference
+
+### Themes Context
+
+```elixir
+# Check if a theme is valid
+Themes.valid_theme?(theme) # Returns boolean
+
+# Merge customizations with defaults
+Themes.merge_customizations(theme, customizations) # Returns map
+
+# Validate customizations
+Themes.validate_customizations(customizations) # Returns {:ok, map} or {:error, reason}
+
+# Get CSS class for a theme
+Themes.get_theme_css_class(theme) # Returns string
+
+# Get default customizations
+Themes.get_default_customizations(theme) # Returns map
+```
+
+### Events Context
+
+```elixir
+# Update event theme
+Events.update_event_theme(event, theme) # Returns {:ok, event} or {:error, reason}
+
+# Update theme customizations
+Events.update_event_theme_customizations(event, customizations) # Returns {:ok, event} or {:error, reason}
+
+# Get complete theme data
+Events.get_event_theme_data(event) # Returns map
+
+# Copy theme between events
+Events.copy_event_theme(source_event_id, target_event_id) # Returns {:ok, event} or {:error, reason}
+```
+
+## Testing
+
+- Unit tests for theme validation and utilities
+- Integration tests for theme application
+- End-to-end tests for user workflows
+- Accessibility testing with automated tools
+- Performance testing for theme switching
+```
+
+5. Create user documentation:
+```markdown
+# Eventasaurus Theming System - User Guide
+
+## Introduction
+
+The Eventasaurus Theming System allows you to customize the look and feel of your event pages. This guide will help you select and customize themes to match your brand or event style.
+
+## Selecting a Theme
+
+1. Navigate to your event's edit page
+2. In the "Theme" section, you'll see thumbnails for each available theme
+3. Click on a theme to preview it
+4. Click "Apply Theme" to save your selection
+
+## Available Themes
+
+- **Minimal**: Clean, modern design with lots of white space
+- **Cosmic**: Space/galaxy themed with dark backgrounds
+- **Velocity**: Tech/futuristic with gradients and geometric elements
+- **Retro**: Vintage/80s aesthetic with vibrant colors
+- **Celebration**: Party/confetti themed with festive colors
+- **Nature**: Organic patterns with earth tones
+- **Professional**: Corporate/business focused with sophisticated colors
+
+## Customizing Your Theme
+
+### Colors
+
+1. In the Theme Customization panel, select the "Colors" tab
+2. Use the color pickers to adjust:
+   - Primary Color: Used for buttons and important elements
+   - Secondary Color: Used for secondary elements
+   - Accent Color: Used for highlights and accents
+   - Background Color: The main page background
+   - Text Color: The main text color
+3. Try the color presets for quick, harmonious color schemes
+
+### Typography
+
+1. Select the "Typography" tab
+2. Choose a font family that matches your event's personality
+3. Adjust heading weight to make titles more or less bold
+4. Set body text size for comfortable reading
+
+### Layout
+
+1. Select the "Layout" tab
+2. Adjust border radius for rounded or sharp corners
+3. Choose a shadow style for depth and dimension
+4. Toggle between light and dark mode
+
+## Tips for Great-Looking Event Pages
+
+- Choose colors that match your event's branding
+- Ensure good contrast between text and background colors
+- Select fonts that reflect your event's personality
+- Preview your theme on both desktop and mobile devices
+- Consider both light and dark mode preferences
+
+## Copying Themes Between Events
+
+1. In the Theme section, find "Copy Theme From Another Event"
+2. Select the source event from the dropdown
+3. Click "Copy Theme" to apply the same theme and customizations
+
+## Troubleshooting
+
+- If colors appear incorrect, try refreshing the page
+- If theme changes aren't saving, check your internet connection
+- If text is hard to read, try adjusting the contrast between text and background colors
+
+## Accessibility
+
+All themes are designed to meet accessibility standards. The system will warn you if your color choices might create readability issues.
+```
+
+# Test Strategy:
+1. Verify all unit tests pass for the Themes context
+2. Test integration tests for theme application and customization
+3. Run end-to-end tests for complete user workflows
+4. Verify accessibility tests pass for all themes
+5. Test performance benchmarks for theme switching and loading
+6. Verify documentation is accurate and comprehensive
+7. Test with real users to validate usability
+8. Verify all test coverage meets project requirements
+9. Test edge cases like theme migration and compatibility
+10. Verify that the system gracefully handles errors and edge cases

@@ -1,241 +1,65 @@
-# 📝 Eventasaurus Ticketing Enhancement PRD
+# Basic PostHog Analytics Integration for Eventasaurus
 
-**Version:** 2025.06  
-**Author:** Holden  
-**Purpose:** Add comprehensive ticketing functionality to the existing Eventasaurus event management platform.
+## Project Overview
 
----
+Add basic PostHog analytics integration to track core user behaviors and events in the Eventasaurus application. This is the foundation setup that we can build upon later.
 
-## 🎯 Goal and Context
+## Current State
 
-**Objective:** Enhance the existing Eventasaurus platform by adding a simplified ticketing system that allows one ticket type per order.
+- Eventasaurus is a Phoenix/LiveView application with Supabase auth
+- No analytics tracking currently implemented
+- Need to start tracking core user actions and events
 
-**Existing System Overview:**
-Eventasaurus is a fully functional Phoenix/LiveView event management platform that includes:
-- ✅ **User Authentication & Authorization** (via Supabase integration)
-- ✅ **Event Creation & Management** (with organizers, participants, themes)
-- ✅ **Event State Management** (draft, polling, threshold, confirmed, canceled)  
-- ✅ **Date Polling System** (for flexible event scheduling)
-- ✅ **Venue Management** (physical and virtual venues)
-- ✅ **Theme System** (7 themes with customizations)
-- ✅ **User Roles** (organizers, participants, ticket holders)
-- ✅ **Phoenix/LiveView UI** with modern styling
-- ✅ **PostgreSQL Database** with full Ecto schemas
+## Technical Requirements
 
-**What's Missing:** Ticketing functionality including payments, order management, and ticket sales.
+- Add PostHog dependency to Phoenix project
+- Configure POSTHOG_API_KEY environment variable 
+- Use PostHog EU endpoint: https://eu.i.posthog.com
+- Implement both server-side (Elixir) and client-side (JavaScript) tracking
 
-**Inspiration:** Combine the simplicity of Kickstarter's single-tier pledges with a streamlined order process similar to Luma.
+## Core Features to Implement
 
-**Compatibility:** Aligns with Stripe best practices (via [t3dotgg/stripe-recommendations](https://github.com/t3dotgg/stripe-recommendations)).
+### 1. Basic PostHog Setup
+- Add PostHog HTTP client dependency to mix.exs
+- Configure environment variables in config files
+- Initialize PostHog JavaScript SDK in assets/js/app.js
+- Add PostHog script to root.html.heex layout
 
----
+### 2. User Identification
+- Identify authenticated users with their Supabase ID
+- Track anonymous users with session-based identifiers
+- Handle user login/logout identification changes
 
-## 🏗️ Existing Architecture
+### 3. Core Event Tracking
+- **Authentication Events**: user_registered, user_logged_in, user_logged_out
+- **Event Management**: event_created, event_published, event_theme_changed
+- **Critical Business Events**: ticket_purchased, payment_succeeded, payment_failed
+- **Basic Engagement**: event_viewed, dashboard_visited
 
-### Current Data Models (Already Implemented)
-- **Event** - Complete with status, themes, venue, organizers
-- **User** - Authentication via Supabase, roles, relationships  
-- **EventUser** - Organizer relationships
-- **EventParticipant** - Participant relationships (includes :ticket_holder role)
-- **Venue** - Physical and virtual venue management
-- **EventDatePoll/Options/Votes** - Date polling system
+### 4. PostHog Service Module
+- Create a PostHog service module for server-side tracking
+- Implement error handling and graceful fallbacks
+- Ensure analytics don't block user experience
 
-### Current Event Status Flow (Already Implemented)
-Events can be: `draft` → `polling` → `threshold` → `confirmed` → `canceled`
+## Success Criteria
 
----
+- PostHog is successfully configured and receiving events
+- Core user actions are being tracked
+- Analytics don't impact application performance
+- Foundation is ready for future enhancements
 
-## 📦 New Data Models to Add
+## Files to Modify
 
-### 1. Ticket (New)
-Represents the different types of tickets available for an event.
+- mix.exs (add PostHog dependency)
+- config/config.exs and config/runtime.exs (configuration)
+- assets/js/app.js (JavaScript SDK)
+- lib/eventasaurus_web/components/layouts/root.html.heex (script tag)
+- lib/eventasaurus_app/services/ (new PostHog service module)
+- Authentication and event modules (add tracking calls)
 
-Fields:
-- `id`
-- `event_id` (FK to existing events table)
-- `title`
-- `description`
-- `price_cents`
-- `currency` (default: `usd`)
-- `quantity` (total available)
-- `quantity_sold` (track sales)
-- `starts_at`, `ends_at` (availability window)
-- `tippable` (boolean, default: false)
-- `created_at`, `updated_at`
+## Implementation Notes
 
-### 2. Order (New)
-Tracks a single purchase of one ticket type.
-
-Fields:
-- `id`
-- `user_id` (FK to existing users table)
-- `event_id` (FK to existing events table)
-- `ticket_id` (FK to new tickets table)
-- `quantity`
-- `subtotal_cents`, `tax_cents`, `total_cents`
-- `currency`
-- `status` (`pending`, `confirmed`, `refunded`, `canceled`)
-- `stripe_session_id`, `payment_reference`
-- `created_at`, `updated_at`, `confirmed_at`
-
----
-
-## 🔄 Enhanced Workflow & State Transitions
-
-### Existing Event Creation (No Changes)
-- Organizer creates event using existing UI
-- Event goes through existing status workflow
-
-### New Ticketing Integration
-1. **Enable Ticketing** - Add to existing event management UI
-   - Organizer can enable ticketing on confirmed events
-   - Create ticket types with pricing
-
-2. **User Ticket Purchase Flow** (New)
-   - User browses event using existing UI
-   - New ticket purchase section appears for ticketed events
-   - User selects one ticket type → creates `Order` in `pending` state
-   - Stripe Checkout handles payment
-   - On success → Order becomes `confirmed`, EventParticipant created
-
-3. **Free Tickets** (New)
-   - No Stripe handoff required
-   - Order goes directly to `confirmed`
-   - EventParticipant automatically created
-
-4. **Integration with Existing EventParticipant**
-   - Successful ticket purchases automatically create EventParticipant with `:ticket_holder` role
-   - Leverage existing participant management system
-
----
-
-## 🔐 Stripe Integration Requirements
-
-**New Dependencies to Add:**
-- `stripity_stripe` library
-- Stripe webhook handling
-- Environment variables for Stripe keys
-
-**Best Practices:**
-- **Do not trust client redirect** to confirm payment
-- Use **webhooks** as single source of truth for payment success
-- Store `stripe_session_id` and `payment_reference`
-- Handle **idempotency** properly
-- Only send confirmation emails after webhook success
-
----
-
-## 🎨 UI/UX Integration Points
-
-### Existing UI Enhancements (Modify Existing Components)
-1. **Event Show Page** - Add ticket purchase section
-2. **Event Management Dashboard** - Add ticketing controls
-3. **Event Creation/Edit Forms** - Add ticket type management
-4. **User Dashboard** - Show purchased tickets
-
-### New UI Components Needed
-1. **Ticket Selection Interface**
-2. **Checkout Flow UI**  
-3. **Order Confirmation Pages**
-4. **Ticket Management Admin Interface**
-5. **Order History for Users**
-
----
-
-## 💾 Database Integration
-
-### New Tables to Create
-- `tickets` table with FK to existing `events` 
-- `orders` table with FKs to existing `users`, `events`, and new `tickets`
-
-### Existing Table Modifications
-- Events table: Add `is_ticketed` boolean field
-- No changes needed to users, event_participants, or other existing tables
-
----
-
-## 🧪 Testing Strategy
-
-### Integration with Existing Tests
-- Leverage existing Factory and test fixtures
-- Extend existing EventsFixtures with ticket/order factories
-- Use existing authentication test helpers
-
-### New Test Coverage Needed
-- Order lifecycle testing
-- Stripe integration testing (with mocks)
-- Ticket availability constraints
-- Free vs paid ticket flows
-- Integration with existing EventParticipant system
-
----
-
-## 🚀 Implementation Priority
-
-### Phase 1: Core Ticketing Models (High Priority)
-- Create Ticket and Order schemas
-- Add ticketing context module
-- Database migrations
-
-### Phase 2: Stripe Integration (High Priority)  
-- Stripe library integration
-- Checkout session creation
-- Webhook handling for payment confirmation
-
-### Phase 3: UI Integration (High Priority)
-- Modify existing event show pages
-- Add ticket purchase UI components
-- Integrate with existing event management dashboard
-
-### Phase 4: Admin Features (Medium Priority)
-- Ticket type management interface
-- Order management for organizers
-- Integration with existing event analytics
-
-### Phase 5: Enhancements (Low Priority)
-- Email notifications for ticket purchases
-- Order history and management for users
-- Reporting and analytics integration
-
----
-
-## ✅ Benefits of This Approach
-
-- **Minimal Disruption** - Builds on existing solid foundation
-- **Leverages Existing Code** - Uses current auth, events, and participant systems
-- **Maintains Consistency** - Follows existing Phoenix/LiveView patterns
-- **Scalable** - Can extend with more complex ticketing features later
-
----
-
-## 🧪 Testing and Validation
-
-### Integration Tests Required
-- Full user flow: browse event → purchase ticket → confirmation
-- Free vs paid ticket flows  
-- Stripe webhook integration testing
-- Integration with existing EventParticipant system
-- Existing event management flows continue to work
-
-### Unit Tests Required
-- Order lifecycle management
-- Ticket availability constraints
-- Time-based ticket sales periods
-- Integration with existing Event status system
-
----
-
-## 🚧 Stretch Goals (Future Extensions)
-
-| Feature                    | Current Support | Stretch Goal                    |
-|---------------------------|-----------------|----------------------------------|
-| Multiple ticket types     | ❌              | Allow multiple types per event  |
-| Ticket bundles            | ❌              | Multi-type bundle purchases     |
-| Advanced pricing          | ❌              | Early bird, tiered pricing      |
-| Seat reservations         | ❌              | Assigned seating integration    |
-| Group orders              | ❌              | Group purchase management       |
-| Integration with themes   | ❌              | Themed ticket purchase UI       |
-
----
-
-This enhancement maintains the existing Eventasaurus functionality while adding robust ticketing capabilities that integrate seamlessly with the current architecture.
+- Use async event tracking to avoid blocking user interactions
+- Implement proper error handling if PostHog is unavailable
+- Follow data privacy best practices
+- Start simple and build upon this foundation

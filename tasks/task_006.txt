@@ -1,0 +1,11 @@
+# Task ID: 6
+# Title: Implement Date Range Generation
+# Status: done
+# Dependencies: 5
+# Priority: medium
+# Description: Create a function to generate date options within the specified range.
+# Details:
+Implement a Phoenix context function that takes start_at and end_at as inputs and returns a list of dates within that range. Use the Elixir Date module for date manipulation. Consider using the Timex library (version ~> 3.7) for more advanced date operations if needed.
+
+# Test Strategy:
+Write unit tests for the date generation function, covering various scenarios including different date ranges, leap years, and edge cases.

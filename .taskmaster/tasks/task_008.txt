@@ -1,0 +1,11 @@
+# Task ID: 8
+# Title: Add User Dashboard for Ticket Management
+# Status: pending
+# Dependencies: 3, 4, 7
+# Priority: medium
+# Description: Display purchased tickets and order history in user dashboard.
+# Details:
+Enhance user dashboard to show purchased tickets and order history. Add UI components for viewing order details and status. Use Phoenix LiveView for real-time updates.
+
+# Test Strategy:
+Write UI tests for user dashboard. Test display of order history and ticket details. Verify real-time updates.

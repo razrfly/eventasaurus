@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   require Logger
 
   alias EventasaurusApp.Auth
+  alias Eventasaurus.Services.PosthogService
 
   # Privacy-safe email logging for GDPR/CCPA compliance
   defp mask_email(email) do
@@ -47,6 +48,20 @@ defmodule EventasaurusWeb.Auth.AuthController do
             user = Auth.get_current_user(conn)
             Logger.debug("User data fetched: #{inspect(user)}")
 
+            # Track login event with PostHog
+            if user do
+              PosthogService.identify_user(user.id, %{
+                "email" => user.email,
+                "name" => user.name,
+                "supabase_id" => user.supabase_id,
+                "created_at" => user.inserted_at
+              })
+              PosthogService.track_event(user.id, "user_logged_in", %{
+                "login_method" => "email",
+                "remember_me" => remember_me
+              })
+            end
+
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
@@ -71,6 +86,19 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           user ->
             Logger.info("Found existing user with email #{mask_email(email)}, logging in directly")
+
+            # Track login event with PostHog
+            PosthogService.identify_user(user.id, %{
+              "email" => user.email,
+              "name" => user.name,
+              "supabase_id" => user.supabase_id,
+              "created_at" => user.inserted_at
+            })
+            PosthogService.track_event(user.id, "user_logged_in", %{
+              "login_method" => "email_fallback",
+              "remember_me" => remember_me
+            })
+
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
@@ -114,6 +142,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
     case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
       {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
         Logger.info("Registration successful with tokens")
+
+        # Track registration event with PostHog
+        # Use email as temporary identifier until we get the user record
+        PosthogService.track_event(email, "user_registered", %{
+          "registration_method" => "email",
+          "name" => name,
+          "has_tokens" => true
+        })
+
         conn
         |> put_session(:access_token, access_token)
         |> put_session(:refresh_token, refresh_token)
@@ -122,6 +159,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       {:ok, %{user: _user, access_token: access_token}} ->
         Logger.info("Registration successful with access token")
+
+        # Track registration event with PostHog
+        PosthogService.track_event(email, "user_registered", %{
+          "registration_method" => "email",
+          "name" => name,
+          "has_tokens" => true
+        })
+
         conn
         |> put_session(:access_token, access_token)
         |> put_flash(:info, "Account created successfully!")
@@ -129,6 +174,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       {:ok, %{user: _user, confirmation_required: true}} ->
         Logger.info("Registration successful, confirmation required")
+
+        # Track registration event with PostHog
+        PosthogService.track_event(email, "user_registered", %{
+          "registration_method" => "email",
+          "name" => name,
+          "confirmation_required" => true
+        })
+
         conn
         |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
         |> redirect(to: ~p"/login")
@@ -151,6 +204,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Logs out the current user.
   """
   def logout(conn, _params) do
+    # Track logout event before clearing session
+    user = Auth.get_current_user(conn)
+    if user do
+      PosthogService.track_event(user.id, "user_logged_out", %{})
+    end
+
     conn
     |> Auth.clear_session()
     |> put_flash(:info, "You have been logged out")
@@ -429,6 +488,17 @@ defmodule EventasaurusWeb.Auth.AuthController do
       # Sync user with local database (using existing pattern)
       case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
         {:ok, user} ->
+          # Track Facebook login event with PostHog
+          PosthogService.identify_user(user.id, %{
+            "email" => user.email,
+            "name" => user.name,
+            "supabase_id" => user.supabase_id,
+            "created_at" => user.inserted_at
+          })
+          PosthogService.track_event(user.id, "user_logged_in", %{
+            "login_method" => "facebook_oauth"
+          })
+
           conn
           |> put_session(:access_token, access_token)
           |> put_session(:refresh_token, refresh_token)

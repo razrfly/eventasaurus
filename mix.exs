@@ -84,6 +84,8 @@ defmodule Eventasaurus.MixProject do
       # Stripe payment processing
       {:stripity_stripe, "~> 3.2"},
 
+      # PostHog analytics integration
+      {:posthog, "~> 0.1"},
 
     ]
   end

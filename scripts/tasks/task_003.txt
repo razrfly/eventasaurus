@@ -1,0 +1,116 @@
+# Task ID: 3
+# Title: CSS Architecture Setup for Themes
+# Status: pending
+# Dependencies: 2
+# Priority: high
+# Description: Establish the CSS architecture for themes including base styles, theme-specific CSS files, and CSS custom properties.
+# Details:
+Create the CSS architecture as specified in REQ-4.2.1 and REQ-4.2.2. Set up the directory structure and implement the base theme foundation with CSS custom properties.
+
+1. Create the directory structure:
+```
+assets/css/
+├── themes/
+│   ├── base.css              # Shared theme foundation
+│   ├── minimal.css           # Minimal theme
+│   ├── cosmic.css            # Cosmic theme
+│   ├── velocity.css          # Velocity theme
+│   ├── retro.css             # Retro theme
+│   ├── celebration.css       # Celebration theme
+│   ├── nature.css            # Nature theme
+│   └── professional.css      # Professional theme
+└── public.css                # Base public styles
+```
+
+2. Implement base.css with CSS custom properties:
+```css
+/* Base theme foundation */
+:root {
+  /* Default theme variables (minimal theme) */
+  --theme-primary-color: #000000;
+  --theme-secondary-color: #333333;
+  --theme-accent-color: #0066cc;
+  --theme-background-color: #ffffff;
+  --theme-text-color: #000000;
+  
+  --theme-font-family: 'Inter', sans-serif;
+  --theme-heading-weight: 600;
+  --theme-body-size: 16px;
+  
+  --theme-border-radius: 4px;
+  --theme-shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Base theme styles that apply to all themes */
+.event-page {
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-body-size);
+  color: var(--theme-text-color);
+  background-color: var(--theme-background-color);
+}
+
+.event-page h1, .event-page h2, .event-page h3 {
+  font-weight: var(--theme-heading-weight);
+}
+
+.event-page .btn-primary {
+  background-color: var(--theme-primary-color);
+  color: white;
+  border-radius: var(--theme-border-radius);
+}
+
+.event-page .card {
+  border-radius: var(--theme-border-radius);
+  box-shadow: var(--theme-shadow-style);
+}
+
+/* Theme mode support */
+.theme-dark {
+  --theme-text-color: #ffffff;
+  --theme-background-color: #121212;
+  /* Other dark mode overrides */
+}
+```
+
+3. Implement minimal.css (example):
+```css
+/* Minimal theme */
+.theme-minimal {
+  --theme-primary-color: #000000;
+  --theme-secondary-color: #333333;
+  --theme-accent-color: #0066cc;
+  --theme-background-color: #ffffff;
+  --theme-text-color: #000000;
+  
+  --theme-font-family: 'Inter', sans-serif;
+  --theme-heading-weight: 600;
+  --theme-body-size: 16px;
+  
+  --theme-border-radius: 4px;
+  --theme-shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Minimal theme specific styles */
+.theme-minimal .event-header {
+  border-bottom: 1px solid #eaeaea;
+}
+
+.theme-minimal .event-description {
+  line-height: 1.6;
+}
+```
+
+4. Create similar CSS files for each theme with appropriate custom properties and theme-specific styles
+
+5. Update the webpack/esbuild configuration to include these CSS files
+
+6. Implement a mechanism to load only the required theme CSS based on the event's theme
+
+# Test Strategy:
+1. Verify CSS files compile correctly without errors
+2. Test that CSS custom properties are properly defined and accessible
+3. Check that theme-specific styles don't conflict with each other
+4. Test browser compatibility across major browsers
+5. Verify that the CSS architecture follows BEM or similar methodology
+6. Test that themes don't conflict with admin/dashboard styles
+7. Measure CSS bundle size to ensure it meets performance requirements (<50KB total)

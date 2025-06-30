@@ -1,0 +1,11 @@
+# Task ID: 8
+# Title: Implement Date Finalization
+# Status: pending
+# Dependencies: 7
+# Priority: high
+# Description: Allow organizers to finalize a date, updating the event state and start date.
+# Details:
+Add a 'Finalize Date' action to the organizer dashboard. Implement a Phoenix controller action that updates the event.state to 'confirmed', sets event.start_at to the selected date, and optionally archives vote data. Use Ecto.Multi for transactional updates across multiple models.
+
+# Test Strategy:
+Create integration tests for the date finalization process. Verify that the event state and start date are correctly updated, and that vote data is properly handled.

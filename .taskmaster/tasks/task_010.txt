@@ -1,0 +1,11 @@
+# Task ID: 10
+# Title: Extend Test Coverage and Validation
+# Status: pending
+# Dependencies: 2, 3, 4, 5, 6, 7, 8, 9
+# Priority: medium
+# Description: Expand test suite to cover new ticketing features and integration points.
+# Details:
+Extend existing test factories with ticket and order fixtures. Add integration tests for full user flow (browse event → purchase ticket → confirmation). Test free vs paid ticket flows, Stripe webhook integration, and integration with EventParticipant. Add unit tests for order lifecycle, ticket availability, and time-based sales.
+
+# Test Strategy:
+Run full test suite. Verify coverage for new features. Test edge cases and integration points.

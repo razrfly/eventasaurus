@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Design and Implement Order Schema and Migration
+# Status: done
+# Dependencies: 1, 2
+# Priority: high
+# Description: Create the new Order data model and corresponding database migration.
+# Details:
+Define Order schema with fields: id, user_id (FK), event_id (FK), ticket_id (FK), quantity, subtotal_cents, tax_cents, total_cents, currency, status (pending, confirmed, refunded, canceled), stripe_session_id, payment_reference, created_at, updated_at, confirmed_at. Generate and run Ecto migration. Add validation for quantity, status transitions, and payment references.
+
+# Test Strategy:
+Write unit tests for schema validation and status transitions. Test migration rollback and forward. Verify foreign key constraints.

@@ -1,0 +1,43 @@
+# Task ID: 6
+# Title: Enhance Event Management UI for Ticketing
+# Status: done
+# Dependencies: 2, 4
+# Priority: medium
+# Description: Add flexible pricing model support to the existing ticketing UI. The basic ticketing functionality is complete, and the core flexible pricing interface has been implemented. Now need to complete validation, real-time form updates, and testing to finalize the flexible pricing enhancement.
+# Details:
+The basic ticketing UI is 95% complete with event ticketing toggle, ticket creation/editing modal, ticket listing, multiple currency support, sale window management, and tips functionality. Core flexible pricing functionality has been successfully implemented including pricing model selection (Fixed/Flexible/Dynamic) with radio buttons, context-sensitive fields for flexible pricing (Base Price, Minimum Price, Suggested Price), and backend integration with LiveView handlers. The current single 'price' field maps to base_price_cents and all existing tickets default to 'fixed' model for backward compatibility. Remaining work focuses on validation, enhanced real-time form updates, and comprehensive testing.
+
+# Test Strategy:
+Write UI tests for pricing model selection and context-sensitive field display. Test flexible pricing form validation (minimum <= suggested <= base price). Verify backward compatibility with existing fixed-price tickets. Test real-time form updates when switching pricing models. Test the completed flexible pricing interface with various pricing scenarios.
+
+# Subtasks:
+## 6.1. Add pricing model selection to ticket modal [completed]
+### Dependencies: None
+### Description: Add radio buttons or dropdown for selecting Fixed/Flexible/Dynamic pricing models in the ticket creation/editing modal
+### Details:
+
+
+## 6.2. Implement flexible pricing fields [completed]
+### Dependencies: None
+### Description: Add context-sensitive fields for flexible pricing: Base Price (maximum), Minimum Price (defaults to 0), and Suggested Price (optional, defaults to base price). Show/hide based on selected pricing model.
+### Details:
+
+
+## 6.3. Add comprehensive pricing model validation [done]
+### Dependencies: None
+### Description: Implement robust validation for flexible pricing ensuring minimum <= suggested <= base price, with clear error messages and real-time validation feedback. Build upon the existing pricing model selection and field implementation.
+### Details:
+
+
+## 6.4. Enhance LiveView for seamless real-time form updates [done]
+### Dependencies: None
+### Description: Improve the existing LiveView ticket form to provide smooth real-time updates when switching between pricing models, ensuring proper field state management and user experience. Enhance the current working implementation.
+### Details:
+
+
+## 6.5. Comprehensive testing and backward compatibility verification [done]
+### Dependencies: None
+### Description: Test the completed flexible pricing implementation including pricing model selection, field behavior, and backend integration. Ensure existing fixed-price tickets continue to work correctly and verify default pricing model behavior.
+### Details:
+
+

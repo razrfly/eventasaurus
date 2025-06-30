@@ -1,0 +1,49 @@
+# Task ID: 4
+# Title: Add Ticketing Context and Business Logic
+# Status: done
+# Dependencies: 2, 3
+# Priority: high
+# Description: Implement core ticketing business logic and context module.
+# Details:
+Create a new Ticketing context module. Implement functions for creating tickets, updating availability, and managing orders. Handle ticket availability checks, order creation, and status updates. Integrate with existing EventParticipant system to create ticket_holder records on successful order confirmation. Use Phoenix PubSub for real-time updates if needed[3][5].
+
+# Test Strategy:
+Write unit and integration tests for ticket and order lifecycle. Test integration with EventParticipant. Test real-time updates if PubSub is used.
+
+# Subtasks:
+## 1. Install Stripe Library and Configure API Keys [done]
+### Dependencies: None
+### Description: Install the Stripe SDK, set up environment variables for API keys (test and live), and implement secure API key management with proper configuration handling.
+### Details:
+Install stripe library, create environment configuration for API keys, implement key rotation strategy, and set up proper error handling for authentication failures.
+
+## 2. Update Ticket Schema for Flexible Pricing [done]
+### Dependencies: 4.1
+### Description: Add new fields to Ticket model: base_price_cents, minimum_price_cents, suggested_price_cents, and pricing_model enum to support different pricing strategies including pay-what-you-want.
+### Details:
+Create database migration, update Ticket model with new pricing fields, add validation rules, and ensure backwards compatibility with existing tickets.
+
+## 3. Update Order Model and Implement Flexible Pricing Logic [done]
+### Dependencies: 4.2
+### Description: Enhance Order model to handle flexible pricing calculations, implement pay-what-you-want logic above minimum thresholds, and add tippable functionality with proper validation.
+### Details:
+Update Order schema, implement pricing calculation methods, add tip handling, create validation for minimum price enforcement, and update order total calculations.
+
+## 4. Create Stripe Checkout Sessions with Dynamic Pricing [done]
+### Dependencies: 4.3
+### Description: Implement Stripe checkout session creation that handles different pricing models, supports custom amounts, and includes proper metadata for order tracking and idempotency.
+### Details:
+Create checkout session API endpoint, implement dynamic pricing integration with Stripe, add idempotency keys, include proper metadata, and handle session expiration.
+
+## 5. Implement Webhook Handling and Order Processing [done]
+### Dependencies: 4.4
+### Description: Set up Stripe webhook endpoints to handle payment events, implement secure webhook verification, and update order status based on payment completion or failure.
+### Details:
+Create webhook endpoint, implement signature verification, handle payment_intent events, update order status, send confirmation emails, and implement retry logic for failed webhooks.
+
+## 6. Update Ticketing Context and Comprehensive Testing [done]
+### Dependencies: 4.5
+### Description: Update ticketing business logic to support new pricing models, ensure backwards compatibility with existing basic ticketing, and implement comprehensive testing including unit tests, integration tests, and Stripe webhook testing.
+### Details:
+Refactor ticketing context methods, maintain backwards compatibility, create test suites for all pricing models, implement Stripe test scenarios, add webhook testing with mock events, and perform end-to-end payment flow testing.
+

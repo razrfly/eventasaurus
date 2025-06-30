@@ -1,0 +1,43 @@
+# Task ID: 1
+# Title: Setup and Configure Project Environment
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Add the missing `is_ticketed` boolean field to the existing Event schema and configure Stripe dependencies for ticketing functionality.
+# Details:
+The Event schema currently has all required fields (id, title, start_at, ends_at, status, canceled_at, threshold_count, polling_deadline) but is missing the `is_ticketed` boolean field. This task involves: 1) Creating a database migration to add the `is_ticketed` boolean field to the events table with default value false, 2) Updating the Event schema module to include the new field, 3) Modifying the changeset to cast and validate the new field, 4) Adding stripity_stripe dependency to mix.exs for future Stripe integration, and 5) Ensuring all changes are properly tested.
+
+# Test Strategy:
+Run the new migration and verify the `is_ticketed` field is added to the events table with correct default value. Test Event changeset with the new field included. Verify existing event creation and update functionality still works. Run full test suite to ensure no regressions.
+
+# Subtasks:
+## 1.1. Create migration for is_ticketed field [done]
+### Dependencies: None
+### Description: Generate and implement a migration to add the `is_ticketed` boolean field to the events table
+### Details:
+
+
+## 1.2. Update Event schema module [done]
+### Dependencies: None
+### Description: Add `is_ticketed` field to the Event schema struct and update field definitions
+### Details:
+
+
+## 1.3. Update Event changeset [done]
+### Dependencies: None
+### Description: Modify the Event changeset to cast the `is_ticketed` field and add any necessary validation
+### Details:
+
+
+## 1.4. Add Stripe dependency [done]
+### Dependencies: None
+### Description: Add stripity_stripe (v3.0+) to mix.exs dependencies for future ticketing integration
+### Details:
+
+
+## 1.5. Test schema changes [done]
+### Dependencies: None
+### Description: Write and run tests to verify the new field works correctly with existing Event functionality
+### Details:
+
+

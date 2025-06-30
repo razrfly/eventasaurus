@@ -1,0 +1,11 @@
+# Task ID: 16
+# Title: Develop API Endpoints
+# Status: pending
+# Dependencies: 13, 15
+# Priority: medium
+# Description: Create RESTful API endpoints for poll-related operations.
+# Details:
+Implement Phoenix controllers for API endpoints. Use Phoenix.Router to define API routes. Implement JSON serialization using Jason (version 1.3). Consider using JSON:API specification for standardized responses. Implement proper error handling and status codes.
+
+# Test Strategy:
+Write controller tests using Phoenix.ConnTest. Verify correct JSON responses, error handling, and status codes. Test API versioning if implemented.

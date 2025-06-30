@@ -1,0 +1,235 @@
+# Task ID: 6
+# Title: Theme Preview Functionality
+# Status: pending
+# Dependencies: 4, 5
+# Priority: medium
+# Description: Implement real-time preview capability for themes, allowing users to see how their event page will look with different themes.
+# Details:
+Create a theme preview functionality that allows users to see a real-time preview of their event page with the selected theme before applying it. The preview should include key event page elements.
+
+1. Create a ThemePreviewComponent:
+```elixir
+defmodule EventasaurusAppWeb.ThemePreviewComponent do
+  use EventasaurusAppWeb, :live_component
+  alias EventasaurusApp.Events
+  alias EventasaurusApp.Themes
+  
+  @impl true
+  def update(assigns, socket) do
+    theme_data = if assigns.preview_theme do
+      # For preview, merge default theme settings with current customizations
+      current_customizations = assigns.event.theme_customizations
+      Themes.merge_customizations(assigns.preview_theme, current_customizations)
+    else
+      Events.get_event_theme_data(assigns.event)
+    end
+    
+    theme_class = if assigns.preview_theme do
+      Themes.get_theme_css_class(assigns.preview_theme)
+    else
+      Themes.get_theme_css_class(assigns.event.theme)
+    end
+    
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(:theme_data, theme_data)
+     |> assign(:theme_class, theme_class)}
+  end
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="theme-preview-container">
+      <div class="theme-preview-header">
+        <h3>Theme Preview</h3>
+        <%= if @preview_theme do %>
+          <div class="preview-actions">
+            <button phx-click="apply-theme" phx-target={@myself} class="btn-primary">Apply Theme</button>
+            <button phx-click="cancel-preview" phx-target={@myself} class="btn-secondary">Cancel</button>
+          </div>
+        <% end %>
+      </div>
+      
+      <div class={["theme-preview", @theme_class]}>
+        <!-- Simplified event page preview -->
+        <div class="preview-event-header">
+          <h1><%= @event.title %></h1>
+          <p class="preview-event-date">Dec 15, 2023 • 7:00 PM</p>
+        </div>
+        
+        <div class="preview-event-description">
+          <p><%= String.slice(@event.description || "", 0, 150) %><%= if String.length(@event.description || "") > 150, do: "...", else: "" %></p>
+        </div>
+        
+        <div class="preview-event-actions">
+          <button class="preview-register-btn">Register Now</button>
+        </div>
+      </div>
+      
+      <style>
+        .theme-preview {
+          --theme-primary-color: <%= @theme_data["colors"]["primary"] %>;
+          --theme-secondary-color: <%= @theme_data["colors"]["secondary"] %>;
+          --theme-accent-color: <%= @theme_data["colors"]["accent"] %>;
+          --theme-background-color: <%= @theme_data["colors"]["background"] %>;
+          --theme-text-color: <%= @theme_data["colors"]["text"] %>;
+          
+          --theme-font-family: <%= @theme_data["typography"]["font_family"] %>;
+          --theme-heading-weight: <%= @theme_data["typography"]["heading_weight"] %>;
+          --theme-body-size: <%= @theme_data["typography"]["body_size"] %>;
+          
+          --theme-border-radius: <%= @theme_data["layout"]["border_radius"] %>;
+          /* Other custom properties... */
+        }
+      </style>
+    </div>
+    """
+  end
+  
+  @impl true
+  def handle_event("apply-theme", _, socket) do
+    # Apply the preview theme to the event
+    {:ok, event} = Events.update_event_theme(socket.assigns.event, socket.assigns.preview_theme)
+    
+    send(self(), {:theme_updated, event})
+    
+    {:noreply,
+     socket
+     |> assign(:event, event)
+     |> assign(:preview_theme, nil)}
+  end
+  
+  @impl true
+  def handle_event("cancel-preview", _, socket) do
+    {:noreply, assign(socket, :preview_theme, nil)}
+  end
+end
+```
+
+2. Add CSS for the theme preview:
+```css
+.theme-preview-container {
+  margin-top: 2rem;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.theme-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.theme-preview {
+  padding: 2rem;
+  min-height: 300px;
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-body-size);
+  color: var(--theme-text-color);
+  background-color: var(--theme-background-color);
+}
+
+.preview-event-header h1 {
+  font-weight: var(--theme-heading-weight);
+  margin-bottom: 0.5rem;
+}
+
+.preview-event-date {
+  color: var(--theme-secondary-color);
+  margin-bottom: 1.5rem;
+}
+
+.preview-event-description {
+  margin-bottom: 2rem;
+}
+
+.preview-register-btn {
+  background-color: var(--theme-primary-color);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--theme-border-radius);
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+```
+
+3. Update the EventLive.FormComponent to include the preview functionality:
+```elixir
+defmodule EventasaurusAppWeb.EventLive.FormComponent do
+  # Existing code...
+  
+  @impl true
+  def update(%{event: event} = assigns, socket) do
+    changeset = Events.change_event(event)
+    
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(:changeset, changeset)
+     |> assign(:selected_theme, event.theme)
+     |> assign(:preview_theme, nil)}
+  end
+  
+  @impl true
+  def handle_info({:theme_selected, theme}, socket) do
+    # Instead of immediately updating, set as preview
+    {:noreply, assign(socket, :preview_theme, theme)}
+  end
+  
+  @impl true
+  def handle_info({:theme_updated, event}, socket) do
+    {:noreply,
+     socket
+     |> assign(:event, event)
+     |> assign(:selected_theme, event.theme)
+     |> put_flash(:info, "Theme updated successfully")}
+  end
+  
+  # Existing code...
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div>
+      <!-- Existing form content... -->
+      
+      <section class="theme-section">
+        <.live_component
+          module={EventasaurusAppWeb.ThemePickerComponent}
+          id="theme-picker"
+          selected_theme={@selected_theme}
+        />
+        
+        <.live_component
+          module={EventasaurusAppWeb.ThemePreviewComponent}
+          id="theme-preview"
+          event={@event}
+          preview_theme={@preview_theme}
+        />
+      </section>
+      
+      <!-- Remaining form content... -->
+    </div>
+    """
+  end
+end
+```
+
+# Test Strategy:
+1. Test that the preview correctly displays the selected theme
+2. Verify that the preview includes key event page elements
+3. Test that applying a previewed theme updates the event
+4. Test that canceling a preview reverts to the current theme
+5. Verify that the preview accurately represents how the public page will look
+6. Test the preview with all 7 themes
+7. Test the preview with various event data (long titles, descriptions, etc.)

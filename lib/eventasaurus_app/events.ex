@@ -11,6 +11,7 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Themes
   alias EventasaurusApp.Events.EventDateVote
+  alias Eventasaurus.Services.PosthogService
   require Logger
 
   @doc """
@@ -352,6 +353,15 @@ defmodule EventasaurusApp.Events do
     Repo.transaction(fn ->
       with {:ok, event} <- create_event(event_attrs),
            {:ok, _} <- add_user_to_event(event, user) do
+        # Track event creation with PostHog
+        PosthogService.track_event(user.id, "event_created", %{
+          "event_id" => event.id,
+          "event_title" => event.title,
+          "event_status" => to_string(event.status),
+          "is_ticketed" => event.is_ticketed,
+          "event_type" => get_event_type(event)
+        })
+
         event
         |> Repo.preload([:venue, :users])
         |> Event.with_computed_fields()
@@ -502,6 +512,16 @@ defmodule EventasaurusApp.Events do
     case get_event_participant_by_event_and_user(event, user) do
       nil -> false
       _participant -> true
+    end
+  end
+
+  # Helper function for PostHog tracking
+  defp get_event_type(%Event{} = event) do
+    cond do
+      event.is_ticketed -> "ticketed"
+      event.venue_id && event.start_at -> "scheduled"
+      event.start_at -> "scheduled_no_venue"
+      true -> "draft"
     end
   end
 
@@ -863,11 +883,25 @@ defmodule EventasaurusApp.Events do
       iex> update_event_theme(event, :invalid)
       {:error, "Invalid theme"}
   """
-  def update_event_theme(%Event{} = event, theme) when is_atom(theme) do
+  def update_event_theme(%Event{} = event, theme, %User{} = user \\ nil) when is_atom(theme) do
     if Themes.valid_theme?(theme) do
-      event
-      |> Event.changeset(%{theme: theme})
-      |> Repo.update()
+      case event
+           |> Event.changeset(%{theme: theme})
+           |> Repo.update() do
+        {:ok, updated_event} ->
+          # Track theme change with PostHog
+          if user do
+            PosthogService.track_event(user.id, "event_theme_changed", %{
+              "event_id" => updated_event.id,
+              "event_title" => updated_event.title,
+              "old_theme" => to_string(event.theme),
+              "new_theme" => to_string(theme)
+            })
+          end
+
+          {:ok, updated_event}
+        error -> error
+      end
     else
       {:error, "Invalid theme"}
     end
@@ -1976,7 +2010,7 @@ defmodule EventasaurusApp.Events do
   Publishes an event by transitioning it to confirmed status.
   This action makes the event publicly available.
   """
-  def publish_event(%Event{} = event) do
+  def publish_event(%Event{} = event, %User{} = user \\ nil) do
     attrs = %{
       status: :confirmed,
       visibility: :public
@@ -1986,7 +2020,18 @@ defmodule EventasaurusApp.Events do
     changeset = Event.changeset_with_inferred_status(event, attrs)
 
     case Repo.update(changeset) do
-      {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
+      {:ok, updated_event} ->
+        # Track event publishing with PostHog
+        if user do
+          PosthogService.track_event(user.id, "event_published", %{
+            "event_id" => updated_event.id,
+            "event_title" => updated_event.title,
+            "event_type" => get_event_type(updated_event),
+            "is_ticketed" => updated_event.is_ticketed
+          })
+        end
+
+        {:ok, Event.with_computed_fields(updated_event)}
       error -> error
     end
   end

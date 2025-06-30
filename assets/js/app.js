@@ -860,6 +860,82 @@ Hooks.StripePaymentElements = {
   }
 };
 
+// ===============================
+// PostHog Analytics Helpers
+// ===============================
+
+// PostHog helper functions for tracking events
+window.PostHogHelpers = {
+  // Track a generic event
+  track: function(eventName, properties = {}) {
+    if (typeof window.posthog !== 'undefined') {
+      console.log('PostHog tracking:', eventName, properties);
+      window.posthog.capture(eventName, properties);
+    } else {
+      console.warn('PostHog not loaded, skipping track:', eventName);
+    }
+  },
+
+  // Identify a user (call when user logs in)
+  identify: function(userId, userProperties = {}) {
+    if (typeof window.posthog !== 'undefined') {
+      console.log('PostHog identify:', userId, userProperties);
+      window.posthog.identify(userId, userProperties);
+    } else {
+      console.warn('PostHog not loaded, skipping identify:', userId);
+    }
+  },
+
+  // Reset user session (call when user logs out)
+  reset: function() {
+    if (typeof window.posthog !== 'undefined') {
+      console.log('PostHog reset');
+      window.posthog.reset();
+    }
+  },
+
+  // Track page view
+  trackPageView: function(path = null) {
+    if (typeof window.posthog !== 'undefined') {
+      const properties = { 
+        path: path || window.location.pathname,
+        url: window.location.href
+      };
+      console.log('PostHog page view:', properties);
+      window.posthog.capture('$pageview', properties);
+    }
+  },
+
+  // Track authentication events
+  trackAuth: function(action, properties = {}) {
+    this.track(`auth_${action}`, {
+      ...properties,
+      timestamp: new Date().toISOString()
+    });
+  },
+
+  // Track event management actions
+  trackEvent: function(action, eventData = {}) {
+    this.track(`event_${action}`, {
+      ...eventData,
+      timestamp: new Date().toISOString()
+    });
+  },
+
+  // Track business events (tickets, payments)
+  trackBusiness: function(action, businessData = {}) {
+    this.track(`business_${action}`, {
+      ...businessData,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Auto-track page views on navigation
+window.addEventListener('phx:page-loading-stop', function() {
+  window.PostHogHelpers.trackPageView();
+});
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {

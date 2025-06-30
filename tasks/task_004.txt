@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Develop EventDateVote Model
+# Status: done
+# Dependencies: 3
+# Priority: high
+# Description: Implement the EventDateVote model to store user votes for date options.
+# Details:
+Create an Ecto schema for EventDateVote with fields: id (primary key), event_date_option_id (foreign key to event_date_options), user_id (foreign key to users), and vote_type (Ecto.Enum with values :yes, :if_need_be, :no). Implement a unique constraint on (event_date_option_id, user_id) to ensure one vote per user per date. Use Ecto associations to link with EventDateOption and User models.
+
+# Test Strategy:
+Write unit tests for the EventDateVote model, including association tests and unique constraint validation. Test CRUD operations and enum validations for vote_type.

@@ -1,0 +1,11 @@
+# Task ID: 5
+# Title: Update Event Creation Flow
+# Status: done
+# Dependencies: 1, 2, 3, 4
+# Priority: high
+# Description: Modify the event creation process to include the option for polling.
+# Details:
+Update the Phoenix controller and template for event creation. Add a checkbox or toggle for 'Let attendees vote on the date.' When selected, set event.state to 'polling'. Ensure start_at and end_at are treated as the poll range. Use Phoenix.HTML.Form helpers for form creation. Implement server-side logic to create EventDateOption entries for each date in the range.
+
+# Test Strategy:
+Write integration tests using Phoenix.ConnTest to verify the new event creation flow. Test both standard and polling event creation. Verify EventDateOption entries are correctly created for polling events.

@@ -1,0 +1,11 @@
+# Task ID: 2
+# Title: Create EventDatePoll Model
+# Status: done
+# Dependencies: 1
+# Priority: high
+# Description: Implement the EventDatePoll model to manage polling for event dates.
+# Details:
+Create a new Ecto schema for EventDatePoll with fields: id (primary key), event_id (foreign key to events), created_by_id (foreign key to users), voting_deadline (utc_datetime, optional), and finalized_date (date). Use Ecto associations to link with the Event model. Implement any necessary validations using Ecto.Changeset.
+
+# Test Strategy:
+Write unit tests for the EventDatePoll model, including association tests with Event and User models. Test CRUD operations and validations.

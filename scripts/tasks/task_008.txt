@@ -1,0 +1,284 @@
+# Task ID: 8
+# Title: Theme Data Persistence and Management
+# Status: pending
+# Dependencies: 1, 2
+# Priority: medium
+# Description: Implement theme data persistence, automatic saving, and theme management functionality.
+# Details:
+Implement the functionality to persist theme selections and customizations, automatically save changes, and provide theme management capabilities such as copying themes between events.
+
+1. Update the Events context with theme management functions:
+```elixir
+defmodule EventasaurusApp.Events do
+  # Existing code...
+  
+  @doc """
+  Updates an event's theme with debounced saving.
+  """
+  def update_event_theme_debounced(event, theme) do
+    # Use a GenServer or similar to debounce saves
+    EventasaurusApp.ThemeSaver.save_theme(event.id, %{theme: theme})
+    {:ok, %{event | theme: theme}}
+  end
+  
+  @doc """
+  Updates an event's theme customizations with debounced saving.
+  """
+  def update_event_theme_customizations_debounced(event, customizations) do
+    case Themes.validate_customizations(customizations) do
+      {:ok, valid_customizations} ->
+        EventasaurusApp.ThemeSaver.save_theme(event.id, %{theme_customizations: valid_customizations})
+        {:ok, %{event | theme_customizations: valid_customizations}}
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+  
+  @doc """
+  Copies theme settings from one event to another.
+  """
+  def copy_event_theme(source_event_id, target_event_id) do
+    with %Event{} = source_event <- get_event(source_event_id),
+         %Event{} = target_event <- get_event(target_event_id) do
+      
+      target_event
+      |> Event.changeset(%{
+        theme: source_event.theme,
+        theme_customizations: source_event.theme_customizations
+      })
+      |> Repo.update()
+    else
+      nil -> {:error, "Event not found"}
+    end
+  end
+  
+  @doc """
+  Gets all events for an organizer with their themes.
+  """
+  def list_events_with_themes(organizer_id) do
+    Event
+    |> where([e], e.organizer_id == ^organizer_id)
+    |> select([e], %{id: e.id, title: e.title, theme: e.theme})
+    |> Repo.all()
+  end
+end
+```
+
+2. Create a ThemeSaver GenServer for debounced saving:
+```elixir
+defmodule EventasaurusApp.ThemeSaver do
+  @moduledoc """
+  GenServer for debounced saving of theme changes.
+  """
+  use GenServer
+  alias EventasaurusApp.Events.Event
+  alias EventasaurusApp.Repo
+  
+  # Client API
+  
+  def start_link(_) do
+    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  end
+  
+  def save_theme(event_id, attrs) do
+    GenServer.cast(__MODULE__, {:save_theme, event_id, attrs})
+  end
+  
+  # Server Callbacks
+  
+  @impl true
+  def init(state) do
+    {:ok, state}
+  end
+  
+  @impl true
+  def handle_cast({:save_theme, event_id, attrs}, state) do
+    # Cancel any existing timer for this event
+    if Map.has_key?(state, event_id) do
+      Process.cancel_timer(state[event_id])
+    end
+    
+    # Set a new timer to save after 500ms
+    timer = Process.send_after(self(), {:do_save, event_id, attrs}, 500)
+    
+    {:noreply, Map.put(state, event_id, timer)}
+  end
+  
+  @impl true
+  def handle_info({:do_save, event_id, attrs}, state) do
+    # Actually save the theme changes
+    event = Repo.get(Event, event_id)
+    
+    if event do
+      event
+      |> Event.changeset(attrs)
+      |> Repo.update()
+    end
+    
+    {:noreply, Map.delete(state, event_id)}
+  end
+end
+```
+
+3. Add the ThemeSaver to your application supervision tree:
+```elixir
+defmodule EventasaurusApp.Application do
+  # Existing code...
+  
+  def start(_type, _args) do
+    children = [
+      # Existing children...
+      EventasaurusApp.ThemeSaver
+    ]
+    
+    # Existing code...
+  end
+end
+```
+
+4. Create a ThemeCopyComponent for copying themes between events:
+```elixir
+defmodule EventasaurusAppWeb.ThemeCopyComponent do
+  use EventasaurusAppWeb, :live_component
+  alias EventasaurusApp.Events
+  
+  @impl true
+  def update(assigns, socket) do
+    events = Events.list_events_with_themes(assigns.current_user.id)
+    
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(:events, events)
+     |> assign(:selected_event_id, nil)}
+  end
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="theme-copy">
+      <h3>Copy Theme From Another Event</h3>
+      
+      <div class="event-selector">
+        <label>Select Source Event</label>
+        <select phx-change="select-event" phx-target={@myself}>
+          <option value="">Choose an event...</option>
+          <%= for event <- @events do %>
+            <%= if event.id != @event.id do %>
+              <option value={event.id}><%= event.title %></option>
+            <% end %>
+          <% end %>
+        </select>
+      </div>
+      
+      <div class="copy-actions">
+        <button class="btn-primary" 
+                phx-click="copy-theme" 
+                phx-target={@myself} 
+                disabled={is_nil(@selected_event_id)}>Copy Theme</button>
+      </div>
+    </div>
+    """
+  end
+  
+  @impl true
+  def handle_event("select-event", %{"value" => ""}, socket) do
+    {:noreply, assign(socket, :selected_event_id, nil)}
+  end
+  
+  @impl true
+  def handle_event("select-event", %{"value" => event_id}, socket) do
+    {:noreply, assign(socket, :selected_event_id, String.to_integer(event_id))}
+  end
+  
+  @impl true
+  def handle_event("copy-theme", _, %{assigns: %{selected_event_id: nil}} = socket) do
+    {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_event("copy-theme", _, socket) do
+    case Events.copy_event_theme(socket.assigns.selected_event_id, socket.assigns.event.id) do
+      {:ok, updated_event} ->
+        send(self(), {:theme_updated, updated_event})
+        
+        {:noreply,
+         socket
+         |> assign(:event, updated_event)
+         |> assign(:selected_event_id, nil)}
+      
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to copy theme")}
+    end
+  end
+end
+```
+
+5. Add CSS for the theme copy component:
+```css
+.theme-copy {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+}
+
+.event-selector {
+  margin-bottom: 1.5rem;
+}
+
+.event-selector label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.event-selector select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #eaeaea;
+  border-radius: 4px;
+}
+```
+
+6. Update the EventLive.FormComponent to include the theme copy component:
+```elixir
+defmodule EventasaurusAppWeb.EventLive.FormComponent do
+  # Existing code...
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div>
+      <!-- Existing form content... -->
+      
+      <section class="theme-section">
+        <!-- Existing theme components... -->
+        
+        <.live_component
+          module={EventasaurusAppWeb.ThemeCopyComponent}
+          id="theme-copy"
+          event={@event}
+          current_user={@current_user}
+        />
+      </section>
+      
+      <!-- Remaining form content... -->
+    </div>
+    """
+  end
+end
+```
+
+# Test Strategy:
+1. Test that theme changes are saved automatically with debouncing
+2. Verify that theme customizations are persisted correctly
+3. Test the theme copying functionality between events
+4. Verify that validation works for theme data
+5. Test error handling for invalid theme data
+6. Verify that the ThemeSaver GenServer correctly debounces saves
+7. Test that theme data integrity is maintained during event updates
+8. Verify that the theme copy component correctly lists available events
+9. Test performance of theme data persistence operations

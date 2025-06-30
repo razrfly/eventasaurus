@@ -1,0 +1,491 @@
+# Task ID: 7
+# Title: Theme Customization Interface
+# Status: pending
+# Dependencies: 2, 6
+# Priority: medium
+# Description: Build a comprehensive theme customization interface that allows users to customize colors, typography, and layout options.
+# Details:
+Implement a theme customization interface that allows users to customize colors, typography, and layout options for their selected theme. The interface should provide color pickers, font selectors, and layout option controls.
+
+1. Create a ThemeCustomizationComponent:
+```elixir
+defmodule EventasaurusAppWeb.ThemeCustomizationComponent do
+  use EventasaurusAppWeb, :live_component
+  alias EventasaurusApp.Events
+  alias EventasaurusApp.Themes
+  
+  @impl true
+  def update(assigns, socket) do
+    theme_data = Events.get_event_theme_data(assigns.event)
+    
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(:theme_data, theme_data)
+     |> assign(:active_tab, :colors)}
+  end
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="theme-customization">
+      <h3>Customize Theme</h3>
+      
+      <div class="customization-tabs">
+        <button class={["tab", @active_tab == :colors && "active"]} 
+                phx-click="switch-tab" 
+                phx-value-tab="colors" 
+                phx-target={@myself}>Colors</button>
+        <button class={["tab", @active_tab == :typography && "active"]} 
+                phx-click="switch-tab" 
+                phx-value-tab="typography" 
+                phx-target={@myself}>Typography</button>
+        <button class={["tab", @active_tab == :layout && "active"]} 
+                phx-click="switch-tab" 
+                phx-value-tab="layout" 
+                phx-target={@myself}>Layout</button>
+      </div>
+      
+      <div class="customization-content">
+        <%= if @active_tab == :colors do %>
+          <div class="color-customization">
+            <div class="color-option">
+              <label>Primary Color</label>
+              <input type="color" 
+                     value={@theme_data["colors"]["primary"]} 
+                     phx-change="update-color" 
+                     phx-value-color="primary" 
+                     phx-target={@myself} />
+            </div>
+            
+            <div class="color-option">
+              <label>Secondary Color</label>
+              <input type="color" 
+                     value={@theme_data["colors"]["secondary"]} 
+                     phx-change="update-color" 
+                     phx-value-color="secondary" 
+                     phx-target={@myself} />
+            </div>
+            
+            <div class="color-option">
+              <label>Accent Color</label>
+              <input type="color" 
+                     value={@theme_data["colors"]["accent"]} 
+                     phx-change="update-color" 
+                     phx-value-color="accent" 
+                     phx-target={@myself} />
+            </div>
+            
+            <div class="color-option">
+              <label>Background Color</label>
+              <input type="color" 
+                     value={@theme_data["colors"]["background"]} 
+                     phx-change="update-color" 
+                     phx-value-color="background" 
+                     phx-target={@myself} />
+            </div>
+            
+            <div class="color-option">
+              <label>Text Color</label>
+              <input type="color" 
+                     value={@theme_data["colors"]["text"]} 
+                     phx-change="update-color" 
+                     phx-value-color="text" 
+                     phx-target={@myself} />
+            </div>
+            
+            <div class="color-presets">
+              <h4>Color Presets</h4>
+              <div class="preset-options">
+                <%= for {name, preset} <- color_presets(@event.theme) do %>
+                  <button class="preset-option" 
+                          phx-click="apply-color-preset" 
+                          phx-value-preset={name} 
+                          phx-target={@myself}>
+                    <div class="preset-preview" style={"background: linear-gradient(to right, #{preset.primary}, #{preset.accent})"}></div>
+                    <span><%= name %></span>
+                  </button>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+        
+        <%= if @active_tab == :typography do %>
+          <div class="typography-customization">
+            <div class="font-option">
+              <label>Font Family</label>
+              <select phx-change="update-typography" 
+                      phx-value-property="font_family" 
+                      phx-target={@myself}>
+                <%= for font <- available_fonts() do %>
+                  <option value={font} selected={font == @theme_data["typography"]["font_family"]}>
+                    <%= font %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
+            
+            <div class="font-option">
+              <label>Heading Weight</label>
+              <select phx-change="update-typography" 
+                      phx-value-property="heading_weight" 
+                      phx-target={@myself}>
+                <%= for weight <- ["400", "500", "600", "700"] do %>
+                  <option value={weight} selected={weight == @theme_data["typography"]["heading_weight"]}>
+                    <%= weight %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
+            
+            <div class="font-option">
+              <label>Body Text Size</label>
+              <select phx-change="update-typography" 
+                      phx-value-property="body_size" 
+                      phx-target={@myself}>
+                <%= for size <- ["14px", "16px", "18px"] do %>
+                  <option value={size} selected={size == @theme_data["typography"]["body_size"]}>
+                    <%= size %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
+          </div>
+        <% end %>
+        
+        <%= if @active_tab == :layout do %>
+          <div class="layout-customization">
+            <div class="layout-option">
+              <label>Border Radius</label>
+              <select phx-change="update-layout" 
+                      phx-value-property="border_radius" 
+                      phx-target={@myself}>
+                <%= for {name, value} <- border_radius_options() do %>
+                  <option value={value} selected={value == @theme_data["layout"]["border_radius"]}>
+                    <%= name %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
+            
+            <div class="layout-option">
+              <label>Shadow Style</label>
+              <select phx-change="update-layout" 
+                      phx-value-property="shadow_style" 
+                      phx-target={@myself}>
+                <%= for style <- ["none", "soft", "pronounced"] do %>
+                  <option value={style} selected={style == @theme_data["layout"]["shadow_style"]}>
+                    <%= String.capitalize(style) %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
+            
+            <div class="layout-option">
+              <label>Mode</label>
+              <div class="mode-toggle">
+                <button class={["mode-option", @theme_data["mode"] == "light" && "active"]} 
+                        phx-click="update-mode" 
+                        phx-value-mode="light" 
+                        phx-target={@myself}>Light</button>
+                <button class={["mode-option", @theme_data["mode"] == "dark" && "active"]} 
+                        phx-click="update-mode" 
+                        phx-value-mode="dark" 
+                        phx-target={@myself}>Dark</button>
+              </div>
+            </div>
+          </div>
+        <% end %>
+        
+        <div class="customization-actions">
+          <button phx-click="reset-customizations" phx-target={@myself} class="btn-secondary">Reset to Default</button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+  
+  @impl true
+  def handle_event("switch-tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, :active_tab, String.to_existing_atom(tab))}
+  end
+  
+  @impl true
+  def handle_event("update-color", %{"color" => color, "value" => value}, socket) do
+    updated_theme_data = update_in(socket.assigns.theme_data, ["colors", color], fn _ -> value end)
+    save_theme_customizations(socket, updated_theme_data)
+  end
+  
+  @impl true
+  def handle_event("update-typography", %{"property" => property, "value" => value}, socket) do
+    updated_theme_data = update_in(socket.assigns.theme_data, ["typography", property], fn _ -> value end)
+    save_theme_customizations(socket, updated_theme_data)
+  end
+  
+  @impl true
+  def handle_event("update-layout", %{"property" => property, "value" => value}, socket) do
+    updated_theme_data = update_in(socket.assigns.theme_data, ["layout", property], fn _ -> value end)
+    save_theme_customizations(socket, updated_theme_data)
+  end
+  
+  @impl true
+  def handle_event("update-mode", %{"mode" => mode}, socket) do
+    updated_theme_data = Map.put(socket.assigns.theme_data, "mode", mode)
+    save_theme_customizations(socket, updated_theme_data)
+  end
+  
+  @impl true
+  def handle_event("apply-color-preset", %{"preset" => preset_name}, socket) do
+    preset = Enum.find(color_presets(socket.assigns.event.theme), fn {name, _} -> name == preset_name end)
+    
+    if preset do
+      {_, colors} = preset
+      updated_theme_data = update_in(socket.assigns.theme_data, ["colors"], fn _ -> 
+        %{
+          "primary" => colors.primary,
+          "secondary" => colors.secondary,
+          "accent" => colors.accent,
+          "background" => colors.background,
+          "text" => colors.text
+        }
+      end)
+      
+      save_theme_customizations(socket, updated_theme_data)
+    else
+      {:noreply, socket}
+    end
+  end
+  
+  @impl true
+  def handle_event("reset-customizations", _, socket) do
+    default_customizations = Themes.get_default_customizations(socket.assigns.event.theme)
+    
+    {:ok, event} = Events.update_event_theme_customizations(socket.assigns.event, default_customizations)
+    
+    send(self(), {:theme_customizations_updated, event})
+    
+    {:noreply,
+     socket
+     |> assign(:event, event)
+     |> assign(:theme_data, default_customizations)}
+  end
+  
+  defp save_theme_customizations(socket, updated_theme_data) do
+    case Events.update_event_theme_customizations(socket.assigns.event, updated_theme_data) do
+      {:ok, event} ->
+        send(self(), {:theme_customizations_updated, event})
+        
+        {:noreply,
+         socket
+         |> assign(:event, event)
+         |> assign(:theme_data, updated_theme_data)}
+      
+      {:error, _reason} ->
+        {:noreply, socket}
+    end
+  end
+  
+  defp available_fonts do
+    ["Inter", "Playfair Display", "Roboto", "Open Sans", "Montserrat", "Lato"]
+  end
+  
+  defp border_radius_options do
+    [
+      {"Sharp", "0px"},
+      {"Rounded", "4px"},
+      {"Very Rounded", "8px"}
+    ]
+  end
+  
+  defp color_presets(:minimal) do
+    [
+      {"Default", %{
+        primary: "#000000",
+        secondary: "#333333",
+        accent: "#0066cc",
+        background: "#ffffff",
+        text: "#000000"
+      }},
+      {"Blue", %{
+        primary: "#0066cc",
+        secondary: "#333333",
+        accent: "#3399ff",
+        background: "#ffffff",
+        text: "#000000"
+      }},
+      # Add more presets
+    ]
+  end
+  
+  # Add color presets for other themes
+  defp color_presets(_), do: color_presets(:minimal)
+end
+```
+
+2. Add CSS for the customization component:
+```css
+.theme-customization {
+  margin-top: 2rem;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.customization-tabs {
+  display: flex;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.customization-tabs .tab {
+  padding: 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  color: #666;
+}
+
+.customization-tabs .tab.active {
+  color: #000;
+  border-bottom: 2px solid #000;
+}
+
+.customization-content {
+  padding: 1.5rem;
+}
+
+.color-option, .font-option, .layout-option {
+  margin-bottom: 1rem;
+}
+
+.color-option label, .font-option label, .layout-option label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.color-option input[type="color"] {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #eaeaea;
+  border-radius: 4px;
+}
+
+.font-option select, .layout-option select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #eaeaea;
+  border-radius: 4px;
+}
+
+.color-presets {
+  margin-top: 2rem;
+}
+
+.preset-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.preset-option {
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+}
+
+.preset-preview {
+  height: 40px;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.mode-toggle {
+  display: flex;
+  border: 1px solid #eaeaea;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mode-option {
+  flex: 1;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.mode-option.active {
+  background-color: #f5f5f5;
+  font-weight: 500;
+}
+
+.customization-actions {
+  margin-top: 2rem;
+  text-align: right;
+}
+```
+
+3. Update the EventLive.FormComponent to include the customization component:
+```elixir
+defmodule EventasaurusAppWeb.EventLive.FormComponent do
+  # Existing code...
+  
+  @impl true
+  def handle_info({:theme_customizations_updated, event}, socket) do
+    {:noreply,
+     socket
+     |> assign(:event, event)
+     |> put_flash(:info, "Theme customizations updated")}
+  end
+  
+  # Existing code...
+  
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div>
+      <!-- Existing form content... -->
+      
+      <section class="theme-section">
+        <.live_component
+          module={EventasaurusAppWeb.ThemePickerComponent}
+          id="theme-picker"
+          selected_theme={@selected_theme}
+        />
+        
+        <.live_component
+          module={EventasaurusAppWeb.ThemePreviewComponent}
+          id="theme-preview"
+          event={@event}
+          preview_theme={@preview_theme}
+        />
+        
+        <.live_component
+          module={EventasaurusAppWeb.ThemeCustomizationComponent}
+          id="theme-customization"
+          event={@event}
+        />
+      </section>
+      
+      <!-- Remaining form content... -->
+    </div>
+    """
+  end
+end
+```
+
+# Test Strategy:
+1. Test that all customization options are displayed correctly
+2. Verify that color pickers update the theme colors in real-time
+3. Test that typography options correctly change fonts and sizes
+4. Verify that layout options update border radius and shadow styles
+5. Test that light/dark mode toggle works correctly
+6. Verify that color presets apply correctly
+7. Test that reset functionality restores default theme settings
+8. Verify that customizations are saved to the database
+9. Test accessibility of the customization interface
+10. Test color contrast validation for accessibility

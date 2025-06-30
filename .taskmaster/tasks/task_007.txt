@@ -1,0 +1,11 @@
+# Task ID: 7
+# Title: Implement Ticket Purchase UI and Flow
+# Status: pending
+# Dependencies: 3, 4, 5, 6
+# Priority: high
+# Description: Add ticket purchase section to event show page and implement checkout flow.
+# Details:
+Add ticket selection interface to event show page. Implement checkout flow UI for both free and paid tickets. Use Phoenix LiveView for real-time updates and form handling. Redirect to Stripe Checkout for paid tickets. Handle order confirmation and EventParticipant creation.
+
+# Test Strategy:
+Write UI and integration tests for ticket purchase flow. Test free and paid ticket scenarios. Verify order confirmation and participant creation.

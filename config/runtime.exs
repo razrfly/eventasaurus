@@ -138,5 +138,9 @@ if config_env() == :prod do
       auto_confirm_email: false
     }
 
+  # Configure PostHog for production
+  config :eventasaurus, :posthog,
+    api_key: System.get_env("POSTHOG_API_KEY") || raise("POSTHOG_API_KEY not set"),
+    host: "https://eu.i.posthog.com"
 
 end

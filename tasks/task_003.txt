@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Implement EventDateOption Model
+# Status: done
+# Dependencies: 2
+# Priority: high
+# Description: Create the EventDateOption model to represent individual date options for polling.
+# Details:
+Define an Ecto schema for EventDateOption with fields: id (primary key), event_date_poll_id (foreign key to event_date_polls), and date (date type). Use Ecto associations to link with the EventDatePoll model. Implement any necessary validations using Ecto.Changeset.
+
+# Test Strategy:
+Create unit tests for the EventDateOption model, including association tests with EventDatePoll. Verify CRUD operations and date validations.

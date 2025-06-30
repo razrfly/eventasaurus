@@ -1,333 +1,424 @@
 ---
-description: Guide for using meta-development script (scripts/dev.js) to manage task-driven development workflows
+description: Guide for using Taskmaster to manage task-driven development workflows
 globs: **/*
 alwaysApply: true
 ---
 
-- **Global CLI Commands**
-  - Task Master now provides a global CLI through the `task-master` command
-  - All functionality from `scripts/dev.js` is available through this interface
-  - Install globally with `npm install -g claude-task-master` or use locally via `npx`
-  - Use `task-master <command>` instead of `node scripts/dev.js <command>`
-  - Examples:
-    - `task-master list` instead of `node scripts/dev.js list`
-    - `task-master next` instead of `node scripts/dev.js next`
-    - `task-master expand --id=3` instead of `node scripts/dev.js expand --id=3`
-  - All commands accept the same options as their script equivalents
-  - The CLI provides additional commands like `task-master init` for project setup
+# Taskmaster Development Workflow
 
-- **Development Workflow Process**
-  - Start new projects by running `task-master init` or `node scripts/dev.js parse-prd --input=<prd-file.txt>` to generate initial tasks.json
-  - Begin coding sessions with `task-master list` to see current tasks, status, and IDs
-  - Analyze task complexity with `task-master analyze-complexity --research` before breaking down tasks
-  - Select tasks based on dependencies (all marked 'done'), priority level, and ID order
-  - Clarify tasks by checking task files in tasks/ directory or asking for user input
-  - View specific task details using `task-master show <id>` to understand implementation requirements
-  - Break down complex tasks using `task-master expand --id=<id>` with appropriate flags
-  - Clear existing subtasks if needed using `task-master clear-subtasks --id=<id>` before regenerating
-  - Implement code following task details, dependencies, and project standards
-  - Verify tasks according to test strategies before marking as complete
-  - Mark completed tasks with `task-master set-status --id=<id> --status=done`
-  - Update dependent tasks when implementation differs from original plan
-  - Generate task files with `task-master generate` after updating tasks.json
-  - Maintain valid dependency structure with `task-master fix-dependencies` when needed
-  - Respect dependency chains and task priorities when selecting work
-  - Report progress regularly using the list command
+This guide outlines the standard process for using Taskmaster to manage software development projects. It is written as a set of instructions for you, the AI agent.
 
-- **Task Complexity Analysis**
-  - Run `node scripts/dev.js analyze-complexity --research` for comprehensive analysis
-  - Review complexity report in scripts/task-complexity-report.json
-  - Or use `node scripts/dev.js complexity-report` for a formatted, readable version of the report
-  - Focus on tasks with highest complexity scores (8-10) for detailed breakdown
-  - Use analysis results to determine appropriate subtask allocation
-  - Note that reports are automatically used by the expand command
+- **Your Default Stance**: For most projects, the user can work directly within the `master` task context. Your initial actions should operate on this default context unless a clear pattern for multi-context work emerges.
+- **Your Goal**: Your role is to elevate the user's workflow by intelligently introducing advanced features like **Tagged Task Lists** when you detect the appropriate context. Do not force tags on the user; suggest them as a helpful solution to a specific need.
 
-- **Task Breakdown Process**
-  - For tasks with complexity analysis, use `node scripts/dev.js expand --id=<id>`
-  - Otherwise use `node scripts/dev.js expand --id=<id> --subtasks=<number>`
-  - Add `--research` flag to leverage Perplexity AI for research-backed expansion
-  - Use `--prompt="<context>"` to provide additional context when needed
-  - Review and adjust generated subtasks as necessary
-  - Use `--all` flag to expand multiple pending tasks at once
-  - If subtasks need regeneration, clear them first with `clear-subtasks` command
+## The Basic Loop
+The fundamental development cycle you will facilitate is:
+1.  **`list`**: Show the user what needs to be done.
+2.  **`next`**: Help the user decide what to work on.
+3.  **`show <id>`**: Provide details for a specific task.
+4.  **`expand <id>`**: Break down a complex task into smaller, manageable subtasks.
+5.  **Implement**: The user writes the code and tests.
+6.  **`update-subtask`**: Log progress and findings on behalf of the user.
+7.  **`set-status`**: Mark tasks and subtasks as `done` as work is completed.
+8.  **Repeat**.
 
-- **Implementation Drift Handling**
-  - When implementation differs significantly from planned approach
-  - When future tasks need modification due to current implementation choices
-  - When new dependencies or requirements emerge
-  - Call `node scripts/dev.js update --from=<futureTaskId> --prompt="<explanation>"` to update tasks.json
+All your standard command executions should operate on the user's current task context, which defaults to `master`.
 
-- **Task Status Management**
-  - Use 'pending' for tasks ready to be worked on
-  - Use 'done' for completed and verified tasks
-  - Use 'deferred' for postponed tasks
-  - Add custom status values as needed for project-specific workflows
+---
 
-- **Task File Format Reference**
-  ```
-  # Task ID: <id>
-  # Title: <title>
-  # Status: <status>
-  # Dependencies: <comma-separated list of dependency IDs>
-  # Priority: <priority>
-  # Description: <brief description>
-  # Details:
-  <detailed implementation notes>
-  
-  # Test Strategy:
-  <verification approach>
-  ```
+## Standard Development Workflow Process
 
-- **Command Reference: parse-prd**
-  - Legacy Syntax: `node scripts/dev.js parse-prd --input=<prd-file.txt>`
-  - CLI Syntax: `task-master parse-prd --input=<prd-file.txt>`
-  - Description: Parses a PRD document and generates a tasks.json file with structured tasks
-  - Parameters: 
-    - `--input=<file>`: Path to the PRD text file (default: sample-prd.txt)
-  - Example: `task-master parse-prd --input=requirements.txt`
-  - Notes: Will overwrite existing tasks.json file. Use with caution.
+### Simple Workflow (Default Starting Point)
 
-- **Command Reference: update**
-  - Legacy Syntax: `node scripts/dev.js update --from=<id> --prompt="<prompt>"`
-  - CLI Syntax: `task-master update --from=<id> --prompt="<prompt>"`
-  - Description: Updates tasks with ID >= specified ID based on the provided prompt
-  - Parameters:
-    - `--from=<id>`: Task ID from which to start updating (required)
-    - `--prompt="<text>"`: Explanation of changes or new context (required)
-  - Example: `task-master update --from=4 --prompt="Now we are using Express instead of Fastify."`
-  - Notes: Only updates tasks not marked as 'done'. Completed tasks remain unchanged.
+For new projects or when users are getting started, operate within the `master` tag context:
 
-- **Command Reference: generate**
-  - Legacy Syntax: `node scripts/dev.js generate`
-  - CLI Syntax: `task-master generate`
-  - Description: Generates individual task files in tasks/ directory based on tasks.json
-  - Parameters: 
-    - `--file=<path>, -f`: Use alternative tasks.json file (default: 'tasks/tasks.json')
-    - `--output=<dir>, -o`: Output directory (default: 'tasks')
-  - Example: `task-master generate`
-  - Notes: Overwrites existing task files. Creates tasks/ directory if needed.
+-   Start new projects by running `initialize_project` tool / `task-master init` or `parse_prd` / `task-master parse-prd --input='<prd-file.txt>'` (see @`taskmaster.md`) to generate initial tasks.json with tagged structure
+-   Configure rule sets during initialization with `--rules` flag (e.g., `task-master init --rules roo,windsurf`) or manage them later with `task-master rules add/remove` commands  
+-   Begin coding sessions with `get_tasks` / `task-master list` (see @`taskmaster.md`) to see current tasks, status, and IDs
+-   Determine the next task to work on using `next_task` / `task-master next` (see @`taskmaster.md`)
+-   Analyze task complexity with `analyze_project_complexity` / `task-master analyze-complexity --research` (see @`taskmaster.md`) before breaking down tasks
+-   Review complexity report using `complexity_report` / `task-master complexity-report` (see @`taskmaster.md`)
+-   Select tasks based on dependencies (all marked 'done'), priority level, and ID order
+-   View specific task details using `get_task` / `task-master show <id>` (see @`taskmaster.md`) to understand implementation requirements
+-   Break down complex tasks using `expand_task` / `task-master expand --id=<id> --force --research` (see @`taskmaster.md`) with appropriate flags like `--force` (to replace existing subtasks) and `--research`
+-   Implement code following task details, dependencies, and project standards
+-   Mark completed tasks with `set_task_status` / `task-master set-status --id=<id> --status=done` (see @`taskmaster.md`)
+-   Update dependent tasks when implementation differs from original plan using `update` / `task-master update --from=<id> --prompt="..."` or `update_task` / `task-master update-task --id=<id> --prompt="..."` (see @`taskmaster.md`)
 
-- **Command Reference: set-status**
-  - Legacy Syntax: `node scripts/dev.js set-status --id=<id> --status=<status>`
-  - CLI Syntax: `task-master set-status --id=<id> --status=<status>`
-  - Description: Updates the status of a specific task in tasks.json
-  - Parameters:
-    - `--id=<id>`: ID of the task to update (required)
-    - `--status=<status>`: New status value (required)
-  - Example: `task-master set-status --id=3 --status=done`
-  - Notes: Common values are 'done', 'pending', and 'deferred', but any string is accepted.
+---
 
-- **Command Reference: list**
-  - Legacy Syntax: `node scripts/dev.js list`
-  - CLI Syntax: `task-master list`
-  - Description: Lists all tasks in tasks.json with IDs, titles, and status
-  - Parameters: 
-    - `--status=<status>, -s`: Filter by status
-    - `--with-subtasks`: Show subtasks for each task
-    - `--file=<path>, -f`: Use alternative tasks.json file (default: 'tasks/tasks.json')
-  - Example: `task-master list`
-  - Notes: Provides quick overview of project progress. Use at start of sessions.
+## Leveling Up: Agent-Led Multi-Context Workflows
 
-- **Command Reference: expand**
-  - Legacy Syntax: `node scripts/dev.js expand --id=<id> [--num=<number>] [--research] [--prompt="<context>"]`
-  - CLI Syntax: `task-master expand --id=<id> [--num=<number>] [--research] [--prompt="<context>"]`
-  - Description: Expands a task with subtasks for detailed implementation
-  - Parameters:
-    - `--id=<id>`: ID of task to expand (required unless using --all)
-    - `--all`: Expand all pending tasks, prioritized by complexity
-    - `--num=<number>`: Number of subtasks to generate (default: from complexity report)
-    - `--research`: Use Perplexity AI for research-backed generation
-    - `--prompt="<text>"`: Additional context for subtask generation
-    - `--force`: Regenerate subtasks even for tasks that already have them
-  - Example: `task-master expand --id=3 --num=5 --research --prompt="Focus on security aspects"`
-  - Notes: Uses complexity report recommendations if available.
+While the basic workflow is powerful, your primary opportunity to add value is by identifying when to introduce **Tagged Task Lists**. These patterns are your tools for creating a more organized and efficient development environment for the user, especially if you detect agentic or parallel development happening across the same session.
 
-- **Command Reference: analyze-complexity**
-  - Legacy Syntax: `node scripts/dev.js analyze-complexity [options]`
-  - CLI Syntax: `task-master analyze-complexity [options]`
-  - Description: Analyzes task complexity and generates expansion recommendations
-  - Parameters:
-    - `--output=<file>, -o`: Output file path (default: scripts/task-complexity-report.json)
-    - `--model=<model>, -m`: Override LLM model to use
-    - `--threshold=<number>, -t`: Minimum score for expansion recommendation (default: 5)
-    - `--file=<path>, -f`: Use alternative tasks.json file
-    - `--research, -r`: Use Perplexity AI for research-backed analysis
-  - Example: `task-master analyze-complexity --research`
-  - Notes: Report includes complexity scores, recommended subtasks, and tailored prompts.
+**Critical Principle**: Most users should never see a difference in their experience. Only introduce advanced workflows when you detect clear indicators that the project has evolved beyond simple task management.
 
-- **Command Reference: clear-subtasks**
-  - Legacy Syntax: `node scripts/dev.js clear-subtasks --id=<id>`
-  - CLI Syntax: `task-master clear-subtasks --id=<id>`
-  - Description: Removes subtasks from specified tasks to allow regeneration
-  - Parameters:
-    - `--id=<id>`: ID or comma-separated IDs of tasks to clear subtasks from
-    - `--all`: Clear subtasks from all tasks
-  - Examples:
-    - `task-master clear-subtasks --id=3`
-    - `task-master clear-subtasks --id=1,2,3`
-    - `task-master clear-subtasks --all`
-  - Notes: 
-    - Task files are automatically regenerated after clearing subtasks
-    - Can be combined with expand command to immediately generate new subtasks
-    - Works with both parent tasks and individual subtasks
+### When to Introduce Tags: Your Decision Patterns
 
-- **Task Structure Fields**
-  - **id**: Unique identifier for the task (Example: `1`)
-  - **title**: Brief, descriptive title (Example: `"Initialize Repo"`)
-  - **description**: Concise summary of what the task involves (Example: `"Create a new repository, set up initial structure."`)
-  - **status**: Current state of the task (Example: `"pending"`, `"done"`, `"deferred"`)
-  - **dependencies**: IDs of prerequisite tasks (Example: `[1, 2]`)
+Here are the patterns to look for. When you detect one, you should propose the corresponding workflow to the user.
+
+#### Pattern 1: Simple Git Feature Branching
+This is the most common and direct use case for tags.
+
+- **Trigger**: The user creates a new git branch (e.g., `git checkout -b feature/user-auth`).
+- **Your Action**: Propose creating a new tag that mirrors the branch name to isolate the feature's tasks from `master`.
+- **Your Suggested Prompt**: *"I see you've created a new branch named 'feature/user-auth'. To keep all related tasks neatly organized and separate from your main list, I can create a corresponding task tag for you. This helps prevent merge conflicts in your `tasks.json` file later. Shall I create the 'feature-user-auth' tag?"*
+- **Tool to Use**: `task-master add-tag --from-branch`
+
+#### Pattern 2: Team Collaboration
+- **Trigger**: The user mentions working with teammates (e.g., "My teammate Alice is handling the database schema," or "I need to review Bob's work on the API.").
+- **Your Action**: Suggest creating a separate tag for the user's work to prevent conflicts with shared master context.
+- **Your Suggested Prompt**: *"Since you're working with Alice, I can create a separate task context for your work to avoid conflicts. This way, Alice can continue working with the master list while you have your own isolated context. When you're ready to merge your work, we can coordinate the tasks back to master. Shall I create a tag for your current work?"*
+- **Tool to Use**: `task-master add-tag my-work --copy-from-current --description="My tasks while collaborating with Alice"`
+
+#### Pattern 3: Experiments or Risky Refactors
+- **Trigger**: The user wants to try something that might not be kept (e.g., "I want to experiment with switching our state management library," or "Let's refactor the old API module, but I want to keep the current tasks as a reference.").
+- **Your Action**: Propose creating a sandboxed tag for the experimental work.
+- **Your Suggested Prompt**: *"This sounds like a great experiment. To keep these new tasks separate from our main plan, I can create a temporary 'experiment-zustand' tag for this work. If we decide not to proceed, we can simply delete the tag without affecting the main task list. Sound good?"*
+- **Tool to Use**: `task-master add-tag experiment-zustand --description="Exploring Zustand migration"`
+
+#### Pattern 4: Large Feature Initiatives (PRD-Driven)
+This is a more structured approach for significant new features or epics.
+
+- **Trigger**: The user describes a large, multi-step feature that would benefit from a formal plan.
+- **Your Action**: Propose a comprehensive, PRD-driven workflow.
+- **Your Suggested Prompt**: *"This sounds like a significant new feature. To manage this effectively, I suggest we create a dedicated task context for it. Here's the plan: I'll create a new tag called 'feature-xyz', then we can draft a Product Requirements Document (PRD) together to scope the work. Once the PRD is ready, I'll automatically generate all the necessary tasks within that new tag. How does that sound?"*
+- **Your Implementation Flow**:
+    1.  **Create an empty tag**: `task-master add-tag feature-xyz --description "Tasks for the new XYZ feature"`. You can also start by creating a git branch if applicable, and then create the tag from that branch.
+    2.  **Collaborate & Create PRD**: Work with the user to create a detailed PRD file (e.g., `.taskmaster/docs/feature-xyz-prd.txt`).
+    3.  **Parse PRD into the new tag**: `task-master parse-prd .taskmaster/docs/feature-xyz-prd.txt --tag feature-xyz`
+    4.  **Prepare the new task list**: Follow up by suggesting `analyze-complexity` and `expand-all` for the newly created tasks within the `feature-xyz` tag.
+
+#### Pattern 5: Version-Based Development
+Tailor your approach based on the project maturity indicated by tag names.
+
+- **Prototype/MVP Tags** (`prototype`, `mvp`, `poc`, `v0.x`):
+  - **Your Approach**: Focus on speed and functionality over perfection
+  - **Task Generation**: Create tasks that emphasize "get it working" over "get it perfect"
+  - **Complexity Level**: Lower complexity, fewer subtasks, more direct implementation paths
+  - **Research Prompts**: Include context like "This is a prototype - prioritize speed and basic functionality over optimization"
+  - **Example Prompt Addition**: *"Since this is for the MVP, I'll focus on tasks that get core functionality working quickly rather than over-engineering."*
+
+- **Production/Mature Tags** (`v1.0+`, `production`, `stable`):
+  - **Your Approach**: Emphasize robustness, testing, and maintainability
+  - **Task Generation**: Include comprehensive error handling, testing, documentation, and optimization
+  - **Complexity Level**: Higher complexity, more detailed subtasks, thorough implementation paths
+  - **Research Prompts**: Include context like "This is for production - prioritize reliability, performance, and maintainability"
+  - **Example Prompt Addition**: *"Since this is for production, I'll ensure tasks include proper error handling, testing, and documentation."*
+
+### Advanced Workflow (Tag-Based & PRD-Driven)
+
+**When to Transition**: Recognize when the project has evolved (or has initiated a project which existing code) beyond simple task management. Look for these indicators:
+- User mentions teammates or collaboration needs
+- Project has grown to 15+ tasks with mixed priorities
+- User creates feature branches or mentions major initiatives
+- User initializes Taskmaster on an existing, complex codebase
+- User describes large features that would benefit from dedicated planning
+
+**Your Role in Transition**: Guide the user to a more sophisticated workflow that leverages tags for organization and PRDs for comprehensive planning.
+
+#### Master List Strategy (High-Value Focus)
+Once you transition to tag-based workflows, the `master` tag should ideally contain only:
+- **High-level deliverables** that provide significant business value
+- **Major milestones** and epic-level features
+- **Critical infrastructure** work that affects the entire project
+- **Release-blocking** items
+
+**What NOT to put in master**:
+- Detailed implementation subtasks (these go in feature-specific tags' parent tasks)
+- Refactoring work (create dedicated tags like `refactor-auth`)
+- Experimental features (use `experiment-*` tags)
+- Team member-specific tasks (use person-specific tags)
+
+#### PRD-Driven Feature Development
+
+**For New Major Features**:
+1. **Identify the Initiative**: When user describes a significant feature
+2. **Create Dedicated Tag**: `add_tag feature-[name] --description="[Feature description]"`
+3. **Collaborative PRD Creation**: Work with user to create comprehensive PRD in `.taskmaster/docs/feature-[name]-prd.txt`
+4. **Parse & Prepare**: 
+   - `parse_prd .taskmaster/docs/feature-[name]-prd.txt --tag=feature-[name]`
+   - `analyze_project_complexity --tag=feature-[name] --research`
+   - `expand_all --tag=feature-[name] --research`
+5. **Add Master Reference**: Create a high-level task in `master` that references the feature tag
+
+**For Existing Codebase Analysis**:
+When users initialize Taskmaster on existing projects:
+1. **Codebase Discovery**: Use your native tools for producing deep context about the code base. You may use `research` tool with `--tree` and `--files` to collect up to date information using the existing architecture as context.
+2. **Collaborative Assessment**: Work with user to identify improvement areas, technical debt, or new features
+3. **Strategic PRD Creation**: Co-author PRDs that include:
+   - Current state analysis (based on your codebase research)
+   - Proposed improvements or new features
+   - Implementation strategy considering existing code
+4. **Tag-Based Organization**: Parse PRDs into appropriate tags (`refactor-api`, `feature-dashboard`, `tech-debt`, etc.)
+5. **Master List Curation**: Keep only the most valuable initiatives in master
+
+The parse-prd's `--append` flag enables the user to parse multple PRDs within tags or across tags. PRDs should be focused and the number of tasks they are parsed into should be strategically chosen relative to the PRD's complexity and level of detail.
+
+### Workflow Transition Examples
+
+**Example 1: Simple → Team-Based**
+```
+User: "Alice is going to help with the API work"
+Your Response: "Great! To avoid conflicts, I'll create a separate task context for your work. Alice can continue with the master list while you work in your own context. When you're ready to merge, we can coordinate the tasks back together."
+Action: add_tag my-api-work --copy-from-current --description="My API tasks while collaborating with Alice"
+```
+
+**Example 2: Simple → PRD-Driven**
+```
+User: "I want to add a complete user dashboard with analytics, user management, and reporting"
+Your Response: "This sounds like a major feature that would benefit from detailed planning. Let me create a dedicated context for this work and we can draft a PRD together to ensure we capture all requirements."
+Actions: 
+1. add_tag feature-dashboard --description="User dashboard with analytics and management"
+2. Collaborate on PRD creation
+3. parse_prd dashboard-prd.txt --tag=feature-dashboard
+4. Add high-level "User Dashboard" task to master
+```
+
+**Example 3: Existing Project → Strategic Planning**
+```
+User: "I just initialized Taskmaster on my existing React app. It's getting messy and I want to improve it."
+Your Response: "Let me research your codebase to understand the current architecture, then we can create a strategic plan for improvements."
+Actions:
+1. research "Current React app architecture and improvement opportunities" --tree --files=src/
+2. Collaborate on improvement PRD based on findings
+3. Create tags for different improvement areas (refactor-components, improve-state-management, etc.)
+4. Keep only major improvement initiatives in master
+```
+
+---
+
+## Primary Interaction: MCP Server vs. CLI
+
+Taskmaster offers two primary ways to interact:
+
+1.  **MCP Server (Recommended for Integrated Tools)**:
+    - For AI agents and integrated development environments (like Roo Code), interacting via the **MCP server is the preferred method**.
+    - The MCP server exposes Taskmaster functionality through a set of tools (e.g., `get_tasks`, `add_subtask`).
+    - This method offers better performance, structured data exchange, and richer error handling compared to CLI parsing.
+    - Refer to @`mcp.md` for details on the MCP architecture and available tools.
+    - A comprehensive list and description of MCP tools and their corresponding CLI commands can be found in @`taskmaster.md`.
+    - **Restart the MCP server** if core logic in `scripts/modules` or MCP tool/direct function definitions change.
+    - **Note**: MCP tools fully support tagged task lists with complete tag management capabilities.
+
+2.  **`task-master` CLI (For Users & Fallback)**:
+    - The global `task-master` command provides a user-friendly interface for direct terminal interaction.
+    - It can also serve as a fallback if the MCP server is inaccessible or a specific function isn't exposed via MCP.
+    - Install globally with `npm install -g task-master-ai` or use locally via `npx task-master-ai ...`.
+    - The CLI commands often mirror the MCP tools (e.g., `task-master list` corresponds to `get_tasks`).
+    - Refer to @`taskmaster.md` for a detailed command reference.
+    - **Tagged Task Lists**: CLI fully supports the new tagged system with seamless migration.
+
+## How the Tag System Works (For Your Reference)
+
+- **Data Structure**: Tasks are organized into separate contexts (tags) like "master", "feature-branch", or "v2.0".
+- **Silent Migration**: Existing projects automatically migrate to use a "master" tag with zero disruption.
+- **Context Isolation**: Tasks in different tags are completely separate. Changes in one tag do not affect any other tag.
+- **Manual Control**: The user is always in control. There is no automatic switching. You facilitate switching by using `use-tag <name>`.
+- **Full CLI & MCP Support**: All tag management commands are available through both the CLI and MCP tools for you to use. Refer to @`taskmaster.md` for a full command list.
+
+---
+
+## Task Complexity Analysis
+
+-   Run `analyze_project_complexity` / `task-master analyze-complexity --research` (see @`taskmaster.md`) for comprehensive analysis
+-   Review complexity report via `complexity_report` / `task-master complexity-report` (see @`taskmaster.md`) for a formatted, readable version.
+-   Focus on tasks with highest complexity scores (8-10) for detailed breakdown
+-   Use analysis results to determine appropriate subtask allocation
+-   Note that reports are automatically used by the `expand_task` tool/command
+
+## Task Breakdown Process
+
+-   Use `expand_task` / `task-master expand --id=<id>`. It automatically uses the complexity report if found, otherwise generates default number of subtasks.
+-   Use `--num=<number>` to specify an explicit number of subtasks, overriding defaults or complexity report recommendations.
+-   Add `--research` flag to leverage Perplexity AI for research-backed expansion.
+-   Add `--force` flag to clear existing subtasks before generating new ones (default is to append).
+-   Use `--prompt="<context>"` to provide additional context when needed.
+-   Review and adjust generated subtasks as necessary.
+-   Use `expand_all` tool or `task-master expand --all` to expand multiple pending tasks at once, respecting flags like `--force` and `--research`.
+-   If subtasks need complete replacement (regardless of the `--force` flag on `expand`), clear them first with `clear_subtasks` / `task-master clear-subtasks --id=<id>`.
+
+## Implementation Drift Handling
+
+-   When implementation differs significantly from planned approach
+-   When future tasks need modification due to current implementation choices
+-   When new dependencies or requirements emerge
+-   Use `update` / `task-master update --from=<futureTaskId> --prompt='<explanation>\nUpdate context...' --research` to update multiple future tasks.
+-   Use `update_task` / `task-master update-task --id=<taskId> --prompt='<explanation>\nUpdate context...' --research` to update a single specific task.
+
+## Task Status Management
+
+-   Use 'pending' for tasks ready to be worked on
+-   Use 'done' for completed and verified tasks
+-   Use 'deferred' for postponed tasks
+-   Add custom status values as needed for project-specific workflows
+
+## Task Structure Fields
+
+- **id**: Unique identifier for the task (Example: `1`, `1.1`)
+- **title**: Brief, descriptive title (Example: `"Initialize Repo"`)
+- **description**: Concise summary of what the task involves (Example: `"Create a new repository, set up initial structure."`)
+- **status**: Current state of the task (Example: `"pending"`, `"done"`, `"deferred"`)
+- **dependencies**: IDs of prerequisite tasks (Example: `[1, 2.1]`)
     - Dependencies are displayed with status indicators (✅ for completed, ⏱️ for pending)
     - This helps quickly identify which prerequisite tasks are blocking work
-  - **priority**: Importance level (Example: `"high"`, `"medium"`, `"low"`)
-  - **details**: In-depth implementation instructions (Example: `"Use GitHub client ID/secret, handle callback, set session token."`)
-  - **testStrategy**: Verification approach (Example: `"Deploy and call endpoint to confirm 'Hello World' response."`)
-  - **subtasks**: List of smaller, more specific tasks (Example: `[{"id": 1, "title": "Configure OAuth", ...}]`)
+- **priority**: Importance level (Example: `"high"`, `"medium"`, `"low"`)
+- **details**: In-depth implementation instructions (Example: `"Use GitHub client ID/secret, handle callback, set session token."`) 
+- **testStrategy**: Verification approach (Example: `"Deploy and call endpoint to confirm 'Hello World' response."`) 
+- **subtasks**: List of smaller, more specific tasks (Example: `[{"id": 1, "title": "Configure OAuth", ...}]`) 
+- Refer to task structure details (previously linked to `tasks.md`).
 
-- **Environment Variables Configuration**
-  - **ANTHROPIC_API_KEY** (Required): Your Anthropic API key for Claude (Example: `ANTHROPIC_API_KEY=sk-ant-api03-...`)
-  - **MODEL** (Default: `"claude-3-7-sonnet-20250219"`): Claude model to use (Example: `MODEL=claude-3-opus-20240229`)
-  - **MAX_TOKENS** (Default: `"4000"`): Maximum tokens for responses (Example: `MAX_TOKENS=8000`)
-  - **TEMPERATURE** (Default: `"0.7"`): Temperature for model responses (Example: `TEMPERATURE=0.5`)
-  - **DEBUG** (Default: `"false"`): Enable debug logging (Example: `DEBUG=true`)
-  - **LOG_LEVEL** (Default: `"info"`): Console output level (Example: `LOG_LEVEL=debug`)
-  - **DEFAULT_SUBTASKS** (Default: `"3"`): Default subtask count (Example: `DEFAULT_SUBTASKS=5`)
-  - **DEFAULT_PRIORITY** (Default: `"medium"`): Default priority (Example: `DEFAULT_PRIORITY=high`)
-  - **PROJECT_NAME** (Default: `"MCP SaaS MVP"`): Project name in metadata (Example: `PROJECT_NAME=My Awesome Project`)
-  - **PROJECT_VERSION** (Default: `"1.0.0"`): Version in metadata (Example: `PROJECT_VERSION=2.1.0`)
-  - **PERPLEXITY_API_KEY**: For research-backed features (Example: `PERPLEXITY_API_KEY=pplx-...`)
-  - **PERPLEXITY_MODEL** (Default: `"sonar-medium-online"`): Perplexity model (Example: `PERPLEXITY_MODEL=sonar-large-online`)
+## Configuration Management (Updated)
 
-- **Determining the Next Task**
-  - Run `task-master next` to show the next task to work on
-  - The next command identifies tasks with all dependencies satisfied
-  - Tasks are prioritized by priority level, dependency count, and ID
-  - The command shows comprehensive task information including:
+Taskmaster configuration is managed through two main mechanisms:
+
+1.  **`.taskmaster/config.json` File (Primary):**
+    *   Located in the project root directory.
+    *   Stores most configuration settings: AI model selections (main, research, fallback), parameters (max tokens, temperature), logging level, default subtasks/priority, project name, etc.
+    *   **Tagged System Settings**: Includes `global.defaultTag` (defaults to "master") and `tags` section for tag management configuration.
+    *   **Managed via `task-master models --setup` command.** Do not edit manually unless you know what you are doing.
+    *   **View/Set specific models via `task-master models` command or `models` MCP tool.**
+    *   Created automatically when you run `task-master models --setup` for the first time or during tagged system migration.
+
+2.  **Environment Variables (`.env` / `mcp.json`):**
+    *   Used **only** for sensitive API keys and specific endpoint URLs.
+    *   Place API keys (one per provider) in a `.env` file in the project root for CLI usage.
+    *   For MCP/Roo Code integration, configure these keys in the `env` section of `.roo/mcp.json`.
+    *   Available keys/variables: See `assets/env.example` or the Configuration section in the command reference (previously linked to `taskmaster.md`).
+
+3.  **`.taskmaster/state.json` File (Tagged System State):**
+    *   Tracks current tag context and migration status.
+    *   Automatically created during tagged system migration.
+    *   Contains: `currentTag`, `lastSwitched`, `migrationNoticeShown`.
+
+**Important:** Non-API key settings (like model selections, `MAX_TOKENS`, `TASKMASTER_LOG_LEVEL`) are **no longer configured via environment variables**. Use the `task-master models` command (or `--setup` for interactive configuration) or the `models` MCP tool.
+**If AI commands FAIL in MCP** verify that the API key for the selected provider is present in the `env` section of `.roo/mcp.json`.
+**If AI commands FAIL in CLI** verify that the API key for the selected provider is present in the `.env` file in the root of the project.
+
+## Rules Management
+
+Taskmaster supports multiple AI coding assistant rule sets that can be configured during project initialization or managed afterward:
+
+- **Available Profiles**: Claude Code, Cline, Codex, Roo Code, Roo Code, Trae, Windsurf (claude, cline, codex, roo, roo, trae, windsurf)
+- **During Initialization**: Use `task-master init --rules roo,windsurf` to specify which rule sets to include
+- **After Initialization**: Use `task-master rules add <profiles>` or `task-master rules remove <profiles>` to manage rule sets
+- **Interactive Setup**: Use `task-master rules setup` to launch an interactive prompt for selecting rule profiles
+- **Default Behavior**: If no `--rules` flag is specified during initialization, all available rule profiles are included
+- **Rule Structure**: Each profile creates its own directory (e.g., `.roo/rules`, `.roo/rules`) with appropriate configuration files
+
+## Determining the Next Task
+
+- Run `next_task` / `task-master next` to show the next task to work on.
+- The command identifies tasks with all dependencies satisfied
+- Tasks are prioritized by priority level, dependency count, and ID
+- The command shows comprehensive task information including:
     - Basic task details and description
     - Implementation details
     - Subtasks (if they exist)
     - Contextual suggested actions
-  - Recommended before starting any new development work
-  - Respects your project's dependency structure
-  - Ensures tasks are completed in the appropriate sequence
-  - Provides ready-to-use commands for common task actions
+- Recommended before starting any new development work
+- Respects your project's dependency structure
+- Ensures tasks are completed in the appropriate sequence
+- Provides ready-to-use commands for common task actions
 
-- **Viewing Specific Task Details**
-  - Run `task-master show <id>` or `task-master show --id=<id>` to view a specific task
-  - Use dot notation for subtasks: `task-master show 1.2` (shows subtask 2 of task 1)
-  - Displays comprehensive information similar to the next command, but for a specific task
-  - For parent tasks, shows all subtasks and their current status
-  - For subtasks, shows parent task information and relationship
-  - Provides contextual suggested actions appropriate for the specific task
-  - Useful for examining task details before implementation or checking status
+## Viewing Specific Task Details
 
-- **Managing Task Dependencies**
-  - Use `task-master add-dependency --id=<id> --depends-on=<id>` to add a dependency
-  - Use `task-master remove-dependency --id=<id> --depends-on=<id>` to remove a dependency
-  - The system prevents circular dependencies and duplicate dependency entries
-  - Dependencies are checked for existence before being added or removed
-  - Task files are automatically regenerated after dependency changes
-  - Dependencies are visualized with status indicators in task listings and files
+- Run `get_task` / `task-master show <id>` to view a specific task.
+- Use dot notation for subtasks: `task-master show 1.2` (shows subtask 2 of task 1)
+- Displays comprehensive information similar to the next command, but for a specific task
+- For parent tasks, shows all subtasks and their current status
+- For subtasks, shows parent task information and relationship
+- Provides contextual suggested actions appropriate for the specific task
+- Useful for examining task details before implementation or checking status
 
-- **Command Reference: add-dependency**
-  - Legacy Syntax: `node scripts/dev.js add-dependency --id=<id> --depends-on=<id>`
-  - CLI Syntax: `task-master add-dependency --id=<id> --depends-on=<id>`
-  - Description: Adds a dependency relationship between two tasks
-  - Parameters:
-    - `--id=<id>`: ID of task that will depend on another task (required)
-    - `--depends-on=<id>`: ID of task that will become a dependency (required)
-  - Example: `task-master add-dependency --id=22 --depends-on=21`
-  - Notes: Prevents circular dependencies and duplicates; updates task files automatically
+## Managing Task Dependencies
 
-- **Command Reference: remove-dependency**
-  - Legacy Syntax: `node scripts/dev.js remove-dependency --id=<id> --depends-on=<id>`
-  - CLI Syntax: `task-master remove-dependency --id=<id> --depends-on=<id>`
-  - Description: Removes a dependency relationship between two tasks
-  - Parameters:
-    - `--id=<id>`: ID of task to remove dependency from (required)
-    - `--depends-on=<id>`: ID of task to remove as a dependency (required)
-  - Example: `task-master remove-dependency --id=22 --depends-on=21`
-  - Notes: Checks if dependency actually exists; updates task files automatically
+- Use `add_dependency` / `task-master add-dependency --id=<id> --depends-on=<id>` to add a dependency.
+- Use `remove_dependency` / `task-master remove-dependency --id=<id> --depends-on=<id>` to remove a dependency.
+- The system prevents circular dependencies and duplicate dependency entries
+- Dependencies are checked for existence before being added or removed
+- Task files are automatically regenerated after dependency changes
+- Dependencies are visualized with status indicators in task listings and files
 
-- **Command Reference: validate-dependencies**
-  - Legacy Syntax: `node scripts/dev.js validate-dependencies [options]`
-  - CLI Syntax: `task-master validate-dependencies [options]`
-  - Description: Checks for and identifies invalid dependencies in tasks.json and task files
-  - Parameters:
-    - `--file=<path>, -f`: Use alternative tasks.json file (default: 'tasks/tasks.json')
-  - Example: `task-master validate-dependencies`
-  - Notes: 
-    - Reports all non-existent dependencies and self-dependencies without modifying files
-    - Provides detailed statistics on task dependency state
-    - Use before fix-dependencies to audit your task structure
+## Task Reorganization
 
-- **Command Reference: fix-dependencies**
-  - Legacy Syntax: `node scripts/dev.js fix-dependencies [options]`
-  - CLI Syntax: `task-master fix-dependencies [options]`
-  - Description: Finds and fixes all invalid dependencies in tasks.json and task files
-  - Parameters:
-    - `--file=<path>, -f`: Use alternative tasks.json file (default: 'tasks/tasks.json')
-  - Example: `task-master fix-dependencies`
-  - Notes: 
-    - Removes references to non-existent tasks and subtasks
-    - Eliminates self-dependencies (tasks depending on themselves)
-    - Regenerates task files with corrected dependencies
-    - Provides detailed report of all fixes made
+- Use `move_task` / `task-master move --from=<id> --to=<id>` to move tasks or subtasks within the hierarchy
+- This command supports several use cases:
+  - Moving a standalone task to become a subtask (e.g., `--from=5 --to=7`)
+  - Moving a subtask to become a standalone task (e.g., `--from=5.2 --to=7`) 
+  - Moving a subtask to a different parent (e.g., `--from=5.2 --to=7.3`)
+  - Reordering subtasks within the same parent (e.g., `--from=5.2 --to=5.4`)
+  - Moving a task to a new, non-existent ID position (e.g., `--from=5 --to=25`)
+  - Moving multiple tasks at once using comma-separated IDs (e.g., `--from=10,11,12 --to=16,17,18`)
+- The system includes validation to prevent data loss:
+  - Allows moving to non-existent IDs by creating placeholder tasks
+  - Prevents moving to existing task IDs that have content (to avoid overwriting)
+  - Validates source tasks exist before attempting to move them
+- The system maintains proper parent-child relationships and dependency integrity
+- Task files are automatically regenerated after the move operation
+- This provides greater flexibility in organizing and refining your task structure as project understanding evolves
+- This is especially useful when dealing with potential merge conflicts arising from teams creating tasks on separate branches. Solve these conflicts very easily by moving your tasks and keeping theirs.
 
-- **Command Reference: complexity-report**
-  - Legacy Syntax: `node scripts/dev.js complexity-report [options]`
-  - CLI Syntax: `task-master complexity-report [options]`
-  - Description: Displays the task complexity analysis report in a formatted, easy-to-read way
-  - Parameters:
-    - `--file=<path>, -f`: Path to the complexity report file (default: 'scripts/task-complexity-report.json')
-  - Example: `task-master complexity-report`
-  - Notes: 
-    - Shows tasks organized by complexity score with recommended actions
-    - Provides complexity distribution statistics
-    - Displays ready-to-use expansion commands for complex tasks
-    - If no report exists, offers to generate one interactively
+## Iterative Subtask Implementation
 
-- **Command Reference: add-task**
-  - CLI Syntax: `task-master add-task [options]`
-  - Description: Add a new task to tasks.json using AI
-  - Parameters:
-    - `--file=<path>, -f`: Path to the tasks file (default: 'tasks/tasks.json')
-    - `--prompt=<text>, -p`: Description of the task to add (required)
-    - `--dependencies=<ids>, -d`: Comma-separated list of task IDs this task depends on
-    - `--priority=<priority>`: Task priority (high, medium, low) (default: 'medium')
-  - Example: `task-master add-task --prompt="Create user authentication using Auth0"`
-  - Notes: Uses AI to convert description into structured task with appropriate details
+Once a task has been broken down into subtasks using `expand_task` or similar methods, follow this iterative process for implementation:
 
-- **Command Reference: init**
-  - CLI Syntax: `task-master init`
-  - Description: Initialize a new project with Task Master structure
-  - Parameters: None
-  - Example: `task-master init`
-  - Notes: 
-    - Creates initial project structure with required files
-    - Prompts for project settings if not provided
-    - Merges with existing files when appropriate
-    - Can be used to bootstrap a new Task Master project quickly
+1.  **Understand the Goal (Preparation):**
+    *   Use `get_task` / `task-master show <subtaskId>` (see @`taskmaster.md`) to thoroughly understand the specific goals and requirements of the subtask.
 
-- **Code Analysis & Refactoring Techniques**
-  - **Top-Level Function Search**
-    - Use grep pattern matching to find all exported functions across the codebase
-    - Command: `grep -E "export (function|const) \w+|function \w+\(|const \w+ = \(|module\.exports" --include="*.js" -r ./`
-    - Benefits:
-      - Quickly identify all public API functions without reading implementation details
-      - Compare functions between files during refactoring (e.g., monolithic to modular structure)
-      - Verify all expected functions exist in refactored modules
-      - Identify duplicate functionality or naming conflicts
-    - Usage examples:
-      - When migrating from `scripts/dev.js` to modular structure: `grep -E "function \w+\(" scripts/dev.js`
-      - Check function exports in a directory: `grep -E "export (function|const)" scripts/modules/`
-      - Find potential naming conflicts: `grep -E "function (get|set|create|update)\w+\(" -r ./`
-    - Variations:
-      - Add `-n` flag to include line numbers
-      - Add `--include="*.ts"` to filter by file extension
-      - Use with `| sort` to alphabetize results
-    - Integration with refactoring workflow:
-      - Start by mapping all functions in the source file
-      - Create target module files based on function grouping
-      - Verify all functions were properly migrated
-      - Check for any unintentional duplications or omissions
+2.  **Initial Exploration & Planning (Iteration 1):**
+    *   This is the first attempt at creating a concrete implementation plan.
+    *   Explore the codebase to identify the precise files, functions, and even specific lines of code that will need modification.
+    *   Determine the intended code changes (diffs) and their locations.
+    *   Gather *all* relevant details from this exploration phase.
+
+3.  **Log the Plan:**
+    *   Run `update_subtask` / `task-master update-subtask --id=<subtaskId> --prompt='<detailed plan>'`.
+    *   Provide the *complete and detailed* findings from the exploration phase in the prompt. Include file paths, line numbers, proposed diffs, reasoning, and any potential challenges identified. Do not omit details. The goal is to create a rich, timestamped log within the subtask's `details`.
+
+4.  **Verify the Plan:**
+    *   Run `get_task` / `task-master show <subtaskId>` again to confirm that the detailed implementation plan has been successfully appended to the subtask's details.
+
+5.  **Begin Implementation:**
+    *   Set the subtask status using `set_task_status` / `task-master set-status --id=<subtaskId> --status=in-progress`.
+    *   Start coding based on the logged plan.
+
+6.  **Refine and Log Progress (Iteration 2+):**
+    *   As implementation progresses, you will encounter challenges, discover nuances, or confirm successful approaches.
+    *   **Before appending new information**: Briefly review the *existing* details logged in the subtask (using `get_task` or recalling from context) to ensure the update adds fresh insights and avoids redundancy.
+    *   **Regularly** use `update_subtask` / `task-master update-subtask --id=<subtaskId> --prompt='<update details>\n- What worked...\n- What didn't work...'` to append new findings.
+    *   **Crucially, log:**
+        *   What worked ("fundamental truths" discovered).
+        *   What didn't work and why (to avoid repeating mistakes).
+        *   Specific code snippets or configurations that were successful.
+        *   Decisions made, especially if confirmed with user input.
+        *   Any deviations from the initial plan and the reasoning.
+    *   The objective is to continuously enrich the subtask's details, creating a log of the implementation journey that helps the AI (and human developers) learn, adapt, and avoid repeating errors.
+
+7.  **Review & Update Rules (Post-Implementation):**
+    *   Once the implementation for the subtask is functionally complete, review all code changes and the relevant chat history.
+    *   Identify any new or modified code patterns, conventions, or best practices established during the implementation.
+    *   Create new or update existing rules following internal guidelines (previously linked to `cursor_rules.md` and `self_improve.md`).
+
+8.  **Mark Task Complete:**
+    *   After verifying the implementation and updating any necessary rules, mark the subtask as completed: `set_task_status` / `task-master set-status --id=<subtaskId> --status=done`.
+
+9.  **Commit Changes (If using Git):**
+    *   Stage the relevant code changes and any updated/new rule files (`git add .`).
+    *   Craft a comprehensive Git commit message summarizing the work done for the subtask, including both code implementation and any rule adjustments.
+    *   Execute the commit command directly in the terminal (e.g., `git commit -m 'feat(module): Implement feature X for subtask <subtaskId>\n\n- Details about changes...\n- Updated rule Y for pattern Z'`).
+    *   Consider if a Changeset is needed according to internal versioning guidelines (previously linked to `changeset.md`). If so, run `npm run changeset`, stage the generated file, and amend the commit or create a new one.
+
+10. **Proceed to Next Subtask:**
+    *   Identify the next subtask (e.g., using `next_task` / `task-master next`).
+
+## Code Analysis & Refactoring Techniques
+
+- **Top-Level Function Search**:
+    - Useful for understanding module structure or planning refactors.
+    - Use grep/ripgrep to find exported functions/constants:
+      `rg "export (async function|function|const) \w+"` or similar patterns.
+    - Can help compare functions between files during migrations or identify potential naming conflicts.
+
+---
+*This workflow provides a general guideline. Adapt it based on your specific project needs and team practices.*
