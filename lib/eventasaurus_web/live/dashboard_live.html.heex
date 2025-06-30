@@ -1,0 +1,463 @@
+<div class="px-4 py-6 sm:px-0">
+  <div class="rounded-lg bg-white p-6 shadow">
+    <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+    
+    <!-- User info section -->
+    <div class="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <%= avatar_img_size(@user, :lg, class: "border-2 border-green-400") %>
+          <div>
+            <p class="font-semibold">Welcome back!</p>
+            <p class="mt-1">
+              <strong>Email:</strong> <%= @user.email %>
+            </p>
+            <p class="mt-1">
+              <strong>Name:</strong> <%= @user.name || "Not provided" %>
+            </p>
+          </div>
+        </div>
+        <div>
+          <a href="/settings" class="inline-flex items-center px-3 py-2 border border-green-300 shadow-sm text-sm leading-4 font-medium rounded-md text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            Settings
+          </a>
+            </div>
+  </div>
+</div>
+
+    <!-- Tab navigation -->
+    <div class="border-b border-gray-200 mb-6">
+      <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="events"
+          class={[
+            "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm",
+            if @active_tab == "events" do
+              "border-indigo-500 text-indigo-600"
+            else
+              "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            end
+          ]}
+        >
+          📅 My Events
+        </button>
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="tickets"
+          class={[
+            "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm",
+            if @active_tab == "tickets" do
+              "border-indigo-500 text-indigo-600"
+            else
+              "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            end
+          ]}
+        >
+          🎫 My Tickets
+        </button>
+      </nav>
+    </div>
+
+    <!-- Loading indicator -->
+    <%= if @loading do %>
+      <div class="flex justify-center items-center py-8">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <span class="ml-2 text-gray-600">Loading...</span>
+      </div>
+    <% end %>
+
+    <!-- Events Tab -->
+    <%= if @active_tab == "events" and not @loading do %>
+      <div class="space-y-6">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-semibold">Your Events</h2>
+          <div class="flex space-x-3">
+            <button
+              phx-click="refresh_data"
+              class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+            <a href="/events/new" class="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+              Create New Event
+            </a>
+          </div>
+        </div>
+
+        <%= if Enum.empty?(@upcoming_events) and Enum.empty?(@past_events) do %>
+          <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No events yet</h3>
+            <p class="mt-1 text-sm text-gray-500">Get started by creating your first event.</p>
+            <div class="mt-6">
+              <a href="/events/new" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                Create Event
+              </a>
+            </div>
+          </div>
+        <% else %>
+          <%= if length(@upcoming_events) > 0 do %>
+            <div>
+              <h3 class="text-lg font-bold mb-3">Upcoming Events</h3>
+              <.table id="upcoming-events" rows={@upcoming_events}>
+                <:col :let={event} label="Title">
+                  <a href={"/events/" <> event.slug} class="text-blue-600 hover:underline font-medium">
+                    <%= event.title %>
+                  </a>
+                </:col>
+                <:col :let={event} label="Date & Time">
+                  <%= if event.status == :polling do %>
+                    <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full mb-2">
+                      📊 Date Polling
+                    </span>
+                    <div class="text-sm text-gray-600">
+                      Multiple dates being voted on
+                    </div>
+                  <% else %>
+                    <div class="mb-1">
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                        ✓ Confirmed
+                      </span>
+                    </div>
+                    <div class="font-medium">
+                      <%= EventasaurusWeb.EventHTML.format_date(event.start_at, event.timezone) %>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                      <%= EventasaurusWeb.EventHTML.format_time(event.start_at, event.timezone) %>
+                      <%= if event.ends_at do %>
+                        - <%= EventasaurusWeb.EventHTML.format_time(event.ends_at, event.timezone) %>
+                      <% end %>
+                    </div>
+                  <% end %>
+                  <span class="block text-xs text-gray-500 mt-1"><%= event.timezone %></span>
+                </:col>
+                <:col :let={event} label="Venue">
+                  <%= if event.venue_id == nil do %>
+                    <span class="text-gray-500 italic">Virtual</span>
+                  <% else %>
+                    <%= if event.venue, do: event.venue.name, else: "-" %>
+                  <% end %>
+                </:col>
+              </.table>
+            </div>
+          <% end %>
+          
+          <%= if length(@past_events) > 0 do %>
+            <div>
+              <h3 class="text-lg font-bold mb-3">Past Events</h3>
+              <.table id="past-events" rows={@past_events}>
+                <:col :let={event} label="Title">
+                  <a href={"/events/" <> event.slug} class="text-blue-600 hover:underline font-medium">
+                    <%= event.title %>
+                  </a>
+                </:col>
+                <:col :let={event} label="Date & Time">
+                  <%= if event.status == :polling do %>
+                    <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full mb-2">
+                      📊 Was Polling
+                    </span>
+                    <div class="text-sm text-gray-600">
+                      Date poll never finalized
+                    </div>
+                  <% else %>
+                    <div class="mb-1">
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                        ✓ Was Confirmed
+                      </span>
+                    </div>
+                    <div class="font-medium text-gray-700">
+                      <%= EventasaurusWeb.EventHTML.format_date(event.start_at, event.timezone) %>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                      <%= EventasaurusWeb.EventHTML.format_time(event.start_at, event.timezone) %>
+                      <%= if event.ends_at do %>
+                        - <%= EventasaurusWeb.EventHTML.format_time(event.ends_at, event.timezone) %>
+                      <% end %>
+                    </div>
+                  <% end %>
+                  <span class="block text-xs text-gray-500 mt-1"><%= event.timezone %></span>
+                </:col>
+                <:col :let={event} label="Venue">
+                  <%= if event.venue_id == nil do %>
+                    <span class="text-gray-500 italic">Virtual</span>
+                  <% else %>
+                    <%= if event.venue, do: event.venue.name, else: "-" %>
+                  <% end %>
+                </:col>
+              </.table>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <!-- Tickets Tab -->
+    <%= if @active_tab == "tickets" and not @loading do %>
+      <div class="space-y-6">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-semibold">My Tickets</h2>
+          <div class="flex space-x-3">
+            <!-- Order status filter -->
+            <select
+              phx-change="filter_orders"
+              name="status"
+              class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+            >
+              <option value="all" selected={@order_filter == "all"}>All Orders</option>
+              <option value="confirmed" selected={@order_filter == "confirmed"}>Available Tickets</option>
+              <option value="pending" selected={@order_filter == "pending"}>Pending</option>
+              <option value="cancelled" selected={@order_filter == "cancelled"}>Cancelled</option>
+              <option value="refunded" selected={@order_filter == "refunded"}>Refunded</option>
+            </select>
+            <button
+              phx-click="refresh_data"
+              class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <%= if Enum.empty?(filtered_orders(@orders, @order_filter)) do %>
+          <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No tickets found</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              <%= if @order_filter == "all" do %>
+                You haven't purchased any tickets yet.
+              <% else %>
+                No tickets match the selected filter.
+              <% end %>
+            </p>
+          </div>
+        <% else %>
+          <div class="bg-white overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+            <table class="min-w-full divide-y divide-gray-300">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Order
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Event
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ticket
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Purchase Date
+                  </th>
+                  <th scope="col" class="relative px-6 py-3">
+                    <span class="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <%= for order <- filtered_orders(@orders, @order_filter) do %>
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      #<%= order.id %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-900 font-medium"><%= order.event.title %></div>
+                      <div class="text-sm text-gray-500">
+                        <%= if order.event.start_at do %>
+                          <%= Calendar.strftime(order.event.start_at, "%B %d, %Y") %>
+                        <% end %>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-900 font-medium"><%= order.ticket.title %></div>
+                      <div class="text-sm text-gray-500">Qty: <%= order.quantity %></div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                      <%= format_currency(order.total_cents) %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full #{status_badge_class(order.status)}"}>
+                        <%= String.replace(order.status, "_", " ") |> String.capitalize() %>
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <%= Calendar.strftime(order.inserted_at, "%m/%d/%Y") %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div class="flex justify-end space-x-2">
+                        <%= if order.status == "confirmed" do %>
+                          <button
+                            phx-click="show_ticket_modal"
+                            phx-value-order-id={order.id}
+                            class="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                          >
+                            View Ticket
+                          </button>
+                        <% end %>
+                        <%= if can_cancel_order?(order) do %>
+                          <button
+                            phx-click="cancel_order"
+                            phx-value-order_id={order.id}
+                            data-confirm="Are you sure you want to cancel this order?"
+                            class="text-red-600 hover:text-red-900 text-sm font-medium"
+                          >
+                            Cancel
+                          </button>
+                        <% end %>
+                      </div>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<!-- Ticket Modal -->
+<%= if @selected_order do %>
+  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" phx-click="close_ticket_modal">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white" phx-click-away="close_ticket_modal">
+      <div class="mt-3">
+        <!-- Modal Header -->
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-lg font-medium text-gray-900">Your Ticket</h3>
+          <button
+            phx-click="close_ticket_modal"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Ticket Display -->
+        <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white mb-6">
+          <div class="flex justify-between items-start mb-4">
+            <div class="flex-1">
+              <h4 class="text-xl font-bold mb-2"><%= @selected_order.event.title %></h4>
+              <p class="text-blue-100 mb-1">
+                <strong>Ticket:</strong> <%= @selected_order.ticket.title %>
+              </p>
+              <p class="text-blue-100 mb-1">
+                <strong>Quantity:</strong> <%= @selected_order.quantity %>
+              </p>
+              <p class="text-blue-100 mb-1">
+                <strong>Order ID:</strong> #<%= @selected_order.id %>
+              </p>
+            </div>
+            
+            <!-- QR Code Section -->
+            <div class="bg-white rounded-lg p-4 ml-4">
+              <div 
+                id={"ticket-qr-#{@selected_order.id}"}
+                phx-hook="TicketQR"
+                data-qr-ticket="true"
+                data-ticket-id={generate_ticket_id(@selected_order)}
+                data-order-id={@selected_order.id}
+                class="text-center"
+              >
+                <canvas class="qr-code-canvas mx-auto"></canvas>
+                <div class="qr-fallback hidden text-black text-xs mt-2"></div>
+              </div>
+              <p class="text-black text-xs text-center mt-2 font-medium">Scan to Verify</p>
+            </div>
+          </div>
+
+          <!-- Event Details -->
+          <div class="border-t border-blue-400 pt-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p class="text-blue-100 mb-1"><strong>Date:</strong></p>
+                <p class="text-white">
+                  <%= if @selected_order.event.start_at do %>
+                    <%= Calendar.strftime(@selected_order.event.start_at, "%A, %B %d, %Y") %>
+                  <% else %>
+                    To be determined
+                  <% end %>
+                </p>
+              </div>
+              <div>
+                <p class="text-blue-100 mb-1"><strong>Time:</strong></p>
+                <p class="text-white">
+                  <%= if @selected_order.event.start_at do %>
+                    <%= Calendar.strftime(@selected_order.event.start_at, "%I:%M %p") %>
+                    <%= if @selected_order.event.ends_at do %>
+                      - <%= Calendar.strftime(@selected_order.event.ends_at, "%I:%M %p") %>
+                    <% end %>
+                  <% else %>
+                    To be determined
+                  <% end %>
+                </p>
+              </div>
+              <div>
+                <p class="text-blue-100 mb-1"><strong>Venue:</strong></p>
+                <p class="text-white">
+                  <%= if @selected_order.event.venue do %>
+                    <%= @selected_order.event.venue.name %>
+                  <% else %>
+                    Virtual Event
+                  <% end %>
+                </p>
+              </div>
+              <div>
+                <p class="text-blue-100 mb-1"><strong>Total Paid:</strong></p>
+                <p class="text-white font-bold"><%= format_currency(@selected_order.total_cents) %></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile-friendly instructions -->
+        <div class="bg-gray-50 rounded-lg p-4 text-sm">
+          <h5 class="font-medium text-gray-900 mb-2">How to use your ticket:</h5>
+          <ul class="list-disc list-inside text-gray-600 space-y-1">
+            <li>Show this QR code at the event entrance</li>
+            <li>Screenshot or download for offline access</li>
+            <li>Keep your order ID (#<%= @selected_order.id %>) handy</li>
+            <li>Contact support if you have any issues</li>
+          </ul>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="mt-6 flex justify-end space-x-3">
+          <button
+            phx-click="close_ticket_modal"
+            class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+          >
+            Close
+          </button>
+          <button
+            onclick="window.print()"
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Print Ticket
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %> 
