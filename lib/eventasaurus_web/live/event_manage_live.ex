@@ -22,7 +22,7 @@ defmodule EventasaurusWeb.EventManageLive do
             venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
             organizers = Events.list_event_organizers(event)
             participants = Events.list_event_participants(event)
-                          |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
+                          |> Enum.sort_by(& &1.inserted_at, :desc)
 
             tickets = Ticketing.list_tickets_for_event(event.id)
             orders = Ticketing.list_orders_for_event(event.id)
@@ -102,7 +102,7 @@ defmodule EventasaurusWeb.EventManageLive do
   def handle_event("refresh_data", _params, socket) do
     # Refresh all data
     participants = Events.list_event_participants(socket.assigns.event)
-                  |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
+                  |> Enum.sort_by(& &1.inserted_at, :desc)
     tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
     orders = Ticketing.list_orders_for_event(socket.assigns.event.id)
             |> EventasaurusApp.Repo.preload([:ticket, :user])
@@ -143,5 +143,18 @@ defmodule EventasaurusWeb.EventManageLive do
     Enum.sum(Enum.map(confirmed_orders, & &1.quantity))
   end
 
+  defp get_ticket_orders(ticket, orders) do
+    Enum.filter(orders, &(&1.ticket_id == ticket.id and &1.status == "confirmed"))
+  end
+
+  defp get_tickets_sold(ticket, orders) do
+    ticket_orders = get_ticket_orders(ticket, orders)
+    Enum.sum(Enum.map(ticket_orders, & &1.quantity))
+  end
+
+  defp get_tickets_available(ticket, orders) do
+    sold = get_tickets_sold(ticket, orders)
+    max(0, ticket.quantity - sold)
+  end
 
 end
