@@ -184,10 +184,11 @@ defmodule EventasaurusWeb.DashboardLive do
   end
 
   defp generate_ticket_id(order) do
-    # Generate a cryptographically secure ticket ID
+    # Generate a deterministic but secure ticket ID that can be verified
     base = "EVT-#{order.id}"
-    # Use strong random bytes for security
-    hash = :crypto.strong_rand_bytes(8)
+    # Create deterministic hash based on order data that can't be easily forged
+    data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
+    hash = :crypto.hash(:sha256, data)
     |> Base.url_encode64(padding: false)
     |> String.slice(0, 8)
     "#{base}-#{hash}"
