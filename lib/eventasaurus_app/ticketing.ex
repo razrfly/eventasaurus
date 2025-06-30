@@ -269,6 +269,24 @@ defmodule EventasaurusApp.Ticketing do
   def get_order!(id), do: Repo.get!(Order, id)
 
   @doc """
+  Gets a single order by ID.
+
+  ## Examples
+
+      iex> get_order(123)
+      %Order{}
+
+      iex> get_order(invalid_id)
+      nil
+
+  """
+  def get_order(id) do
+    Order
+    |> preload([:user, :event, :ticket, event: :venue])
+    |> Repo.get(id)
+  end
+
+  @doc """
   Gets a single order with preloaded associations.
 
   ## Examples
