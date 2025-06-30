@@ -65,13 +65,18 @@ defmodule EventasaurusApp.Events.Order do
   end
 
   defp validate_total_calculation(changeset) do
+    # Note: With Stripe handling tax calculation automatically, we have different validation rules:
+    # 1. For new orders (before Stripe processing): total should equal subtotal since tax is 0
+    # 2. For processed orders (after Stripe): we trust Stripe's calculations completely
     subtotal = get_field(changeset, :subtotal_cents)
     tax = get_field(changeset, :tax_cents) || 0
     total = get_field(changeset, :total_cents)
 
-    if subtotal && total && (subtotal + tax) != total do
-      add_error(changeset, :total_cents, "must equal subtotal plus tax")
+    # Only validate for orders that haven't been processed by Stripe yet
+    if subtotal && total && tax == 0 && subtotal != total do
+      add_error(changeset, :total_cents, "must equal subtotal when tax is not yet calculated")
     else
+      # For orders with tax > 0, trust Stripe's calculations
       changeset
     end
   end
@@ -97,10 +102,6 @@ defmodule EventasaurusApp.Events.Order do
 
   def using_stripe_connect?(%__MODULE__{stripe_connect_account_id: id}) when not is_nil(id), do: true
   def using_stripe_connect?(_), do: false
-
-  def calculate_platform_fee(total_cents, fee_percentage \\ 0.05) do
-    round(total_cents * fee_percentage)
-  end
 
   @doc """
   Create a pricing snapshot from ticket and order parameters.
