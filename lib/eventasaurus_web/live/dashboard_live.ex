@@ -184,13 +184,27 @@ defmodule EventasaurusWeb.DashboardLive do
   end
 
   defp generate_ticket_id(order) do
-    # Generate a deterministic but secure ticket ID that can be verified
+    # Generate a cryptographically secure ticket ID using HMAC
     base = "EVT-#{order.id}"
-    # Create deterministic hash based on order data that can't be easily forged
+    # Use HMAC with server secret for secure hash generation
+    secret_key = get_ticket_secret_key()
     data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
-    hash = :crypto.hash(:sha256, data)
+    hash = :crypto.mac(:hmac, :sha256, secret_key, data)
     |> Base.url_encode64(padding: false)
-    |> String.slice(0, 8)
+    |> String.slice(0, 16)  # Increased entropy to 16 chars
     "#{base}-#{hash}"
+  end
+
+  defp get_ticket_secret_key do
+    # Use Phoenix secret key base as entropy source for ticket signatures
+    secret_base = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)[:secret_key_base]
+
+    # Add nil check with fallback
+    if secret_base do
+      :crypto.hash(:sha256, secret_base <> "ticket_signing")
+    else
+      # Fallback: generate deterministic key from app name
+      :crypto.hash(:sha256, "eventasaurus_ticket_signing_fallback_key")
+    end
   end
 end
