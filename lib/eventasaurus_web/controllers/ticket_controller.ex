@@ -15,35 +15,69 @@ defmodule EventasaurusWeb.TicketController do
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
-        |> put_flash(:error, "Ticket not found or invalid.")
-        |> render(:verify_error, error: "Ticket not found")
+        |> put_flash(:error, "Order not found.")
+        |> render(:verify_error, error: "Order not found")
+
+      {:error, :not_confirmed} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> put_flash(:error, "Order is not confirmed.")
+        |> render(:verify_error, error: "Order not confirmed")
 
       {:error, :invalid_ticket} ->
         conn
         |> put_status(:bad_request)
         |> put_flash(:error, "Invalid ticket format.")
-        |> render(:verify_error, error: "Invalid ticket")
+        |> render(:verify_error, error: "Invalid ticket format")
+
+      {:error, :invalid_hash} ->
+        conn
+        |> put_status(:unauthorized)
+        |> put_flash(:error, "Ticket authentication failed.")
+        |> render(:verify_error, error: "Invalid ticket signature")
+
+      {:error, :invalid_format} ->
+        conn
+        |> put_status(:bad_request)
+        |> put_flash(:error, "Invalid ticket format.")
+        |> render(:verify_error, error: "Malformed ticket ID")
     end
   end
 
   defp verify_ticket(ticket_id, order_id) when is_binary(ticket_id) and is_binary(order_id) do
     # Parse order_id to integer for database lookup
-    with {parsed_order_id, ""} <- Integer.parse(order_id),
-         {:ok, extracted_order_id, provided_hash} <- extract_ticket_components(ticket_id),
-         true <- extracted_order_id == parsed_order_id,
-         {:ok, order} <- get_order_with_validation(parsed_order_id),
-         true <- validate_ticket_hash(order, provided_hash) do
-      {:ok, order}
-    else
-      _ -> {:error, :invalid_ticket}
+    case Integer.parse(order_id) do
+      {parsed_order_id, ""} ->
+        # Extract components from ticket ID
+        case extract_ticket_components(ticket_id) do
+          {:error, reason} -> {:error, reason}
+          {:ok, extracted_order_id, provided_hash} ->
+            # Verify order IDs match
+            if extracted_order_id != parsed_order_id do
+              {:error, :invalid_ticket}
+            else
+              # Get and validate order
+              case get_order_with_validation(parsed_order_id) do
+                {:error, reason} -> {:error, reason}
+                {:ok, order} ->
+                  # Validate cryptographic hash
+                  if validate_ticket_hash(order, provided_hash) do
+                    {:ok, order}
+                  else
+                    {:error, :invalid_hash}
+                  end
+              end
+            end
+        end
+      _ -> {:error, :invalid_format}
     end
   end
 
-  defp verify_ticket(_, _), do: {:error, :invalid_ticket}
+  defp verify_ticket(_, _), do: {:error, :invalid_format}
 
   defp extract_ticket_components("EVT-" <> rest) do
     case String.split(rest, "-", parts: 2) do
-      [order_id_str, hash] when byte_size(hash) == 8 ->
+      [order_id_str, hash] when byte_size(hash) == 16 ->  # Updated to 16 chars for HMAC
         case Integer.parse(order_id_str) do
           {order_id, ""} -> {:ok, order_id, hash}
           _ -> {:error, :invalid_format}
@@ -74,11 +108,25 @@ defmodule EventasaurusWeb.TicketController do
   end
 
   defp generate_secure_hash_for_order(order) do
-    # Create deterministic hash based on order data that can't be easily forged
+    # Use HMAC with server secret for cryptographically secure hash generation
+    secret_key = get_ticket_secret_key()
     data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
-    :crypto.hash(:sha256, data)
+    :crypto.mac(:hmac, :sha256, secret_key, data)
     |> Base.url_encode64(padding: false)
-    |> String.slice(0, 8)
+    |> String.slice(0, 16)  # Increased entropy to 16 chars
+  end
+
+  defp get_ticket_secret_key do
+    # Use Phoenix secret key base as entropy source for ticket signatures
+    secret_base = Application.get_env(:eventasaurus, EventasaurusWeb.Endpoint)[:secret_key_base]
+
+    # Add nil check with fallback
+    if secret_base do
+      :crypto.hash(:sha256, secret_base <> "ticket_signing")
+    else
+      # Fallback: generate deterministic key from app name
+      :crypto.hash(:sha256, "eventasaurus_ticket_signing_fallback_key")
+    end
   end
 
   defp secure_compare(a, b) when byte_size(a) != byte_size(b), do: false
