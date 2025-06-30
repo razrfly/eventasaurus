@@ -104,6 +104,8 @@ defmodule EventasaurusWeb.Router do
       live "/dashboard", DashboardLive, :index
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
+      live "/events/:slug/tickets", AdminTicketLive, :index
+      live "/events/:slug/orders", AdminOrderLive, :index
       live "/checkout/payment", CheckoutPaymentLive
     end
   end
@@ -145,11 +147,19 @@ defmodule EventasaurusWeb.Router do
     get "/callback", StripeConnectController, :callback
   end
 
+  # Protected event management LiveView (require authentication)
+  live_session :event_management, on_mount: [{EventasaurusWeb.Live.AuthHooks, :require_authenticated_user}] do
+    scope "/events", EventasaurusWeb do
+      pipe_through :browser
+
+      live "/:slug", EventManageLive, :show
+    end
+  end
+
   # Protected event routes that require authentication (browser)
   scope "/events", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
 
-    get "/:slug", EventController, :show
     get "/:slug/attendees", EventController, :attendees
     delete "/:slug", EventController, :delete
     post "/:slug/cancel", EventController, :cancel
