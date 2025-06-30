@@ -1271,7 +1271,18 @@ defmodule EventasaurusApp.Ticketing do
       checkout_params
     end
 
-    stripe_impl().create_checkout_session(checkout_params)
+    case stripe_impl().create_checkout_session(checkout_params) do
+      {:ok, session} ->
+        Logger.info("Successfully created Stripe checkout session", session_id: session["id"])
+        {:ok, session}
+
+      {:error, error} ->
+        Logger.error("Failed to create Stripe checkout session",
+          error: error,
+          checkout_params: Map.drop(checkout_params, [:idempotency_key])
+        )
+        {:error, error}
+    end
   end
 
   defp get_base_url do
