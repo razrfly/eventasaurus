@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.DashboardLive do
   use EventasaurusWeb, :live_view
 
-  alias EventasaurusApp.{Accounts, Events, Ticketing}
+  alias EventasaurusApp.{Events, Ticketing}
   alias EventasaurusWeb.Helpers.CurrencyHelpers
 
   @impl true
@@ -51,7 +51,9 @@ defmodule EventasaurusWeb.DashboardLive do
 
   @impl true
   def handle_event("filter_orders", %{"status" => status}, socket) do
-    {:noreply, assign(socket, :order_filter, status)}
+    valid_statuses = ["all", "pending", "payment_pending", "confirmed", "cancelled", "refunded"]
+    validated_status = if status in valid_statuses, do: status, else: "all"
+    {:noreply, assign(socket, :order_filter, validated_status)}
   end
 
   @impl true
@@ -92,7 +94,7 @@ defmodule EventasaurusWeb.DashboardLive do
   end
 
   @impl true
-  def handle_event("show_ticket_modal", %{"order-id" => order_id}, socket) do
+  def handle_event("show_ticket_modal", %{"order_id" => order_id}, socket) do
     user = socket.assigns.user
 
     # Find the order in the current orders list
@@ -154,12 +156,7 @@ defmodule EventasaurusWeb.DashboardLive do
     |> assign(:loading, false)
   end
 
-  defp ensure_user_struct(nil), do: {:error, :no_user}
-  defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
-  defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
-    Accounts.find_or_create_from_supabase(supabase_user)
-  end
-  defp ensure_user_struct(_), do: {:error, :invalid_user_data}
+# Removed unused ensure_user_struct/1 function
 
   defp filtered_orders(orders, "all"), do: orders
   defp filtered_orders(orders, filter) do
@@ -187,10 +184,11 @@ defmodule EventasaurusWeb.DashboardLive do
   end
 
   defp generate_ticket_id(order) do
-    # Generate a unique ticket ID based on order ID and some hash
+    # Generate a cryptographically secure ticket ID
     base = "EVT-#{order.id}"
-    hash = :crypto.hash(:md5, "#{order.id}#{order.inserted_at}")
-    |> Base.encode16(case: :lower)
+    # Use strong random bytes for security
+    hash = :crypto.strong_rand_bytes(8)
+    |> Base.url_encode64(padding: false)
     |> String.slice(0, 8)
     "#{base}-#{hash}"
   end

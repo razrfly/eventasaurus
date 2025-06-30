@@ -169,6 +169,13 @@ defmodule EventasaurusWeb.Router do
     post "/:slug/publish", EventController, :publish
   end
 
+  # Public ticket verification routes (no auth required)
+  scope "/tickets", EventasaurusWeb do
+    pipe_through :browser
+
+    get "/verify/:ticket_id", TicketController, :verify
+  end
+
   # Public routes with auth user assignment
   live_session :default, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user}] do
     scope "/", EventasaurusWeb do
