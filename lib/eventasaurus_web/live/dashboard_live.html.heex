@@ -111,7 +111,7 @@
               <h3 class="text-lg font-bold mb-3">Upcoming Events</h3>
               <.table id="upcoming-events" rows={@upcoming_events}>
                 <:col :let={event} label="Title">
-                  <a href={"/events/" <> event.slug} class="text-blue-600 hover:underline font-medium">
+                  <a href={~p"/events/#{event.slug}"} class="text-blue-600 hover:underline font-medium">
                     <%= event.title %>
                   </a>
                 </:col>
@@ -157,7 +157,7 @@
               <h3 class="text-lg font-bold mb-3">Past Events</h3>
               <.table id="past-events" rows={@past_events}>
                 <:col :let={event} label="Title">
-                  <a href={"/events/" <> event.slug} class="text-blue-600 hover:underline font-medium">
+                  <a href={~p"/events/#{event.slug}"} class="text-blue-600 hover:underline font-medium">
                     <%= event.title %>
                   </a>
                 </:col>
@@ -307,7 +307,7 @@
                         <%= if order.status == "confirmed" do %>
                           <button
                             phx-click="show_ticket_modal"
-                            phx-value-order-id={order.id}
+                            phx-value-order_id={order.id}
                             class="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
                           >
                             View Ticket
@@ -336,13 +336,28 @@
   </div>
 </div>
 
+<!-- Print-only styles for ticket -->
+<style>
+  @media print {
+    body * { visibility: hidden; }
+    .ticket-print, .ticket-print * { visibility: visible; }
+    .ticket-print { 
+      position: absolute; 
+      left: 0; 
+      top: 0; 
+      width: 100%; 
+    }
+    .no-print { display: none !important; }
+  }
+</style>
+
 <!-- Ticket Modal -->
 <%= if @selected_order do %>
-  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" phx-click="close_ticket_modal">
+  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 no-print" phx-click="close_ticket_modal">
     <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white" phx-click-away="close_ticket_modal">
       <div class="mt-3">
         <!-- Modal Header -->
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-6 no-print">
           <h3 class="text-lg font-medium text-gray-900">Your Ticket</h3>
           <button
             phx-click="close_ticket_modal"
@@ -355,7 +370,7 @@
         </div>
 
         <!-- Ticket Display -->
-        <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white mb-6">
+        <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white mb-6 ticket-print">
           <div class="flex justify-between items-start mb-4">
             <div class="flex-1">
               <h4 class="text-xl font-bold mb-2"><%= @selected_order.event.title %></h4>
@@ -432,7 +447,7 @@
         </div>
 
         <!-- Mobile-friendly instructions -->
-        <div class="bg-gray-50 rounded-lg p-4 text-sm">
+        <div class="bg-gray-50 rounded-lg p-4 text-sm no-print">
           <h5 class="font-medium text-gray-900 mb-2">How to use your ticket:</h5>
           <ul class="list-disc list-inside text-gray-600 space-y-1">
             <li>Show this QR code at the event entrance</li>
@@ -443,7 +458,7 @@
         </div>
 
         <!-- Action buttons -->
-        <div class="mt-6 flex justify-end space-x-3">
+        <div class="mt-6 flex justify-end space-x-3 no-print">
           <button
             phx-click="close_ticket_modal"
             class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"

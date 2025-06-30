@@ -14,9 +14,11 @@ export const TicketQR = {
     const ticketData = this.el.dataset
     
     if (canvas && ticketData.ticketId) {
-      // Create ticket verification URL
+      // Create ticket verification URL with proper encoding
       const baseUrl = window.location.origin
-      const verificationUrl = `${baseUrl}/tickets/verify/${ticketData.ticketId}?order=${ticketData.orderId}`
+      const ticketId = encodeURIComponent(ticketData.ticketId)
+      const orderId = encodeURIComponent(ticketData.orderId)
+      const verificationUrl = `${baseUrl}/tickets/verify/${ticketId}?order=${orderId}`
       
       // Generate QR code
       QRCode.toCanvas(canvas, verificationUrl, {
@@ -42,14 +44,8 @@ export const TicketQR = {
   }
 }
 
-// Auto-initialize QR codes on page load
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('[data-qr-ticket]').forEach(element => {
-    const hook = Object.create(TicketQR)
-    hook.el = element
-    hook.mounted()
-  })
-})
+// Note: Auto-initialization removed to prevent conflicts with LiveView hooks
+// QR codes are initialized via LiveView's phx-hook system
 
 // Export for use with Phoenix LiveView hooks
 window.TicketQR = TicketQR 

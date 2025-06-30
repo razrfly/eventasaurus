@@ -538,7 +538,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
 
   defp broadcast_order_update(order) do
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       "orders:#{order.user_id}",
       {:order_updated, order}
     )
