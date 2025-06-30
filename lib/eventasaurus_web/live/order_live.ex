@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.OrderLive do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       # Subscribe to order updates
-      Phoenix.PubSub.subscribe(EventasaurusApp.PubSub, "orders:#{socket.assigns.current_user.id}")
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "orders:#{socket.assigns.current_user.id}")
     end
 
     {:ok,

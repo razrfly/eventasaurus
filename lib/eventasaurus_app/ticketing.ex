@@ -353,7 +353,7 @@ defmodule EventasaurusApp.Ticketing do
     query =
       Order
       |> where([o], o.user_id == ^user_id)
-      |> preload([:ticket, :event])
+      |> preload([:ticket, event: :venue])
       |> order_by([o], desc: o.inserted_at)
       |> limit(^limit)
       |> offset(^offset)

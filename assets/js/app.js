@@ -3,6 +3,7 @@ import "phoenix_html";
 import {Socket} from "phoenix";
 import {LiveSocket} from "phoenix_live_view";
 import topbar from "../vendor/topbar";
+import { TicketQR } from "./ticket_qr";
 
 // Supabase client setup for identity management
 let supabaseClient = null;
@@ -48,6 +49,9 @@ function initSupabaseClient() {
 // Define LiveView hooks here
 import SupabaseImageUpload from "./supabase_upload";
 let Hooks = {};
+
+// TicketQR hook for generating QR codes on tickets
+Hooks.TicketQR = TicketQR;
 
 // SupabaseAuthHandler hook to handle auth tokens from URL fragments
 Hooks.SupabaseAuthHandler = {

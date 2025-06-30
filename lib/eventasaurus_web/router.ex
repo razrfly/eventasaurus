@@ -101,6 +101,7 @@ defmodule EventasaurusWeb.Router do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
+      live "/dashboard", DashboardLive, :index
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
       live "/checkout/payment", CheckoutPaymentLive
@@ -110,8 +111,6 @@ defmodule EventasaurusWeb.Router do
   # Protected routes that require authentication
   scope "/", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
-
-    get "/dashboard", DashboardController, :index
     get "/settings", SettingsController, :index
     get "/settings/account", SettingsController, :account
     get "/settings/payments", SettingsController, :payments
