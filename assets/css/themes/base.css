@@ -561,4 +561,124 @@ textarea,
     color: black !important;
     box-shadow: none !important;
   }
-} 
+}
+
+/* ============================================================================
+   POSTHOG ANALYTICS & PERFORMANCE OPTIMIZATIONS
+   ============================================================================ */
+
+/* Analytics loading states */
+.analytics-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.analytics-skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite ease-in-out;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Analytics cards responsive optimization */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-standard);
+}
+
+@media (min-width: 640px) {
+  .analytics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .analytics-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.analytics-card {
+  min-height: 100px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform; /* Optimize for animations */
+}
+
+.analytics-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Privacy banner enhancements */
+.privacy-banner {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Safari and older browser fallbacks */
+@supports not (backdrop-filter: blur(8px)) {
+  .privacy-banner {
+    background-color: rgba(17, 24, 39, 0.95);
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .analytics-card {
+    transition: none;
+    will-change: auto;
+  }
+  
+  .analytics-card:hover {
+    transform: none;
+  }
+  
+  .analytics-skeleton {
+    animation: none;
+    background: #f3f4f6;
+  }
+}
+
+/* Focus accessibility for analytics cards */
+.analytics-card:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Error state styling */
+.analytics-error {
+  border-left: 4px solid #f59e0b;
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .analytics-card {
+    border: 2px solid;
+  }
+  
+  .analytics-skeleton {
+    background: #000;
+    color: #fff;
+  }
+}
+
+/* Mobile touch optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .analytics-card:hover {
+    transform: none;
+  }
+  
+  .analytics-card:active {
+    transform: scale(0.98);
+  }
+}

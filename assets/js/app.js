@@ -8,6 +8,274 @@ import { TicketQR } from "./ticket_qr";
 // Supabase client setup for identity management
 let supabaseClient = null;
 
+// PostHog Analytics Manager with performance optimizations
+class PostHogManager {
+  constructor() {
+    this.posthog = null;
+    this.isLoaded = false;
+    this.isLoading = false;
+    this.eventQueue = [];
+    this.loadAttempts = 0;
+    this.maxLoadAttempts = 3;
+    this.retryDelay = 2000;
+    this.privacyConsent = this.getPrivacyConsent();
+    this.isOnline = navigator.onLine;
+    
+    // Listen for online/offline events
+    window.addEventListener('online', () => {
+      this.isOnline = true;
+      this.processQueue();
+    });
+    
+    window.addEventListener('offline', () => {
+      this.isOnline = false;
+    });
+    
+    // Privacy event listener
+    window.addEventListener('posthog:privacy-consent', (e) => {
+      this.updatePrivacyConsent(e.detail.consent);
+    });
+  }
+  
+  async init() {
+    if (this.isLoaded || this.isLoading || !this.privacyConsent) {
+      return;
+    }
+    
+    this.isLoading = true;
+    
+    try {
+      // Get PostHog config from window variables set by the server
+      const posthogApiKey = window.POSTHOG_API_KEY;
+      const posthogHost = window.POSTHOG_HOST || 'https://eu.i.posthog.com';
+      
+      if (!posthogApiKey) {
+        console.warn('PostHog API key not found - analytics will be disabled');
+        this.isLoading = false;
+        return;
+      }
+      
+      // Dynamic import to prevent blocking page render
+      const { default: posthog } = await import('posthog-js');
+      
+      // Initialize with privacy-focused settings
+      posthog.init(posthogApiKey, {
+        api_host: posthogHost,
+        
+        // Privacy settings
+        disable_session_recording: !this.privacyConsent.analytics,
+        disable_cookie: !this.privacyConsent.cookies,
+        respect_dnt: true,
+        opt_out_capturing_by_default: !this.privacyConsent.analytics,
+        
+        // Performance settings
+        capture_pageview: this.privacyConsent.analytics,
+        capture_pageleave: this.privacyConsent.analytics,
+        loaded: (posthogInstance) => {
+          this.onPostHogLoaded(posthogInstance);
+        },
+        
+        // Error handling
+        on_request_error: (error) => {
+          console.warn('PostHog request failed:', error);
+        },
+        
+        // Batch settings for performance
+        batch_requests: true,
+        batch_size: 10,
+        batch_flush_interval_ms: 5000,
+        
+        // Cross-domain settings
+        cross_subdomain_cookie: false,
+        secure_cookie: window.location.protocol === 'https:',
+        
+        // Advanced privacy
+        mask_all_element_attributes: !this.privacyConsent.analytics,
+        mask_all_text: !this.privacyConsent.analytics
+      });
+      
+      this.posthog = posthog;
+      window.posthog = posthog;
+      this.isLoaded = true;
+      this.isLoading = false;
+      this.loadAttempts = 0;
+      
+      console.log('PostHog loaded successfully with privacy settings:', this.privacyConsent);
+      
+      // Process any queued events
+      this.processQueue();
+      
+    } catch (error) {
+      console.error('Failed to load PostHog:', error);
+      this.isLoading = false;
+      this.loadAttempts++;
+      
+      // Retry loading with exponential backoff
+      if (this.loadAttempts < this.maxLoadAttempts) {
+        const delay = this.retryDelay * Math.pow(2, this.loadAttempts - 1);
+        console.log(`Retrying PostHog load in ${delay}ms (attempt ${this.loadAttempts}/${this.maxLoadAttempts})`);
+        setTimeout(() => this.init(), delay);
+      } else {
+        console.warn('PostHog failed to load after multiple attempts - analytics disabled');
+        this.processQueue(); // Process queue to clear it
+      }
+    }
+  }
+  
+  onPostHogLoaded(posthogInstance) {
+    console.log('PostHog initialized successfully');
+    
+    // Identify user if authenticated and consent given
+    if (this.privacyConsent.analytics && window.currentUser) {
+      posthogInstance.identify(window.currentUser.id, {
+        email: window.currentUser.email,
+        user_type: 'authenticated',
+        privacy_consent: this.privacyConsent
+      });
+      console.log('PostHog user identified:', window.currentUser.id);
+    } else if (this.privacyConsent.analytics) {
+      // Set properties for anonymous users
+      posthogInstance.register({
+        user_type: 'anonymous',
+        privacy_consent: this.privacyConsent
+      });
+      console.log('PostHog tracking anonymous user');
+    }
+  }
+  
+  capture(event, properties = {}) {
+    // Add privacy and performance checks
+    if (!this.privacyConsent.analytics) {
+      console.log('PostHog event blocked by privacy settings:', event);
+      return;
+    }
+    
+    const eventData = {
+      event,
+      properties: {
+        ...properties,
+        timestamp: Date.now(),
+        user_agent: navigator.userAgent,
+        is_online: this.isOnline,
+        privacy_consent: this.privacyConsent
+      }
+    };
+    
+    if (this.isLoaded && this.posthog && this.isOnline) {
+      try {
+        this.posthog.capture(event, eventData.properties);
+        console.log('PostHog event captured:', event, eventData.properties);
+      } catch (error) {
+        console.warn('Failed to capture PostHog event:', error);
+        this.queueEvent(eventData);
+      }
+    } else {
+      // Queue for later if PostHog not loaded or offline
+      this.queueEvent(eventData);
+    }
+  }
+  
+  queueEvent(eventData) {
+    // Limit queue size to prevent memory issues
+    if (this.eventQueue.length >= 100) {
+      this.eventQueue.shift(); // Remove oldest event
+    }
+    
+    this.eventQueue.push(eventData);
+    console.log(`Event queued (${this.eventQueue.length} total):`, eventData.event);
+  }
+  
+  processQueue() {
+    if (!this.isLoaded || !this.posthog || !this.isOnline || !this.privacyConsent.analytics) {
+      return;
+    }
+    
+    console.log(`Processing ${this.eventQueue.length} queued events`);
+    
+    const eventsToProcess = [...this.eventQueue];
+    this.eventQueue = [];
+    
+    eventsToProcess.forEach(eventData => {
+      try {
+        this.posthog.capture(eventData.event, eventData.properties);
+      } catch (error) {
+        console.warn('Failed to process queued event:', error);
+        // Re-queue if it fails
+        this.queueEvent(eventData);
+      }
+    });
+  }
+  
+  getPrivacyConsent() {
+    try {
+      const stored = localStorage.getItem('posthog_privacy_consent');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      console.warn('Failed to read privacy consent from localStorage:', error);
+    }
+    
+    // Default privacy settings (conservative)
+    return {
+      analytics: false,
+      cookies: false,
+      essential: true // Always allow essential functionality
+    };
+  }
+  
+  updatePrivacyConsent(consent) {
+    this.privacyConsent = { ...this.privacyConsent, ...consent };
+    
+    try {
+      localStorage.setItem('posthog_privacy_consent', JSON.stringify(this.privacyConsent));
+    } catch (error) {
+      console.warn('Failed to save privacy consent to localStorage:', error);
+    }
+    
+    console.log('Privacy consent updated:', this.privacyConsent);
+    
+    // Reinitialize PostHog if consent changed
+    if (consent.analytics && !this.isLoaded) {
+      this.init();
+    } else if (!consent.analytics && this.isLoaded) {
+      this.disable();
+    }
+  }
+  
+  disable() {
+    if (this.posthog) {
+      try {
+        this.posthog.opt_out_capturing();
+        console.log('PostHog tracking disabled');
+      } catch (error) {
+        console.warn('Failed to disable PostHog:', error);
+      }
+    }
+  }
+  
+  // GDPR compliance helper
+  showPrivacyBanner() {
+    if (this.privacyConsent.analytics === undefined) {
+      // Show privacy banner - you can customize this
+      console.log('Privacy consent required - consider showing a banner');
+      
+      // For development, auto-consent (remove in production)
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        this.updatePrivacyConsent({ analytics: true, cookies: true });
+      }
+    }
+  }
+}
+
+// Initialize PostHog manager
+const posthogManager = new PostHogManager();
+
+// Legacy compatibility function
+function initPostHogClient() {
+  return posthogManager.init();
+}
+
 // Initialize Supabase client if needed
 function initSupabaseClient() {
   if (!supabaseClient && typeof window !== 'undefined') {
@@ -872,6 +1140,19 @@ topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"});
 window.addEventListener("phx:page-loading-start", info => topbar.show());
 window.addEventListener("phx:page-loading-stop", info => topbar.hide());
 
+// PostHog event tracking listener with enhanced error handling
+window.addEventListener("phx:track_event", (e) => {
+  if (e.detail) {
+    const { event, properties } = e.detail;
+    
+    // Use the PostHogManager for better error handling and queueing
+    posthogManager.capture(event, properties);
+  }
+});
+
+// Expose PostHog manager for debugging and external use
+window.posthogManager = posthogManager;
+
 // Connect if there are any LiveViews on the page
 liveSocket.connect();
 
@@ -932,4 +1213,11 @@ document.addEventListener("DOMContentLoaded", function() {
       window.history.replaceState(null, null, window.location.pathname);
     }
   }
+  
+  // Initialize PostHog analytics with privacy checks
+  posthogManager.showPrivacyBanner();
+  posthogManager.init();
+  
+  // Initialize Supabase client
+  initSupabaseClient();
 });

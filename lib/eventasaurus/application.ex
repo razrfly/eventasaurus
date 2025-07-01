@@ -56,6 +56,8 @@ defmodule Eventasaurus.Application do
       {Finch, name: Eventasaurus.Finch},
       # Add a Task Supervisor for background jobs
       {Task.Supervisor, name: Eventasaurus.TaskSupervisor},
+      # Start PostHog analytics service
+      Eventasaurus.Services.PosthogService,
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry
