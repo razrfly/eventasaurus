@@ -2015,15 +2015,17 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
-  Get all unique participants from events organized by a user, excluding specified events.
+  Get all unique participants from events organized by a user, excluding specified events and users.
   Returns participant data with frequency and recency metrics for scoring.
 
   Options:
   - exclude_event_ids: List of event IDs to exclude from results (e.g., current event)
+  - exclude_user_ids: List of user IDs to exclude from results (e.g., current participants)
   - limit: Maximum number of participants to return (default: 50)
   """
   def get_historical_participants(%User{} = organizer, opts \\ []) do
     exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
+    exclude_user_ids = Keyword.get(opts, :exclude_user_ids, [])
     limit = Keyword.get(opts, :limit, 50)
 
     # Query to get unique participants with their participation history
@@ -2053,6 +2055,14 @@ defmodule EventasaurusApp.Events do
       query
     end
 
+    # Apply exclude_user_ids filter if provided
+    query = if exclude_user_ids != [] do
+      from [p, e, eu, u] in query,
+           where: u.id not in ^exclude_user_ids
+    else
+      query
+    end
+
     query
     |> limit(^limit)
     |> Repo.all()
@@ -2066,18 +2076,21 @@ defmodule EventasaurusApp.Events do
 
   Options:
   - exclude_event_ids: List of event IDs to exclude (default: [])
+  - exclude_user_ids: List of user IDs to exclude (default: [])
   - limit: Maximum number of suggestions (default: 20)
   - frequency_weight: Weight for frequency score (default: 0.6)
   - recency_weight: Weight for recency score (default: 0.4)
   """
   def get_participant_suggestions(%User{} = organizer, opts \\ []) do
     exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
+    exclude_user_ids = Keyword.get(opts, :exclude_user_ids, [])
     limit = Keyword.get(opts, :limit, 20)
     frequency_weight = Keyword.get(opts, :frequency_weight, 0.6)
     recency_weight = Keyword.get(opts, :recency_weight, 0.4)
 
     participants = get_historical_participants(organizer,
       exclude_event_ids: exclude_event_ids,
+      exclude_user_ids: exclude_user_ids,
       limit: limit * 2  # Get more to have better selection after scoring
     )
 
@@ -2387,7 +2400,7 @@ defmodule EventasaurusApp.Events do
   - failed_invitations: Count of failed attempts
   - errors: List of error messages
   """
-  def process_guest_invitations(event, organizer, opts \\ []) do
+  def process_guest_invitations(%Event{} = event, %User{} = organizer, opts \\ []) do
     suggestion_structs = Keyword.get(opts, :suggestion_structs, [])
     manual_emails = Keyword.get(opts, :manual_emails, [])
     invitation_message = Keyword.get(opts, :invitation_message, "")
