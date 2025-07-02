@@ -25,6 +25,7 @@ defmodule Eventasaurus.Services.PosthogService do
   Gets comprehensive event analytics for a specific event.
 
   Returns cached data if available and fresh, otherwise fetches from PostHog API.
+  Note: Requires POSTHOG_PROJECT_ID environment variable to be set.
 
   ## Parameters
 
@@ -161,40 +162,48 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_analytics_from_api(event_id, date_range) do
     api_key = get_api_key()
+    project_id = get_project_id()
 
-    if api_key do
-      with {:ok, visitors} <- fetch_unique_visitors(event_id, date_range, api_key),
-           {:ok, registrations} <- fetch_registrations(event_id, date_range, api_key),
-           {:ok, votes} <- fetch_votes(event_id, date_range, api_key),
-           {:ok, checkouts} <- fetch_checkouts(event_id, date_range, api_key) do
+    cond do
+      !api_key ->
+        Logger.warning("PostHog API key not configured - analytics will be unavailable")
+        {:error, :no_api_key}
 
-        analytics = %{
-          unique_visitors: visitors,
-          registrations: registrations,
-          registration_rate: calculate_rate(registrations, visitors),
-          votes_cast: votes,
-          ticket_checkouts: checkouts,
-          checkout_conversion_rate: calculate_rate(checkouts, visitors)
-        }
+      !project_id ->
+        Logger.warning("PostHog project ID not configured - analytics will be unavailable. Please set POSTHOG_PROJECT_ID environment variable")
+        {:error, :no_project_id}
 
-        {:ok, analytics}
-      else
-        {:error, reason} -> {:error, reason}
-      end
-    else
-      {:error, :no_api_key}
+      true ->
+        with {:ok, visitors} <- fetch_unique_visitors(event_id, date_range, api_key),
+             {:ok, registrations} <- fetch_registrations(event_id, date_range, api_key),
+             {:ok, votes} <- fetch_votes(event_id, date_range, api_key),
+             {:ok, checkouts} <- fetch_checkouts(event_id, date_range, api_key) do
+
+          analytics = %{
+            unique_visitors: visitors,
+            registrations: registrations,
+            registration_rate: calculate_rate(registrations, visitors),
+            votes_cast: votes,
+            ticket_checkouts: checkouts,
+            checkout_conversion_rate: calculate_rate(checkouts, visitors)
+          }
+
+          {:ok, analytics}
+        else
+          {:error, reason} -> {:error, reason}
+        end
     end
   end
 
   defp fetch_unique_visitors(event_id, date_range, api_key) do
     query_params = %{
       event: "event_page_viewed",
-      properties: %{event_id: event_id},
+      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
       date_from: days_ago(date_range),
-      date_to: "today"
+      date_to: Date.to_iso8601(Date.utc_today())
     }
 
-    case make_api_request("/events", query_params, api_key) do
+    case make_api_request("/events/", query_params, api_key) do
       {:ok, response} ->
         count = count_unique_users(response)
         {:ok, count}
@@ -205,12 +214,12 @@ defmodule Eventasaurus.Services.PosthogService do
   defp fetch_registrations(event_id, date_range, api_key) do
     query_params = %{
       event: "event_registration_completed",
-      properties: %{event_id: event_id},
+      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
       date_from: days_ago(date_range),
-      date_to: "today"
+      date_to: Date.to_iso8601(Date.utc_today())
     }
 
-    case make_api_request("/events", query_params, api_key) do
+    case make_api_request("/events/", query_params, api_key) do
       {:ok, response} ->
         count = count_events(response)
         {:ok, count}
@@ -221,12 +230,12 @@ defmodule Eventasaurus.Services.PosthogService do
   defp fetch_votes(event_id, date_range, api_key) do
     query_params = %{
       event: "event_date_vote_cast",
-      properties: %{event_id: event_id},
+      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
       date_from: days_ago(date_range),
-      date_to: "today"
+      date_to: Date.to_iso8601(Date.utc_today())
     }
 
-    case make_api_request("/events", query_params, api_key) do
+    case make_api_request("/events/", query_params, api_key) do
       {:ok, response} ->
         count = count_events(response)
         {:ok, count}
@@ -237,12 +246,12 @@ defmodule Eventasaurus.Services.PosthogService do
   defp fetch_checkouts(event_id, date_range, api_key) do
     query_params = %{
       event: "ticket_checkout_initiated",
-      properties: %{event_id: event_id},
+      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
       date_from: days_ago(date_range),
-      date_to: "today"
+      date_to: Date.to_iso8601(Date.utc_today())
     }
 
-    case make_api_request("/events", query_params, api_key) do
+    case make_api_request("/events/", query_params, api_key) do
       {:ok, response} ->
         count = count_events(response)
         {:ok, count}
@@ -251,28 +260,38 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp make_api_request(endpoint, query_params, api_key) do
-    url = @api_base <> endpoint
-    headers = [
-      {"Authorization", "Bearer #{api_key}"},
-      {"Content-Type", "application/json"}
-    ]
+    project_id = get_project_id()
 
-    body = Jason.encode!(query_params)
+    if project_id do
+      # Use the correct PostHog API format with project ID
+      url = "#{@api_base}/projects/#{project_id}#{endpoint}"
+      headers = [
+        {"Authorization", "Bearer #{api_key}"},
+        {"Content-Type", "application/json"}
+      ]
 
-    case HTTPoison.post(url, body, headers, timeout: 10000, recv_timeout: 10000) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
-        case Jason.decode(response_body) do
-          {:ok, data} -> {:ok, data}
-          {:error, _} -> {:error, :invalid_json}
-        end
+      # Convert query params to URL parameters for GET request
+      query_string = URI.encode_query(query_params)
+      full_url = "#{url}?#{query_string}"
 
-      {:ok, %HTTPoison.Response{status_code: status_code}} ->
-        Logger.warning("PostHog API returned status #{status_code}")
-        {:error, {:api_error, status_code}}
+      case HTTPoison.get(full_url, headers, timeout: 10000, recv_timeout: 10000) do
+        {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+          case Jason.decode(response_body) do
+            {:ok, data} -> {:ok, data}
+            {:error, _} -> {:error, :invalid_json}
+          end
 
-      {:error, %HTTPoison.Error{reason: reason}} ->
-        Logger.error("PostHog API request failed: #{inspect(reason)}")
-        {:error, {:http_error, reason}}
+        {:ok, %HTTPoison.Response{status_code: status_code}} ->
+          Logger.warning("PostHog API returned status #{status_code}")
+          {:error, {:api_error, status_code}}
+
+        {:error, %HTTPoison.Error{reason: reason}} ->
+          Logger.error("PostHog API request failed: #{inspect(reason)}")
+          {:error, {:http_error, reason}}
+      end
+    else
+      Logger.warning("PostHog project ID not configured - skipping API request")
+      {:error, :no_project_id}
     end
   end
 
@@ -306,6 +325,10 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp get_api_key do
     System.get_env("POSTHOG_API_KEY")
+  end
+
+  defp get_project_id do
+    System.get_env("POSTHOG_PROJECT_ID")
   end
 
   defp get_fallback_analytics do
