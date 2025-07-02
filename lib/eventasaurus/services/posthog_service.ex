@@ -148,11 +148,11 @@ defmodule Eventasaurus.Services.PosthogService do
   defp format_error_message(reason) do
     case reason do
       :no_api_key ->
-        "PostHog not configured - analytics unavailable"
+        "PostHog private API key not configured - analytics unavailable"
       :no_project_id ->
         "PostHog project ID missing - please contact support"
       {:api_error, 403} ->
-        "PostHog authentication failed - public API key cannot be used for backend analytics"
+        "PostHog authentication failed - please check private API key permissions"
       {:api_error, status} ->
         "PostHog API error (#{status}) - analytics temporarily unavailable"
       _ ->
@@ -166,7 +166,7 @@ defmodule Eventasaurus.Services.PosthogService do
 
     cond do
       !api_key ->
-        Logger.warning("PostHog API key not configured - analytics will be unavailable")
+        Logger.warning("PostHog private API key not configured - analytics will be unavailable")
         {:error, :no_api_key}
 
       !project_id ->
@@ -179,16 +179,17 @@ defmodule Eventasaurus.Services.PosthogService do
              {:ok, votes} <- fetch_votes(event_id, date_range, api_key),
              {:ok, checkouts} <- fetch_checkouts(event_id, date_range, api_key) do
 
-          analytics = %{
+          registration_rate = if visitors > 0, do: (registrations / visitors) * 100, else: 0.0
+          checkout_rate = if registrations > 0, do: (checkouts / registrations) * 100, else: 0.0
+
+          {:ok, %{
             unique_visitors: visitors,
             registrations: registrations,
-            registration_rate: calculate_rate(registrations, visitors),
             votes_cast: votes,
             ticket_checkouts: checkouts,
-            checkout_conversion_rate: calculate_rate(checkouts, visitors)
-          }
-
-          {:ok, analytics}
+            registration_rate: Float.round(registration_rate, 1),
+            checkout_conversion_rate: Float.round(checkout_rate, 1)
+          }}
         else
           {:error, reason} -> {:error, reason}
         end
@@ -197,10 +198,12 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_unique_visitors(event_id, date_range, api_key) do
     # Use PostHog's query API with HogQL for unique visitors
+    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
     query_params = %{
       "query" => %{
         "kind" => "HogQLQuery",
-        "query" => "SELECT count(DISTINCT person_id) FROM events WHERE event = 'event_page_viewed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+        "query" => "SELECT count(DISTINCT person_id) FROM events WHERE event = 'event_page_viewed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
       }
     }
 
@@ -214,10 +217,12 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_registrations(event_id, date_range, api_key) do
     # Use PostHog's query API with HogQL for registrations
+    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
     query_params = %{
       "query" => %{
         "kind" => "HogQLQuery",
-        "query" => "SELECT count(*) FROM events WHERE event = 'event_registration_completed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+        "query" => "SELECT count(*) FROM events WHERE event = 'event_registration_completed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
       }
     }
 
@@ -230,10 +235,13 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp fetch_votes(event_id, date_range, api_key) do
+    # Use PostHog's query API with HogQL for votes
+    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
     query_params = %{
       "query" => %{
         "kind" => "HogQLQuery",
-        "query" => "SELECT count(*) FROM events WHERE event = 'event_date_vote_cast' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+        "query" => "SELECT count(*) FROM events WHERE event = 'event_date_vote_cast' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
       }
     }
 
@@ -246,10 +254,13 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp fetch_checkouts(event_id, date_range, api_key) do
+    # Use PostHog's query API with HogQL for checkouts
+    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
     query_params = %{
       "query" => %{
         "kind" => "HogQLQuery",
-        "query" => "SELECT count(*) FROM events WHERE event = 'checkout_started' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+        "query" => "SELECT count(*) FROM events WHERE event = 'ticket_checkout_initiated' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
       }
     }
 
@@ -319,14 +330,15 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp days_ago(days) do
-    # PostHog expects timestamps, not just dates
+    # PostHog expects DateTime format with seconds precision, not microseconds
     DateTime.utc_now()
     |> DateTime.add(-days * 24 * 60 * 60, :second)
+    |> DateTime.truncate(:second)
     |> DateTime.to_iso8601()
   end
 
   defp get_api_key do
-    System.get_env("POSTHOG_API_KEY")
+    System.get_env("POSTHOG_PRIVATE_API_KEY")
   end
 
   defp get_project_id do
