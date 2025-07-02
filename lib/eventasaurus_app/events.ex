@@ -11,6 +11,8 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Themes
   alias EventasaurusApp.Events.EventDateVote
+
+  alias EventasaurusApp.GuestInvitations
   require Logger
 
   @doc """
@@ -1494,9 +1496,6 @@ defmodule EventasaurusApp.Events do
                 {:error, :user_confirmation_required} ->
                   Logger.info("User created via OTP but email confirmation required for voting")
                   Repo.rollback(:email_confirmation_required)
-                {:error, :invalid_user_data} ->
-                  Logger.error("Invalid user data from Supabase after OTP creation")
-                  Repo.rollback(:invalid_user_data)
                 {:error, reason} ->
                   Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
                   Repo.rollback(reason)
@@ -1990,4 +1989,529 @@ defmodule EventasaurusApp.Events do
       error -> error
     end
   end
+
+  # Guest Invitation System Functions
+
+  @doc """
+  Get all events organized by a user for guest invitation suggestions.
+  Only returns events that have participants (to avoid empty suggestion lists).
+  """
+  def list_organizer_events_with_participants(%User{} = user) do
+    query = from e in Event,
+            join: eu in EventUser, on: e.id == eu.event_id,
+            join: ep in EventParticipant, on: e.id == ep.event_id,
+            where: eu.user_id == ^user.id,
+            group_by: [e.id, e.title, e.start_at, e.status],
+            select: %{
+              id: e.id,
+              title: e.title,
+              start_at: e.start_at,
+              status: e.status,
+              participant_count: count(ep.id, :distinct)
+            },
+            order_by: [desc: e.start_at]
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Get all unique participants from events organized by a user, excluding specified events.
+  Returns participant data with frequency and recency metrics for scoring.
+
+  Options:
+  - exclude_event_ids: List of event IDs to exclude from results (e.g., current event)
+  - limit: Maximum number of participants to return (default: 50)
+  """
+  def get_historical_participants(%User{} = organizer, opts \\ []) do
+    exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
+    limit = Keyword.get(opts, :limit, 50)
+
+    # Query to get unique participants with their participation history
+    query = from p in EventParticipant,
+            join: e in Event, on: p.event_id == e.id,
+            join: eu in EventUser, on: e.id == eu.event_id,
+            join: u in User, on: p.user_id == u.id,
+            where: eu.user_id == ^organizer.id and
+                   p.user_id != ^organizer.id,  # Exclude organizer from suggestions
+            group_by: [u.id, u.name, u.email, u.username],
+            select: %{
+              user_id: u.id,
+              name: u.name,
+              email: u.email,
+              username: u.username,
+              participation_count: count(p.id),
+              last_participation: max(e.start_at),
+              event_ids: fragment("array_agg(?)", e.id)
+            },
+            order_by: [desc: count(p.id), desc: max(e.start_at)]
+
+    # Apply exclude_event_ids filter if provided
+    query = if exclude_event_ids != [] do
+      from [p, e, eu, u] in query,
+           where: e.id not in ^exclude_event_ids
+    else
+      query
+    end
+
+    query
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  @doc """
+  Get suggested participants with scoring for a specific event organizer.
+  Combines frequency and recency scoring with configurable weights.
+
+  Scoring formula: (Frequency Score × 0.6) + (Recency Score × 0.4)
+
+  Options:
+  - exclude_event_ids: List of event IDs to exclude (default: [])
+  - limit: Maximum number of suggestions (default: 20)
+  - frequency_weight: Weight for frequency score (default: 0.6)
+  - recency_weight: Weight for recency score (default: 0.4)
+  """
+  def get_participant_suggestions(%User{} = organizer, opts \\ []) do
+    exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
+    limit = Keyword.get(opts, :limit, 20)
+    frequency_weight = Keyword.get(opts, :frequency_weight, 0.6)
+    recency_weight = Keyword.get(opts, :recency_weight, 0.4)
+
+    participants = get_historical_participants(organizer,
+      exclude_event_ids: exclude_event_ids,
+      limit: limit * 2  # Get more to have better selection after scoring
+    )
+
+         # Use the dedicated scoring module
+     config = GuestInvitations.create_config(
+       frequency_weight: frequency_weight,
+       recency_weight: recency_weight
+     )
+
+     GuestInvitations.score_participants(participants, config, limit: limit)
+  end
+
+  @doc """
+  Get paginated participant suggestions for efficient loading.
+
+  Options:
+  - exclude_event_ids: List of event IDs to exclude (default: [])
+  - page: Page number (1-based, default: 1)
+  - per_page: Results per page (default: 20)
+  """
+  def get_participant_suggestions_paginated(%User{} = organizer, opts \\ []) do
+    exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
+    page = Keyword.get(opts, :page, 1)
+    per_page = Keyword.get(opts, :per_page, 20)
+
+    offset = (page - 1) * per_page
+
+    # Get total count for pagination metadata
+    total_count = count_historical_participants(organizer, exclude_event_ids: exclude_event_ids)
+
+         # Get the actual data using the scoring module
+     participants = get_historical_participants(organizer,
+       exclude_event_ids: exclude_event_ids,
+       limit: per_page * 3  # Get extra for scoring
+     )
+     |> GuestInvitations.score_participants()
+     |> Enum.drop(offset)
+     |> Enum.take(per_page)
+
+    %{
+      participants: participants,
+      page: page,
+      per_page: per_page,
+      total_count: total_count,
+      total_pages: ceil(total_count / per_page),
+      has_next?: page * per_page < total_count,
+      has_prev?: page > 1
+    }
+  end
+
+  @doc """
+  Count historical participants for pagination.
+  """
+  def count_historical_participants(%User{} = organizer, opts \\ []) do
+    exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
+
+    query = from p in EventParticipant,
+            join: e in Event, on: p.event_id == e.id,
+            join: eu in EventUser, on: e.id == eu.event_id,
+            where: eu.user_id == ^organizer.id and
+                   p.user_id != ^organizer.id,
+            select: count(p.user_id, :distinct)
+
+    # Apply exclude_event_ids filter if provided
+    query = if exclude_event_ids != [] do
+      from [p, e, eu] in query,
+           where: e.id not in ^exclude_event_ids
+    else
+      query
+    end
+
+    Repo.one(query) || 0
+  end
+
+
+
+  # Participant Aggregation Functions
+
+  @doc """
+  Get participant statistics for a specific event.
+  Returns counts by status and role for invitation management.
+  """
+  def get_event_participant_stats(%Event{} = event) do
+    query = from ep in EventParticipant,
+            where: ep.event_id == ^event.id,
+            group_by: [ep.status, ep.role],
+            select: %{
+              status: ep.status,
+              role: ep.role,
+              count: count(ep.id)
+            }
+
+    stats = Repo.all(query)
+
+    # Aggregate into a more usable format
+    %{
+      total_participants: Enum.sum(Enum.map(stats, & &1.count)),
+      by_status: aggregate_by_field(stats, :status),
+      by_role: aggregate_by_field(stats, :role),
+      breakdown: stats
+    }
+  end
+
+  @doc """
+  Get participant statistics for multiple events organized by a user.
+  Returns a map with event_id as keys and participant stats as values.
+  """
+  def get_organizer_events_participant_stats(%User{} = organizer, event_ids \\ nil) do
+    # Get all events organized by user or filter by specific event_ids
+    base_query = from e in Event,
+                 join: eu in EventUser, on: e.id == eu.event_id,
+                 where: eu.user_id == ^organizer.id,
+                 select: e.id
+
+    event_ids = if event_ids do
+      from([e, eu] in base_query, where: e.id in ^event_ids)
+      |> Repo.all()
+    else
+      Repo.all(base_query)
+    end
+
+    # Get participant stats for each event
+    Enum.reduce(event_ids, %{}, fn event_id, acc ->
+      event = %Event{id: event_id}
+      stats = get_event_participant_stats(event)
+      Map.put(acc, event_id, stats)
+    end)
+  end
+
+  @doc """
+  Get detailed participant breakdown for an event with user information.
+  Useful for invitation management interfaces.
+  """
+  def get_event_participant_details(%Event{} = event, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 100)
+    status_filter = Keyword.get(opts, :status)
+    role_filter = Keyword.get(opts, :role)
+
+    query = from ep in EventParticipant,
+            join: u in User, on: ep.user_id == u.id,
+            where: ep.event_id == ^event.id,
+            select: %{
+              participant_id: ep.id,
+              user_id: u.id,
+              name: u.name,
+              email: u.email,
+              username: u.username,
+              status: ep.status,
+              role: ep.role,
+              invited_at: ep.invited_at,
+              invitation_message: ep.invitation_message,
+              invited_by_user_id: ep.invited_by_user_id,
+              metadata: ep.metadata,
+              inserted_at: ep.inserted_at
+            },
+            order_by: [desc: ep.inserted_at]
+
+    # Apply filters if provided
+    query = if status_filter do
+      from ep in query, where: ep.status == ^status_filter
+    else
+      query
+    end
+
+    query = if role_filter do
+      from ep in query, where: ep.role == ^role_filter
+    else
+      query
+    end
+
+    query
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  @doc """
+  Get invitation statistics for events organized by a user.
+  Shows who invited whom and invitation success rates.
+  """
+  def get_invitation_stats(%User{} = organizer, opts \\ []) do
+    days_back = Keyword.get(opts, :days_back, 90)
+    cutoff_date = DateTime.add(DateTime.utc_now(), -days_back * 24 * 60 * 60, :second)
+
+    query = from ep in EventParticipant,
+            join: e in Event, on: ep.event_id == e.id,
+            join: eu in EventUser, on: e.id == eu.event_id,
+            left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
+            where: eu.user_id == ^organizer.id and
+                   not is_nil(ep.invited_at) and
+                   ep.invited_at >= ^cutoff_date,
+            group_by: [ep.invited_by_user_id, inviter.name, ep.status],
+            select: %{
+              invited_by_user_id: ep.invited_by_user_id,
+              inviter_name: inviter.name,
+              status: ep.status,
+              count: count(ep.id)
+            }
+
+    stats = Repo.all(query)
+
+    # Aggregate invitation success rates
+    invitation_summary = stats
+    |> Enum.group_by(& &1.invited_by_user_id)
+    |> Enum.map(fn {inviter_id, invitations} ->
+      total = Enum.sum(Enum.map(invitations, & &1.count))
+      accepted = invitations
+                 |> Enum.filter(& &1.status in [:accepted, :confirmed_with_order])
+                 |> Enum.sum_by(& &1.count)
+
+      success_rate = if total > 0, do: accepted / total * 100, else: 0
+
+      %{
+        inviter_user_id: inviter_id,
+        inviter_name: List.first(invitations).inviter_name,
+        total_invitations: total,
+        accepted_invitations: accepted,
+        success_rate: Float.round(success_rate, 1)
+      }
+    end)
+    |> Enum.sort_by(& &1.total_invitations, :desc)
+
+    %{
+      period_days: days_back,
+      cutoff_date: cutoff_date,
+      invitation_summary: invitation_summary,
+      detailed_breakdown: stats
+    }
+  end
+
+  @doc """
+  Check if a user has been invited to an event by a specific organizer.
+  Returns invitation details if found.
+  """
+  def get_user_invitation_status(%Event{} = event, %User{} = user) do
+    query = from ep in EventParticipant,
+            left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
+            where: ep.event_id == ^event.id and ep.user_id == ^user.id,
+            select: %{
+              participant_id: ep.id,
+              status: ep.status,
+              role: ep.role,
+              invited_at: ep.invited_at,
+              invitation_message: ep.invitation_message,
+              invited_by_user_id: ep.invited_by_user_id,
+              inviter_name: inviter.name,
+              metadata: ep.metadata
+            }
+
+    case Repo.one(query) do
+      nil -> {:not_invited, nil}
+      invitation -> {:invited, invitation}
+    end
+  end
+
+  @doc """
+  Get a summary of recent invitation activity for an organizer.
+  Useful for dashboard displays.
+  """
+  def get_recent_invitation_activity(%User{} = organizer, opts \\ []) do
+    days_back = Keyword.get(opts, :days_back, 7)
+    limit = Keyword.get(opts, :limit, 20)
+    cutoff_date = DateTime.add(DateTime.utc_now(), -days_back * 24 * 60 * 60, :second)
+
+    query = from ep in EventParticipant,
+            join: e in Event, on: ep.event_id == e.id,
+            join: eu in EventUser, on: e.id == eu.event_id,
+            join: u in User, on: ep.user_id == u.id,
+            left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
+            where: eu.user_id == ^organizer.id and
+                   not is_nil(ep.invited_at) and
+                   ep.invited_at >= ^cutoff_date,
+            select: %{
+              event_id: e.id,
+              event_title: e.title,
+              participant_name: u.name,
+              participant_email: u.email,
+              status: ep.status,
+              invited_at: ep.invited_at,
+              inviter_name: inviter.name,
+              invitation_message: ep.invitation_message
+            },
+            order_by: [desc: ep.invited_at],
+            limit: ^limit
+
+    Repo.all(query)
+  end
+
+  # Guest Invitation Processing Functions
+
+  @doc """
+  Process guest invitations for an event by creating event participants.
+
+  Handles both suggested users (from historical data) and manual email entries.
+  Creates users for emails that don't exist, validates duplicates, and tracks
+  invitation metadata.
+
+  Options:
+  - suggestion_structs: List of suggestion maps with user_id field
+  - manual_emails: List of email strings
+  - invitation_message: Custom message for the invitation
+  - organizer: User struct of the person sending invitations
+
+  Returns a map with:
+  - successful_invitations: Count of successfully created participants
+  - skipped_duplicates: Count of users already participating
+  - failed_invitations: Count of failed invitation attempts
+  - errors: List of error messages for debugging
+  """
+  def process_guest_invitations(%Event{} = event, %User{} = organizer, opts \\ []) do
+    suggestion_structs = Keyword.get(opts, :suggestion_structs, [])
+    manual_emails = Keyword.get(opts, :manual_emails, [])
+    invitation_message = Keyword.get(opts, :invitation_message, "")
+    current_time = DateTime.utc_now()
+
+    # Initialize result tracking
+    result = %{
+      successful_invitations: 0,
+      skipped_duplicates: 0,
+      failed_invitations: 0,
+      errors: []
+    }
+
+    # Process suggested users
+    result_after_suggestions = Enum.reduce(suggestion_structs, result, fn suggestion, acc ->
+      case process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time) do
+        {:ok, :created} ->
+          %{acc | successful_invitations: acc.successful_invitations + 1}
+        {:ok, :duplicate} ->
+          %{acc | skipped_duplicates: acc.skipped_duplicates + 1}
+        {:error, reason} ->
+          %{acc |
+            failed_invitations: acc.failed_invitations + 1,
+            errors: [format_invitation_error("suggestion", suggestion, reason) | acc.errors]
+          }
+      end
+    end)
+
+    # Process manual emails
+    final_result = Enum.reduce(manual_emails, result_after_suggestions, fn email, acc ->
+      case process_email_invitation(event, organizer, email, invitation_message, current_time) do
+        {:ok, :created} ->
+          %{acc | successful_invitations: acc.successful_invitations + 1}
+        {:ok, :duplicate} ->
+          %{acc | skipped_duplicates: acc.skipped_duplicates + 1}
+        {:error, reason} ->
+          %{acc |
+            failed_invitations: acc.failed_invitations + 1,
+            errors: [format_invitation_error("email", email, reason) | acc.errors]
+          }
+      end
+    end)
+
+    final_result
+  end
+
+  # Private helper for aggregating stats by field
+  defp aggregate_by_field(stats, field) do
+    stats
+    |> Enum.group_by(&Map.get(&1, field))
+    |> Enum.map(fn {key, group} ->
+      {key, Enum.sum(Enum.map(group, & &1.count))}
+    end)
+    |> Enum.into(%{})
+  end
+
+  # Process a single suggestion invitation
+  defp process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time) do
+    case EventasaurusApp.Accounts.get_user(suggestion.user_id) do
+      %User{} = user ->
+        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
+          invitation_method: "historical_suggestion",
+          recommendation_level: Map.get(suggestion, :recommendation_level, "unknown"),
+          score: Map.get(suggestion, :total_score, 0.0)
+        })
+      nil ->
+        {:error, :user_not_found}
+    end
+  end
+
+  # Process a single email invitation
+  defp process_email_invitation(event, organizer, email, invitation_message, current_time) do
+    case EventasaurusApp.Accounts.find_or_create_guest_user(email) do
+      {:ok, user} ->
+        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
+          invitation_method: "manual_email"
+        })
+      {:error, _changeset} ->
+        {:error, :user_creation_failed}
+    end
+  end
+
+  # Create event participant for invitation
+  defp create_invitation_participant(event, organizer, user, invitation_message, current_time, metadata) do
+    case get_event_participant_by_event_and_user(event, user) do
+      nil ->
+        # User not already participating, create new participant
+        case create_event_participant(%{
+          event_id: event.id,
+          user_id: user.id,
+          role: :invitee,
+          status: :pending,
+          source: "manual_invitation",
+          invited_by_user_id: organizer.id,
+          invited_at: current_time,
+          invitation_message: invitation_message,
+          metadata: metadata
+        }) do
+          {:ok, _participant} -> {:ok, :created}
+          {:error, _changeset} -> {:error, :participant_creation_failed}
+        end
+      _existing_participant ->
+        # User already participating, skip
+        {:ok, :duplicate}
+    end
+  end
+
+  # Format error messages for debugging
+  defp format_invitation_error(type, identifier, reason) do
+    case type do
+      "suggestion" ->
+        user_id = Map.get(identifier, :user_id, "unknown")
+        "Failed to invite user ID #{user_id}: #{format_error_reason(reason)}"
+      "email" ->
+        "Failed to invite #{identifier}: #{format_error_reason(reason)}"
+    end
+  end
+
+  defp format_error_reason(reason) do
+    case reason do
+      :user_not_found -> "User not found"
+      :user_creation_failed -> "Could not create user account"
+      :participant_creation_failed -> "Could not create participant record"
+      _ -> inspect(reason)
+    end
+  end
+
 end

@@ -45,10 +45,6 @@ node_modules/
 # OS specific
 .DS_Store
 
-# Task files
-# tasks.json
-# tasks/
-
 # AI Assistant Configuration Files (not needed in version control)
 .clinerules/
 .cursor/
@@ -58,3 +54,7 @@ node_modules/
 .taskmaster/
 .trae/
 .windsurf/ 
+
+# Task files
+# tasks.json
+# tasks/ 
