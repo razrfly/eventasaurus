@@ -39,19 +39,15 @@ defmodule Eventasaurus.Services.PosthogService do
 
   ## Examples
 
-      iex> PosthogService.get_event_analytics("123", 7)
-      {:ok, %{
-        unique_visitors: 150,
-        registrations: 25,
-        registration_rate: 16.7,
-        votes_cast: 45,
-        ticket_checkouts: 12,
-        checkout_conversion_rate: 8.0
-      }}
+      iex> PosthogService.get_analytics(123, 7)
+      {:ok, %{unique_visitors: 45, registrations: 12, ...}}
+
+      iex> PosthogService.get_analytics(123, 30)
+      {:error, :no_api_key}
+
   """
-  @spec get_event_analytics(String.t(), integer()) :: {:ok, map()} | {:error, any()}
-  def get_event_analytics(event_id, date_range \\ 7) do
-    GenServer.call(__MODULE__, {:get_analytics, event_id, date_range})
+  def get_analytics(event_id, date_range \\ 7) do
+    GenServer.call(__MODULE__, {:get_analytics, event_id, date_range}, 10000)
   end
 
   @doc """
@@ -59,7 +55,7 @@ defmodule Eventasaurus.Services.PosthogService do
   """
   @spec get_unique_visitors(String.t(), integer()) :: {:ok, integer()} | {:error, any()}
   def get_unique_visitors(event_id, date_range \\ 7) do
-    case get_event_analytics(event_id, date_range) do
+    case get_analytics(event_id, date_range) do
       {:ok, analytics} -> {:ok, analytics.unique_visitors}
       error -> error
     end
@@ -70,7 +66,7 @@ defmodule Eventasaurus.Services.PosthogService do
   """
   @spec get_registration_rate(String.t(), integer()) :: {:ok, float()} | {:error, any()}
   def get_registration_rate(event_id, date_range \\ 7) do
-    case get_event_analytics(event_id, date_range) do
+    case get_analytics(event_id, date_range) do
       {:ok, analytics} -> {:ok, analytics.registration_rate}
       error -> error
     end
@@ -88,76 +84,80 @@ defmodule Eventasaurus.Services.PosthogService do
 
   @impl true
   def init(:ok) do
-    {:ok, %{cache: %{}, cache_timestamps: %{}}}
+    {:ok, %{}}
   end
 
   @impl true
   def handle_call({:get_analytics, event_id, date_range}, _from, state) do
-    cache_key = "#{event_id}_#{date_range}"
+    cache_key = "analytics_#{event_id}_#{date_range}"
+    current_time = System.monotonic_time(:millisecond)
 
-    case get_cached_data(state, cache_key) do
-      {:hit, data} ->
-        Logger.debug("PostHog cache hit for event #{event_id}")
-        {:reply, {:ok, data}, state}
-
-      :miss ->
-        Logger.debug("PostHog cache miss for event #{event_id}, fetching from API")
-        case fetch_analytics_from_api(event_id, date_range) do
-          {:ok, data} ->
-            new_state = cache_data(state, cache_key, data)
-            {:reply, {:ok, data}, new_state}
-
-          {:error, reason} ->
-            Logger.error("PostHog API error for event #{event_id}: #{inspect(reason)}")
-            fallback_data = get_fallback_analytics()
-            {:reply, {:ok, fallback_data}, state}
+    case Map.get(state, cache_key) do
+      %{timestamp: ts, data: data} ->
+        if current_time - ts < @cache_ttl_ms do
+          {:reply, {:ok, data}, state}
+        else
+          fetch_and_cache_analytics(event_id, date_range, current_time, state, cache_key)
         end
+      _ ->
+        fetch_and_cache_analytics(event_id, date_range, current_time, state, cache_key)
+    end
+  end
+
+  defp fetch_and_cache_analytics(event_id, date_range, current_time, state, cache_key) do
+    case fetch_analytics_from_api(event_id, date_range) do
+      {:ok, analytics_data} ->
+        updated_state = Map.put(state, cache_key, %{
+          timestamp: current_time,
+          data: analytics_data
+        })
+        {:reply, {:ok, analytics_data}, updated_state}
+      {:error, reason} ->
+        # Return analytics data with error information for graceful degradation
+        error_analytics = %{
+          unique_visitors: 0,
+          registrations: 0,
+          votes_cast: 0,
+          ticket_checkouts: 0,
+          registration_rate: 0.0,
+          checkout_conversion_rate: 0.0,
+          error: format_error_message(reason),
+          has_error: true
+        }
+        {:reply, {:ok, error_analytics}, state}
     end
   end
 
   @impl true
   def handle_cast({:clear_cache, :all}, _state) do
     Logger.info("Clearing all PostHog cache")
-    {:noreply, %{cache: %{}, cache_timestamps: %{}}}
+    {:noreply, %{}}
   end
 
   @impl true
   def handle_cast({:clear_cache, event_id}, state) when is_binary(event_id) do
     Logger.info("Clearing PostHog cache for event #{event_id}")
 
-    cache = state.cache |> Enum.reject(fn {key, _} -> String.starts_with?(key, event_id) end) |> Enum.into(%{})
-    timestamps = state.cache_timestamps |> Enum.reject(fn {key, _} -> String.starts_with?(key, event_id) end) |> Enum.into(%{})
+    cache = state |> Enum.filter(fn {key, _} -> not String.starts_with?(key, "analytics_#{event_id}_") end) |> Enum.into(%{})
 
-    {:noreply, %{state | cache: cache, cache_timestamps: timestamps}}
+    {:noreply, cache}
   end
 
   # Private Functions
 
-  defp get_cached_data(state, cache_key) do
-    case {Map.get(state.cache, cache_key), Map.get(state.cache_timestamps, cache_key)} do
-      {nil, _} -> :miss
-      {_, nil} -> :miss
-      {data, timestamp} ->
-        if fresh?(timestamp) do
-          {:hit, data}
-        else
-          :miss
-        end
+  defp format_error_message(reason) do
+    case reason do
+      :no_api_key ->
+        "PostHog not configured - analytics unavailable"
+      :no_project_id ->
+        "PostHog project ID missing - please contact support"
+      {:api_error, 403} ->
+        "PostHog authentication failed - public API key cannot be used for backend analytics"
+      {:api_error, status} ->
+        "PostHog API error (#{status}) - analytics temporarily unavailable"
+      _ ->
+        "Analytics temporarily unavailable"
     end
-  end
-
-  defp fresh?(timestamp) do
-    System.system_time(:millisecond) - timestamp < @cache_ttl_ms
-  end
-
-  defp cache_data(state, cache_key, data) do
-    timestamp = System.system_time(:millisecond)
-
-    %{
-      state |
-      cache: Map.put(state.cache, cache_key, data),
-      cache_timestamps: Map.put(state.cache_timestamps, cache_key, timestamp)
-    }
   end
 
   defp fetch_analytics_from_api(event_id, date_range) do
@@ -331,16 +331,5 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp get_project_id do
     System.get_env("POSTHOG_PROJECT_ID")
-  end
-
-  defp get_fallback_analytics do
-    %{
-      unique_visitors: 0,
-      registrations: 0,
-      registration_rate: 0.0,
-      votes_cast: 0,
-      ticket_checkouts: 0,
-      checkout_conversion_rate: 0.0
-    }
   end
 end
