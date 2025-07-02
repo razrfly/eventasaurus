@@ -179,16 +179,16 @@ defmodule Eventasaurus.Services.PosthogService do
              {:ok, votes} <- fetch_votes(event_id, date_range, api_key),
              {:ok, checkouts} <- fetch_checkouts(event_id, date_range, api_key) do
 
-          registration_rate = if visitors > 0, do: (registrations / visitors) * 100, else: 0.0
-          checkout_rate = if registrations > 0, do: (checkouts / registrations) * 100, else: 0.0
+          registration_rate = calculate_rate(registrations, visitors)
+          checkout_rate = calculate_rate(checkouts, registrations)
 
           {:ok, %{
             unique_visitors: visitors,
             registrations: registrations,
             votes_cast: votes,
             ticket_checkouts: checkouts,
-            registration_rate: Float.round(registration_rate, 1),
-            checkout_conversion_rate: Float.round(checkout_rate, 1)
+            registration_rate: registration_rate,
+            checkout_conversion_rate: checkout_rate
           }}
         else
           {:error, reason} -> {:error, reason}
