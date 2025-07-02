@@ -1,0 +1,11 @@
+# Task ID: 2
+# Title: Implement Username/Slug System and Profile URL Routing
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: Build the username/slug system with real-time availability checking, reserved username protection, and implement public profile URL routing.
+# Details:
+Create a LiveView component for username input with real-time availability checking via a dedicated API endpoint. Use Phoenix.Router to support multiple profile URL patterns: /user/:username, /u/:username, /@:username. Implement a profile slug resolver to handle conflicts and redirects. Use Phoenix.Token for secure profile access if needed. For real-time feedback, use Phoenix LiveView hooks and handle server-side validation. For reserved usernames, maintain a list and block registration. Use Phoenix 1.7+ and LiveView 0.19+ for best practices. Add database indexing on the username field for performance. For migration, provide a fallback to email-based profiles if username is not set.
+
+# Test Strategy:
+Test username availability endpoint with various inputs (taken, reserved, invalid). Test all supported profile URL patterns and conflict resolution. Test migration fallback logic. Use automated integration tests for routing and LiveView components.
