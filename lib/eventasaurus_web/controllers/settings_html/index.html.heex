@@ -204,53 +204,27 @@
                 </div>
                 <div>
                   <.label for="user_default_currency">Default Currency</.label>
-                  <select name="user[default_currency]" id="user_default_currency" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option value="USD" selected={@user.default_currency == "USD" || (!@user.default_currency && true)}>US Dollar ($)</option>
-                    <option value="EUR" selected={@user.default_currency == "EUR"}>Euro (€)</option>
-                    <option value="GBP" selected={@user.default_currency == "GBP"}>British Pound (£)</option>
-                    <option value="CAD" selected={@user.default_currency == "CAD"}>Canadian Dollar (C$)</option>
-                    <option value="AUD" selected={@user.default_currency == "AUD"}>Australian Dollar (A$)</option>
-                    <option value="JPY" selected={@user.default_currency == "JPY"}>Japanese Yen (¥)</option>
-                    <option value="CHF" selected={@user.default_currency == "CHF"}>Swiss Franc (CHF)</option>
-                    <option value="SEK" selected={@user.default_currency == "SEK"}>Swedish Krona (SEK)</option>
-                    <option value="NOK" selected={@user.default_currency == "NOK"}>Norwegian Krone (NOK)</option>
-                    <option value="DKK" selected={@user.default_currency == "DKK"}>Danish Krone (DKK)</option>
-                  </select>
+                  <.currency_select 
+                    name="user[default_currency]" 
+                    id="user_default_currency" 
+                    value={@user.default_currency || "usd"}
+                    prompt=""
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
                 </div>
                 <div>
                   <.label for="user_timezone">Timezone</.label>
                   <select name="user[timezone]" id="user_timezone" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <optgroup label="Americas">
-                      <option value="America/New_York" selected={@user.timezone == "America/New_York"}>New York (UTC-05:00)</option>
-                      <option value="America/Chicago" selected={@user.timezone == "America/Chicago"}>Chicago (UTC-06:00)</option>
-                      <option value="America/Denver" selected={@user.timezone == "America/Denver"}>Denver (UTC-07:00)</option>
-                      <option value="America/Los_Angeles" selected={@user.timezone == "America/Los_Angeles"}>Los Angeles (UTC-08:00)</option>
-                      <option value="America/Toronto" selected={@user.timezone == "America/Toronto"}>Toronto (UTC-05:00)</option>
-                      <option value="America/Vancouver" selected={@user.timezone == "America/Vancouver"}>Vancouver (UTC-08:00)</option>
-                      <option value="America/Sao_Paulo" selected={@user.timezone == "America/Sao_Paulo"}>São Paulo (UTC-03:00)</option>
-                      <option value="America/Mexico_City" selected={@user.timezone == "America/Mexico_City"}>Mexico City (UTC-06:00)</option>
-                    </optgroup>
-                    <optgroup label="Europe & Africa">
-                      <option value="Europe/London" selected={@user.timezone == "Europe/London"}>London (UTC+00:00)</option>
-                      <option value="Europe/Paris" selected={@user.timezone == "Europe/Paris"}>Paris (UTC+01:00)</option>
-                      <option value="Europe/Berlin" selected={@user.timezone == "Europe/Berlin"}>Berlin (UTC+01:00)</option>
-                      <option value="Europe/Rome" selected={@user.timezone == "Europe/Rome"}>Rome (UTC+01:00)</option>
-                      <option value="Europe/Madrid" selected={@user.timezone == "Europe/Madrid"}>Madrid (UTC+01:00)</option>
-                      <option value="Europe/Amsterdam" selected={@user.timezone == "Europe/Amsterdam"}>Amsterdam (UTC+01:00)</option>
-                      <option value="Europe/Stockholm" selected={@user.timezone == "Europe/Stockholm"}>Stockholm (UTC+01:00)</option>
-                      <option value="Europe/Zurich" selected={@user.timezone == "Europe/Zurich"}>Zurich (UTC+01:00)</option>
-                    </optgroup>
-                    <optgroup label="Asia & Pacific">
-                      <option value="Asia/Tokyo" selected={@user.timezone == "Asia/Tokyo"}>Tokyo (UTC+09:00)</option>
-                      <option value="Asia/Shanghai" selected={@user.timezone == "Asia/Shanghai"}>Shanghai (UTC+08:00)</option>
-                      <option value="Asia/Singapore" selected={@user.timezone == "Asia/Singapore"}>Singapore (UTC+08:00)</option>
-                      <option value="Asia/Hong_Kong" selected={@user.timezone == "Asia/Hong_Kong"}>Hong Kong (UTC+08:00)</option>
-                      <option value="Asia/Seoul" selected={@user.timezone == "Asia/Seoul"}>Seoul (UTC+09:00)</option>
-                      <option value="Asia/Mumbai" selected={@user.timezone == "Asia/Mumbai"}>Mumbai (UTC+05:30)</option>
-                      <option value="Australia/Sydney" selected={@user.timezone == "Australia/Sydney"}>Sydney (UTC+11:00)</option>
-                      <option value="Australia/Melbourne" selected={@user.timezone == "Australia/Melbourne"}>Melbourne (UTC+11:00)</option>
-                      <option value="Pacific/Auckland" selected={@user.timezone == "Pacific/Auckland"}>Auckland (UTC+13:00)</option>
-                    </optgroup>
+                    <option value="">Select timezone</option>
+                    <%= for {group_name, options} <- EventasaurusWeb.TimezoneHelpers.timezone_options() do %>
+                      <optgroup label={group_name}>
+                        <%= for {label, value} <- options do %>
+                          <option value={value} selected={@user.timezone == value}>
+                            <%= label %>
+                          </option>
+                        <% end %>
+                      </optgroup>
+                    <% end %>
                   </select>
                 </div>
               </div>

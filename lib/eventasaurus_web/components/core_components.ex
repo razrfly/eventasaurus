@@ -7,8 +7,8 @@ defmodule EventasaurusWeb.CoreComponents do
 
   alias Phoenix.LiveView.JS
 
-  # Import helpers for currency components
-  import EventasaurusWeb.Helpers.CurrencyHelpers
+  # Alias for currency helpers
+  alias EventasaurusWeb.Helpers.CurrencyHelpers
 
   @doc """
   Renders a component that wraps an element to provide focus management.
@@ -776,9 +776,9 @@ defmodule EventasaurusWeb.CoreComponents do
   attr :rest, :global
 
   def currency_select(assigns) do
-    options = supported_currencies()
+    grouped_options = CurrencyHelpers.supported_currencies()
 
-    assigns = assign(assigns, options: options)
+    assigns = assign(assigns, grouped_options: grouped_options)
 
     ~H"""
     <select
@@ -795,13 +795,15 @@ defmodule EventasaurusWeb.CoreComponents do
       {@rest}
     >
       <option value="" :if={@prompt}><%= @prompt %></option>
-      <option
-        :for={{code, name} <- @options}
-        value={code}
-        selected={code == @value}
-      >
-        <%= name %>
-      </option>
+      <optgroup :for={{group_name, currencies} <- @grouped_options} label={group_name}>
+        <option
+          :for={{code, name} <- currencies}
+          value={code}
+          selected={code == @value}
+        >
+          <%= name %>
+        </option>
+      </optgroup>
     </select>
     """
   end

@@ -4,21 +4,145 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   """
 
   @currency_symbols %{
+    # Major Global Currencies
     "usd" => "$",
     "eur" => "€",
     "gbp" => "£",
+    "jpy" => "¥",
+
+    # North America & Oceania
     "cad" => "C$",
     "aud" => "A$",
-    "jpy" => "¥"
+    "nzd" => "NZ$",
+
+    # Europe
+    "chf" => "CHF",
+    "sek" => "SEK",
+    "nok" => "NOK",
+    "dkk" => "DKK",
+    "pln" => "zł",
+    "czk" => "CZK",
+    "huf" => "HUF",
+    "ron" => "RON",
+    "bgn" => "BGN",
+    "hrk" => "HRK",
+
+    # Asia
+    "cny" => "¥",
+    "krw" => "₩",
+    "inr" => "₹",
+    "sgd" => "S$",
+    "hkd" => "HK$",
+    "thb" => "฿",
+    "myr" => "RM",
+    "php" => "₱",
+    "idr" => "Rp",
+    "vnd" => "₫",
+
+    # Middle East & Africa
+    "aed" => "د.إ",
+    "sar" => "﷼",
+    "ils" => "₪",
+    "zar" => "R",
+    "egp" => "£",
+
+    # Latin America
+    "brl" => "R$",
+    "mxn" => "$",
+    "ars" => "$",
+    "clp" => "$",
+    "cop" => "$",
+    "pen" => "S/",
+    "uyu" => "$",
+
+    # Additional European
+    "rub" => "₽",
+    "try" => "₺",
+    "uah" => "₴",
+
+    # Other Notable
+    "bob" => "Bs",
+    "pyg" => "₲",
+    "gel" => "₾",
+    "azn" => "₼",
+    "byn" => "Br",
+    "kzt" => "₸",
+    "uzs" => "сўм",
+    "all" => "L",
+    "mkd" => "ден",
+    "rsd" => "din",
+    "bam" => "KM"
   }
 
   @currency_names %{
+    # Major Global Currencies
     "usd" => "US Dollar",
     "eur" => "Euro",
     "gbp" => "British Pound",
+    "jpy" => "Japanese Yen",
+
+    # North America & Oceania
     "cad" => "Canadian Dollar",
     "aud" => "Australian Dollar",
-    "jpy" => "Japanese Yen"
+    "nzd" => "New Zealand Dollar",
+
+    # Europe
+    "chf" => "Swiss Franc",
+    "sek" => "Swedish Krona",
+    "nok" => "Norwegian Krone",
+    "dkk" => "Danish Krone",
+    "pln" => "Polish Złoty",
+    "czk" => "Czech Koruna",
+    "huf" => "Hungarian Forint",
+    "ron" => "Romanian Leu",
+    "bgn" => "Bulgarian Lev",
+    "hrk" => "Croatian Kuna",
+
+    # Asia
+    "cny" => "Chinese Yuan",
+    "krw" => "South Korean Won",
+    "inr" => "Indian Rupee",
+    "sgd" => "Singapore Dollar",
+    "hkd" => "Hong Kong Dollar",
+    "thb" => "Thai Baht",
+    "myr" => "Malaysian Ringgit",
+    "php" => "Philippine Peso",
+    "idr" => "Indonesian Rupiah",
+    "vnd" => "Vietnamese Dong",
+
+    # Middle East & Africa
+    "aed" => "UAE Dirham",
+    "sar" => "Saudi Riyal",
+    "ils" => "Israeli Shekel",
+    "zar" => "South African Rand",
+    "egp" => "Egyptian Pound",
+
+    # Latin America
+    "brl" => "Brazilian Real",
+    "mxn" => "Mexican Peso",
+    "ars" => "Argentine Peso",
+    "clp" => "Chilean Peso",
+    "cop" => "Colombian Peso",
+    "pen" => "Peruvian Sol",
+    "uyu" => "Uruguayan Peso",
+
+    # Additional European
+    "rub" => "Russian Ruble",
+    "try" => "Turkish Lira",
+    "uah" => "Ukrainian Hryvnia",
+
+    # Other Notable
+    "bob" => "Bolivian Boliviano",
+    "pyg" => "Paraguayan Guaraní",
+    "gel" => "Georgian Lari",
+    "azn" => "Azerbaijani Manat",
+    "byn" => "Belarusian Ruble",
+    "kzt" => "Kazakhstani Tenge",
+    "uzs" => "Uzbekistani Som",
+    "all" => "Albanian Lek",
+    "mkd" => "Macedonian Denar",
+    "rsd" => "Serbian Dinar",
+    "bam" => "Bosnia and Herzegovina Convertible Mark"
   }
 
   @doc """
@@ -137,17 +261,93 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   def currency_name(_), do: "US Dollar"
 
   @doc """
-  Returns all supported currencies as {code, name} tuples for dropdowns.
+  Returns grouped currencies organized by region, similar to timezone grouping.
+  Returns a list of {group_name, [currency_options]} for optgroup rendering.
   """
   def supported_currencies do
     [
-      {"usd", "US Dollar ($)"},
-      {"eur", "Euro (€)"},
-      {"gbp", "British Pound (£)"},
-      {"cad", "Canadian Dollar (C$)"},
-      {"aud", "Australian Dollar (A$)"},
-      {"jpy", "Japanese Yen (¥)"}
+      {"Major Currencies", [
+        {"usd", "US Dollar ($)"},
+        {"eur", "Euro (€)"},
+        {"gbp", "British Pound (£)"},
+        {"jpy", "Japanese Yen (¥)"},
+        {"cad", "Canadian Dollar (C$)"},
+        {"aud", "Australian Dollar (A$)"}
+      ]},
+      {"European Currencies", [
+        {"chf", "Swiss Franc (CHF)"},
+        {"sek", "Swedish Krona (SEK)"},
+        {"nok", "Norwegian Krone (NOK)"},
+        {"dkk", "Danish Krone (DKK)"},
+        {"pln", "Polish Złoty (zł)"},
+        {"czk", "Czech Koruna (CZK)"},
+        {"huf", "Hungarian Forint (HUF)"},
+        {"ron", "Romanian Leu (RON)"},
+        {"bgn", "Bulgarian Lev (BGN)"},
+        {"hrk", "Croatian Kuna (HRK)"},
+        {"rub", "Russian Ruble (₽)"},
+        {"try", "Turkish Lira (₺)"},
+        {"uah", "Ukrainian Hryvnia (₴)"}
+      ]},
+      {"Asia & Pacific", [
+        {"cny", "Chinese Yuan (¥)"},
+        {"krw", "South Korean Won (₩)"},
+        {"inr", "Indian Rupee (₹)"},
+        {"sgd", "Singapore Dollar (S$)"},
+        {"hkd", "Hong Kong Dollar (HK$)"},
+        {"thb", "Thai Baht (฿)"},
+        {"myr", "Malaysian Ringgit (RM)"},
+        {"php", "Philippine Peso (₱)"},
+        {"idr", "Indonesian Rupiah (Rp)"},
+        {"vnd", "Vietnamese Dong (₫)"},
+        {"nzd", "New Zealand Dollar (NZ$)"}
+      ]},
+      {"Americas", [
+        {"mxn", "Mexican Peso ($)"},
+        {"brl", "Brazilian Real (R$)"},
+        {"ars", "Argentine Peso ($)"},
+        {"clp", "Chilean Peso ($)"},
+        {"cop", "Colombian Peso ($)"},
+        {"pen", "Peruvian Sol (S/)"},
+        {"uyu", "Uruguayan Peso ($)"}
+      ]},
+      {"Middle East & Africa", [
+        {"aed", "UAE Dirham (د.إ)"},
+        {"sar", "Saudi Riyal (﷼)"},
+        {"ils", "Israeli Shekel (₪)"},
+        {"zar", "South African Rand (R)"},
+        {"egp", "Egyptian Pound (£)"}
+      ]},
+      {"Other", [
+        {"bob", "Bolivian Boliviano (Bs)"},
+        {"pyg", "Paraguayan Guaraní (₲)"},
+        {"gel", "Georgian Lari (₾)"},
+        {"azn", "Azerbaijani Manat (₼)"},
+        {"byn", "Belarusian Ruble (Br)"},
+        {"kzt", "Kazakhstani Tenge (₸)"},
+        {"uzs", "Uzbekistani Som (сўм)"},
+        {"all", "Albanian Lek (L)"},
+        {"mkd", "Macedonian Denar (ден)"},
+        {"rsd", "Serbian Dinar (din)"},
+        {"bam", "Bosnia and Herzegovina Convertible Mark (KM)"}
+      ]}
     ]
+  end
+
+  @doc """
+  Returns a flat list of currencies for backwards compatibility.
+  """
+  def supported_currencies_flat do
+    supported_currencies()
+    |> Enum.flat_map(fn {_group, currencies} -> currencies end)
+  end
+
+  @doc """
+  Returns only the currency codes (without names) for validation purposes.
+  """
+  def supported_currency_codes do
+    supported_currencies_flat()
+    |> Enum.map(fn {code, _name} -> code end)
   end
 
   @doc """
