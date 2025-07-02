@@ -140,7 +140,7 @@ if config_env() == :prod do
 
   # Configure PostHog settings for production
   config :eventasaurus, :posthog,
-    api_key: System.get_env("POSTHOG_API_KEY"),
+    api_key: System.get_env("POSTHOG_PUBLIC_API_KEY"),
     api_host: "https://eu.i.posthog.com"
 
 

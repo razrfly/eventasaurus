@@ -174,103 +174,85 @@ defmodule Eventasaurus.Services.PosthogService do
         {:error, :no_project_id}
 
       true ->
-        with {:ok, visitors} <- fetch_unique_visitors(event_id, date_range, api_key),
-             {:ok, registrations} <- fetch_registrations(event_id, date_range, api_key),
-             {:ok, votes} <- fetch_votes(event_id, date_range, api_key),
-             {:ok, checkouts} <- fetch_checkouts(event_id, date_range, api_key) do
+        # Validate and sanitize event_id to prevent injection
+        case sanitize_event_id(event_id) do
+          {:ok, safe_event_id} ->
+            case fetch_all_analytics(safe_event_id, date_range, api_key) do
+              {:ok, %{visitors: visitors, registrations: registrations, votes: votes, checkouts: checkouts}} ->
+                registration_rate = calculate_rate(registrations, visitors)
+                checkout_rate = calculate_rate(checkouts, registrations)
 
-          registration_rate = calculate_rate(registrations, visitors)
-          checkout_rate = calculate_rate(checkouts, registrations)
+                {:ok, %{
+                  unique_visitors: visitors,
+                  registrations: registrations,
+                  votes_cast: votes,
+                  ticket_checkouts: checkouts,
+                  registration_rate: registration_rate,
+                  checkout_conversion_rate: checkout_rate
+                }}
 
-          {:ok, %{
-            unique_visitors: visitors,
-            registrations: registrations,
-            votes_cast: votes,
-            ticket_checkouts: checkouts,
-            registration_rate: registration_rate,
-            checkout_conversion_rate: checkout_rate
-          }}
-        else
-          {:error, reason} -> {:error, reason}
+              {:error, reason} -> {:error, reason}
+            end
+
+          {:error, reason} ->
+            Logger.error("Invalid event_id provided: #{inspect(event_id)}")
+            {:error, reason}
         end
     end
   end
 
-  defp fetch_unique_visitors(event_id, date_range, api_key) do
-    # Use PostHog's query API with HogQL for unique visitors
+  defp fetch_all_analytics(event_id, date_range, api_key) do
+    # Combined query to get all metrics in a single API call
     current_time = current_time_string()
 
     query_params = %{
       "query" => %{
         "kind" => "HogQLQuery",
-        "query" => "SELECT count(DISTINCT person_id) FROM events WHERE event = 'event_page_viewed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
+        "query" => """
+        SELECT
+          count(DISTINCT CASE WHEN event = 'event_page_viewed' THEN person_id END) as visitors,
+          count(CASE WHEN event = 'event_registration_completed' THEN 1 END) as registrations,
+          count(CASE WHEN event = 'event_date_vote_cast' THEN 1 END) as votes,
+          count(CASE WHEN event = 'ticket_checkout_initiated' THEN 1 END) as checkouts
+        FROM events
+        WHERE properties.event_id = '#{event_id}'
+          AND timestamp >= '#{days_ago(date_range)}'
+          AND timestamp <= '#{current_time}'
+        """
       }
     }
 
     case make_api_request("/query/", query_params, api_key) do
       {:ok, response} ->
-        count = extract_count_from_hogql_response(response)
-        {:ok, count}
+        case parse_combined_analytics_response(response) do
+          {:ok, metrics} -> {:ok, metrics}
+          {:error, reason} -> {:error, reason}
+        end
       error -> error
     end
   end
 
-  defp fetch_registrations(event_id, date_range, api_key) do
-    # Use PostHog's query API with HogQL for registrations
-    current_time = current_time_string()
+  defp parse_combined_analytics_response(response) do
+    case response do
+      %{"results" => [result]} when is_list(result) and length(result) == 4 ->
+        [visitors, registrations, votes, checkouts] = result
+        {:ok, %{
+          visitors: visitors || 0,
+          registrations: registrations || 0,
+          votes: votes || 0,
+          checkouts: checkouts || 0
+        }}
 
-    query_params = %{
-      "query" => %{
-        "kind" => "HogQLQuery",
-        "query" => "SELECT count(*) FROM events WHERE event = 'event_registration_completed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
-      }
-    }
+      %{"results" => []} ->
+        {:ok, %{visitors: 0, registrations: 0, votes: 0, checkouts: 0}}
 
-    case make_api_request("/query/", query_params, api_key) do
-      {:ok, response} ->
-        count = extract_count_from_hogql_response(response)
-        {:ok, count}
-      error -> error
+      _ ->
+        Logger.error("Unexpected combined analytics response format: #{inspect(response)}")
+        {:error, "Invalid response format from PostHog API"}
     end
   end
 
-  defp fetch_votes(event_id, date_range, api_key) do
-    # Use PostHog's query API with HogQL for votes
-    current_time = current_time_string()
 
-    query_params = %{
-      "query" => %{
-        "kind" => "HogQLQuery",
-        "query" => "SELECT count(*) FROM events WHERE event = 'event_date_vote_cast' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
-      }
-    }
-
-    case make_api_request("/query/", query_params, api_key) do
-      {:ok, response} ->
-        count = extract_count_from_hogql_response(response)
-        {:ok, count}
-      error -> error
-    end
-  end
-
-  defp fetch_checkouts(event_id, date_range, api_key) do
-    # Use PostHog's query API with HogQL for checkouts
-    current_time = current_time_string()
-
-    query_params = %{
-      "query" => %{
-        "kind" => "HogQLQuery",
-        "query" => "SELECT count(*) FROM events WHERE event = 'ticket_checkout_initiated' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{current_time}'"
-      }
-    }
-
-    case make_api_request("/query/", query_params, api_key) do
-      {:ok, response} ->
-        count = extract_count_from_hogql_response(response)
-        {:ok, count}
-      error -> error
-    end
-  end
 
   defp make_api_request(endpoint, query_params, api_key) do
     project_id = get_project_id()
@@ -304,22 +286,7 @@ defmodule Eventasaurus.Services.PosthogService do
     end
   end
 
-  defp extract_count_from_hogql_response(response) do
-    # PostHog HogQL response format: {"results": [[123]], "columns": ["count()"], "types": ["Integer"]}
-    case response do
-      %{"results" => [[count]]} when is_integer(count) ->
-        count
-      %{"results" => results} when is_list(results) ->
-        # Handle multiple rows by summing if needed
-        results
-        |> List.flatten()
-        |> Enum.filter(&is_integer/1)
-        |> Enum.sum()
-      _ ->
-        Logger.warning("Unexpected PostHog response format: #{inspect(response)}")
-        0
-    end
-  end
+
 
   defp calculate_rate(numerator, denominator) do
     if denominator > 0 do
@@ -352,5 +319,22 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp get_project_id do
     System.get_env("POSTHOG_PROJECT_ID")
+  end
+
+  defp sanitize_event_id(event_id) when is_binary(event_id) do
+    # Only allow alphanumeric characters, hyphens, and underscores
+    if String.match?(event_id, ~r/^[a-zA-Z0-9_-]+$/) do
+      {:ok, event_id}
+    else
+      {:error, :invalid_event_id}
+    end
+  end
+
+  defp sanitize_event_id(event_id) when is_integer(event_id) do
+    {:ok, to_string(event_id)}
+  end
+
+  defp sanitize_event_id(_event_id) do
+    {:error, :invalid_event_id}
   end
 end

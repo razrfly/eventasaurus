@@ -25,6 +25,41 @@ defmodule EventasaurusApp.AccountsTest do
     test "get_user_by_supabase_id/1 returns nil when supabase_id doesn't exist" do
       assert Accounts.get_user_by_supabase_id("nonexistent-supabase-id") == nil
     end
+
+    test "get_user_by_username_or_id/1 returns user when username exists" do
+      user = user_fixture(%{username: "testuser123"})
+      found_user = Accounts.get_user_by_username_or_id("testuser123")
+      assert found_user.id == user.id
+    end
+
+    test "get_user_by_username_or_id/1 returns user when ID exists" do
+      user = user_fixture()
+      found_user = Accounts.get_user_by_username_or_id(to_string(user.id))
+      assert found_user.id == user.id
+    end
+
+    test "get_user_by_username_or_id/1 handles user-{id} pattern for users without usernames" do
+      user = user_fixture()  # No username set
+      slug = "user-#{user.id}"
+      found_user = Accounts.get_user_by_username_or_id(slug)
+      assert found_user.id == user.id
+    end
+
+    test "get_user_by_username_or_id/1 returns nil when identifier doesn't exist" do
+      assert Accounts.get_user_by_username_or_id("nonexistent") == nil
+      assert Accounts.get_user_by_username_or_id("99999") == nil
+      assert Accounts.get_user_by_username_or_id("user-99999") == nil
+    end
+
+    test "get_user_by_username_or_id/1 prioritizes username over ID" do
+      # Create user with ID, e.g., 1
+      user1 = user_fixture()
+      user2 = user_fixture(%{username: to_string(user1.id)})  # Username is "1"
+
+      # When searching for "1", should find user2 (username) not user1 (ID)
+      found_user = Accounts.get_user_by_username_or_id(to_string(user1.id))
+      assert found_user.id == user2.id
+    end
   end
 
   describe "user profile fields" do
