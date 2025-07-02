@@ -75,7 +75,8 @@
     
     <!-- PostHog configuration -->
     <%
-      posthog_api_key = System.get_env("POSTHOG_API_KEY")
+      # Use POSTHOG_PUBLIC_API_KEY for frontend analytics (different from POSTHOG_PRIVATE_API_KEY used by backend)
+      posthog_api_key = System.get_env("POSTHOG_PUBLIC_API_KEY")
       posthog_host = "https://eu.i.posthog.com"
     %>
     <%= if posthog_api_key do %>

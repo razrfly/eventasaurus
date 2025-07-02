@@ -25,7 +25,7 @@ config :eventasaurus, :supabase,
 
 # Configure PostHog settings for development
 config :eventasaurus, :posthog,
-  api_key: System.get_env("POSTHOG_API_KEY"),
+  api_key: System.get_env("POSTHOG_PUBLIC_API_KEY"),
   api_host: "https://eu.i.posthog.com"
 
 
