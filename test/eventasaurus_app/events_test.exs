@@ -163,5 +163,60 @@ defmodule EventasaurusApp.EventsTest do
       assert result.failed_invitations == 1
       assert length(result.errors) == 1
     end
+
+    test "direct add mode creates participants with confirmed status" do
+      event = event_fixture()
+      organizer = user_fixture()
+
+      # Create a user for suggestion
+      suggested_user = user_fixture(%{email: "direct@example.com", name: "Direct User"})
+
+      suggestion_structs = [
+        %{
+          user_id: suggested_user.id,
+          recommendation_level: "recommended",
+          total_score: 9.0
+        }
+      ]
+
+      manual_emails = ["directnew@example.com"]
+
+      result = Events.process_guest_invitations(event, organizer,
+        suggestion_structs: suggestion_structs,
+        manual_emails: manual_emails,
+        invitation_message: "This should be ignored",
+        mode: :direct_add
+      )
+
+            # Should have 2 successful direct adds
+      assert result.successful_invitations == 2
+      assert result.skipped_duplicates == 0
+      assert result.failed_invitations == 0
+      assert result.errors == []
+
+      # Verify participants were created with accepted status
+      participants = Events.list_event_participants(event)
+      assert length(participants) == 2
+
+      # All participants should be accepted (not pending)
+      Enum.each(participants, fn participant ->
+        assert participant.status == :accepted
+        assert participant.invited_by_user_id == organizer.id
+        assert participant.invited_at != nil
+        # For direct add, invitation_message should be nil
+        assert participant.invitation_message == nil
+      end)
+
+      # Check suggestion participant metadata
+      suggestion_participant = Enum.find(participants, &(&1.user_id == suggested_user.id))
+      assert suggestion_participant.metadata["invitation_method"] == "direct_add_suggestion"
+      assert suggestion_participant.metadata["recommendation_level"] == "recommended"
+
+      # Check email participant metadata
+      new_user = EventasaurusApp.Accounts.get_user_by_email("directnew@example.com")
+      email_participant = Enum.find(participants, &(&1.user_id == new_user.id))
+      assert email_participant.metadata["invitation_method"] == "direct_add_email"
+      assert email_participant.metadata["email_provided"] == "directnew@example.com"
+    end
   end
 end
