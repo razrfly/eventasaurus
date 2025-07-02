@@ -196,32 +196,34 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp fetch_unique_visitors(event_id, date_range, api_key) do
+    # Use PostHog's query API with HogQL for unique visitors
     query_params = %{
-      event: "event_page_viewed",
-      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
-      date_from: days_ago(date_range),
-      date_to: Date.to_iso8601(Date.utc_today())
+      "query" => %{
+        "kind" => "HogQLQuery",
+        "query" => "SELECT count(DISTINCT person_id) FROM events WHERE event = 'event_page_viewed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+      }
     }
 
-    case make_api_request("/events/", query_params, api_key) do
+    case make_api_request("/query/", query_params, api_key) do
       {:ok, response} ->
-        count = count_unique_users(response)
+        count = extract_count_from_hogql_response(response)
         {:ok, count}
       error -> error
     end
   end
 
   defp fetch_registrations(event_id, date_range, api_key) do
+    # Use PostHog's query API with HogQL for registrations
     query_params = %{
-      event: "event_registration_completed",
-      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
-      date_from: days_ago(date_range),
-      date_to: Date.to_iso8601(Date.utc_today())
+      "query" => %{
+        "kind" => "HogQLQuery",
+        "query" => "SELECT count(*) FROM events WHERE event = 'event_registration_completed' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+      }
     }
 
-    case make_api_request("/events/", query_params, api_key) do
+    case make_api_request("/query/", query_params, api_key) do
       {:ok, response} ->
-        count = count_events(response)
+        count = extract_count_from_hogql_response(response)
         {:ok, count}
       error -> error
     end
@@ -229,15 +231,15 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_votes(event_id, date_range, api_key) do
     query_params = %{
-      event: "event_date_vote_cast",
-      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
-      date_from: days_ago(date_range),
-      date_to: Date.to_iso8601(Date.utc_today())
+      "query" => %{
+        "kind" => "HogQLQuery",
+        "query" => "SELECT count(*) FROM events WHERE event = 'event_date_vote_cast' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+      }
     }
 
-    case make_api_request("/events/", query_params, api_key) do
+    case make_api_request("/query/", query_params, api_key) do
       {:ok, response} ->
-        count = count_events(response)
+        count = extract_count_from_hogql_response(response)
         {:ok, count}
       error -> error
     end
@@ -245,15 +247,15 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_checkouts(event_id, date_range, api_key) do
     query_params = %{
-      event: "ticket_checkout_initiated",
-      properties: [%{key: "event_id", value: event_id, operator: "exact"}],
-      date_from: days_ago(date_range),
-      date_to: Date.to_iso8601(Date.utc_today())
+      "query" => %{
+        "kind" => "HogQLQuery",
+        "query" => "SELECT count(*) FROM events WHERE event = 'checkout_started' AND properties.event_id = '#{event_id}' AND timestamp >= '#{days_ago(date_range)}' AND timestamp <= '#{DateTime.utc_now() |> DateTime.to_iso8601()}'"
+      }
     }
 
-    case make_api_request("/events/", query_params, api_key) do
+    case make_api_request("/query/", query_params, api_key) do
       {:ok, response} ->
-        count = count_events(response)
+        count = extract_count_from_hogql_response(response)
         {:ok, count}
       error -> error
     end
@@ -270,43 +272,42 @@ defmodule Eventasaurus.Services.PosthogService do
         {"Content-Type", "application/json"}
       ]
 
-      # Convert query params to URL parameters for GET request
-      query_string = URI.encode_query(query_params)
-      full_url = "#{url}?#{query_string}"
+      # Convert query params to JSON body for POST request
+      body = Jason.encode!(query_params)
 
-      case HTTPoison.get(full_url, headers, timeout: 10000, recv_timeout: 10000) do
+      case HTTPoison.post(url, body, headers, timeout: 10000, recv_timeout: 10000) do
         {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
           case Jason.decode(response_body) do
             {:ok, data} -> {:ok, data}
             {:error, _} -> {:error, :invalid_json}
           end
-
-        {:ok, %HTTPoison.Response{status_code: status_code}} ->
-          Logger.warning("PostHog API returned status #{status_code}")
+        {:ok, %HTTPoison.Response{status_code: status_code, body: body}} ->
+          Logger.error("PostHog API returned status #{status_code}: #{body}")
           {:error, {:api_error, status_code}}
-
         {:error, %HTTPoison.Error{reason: reason}} ->
           Logger.error("PostHog API request failed: #{inspect(reason)}")
-          {:error, {:http_error, reason}}
+          {:error, {:request_failed, reason}}
       end
     else
-      Logger.warning("PostHog project ID not configured - skipping API request")
       {:error, :no_project_id}
     end
   end
 
-  defp count_unique_users(response) do
-    response
-    |> Map.get("results", [])
-    |> Enum.map(& &1["distinct_id"])
-    |> Enum.uniq()
-    |> length()
-  end
-
-  defp count_events(response) do
-    response
-    |> Map.get("results", [])
-    |> length()
+  defp extract_count_from_hogql_response(response) do
+    # PostHog HogQL response format: {"results": [[123]], "columns": ["count()"], "types": ["Integer"]}
+    case response do
+      %{"results" => [[count]]} when is_integer(count) ->
+        count
+      %{"results" => results} when is_list(results) ->
+        # Handle multiple rows by summing if needed
+        results
+        |> List.flatten()
+        |> Enum.filter(&is_integer/1)
+        |> Enum.sum()
+      _ ->
+        Logger.warning("Unexpected PostHog response format: #{inspect(response)}")
+        0
+    end
   end
 
   defp calculate_rate(numerator, denominator) do
@@ -318,9 +319,10 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp days_ago(days) do
-    Date.utc_today()
-    |> Date.add(-days)
-    |> Date.to_iso8601()
+    # PostHog expects timestamps, not just dates
+    DateTime.utc_now()
+    |> DateTime.add(-days * 24 * 60 * 60, :second)
+    |> DateTime.to_iso8601()
   end
 
   defp get_api_key do
