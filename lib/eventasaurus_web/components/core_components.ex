@@ -494,7 +494,7 @@ defmodule EventasaurusWeb.CoreComponents do
 
       <.table id="users" rows={@users}>
         <:col :let={user} label="id"><%= user.id %></:col>
-        <:col :let={user} label="username"><%= user.username %></:col>
+        <:col :let={user} label="username"><%= EventasaurusApp.Accounts.User.username_slug(user) %></:col>
       </.table>
   """
   attr :id, :string, required: true

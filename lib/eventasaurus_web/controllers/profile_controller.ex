@@ -11,7 +11,7 @@ defmodule EventasaurusWeb.ProfileController do
   Returns 404 if user doesn't exist or profile is private.
   """
   def show(conn, %{"username" => username}) do
-    case Accounts.get_user_by_username(username) do
+    case Accounts.get_user_by_username_or_id(username) do
       nil ->
         # User doesn't exist
         conn
@@ -20,15 +20,19 @@ defmodule EventasaurusWeb.ProfileController do
         |> render("404.html", page_title: "User not found")
 
       user ->
-        case user.profile_public do
-          true ->
+        canonical_username = User.username_slug(user)
+
+        # Redirect to canonical URL if accessed via ID or different username format
+        if username != canonical_username do
+          redirect(conn, to: ~p"/user/#{canonical_username}")
+        else
+          if user.profile_public == true do
             # Public profile - show the profile page
             conn
             |> assign(:user, user)
-            |> assign(:page_title, "#{User.display_name(user)} (@#{user.username})")
+            |> assign(:page_title, "#{User.display_name(user)} (@#{canonical_username})")
             |> render(:show)
-
-          false ->
+          else
             # Private profile - check if it's the current user viewing their own profile
             auth_user = conn.assigns[:auth_user]
 
@@ -36,7 +40,7 @@ defmodule EventasaurusWeb.ProfileController do
               # User viewing their own private profile
               conn
               |> assign(:user, user)
-              |> assign(:page_title, "Your Profile (@#{user.username})")
+              |> assign(:page_title, "Your Profile (@#{canonical_username})")
               |> assign(:is_own_profile, true)
               |> render(:show)
             else
@@ -46,23 +50,7 @@ defmodule EventasaurusWeb.ProfileController do
               |> put_view(EventasaurusWeb.ErrorHTML)
               |> render("404.html", page_title: "User not found")
             end
-
-          nil ->
-            # Profile publicity not set (treat as private)
-            auth_user = conn.assigns[:auth_user]
-
-            if auth_user && auth_user.id == user.id do
-              conn
-              |> assign(:user, user)
-              |> assign(:page_title, "Your Profile (@#{user.username})")
-              |> assign(:is_own_profile, true)
-              |> render(:show)
-            else
-              conn
-              |> put_status(:not_found)
-              |> put_view(EventasaurusWeb.ErrorHTML)
-              |> render("404.html", page_title: "User not found")
-            end
+          end
         end
     end
   end
@@ -74,7 +62,7 @@ defmodule EventasaurusWeb.ProfileController do
   """
   def redirect_short(conn, %{"username" => username}) do
     # Validate username exists and profile is accessible before redirecting
-    case Accounts.get_user_by_username(username) do
+    case Accounts.get_user_by_username_or_id(username) do
       nil ->
         conn
         |> put_status(:not_found)
@@ -85,21 +73,19 @@ defmodule EventasaurusWeb.ProfileController do
         # Check if profile is accessible
         auth_user = conn.assigns[:auth_user]
 
-        case user.profile_public do
-          true ->
-            # Public profile - redirect
-            redirect(conn, to: ~p"/user/#{username}")
-
-          _ ->
-            # Private profile - only redirect if viewing own profile
-            if auth_user && auth_user.id == user.id do
-              redirect(conn, to: ~p"/user/#{username}")
-            else
-              conn
-              |> put_status(:not_found)
-              |> put_view(EventasaurusWeb.ErrorHTML)
-              |> render("404.html", page_title: "User not found")
-            end
+        if user.profile_public == true do
+          # Public profile - redirect
+          redirect(conn, to: ~p"/user/#{User.username_slug(user)}")
+        else
+          # Private profile - only redirect if viewing own profile
+          if auth_user && auth_user.id == user.id do
+            redirect(conn, to: ~p"/user/#{User.username_slug(user)}")
+          else
+            conn
+            |> put_status(:not_found)
+            |> put_view(EventasaurusWeb.ErrorHTML)
+            |> render("404.html", page_title: "User not found")
+          end
         end
     end
   end

@@ -80,13 +80,25 @@
     %>
     <%= if posthog_api_key do %>
       <script>
+        // Debug: Log PostHog configuration
+        console.log("PostHog configuration loaded:", {
+          apiKeyPresent: true,
+          apiKeyLength: "<%= String.length(posthog_api_key) %>",
+          host: "<%= posthog_host %>"
+        });
+        
         window.POSTHOG_API_KEY = "<%= posthog_api_key %>";
         window.POSTHOG_HOST = "<%= posthog_host %>";
 <%= if @conn.assigns[:user] do %>        window.currentUser = {
           id: "<%= @conn.assigns.user.supabase_id %>",
-          email: "<%= @conn.assigns.user.email %>"
+          email: "<%= @conn.assigns.user.email %>",
+          name: "<%= @conn.assigns.user.name %>"
         };
-<% end %>
+<% end %>      </script>
+    <% else %>
+      <script>
+        console.warn("PostHog API key not found - analytics will be disabled");
+        window.POSTHOG_API_KEY = null;
       </script>
     <% end %>
     

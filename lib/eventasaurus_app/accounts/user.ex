@@ -159,7 +159,9 @@ defmodule EventasaurusApp.Accounts.User do
   end
 
   defp get_reserved_usernames do
-    case File.read("priv/reserved_usernames.txt") do
+    reserved_usernames_path = Application.app_dir(:eventasaurus, "priv/reserved_usernames.txt")
+
+    case File.read(reserved_usernames_path) do
       {:ok, content} ->
         content
         |> String.split("\n")
