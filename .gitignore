@@ -47,4 +47,14 @@ node_modules/
 
 # Task files
 # tasks.json
-# tasks/ 
+# tasks/
+
+# AI Assistant Configuration Files (not needed in version control)
+.clinerules/
+.cursor/
+.github/instructions/
+.roo/
+.roomodes
+.taskmaster/
+.trae/
+.windsurf/ 

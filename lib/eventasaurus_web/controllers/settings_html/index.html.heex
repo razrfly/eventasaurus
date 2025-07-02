@@ -194,14 +194,18 @@
             <!-- Privacy and Preferences -->
             <div class="border-t border-gray-200 pt-6">
               <h3 class="text-lg font-medium text-gray-900 mb-4">Privacy & Preferences</h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <.label>
-                    <.input type="checkbox" name="user[profile_public]" value="true" checked={@user.profile_public} />
-                    Make my profile public
-                  </.label>
-                  <p class="mt-1 text-sm text-gray-500">Allow others to view your profile page</p>
-                </div>
+              
+              <!-- Profile Public Setting (Full Width) -->
+              <div class="mb-6">
+                <.label>
+                  <.input type="checkbox" name="user[profile_public]" value="true" checked={@user.profile_public} />
+                  Make my profile public
+                </.label>
+                <p class="mt-1 text-sm text-gray-500">Allow others to view your profile page</p>
+              </div>
+
+              <!-- Currency and Timezone (Side by Side) -->
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
                   <.label for="user_default_currency">Default Currency</.label>
                   <.currency_select 
@@ -209,12 +213,12 @@
                     id="user_default_currency" 
                     value={@user.default_currency || "usd"}
                     prompt=""
-                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                 </div>
                 <div>
                   <.label for="user_timezone">Timezone</.label>
-                  <select name="user[timezone]" id="user_timezone" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                  <select name="user[timezone]" id="user_timezone" class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     <option value="">Select timezone</option>
                     <%= for {group_name, options} <- EventasaurusWeb.TimezoneHelpers.timezone_options() do %>
                       <optgroup label={group_name}>
@@ -237,6 +241,43 @@
             </div>
           </.form>
         </div>
+
+        <!-- Auto-detect timezone and set currency defaults if none are set -->
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            // Auto-detect timezone
+            const timezoneSelect = document.getElementById('user_timezone');
+            if (timezoneSelect && timezoneSelect.value === '') {
+              try {
+                const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const options = timezoneSelect.querySelectorAll('option');
+                for (let option of options) {
+                  if (option.value === detectedTimezone) {
+                    option.selected = true;
+                    break;
+                  }
+                }
+              } catch (error) {
+                console.log('Could not auto-detect timezone:', error);
+              }
+            }
+
+            // Set random major currency if none is selected
+            const currencySelect = document.getElementById('user_default_currency');
+            if (currencySelect && currencySelect.value === '') {
+              const majorCurrencies = ['usd', 'eur', 'gbp', 'jpy', 'cad', 'aud'];
+              const randomCurrency = majorCurrencies[Math.floor(Math.random() * majorCurrencies.length)];
+              
+              const options = currencySelect.querySelectorAll('option');
+              for (let option of options) {
+                if (option.value === randomCurrency) {
+                  option.selected = true;
+                  break;
+                }
+              }
+            }
+          });
+        </script>
 
         <!-- Change Password -->
         <div class="bg-white border border-gray-200 rounded-lg p-6">

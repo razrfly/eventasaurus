@@ -351,6 +351,15 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   end
 
   @doc """
+  Returns a random major currency for default selection.
+  Picks from the most commonly used global currencies.
+  """
+  def random_major_currency do
+    major_currencies = ["usd", "eur", "gbp", "jpy", "cad", "aud"]
+    Enum.random(major_currencies)
+  end
+
+  @doc """
   Formats price for input fields (as decimal string).
 
   ## Examples
