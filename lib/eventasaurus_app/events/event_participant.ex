@@ -9,8 +9,13 @@ defmodule EventasaurusApp.Events.EventParticipant do
     field :source, :string
     field :metadata, :map
 
+    # Guest invitation fields
+    field :invited_at, :utc_datetime
+    field :invitation_message, :string
+
     belongs_to :event, EventasaurusApp.Events.Event
     belongs_to :user, EventasaurusApp.Accounts.User
+    belongs_to :invited_by_user, EventasaurusApp.Accounts.User
 
     timestamps()
   end
@@ -18,12 +23,15 @@ defmodule EventasaurusApp.Events.EventParticipant do
   @doc false
   def changeset(event_participant, attrs) do
     event_participant
-    |> cast(attrs, [:role, :status, :source, :metadata, :event_id, :user_id])
+    |> cast(attrs, [:role, :status, :source, :metadata, :event_id, :user_id,
+                    :invited_by_user_id, :invited_at, :invitation_message])
     |> validate_required([:role, :status, :event_id, :user_id])
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:user_id)
+    |> foreign_key_constraint(:invited_by_user_id)
     |> unique_constraint([:event_id, :user_id])
     |> validate_not_event_user()
+    |> validate_invitation_fields()
   end
 
   defp validate_not_event_user(changeset) do
@@ -43,6 +51,24 @@ defmodule EventasaurusApp.Events.EventParticipant do
           # User is already an event_user, add error
           add_error(changeset, :user_id, "cannot be a participant because they are already an organizer/admin for this event")
       end
+    else
+      changeset
+    end
+  end
+
+  # New validation function for invitation fields
+  defp validate_invitation_fields(changeset) do
+    changeset
+    |> validate_length(:invitation_message, max: 1000, message: "must be 1000 characters or less")
+    |> validate_invited_by_not_self()
+  end
+
+  defp validate_invited_by_not_self(changeset) do
+    user_id = get_field(changeset, :user_id)
+    invited_by_user_id = get_field(changeset, :invited_by_user_id)
+
+    if user_id && invited_by_user_id && user_id == invited_by_user_id do
+      add_error(changeset, :invited_by_user_id, "cannot invite yourself")
     else
       changeset
     end
