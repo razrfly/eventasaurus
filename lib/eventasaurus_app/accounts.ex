@@ -51,6 +51,23 @@ defmodule EventasaurusApp.Accounts do
   end
 
   @doc """
+  Gets a user by username or ID.
+  First tries to find by username, then falls back to ID lookup.
+  """
+  def get_user_by_username_or_id(identifier) when is_binary(identifier) do
+    # First try username lookup
+    case get_user_by_username(identifier) do
+      %User{} = user -> user
+      nil ->
+        # Try ID lookup if username fails
+        case Integer.parse(identifier) do
+          {id, ""} -> get_user(id)
+          _ -> nil
+        end
+    end
+  end
+
+  @doc """
   Creates a user.
   """
   def create_user(attrs \\ %{}) do

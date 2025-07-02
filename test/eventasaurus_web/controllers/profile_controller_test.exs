@@ -72,20 +72,40 @@ defmodule EventasaurusWeb.ProfileControllerTest do
       assert html_response(conn, 404) =~ "User not found"
     end
 
-    test "handles case-insensitive username lookup", %{conn: conn} do
+    test "redirects to canonical username for case variations", %{conn: conn} do
       user = user_fixture(%{
         username: "casetest",
         name: "Case Test User",
         profile_public: true
       })
 
-      # Test uppercase
+      # Test uppercase - should redirect to canonical lowercase
       conn = get(conn, ~p"/user/CASETEST")
-      assert html_response(conn, 200) =~ "Case Test User"
+      assert redirected_to(conn, 302) == "/user/casetest"
 
-      # Test mixed case
+      # Test mixed case - should redirect to canonical lowercase
       conn = get(conn, ~p"/user/CaseTest")
+      assert redirected_to(conn, 302) == "/user/casetest"
+
+      # Test canonical URL - should show profile directly
+      conn = get(conn, ~p"/user/casetest")
       assert html_response(conn, 200) =~ "Case Test User"
+    end
+
+    test "redirects ID-based access to canonical username URL", %{conn: conn} do
+      user = user_fixture(%{
+        username: "john123",
+        name: "John Doe",
+        profile_public: true
+      })
+
+      # Access via ID should redirect to canonical username
+      conn = get(conn, ~p"/user/#{user.id}")
+      assert redirected_to(conn, 302) == "/user/john123"
+
+      # Follow redirect to verify it works
+      conn = get(conn, "/user/john123")
+      assert html_response(conn, 200) =~ "John Doe"
     end
 
     test "displays social media links when present", %{conn: conn} do
@@ -163,6 +183,17 @@ defmodule EventasaurusWeb.ProfileControllerTest do
       conn = get(conn, ~p"/u/privateredirect")
 
       assert html_response(conn, 404) =~ "User not found"
+    end
+
+    test "redirects ID-based short URL to canonical username", %{conn: conn} do
+      user = user_fixture(%{
+        username: "alice456",
+        profile_public: true
+      })
+
+      # Access short URL via ID should redirect to canonical username
+      conn = get(conn, ~p"/u/#{user.id}")
+      assert redirected_to(conn, 302) == "/user/alice456"
     end
   end
 
