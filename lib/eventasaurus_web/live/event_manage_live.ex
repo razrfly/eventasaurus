@@ -1,115 +1,44 @@
 defmodule EventasaurusWeb.EventManageLive do
   use EventasaurusWeb, :live_view
 
-  alias EventasaurusApp.{Events, Venues, Ticketing}
+  alias EventasaurusApp.{Events, Ticketing}
   alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   import EventasaurusWeb.Components.GuestInvitationModal
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
-    event = Events.get_event_by_slug(slug)
+    event = Events.get_event_by_slug!(slug)
+    user = socket.assigns.user
 
-    if event do
-      case socket.assigns[:user] do
-        nil ->
-          {:ok,
-           socket
-           |> put_flash(:error, "You must be logged in to manage events")
-           |> redirect(to: "/auth/login")}
-
-        user ->
-          if Events.user_can_manage_event?(user, event) do
-            # Load all necessary data
-            venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
-            organizers = Events.list_event_organizers(event)
-            participants = Events.list_event_participants(event)
-                          |> Enum.sort_by(& &1.inserted_at, :desc)
-
-            tickets = Ticketing.list_tickets_for_event(event.id)
-            orders = Ticketing.list_orders_for_event(event.id)
-                    |> EventasaurusApp.Repo.preload([:ticket, :user])
-
-            # Get polling data if event is in polling state
-            {date_options, votes_by_date, votes_breakdown} = if event.status == :polling do
-              poll = Events.get_event_date_poll(event)
-              if poll do
-                options = Events.list_event_date_options(poll)
-                votes = Events.list_votes_for_poll(poll)
-
-                # Group votes by date
-                votes_by_date = Enum.group_by(votes, & &1.event_date_option.date)
-
-                # Pre-compute vote breakdowns
-                votes_breakdown =
-                  votes_by_date
-                  |> Map.new(fn {date, votes} ->
-                    breakdown = Enum.frequencies_by(votes, &to_string(&1.vote_type))
-                    total = length(votes)
-                    {date, %{
-                      total: total,
-                      yes: Map.get(breakdown, "yes", 0),
-                      if_need_be: Map.get(breakdown, "if_need_be", 0),
-                      no: Map.get(breakdown, "no", 0)
-                    }}
-                  end)
-
-                {options, votes_by_date, votes_breakdown}
-              else
-                {[], %{}, %{}}
-              end
-            else
-              {[], %{}, %{}}
-            end
-
-            # Fetch PostHog analytics data
-            analytics_data = fetch_analytics_data(event.id)
-
-            registration_status = Events.get_user_registration_status(event, user)
-
-            # Schedule periodic refresh for analytics
-            if connected?(socket) do
-              Process.send_after(self(), :refresh_analytics, 300_000) # 5 minutes
-            end
-
-            {:ok,
-             socket
-             |> assign(:event, event)
-             |> assign(:venue, venue)
-             |> assign(:organizers, organizers)
-             |> assign(:participants, participants)
-             |> assign(:tickets, tickets)
-             |> assign(:orders, orders)
-             |> assign(:date_options, date_options)
-             |> assign(:votes_by_date, votes_by_date)
-             |> assign(:votes_breakdown, votes_breakdown)
-             |> assign(:analytics_data, analytics_data)
-             |> assign(:analytics_loading, false)
-             |> assign(:analytics_error, nil)
-             |> assign(:registration_status, registration_status)
-             |> assign(:user, user)
-             |> assign(:active_tab, "overview")
-             |> assign(:page_title, "Manage #{event.title}")
-             |> assign(:loading, false)
-             # Guest invitation modal state
-             |> assign(:show_guest_invitation_modal, false)
-             |> assign(:historical_suggestions, [])
-             |> assign(:suggestions_loading, false)
-             |> assign(:invitation_message, "")
-             |> assign(:manual_emails, "")
-             |> assign(:selected_suggestions, [])}
-          else
-            {:ok,
-             socket
-             |> put_flash(:error, "You don't have permission to manage this event")
-             |> redirect(to: "/dashboard")}
-          end
-      end
+    # Ensure user is authorized to manage this event
+    if not Events.user_is_organizer?(event, user) do
+      {:ok, push_navigate(socket, to: "/events")}
     else
+      # Fetch initial data
+      participants = Events.list_event_participants(event)
+                    |> Enum.sort_by(& &1.inserted_at, :desc)
+      tickets = Ticketing.list_tickets_for_event(event.id)
+      orders = Ticketing.list_orders_for_event(event.id)
+              |> EventasaurusApp.Repo.preload([:ticket, :user])
+
       {:ok,
        socket
-       |> put_flash(:error, "Event not found")
-       |> redirect(to: "/dashboard")}
+       |> assign(:event, event)
+       |> assign(:user, user)
+       |> assign(:page_title, "Manage Event")
+       |> assign(:active_tab, "overview")  # Default tab
+       |> assign(:venue, event.venue)  # Add missing venue assign
+       |> assign(:participants, participants)
+       |> assign(:tickets, tickets)
+       |> assign(:orders, orders)
+       |> assign(:show_guest_invitation_modal, false)
+       |> assign(:historical_suggestions, [])
+       |> assign(:suggestions_loading, false)
+       |> assign(:selected_suggestions, [])
+       |> assign(:manual_emails, "")
+       |> assign(:invitation_message, "")
+       |> assign(:add_mode, "invite")}  # Default to invite mode
     end
   end
 
@@ -212,6 +141,11 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
+  def handle_event("toggle_add_mode", %{"mode" => mode}, socket) when mode in ["invite", "direct"] do
+    {:noreply, assign(socket, :add_mode, mode)}
+  end
+
+  @impl true
   def handle_event("send_invitations", _params, socket) do
     event = socket.assigns.event
     organizer = socket.assigns.user
@@ -271,6 +205,60 @@ defmodule EventasaurusWeb.EventManageLive do
   def handle_event("stop_propagation", _params, socket) do
     # Prevent modal from closing when clicking inside
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("add_guests_directly", _params, socket) do
+    event = socket.assigns.event
+    organizer = socket.assigns.user
+    selected_suggestions = socket.assigns.selected_suggestions
+    manual_emails = socket.assigns.manual_emails
+
+    # Parse manual emails
+    parsed_emails = parse_email_list(manual_emails)
+
+    # Get selected suggestion users
+    suggested_users = socket.assigns.historical_suggestions
+                     |> Enum.filter(&(&1.user_id in selected_suggestions))
+
+    total_guests = length(suggested_users) + length(parsed_emails)
+
+    if total_guests > 0 do
+      # Use our guest invitation processing but set mode to direct
+      result = Events.process_guest_invitations(event, organizer,
+        suggestion_structs: suggested_users,
+        manual_emails: parsed_emails,
+        invitation_message: nil,  # No message for direct adds
+        mode: :direct_add
+      )
+
+      # Build success message
+      success_message = build_direct_add_success_message(result)
+
+      # Reload participants to show updated list
+      updated_participants = Events.list_event_participants(event)
+                           |> Enum.sort_by(& &1.inserted_at, :desc)
+
+      # Build error flash if there were failures
+      socket_with_errors = if result.failed_invitations > 0 do
+        error_message = "#{result.failed_invitations} addition(s) failed. #{Enum.join(result.errors, "; ")}"
+        put_flash(socket, :error, error_message)
+      else
+        socket
+      end
+
+      # Close modal and show success message
+      {:noreply,
+       socket_with_errors
+       |> assign(:participants, updated_participants)
+       |> assign(:show_guest_invitation_modal, false)
+       |> assign(:selected_suggestions, [])
+       |> assign(:manual_emails, "")
+       |> assign(:invitation_message, "")
+       |> put_flash(:info, success_message)}
+    else
+      {:noreply, put_flash(socket, :error, "Please select guests or enter email addresses to add.")}
+    end
   end
 
   @impl true
@@ -427,6 +415,20 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
+  defp build_direct_add_success_message(result) do
+    case {result.successful_invitations, result.skipped_duplicates} do
+      {0, 0} ->
+        "No guests were added."
 
+      {successful, 0} when successful > 0 ->
+        "🎉 #{successful} guest(s) added directly to your event!"
+
+      {0, skipped} when skipped > 0 ->
+        "#{skipped} user(s) were already participating in this event."
+
+      {successful, skipped} ->
+        "🎉 #{successful} guest(s) added! #{skipped} user(s) were already participating."
+    end
+  end
 
 end
