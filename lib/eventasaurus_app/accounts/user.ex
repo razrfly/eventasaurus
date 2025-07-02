@@ -140,11 +140,15 @@ defmodule EventasaurusApp.Accounts.User do
     end
   end
 
-  defp validate_currency(changeset) do
-    valid_currencies = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CNY", "INR", "BRL", "MXN"]
+    defp validate_currency(changeset) do
+    # Get comprehensive list of valid currency codes from CurrencyHelpers
+    valid_currencies = EventasaurusWeb.Helpers.CurrencyHelpers.supported_currency_codes()
+
+    # Also include uppercase versions for backwards compatibility
+    all_valid_currencies = valid_currencies ++ Enum.map(valid_currencies, &String.upcase/1)
 
     changeset
-    |> validate_inclusion(:default_currency, valid_currencies,
+    |> validate_inclusion(:default_currency, all_valid_currencies,
          message: "must be a valid currency code")
   end
 
