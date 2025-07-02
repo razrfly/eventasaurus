@@ -8,37 +8,63 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
-    event = Events.get_event_by_slug!(slug)
-    user = socket.assigns.user
+    # Check authentication first
+    case socket.assigns[:user] do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "You must be logged in to manage events.")
+         |> redirect(to: "/auth/login")}
 
-    # Ensure user is authorized to manage this event
-    if not Events.user_is_organizer?(event, user) do
-      {:ok, push_navigate(socket, to: "/events")}
-    else
-      # Fetch initial data
-      participants = Events.list_event_participants(event)
-                    |> Enum.sort_by(& &1.inserted_at, :desc)
-      tickets = Ticketing.list_tickets_for_event(event.id)
-      orders = Ticketing.list_orders_for_event(event.id)
-              |> EventasaurusApp.Repo.preload([:ticket, :user])
+      user ->
+        # Try to find the event
+        case Events.get_event_by_slug(slug) do
+          nil ->
+            {:ok,
+             socket
+             |> put_flash(:error, "Event not found.")
+             |> redirect(to: "/dashboard")}
 
-      {:ok,
-       socket
-       |> assign(:event, event)
-       |> assign(:user, user)
-       |> assign(:page_title, "Manage Event")
-       |> assign(:active_tab, "overview")  # Default tab
-       |> assign(:venue, event.venue)  # Add missing venue assign
-       |> assign(:participants, participants)
-       |> assign(:tickets, tickets)
-       |> assign(:orders, orders)
-       |> assign(:show_guest_invitation_modal, false)
-       |> assign(:historical_suggestions, [])
-       |> assign(:suggestions_loading, false)
-       |> assign(:selected_suggestions, [])
-       |> assign(:manual_emails, "")
-       |> assign(:invitation_message, "")
-       |> assign(:add_mode, "invite")}  # Default to invite mode
+          event ->
+            # Ensure user is authorized to manage this event
+            if not Events.user_is_organizer?(event, user) do
+              {:ok,
+               socket
+               |> put_flash(:error, "You don't have permission to manage this event.")
+               |> redirect(to: "/dashboard")}
+            else
+              # Fetch initial data
+              participants = Events.list_event_participants(event)
+                            |> Enum.sort_by(& &1.inserted_at, :desc)
+              tickets = Ticketing.list_tickets_for_event(event.id)
+              orders = Ticketing.list_orders_for_event(event.id)
+                      |> EventasaurusApp.Repo.preload([:ticket, :user])
+
+              # Fetch analytics data for insights tab
+              analytics_data = fetch_analytics_data(event.id)
+
+              {:ok,
+               socket
+               |> assign(:event, event)
+               |> assign(:user, user)
+               |> assign(:page_title, "Manage Event")
+               |> assign(:active_tab, "overview")  # Default tab
+               |> assign(:venue, event.venue)  # Add missing venue assign
+               |> assign(:participants, participants)
+               |> assign(:tickets, tickets)
+               |> assign(:orders, orders)
+               |> assign(:analytics_data, analytics_data)  # Required for insights tab
+               |> assign(:analytics_loading, false)  # Required for insights tab
+               |> assign(:analytics_error, nil)  # Required for insights tab
+               |> assign(:show_guest_invitation_modal, false)
+               |> assign(:historical_suggestions, [])
+               |> assign(:suggestions_loading, false)
+               |> assign(:selected_suggestions, [])
+               |> assign(:manual_emails, "")
+               |> assign(:invitation_message, "")
+               |> assign(:add_mode, "invite")}  # Default to invite mode
+            end
+        end
     end
   end
 
@@ -131,12 +157,12 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_event("invitation_message", %{"value" => message}, socket) do
+  def handle_event("invitation_message", %{"invitation_message" => message}, socket) do
     {:noreply, assign(socket, :invitation_message, message)}
   end
 
   @impl true
-  def handle_event("manual_emails", %{"value" => emails}, socket) do
+  def handle_event("manual_emails", %{"manual_emails" => emails}, socket) do
     {:noreply, assign(socket, :manual_emails, emails)}
   end
 
@@ -280,8 +306,16 @@ defmodule EventasaurusWeb.EventManageLive do
     organizer = socket.assigns.user
 
     try do
+      # Get current participants' user IDs to exclude them from suggestions
+      current_participant_user_ids = socket.assigns.participants
+                                   |> Enum.map(& &1.user_id)
+
       # Get historical participants using our guest invitation module
-      suggestions = Events.get_participant_suggestions(organizer, exclude_event_ids: [event.id], limit: 20)
+      suggestions = Events.get_participant_suggestions(organizer,
+        exclude_event_ids: [event.id],
+        exclude_user_ids: current_participant_user_ids,
+        limit: 20
+      )
 
       {:noreply,
        socket
