@@ -78,6 +78,11 @@ class PostHogManager {
   
   async init() {
     if (this.isLoaded || this.isLoading || !this.privacyConsent) {
+      console.log('PostHog init skipped:', {
+        isLoaded: this.isLoaded,
+        isLoading: this.isLoading,
+        privacyConsent: this.privacyConsent
+      });
       return;
     }
     
@@ -88,14 +93,35 @@ class PostHogManager {
       const posthogApiKey = window.POSTHOG_API_KEY;
       const posthogHost = window.POSTHOG_HOST || 'https://eu.i.posthog.com';
       
+      console.log('PostHog initialization attempt:', {
+        apiKeyPresent: !!posthogApiKey,
+        apiKeyLength: posthogApiKey ? posthogApiKey.length : 0,
+        host: posthogHost,
+        privacyConsent: this.privacyConsent,
+        userAgent: navigator.userAgent,
+        isOnline: this.isOnline,
+        protocol: window.location.protocol,
+        domain: window.location.hostname
+      });
+      
       if (!posthogApiKey) {
         console.warn('PostHog API key not found - analytics will be disabled');
         this.isLoading = false;
         return;
       }
       
+      if (!this.privacyConsent.analytics) {
+        console.log('PostHog disabled by privacy consent - analytics opt-out');
+        this.isLoading = false;
+        return;
+      }
+      
+      console.log('Attempting to load PostHog module...');
+      
       // Dynamic import to prevent blocking page render
       const { default: posthog } = await import('posthog-js');
+      
+      console.log('PostHog module loaded, initializing with config...');
       
       // Initialize with privacy-focused settings
       posthog.init(posthogApiKey, {
@@ -144,7 +170,14 @@ class PostHogManager {
       this.processQueue();
       
     } catch (error) {
-      console.error('Failed to load PostHog:', error);
+      console.error('Failed to load PostHog:', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+        loadAttempts: this.loadAttempts,
+        isOnline: this.isOnline,
+        userAgent: navigator.userAgent
+      });
       this.isLoading = false;
       this.loadAttempts++;
       
