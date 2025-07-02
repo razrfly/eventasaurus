@@ -2379,20 +2379,23 @@ defmodule EventasaurusApp.Events do
   - manual_emails: List of email strings
   - invitation_message: Custom message for the invitation
   - organizer: User struct of the person sending invitations
+  - mode: :invitation (default) or :direct_add
 
   Returns a map with:
-  - successful_invitations: Count of successfully created participants
+  - successful_invitations: Count of successfully processed guests
   - skipped_duplicates: Count of users already participating
-  - failed_invitations: Count of failed invitation attempts
-  - errors: List of error messages for debugging
+  - failed_invitations: Count of failed attempts
+  - errors: List of error messages
   """
-  def process_guest_invitations(%Event{} = event, %User{} = organizer, opts \\ []) do
+  def process_guest_invitations(event, organizer, opts \\ []) do
     suggestion_structs = Keyword.get(opts, :suggestion_structs, [])
     manual_emails = Keyword.get(opts, :manual_emails, [])
     invitation_message = Keyword.get(opts, :invitation_message, "")
+    mode = Keyword.get(opts, :mode, :invitation)
+
     current_time = DateTime.utc_now()
 
-    # Initialize result tracking
+    # Initialize counters
     result = %{
       successful_invitations: 0,
       skipped_duplicates: 0,
@@ -2400,38 +2403,144 @@ defmodule EventasaurusApp.Events do
       errors: []
     }
 
-    # Process suggested users
+    # Process suggestion invitations
     result_after_suggestions = Enum.reduce(suggestion_structs, result, fn suggestion, acc ->
-      case process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time) do
+      case process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time, mode) do
         {:ok, :created} ->
           %{acc | successful_invitations: acc.successful_invitations + 1}
-        {:ok, :duplicate} ->
+        {:ok, :already_exists} ->
           %{acc | skipped_duplicates: acc.skipped_duplicates + 1}
         {:error, reason} ->
-          %{acc |
-            failed_invitations: acc.failed_invitations + 1,
-            errors: [format_invitation_error("suggestion", suggestion, reason) | acc.errors]
-          }
+          error_msg = "Failed to invite #{get_suggestion_identifier(suggestion)}: #{format_error(reason)}"
+          %{acc | failed_invitations: acc.failed_invitations + 1, errors: [error_msg | acc.errors]}
       end
     end)
 
-    # Process manual emails
-    final_result = Enum.reduce(manual_emails, result_after_suggestions, fn email, acc ->
-      case process_email_invitation(event, organizer, email, invitation_message, current_time) do
+    # Process manual email invitations
+    Enum.reduce(manual_emails, result_after_suggestions, fn email, acc ->
+      case process_email_invitation(event, organizer, email, invitation_message, current_time, mode) do
         {:ok, :created} ->
           %{acc | successful_invitations: acc.successful_invitations + 1}
-        {:ok, :duplicate} ->
+        {:ok, :already_exists} ->
           %{acc | skipped_duplicates: acc.skipped_duplicates + 1}
         {:error, reason} ->
-          %{acc |
-            failed_invitations: acc.failed_invitations + 1,
-            errors: [format_invitation_error("email", email, reason) | acc.errors]
-          }
+          error_msg = "Failed to invite #{email}: #{format_error(reason)}"
+          %{acc | failed_invitations: acc.failed_invitations + 1, errors: [error_msg | acc.errors]}
       end
     end)
-
-    final_result
   end
+
+  # Process a single suggestion invitation
+  defp process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time, mode) do
+    case EventasaurusApp.Accounts.get_user(suggestion.user_id) do
+      %User{} = user ->
+        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
+          invitation_method: get_invitation_method(mode, "historical_suggestion"),
+          recommendation_level: Map.get(suggestion, :recommendation_level, "unknown"),
+          score: Map.get(suggestion, :total_score, 0.0)
+        }, mode)
+      nil ->
+        {:error, :user_not_found}
+    end
+  end
+
+  # Process a single email invitation
+  defp process_email_invitation(event, organizer, email, invitation_message, current_time, mode) do
+    case EventasaurusApp.Accounts.find_or_create_guest_user(email) do
+      {:ok, user} ->
+        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
+          invitation_method: get_invitation_method(mode, "manual_email"),
+          email_provided: email
+        }, mode)
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # Create an event participant with invitation tracking
+  defp create_invitation_participant(event, organizer, user, invitation_message, current_time, metadata, mode) do
+    case get_event_participant_by_event_and_user(event, user) do
+      nil ->
+        participant_attrs = build_participant_attrs(event, organizer, user, invitation_message, current_time, metadata, mode)
+
+        case create_event_participant(participant_attrs) do
+          {:ok, _participant} -> {:ok, :created}
+          {:error, changeset} -> {:error, changeset}
+        end
+      _existing_participant ->
+        {:ok, :already_exists}
+    end
+  end
+
+    # Build participant attributes based on mode
+  defp build_participant_attrs(event, organizer, user, invitation_message, current_time, metadata, mode) do
+    base_attrs = %{
+      event_id: event.id,
+      user_id: user.id,
+      role: :invitee,
+      status: :pending,
+      source: metadata.invitation_method,
+      metadata: metadata
+    }
+
+    case mode do
+      :direct_add ->
+        # For direct add, set status to accepted and don't include invitation metadata
+        Map.merge(base_attrs, %{
+          status: :accepted,
+          invited_by_user_id: organizer.id,
+          invited_at: current_time
+        })
+
+      :invitation ->
+        # For invitations, include all invitation metadata
+        Map.merge(base_attrs, %{
+          invited_by_user_id: organizer.id,
+          invited_at: current_time,
+          invitation_message: invitation_message
+        })
+
+      _ ->
+        # Default to invitation mode
+        Map.merge(base_attrs, %{
+          invited_by_user_id: organizer.id,
+          invited_at: current_time,
+          invitation_message: invitation_message
+        })
+    end
+  end
+
+  # Get invitation method based on mode
+  defp get_invitation_method(:direct_add, "historical_suggestion"), do: "direct_add_suggestion"
+  defp get_invitation_method(:direct_add, "manual_email"), do: "direct_add_email"
+  defp get_invitation_method(_, original_method), do: original_method
+
+  # Helper functions for error handling
+  defp get_suggestion_identifier(suggestion) do
+    case suggestion do
+      %{email: email} when is_binary(email) -> email
+      %{name: name} when is_binary(name) -> name
+      %{user_id: user_id} -> "User ID #{user_id}"
+      _ -> "Unknown user"
+    end
+  end
+
+  defp format_error(:user_not_found), do: "User not found"
+  defp format_error(:invalid_email), do: "Invalid email address"
+  defp format_error(changeset) when is_struct(changeset) do
+    case changeset do
+      %Ecto.Changeset{errors: [_ | _] = errors} ->
+        error_messages = Enum.map(errors, fn {field, {message, _opts}} ->
+          "#{field}: #{message}"
+        end)
+        "Validation failed: #{Enum.join(error_messages, ", ")}"
+      %Ecto.Changeset{} ->
+        "Validation failed: Unknown error"
+      _ ->
+        "Could not create user account"
+    end
+  end
+  defp format_error(reason), do: inspect(reason)
 
   # Private helper for aggregating stats by field
   defp aggregate_by_field(stats, field) do
@@ -2441,77 +2550,6 @@ defmodule EventasaurusApp.Events do
       {key, Enum.sum(Enum.map(group, & &1.count))}
     end)
     |> Enum.into(%{})
-  end
-
-  # Process a single suggestion invitation
-  defp process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time) do
-    case EventasaurusApp.Accounts.get_user(suggestion.user_id) do
-      %User{} = user ->
-        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
-          invitation_method: "historical_suggestion",
-          recommendation_level: Map.get(suggestion, :recommendation_level, "unknown"),
-          score: Map.get(suggestion, :total_score, 0.0)
-        })
-      nil ->
-        {:error, :user_not_found}
-    end
-  end
-
-  # Process a single email invitation
-  defp process_email_invitation(event, organizer, email, invitation_message, current_time) do
-    case EventasaurusApp.Accounts.find_or_create_guest_user(email) do
-      {:ok, user} ->
-        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
-          invitation_method: "manual_email"
-        })
-      {:error, _changeset} ->
-        {:error, :user_creation_failed}
-    end
-  end
-
-  # Create event participant for invitation
-  defp create_invitation_participant(event, organizer, user, invitation_message, current_time, metadata) do
-    case get_event_participant_by_event_and_user(event, user) do
-      nil ->
-        # User not already participating, create new participant
-        case create_event_participant(%{
-          event_id: event.id,
-          user_id: user.id,
-          role: :invitee,
-          status: :pending,
-          source: "manual_invitation",
-          invited_by_user_id: organizer.id,
-          invited_at: current_time,
-          invitation_message: invitation_message,
-          metadata: metadata
-        }) do
-          {:ok, _participant} -> {:ok, :created}
-          {:error, _changeset} -> {:error, :participant_creation_failed}
-        end
-      _existing_participant ->
-        # User already participating, skip
-        {:ok, :duplicate}
-    end
-  end
-
-  # Format error messages for debugging
-  defp format_invitation_error(type, identifier, reason) do
-    case type do
-      "suggestion" ->
-        user_id = Map.get(identifier, :user_id, "unknown")
-        "Failed to invite user ID #{user_id}: #{format_error_reason(reason)}"
-      "email" ->
-        "Failed to invite #{identifier}: #{format_error_reason(reason)}"
-    end
-  end
-
-  defp format_error_reason(reason) do
-    case reason do
-      :user_not_found -> "User not found"
-      :user_creation_failed -> "Could not create user account"
-      :participant_creation_failed -> "Could not create participant record"
-      _ -> inspect(reason)
-    end
   end
 
 end

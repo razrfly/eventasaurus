@@ -3,7 +3,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
   import EventasaurusWeb.CoreComponents
 
   @doc """
-  Renders a guest invitation modal.
+  Renders a guest invitation modal with toggle between invitation and direct add modes.
 
   ## Examples
 
@@ -16,7 +16,11 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
         suggestions_loading={@suggestions_loading}
         invitation_message={@invitation_message}
         manual_emails={@manual_emails}
+        add_mode={@add_mode}
         on_close="close_guest_invitation_modal"
+        on_mode_change="toggle_add_mode"
+        on_invite_selected="send_invitations"
+        on_add_directly="add_guests_directly"
       />
   """
 
@@ -29,9 +33,12 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
   attr :invitation_message, :string, default: ""
   attr :manual_emails, :string, default: ""
   attr :selected_suggestions, :list, default: []
+  attr :add_mode, :string, default: "invite"  # "invite" or "direct"
   attr :on_close, :any, required: true
   attr :on_invite_selected, :any, default: nil
+  attr :on_add_directly, :any, default: nil
   attr :on_search_suggestions, :any, default: nil
+  attr :on_mode_change, :any, default: nil
 
   def guest_invitation_modal(assigns) do
     ~H"""
@@ -52,16 +59,22 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
           <!-- Modal Header -->
           <div class="flex items-center justify-between p-6 border-b border-gray-200">
             <div>
-              <h2 class="text-xl font-semibold text-gray-900">Invite Guests</h2>
+              <h2 class="text-xl font-semibold text-gray-900">
+                <%= if @add_mode == "direct", do: "Add Guests", else: "Invite Guests" %>
+              </h2>
               <p class="text-sm text-gray-500 mt-1">
-                Add people to <%= @event.title %>
+                <%= if @add_mode == "direct" do %>
+                  Add people directly to <%= @event.title %>
+                <% else %>
+                  Send invitations to people for <%= @event.title %>
+                <% end %>
               </p>
             </div>
             <button
               type="button"
               phx-click={@on_close}
               class="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100"
-              aria-label="Close invitation modal"
+              aria-label="Close modal"
             >
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -73,12 +86,77 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
           <div class="flex-1 overflow-y-auto">
             <div class="p-6 space-y-6">
 
+              <!-- Mode Toggle -->
+              <%= if @on_mode_change do %>
+                <div class="flex items-center justify-center">
+                  <div class="bg-gray-100 p-1 rounded-lg flex">
+                    <button
+                      type="button"
+                      phx-click={@on_mode_change}
+                      phx-value-mode="invite"
+                      class={[
+                        "px-4 py-2 text-sm font-medium rounded-md transition-colors",
+                        if(@add_mode == "invite", do: "bg-white text-gray-900 shadow-sm", else: "text-gray-500 hover:text-gray-700")
+                      ]}
+                    >
+                      📧 Send Invitations
+                    </button>
+                    <button
+                      type="button"
+                      phx-click={@on_mode_change}
+                      phx-value-mode="direct"
+                      class={[
+                        "px-4 py-2 text-sm font-medium rounded-md transition-colors",
+                        if(@add_mode == "direct", do: "bg-white text-gray-900 shadow-sm", else: "text-gray-500 hover:text-gray-700")
+                      ]}
+                    >
+                      ➕ Add Directly
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Mode Description -->
+                <div class="text-center">
+                  <%= if @add_mode == "direct" do %>
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div class="flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span class="text-sm font-medium text-green-800">Direct Add Mode</span>
+                      </div>
+                      <p class="text-sm text-green-700 mt-1">
+                        Users will be added directly to your event without sending email invitations.
+                      </p>
+                    </div>
+                  <% else %>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div class="flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span class="text-sm font-medium text-blue-800">Invitation Mode</span>
+                      </div>
+                      <p class="text-sm text-blue-700 mt-1">
+                        Email invitations will be sent to selected users with your personal message.
+                      </p>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+
               <!-- Historical Participant Suggestions -->
               <div>
                 <div class="flex items-center justify-between mb-4">
                   <div>
                     <h3 class="text-lg font-medium text-gray-900">People from your past events</h3>
-                    <p class="text-sm text-gray-500">Select people who have attended your previous events</p>
+                    <p class="text-sm text-gray-500">
+                      <%= if @add_mode == "direct" do %>
+                        Select people to add directly to your event
+                      <% else %>
+                        Select people who have attended your previous events
+                      <% end %>
+                    </p>
                   </div>
                   <%= if @on_search_suggestions do %>
                     <button
@@ -165,7 +243,9 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
               <!-- Manual Email Entry -->
               <div>
                 <div class="mb-4">
-                  <h3 class="text-lg font-medium text-gray-900">Invite by email</h3>
+                  <h3 class="text-lg font-medium text-gray-900">
+                    <%= if @add_mode == "direct", do: "Add by email", else: "Invite by email" %>
+                  </h3>
                   <p class="text-sm text-gray-500">Enter email addresses separated by commas or new lines</p>
                 </div>
 
@@ -182,84 +262,87 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                 </div>
               </div>
 
-              <!-- Invitation Message -->
-              <div>
-                <div class="mb-4">
-                  <h3 class="text-lg font-medium text-gray-900">Personal message (optional)</h3>
-                  <p class="text-sm text-gray-500">Add a personal note to your invitation</p>
+              <!-- Invitation Message (only in invite mode) -->
+              <%= if @add_mode == "invite" do %>
+                <div>
+                  <div class="mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Personal message (optional)</h3>
+                    <p class="text-sm text-gray-500">Add a personal note to your invitation</p>
+                  </div>
+
+                  <.input
+                    type="textarea"
+                    name="invitation_message"
+                    value={@invitation_message}
+                    placeholder="Hi! I'd love for you to join me at this event..."
+                    rows="3"
+                    class="block w-full"
+                    phx-debounce="300"
+                  />
                 </div>
 
-                <.input
-                  type="textarea"
-                  name="invitation_message"
-                  value={@invitation_message}
-                  placeholder="Hi! I'd love for you to join me at this event..."
-                  rows="3"
-                  class="block w-full"
-                  phx-debounce="300"
-                />
-              </div>
+                <!-- Email Preview Section (Mock) -->
+                <div>
+                  <div class="mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Email preview</h3>
+                    <p class="text-sm text-gray-500">Here's what your invitation will look like</p>
+                  </div>
 
-              <!-- Email Preview Section (Mock) -->
-              <div>
-                <div class="mb-4">
-                  <h3 class="text-lg font-medium text-gray-900">Email preview</h3>
-                  <p class="text-sm text-gray-500">Here's what your invitation will look like</p>
-                </div>
-
-                <div class="bg-white border border-gray-200 rounded-lg p-4 max-h-60 overflow-y-auto shadow-sm">
-                  <div class="space-y-3">
-                    <!-- Email Header -->
-                    <div class="text-sm text-gray-500 border-b border-gray-100 pb-2">
-                      <div class="flex justify-between">
-                        <span><strong>From:</strong> <%= @organizer.name %> &lt;<%= @organizer.email %>&gt;</span>
-                      </div>
-                      <div><strong>Subject:</strong> You're invited to <%= @event.title %></div>
-                    </div>
-
-                    <!-- Email Content -->
-                    <div class="prose prose-sm max-w-none">
-                      <p>Hi there,</p>
-
-                      <%= if @invitation_message && String.trim(@invitation_message) != "" do %>
-                        <div class="bg-blue-50 border-l-4 border-blue-200 p-3 my-3">
-                          <p class="text-gray-700 italic"><%= @invitation_message %></p>
+                  <div class="bg-white border border-gray-200 rounded-lg p-4 max-h-60 overflow-y-auto shadow-sm">
+                    <div class="space-y-3">
+                      <!-- Email Header -->
+                      <div class="text-sm text-gray-500 border-b border-gray-100 pb-2">
+                        <div class="flex justify-between">
+                          <span><strong>From:</strong> <%= @organizer.name %> &lt;<%= @organizer.email %>&gt;</span>
                         </div>
-                      <% end %>
+                        <div><strong>Subject:</strong> You're invited to <%= @event.title %></div>
+                      </div>
 
-                      <p>You're invited to join:</p>
+                      <!-- Email Content -->
+                      <div class="prose prose-sm max-w-none">
+                        <p>Hi there,</p>
 
-                      <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 my-4">
-                        <h4 class="font-semibold text-gray-900 mb-2"><%= @event.title %></h4>
-                        <%= if @event.tagline do %>
-                          <p class="text-gray-600 mb-2"><%= @event.tagline %></p>
+                        <%= if @invitation_message && String.trim(@invitation_message) != "" do %>
+                          <div class="bg-blue-50 border-l-4 border-blue-200 p-3 my-3">
+                            <p class="text-gray-700 italic"><%= @invitation_message %></p>
+                          </div>
                         <% end %>
-                        <div class="text-sm text-gray-500">
-                          <div>📅 Date: <%= if @event.start_at, do: Calendar.strftime(@event.start_at, "%A, %B %d, %Y at %I:%M %p"), else: "To be announced" %></div>
-                          <%= if @event.venue do %>
-                            <div>📍 Location: <%= @event.venue.name %></div>
+
+                        <p>You're invited to join:</p>
+
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 my-4">
+                          <h4 class="font-semibold text-gray-900 mb-2"><%= @event.title %></h4>
+                          <%= if @event.tagline do %>
+                            <p class="text-gray-600 mb-2"><%= @event.tagline %></p>
                           <% end %>
+                          <div class="text-sm text-gray-500">
+                            <div>📅 Date: <%= if @event.start_at, do: Calendar.strftime(@event.start_at, "%A, %B %d, %Y at %I:%M %p"), else: "To be announced" %></div>
+                            <%= if @event.venue do %>
+                              <div>📍 Location: <%= @event.venue.name %></div>
+                            <% end %>
+                          </div>
                         </div>
+
+                        <p>
+                          <strong>👉 <a href="#" class="text-blue-600 underline">Click here to view details and RSVP</a></strong>
+                        </p>
+
+                        <p class="text-sm text-gray-500">
+                          This invitation was sent by <%= @organizer.name %> via Eventasaurus.
+                        </p>
                       </div>
-
-                      <p>
-                        <strong>👉 <a href="#" class="text-blue-600 underline">Click here to view details and RSVP</a></strong>
-                      </p>
-
-                      <p class="text-sm text-gray-500">
-                        This invitation was sent by <%= @organizer.name %> via Eventasaurus.
-                      </p>
                     </div>
                   </div>
                 </div>
-              </div>
+              <% end %>
             </div>
           </div>
 
           <!-- Modal Footer -->
           <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
             <div class="text-sm text-gray-500">
-              <span id="invitation-count">0</span> people will be invited
+              <span id="invitation-count">0</span>
+              <%= if @add_mode == "direct", do: "people will be added", else: "people will be invited" %>
             </div>
             <div class="flex space-x-3">
               <button
@@ -269,15 +352,29 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
               >
                 Cancel
               </button>
-              <%= if @on_invite_selected do %>
-                <button
-                  type="button"
-                  phx-click={@on_invite_selected}
-                  class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  disabled={length(@selected_suggestions) == 0 && String.trim(@manual_emails || "") == ""}
-                >
-                  Send Invitations
-                </button>
+
+              <%= if @add_mode == "direct" do %>
+                <%= if @on_add_directly do %>
+                  <button
+                    type="button"
+                    phx-click={@on_add_directly}
+                    class="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    disabled={length(@selected_suggestions) == 0 && String.trim(@manual_emails || "") == ""}
+                  >
+                    ➕ Add to Event
+                  </button>
+                <% end %>
+              <% else %>
+                <%= if @on_invite_selected do %>
+                  <button
+                    type="button"
+                    phx-click={@on_invite_selected}
+                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    disabled={length(@selected_suggestions) == 0 && String.trim(@manual_emails || "") == ""}
+                  >
+                    📧 Send Invitations
+                  </button>
+                <% end %>
               <% end %>
             </div>
           </div>
@@ -313,7 +410,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
             }
           });
 
-          // Initial count update
+          // Initial count
           updateInvitationCount();
         });
       </script>
