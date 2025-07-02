@@ -159,7 +159,22 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp fetch_analytics_data(event_id) do
     try do
-      PosthogService.get_event_analytics(event_id, days: 30)
+      case PosthogService.get_event_analytics(event_id, 30) do
+        {:ok, data} -> data
+        {:error, reason} ->
+          require Logger
+          Logger.error("PostHog analytics error: #{inspect(reason)}")
+
+          %{
+            unique_visitors: 0,
+            registrations: 0,
+            votes_cast: 0,
+            ticket_checkouts: 0,
+            registration_rate: 0.0,
+            checkout_conversion_rate: 0.0,
+            error: "Analytics temporarily unavailable"
+          }
+      end
     rescue
       error ->
         # Log error but don't crash the page
@@ -170,9 +185,10 @@ defmodule EventasaurusWeb.EventManageLive do
         %{
           unique_visitors: 0,
           registrations: 0,
-          date_votes: 0,
+          votes_cast: 0,
           ticket_checkouts: 0,
-          conversion_rate: 0.0,
+          registration_rate: 0.0,
+          checkout_conversion_rate: 0.0,
           error: "Analytics temporarily unavailable"
         }
     end
