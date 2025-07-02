@@ -73,6 +73,24 @@
     <meta name="supabase-url" content={supabase_url} />
     <meta name="supabase-anon-key" content={supabase_api_key} />
     
+    <!-- PostHog configuration -->
+    <%
+      posthog_api_key = System.get_env("POSTHOG_API_KEY")
+      posthog_host = "https://eu.i.posthog.com"
+    %>
+    <%= if posthog_api_key do %>
+      <script>
+        window.POSTHOG_API_KEY = "<%= posthog_api_key %>";
+        window.POSTHOG_HOST = "<%= posthog_host %>";
+        <% if @conn.assigns[:user] do %>
+          window.currentUser = {
+            id: "<%= @conn.assigns.user.supabase_id %>",
+            email: "<%= @conn.assigns.user.email %>"
+          };
+        <% end %>
+      </script>
+    <% end %>
+    
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
     
@@ -397,5 +415,86 @@
     <div class="toast-container fixed bottom-4 right-4 z-50">
       <!-- Toast notifications will be inserted here -->
     </div>
+
+    <!-- PostHog Privacy Consent Banner -->
+    <div id="privacy-banner" class="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 shadow-lg transform translate-y-full transition-transform duration-300 z-50" style="display: none;">
+      <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex-1">
+          <p class="text-sm">
+            We use analytics to improve your experience. 
+            <a href="/privacy" class="underline hover:text-gray-300">Learn more</a>
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <button 
+            id="privacy-accept" 
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+          >
+            Accept Analytics
+          </button>
+          <button 
+            id="privacy-decline" 
+            class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+          >
+            Essential Only
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Privacy banner functionality
+      document.addEventListener('DOMContentLoaded', function() {
+        const banner = document.getElementById('privacy-banner');
+        const acceptBtn = document.getElementById('privacy-accept');
+        const declineBtn = document.getElementById('privacy-decline');
+        
+        // Check if consent is already given
+        const hasConsent = localStorage.getItem('posthog_privacy_consent');
+        
+        if (!hasConsent) {
+          // Show banner after a short delay
+          setTimeout(() => {
+            banner.style.display = 'block';
+            requestAnimationFrame(() => {
+              banner.classList.remove('translate-y-full');
+            });
+          }, 2000);
+        }
+        
+        // Handle accept button
+        acceptBtn.addEventListener('click', function() {
+          const consent = { analytics: true, cookies: true, essential: true };
+          localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
+          
+          // Trigger PostHog consent event
+          window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
+            detail: { consent }
+          }));
+          
+          hideBanner();
+        });
+        
+        // Handle decline button
+        declineBtn.addEventListener('click', function() {
+          const consent = { analytics: false, cookies: false, essential: true };
+          localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
+          
+          // Trigger PostHog consent event
+          window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
+            detail: { consent }
+          }));
+          
+          hideBanner();
+        });
+        
+        function hideBanner() {
+          banner.classList.add('translate-y-full');
+          setTimeout(() => {
+            banner.style.display = 'none';
+          }, 300);
+        }
+      });
+    </script>
   </body>
 </html> 

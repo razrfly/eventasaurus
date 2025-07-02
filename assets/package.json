@@ -16,6 +16,7 @@
   "dependencies": {
     "@alpinejs/focus": "^3.13.10",
     "alpinejs": "^3.13.10",
+    "posthog-js": "^1.157.2",
     "qrcode": "^1.5.3",
     "topbar": "^2.0.0",
     "@supabase/supabase-js": "^2.49.6",

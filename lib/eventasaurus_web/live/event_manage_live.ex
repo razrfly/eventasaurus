@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.EventManageLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.{Events, Venues, Ticketing}
+  alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
 
   @impl true
@@ -60,7 +61,15 @@ defmodule EventasaurusWeb.EventManageLive do
               {[], %{}, %{}}
             end
 
+            # Fetch PostHog analytics data
+            analytics_data = fetch_analytics_data(event.id)
+
             registration_status = Events.get_user_registration_status(event, user)
+
+            # Schedule periodic refresh for analytics
+            if connected?(socket) do
+              Process.send_after(self(), :refresh_analytics, 300_000) # 5 minutes
+            end
 
             {:ok,
              socket
@@ -73,6 +82,9 @@ defmodule EventasaurusWeb.EventManageLive do
              |> assign(:date_options, date_options)
              |> assign(:votes_by_date, votes_by_date)
              |> assign(:votes_breakdown, votes_breakdown)
+             |> assign(:analytics_data, analytics_data)
+             |> assign(:analytics_loading, false)
+             |> assign(:analytics_error, nil)
              |> assign(:registration_status, registration_status)
              |> assign(:user, user)
              |> assign(:active_tab, "overview")
@@ -115,7 +127,56 @@ defmodule EventasaurusWeb.EventManageLive do
      |> put_flash(:info, "Data refreshed")}
   end
 
+  @impl true
+  def handle_event("refresh_analytics", _params, socket) do
+    socket =
+      socket
+      |> assign(:analytics_loading, true)
+      |> assign(:analytics_error, nil)
+
+    analytics_data = fetch_analytics_data(socket.assigns.event.id)
+
+    {:noreply,
+     socket
+     |> assign(:analytics_data, analytics_data)
+     |> assign(:analytics_loading, false)}
+  end
+
+  @impl true
+  def handle_info(:refresh_analytics, socket) do
+    # Periodic refresh of analytics data
+    analytics_data = fetch_analytics_data(socket.assigns.event.id)
+
+    # Schedule next refresh
+    Process.send_after(self(), :refresh_analytics, 300_000) # 5 minutes
+
+    {:noreply,
+     socket
+     |> assign(:analytics_data, analytics_data)}
+  end
+
   # Helper functions
+
+  defp fetch_analytics_data(event_id) do
+    try do
+      PosthogService.get_event_analytics(event_id, days: 30)
+    rescue
+      error ->
+        # Log error but don't crash the page
+        require Logger
+        Logger.error("Failed to fetch PostHog analytics: #{inspect(error)}")
+
+        # Return default/empty analytics data
+        %{
+          unique_visitors: 0,
+          registrations: 0,
+          date_votes: 0,
+          ticket_checkouts: 0,
+          conversion_rate: 0.0,
+          error: "Analytics temporarily unavailable"
+        }
+    end
+  end
 
   defp format_event_datetime(event) do
     if event.start_at do

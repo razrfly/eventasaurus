@@ -123,6 +123,20 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:meta_description, description)
            |> assign(:meta_image, social_image_url)
            |> assign(:meta_url, event_url)
+           # Track event page view
+           |> push_event("track_event", %{
+               event: "event_page_viewed",
+               properties: %{
+                 event_id: event.id,
+                 event_title: event.title,
+                 event_slug: event.slug,
+                 is_ticketed: event.is_ticketed,
+                 has_date_polling: event.status == :polling,
+                 user_type: if(user, do: "authenticated", else: "anonymous"),
+                 registration_status: registration_status,
+                 theme: theme
+               }
+             })
           }
       end
     end
@@ -174,6 +188,16 @@ defmodule EventasaurusWeb.PublicEventLive do
              |> assign(:just_registered, false)  # Existing users don't need email verification
              |> assign(:participants, updated_participants)
              |> put_flash(:info, "You're now registered for #{socket.assigns.event.title}!")
+             |> push_event("track_event", %{
+                 event: "event_registration_completed",
+                 properties: %{
+                   event_id: socket.assigns.event.id,
+                   event_title: socket.assigns.event.title,
+                   event_slug: socket.assigns.event.slug,
+                   user_type: "authenticated",
+                   registration_method: "one_click"
+                 }
+               })
             }
 
           {:error, :already_registered} ->
@@ -254,6 +278,16 @@ defmodule EventasaurusWeb.PublicEventLive do
              |> assign(:just_registered, false)  # Existing users don't need email verification
              |> assign(:participants, updated_participants)
              |> put_flash(:info, "Welcome back! You're now registered for #{socket.assigns.event.title}.")
+             |> push_event("track_event", %{
+                 event: "event_registration_completed",
+                 properties: %{
+                   event_id: socket.assigns.event.id,
+                   event_title: socket.assigns.event.title,
+                   event_slug: socket.assigns.event.slug,
+                   user_type: "authenticated",
+                   registration_method: "reregister"
+                 }
+               })
             }
 
           {:error, reason} ->
@@ -331,6 +365,18 @@ defmodule EventasaurusWeb.PublicEventLive do
                |> assign(:user_votes, user_votes)
                |> assign(:voting_summary, voting_summary)
                |> put_flash(:info, "Your vote has been recorded!")
+               |> push_event("track_event", %{
+                   event: "event_date_vote_cast",
+                   properties: %{
+                     event_id: socket.assigns.event.id,
+                     event_title: socket.assigns.event.title,
+                     event_slug: socket.assigns.event.slug,
+                     poll_id: socket.assigns.date_poll.id,
+                     option_id: option.id,
+                     vote_type: vote_type_atom,
+                     user_type: "authenticated"
+                   }
+                 })
               }
 
             {:error, reason} ->
@@ -493,9 +539,20 @@ defmodule EventasaurusWeb.PublicEventLive do
             |> URI.encode_query()
 
           {:noreply,
-           redirect(socket,
-             to: "/events/#{socket.assigns.event.slug}/checkout?" <> query
-           )}
+           socket
+           |> push_event("track_event", %{
+               event: "ticket_checkout_initiated",
+               properties: %{
+                 event_id: socket.assigns.event.id,
+                 event_title: socket.assigns.event.title,
+                 event_slug: socket.assigns.event.slug,
+                 user_type: "anonymous",
+                 ticket_selections: selected_tickets,
+                 total_tickets: Enum.sum(Map.values(selected_tickets))
+               }
+             })
+           |> redirect(to: "/events/#{socket.assigns.event.slug}/checkout?" <> query)
+          }
 
         user ->
           # User is logged in - create Stripe hosted checkout session directly
@@ -530,6 +587,19 @@ defmodule EventasaurusWeb.PublicEventLive do
             # Redirect to Stripe hosted checkout
             {:noreply,
              socket
+             |> push_event("track_event", %{
+                 event: "ticket_checkout_initiated",
+                 properties: %{
+                   event_id: socket.assigns.event.id,
+                   event_title: socket.assigns.event.title,
+                   event_slug: socket.assigns.event.slug,
+                   user_type: "authenticated",
+                   ticket_id: ticket.id,
+                   ticket_title: ticket.title,
+                   quantity: quantity,
+                   session_id: session_id
+                 }
+               })
              |> redirect(external: checkout_url)}
 
           {:error, :no_stripe_account} ->
@@ -616,7 +686,23 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> put_flash(:info, message)
      |> assign(:just_registered, just_registered)
      |> assign(:show_registration_modal, false)
-     |> assign(:participants, updated_participants)}
+     |> assign(:participants, updated_participants)
+     |> push_event("track_event", %{
+         event: "event_registration_completed",
+         properties: %{
+           event_id: socket.assigns.event.id,
+           event_title: socket.assigns.event.title,
+           event_slug: socket.assigns.event.slug,
+           user_type: case type do
+             :new_registration -> "new_user"
+             :existing_user_registered -> "existing_user"
+             :registered -> "authenticated"
+             :already_registered -> "returning_user"
+           end,
+           registration_method: "form_submission",
+           registration_type: type
+         }
+       })}
   end
 
   def handle_info({:registration_error, reason}, socket) do
@@ -684,6 +770,21 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> assign(:user_votes, user_votes)
      |> assign(:voting_summary, voting_summary)
      |> put_flash(:info, message)
+     |> push_event("track_event", %{
+         event: "event_date_vote_cast",
+         properties: %{
+           event_id: socket.assigns.event.id,
+           event_title: socket.assigns.event.title,
+           event_slug: socket.assigns.event.slug,
+           poll_id: socket.assigns.date_poll.id,
+           user_type: case type do
+             :new_voter -> "new_user"
+             :existing_user_voted -> "existing_user"
+           end,
+           vote_method: "anonymous_form",
+           vote_type: type
+         }
+       })
     }
   end
 
