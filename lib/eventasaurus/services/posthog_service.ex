@@ -210,10 +210,10 @@ defmodule Eventasaurus.Services.PosthogService do
         "kind" => "HogQLQuery",
         "query" => """
         SELECT
-          count(DISTINCT CASE WHEN event = 'event_page_viewed' THEN person_id END) as visitors,
-          count(CASE WHEN event = 'event_registration_completed' THEN 1 END) as registrations,
-          count(CASE WHEN event = 'event_date_vote_cast' THEN 1 END) as votes,
-          count(CASE WHEN event = 'ticket_checkout_initiated' THEN 1 END) as checkouts
+          count(DISTINCT CASE WHEN event = 'event_page_viewed' THEN person_id ELSE NULL END) as visitors,
+          count(CASE WHEN event = 'event_registration_completed' THEN 1 ELSE NULL END) as registrations,
+          count(CASE WHEN event = 'event_date_vote_cast' THEN 1 ELSE NULL END) as votes,
+          count(CASE WHEN event = 'ticket_checkout_initiated' THEN 1 ELSE NULL END) as checkouts
         FROM events
         WHERE properties.event_id = '#{event_id}'
           AND timestamp >= '#{days_ago(date_range)}'
