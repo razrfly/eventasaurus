@@ -125,21 +125,28 @@ class PostHogManager {
     console.log('PostHog initialized successfully');
     
     // Identify user if authenticated and consent given
-    if (this.privacyConsent.analytics && window.currentUser) {
+    if (this.privacyConsent.analytics && window.currentUser && window.currentUser.id) {
       const identifyProps = {
         user_type: 'authenticated',
         privacy_consent: this.privacyConsent
       };
       
-      // Only include hashed email if marketing consent is given
-      if (this.privacyConsent.marketing) {
-        this.hashEmail(window.currentUser.email).then(hashedEmail => {
-          posthogInstance.identify(window.currentUser.id, {
-            ...identifyProps,
-            email_hash: hashedEmail
+      // Only include hashed email if marketing consent is given and email exists
+      if (this.privacyConsent.marketing && window.currentUser.email) {
+        this.hashEmail(window.currentUser.email)
+          .then(hashedEmail => {
+            posthogInstance.identify(window.currentUser.id, {
+              ...identifyProps,
+              email_hash: hashedEmail
+            });
+            console.log('PostHog user identified with hashed email:', window.currentUser.id);
+          })
+          .catch(error => {
+            console.warn('Failed to hash email for PostHog:', error);
+            // Fall back to identifying without email hash
+            posthogInstance.identify(window.currentUser.id, identifyProps);
+            console.log('PostHog user identified (fallback, no email hash):', window.currentUser.id);
           });
-          console.log('PostHog user identified with hashed email:', window.currentUser.id);
-        });
       } else {
         posthogInstance.identify(window.currentUser.id, identifyProps);
         console.log('PostHog user identified (no email):', window.currentUser.id);
@@ -268,11 +275,27 @@ class PostHogManager {
   
   // Helper to hash email for GDPR compliance
   async hashEmail(email) {
-    const data = new TextEncoder().encode(email);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(digest))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    // Check if email is valid
+    if (!email || typeof email !== 'string') {
+      throw new Error('Invalid email provided for hashing');
+    }
+    
+    // Check if crypto.subtle is available (requires HTTPS or localhost)
+    if (typeof crypto?.subtle !== 'object') {
+      console.warn('Web Crypto API not available—cannot hash email securely.');
+      throw new Error('crypto.subtle is not supported in this environment');
+    }
+    
+    try {
+      const data = new TextEncoder().encode(email);
+      const digest = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(digest))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch (error) {
+      console.error('Failed to hash email:', error);
+      throw new Error(`Email hashing failed: ${error.message}`);
+    }
   }
 
   // GDPR compliance helper
