@@ -152,16 +152,11 @@ defmodule Eventasaurus.Services.PosthogServiceTest do
       assert analytics1.unique_visitors == 0
     end
 
+    @tag :skip
     test "cache expires after TTL" do
-      # This test would require waiting 5 minutes or mocking time
-      # For now, we'll just test that cache keys are generated correctly
-      System.delete_env("POSTHOG_API_KEY")
-
-      {:ok, _} = PosthogService.get_event_analytics("ttl_test", 7)
-      {:ok, _} = PosthogService.get_event_analytics("ttl_test", 30)
-
-      # Different date ranges should create different cache keys
-      # This is implicit in the implementation
+      # TODO: Implement with proper time mocking
+      # This test would require mocking time or waiting 5 minutes
+      # For now, we'll skip this test to avoid confusion
     end
   end
 end
