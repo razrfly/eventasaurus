@@ -7,6 +7,9 @@ defmodule EventasaurusWeb.CoreComponents do
 
   alias Phoenix.LiveView.JS
 
+  # Import helpers for currency components
+  import EventasaurusWeb.Helpers.CurrencyHelpers
+
   @doc """
   Renders a component that wraps an element to provide focus management.
 
@@ -746,6 +749,60 @@ defmodule EventasaurusWeb.CoreComponents do
         Eventasaurus
       </span>
     </a>
+    """
+  end
+
+
+
+  @doc """
+  Renders a currency select component with all supported currencies.
+
+  ## Examples
+
+      <.currency_select
+        name="user[default_currency]"
+        id="user_default_currency"
+        value={@user.default_currency}
+        prompt="Select Currency"
+      />
+  """
+  attr :name, :string, required: true
+  attr :id, :string, required: true
+  attr :value, :string, default: nil
+  attr :prompt, :string, default: "Select Currency"
+  attr :class, :string, default: nil
+  attr :required, :boolean, default: false
+  attr :disabled, :boolean, default: false
+  attr :rest, :global
+
+  def currency_select(assigns) do
+    options = supported_currencies()
+
+    assigns = assign(assigns, options: options)
+
+    ~H"""
+    <select
+      name={@name}
+      id={@id}
+      class={[
+        "mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2",
+        "text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500",
+        "disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500",
+        @class
+      ]}
+      required={@required}
+      disabled={@disabled}
+      {@rest}
+    >
+      <option value="" :if={@prompt}><%= @prompt %></option>
+      <option
+        :for={{code, name} <- @options}
+        value={code}
+        selected={code == @value}
+      >
+        <%= name %>
+      </option>
+    </select>
     """
   end
 

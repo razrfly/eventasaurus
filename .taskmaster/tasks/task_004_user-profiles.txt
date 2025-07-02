@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Build Public Profile Pages and Social Integration
+# Status: pending
+# Dependencies: 1, 2, 3
+# Priority: medium
+# Description: Implement public profile pages with user info, social links, event statistics, and SEO optimization.
+# Details:
+Create a LiveView for public profile pages at /user/:username (and alternatives). Display: user display name, username, bio, avatar (DiceBear API), join date, event statistics (hosted/attended), social media links (with platform icons), and list of public events hosted by user. Use conditional rendering for social links. Implement SEO optimization with meta tags and structured data markup. Use caching for public profiles to improve performance. For social media icons, use a library like Heroicons or Font Awesome. For SEO, use Phoenix.HTML meta tags and schema.org markup. For caching, consider using ETS or a dedicated cache layer. Use Phoenix LiveView 0.19+ and Tailwind 3.3+.
+
+# Test Strategy:
+Test profile page rendering with various user data and missing fields. Test SEO meta tags and structured data. Test caching behavior. Test mobile responsiveness and social link display. Use automated integration tests for profile page access and content rendering.

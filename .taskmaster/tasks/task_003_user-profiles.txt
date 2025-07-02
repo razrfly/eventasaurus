@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Develop Enhanced Settings and Profile Management
+# Status: pending
+# Dependencies: 1, 2
+# Priority: medium
+# Description: Enhance the settings page with new profile fields, social media inputs, currency/timezone selectors, and live profile preview.
+# Details:
+Extend the existing settings LiveView to include: username field with real-time availability indicator, bio textarea with character counter, timezone selector dropdown, profile visibility toggle, social media handle inputs with format validation, website URL input with validation, default currency selector (USD, EUR, GBP, CAD, AUD, etc.), and a live profile preview component. Use Tailwind CSS for responsive design. For validation, use LiveView form bindings and custom validators. For live preview, use LiveView assigns and conditional rendering. For currency and timezone selectors, use pre-populated lists with 3-letter currency codes and standard timezone identifiers. Use Phoenix LiveView 0.19+ and Tailwind 3.3+.
+
+# Test Strategy:
+Test all form validations and real-time feedback. Test profile preview updates with form changes. Test mobile responsiveness. Use automated browser tests for form submission and error handling.

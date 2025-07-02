@@ -58,6 +58,7 @@
             method="post" 
             class="space-y-4"
           >
+            <!-- Basic Information -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <.label for="user_name">Full Name</.label>
@@ -65,7 +66,193 @@
               </div>
               <div>
                 <.label for="user_email">Email Address</.label>
-                <.input type="email" name="user[email]" id="user_email" value={@user.email} placeholder="Enter your email" />
+                <.input type="email" name="user[email]" id="user_email" value={@user.email} disabled placeholder="Enter your email" />
+                <p class="mt-1 text-sm text-gray-500">Email cannot be changed from here</p>
+              </div>
+            </div>
+
+            <!-- Username and Website -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <.label for="user_username">
+                  Username
+                  <span class="text-red-500">*</span>
+                </.label>
+                <div class="relative mt-1">
+                  <.input 
+                    type="text" 
+                    name="user[username]" 
+                    id="user_username" 
+                    value={@user.username} 
+                    placeholder="Choose a unique username"
+                    class="pr-10"
+                  />
+                  <!-- Status indicator -->
+                  <div id="username-status" class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none hidden">
+                    <!-- Loading spinner -->
+                    <svg id="username-loading" class="animate-spin h-4 w-4 text-gray-400 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <!-- Success checkmark -->
+                    <svg id="username-success" class="h-4 w-4 text-green-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <!-- Error X -->
+                    <svg id="username-error" class="h-4 w-4 text-red-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                  </div>
+                </div>
+                <!-- Validation messages -->
+                <div id="username-messages" class="mt-1 text-sm"></div>
+              </div>
+              <div>
+                <.label for="user_website_url">Website</.label>
+                <.input type="url" name="user[website_url]" id="user_website_url" value={@user.website_url} placeholder="https://your-website.com" />
+              </div>
+            </div>
+
+            <!-- Bio -->
+            <div>
+              <.label for="user_bio">Bio</.label>
+              <.input type="textarea" name="user[bio]" id="user_bio" value={@user.bio} placeholder="Tell people about yourself..." />
+              <p class="mt-1 text-sm text-gray-500">Max 500 characters</p>
+            </div>
+
+            <!-- Social Links -->
+            <div class="border-t border-gray-200 pt-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-6">Social Links</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Instagram -->
+                <div class="flex items-center space-x-3">
+                  <div class="flex-shrink-0">
+                    <svg class="w-6 h-6 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947C23.728 2.695 21.31.273 16.948.073 15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 flex items-center bg-gray-50 rounded-lg border border-gray-200 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                    <span class="px-3 py-2 text-gray-500 text-sm font-medium bg-gray-100 border-r border-gray-200 rounded-l-lg">instagram.com/</span>
+                    <input type="text" name="user[instagram_handle]" id="user_instagram_handle" value={@user.instagram_handle} placeholder="username" class="flex-1 border-0 bg-transparent px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none rounded-r-lg">
+                  </div>
+                </div>
+
+                <!-- X (Twitter) -->
+                <div class="flex items-center space-x-3">
+                  <div class="flex-shrink-0">
+                    <svg class="w-6 h-6 text-black" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 flex items-center bg-gray-50 rounded-lg border border-gray-200 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                    <span class="px-3 py-2 text-gray-500 text-sm font-medium bg-gray-100 border-r border-gray-200 rounded-l-lg">x.com/</span>
+                    <input type="text" name="user[x_handle]" id="user_x_handle" value={@user.x_handle} placeholder="username" class="flex-1 border-0 bg-transparent px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none rounded-r-lg">
+                  </div>
+                </div>
+
+                <!-- YouTube -->
+                <div class="flex items-center space-x-3">
+                  <div class="flex-shrink-0">
+                    <svg class="w-6 h-6 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 flex items-center bg-gray-50 rounded-lg border border-gray-200 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                    <span class="px-3 py-2 text-gray-500 text-sm font-medium bg-gray-100 border-r border-gray-200 rounded-l-lg">youtube.com/@</span>
+                    <input type="text" name="user[youtube_handle]" id="user_youtube_handle" value={@user.youtube_handle} placeholder="username" class="flex-1 border-0 bg-transparent px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none rounded-r-lg">
+                  </div>
+                </div>
+
+                <!-- TikTok -->
+                <div class="flex items-center space-x-3">
+                  <div class="flex-shrink-0">
+                    <svg class="w-6 h-6 text-black" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 flex items-center bg-gray-50 rounded-lg border border-gray-200 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                    <span class="px-3 py-2 text-gray-500 text-sm font-medium bg-gray-100 border-r border-gray-200 rounded-l-lg">tiktok.com/@</span>
+                    <input type="text" name="user[tiktok_handle]" id="user_tiktok_handle" value={@user.tiktok_handle} placeholder="username" class="flex-1 border-0 bg-transparent px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none rounded-r-lg">
+                  </div>
+                </div>
+
+                <!-- LinkedIn -->
+                <div class="flex items-center space-x-3">
+                  <div class="flex-shrink-0">
+                    <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 flex items-center bg-gray-50 rounded-lg border border-gray-200 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                    <span class="px-3 py-2 text-gray-500 text-sm font-medium bg-gray-100 border-r border-gray-200 rounded-l-lg">linkedin.com/in/</span>
+                    <input type="text" name="user[linkedin_handle]" id="user_linkedin_handle" value={@user.linkedin_handle} placeholder="handle" class="flex-1 border-0 bg-transparent px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none rounded-r-lg">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Privacy and Preferences -->
+            <div class="border-t border-gray-200 pt-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">Privacy & Preferences</h3>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <.label>
+                    <.input type="checkbox" name="user[profile_public]" value="true" checked={@user.profile_public} />
+                    Make my profile public
+                  </.label>
+                  <p class="mt-1 text-sm text-gray-500">Allow others to view your profile page</p>
+                </div>
+                <div>
+                  <.label for="user_default_currency">Default Currency</.label>
+                  <select name="user[default_currency]" id="user_default_currency" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option value="USD" selected={@user.default_currency == "USD" || (!@user.default_currency && true)}>US Dollar ($)</option>
+                    <option value="EUR" selected={@user.default_currency == "EUR"}>Euro (€)</option>
+                    <option value="GBP" selected={@user.default_currency == "GBP"}>British Pound (£)</option>
+                    <option value="CAD" selected={@user.default_currency == "CAD"}>Canadian Dollar (C$)</option>
+                    <option value="AUD" selected={@user.default_currency == "AUD"}>Australian Dollar (A$)</option>
+                    <option value="JPY" selected={@user.default_currency == "JPY"}>Japanese Yen (¥)</option>
+                    <option value="CHF" selected={@user.default_currency == "CHF"}>Swiss Franc (CHF)</option>
+                    <option value="SEK" selected={@user.default_currency == "SEK"}>Swedish Krona (SEK)</option>
+                    <option value="NOK" selected={@user.default_currency == "NOK"}>Norwegian Krone (NOK)</option>
+                    <option value="DKK" selected={@user.default_currency == "DKK"}>Danish Krone (DKK)</option>
+                  </select>
+                </div>
+                <div>
+                  <.label for="user_timezone">Timezone</.label>
+                  <select name="user[timezone]" id="user_timezone" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <optgroup label="Americas">
+                      <option value="America/New_York" selected={@user.timezone == "America/New_York"}>New York (UTC-05:00)</option>
+                      <option value="America/Chicago" selected={@user.timezone == "America/Chicago"}>Chicago (UTC-06:00)</option>
+                      <option value="America/Denver" selected={@user.timezone == "America/Denver"}>Denver (UTC-07:00)</option>
+                      <option value="America/Los_Angeles" selected={@user.timezone == "America/Los_Angeles"}>Los Angeles (UTC-08:00)</option>
+                      <option value="America/Toronto" selected={@user.timezone == "America/Toronto"}>Toronto (UTC-05:00)</option>
+                      <option value="America/Vancouver" selected={@user.timezone == "America/Vancouver"}>Vancouver (UTC-08:00)</option>
+                      <option value="America/Sao_Paulo" selected={@user.timezone == "America/Sao_Paulo"}>São Paulo (UTC-03:00)</option>
+                      <option value="America/Mexico_City" selected={@user.timezone == "America/Mexico_City"}>Mexico City (UTC-06:00)</option>
+                    </optgroup>
+                    <optgroup label="Europe & Africa">
+                      <option value="Europe/London" selected={@user.timezone == "Europe/London"}>London (UTC+00:00)</option>
+                      <option value="Europe/Paris" selected={@user.timezone == "Europe/Paris"}>Paris (UTC+01:00)</option>
+                      <option value="Europe/Berlin" selected={@user.timezone == "Europe/Berlin"}>Berlin (UTC+01:00)</option>
+                      <option value="Europe/Rome" selected={@user.timezone == "Europe/Rome"}>Rome (UTC+01:00)</option>
+                      <option value="Europe/Madrid" selected={@user.timezone == "Europe/Madrid"}>Madrid (UTC+01:00)</option>
+                      <option value="Europe/Amsterdam" selected={@user.timezone == "Europe/Amsterdam"}>Amsterdam (UTC+01:00)</option>
+                      <option value="Europe/Stockholm" selected={@user.timezone == "Europe/Stockholm"}>Stockholm (UTC+01:00)</option>
+                      <option value="Europe/Zurich" selected={@user.timezone == "Europe/Zurich"}>Zurich (UTC+01:00)</option>
+                    </optgroup>
+                    <optgroup label="Asia & Pacific">
+                      <option value="Asia/Tokyo" selected={@user.timezone == "Asia/Tokyo"}>Tokyo (UTC+09:00)</option>
+                      <option value="Asia/Shanghai" selected={@user.timezone == "Asia/Shanghai"}>Shanghai (UTC+08:00)</option>
+                      <option value="Asia/Singapore" selected={@user.timezone == "Asia/Singapore"}>Singapore (UTC+08:00)</option>
+                      <option value="Asia/Hong_Kong" selected={@user.timezone == "Asia/Hong_Kong"}>Hong Kong (UTC+08:00)</option>
+                      <option value="Asia/Seoul" selected={@user.timezone == "Asia/Seoul"}>Seoul (UTC+09:00)</option>
+                      <option value="Asia/Mumbai" selected={@user.timezone == "Asia/Mumbai"}>Mumbai (UTC+05:30)</option>
+                      <option value="Australia/Sydney" selected={@user.timezone == "Australia/Sydney"}>Sydney (UTC+11:00)</option>
+                      <option value="Australia/Melbourne" selected={@user.timezone == "Australia/Melbourne"}>Melbourne (UTC+11:00)</option>
+                      <option value="Pacific/Auckland" selected={@user.timezone == "Pacific/Auckland"}>Auckland (UTC+13:00)</option>
+                    </optgroup>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -239,4 +426,188 @@
       </div>
     <% end %>
   </div>
-</div> 
+</div>
+
+<script>
+  // Username availability checking
+  (function() {
+    const usernameInput = document.getElementById('user_username');
+    const statusContainer = document.getElementById('username-status');
+    const loadingIcon = document.getElementById('username-loading');
+    const successIcon = document.getElementById('username-success');
+    const errorIcon = document.getElementById('username-error');
+    const messagesContainer = document.getElementById('username-messages');
+    
+    let debounceTimer;
+    let lastCheckedUsername = '';
+    
+    if (!usernameInput) return;
+    
+    function showIcon(iconElement) {
+      // Hide all icons first
+      loadingIcon.classList.add('hidden');
+      successIcon.classList.add('hidden');
+      errorIcon.classList.add('hidden');
+      
+      // Show the specific icon
+      iconElement.classList.remove('hidden');
+      statusContainer.classList.remove('hidden');
+    }
+    
+    function hideAllIcons() {
+      statusContainer.classList.add('hidden');
+      loadingIcon.classList.add('hidden');
+      successIcon.classList.add('hidden');
+      errorIcon.classList.add('hidden');
+    }
+    
+    function showMessages(messages, type = 'error') {
+      messagesContainer.innerHTML = '';
+      if (messages && messages.length > 0) {
+        const messageClass = type === 'error' ? 'text-red-600' : 'text-green-600';
+        messages.forEach(message => {
+          const p = document.createElement('p');
+          p.className = messageClass;
+          p.textContent = message;
+          messagesContainer.appendChild(p);
+        });
+      }
+    }
+    
+    function showSuggestions(suggestions) {
+      if (suggestions && suggestions.length > 0) {
+        const suggestionsDiv = document.createElement('div');
+        suggestionsDiv.className = 'mt-2';
+        
+        const label = document.createElement('p');
+        label.className = 'text-gray-600 text-xs mb-1';
+        label.textContent = 'Suggestions:';
+        suggestionsDiv.appendChild(label);
+        
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.className = 'flex flex-wrap gap-1';
+        
+        suggestions.forEach(suggestion => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors';
+          button.textContent = suggestion;
+          button.addEventListener('click', function() {
+            usernameInput.value = suggestion;
+            checkUsername(suggestion);
+          });
+          buttonsDiv.appendChild(button);
+        });
+        
+        suggestionsDiv.appendChild(buttonsDiv);
+        messagesContainer.appendChild(suggestionsDiv);
+      }
+    }
+    
+    function checkUsername(username) {
+      username = username.trim();
+      
+      if (username === '' || username === lastCheckedUsername) {
+        hideAllIcons();
+        messagesContainer.innerHTML = '';
+        return;
+      }
+      
+      lastCheckedUsername = username;
+      showIcon(loadingIcon);
+      messagesContainer.innerHTML = '';
+      
+      fetch(`/api/username/availability/${encodeURIComponent(username)}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.available === true) {
+            showIcon(successIcon);
+            showMessages(['✓ Username is available'], 'success');
+          } else {
+            showIcon(errorIcon);
+            showMessages(data.errors || ['Username is not available']);
+            showSuggestions(data.suggestions);
+          }
+          
+          // Update input border color
+          const input = usernameInput;
+          input.classList.remove('border-green-400', 'border-red-400', 'focus:border-green-400', 'focus:border-red-400');
+          if (data.available === true) {
+            input.classList.add('border-green-400', 'focus:border-green-400');
+          } else {
+            input.classList.add('border-red-400', 'focus:border-red-400');
+          }
+        })
+        .catch(error => {
+          console.error('Username check failed:', error);
+          showIcon(errorIcon);
+          showMessages(['Error checking username availability']);
+        });
+    }
+    
+    usernameInput.addEventListener('input', function(e) {
+      const username = e.target.value;
+      
+      // Clear previous timer
+      clearTimeout(debounceTimer);
+      
+      // Reset border classes
+      usernameInput.classList.remove('border-green-400', 'border-red-400', 'focus:border-green-400', 'focus:border-red-400');
+      
+      // Set new timer
+      debounceTimer = setTimeout(() => {
+        checkUsername(username);
+      }, 500);
+    });
+  })();
+
+  // Auto-detect timezone and set defaults
+  (function() {
+    const timezoneSelect = document.getElementById('user_timezone');
+    const currencySelect = document.getElementById('user_default_currency');
+    
+    if (timezoneSelect && !timezoneSelect.value) {
+      // Try to detect user's timezone
+      try {
+        const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+        // Check if the detected timezone is in our options
+        const option = timezoneSelect.querySelector(`option[value="${userTimezone}"]`);
+        if (option) {
+          option.selected = true;
+        } else {
+          // Fallback to a reasonable default based on common timezones
+          const fallbackTimezones = [
+            'America/New_York',
+            'America/Los_Angeles', 
+            'Europe/London',
+            'Europe/Berlin',
+            'Asia/Tokyo'
+          ];
+          
+          for (const tz of fallbackTimezones) {
+            const fallbackOption = timezoneSelect.querySelector(`option[value="${tz}"]`);
+            if (fallbackOption) {
+              fallbackOption.selected = true;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        // If timezone detection fails, select New York as default
+        const defaultOption = timezoneSelect.querySelector('option[value="America/New_York"]');
+        if (defaultOption) {
+          defaultOption.selected = true;
+        }
+      }
+    }
+    
+    // Ensure currency has a default if not set
+    if (currencySelect && !currencySelect.value) {
+      const defaultCurrency = currencySelect.querySelector('option[value="USD"]');
+      if (defaultCurrency) {
+        defaultCurrency.selected = true;
+      }
+    }
+  })();
+</script> 

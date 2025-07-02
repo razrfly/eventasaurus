@@ -68,20 +68,21 @@ defmodule EventasaurusWeb.SettingsController do
   def update_account(conn, %{"user" => user_params} = _params) do
     case ensure_user_struct(conn.assigns[:auth_user]) do
       {:ok, user} ->
-        case Accounts.update_user(user, user_params) do
+        case update_user_profile(user, user_params) do
           {:ok, _updated_user} ->
             conn
-            |> put_flash(:info, "Account updated successfully.")
+            |> put_flash(:info, "Profile updated successfully.")
             |> redirect(to: ~p"/settings/account")
 
           {:error, %Ecto.Changeset{} = changeset} ->
             conn
-            |> put_flash(:error, "Failed to update account. Please check the errors below.")
+            |> put_flash(:error, "Failed to update profile. Please check the errors below.")
             |> render(:index,
               user: user,
               active_tab: "account",
               connect_account: nil,
-              changeset: changeset
+              changeset: changeset,
+              facebook_identity: get_facebook_identity_from_session(conn)
             )
         end
 
@@ -90,6 +91,13 @@ defmodule EventasaurusWeb.SettingsController do
         |> put_flash(:error, "You must be logged in to update your account.")
         |> redirect(to: ~p"/auth/login")
     end
+  end
+
+  # Helper function to update user profile using the profile_changeset
+  defp update_user_profile(%User{} = user, attrs) do
+    user
+    |> User.profile_changeset(attrs)
+    |> EventasaurusApp.Repo.update()
   end
 
   @doc """

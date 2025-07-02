@@ -1,0 +1,213 @@
+# User Profile Pages with Social Links and Username System - PRD
+
+## Project Overview
+Implement comprehensive user profile pages similar to Luma's profile system for the Eventasaurus platform. This includes public profile pages, enhanced settings, social links, and a username/slug system to improve user engagement and provide professional event host profiles.
+
+## Current State Analysis
+- **Framework**: Phoenix LiveView (Elixir) with PostgreSQL/Ecto
+- **Authentication**: Supabase with local user sync
+- **Current User Model**: Basic fields (id, email, name, supabase_id, timestamps)
+- **Existing Settings**: Account tab (name/email/password) and Payments tab (Stripe Connect)
+- **Avatar System**: DiceBear API integration
+
+## Business Objectives
+- Increase user engagement through personalized profiles
+- Provide professional identity for event hosts
+- Improve discoverability of events through host profiles
+- Enhance social sharing and networking capabilities
+- Match feature parity with established event platforms like Luma
+
+## Target Users
+- **Primary**: Event hosts who want professional profile presence
+- **Secondary**: Event attendees discovering hosts and events
+- **Tertiary**: Social media users sharing event/profile links
+
+## Core Features
+
+### 1. Database Schema Extensions
+**New User Model Fields:**
+- `username` (string, unique) - For profile URLs
+- `bio` (text) - Short bio/description (160 char limit)
+- `default_currency` (string, default: "USD") - Currency preference
+- `instagram_handle` (string) - Social media handles
+- `twitter_handle` (string)
+- `youtube_handle` (string)
+- `tiktok_handle` (string)
+- `linkedin_handle` (string)
+- `website_url` (string) - Personal website
+- `profile_public` (boolean, default: true) - Profile visibility
+- `timezone` (string) - User timezone
+
+**Database Requirements:**
+- Unique constraint on username field
+- URL validation for website_url and social handles
+- Reserved username protection (admin, api, www, etc.)
+- Migration strategy for existing users
+
+### 2. Public Profile Pages
+**URL Structure:**
+- `/user/:username` - Primary public profile page
+- `/u/:username` - Short URL alternative
+- `/@:username` - Social media style URL
+
+**Profile Content:**
+- User display name, username, bio, avatar
+- Join date and event statistics (hosted/attended)
+- Social media links (conditional display)
+- List of public events hosted by user
+- Responsive design matching app aesthetics
+
+### 3. Enhanced Settings System
+**Account Tab Extensions:**
+- Username field with real-time availability checker
+- Bio textarea with character counter
+- Timezone selector dropdown
+- Profile visibility toggle
+
+**New Profile Tab:**
+- Social media handle inputs with format validation
+- Website URL input with validation
+- Default currency selector
+- Live profile preview component
+
+**Future Privacy Tab:**
+- Profile visibility granular controls
+- Event privacy defaults
+- Communication preferences
+
+### 4. Username/Slug System
+**Requirements:**
+- Unique username validation (3-30 characters)
+- Alphanumeric, underscores, hyphens only
+- Real-time availability checking
+- Auto-suggest alternatives for taken usernames
+- Reserved username protection
+- Graceful migration for existing users
+
+### 5. Social Links Integration
+**Storage Strategy**: Individual database columns (not JSON)
+**Supported Platforms**: Instagram, Twitter, YouTube, TikTok, LinkedIn
+**Validation**: Platform-specific handle format validation
+**Display**: Conditional rendering with proper platform icons
+
+### 6. Default Currency System
+**Purpose**: 
+- Default currency for new events
+- Display preferences for event pricing
+- Integration with Stripe Connect accounts
+
+**Implementation**: 
+- Major currencies (USD, EUR, GBP, CAD, AUD, etc.)
+- 3-letter currency codes
+- Dropdown selector in settings
+
+## Technical Requirements
+
+### Backend (Phoenix/Elixir)
+- Database migration for new user fields
+- Updated User schema with comprehensive validations
+- Username availability API endpoint
+- Public profile controller with SEO optimization
+- Extended settings controller for new fields
+- Social media handle validation functions
+- Profile slug resolver with conflict handling
+- Timezone utilities integration
+
+### Frontend (LiveView/Tailwind)
+- Public profile page layout (mobile-responsive)
+- Enhanced settings form components
+- Real-time username availability indicator
+- Social media link components with icons
+- Currency selector component
+- Live profile preview component
+- Character counters and validation feedback
+
+### Performance & SEO
+- Database indexing for username lookups
+- Caching strategy for public profiles
+- Meta tags for social media sharing
+- Structured data markup
+- Optimized queries for profile statistics
+
+## User Stories
+
+### Host User Stories
+- As an event host, I want a unique username so I can share my profile easily
+- As a host, I want to add my social media links so attendees can connect with me
+- As a host, I want to set my default currency so new events use my preference
+- As a host, I want a professional profile page to showcase my events
+
+### Attendee User Stories
+- As an attendee, I want to view host profiles to learn about event organizers
+- As an attendee, I want to see a host's social media to connect with them
+- As an attendee, I want to see a host's event history to gauge their experience
+
+### System User Stories
+- As the system, I need to migrate existing users without data loss
+- As the system, I need to prevent username conflicts and squatting
+- As the system, I need to validate social media handles properly
+
+## Success Metrics
+- **Adoption**: 80% of active hosts set usernames within 30 days
+- **Engagement**: 40% of hosts add at least one social media link
+- **Discoverability**: 25% increase in event page views via profile links
+- **Retention**: 15% improvement in host retention after profile completion
+
+## Implementation Phases
+
+### Phase 1: Core Infrastructure (Week 1)
+- Database schema design and migration
+- Username system with validation
+- Basic settings page enhancements
+- Migration strategy for existing users
+
+### Phase 2: Profile Features (Week 2)
+- Social media links functionality
+- Enhanced settings with currency selection
+- Real-time username availability
+- Form validation and user feedback
+
+### Phase 3: Public Profiles (Week 3)
+- Public profile page design and implementation
+- SEO optimization and meta tags
+- Profile statistics and event listings
+- Mobile responsiveness and polish
+
+### Phase 4: Testing & Launch
+- Comprehensive testing across all components
+- User acceptance testing with beta hosts
+- Performance optimization
+- Gradual rollout with feature flags
+
+## Acceptance Criteria
+- [ ] Users can set unique usernames with real-time availability checking
+- [ ] Public profile pages accessible via /user/:username URLs
+- [ ] Social media handles validated and properly displayed
+- [ ] Default currency selection integrated with event creation
+- [ ] Profile settings enhanced with bio and timezone options
+- [ ] Existing users can migrate without data loss
+- [ ] Profile pages are mobile responsive and SEO optimized
+- [ ] Reserved usernames are protected from registration
+- [ ] Social media links render with appropriate platform icons
+
+## Risk Mitigation
+- **Username Conflicts**: Implement auto-suggestion system for alternatives
+- **Migration Issues**: Staged rollout with fallback to email-based profiles
+- **Performance**: Database indexing and caching strategy
+- **SEO Impact**: Proper redirect handling for profile URL changes
+- **User Adoption**: Onboarding flow to encourage profile completion
+
+## Dependencies
+- Existing Supabase authentication system
+- Current settings page implementation
+- Stripe Connect integration
+- DiceBear avatar system
+- Phoenix LiveView components
+
+## Future Enhancements
+- Custom profile picture uploads
+- Profile verification badges
+- Profile analytics for hosts
+- Custom profile themes
+- Social media auto-sync
+- Profile export functionality 

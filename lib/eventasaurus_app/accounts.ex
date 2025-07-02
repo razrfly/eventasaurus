@@ -43,6 +43,14 @@ defmodule EventasaurusApp.Accounts do
   end
 
   @doc """
+  Gets a user by username (case-insensitive).
+  """
+  def get_user_by_username(username) when is_binary(username) do
+    from(u in User, where: fragment("lower(?)", u.username) == ^String.downcase(username))
+    |> Repo.one()
+  end
+
+  @doc """
   Creates a user.
   """
   def create_user(attrs \\ %{}) do
