@@ -193,6 +193,14 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                             phx-click="toggle_suggestion"
                             phx-value-user_id={suggestion.user_id}
                           />
+                          <!-- User Avatar -->
+                          <div class="flex-shrink-0">
+                            <img
+                              src={get_user_avatar_url(suggestion)}
+                              alt={"#{suggestion.name} avatar"}
+                              class="h-10 w-10 rounded-full object-cover"
+                            />
+                          </div>
                           <div class="flex-1">
                             <div class="flex items-center space-x-2">
                               <label for={"suggestion-#{suggestion.user_id}"} class="font-medium text-gray-900 cursor-pointer">
@@ -257,6 +265,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                     placeholder="Enter email addresses (one per line or separated by commas)&#10;example@domain.com, another@example.com"
                     rows="4"
                     class="block w-full"
+                    phx-change="manual_emails"
                     phx-debounce="300"
                   />
                 </div>
@@ -277,6 +286,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                     placeholder="Hi! I'd love for you to join me at this event..."
                     rows="3"
                     class="block w-full"
+                    phx-change="invitation_message"
                     phx-debounce="300"
                   />
                 </div>
@@ -341,7 +351,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
           <!-- Modal Footer -->
           <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
             <div class="text-sm text-gray-500">
-              <span id="invitation-count">0</span>
+              <span id="invitation-count"><%= calculate_invitation_count(@selected_suggestions, @manual_emails) %></span>
               <%= if @add_mode == "direct", do: "people will be added", else: "people will be invited" %>
             </div>
             <div class="flex space-x-3">
@@ -381,40 +391,32 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
         </div>
       </div>
 
-      <!-- JavaScript for updating invitation count -->
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          function updateInvitationCount() {
-            const checkboxes = document.querySelectorAll('input[name="selected_suggestions[]"]:checked');
-            const manualEmails = document.querySelector('textarea[name="manual_emails"]')?.value || '';
-            const emailCount = manualEmails.split(/[,\n]/).filter(email => email.trim().length > 0).length;
-            const totalCount = checkboxes.length + emailCount;
 
-            const countElement = document.getElementById('invitation-count');
-            if (countElement) {
-              countElement.textContent = totalCount;
-            }
-          }
-
-          // Update count when checkboxes change
-          document.addEventListener('change', function(e) {
-            if (e.target.name === 'selected_suggestions[]') {
-              updateInvitationCount();
-            }
-          });
-
-          // Update count when manual emails change
-          document.addEventListener('input', function(e) {
-            if (e.target.name === 'manual_emails') {
-              updateInvitationCount();
-            }
-          });
-
-          // Initial count
-          updateInvitationCount();
-        });
-      </script>
     <% end %>
     """
+  end
+
+  # Helper function to calculate invitation count server-side
+  defp calculate_invitation_count(selected_suggestions, manual_emails) do
+    selected_count = length(selected_suggestions || [])
+
+    email_count =
+      case manual_emails do
+        nil -> 0
+        "" -> 0
+        emails ->
+          emails
+          |> String.split(~r/[,\n]/)
+          |> Enum.map(&String.trim/1)
+          |> Enum.reject(&(&1 == ""))
+          |> length()
+      end
+
+    selected_count + email_count
+  end
+
+  # Helper function to generate user avatar URL using dicebear
+  defp get_user_avatar_url(user, size \\ 40) do
+    EventasaurusApp.Avatars.generate_user_avatar(user.email, size: size)
   end
 end
