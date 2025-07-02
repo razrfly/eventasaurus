@@ -612,7 +612,7 @@
                     <div class="text-sm font-medium text-green-900">Conversion Rate</div>
                     <div class="text-2xl font-bold text-green-600">
                       <%= if @analytics_data.unique_visitors > 0 do %>
-                        <%= Float.round(@analytics_data.conversion_rate, 1) %>%
+                        <%= Float.round(@analytics_data.registration_rate, 1) %>%
                       <% else %>
                         0.0%
                       <% end %>
@@ -633,7 +633,7 @@
                     </div>
                     <div class="ml-4">
                       <div class="text-sm font-medium text-purple-900">Date Votes</div>
-                      <div class="text-2xl font-bold text-purple-600"><%= @analytics_data.date_votes %></div>
+                      <div class="text-2xl font-bold text-purple-600"><%= @analytics_data.votes_cast %></div>
                       <div class="text-xs text-purple-700">Poll engagement</div>
                     </div>
                   </div>
