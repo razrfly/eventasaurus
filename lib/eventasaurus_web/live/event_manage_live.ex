@@ -159,7 +159,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp fetch_analytics_data(event_id) do
     try do
-      case PosthogService.get_event_analytics(event_id, 30) do
+      case PosthogService.get_analytics(event_id, 30) do
         {:ok, data} -> data
         {:error, reason} ->
           require Logger
@@ -172,7 +172,8 @@ defmodule EventasaurusWeb.EventManageLive do
             ticket_checkouts: 0,
             registration_rate: 0.0,
             checkout_conversion_rate: 0.0,
-            error: "Analytics temporarily unavailable"
+            error: "Analytics temporarily unavailable",
+            has_error: true
           }
       end
     rescue
@@ -189,7 +190,8 @@ defmodule EventasaurusWeb.EventManageLive do
           ticket_checkouts: 0,
           registration_rate: 0.0,
           checkout_conversion_rate: 0.0,
-          error: "Analytics temporarily unavailable"
+          error: "Analytics temporarily unavailable",
+          has_error: true
         }
     end
   end
