@@ -195,6 +195,22 @@ defmodule EventasaurusWeb.ProfileControllerTest do
       conn = get(conn, ~p"/u/#{user.id}")
       assert redirected_to(conn, 302) == "/user/alice456"
     end
+
+    test "handles users without usernames correctly", %{conn: conn} do
+      user = user_fixture(%{
+        name: "No Username User",
+        profile_public: true
+        # No username set
+      })
+
+      # Access via ID should redirect to canonical user-{id} slug
+      conn = get(conn, ~p"/user/#{user.id}")
+      assert redirected_to(conn, 302) == "/user/user-#{user.id}"
+
+      # Access via canonical user-{id} slug should work
+      conn = get(conn, "/user/user-#{user.id}")
+      assert html_response(conn, 200) =~ "No Username User"
+    end
   end
 
   # Helper function to create users for testing
