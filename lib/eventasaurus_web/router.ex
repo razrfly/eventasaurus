@@ -111,6 +111,7 @@ defmodule EventasaurusWeb.Router do
   # Protected routes that require authentication
   scope "/", EventasaurusWeb do
     pipe_through [:browser, :authenticated]
+
     get "/settings", SettingsController, :index
     get "/settings/account", SettingsController, :account
     get "/settings/payments", SettingsController, :payments
@@ -206,6 +207,17 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
+  # Public profile routes (with auth user assignment for privacy checking)
+  live_session :profiles, on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user}] do
+    scope "/", EventasaurusWeb do
+      pipe_through :browser
+
+      # Username-based profile routes
+      get "/user/:username", ProfileController, :show
+      get "/u/:username", ProfileController, :redirect_short
+    end
+  end
+
   # Public event routes (with theme support)
   live_session :public,
     on_mount: [{EventasaurusWeb.Live.AuthHooks, :assign_auth_user_and_theme}] do
@@ -233,6 +245,7 @@ defmodule EventasaurusWeb.Router do
     pipe_through :api
 
     get "/search/unified", SearchController, :unified
+    get "/username/availability/:username", UsernameController, :check_availability
   end
 
   # Stripe payment API routes (require authentication and HTTPS)

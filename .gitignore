@@ -46,5 +46,15 @@ node_modules/
 .DS_Store
 
 # Task files
-tasks.json
-tasks/ 
+# tasks.json
+# tasks/
+
+# AI Assistant Configuration Files (not needed in version control)
+.clinerules/
+.cursor/
+.github/instructions/
+.roo/
+.roomodes
+.taskmaster/
+.trae/
+.windsurf/ 
