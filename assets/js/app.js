@@ -95,7 +95,6 @@ class PostHogManager {
       });
       
       this.posthog = posthog;
-      window.posthog = posthog;
       this.isLoaded = true;
       this.isLoading = false;
       this.loadAttempts = 0;
@@ -127,12 +126,24 @@ class PostHogManager {
     
     // Identify user if authenticated and consent given
     if (this.privacyConsent.analytics && window.currentUser) {
-      posthogInstance.identify(window.currentUser.id, {
-        email: window.currentUser.email,
+      const identifyProps = {
         user_type: 'authenticated',
         privacy_consent: this.privacyConsent
-      });
-      console.log('PostHog user identified:', window.currentUser.id);
+      };
+      
+      // Only include hashed email if marketing consent is given
+      if (this.privacyConsent.marketing) {
+        this.hashEmail(window.currentUser.email).then(hashedEmail => {
+          posthogInstance.identify(window.currentUser.id, {
+            ...identifyProps,
+            email_hash: hashedEmail
+          });
+          console.log('PostHog user identified with hashed email:', window.currentUser.id);
+        });
+      } else {
+        posthogInstance.identify(window.currentUser.id, identifyProps);
+        console.log('PostHog user identified (no email):', window.currentUser.id);
+      }
     } else if (this.privacyConsent.analytics) {
       // Set properties for anonymous users
       posthogInstance.register({
@@ -220,6 +231,7 @@ class PostHogManager {
     return {
       analytics: false,
       cookies: false,
+      marketing: false, // For hashed email and marketing communications
       essential: true // Always allow essential functionality
     };
   }
@@ -254,15 +266,29 @@ class PostHogManager {
     }
   }
   
+  // Helper to hash email for GDPR compliance
+  async hashEmail(email) {
+    const data = new TextEncoder().encode(email);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
   // GDPR compliance helper
-  showPrivacyBanner() {
+    showPrivacyBanner() {
     if (this.privacyConsent.analytics === undefined) {
-      // Show privacy banner - you can customize this
-      console.log('Privacy consent required - consider showing a banner');
+      // Dispatch event to show privacy banner UI
+      window.dispatchEvent(new CustomEvent('posthog:show-privacy-banner'));
       
-      // For development, auto-consent (remove in production)
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        this.updatePrivacyConsent({ analytics: true, cookies: true });
+      // Show the privacy banner element if it exists
+      const banner = document.getElementById('privacy-banner');
+      if (banner) {
+        banner.style.display = 'block';
+        // Animate in
+        setTimeout(() => {
+          banner.style.transform = 'translateY(0)';
+        }, 100);
       }
     }
   }
