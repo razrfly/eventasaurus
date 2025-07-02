@@ -198,7 +198,7 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_unique_visitors(event_id, date_range, api_key) do
     # Use PostHog's query API with HogQL for unique visitors
-    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    current_time = current_time_string()
 
     query_params = %{
       "query" => %{
@@ -217,7 +217,7 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_registrations(event_id, date_range, api_key) do
     # Use PostHog's query API with HogQL for registrations
-    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    current_time = current_time_string()
 
     query_params = %{
       "query" => %{
@@ -236,7 +236,7 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_votes(event_id, date_range, api_key) do
     # Use PostHog's query API with HogQL for votes
-    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    current_time = current_time_string()
 
     query_params = %{
       "query" => %{
@@ -255,7 +255,7 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp fetch_checkouts(event_id, date_range, api_key) do
     # Use PostHog's query API with HogQL for checkouts
-    current_time = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    current_time = current_time_string()
 
     query_params = %{
       "query" => %{
@@ -330,11 +330,20 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp days_ago(days) do
-    # PostHog expects DateTime format with seconds precision, not microseconds
+    # PostHog HogQL expects simple timestamp format: 'YYYY-MM-DD HH:MM:SS'
     DateTime.utc_now()
     |> DateTime.add(-days * 24 * 60 * 60, :second)
     |> DateTime.truncate(:second)
-    |> DateTime.to_iso8601()
+    |> DateTime.to_naive()
+    |> NaiveDateTime.to_string()
+  end
+
+  defp current_time_string() do
+    # PostHog HogQL expects simple timestamp format: 'YYYY-MM-DD HH:MM:SS'
+    DateTime.utc_now()
+    |> DateTime.truncate(:second)
+    |> DateTime.to_naive()
+    |> NaiveDateTime.to_string()
   end
 
   defp get_api_key do
