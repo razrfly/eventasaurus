@@ -1,0 +1,125 @@
+# Reserved Usernames
+# These usernames are reserved and cannot be used for user registration
+# Format: one username per line, case-insensitive
+
+# System and Administrative
+admin
+administrator
+root
+system
+support
+help
+api
+www
+mail
+ftp
+smtp
+pop
+imap
+
+# Authentication and User Management
+about
+contact
+privacy
+terms
+login
+logout
+signup
+register
+signin
+signout
+auth
+oauth
+profile
+settings
+account
+user
+users
+
+# Core Application Features
+dashboard
+events
+event
+orders
+order
+tickets
+ticket
+checkout
+payment
+payments
+stripe
+billing
+
+# File and Resource Paths
+assets
+static
+public
+private
+uploads
+downloads
+images
+css
+js
+javascript
+files
+docs
+documentation
+
+# Testing and Development
+test
+testing
+tests
+demo
+example
+sample
+staging
+dev
+development
+production
+prod
+local
+localhost
+
+# Common Reserved Words
+null
+undefined
+anonymous
+guest
+default
+index
+home
+main
+app
+application
+
+# Social and External
+facebook
+twitter
+instagram
+youtube
+tiktok
+linkedin
+discord
+slack
+zoom
+
+# Security and Technical
+security
+ssl
+https
+http
+ftp
+ssh
+vpn
+proxy
+cache
+cdn
+database
+db
+sql
+backup
+
+# Brand Protection
+eventasaurus
+event-asaurus
+eventosaurus 
