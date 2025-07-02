@@ -108,7 +108,7 @@ defmodule Eventasaurus.Services.PosthogService do
 
           {:error, reason} ->
             Logger.error("PostHog API error for event #{event_id}: #{inspect(reason)}")
-            fallback_data = get_fallback_analytics()
+            fallback_data = get_fallback_analytics() |> Map.put(:error, "PostHog analytics temporarily unavailable")
             {:reply, {:ok, fallback_data}, state}
         end
     end
