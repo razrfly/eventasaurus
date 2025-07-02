@@ -130,6 +130,31 @@ defmodule EventasaurusApp.Accounts do
 
   def find_or_create_from_supabase(_), do: {:error, :invalid_supabase_data}
 
+  @doc """
+  Finds or creates a user by email for guest invitations.
+  If the user doesn't exist, creates a minimal user record with the email.
+  Returns {:ok, user} or {:error, changeset}.
+  """
+  def find_or_create_guest_user(email) when is_binary(email) do
+    case get_user_by_email(email) do
+      %User{} = user ->
+        {:ok, user}
+      nil ->
+        name = extract_name_from_email(email)
+        # Generate a temporary supabase_id for guest users
+        temp_supabase_id = "guest_#{:crypto.strong_rand_bytes(8) |> Base.encode64()}"
+
+        user_params = %{
+          email: email,
+          name: name,
+          supabase_id: temp_supabase_id
+        }
+        create_user(user_params)
+    end
+  end
+
+  def find_or_create_guest_user(_), do: {:error, :invalid_email}
+
   # Helper function to extract name from email consistently
   defp extract_name_from_email(email) when is_binary(email) do
     email
