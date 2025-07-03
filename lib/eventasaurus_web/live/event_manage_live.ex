@@ -50,7 +50,7 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:page_title, "Manage Event")
                |> assign(:active_tab, "overview")  # Default tab
                |> assign(:venue, event.venue)  # Add missing venue assign
-               |> assign(:participants, participants)
+               |> assign_participants_with_stats(participants)
                |> assign(:tickets, tickets)
                |> assign(:orders, orders)
                |> assign(:analytics_data, analytics_data)  # Required for insights tab
@@ -87,7 +87,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
     {:noreply,
      socket
-     |> assign(:participants, participants)
+     |> assign_participants_with_stats(participants)
      |> assign(:tickets, tickets)
      |> assign(:orders, orders)
      |> put_flash(:info, "Data refreshed")}
@@ -218,7 +218,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
       {:noreply,
        socket_with_errors
-       |> assign(:participants, updated_participants)
+       |> assign_participants_with_stats(updated_participants)
        |> assign(:show_guest_invitation_modal, false)
        |> assign(:historical_suggestions, [])
        |> assign(:selected_suggestions, [])
@@ -282,27 +282,31 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_event("remove_participant", %{"participant_id" => participant_id}, socket) do
-    try do
-      case Events.get_event_participant!(participant_id) do
-        participant ->
-          case Events.delete_event_participant(participant) do
-            {:ok, _} ->
-              # Reload participants
-              updated_participants = Events.list_event_participants(socket.assigns.event)
-              {:noreply,
-               socket
-               |> assign(:participants, updated_participants)
-               |> assign(:open_participant_menu, nil)  # Close any open dropdown menus
-               |> put_flash(:info, "Participant removed successfully")}
+    def handle_event("remove_participant", %{"participant_id" => participant_id}, socket) do
+    case Integer.parse(participant_id) do
+      {participant_id, _} ->
+        case EventasaurusApp.Repo.get(EventasaurusApp.Events.EventParticipant, participant_id) do
+          nil ->
+            {:noreply, put_flash(socket, :error, "Participant not found")}
 
-            {:error, _changeset} ->
-              {:noreply, put_flash(socket, :error, "Failed to remove participant")}
-          end
-      end
-    rescue
-      Ecto.NoResultsError ->
-        {:noreply, put_flash(socket, :error, "Participant not found")}
+          participant ->
+            case Events.delete_event_participant(participant) do
+              {:ok, _} ->
+                # Reload participants
+                updated_participants = Events.list_event_participants(socket.assigns.event)
+                {:noreply,
+                 socket
+                 |> assign_participants_with_stats(updated_participants)
+                 |> assign(:open_participant_menu, nil)  # Close any open dropdown menus
+                 |> put_flash(:info, "Participant removed successfully")}
+
+              {:error, _changeset} ->
+                {:noreply, put_flash(socket, :error, "Failed to remove participant")}
+            end
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid participant ID")}
     end
   end
 
@@ -349,7 +353,7 @@ defmodule EventasaurusWeb.EventManageLive do
       # Close modal and show success message
       {:noreply,
        socket_with_errors
-       |> assign(:participants, updated_participants)
+       |> assign_participants_with_stats(updated_participants)
        |> assign(:show_guest_invitation_modal, false)
        |> assign(:selected_suggestions, [])
        |> assign(:manual_emails, "")
@@ -410,6 +414,40 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   # Helper functions
+
+  # Pre-compute participant statistics to avoid repeated Enum.count operations
+  defp assign_participants_with_stats(socket, participants) do
+    participant_stats = calculate_participant_stats(participants)
+
+    socket
+    |> assign(:participants, participants)
+    |> assign(:participant_stats, participant_stats)
+  end
+
+  defp calculate_participant_stats(participants) do
+    %{
+      direct_adds: count_by_source(participants, "direct_add"),
+      self_registered: count_by_source(participants, "public_registration"),
+      invited: count_invited(participants),
+      ticket_holders: count_by_status(participants, :confirmed_with_order)
+    }
+  end
+
+  defp count_by_source(participants, "direct_add") do
+    Enum.count(participants, &(is_binary(&1.source) && String.starts_with?(&1.source, "direct_add")))
+  end
+
+  defp count_by_source(participants, source) do
+    Enum.count(participants, &(&1.source == source))
+  end
+
+  defp count_invited(participants) do
+    Enum.count(participants, &(&1.invited_at != nil && !(is_binary(&1.source) && String.starts_with?(&1.source, "direct_add"))))
+  end
+
+  defp count_by_status(participants, status) do
+    Enum.count(participants, &(&1.status == status))
+  end
 
   defp fetch_analytics_data(event_id) do
     try do
@@ -550,7 +588,7 @@ defmodule EventasaurusWeb.EventManageLive do
   defp filter_by_source(participants, nil), do: participants
   defp filter_by_source(participants, "direct_add") do
     Enum.filter(participants, fn p ->
-      is_binary(p.source) && String.contains?(p.source, "direct_add")
+      is_binary(p.source) && String.starts_with?(p.source, "direct_add")
     end)
   end
   defp filter_by_source(participants, "invitation") do
@@ -574,9 +612,9 @@ defmodule EventasaurusWeb.EventManageLive do
     Enum.filter(participants, fn p -> p.status == status end)
   end
 
-  # Helper function to generate source badges
-  defp get_source_badge(participant) do
-    {text, class} = cond do
+  # Helper functions to get badge data (safer than Phoenix.HTML.raw)
+  defp get_source_badge_data(participant) do
+    cond do
       is_binary(participant.source) and String.contains?(participant.source, "direct_add") ->
         {"Direct Add", "bg-blue-100 text-blue-800"}
       participant.source == "public_registration" ->
@@ -592,17 +630,10 @@ defmodule EventasaurusWeb.EventManageLive do
       true ->
         {"Unknown", "bg-gray-100 text-gray-800"}
     end
-
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{class}">
-      #{text}
-    </span>
-    """)
   end
 
-  # Helper function to generate status badges
-  defp get_status_badge(status) do
-    {text, class} = case status do
+  defp get_status_badge_data(status) do
+    case status do
       :pending ->
         {"Pending", "bg-yellow-100 text-yellow-800"}
       :accepted ->
@@ -616,12 +647,6 @@ defmodule EventasaurusWeb.EventManageLive do
       _ ->
         {"Unknown", "bg-gray-100 text-gray-800"}
     end
-
-    Phoenix.HTML.raw("""
-    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{class}">
-      #{text}
-    </span>
-    """)
   end
 
   # Helper function to format relative time
@@ -647,18 +672,14 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-  # Helper function to get inviter name
-  defp get_inviter_name(inviter_id, _participants) when is_nil(inviter_id), do: "Unknown"
+  # Helper function to get inviter name from the preloaded association
+  defp get_inviter_name(nil, _), do: "Unknown"
   defp get_inviter_name(inviter_id, participants) do
-    # Try to find the inviter in the participants list first
-    case Enum.find(participants, fn p -> p.user && p.user.id == inviter_id end) do
-      %{user: %{name: name}} when is_binary(name) -> name
-      _ ->
-        # Fallback to direct database lookup
-        case EventasaurusApp.Accounts.get_user(inviter_id) do
-          %{name: name} when is_binary(name) -> name
-          _ -> "Unknown"
-        end
+    participants
+    |> Enum.find(fn p -> p.invited_by_user && p.invited_by_user.id == inviter_id end)
+    |> case do
+      %{invited_by_user: %{name: name}} when is_binary(name) -> name
+      _ -> "Unknown"
     end
   end
 
