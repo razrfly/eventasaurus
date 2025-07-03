@@ -277,6 +277,7 @@
     <!-- Guests Tab -->
     <%= if @active_tab == "guests" do %>
       <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <!-- Header with Stats and Actions -->
         <div class="px-6 py-4 border-b border-gray-200">
           <div class="flex justify-between items-center">
             <div>
@@ -302,42 +303,208 @@
         </div>
 
         <%= if length(@participants) > 0 do %>
+          <!-- Guest Analytics and Filters -->
+          <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div class="text-center">
+                <div class="text-lg font-bold text-blue-600">
+                  <%= @participants |> Enum.count(&(is_binary(&1.source) && String.contains?(&1.source, "direct_add"))) %>
+                </div>
+                <div class="text-xs text-gray-500">Direct Adds</div>
+              </div>
+              <div class="text-center">
+                <div class="text-lg font-bold text-green-600">
+                  <%= @participants |> Enum.count(&(&1.source == "public_registration")) %>
+                </div>
+                <div class="text-xs text-gray-500">Self Registered</div>
+              </div>
+              <div class="text-center">
+                <div class="text-lg font-bold text-purple-600">
+                  <%= @participants |> Enum.count(&(&1.invited_at != nil && !(is_binary(&1.source) && String.contains?(&1.source, "direct_add")))) %>
+                </div>
+                <div class="text-xs text-gray-500">Invited</div>
+              </div>
+              <div class="text-center">
+                <div class="text-lg font-bold text-orange-600">
+                  <%= @participants |> Enum.count(&(&1.status == :confirmed_with_order)) %>
+                </div>
+                <div class="text-xs text-gray-500">Ticket Holders</div>
+              </div>
+            </div>
+
+            <!-- Filters -->
+            <form phx-change="filter_guests" class="flex flex-wrap items-center gap-3">
+              <div class="text-sm font-medium text-gray-700">Filter by:</div>
+              
+              <!-- Source Filter -->
+              <div class="relative">
+                <select 
+                  name="source_filter"
+                  value={@guests_source_filter || ""}
+                  class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                >
+                  <option value="" selected={@guests_source_filter == nil}>All Sources</option>
+                  <option value="direct_add" selected={@guests_source_filter == "direct_add"}>Direct Add</option>
+                  <option value="public_registration" selected={@guests_source_filter == "public_registration"}>Self Registered</option>
+                  <option value="invitation" selected={@guests_source_filter == "invitation"}>Invited</option>
+                  <option value="ticket_purchase" selected={@guests_source_filter == "ticket_purchase"}>Ticket Purchase</option>
+                </select>
+                <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+              </div>
+
+              <!-- Status Filter -->
+              <div class="relative">
+                <select 
+                  name="status_filter"
+                  value={@guests_status_filter || ""}
+                  class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                >
+                  <option value="" selected={@guests_status_filter == nil}>All Statuses</option>
+                  <option value="pending" selected={@guests_status_filter == :pending}>Pending</option>
+                  <option value="accepted" selected={@guests_status_filter == :accepted}>Accepted</option>
+                  <option value="confirmed_with_order" selected={@guests_status_filter == :confirmed_with_order}>Confirmed with Order</option>
+                  <option value="declined" selected={@guests_status_filter == :declined}>Declined</option>
+                  <option value="cancelled" selected={@guests_status_filter == :cancelled}>Cancelled</option>
+                </select>
+                <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+              </div>
+
+              <!-- Clear Filters -->
+              <%= if @guests_source_filter || @guests_status_filter do %>
+                <button
+                  phx-click="clear_guest_filters"
+                  type="button"
+                  class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
+                >
+                  <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear
+                </button>
+              <% end %>
+            </form>
+          </div>
+
+          <!-- Guest List -->
           <div class="divide-y divide-gray-200">
-            <%= for participant <- @participants do %>
-              <div class="px-6 py-4">
+            <%= for participant <- get_filtered_participants(@participants, @guests_source_filter, @guests_status_filter) do %>
+              <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
                 <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-3">
+                  <!-- User Info with Avatar -->
+                  <div class="flex items-center gap-3 flex-1 min-w-0">
                     <%= if participant.user do %>
-                      <%= avatar_img_size(participant.user, :md) %>
-                      <div>
-                        <div class="font-medium text-gray-900"><%= participant.user.name || "Unknown User" %></div>
-                        <div class="text-sm text-gray-500"><%= participant.user.email || "No email" %></div>
+                      <img 
+                        src={EventasaurusApp.Avatars.generate_user_avatar(participant.user, size: 40)}
+                        alt={"#{participant.user.name} avatar"}
+                        class="h-10 w-10 rounded-full object-cover flex-shrink-0"
+                      />
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                          <div class="font-medium text-gray-900 truncate">
+                            <%= participant.user.name || "Unknown User" %>
+                          </div>
+                          <!-- Source Badge -->
+                          <%= get_source_badge(participant) %>
+                        </div>
+                        <div class="text-sm text-gray-500 truncate">
+                          <%= participant.user.email || "No email" %>
+                        </div>
+                        <!-- Invitation Details -->
+                        <%= if participant.invited_at do %>
+                          <div class="text-xs text-gray-400 mt-1">
+                            Invited <%= format_relative_time(participant.invited_at) %>
+                            <%= if participant.invited_by_user_id && participant.invited_by_user_id != @user.id do %>
+                              by <%= get_inviter_name(participant.invited_by_user_id, @participants) %>
+                            <% end %>
+                          </div>
+                        <% end %>
                       </div>
                     <% else %>
-                      <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-600 font-medium text-sm">
+                      <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-600 font-medium text-sm flex-shrink-0">
                         ?
                       </div>
-                      <div>
-                        <div class="font-medium text-gray-900">Unknown User</div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                          <div class="font-medium text-gray-900">Unknown User</div>
+                          <%= get_source_badge(participant) %>
+                        </div>
                         <div class="text-sm text-gray-500">User data unavailable</div>
                       </div>
                     <% end %>
                   </div>
-                  <div class="flex items-center gap-4">
+
+                  <!-- Status and Actions -->
+                  <div class="flex items-center gap-4 flex-shrink-0">
                     <div class="text-right">
-                      <div class="text-sm text-gray-500">
+                      <div class="text-sm text-gray-500 mb-1">
                         Registered <%= Calendar.strftime(participant.inserted_at, "%m/%d/%Y") %>
                       </div>
+                      <!-- Status Badge -->
+                      <%= get_status_badge(participant.status) %>
                     </div>
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Going
-                    </span>
+                    
+                    <!-- Actions Menu -->
+                    <div class="relative">
+                      <button 
+                        phx-click="toggle_participant_menu"
+                        phx-value-participant_id={participant.id}
+                        class="p-2 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-full"
+                        aria-label="Guest actions"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
+                      </button>
+                      
+                      <%= if @open_participant_menu == participant.id do %>
+                        <div 
+                          phx-click-away="close_participant_menu"
+                          class="absolute right-0 z-10 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                        >
+                        <div class="py-1">
+                          <%= if participant.user && participant.user.email do %>
+                            <a 
+                              href={"mailto:#{participant.user.email}"}
+                              class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              Send Email
+                            </a>
+                          <% end %>
+                          
+                          <%= if participant.status != :cancelled do %>
+                            <button 
+                              phx-click="remove_participant"
+                              phx-value-participant_id={participant.id}
+                              data-confirm="Are you sure you want to remove this participant?"
+                              class="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                            >
+                              <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Remove
+                            </button>
+                          <% end %>
+                        </div>
+                        </div>
+                      <% end %>
+                    </div>
                   </div>
                 </div>
               </div>
             <% end %>
           </div>
         <% else %>
+          <!-- Empty State -->
           <div class="px-6 py-12 text-center">
             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM9 5a2 2 0 11-4 0 2 2 0 014 0z" />
