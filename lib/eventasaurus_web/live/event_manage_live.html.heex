@@ -309,25 +309,25 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div class="text-center">
                 <div class="text-lg font-bold text-blue-600">
-                  <%= @participants |> Enum.count(&(is_binary(&1.source) && String.contains?(&1.source, "direct_add"))) %>
+                  <%= @participant_stats.direct_adds %>
                 </div>
                 <div class="text-xs text-gray-500">Direct Adds</div>
               </div>
               <div class="text-center">
                 <div class="text-lg font-bold text-green-600">
-                  <%= @participants |> Enum.count(&(&1.source == "public_registration")) %>
+                  <%= @participant_stats.self_registered %>
                 </div>
                 <div class="text-xs text-gray-500">Self Registered</div>
               </div>
               <div class="text-center">
                 <div class="text-lg font-bold text-purple-600">
-                  <%= @participants |> Enum.count(&(&1.invited_at != nil && !(is_binary(&1.source) && String.contains?(&1.source, "direct_add")))) %>
+                  <%= @participant_stats.invited %>
                 </div>
                 <div class="text-xs text-gray-500">Invited</div>
               </div>
               <div class="text-center">
                 <div class="text-lg font-bold text-orange-600">
-                  <%= @participants |> Enum.count(&(&1.status == :confirmed_with_order)) %>
+                  <%= @participant_stats.ticket_holders %>
                 </div>
                 <div class="text-xs text-gray-500">Ticket Holders</div>
               </div>
@@ -411,7 +411,10 @@
                             <%= participant.user.name || "Unknown User" %>
                           </div>
                           <!-- Source Badge -->
-                          <%= get_source_badge(participant) %>
+                          <% {badge_text, badge_class} = get_source_badge_data(participant) %>
+                          <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{badge_class}"}>
+                            <%= badge_text %>
+                          </span>
                         </div>
                         <div class="text-sm text-gray-500 truncate">
                           <%= participant.user.email || "No email" %>
@@ -433,7 +436,10 @@
                       <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2 mb-1">
                           <div class="font-medium text-gray-900">Unknown User</div>
-                          <%= get_source_badge(participant) %>
+                          <% {badge_text, badge_class} = get_source_badge_data(participant) %>
+                          <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{badge_class}"}>
+                            <%= badge_text %>
+                          </span>
                         </div>
                         <div class="text-sm text-gray-500">User data unavailable</div>
                       </div>
@@ -447,7 +453,10 @@
                         Registered <%= Calendar.strftime(participant.inserted_at, "%m/%d/%Y") %>
                       </div>
                       <!-- Status Badge -->
-                      <%= get_status_badge(participant.status) %>
+                      <% {status_text, status_class} = get_status_badge_data(participant.status) %>
+                      <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{status_class}"}>
+                        <%= status_text %>
+                      </span>
                     </div>
                     
                     <!-- Actions Menu -->
