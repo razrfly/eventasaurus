@@ -314,8 +314,6 @@ defmodule Eventasaurus.Services.PosthogService do
     end
   end
 
-
-
   defp make_api_request(endpoint, query_params, api_key) do
     project_id = get_project_id()
 
@@ -348,8 +346,6 @@ defmodule Eventasaurus.Services.PosthogService do
     end
   end
 
-
-
   defp calculate_rate(numerator, denominator) do
     if denominator > 0 do
       Float.round(numerator / denominator * 100, 1)
@@ -376,8 +372,8 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp send_event_to_posthog(event_name, user_id, properties, api_key) do
-    # PostHog event ingestion API endpoint
-    url = "#{@api_base}/capture/"
+    # PostHog event ingestion API endpoint - capture is at root level, not under /api
+    url = "https://eu.i.posthog.com/capture/"
 
     # Build event payload according to PostHog format
     event_payload = %{
