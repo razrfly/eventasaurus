@@ -594,7 +594,7 @@ defmodule EventasaurusWeb.EventManageLive do
   defp filter_by_source(participants, "invitation") do
     Enum.filter(participants, fn p ->
       p.source in ["historical_suggestion", "manual_email"] ||
-      (p.invited_at != nil && is_binary(p.source) && !String.contains?(p.source, "direct_add"))
+      (p.invited_at != nil && is_binary(p.source) && !String.starts_with?(p.source, "direct_add"))
     end)
   end
   defp filter_by_source(participants, source) do
@@ -615,7 +615,7 @@ defmodule EventasaurusWeb.EventManageLive do
   # Helper functions to get badge data (safer than Phoenix.HTML.raw)
   defp get_source_badge_data(participant) do
     cond do
-      is_binary(participant.source) and String.contains?(participant.source, "direct_add") ->
+      is_binary(participant.source) and String.starts_with?(participant.source, "direct_add") ->
         {"Direct Add", "bg-blue-100 text-blue-800"}
       participant.source == "public_registration" ->
         {"Self Registered", "bg-green-100 text-green-800"}
@@ -672,14 +672,19 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-  # Helper function to get inviter name from the preloaded association
+  # Helper function to get inviter name by finding the inviter among participants
   defp get_inviter_name(nil, _), do: "Unknown"
   defp get_inviter_name(inviter_id, participants) do
     participants
-    |> Enum.find(fn p -> p.invited_by_user && p.invited_by_user.id == inviter_id end)
+    |> Enum.find(fn p -> p.user && p.user.id == inviter_id end)
     |> case do
-      %{invited_by_user: %{name: name}} when is_binary(name) -> name
-      _ -> "Unknown"
+      %{user: %{name: name}} when is_binary(name) -> name
+      _ ->
+        # Fallback to direct database lookup if inviter not in participant list
+        case EventasaurusApp.Accounts.get_user(inviter_id) do
+          %{name: name} when is_binary(name) -> name
+          _ -> "Unknown"
+        end
     end
   end
 
