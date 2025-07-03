@@ -2072,7 +2072,7 @@ defmodule EventasaurusApp.Events do
               username: u.username,
               participation_count: count(p.id),
               last_participation: max(e.start_at),
-              event_ids: fragment("array_agg(?)", e.id)
+              event_ids: fragment("array_agg(DISTINCT ?)", e.id)
             },
             order_by: [desc: count(p.id), desc: max(e.start_at)]
 
@@ -2125,7 +2125,7 @@ defmodule EventasaurusApp.Events do
               username: u.username,
               participation_count: count(p.id),
               last_participation: max(e.start_at),
-              event_ids: fragment("array_agg(?)", e.id)
+              event_ids: fragment("array_agg(DISTINCT ?)", e.id)
             },
             order_by: [desc: count(p.id), desc: max(e.start_at)]
 
