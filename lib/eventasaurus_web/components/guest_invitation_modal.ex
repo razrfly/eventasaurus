@@ -417,6 +417,6 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
 
   # Helper function to generate user avatar URL using dicebear
   defp get_user_avatar_url(user, size \\ 40) do
-    EventasaurusApp.Avatars.generate_user_avatar(user.email, size: size)
+    EventasaurusApp.Avatars.generate_user_avatar(user, size: size)
   end
 end
