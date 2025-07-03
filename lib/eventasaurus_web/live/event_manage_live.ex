@@ -62,7 +62,10 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:selected_suggestions, [])
                |> assign(:manual_emails, "")
                |> assign(:invitation_message, "")
-               |> assign(:add_mode, "invite")}  # Default to invite mode
+               |> assign(:add_mode, "invite")
+               |> assign(:guests_source_filter, nil)  # Guest filtering state
+               |> assign(:guests_status_filter, nil)  # Guest filtering state
+               |> assign(:open_participant_menu, nil)}  # Track which dropdown is open
             end
         end
     end
@@ -231,6 +234,76 @@ defmodule EventasaurusWeb.EventManageLive do
   def handle_event("stop_propagation", _params, socket) do
     # Prevent modal from closing when clicking inside
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_guests", %{"source_filter" => source, "status_filter" => status}, socket) do
+    source_filter = if source == "", do: nil, else: source
+
+    status_filter = if status == "" do
+      nil
+    else
+      try do
+        String.to_existing_atom(status)
+      rescue
+        ArgumentError ->
+          # Handle invalid status atom
+          nil
+      end
+    end
+
+    {:noreply,
+     socket
+     |> assign(:guests_source_filter, source_filter)
+     |> assign(:guests_status_filter, status_filter)}
+  end
+
+  @impl true
+  def handle_event("clear_guest_filters", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:guests_source_filter, nil)
+     |> assign(:guests_status_filter, nil)}
+  end
+
+  @impl true
+  def handle_event("toggle_participant_menu", %{"participant_id" => participant_id}, socket) do
+    participant_id = String.to_integer(participant_id)
+    current_open = socket.assigns.open_participant_menu
+
+    new_open = if current_open == participant_id, do: nil, else: participant_id
+
+    {:noreply, assign(socket, :open_participant_menu, new_open)}
+  end
+
+  @impl true
+  def handle_event("close_participant_menu", _params, socket) do
+    {:noreply, assign(socket, :open_participant_menu, nil)}
+  end
+
+  @impl true
+  def handle_event("remove_participant", %{"participant_id" => participant_id}, socket) do
+    try do
+      case Events.get_event_participant!(participant_id) do
+        participant ->
+          case Events.delete_event_participant(participant) do
+            {:ok, _} ->
+              # Reload participants
+              updated_participants = Events.list_event_participants(socket.assigns.event)
+              {:noreply,
+               socket
+               |> assign(:participants, updated_participants)
+               |> assign(:open_participant_menu, nil)  # Close any open dropdown menus
+               |> put_flash(:info, "Participant removed successfully")}
+
+            {:error, _changeset} ->
+              {:noreply, put_flash(socket, :error, "Failed to remove participant")}
+          end
+      end
+    rescue
+      Ecto.NoResultsError ->
+        {:noreply, put_flash(socket, :error, "Participant not found")}
+    end
   end
 
   @impl true
@@ -462,6 +535,130 @@ defmodule EventasaurusWeb.EventManageLive do
 
       {successful, skipped} ->
         "🎉 #{successful} guest(s) added! #{skipped} user(s) were already participating."
+    end
+  end
+
+# Guest filtering and UI helper functions
+
+  # Helper function to filter participants by source and status
+    defp get_filtered_participants(participants, source_filter, status_filter) do
+    participants
+    |> filter_by_source(source_filter)
+    |> filter_by_status(status_filter)
+  end
+
+  defp filter_by_source(participants, nil), do: participants
+  defp filter_by_source(participants, "direct_add") do
+    Enum.filter(participants, fn p ->
+      is_binary(p.source) && String.contains?(p.source, "direct_add")
+    end)
+  end
+  defp filter_by_source(participants, "invitation") do
+    Enum.filter(participants, fn p ->
+      p.source in ["historical_suggestion", "manual_email"] ||
+      (p.invited_at != nil && is_binary(p.source) && !String.contains?(p.source, "direct_add"))
+    end)
+  end
+  defp filter_by_source(participants, source) do
+    Enum.filter(participants, fn p ->
+      case p.source do
+        ^source -> true
+        source_string when is_binary(source_string) -> source_string == source
+        _ -> false
+      end
+    end)
+  end
+
+  defp filter_by_status(participants, nil), do: participants
+  defp filter_by_status(participants, status) do
+    Enum.filter(participants, fn p -> p.status == status end)
+  end
+
+  # Helper function to generate source badges
+  defp get_source_badge(participant) do
+    {text, class} = cond do
+      is_binary(participant.source) and String.contains?(participant.source, "direct_add") ->
+        {"Direct Add", "bg-blue-100 text-blue-800"}
+      participant.source == "public_registration" ->
+        {"Self Registered", "bg-green-100 text-green-800"}
+      participant.source == "ticket_purchase" ->
+        {"Ticket Purchase", "bg-orange-100 text-orange-800"}
+      participant.source in ["historical_suggestion", "manual_email"] ->
+        {"Invited", "bg-purple-100 text-purple-800"}
+      participant.source == "voting_registration" ->
+        {"Poll Voter", "bg-indigo-100 text-indigo-800"}
+      participant.source == "bulk_voting_registration" ->
+        {"Bulk Voter", "bg-indigo-100 text-indigo-800"}
+      true ->
+        {"Unknown", "bg-gray-100 text-gray-800"}
+    end
+
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{class}">
+      #{text}
+    </span>
+    """)
+  end
+
+  # Helper function to generate status badges
+  defp get_status_badge(status) do
+    {text, class} = case status do
+      :pending ->
+        {"Pending", "bg-yellow-100 text-yellow-800"}
+      :accepted ->
+        {"Accepted", "bg-green-100 text-green-800"}
+      :declined ->
+        {"Declined", "bg-red-100 text-red-800"}
+      :cancelled ->
+        {"Cancelled", "bg-gray-100 text-gray-800"}
+      :confirmed_with_order ->
+        {"Confirmed", "bg-emerald-100 text-emerald-800"}
+      _ ->
+        {"Unknown", "bg-gray-100 text-gray-800"}
+    end
+
+    Phoenix.HTML.raw("""
+    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{class}">
+      #{text}
+    </span>
+    """)
+  end
+
+  # Helper function to format relative time
+  defp format_relative_time(datetime) when is_nil(datetime), do: "never"
+  defp format_relative_time(%DateTime{} = datetime) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(now, datetime, :second)
+
+    cond do
+      diff_seconds < 60 ->
+        "just now"
+      diff_seconds < 3600 ->
+        minutes = div(diff_seconds, 60)
+        "#{minutes} minute#{if minutes == 1, do: "", else: "s"} ago"
+      diff_seconds < 86400 ->
+        hours = div(diff_seconds, 3600)
+        "#{hours} hour#{if hours == 1, do: "", else: "s"} ago"
+      diff_seconds < 2592000 ->
+        days = div(diff_seconds, 86400)
+        "#{days} day#{if days == 1, do: "", else: "s"} ago"
+      true ->
+        Calendar.strftime(datetime, "%m/%d/%Y")
+    end
+  end
+
+  # Helper function to get inviter name
+  defp get_inviter_name(inviter_id, _participants) when is_nil(inviter_id), do: "Unknown"
+  defp get_inviter_name(inviter_id, participants) do
+    # Try to find the inviter in the participants list first
+    case Enum.find(participants, fn p -> p.user && p.user.id == inviter_id end) do
+      %{user: %{name: name}} when is_binary(name) -> name
+      _ ->
+        # Fallback to direct database lookup
+        case EventasaurusApp.Accounts.get_user(inviter_id) do
+          %{name: name} when is_binary(name) -> name
+          _ -> "Unknown"
+        end
     end
   end
 
