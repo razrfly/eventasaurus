@@ -80,6 +80,68 @@ defmodule Eventasaurus.Services.PosthogService do
     GenServer.cast(__MODULE__, {:clear_cache, event_id_or_all})
   end
 
+  # Event Tracking Functions
+
+  @doc """
+  Tracks when a guest invitation modal is opened.
+  """
+  @spec track_guest_invitation_modal_opened(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  def track_guest_invitation_modal_opened(user_id, event_id, metadata \\ %{}) do
+    properties = Map.merge(%{
+      event_id: event_id,
+      source: "guest_invitation_modal"
+    }, metadata)
+
+    send_event("guest_invitation_modal_opened", user_id, properties)
+  end
+
+  @doc """
+  Tracks when a historical participant is selected for invitation.
+  """
+  @spec track_historical_participant_selected(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  def track_historical_participant_selected(user_id, event_id, metadata \\ %{}) do
+    properties = Map.merge(%{
+      event_id: event_id,
+      source: "historical_suggestions"
+    }, metadata)
+
+    send_event("historical_participant_selected", user_id, properties)
+  end
+
+  @doc """
+  Tracks when a guest is added directly to an event.
+  """
+  @spec track_guest_added_directly(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  def track_guest_added_directly(user_id, event_id, metadata \\ %{}) do
+    properties = Map.merge(%{
+      event_id: event_id,
+      source: "direct_addition"
+    }, metadata)
+
+    send_event("guest_added_directly", user_id, properties)
+  end
+
+  @doc """
+  Sends a custom event to PostHog.
+  """
+  @spec send_event(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  def send_event(event_name, user_id, properties \\ %{}) do
+    api_key = get_api_key()
+
+    cond do
+      !api_key ->
+        Logger.warning("PostHog API key not configured - event tracking disabled")
+        {:error, :no_api_key}
+
+      !user_id or user_id == "" ->
+        Logger.warning("Invalid user_id for PostHog event: #{event_name}")
+        {:error, :invalid_user_id}
+
+      true ->
+        send_event_to_posthog(event_name, user_id, properties, api_key)
+    end
+  end
+
   # GenServer Callbacks
 
   @impl true
@@ -311,6 +373,44 @@ defmodule Eventasaurus.Services.PosthogService do
     |> DateTime.truncate(:second)
     |> DateTime.to_naive()
     |> NaiveDateTime.to_string()
+  end
+
+  defp send_event_to_posthog(event_name, user_id, properties, api_key) do
+    # PostHog event ingestion API endpoint
+    url = "#{@api_base}/capture/"
+
+    # Build event payload according to PostHog format
+    event_payload = %{
+      api_key: api_key,
+      event: event_name,
+      distinct_id: user_id,
+      properties: Map.merge(properties, %{
+        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+        "$lib" => "eventasaurus-backend",
+        "$lib_version" => "0.1.0"
+      })
+    }
+
+    headers = [
+      {"Content-Type", "application/json"},
+      {"User-Agent", "Eventasaurus Backend/0.1.0"}
+    ]
+
+    body = Jason.encode!(event_payload)
+
+    case HTTPoison.post(url, body, headers, timeout: 5000, recv_timeout: 5000) do
+      {:ok, %HTTPoison.Response{status_code: 200}} ->
+        Logger.debug("PostHog event sent successfully: #{event_name}")
+        {:ok, :sent}
+
+      {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
+        Logger.warning("PostHog event failed with status #{status_code}: #{response_body}")
+        {:error, {:api_error, status_code}}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("PostHog event request failed: #{inspect(reason)}")
+        {:error, {:request_failed, reason}}
+    end
   end
 
   defp get_api_key do

@@ -82,10 +82,24 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
                       type="text"
                       name="search_query"
                       value={@search_query}
+                      phx-change="unified_search"
+                      phx-debounce="500"
                       class="w-full px-4 py-2 border border-gray-300 rounded-l-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="Search for more photos"
                       aria-label="Search for more photos"
                     />
+                    <!-- Search indicator -->
+                    <%= if @loading do %>
+                      <div class="absolute inset-y-0 right-2 flex items-center">
+                        <div class="w-4 h-4 border-t-2 border-b-2 border-indigo-500 rounded-full animate-spin"></div>
+                      </div>
+                    <% else %>
+                      <div class="absolute inset-y-0 right-2 flex items-center">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                    <% end %>
                   </div>
                   <button
                     type="submit"

@@ -33,9 +33,13 @@ defmodule EventasaurusWeb.EventManageLive do
                |> put_flash(:error, "You don't have permission to manage this event.")
                |> redirect(to: "/dashboard")}
             else
-              # Fetch initial data
-              participants = Events.list_event_participants(event)
-                            |> Enum.sort_by(& &1.inserted_at, :desc)
+              # Implement lazy loading with pagination
+              total_participants = Events.count_event_participants(event)
+
+              # Load initial batch of participants (first 20)
+              initial_participants = Events.list_event_participants(event, limit: 20, offset: 0)
+                                   |> Enum.sort_by(& &1.inserted_at, :desc)
+
               tickets = Ticketing.list_tickets_for_event(event.id)
               orders = Ticketing.list_orders_for_event(event.id)
                       |> EventasaurusApp.Repo.preload([:ticket, :user])
@@ -50,7 +54,12 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:page_title, "Manage Event")
                |> assign(:active_tab, "overview")  # Default tab
                |> assign(:venue, event.venue)  # Add missing venue assign
-               |> assign_participants_with_stats(participants)
+               |> assign_participants_with_stats(initial_participants)
+               |> assign(:participants_count, total_participants)
+               |> assign(:participants_loaded, length(initial_participants))
+               |> assign(:participants_loading, false)
+               |> assign(:guests_source_filter, nil)  # Guest filtering state
+               |> assign(:guests_status_filter, nil)  # Guest filtering state
                |> assign(:tickets, tickets)
                |> assign(:orders, orders)
                |> assign(:analytics_data, analytics_data)  # Required for insights tab
@@ -63,8 +72,6 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:manual_emails, "")
                |> assign(:invitation_message, "")
                |> assign(:add_mode, "invite")
-               |> assign(:guests_source_filter, nil)  # Guest filtering state
-               |> assign(:guests_status_filter, nil)  # Guest filtering state
                |> assign(:open_participant_menu, nil)}  # Track which dropdown is open
             end
         end
@@ -78,16 +85,22 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("refresh_data", _params, socket) do
-    # Refresh all data
-    participants = Events.list_event_participants(socket.assigns.event)
-                  |> Enum.sort_by(& &1.inserted_at, :desc)
+    # Refresh all data with lazy loading
+    total_participants = Events.count_event_participants(socket.assigns.event)
+
+    # Reload initial batch
+    initial_participants = Events.list_event_participants(socket.assigns.event, limit: 20, offset: 0)
+                         |> Enum.sort_by(& &1.inserted_at, :desc)
+
     tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
     orders = Ticketing.list_orders_for_event(socket.assigns.event.id)
             |> EventasaurusApp.Repo.preload([:ticket, :user])
 
     {:noreply,
      socket
-     |> assign_participants_with_stats(participants)
+     |> assign_participants_with_stats(initial_participants)
+     |> assign(:participants_count, total_participants)
+     |> assign(:participants_loaded, length(initial_participants))
      |> assign(:tickets, tickets)
      |> assign(:orders, orders)
      |> put_flash(:info, "Data refreshed")}
@@ -112,6 +125,18 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("open_guest_invitation_modal", _params, socket) do
+    # Track analytics event
+    user = socket.assigns.user
+    event = socket.assigns.event
+    PosthogService.track_guest_invitation_modal_opened(
+      to_string(user.id),
+      to_string(event.id),
+      %{
+        "event_slug" => event.slug,
+        "event_title" => event.title
+      }
+    )
+
     # Load historical suggestions when opening modal
     socket =
       socket
@@ -146,6 +171,29 @@ defmodule EventasaurusWeb.EventManageLive do
     updated_selections = if user_id in current_selections do
       List.delete(current_selections, user_id)
     else
+      # Track analytics event when adding a historical participant
+      organizer = socket.assigns.user
+      event = socket.assigns.event
+
+      # Find the suggestion being selected for metadata
+      suggestion = socket.assigns.historical_suggestions
+                  |> Enum.find(&(&1.user_id == user_id))
+
+      if suggestion do
+        PosthogService.track_historical_participant_selected(
+          to_string(organizer.id),
+          to_string(event.id),
+          %{
+            "event_slug" => event.slug,
+            "participant_user_id" => user_id,
+            "participant_email" => suggestion.email,
+            "recommendation_level" => suggestion.recommendation_level,
+            "participation_count" => suggestion.participation_count,
+            "total_selections" => length(current_selections) + 1
+          }
+        )
+      end
+
       [user_id | current_selections]
     end
 
@@ -192,14 +240,32 @@ defmodule EventasaurusWeb.EventManageLive do
     total_invitations = length(suggested_users) + length(parsed_emails)
 
     if total_invitations > 0 do
-      # Process invitations using the new robust function
+      # Determine mode and process invitations
+      mode = if socket.assigns.add_mode == "direct", do: :direct_add, else: :invitation
+
       result = Events.process_guest_invitations(
         event,
         organizer,
         suggestion_structs: suggested_users,
         manual_emails: parsed_emails,
-        invitation_message: invitation_message
+        invitation_message: invitation_message,
+        mode: mode
       )
+
+      # Track direct guest additions
+      if mode == :direct_add and result.successful_invitations > 0 do
+        PosthogService.track_guest_added_directly(
+          to_string(organizer.id),
+          to_string(event.id),
+          %{
+            "event_slug" => event.slug,
+            "guest_count" => result.successful_invitations,
+            "suggested_guests" => length(suggested_users),
+            "manual_emails" => length(parsed_emails),
+            "total_guests_added" => result.successful_invitations
+          }
+        )
+      end
 
       # Build success message
       success_message = build_invitation_success_message(result)
@@ -413,6 +479,31 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
+    @impl true
+  def handle_event("load_more_participants", _params, socket) do
+    if socket.assigns.participants_loaded < socket.assigns.participants_count do
+      socket = assign(socket, :participants_loading, true)
+
+      # Load next batch of participants
+      next_batch = Events.list_event_participants(
+        socket.assigns.event,
+        limit: 20,
+        offset: socket.assigns.participants_loaded
+      ) |> Enum.sort_by(& &1.inserted_at, :desc)
+
+      # Combine with existing participants
+      updated_participants = socket.assigns.participants ++ next_batch
+
+      {:noreply,
+       socket
+       |> assign_participants_with_stats(updated_participants)
+       |> assign(:participants_loaded, socket.assigns.participants_loaded + length(next_batch))
+       |> assign(:participants_loading, false)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # Helper functions
 
   # Pre-compute participant statistics to avoid repeated Enum.count operations
@@ -423,6 +514,8 @@ defmodule EventasaurusWeb.EventManageLive do
     |> assign(:participants, participants)
     |> assign(:participant_stats, participant_stats)
   end
+
+
 
   defp calculate_participant_stats(participants) do
     %{

@@ -185,6 +185,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
                 id="voter_name"
                 value={@form_data["name"]}
                 phx-change="validate"
+                phx-debounce="300"
                 phx-target={@myself}
                 required
                 class="mt-1 block w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -200,6 +201,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
                 id="voter_email"
                 value={@form_data["email"]}
                 phx-change="validate"
+                phx-debounce="300"
                 phx-target={@myself}
                 required
                 class="mt-1 block w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
