@@ -343,7 +343,7 @@
                   name="source_filter"
                   value={@guests_source_filter || ""}
                   class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                  style="background-image: none !important;"
                 >
                   <option value="" selected={@guests_source_filter == nil}>All Sources</option>
                   <option value="direct_add" selected={@guests_source_filter == "direct_add"}>Direct Add</option>
@@ -362,7 +362,7 @@
                   name="status_filter"
                   value={@guests_status_filter || ""}
                   class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                  style="background-image: none !important;"
                 >
                   <option value="" selected={@guests_status_filter == nil}>All Statuses</option>
                   <option value="pending" selected={@guests_status_filter == :pending}>Pending</option>
