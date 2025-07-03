@@ -158,6 +158,9 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
                 value={@form_data["name"] || ""}
                 placeholder="Your Name"
                 required
+                phx-change="validate"
+                phx-debounce="300"
+                phx-target={@myself}
                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 disabled={@loading}
               />
@@ -178,6 +181,9 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
                 value={@form_data["email"] || ""}
                 placeholder="your@email.com"
                 required
+                phx-change="validate"
+                phx-debounce="300"
+                phx-target={@myself}
                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 disabled={@loading}
               />
