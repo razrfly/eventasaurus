@@ -2018,12 +2018,41 @@ defmodule EventasaurusApp.Events do
   Get all unique participants from events organized by a user, excluding specified events and users.
   Returns participant data with frequency and recency metrics for scoring.
 
+  OPTIMIZED VERSION: Uses two-phase query approach for better performance.
+  Phase 1: Get organizer's event IDs (cached)
+  Phase 2: Query participants using those event IDs
+
   Options:
   - exclude_event_ids: List of event IDs to exclude from results (e.g., current event)
   - exclude_user_ids: List of user IDs to exclude from results (e.g., current participants)
   - limit: Maximum number of participants to return (default: 50)
   """
   def get_historical_participants(%User{} = organizer, opts \\ []) do
+    exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
+    exclude_user_ids = Keyword.get(opts, :exclude_user_ids, [])
+    limit = Keyword.get(opts, :limit, 50)
+
+    # Phase 1: Get organizer's event IDs (this can be cached)
+    organizer_event_ids = get_organizer_event_ids_basic(organizer.id)
+
+    # Apply exclude_event_ids filter
+    filtered_event_ids = if exclude_event_ids != [] do
+      organizer_event_ids -- exclude_event_ids
+    else
+      organizer_event_ids
+    end
+
+    # Early return if no events
+    if filtered_event_ids == [] do
+      []
+    else
+      # Phase 2: Query participants using pre-filtered event IDs
+      get_participants_for_events(filtered_event_ids, exclude_user_ids, organizer.id, limit)
+    end
+  end
+
+  # LEGACY VERSION: Kept for compatibility during transition
+  def get_historical_participants_legacy(%User{} = organizer, opts \\ []) do
     exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
     exclude_user_ids = Keyword.get(opts, :exclude_user_ids, [])
     limit = Keyword.get(opts, :limit, 50)
@@ -2058,6 +2087,51 @@ defmodule EventasaurusApp.Events do
     # Apply exclude_user_ids filter if provided
     query = if exclude_user_ids != [] do
       from [p, e, eu, u] in query,
+           where: u.id not in ^exclude_user_ids
+    else
+      query
+    end
+
+    query
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  # Private helper functions for optimized queries
+
+  @doc false
+  defp get_organizer_event_ids_basic(organizer_id) do
+    # Basic query for organizer's event IDs
+    query = from eu in EventUser,
+            where: eu.user_id == ^organizer_id,
+            select: eu.event_id
+
+    Repo.all(query)
+  end
+
+  @doc false
+  defp get_participants_for_events(event_ids, exclude_user_ids, organizer_id, limit) do
+    # Build base query for participants in the specified events
+    query = from p in EventParticipant,
+            join: e in Event, on: p.event_id == e.id,
+            join: u in User, on: p.user_id == u.id,
+            where: p.event_id in ^event_ids and
+                   p.user_id != ^organizer_id,  # Exclude organizer from suggestions
+            group_by: [u.id, u.name, u.email, u.username],
+            select: %{
+              user_id: u.id,
+              name: u.name,
+              email: u.email,
+              username: u.username,
+              participation_count: count(p.id),
+              last_participation: max(e.start_at),
+              event_ids: fragment("array_agg(?)", e.id)
+            },
+            order_by: [desc: count(p.id), desc: max(e.start_at)]
+
+    # Apply exclude_user_ids filter if provided
+    query = if exclude_user_ids != [] do
+      from [p, e, u] in query,
            where: u.id not in ^exclude_user_ids
     else
       query
@@ -2563,6 +2637,37 @@ defmodule EventasaurusApp.Events do
       {key, Enum.sum(Enum.map(group, & &1.count))}
     end)
     |> Enum.into(%{})
+  end
+
+    @doc """
+  Gets the count of participants for a specific event.
+  """
+  def count_event_participants(event) do
+    Repo.aggregate(
+      from(p in EventParticipant, where: p.event_id == ^event.id),
+      :count,
+      :id
+    )
+  end
+
+  @doc """
+  Gets participants for a specific event with optional pagination support.
+  """
+  def list_event_participants(event, opts \\ []) do
+    limit = Keyword.get(opts, :limit, nil)
+    offset = Keyword.get(opts, :offset, 0)
+
+    query = from p in EventParticipant,
+            where: p.event_id == ^event.id,
+            preload: [:user]
+
+    query = if limit do
+      query |> limit(^limit) |> offset(^offset)
+    else
+      query
+    end
+
+    Repo.all(query)
   end
 
 end
