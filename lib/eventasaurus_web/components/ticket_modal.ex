@@ -156,7 +156,7 @@ defmodule EventasaurusWeb.Components.TicketModal do
                 name="ticket[currency]"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <%= for {code, name} <- supported_currencies() do %>
+                <%= for {code, name} <- supported_currencies_flat() do %>
                   <option
                     value={code}
                     selected={Map.get(@ticket_form_data, "currency", @default_currency) == code}

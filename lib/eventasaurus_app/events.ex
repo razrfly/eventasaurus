@@ -466,7 +466,7 @@ defmodule EventasaurusApp.Events do
   def list_event_participants_for_event(%Event{} = event) do
     query = from ep in EventParticipant,
             where: ep.event_id == ^event.id,
-            preload: [:user]
+            preload: [:user, :invited_by_user]
 
     Repo.all(query)
   end
