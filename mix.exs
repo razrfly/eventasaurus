@@ -84,6 +84,8 @@ defmodule Eventasaurus.MixProject do
       # Stripe payment processing
       {:stripity_stripe, "~> 3.2"},
 
+      # Email service for guest invitations
+      {:resend, "~> 0.4"},
 
     ]
   end
