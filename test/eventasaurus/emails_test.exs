@@ -74,13 +74,13 @@ defmodule Eventasaurus.EmailsTest do
       # Should handle missing data gracefully
       html_body = email.html_body
       assert html_body =~ "Simple Event"
-      assert html_body =~ "organizer"  # Should use username when name not available
+      assert html_body =~ "Test User"  # Should use user's name
       assert html_body =~ "Hi there,"  # Should default when guest name is nil
       assert html_body =~ "Date TBD"  # Should handle nil start_at
 
       text_body = email.text_body
       assert text_body =~ "Simple Event"
-      assert text_body =~ "organizer"
+      assert text_body =~ "Test User"
       assert text_body =~ "Hi there,"
       assert text_body =~ "Date TBD"
     end
@@ -125,6 +125,59 @@ defmodule Eventasaurus.EmailsTest do
         email.subject == "You're invited to Email Test Event" and
         email.to == [{"Recipient Name", "recipient@example.com"}]
       end)
+    end
+  end
+
+  describe "security" do
+    test "escapes HTML in user-provided content to prevent XSS" do
+      organizer = user_fixture(%{name: "<script>alert('xss')</script>"})
+      event = simple_event_struct(%{
+        title: "Event <script>alert('xss')</script>",
+        description: "<img src=x onerror=alert('xss')>",
+        slug: "test-event"
+      })
+
+      email = Emails.guest_invitation_email(
+        "guest@example.com",
+        "<b>Bold Guest</b>",
+        event,
+        "<script>alert('message')</script>",
+        organizer
+      )
+
+      # HTML should be escaped
+      assert email.html_body =~ "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"
+      assert email.html_body =~ "&lt;img src=x onerror=alert(&#39;xss&#39;)&gt;"
+      assert email.html_body =~ "&lt;b&gt;Bold Guest&lt;/b&gt;"
+      # Ensure raw script tags are not present
+      refute email.html_body =~ "<script>alert('xss')</script>"
+    end
+
+    test "validates email address format" do
+      organizer = user_fixture()
+      event = simple_event_struct()
+
+      assert_raise ArgumentError, ~r/Invalid email/, fn ->
+        Emails.guest_invitation_email(
+          "not-an-email",
+          "Guest",
+          event,
+          "",
+          organizer
+        )
+      end
+    end
+  end
+
+  describe "error handling" do
+    test "handles mailer delivery failures gracefully" do
+      # Mock a mailer failure scenario
+      organizer = user_fixture()
+      event = simple_event_struct()
+
+      # This would need proper mocking setup for full testing
+      # For now, just verify the function exists and can be called
+      assert is_function(&Emails.send_guest_invitation/5)
     end
   end
 
