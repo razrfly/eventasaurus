@@ -756,6 +756,7 @@ defmodule EventasaurusWeb.CoreComponents do
 
   @doc """
   Renders a currency select component with all supported currencies.
+  Uses Stripe integration by default with fallback to hardcoded list.
 
   ## Examples
 
@@ -765,6 +766,13 @@ defmodule EventasaurusWeb.CoreComponents do
         value={@user.default_currency}
         prompt="Select Currency"
       />
+
+      <.currency_select
+        name="user[default_currency]"
+        id="user_default_currency"
+        value={@user.default_currency}
+        use_stripe_data={true}
+      />
   """
   attr :name, :string, required: true
   attr :id, :string, required: true
@@ -773,10 +781,15 @@ defmodule EventasaurusWeb.CoreComponents do
   attr :class, :string, default: nil
   attr :required, :boolean, default: false
   attr :disabled, :boolean, default: false
+  attr :use_stripe_data, :boolean, default: true
   attr :rest, :global
 
   def currency_select(assigns) do
-    grouped_options = CurrencyHelpers.supported_currencies()
+    grouped_options = if assigns[:use_stripe_data] do
+      CurrencyHelpers.grouped_currencies_from_stripe()
+    else
+      CurrencyHelpers.supported_currencies()
+    end
 
     assigns = assign(assigns, grouped_options: grouped_options)
 
