@@ -3268,7 +3268,7 @@ defmodule EventasaurusApp.Events do
           case {location1.usage_count, location2.usage_count} do
             {c1, c2} when c1 > c2 -> true
             {c1, c2} when c1 < c2 -> false
-            _ -> NaiveDateTime.compare(location1.last_used, location2.last_used) == :gt
+            _ -> DateTime.compare(location1.last_used, location2.last_used) == :gt
           end
         end)
         |> Enum.take(limit)

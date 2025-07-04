@@ -15,8 +15,8 @@ defmodule EventasaurusApp.Repo.Migrations.AddRecentLocationsIndexes do
     create index(:events, [:virtual_venue_url], name: :events_virtual_venue_url_idx, where: "virtual_venue_url IS NULL")
 
     # Composite index for events by venue_id and inserted_at for sorting
-    # This optimizes both the venue lookup and the recency sorting
-    create index(:events, [:venue_id, :inserted_at], name: :events_venue_id_inserted_at_idx, where: "venue_id IS NOT NULL")
+    # This optimizes both the venue lookup and the recency sorting, with better support for physical venue queries
+    create index(:events, [:venue_id, :inserted_at], name: :events_venue_id_inserted_at_idx, where: "venue_id IS NOT NULL AND virtual_venue_url IS NULL")
 
     # Index for efficient venue lookups (already might exist, but ensure it's there)
     create_if_not_exists index(:venues, [:id], name: :venues_id_idx)

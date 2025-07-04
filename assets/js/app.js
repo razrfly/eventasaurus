@@ -864,19 +864,24 @@ Hooks.VenueSearchWithFiltering = {
     });
     
     // Add focus event listener to show recent locations when appropriate
-    this.inputEl.addEventListener('focus', () => {
+    this.handleFocus = () => {
       // Only show recent locations if Google Places is disabled or input is empty
       if (!this.googlePlacesEnabled || this.inputEl.value.trim().length === 0) {
         this.pushEvent('show_recent_locations', {});
       }
-    });
+    };
+    this.inputEl.addEventListener('focus', this.handleFocus);
     
     // Hide recent locations when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!this.inputEl.contains(e.target) && !e.target.closest('.recent-locations-dropdown')) {
-        this.pushEvent('hide_recent_locations', {});
+    this.documentClickHandler = (e) => {
+      // Validate that e.target is a DOM element
+      if (e.target && typeof e.target.contains === 'function' && typeof e.target.closest === 'function') {
+        if (!this.inputEl.contains(e.target) && !e.target.closest('.recent-locations-dropdown')) {
+          this.pushEvent('hide_recent_locations', {});
+        }
       }
-    });
+    };
+    document.addEventListener('click', this.documentClickHandler);
   },
   
   destroyed() {
@@ -885,8 +890,19 @@ Hooks.VenueSearchWithFiltering = {
       clearTimeout(this.debounceTimeout);
     }
     
+    // Remove event listeners to prevent memory leaks
+    if (this.inputEl && this.handleFocus) {
+      this.inputEl.removeEventListener('focus', this.handleFocus);
+      this.handleFocus = null;
+    }
+    
+    if (this.documentClickHandler) {
+      document.removeEventListener('click', this.documentClickHandler);
+      this.documentClickHandler = null;
+    }
+    
     // Remove this hook from the waiting list if it exists
-    if (window.venueSearchHooks) {
+    if (window.venueSearchHooks && Array.isArray(window.venueSearchHooks)) {
       const index = window.venueSearchHooks.indexOf(this);
       if (index > -1) {
         window.venueSearchHooks.splice(index, 1);
@@ -909,15 +925,23 @@ Hooks.VenueSearchWithFiltering = {
       if (!window.venueSearchHooks) {
         window.venueSearchHooks = [];
       }
-      window.venueSearchHooks.push(this);
+      
+      // Ensure this hook isn't already in the list to prevent duplicates
+      if (!window.venueSearchHooks.includes(this)) {
+        window.venueSearchHooks.push(this);
+      }
       
       // Set up the global callback for when Google Maps loads (only once)
       if (!window.initGooglePlaces) {
         window.initGooglePlaces = () => {
-          if (window.venueSearchHooks) {
+          if (window.venueSearchHooks && Array.isArray(window.venueSearchHooks)) {
             window.venueSearchHooks.forEach(hook => {
               if (hook.mounted) {
-                setTimeout(() => hook.initClassicAutocomplete(), 100);
+                try {
+                  setTimeout(() => hook.initClassicAutocomplete(), 100);
+                } catch (error) {
+                  if (process.env.NODE_ENV !== 'production') console.error("Error initializing autocomplete for hook:", error);
+                }
               }
             });
             // Clear the list after initialization
@@ -934,6 +958,12 @@ Hooks.VenueSearchWithFiltering = {
     
     try {
       if (process.env.NODE_ENV !== 'production') console.log("Initializing Google Places Autocomplete");
+      
+      // Prevent creating multiple instances
+      if (this.autocomplete) {
+        if (process.env.NODE_ENV !== 'production') console.log("Autocomplete already initialized");
+        return;
+      }
       
       // Create the autocomplete object with suggestions enabled by default
       const options = {
@@ -1047,9 +1077,9 @@ Hooks.VenueSearchWithFiltering = {
       // Focus the input and trigger search if there's content
       this.inputEl.focus();
       if (this.inputEl.value.trim()) {
-        // Trigger autocomplete to show suggestions for current text
-        google.maps.event.trigger(this.inputEl, 'keydown');
-        google.maps.event.trigger(this.inputEl, 'focus');
+        // Trigger autocomplete to show suggestions for current text using proper DOM events
+        this.inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+        this.inputEl.dispatchEvent(new Event('focus', { bubbles: true }));
       }
     }
   },
