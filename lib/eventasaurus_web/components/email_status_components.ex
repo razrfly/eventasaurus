@@ -278,11 +278,13 @@ defmodule EventasaurusWeb.EmailStatusComponents do
 
   def compact_email_indicator(assigns) do
     ~H"""
-    <div class="relative inline-flex items-center group">
-      <.compact_email_icon status={@email_status.status} class={@class} />
+    <div class="relative inline-flex items-center group" role="status" aria-label={"Email status: #{@email_status.status}"}>
+      <.email_status_icon status={@email_status.status} class={@class} />
 
       <!-- Tooltip on hover -->
-      <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2
+      <div role="tooltip"
+           aria-hidden="true"
+           class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2
                   opacity-0 group-hover:opacity-100 transition-opacity duration-200
                   bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap
                   pointer-events-none z-10">
@@ -295,40 +297,7 @@ defmodule EventasaurusWeb.EmailStatusComponents do
     """
   end
 
-  @doc """
-  Renders compact email status icons with better visual representation.
-  """
-  attr :status, :string, required: true
-  attr :class, :string, default: "w-4 h-4"
 
-  def compact_email_icon(assigns) do
-    ~H"""
-    <span :if={@status == "not_sent"} class={["text-gray-400", @class]} title="Email not sent">
-      📭
-    </span>
-    <span :if={@status == "sending"} class={["text-blue-500", @class]} title="Sending email">
-      ⏳
-    </span>
-    <span :if={@status == "sent"} class={["text-green-500", @class]} title="Email sent">
-      📧
-    </span>
-    <span :if={@status == "delivered"} class={["text-green-600", @class]} title="Email delivered">
-      ✅
-    </span>
-    <span :if={@status == "failed"} class={["text-red-500", @class]} title="Email failed">
-      ❌
-    </span>
-    <span :if={@status == "bounced"} class={["text-orange-500", @class]} title="Email bounced">
-      ⚠️
-    </span>
-    <span :if={@status == "retrying"} class={["text-yellow-500", @class]} title="Retrying email">
-      🔄
-    </span>
-    <span :if={@status not in ["not_sent", "sending", "sent", "delivered", "failed", "bounced", "retrying"]} class={["text-gray-400", @class]} title="Unknown status">
-      ❓
-    </span>
-    """
-  end
 
   # Private helper functions
 
