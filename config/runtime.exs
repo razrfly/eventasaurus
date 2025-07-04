@@ -20,7 +20,11 @@ if System.get_env("PHX_SERVER") do
   config :eventasaurus, EventasaurusWeb.Endpoint, server: true
 end
 
-
+# Configure Stripe for all environments
+# This ensures the configuration is loaded after .env files are processed
+config :stripity_stripe,
+  api_key: System.get_env("STRIPE_SECRET_KEY"),
+  connect_client_id: System.get_env("STRIPE_CONNECT_CLIENT_ID")
 
 if config_env() == :prod do
   # Validate required Supabase environment variables are set
@@ -151,12 +155,6 @@ if config_env() == :prod do
   # Configure base URL for email links
   config :eventasaurus, :base_url, "https://eventasaur.us"
 
-  # Configure Stripe for production
-  # Set the following environment variables:
-  # - STRIPE_SECRET_KEY: Your Stripe secret key
-  # - STRIPE_CONNECT_CLIENT_ID: Your Stripe Connect client ID
-  config :stripity_stripe,
-    api_key: System.get_env("STRIPE_SECRET_KEY"),
-    connect_client_id: System.get_env("STRIPE_CONNECT_CLIENT_ID")
+  # Stripe configuration is now handled globally above (lines 25-27)
 
 end
