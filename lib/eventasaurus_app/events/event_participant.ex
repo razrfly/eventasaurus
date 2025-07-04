@@ -34,6 +34,131 @@ defmodule EventasaurusApp.Events.EventParticipant do
     |> validate_invitation_fields()
   end
 
+  # Email status tracking functions
+
+  @doc """
+  Gets the email status for a participant.
+  Returns email status information from the metadata field.
+  """
+  def get_email_status(%__MODULE__{metadata: metadata}) when is_map(metadata) do
+    %{
+      status: Map.get(metadata, "email_status", "not_sent"),
+      last_sent_at: Map.get(metadata, "email_last_sent_at"),
+      attempts: Map.get(metadata, "email_attempts", 0),
+      last_error: Map.get(metadata, "email_last_error"),
+      delivery_id: Map.get(metadata, "email_delivery_id")
+    }
+  end
+  def get_email_status(_), do: %{status: "not_sent", attempts: 0}
+
+  @doc """
+  Updates the email status in the participant's metadata.
+  """
+  def update_email_status(%__MODULE__{} = participant, status, attrs \\ %{}) do
+    current_metadata = participant.metadata || %{}
+    timestamp = DateTime.utc_now() |> DateTime.to_iso8601()
+
+    email_metadata = %{
+      "email_status" => status,
+      "email_last_updated_at" => timestamp,
+      "email_attempts" => Map.get(current_metadata, "email_attempts", 0) + 1
+    }
+
+    # Add optional attributes like error message, delivery ID
+    email_metadata = Map.merge(email_metadata, attrs)
+
+    # If status is "sent", update the sent timestamp
+    email_metadata = if status == "sent" do
+      Map.put(email_metadata, "email_last_sent_at", timestamp)
+    else
+      email_metadata
+    end
+
+    updated_metadata = Map.merge(current_metadata, email_metadata)
+
+    %{participant | metadata: updated_metadata}
+  end
+
+  @doc """
+  Marks an email as sent with optional delivery ID.
+  """
+  def mark_email_sent(%__MODULE__{} = participant, delivery_id \\ nil) do
+    attrs = if delivery_id, do: %{"email_delivery_id" => delivery_id}, else: %{}
+    update_email_status(participant, "sent", attrs)
+  end
+
+  @doc """
+  Marks an email as failed with error message.
+  """
+  def mark_email_failed(%__MODULE__{} = participant, error_message) do
+    attrs = %{"email_last_error" => error_message}
+    update_email_status(participant, "failed", attrs)
+  end
+
+  @doc """
+  Marks an email as delivered (for webhook updates).
+  """
+  def mark_email_delivered(%__MODULE__{} = participant) do
+    update_email_status(participant, "delivered")
+  end
+
+  @doc """
+  Marks an email as bounced (for webhook updates).
+  """
+  def mark_email_bounced(%__MODULE__{} = participant, bounce_reason \\ nil) do
+    attrs = if bounce_reason, do: %{"email_bounce_reason" => bounce_reason}, else: %{}
+    update_email_status(participant, "bounced", attrs)
+  end
+
+  @doc """
+  Checks if an email can be retried based on attempt count and last failure.
+  """
+  def can_retry_email?(%__MODULE__{} = participant, max_attempts \\ 3) do
+    email_status = get_email_status(participant)
+
+    email_status.status in ["failed", "bounced"] and
+    email_status.attempts < max_attempts
+  end
+
+  @doc """
+  Gets participants that need email retry.
+  """
+  def get_retry_candidates(event_id, max_attempts \\ 3) do
+    from(ep in __MODULE__,
+      where: ep.event_id == ^event_id,
+      where: fragment("(?->>'email_status') IN ('failed', 'bounced')", ep.metadata),
+      where: fragment("COALESCE((?->>'email_attempts')::integer, 0) < ?", ep.metadata, ^max_attempts),
+      preload: [:user, :invited_by_user]
+    )
+  end
+
+  @doc """
+  Gets participants by email status.
+  """
+  def by_email_status(query \\ __MODULE__, status) do
+    from(ep in query,
+      where: fragment("(?->>'email_status') = ?", ep.metadata, ^status)
+    )
+  end
+
+  @doc """
+  Gets participants without email status (never sent).
+  """
+  def without_email_status(query \\ __MODULE__) do
+    from(ep in query,
+      where: fragment("(?->>'email_status') IS NULL", ep.metadata)
+    )
+  end
+
+  @doc """
+  Gets participants with failed email delivery.
+  """
+  def with_failed_emails(query \\ __MODULE__) do
+    from(ep in query,
+      where: fragment("(?->>'email_status') IN ('failed', 'bounced')", ep.metadata)
+    )
+  end
+
   defp validate_not_event_user(changeset) do
     event_id = get_field(changeset, :event_id)
     user_id = get_field(changeset, :user_id)

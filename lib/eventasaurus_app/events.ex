@@ -2581,32 +2581,87 @@ defmodule EventasaurusApp.Events do
         event_with_venue ->
           guest_name = get_user_display_name(user)
 
-          case Eventasaurus.Emails.send_guest_invitation(
-            user.email,
-            guest_name,
-            event_with_venue,
-            invitation_message,
-            organizer
-          ) do
-            {:ok, _response} ->
-              require Logger
-              Logger.info("Guest invitation email sent successfully",
-                user_id: user.id,
-                event_id: event.id,
-                organizer_id: organizer.id
-              )
+          # Get the participant record to update email status
+          participant = get_event_participant_by_event_and_user(event_with_venue, user)
 
-            {:error, reason} ->
-              require Logger
-              Logger.error("Failed to send guest invitation email",
-                user_id: user.id,
-                event_id: event.id,
-                organizer_id: organizer.id,
-                reason: inspect(reason)
-              )
+          if participant do
+            # Mark email as being sent
+            updated_participant = EventParticipant.update_email_status(participant, "sending")
+
+            case update_event_participant(participant, %{metadata: updated_participant.metadata}) do
+              {:ok, _} ->
+                # Attempt to send the email
+                case Eventasaurus.Emails.send_guest_invitation(
+                  user.email,
+                  guest_name,
+                  event_with_venue,
+                  invitation_message,
+                  organizer
+                ) do
+                  {:ok, response} ->
+                    require Logger
+                    Logger.info("Guest invitation email sent successfully",
+                      user_id: user.id,
+                      event_id: event.id,
+                      organizer_id: organizer.id
+                    )
+
+                    # Mark email as sent successfully
+                    delivery_id = extract_delivery_id(response)
+                    sent_participant = EventParticipant.mark_email_sent(participant, delivery_id)
+                    update_event_participant(participant, %{metadata: sent_participant.metadata})
+
+                  {:error, reason} ->
+                    require Logger
+                    Logger.error("Failed to send guest invitation email",
+                      user_id: user.id,
+                      event_id: event.id,
+                      organizer_id: organizer.id,
+                      reason: inspect(reason)
+                    )
+
+                    # Mark email as failed
+                    error_message = format_email_error(reason)
+                    failed_participant = EventParticipant.mark_email_failed(participant, error_message)
+                    update_event_participant(participant, %{metadata: failed_participant.metadata})
+                end
+
+              {:error, changeset_error} ->
+                require Logger
+                Logger.error("Failed to update participant email status",
+                  user_id: user.id,
+                  event_id: event.id,
+                  reason: inspect(changeset_error)
+                )
+            end
+          else
+            require Logger
+            Logger.error("Cannot find participant record for email tracking",
+              user_id: user.id,
+              event_id: event.id
+            )
           end
       end
     end)
+  end
+
+  # Helper function to extract delivery ID from email service response
+  defp extract_delivery_id(response) do
+    case response do
+      %{id: id} -> id
+      %{"id" => id} -> id
+      _ -> nil
+    end
+  end
+
+  # Helper function to format error messages for storage
+  defp format_email_error(reason) do
+    case reason do
+      %{message: message} -> message
+      %{"message" => message} -> message
+      error when is_binary(error) -> error
+      error -> inspect(error)
+    end
   end
 
   # Get event with venue preloaded for email templates
@@ -2741,6 +2796,320 @@ defmodule EventasaurusApp.Events do
     end
 
     Repo.all(query)
+  end
+
+  # Email Status Query Helpers
+
+  @doc """
+  Lists event participants filtered by email status.
+  """
+  def list_event_participants_by_email_status(%Event{} = event, status) do
+    query = from ep in EventParticipant,
+            where: ep.event_id == ^event.id,
+            preload: [:user, :invited_by_user]
+
+    query
+    |> EventParticipant.by_email_status(status)
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists event participants with failed emails.
+  """
+  def list_event_participants_with_failed_emails(%Event{} = event) do
+    query = from ep in EventParticipant,
+            where: ep.event_id == ^event.id,
+            preload: [:user, :invited_by_user]
+
+    query
+    |> EventParticipant.with_failed_emails()
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists event participants without any email status (never sent).
+  """
+  def list_event_participants_without_email_status(%Event{} = event) do
+    query = from ep in EventParticipant,
+            where: ep.event_id == ^event.id,
+            preload: [:user, :invited_by_user]
+
+    query
+    |> EventParticipant.without_email_status()
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets participants that can be retried for email delivery.
+  """
+  def list_email_retry_candidates(%Event{} = event, max_attempts \\ 3) do
+    EventParticipant.get_retry_candidates(event.id, max_attempts)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets email delivery statistics for an event.
+  """
+  def get_email_delivery_stats(%Event{} = event) do
+    base_query = from ep in EventParticipant,
+                 where: ep.event_id == ^event.id
+
+    stats = %{
+      total_participants: Repo.aggregate(base_query, :count, :id),
+      not_sent: 0,
+      sending: 0,
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      bounced: 0
+    }
+
+    # Get counts for each status
+    status_counts = from(ep in base_query,
+      select: {
+        fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata),
+        count(ep.id)
+      },
+      group_by: fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata)
+    )
+    |> Repo.all()
+    |> Map.new()
+
+    # Merge the counts into our stats map
+    Map.merge(stats, status_counts)
+  end
+
+  @doc """
+  Gets participants with detailed email status information for an event.
+  """
+  def get_event_participant_email_details(%Event{} = event, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 100)
+    status_filter = Keyword.get(opts, :email_status)
+
+    query = from ep in EventParticipant,
+            join: u in User, on: ep.user_id == u.id,
+            where: ep.event_id == ^event.id,
+            select: %{
+              participant_id: ep.id,
+              user_id: u.id,
+              name: u.name,
+              email: u.email,
+              username: u.username,
+              status: ep.status,
+              role: ep.role,
+              invited_at: ep.invited_at,
+              email_status: fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata),
+              email_last_sent_at: fragment("?->>'email_last_sent_at'", ep.metadata),
+              email_attempts: fragment("COALESCE((?->>'email_attempts')::integer, 0)", ep.metadata),
+              email_last_error: fragment("?->>'email_last_error'", ep.metadata),
+              email_delivery_id: fragment("?->>'email_delivery_id'", ep.metadata),
+              metadata: ep.metadata,
+              inserted_at: ep.inserted_at
+            },
+            order_by: [desc: ep.inserted_at]
+
+    # Apply email status filter if provided
+    query = if status_filter do
+      from ep in query,
+           where: fragment("COALESCE(?->>'email_status', 'not_sent') = ?", ep.metadata, ^status_filter)
+    else
+      query
+    end
+
+    query
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  # Email Retry Logic
+
+  @doc """
+  Retries failed emails for a specific event.
+
+  Options:
+  - max_attempts: Maximum retry attempts (default: 3)
+  - batch_size: Number of emails to retry in one batch (default: 10)
+  - delay_seconds: Delay between retries in seconds (default: 300, 5 minutes)
+  """
+  def retry_failed_emails(%Event{} = event, opts \\ []) do
+    max_attempts = Keyword.get(opts, :max_attempts, 3)
+    batch_size = Keyword.get(opts, :batch_size, 10)
+    delay_seconds = Keyword.get(opts, :delay_seconds, 300)
+
+    # Get candidates for retry
+    candidates = list_email_retry_candidates(event, max_attempts)
+                |> filter_by_retry_delay(delay_seconds)
+                |> Enum.take(batch_size)
+
+    results = %{
+      attempted: 0,
+      successful: 0,
+      failed: 0,
+      errors: []
+    }
+
+    if length(candidates) > 0 do
+      Logger.info("Retrying failed emails for event #{event.id}, #{length(candidates)} candidates")
+
+      Enum.reduce(candidates, results, fn participant, acc ->
+        case retry_single_email(participant, event) do
+          :ok ->
+            %{acc | attempted: acc.attempted + 1, successful: acc.successful + 1}
+          {:error, reason} ->
+            error_msg = "Failed to retry email for user #{participant.user_id}: #{format_email_error(reason)}"
+            %{acc |
+              attempted: acc.attempted + 1,
+              failed: acc.failed + 1,
+              errors: [error_msg | acc.errors]
+            }
+        end
+      end)
+    else
+      Logger.info("No email retry candidates found for event #{event.id}")
+      results
+    end
+  end
+
+  @doc """
+  Retries a single failed email for a participant.
+  """
+  def retry_single_email(%EventParticipant{} = participant, %Event{} = event) do
+    # Check if retry is allowed
+    unless EventParticipant.can_retry_email?(participant) do
+      {:error, "Maximum retry attempts exceeded"}
+    else
+
+    # Load event with venue and get organizer info
+    case get_event_with_venue(event.id) do
+      nil ->
+        {:error, "Event not found"}
+
+      event_with_venue ->
+        organizer = get_event_organizer(event_with_venue)
+        guest_name = get_user_display_name(participant.user)
+        invitation_message = participant.invitation_message || ""
+
+        # Mark as retrying
+        retrying_participant = EventParticipant.update_email_status(participant, "retrying")
+
+        case update_event_participant(participant, %{metadata: retrying_participant.metadata}) do
+          {:ok, _} ->
+            # Attempt to send the email
+            case Eventasaurus.Emails.send_guest_invitation(
+              participant.user.email,
+              guest_name,
+              event_with_venue,
+              invitation_message,
+              organizer
+            ) do
+              {:ok, response} ->
+                Logger.info("Email retry successful for participant #{participant.id}")
+
+                # Mark as sent
+                delivery_id = extract_delivery_id(response)
+                sent_participant = EventParticipant.mark_email_sent(participant, delivery_id)
+                update_event_participant(participant, %{metadata: sent_participant.metadata})
+                :ok
+
+              {:error, reason} ->
+                Logger.error("Email retry failed for participant #{participant.id}: #{inspect(reason)}")
+
+                # Mark as failed again
+                error_message = format_email_error(reason)
+                failed_participant = EventParticipant.mark_email_failed(participant, error_message)
+                update_event_participant(participant, %{metadata: failed_participant.metadata})
+                {:error, reason}
+            end
+
+                     {:error, changeset_error} ->
+             {:error, changeset_error}
+         end
+    end
+    end
+  end
+
+  @doc """
+  Schedules email retries for all events with failed emails.
+  This function can be called from a background job.
+  """
+  def schedule_email_retries(opts \\ []) do
+    max_attempts = Keyword.get(opts, :max_attempts, 3)
+    batch_size_per_event = Keyword.get(opts, :batch_size_per_event, 5)
+
+    # Find events with failed emails
+    events_with_failed_emails = get_events_with_failed_emails(max_attempts)
+
+    Logger.info("Found #{length(events_with_failed_emails)} events with failed emails to retry")
+
+    results = Enum.map(events_with_failed_emails, fn event ->
+      result = retry_failed_emails(event,
+        max_attempts: max_attempts,
+        batch_size: batch_size_per_event
+      )
+
+      {event.id, result}
+    end)
+
+    # Log summary
+    total_attempted = results |> Enum.map(fn {_, result} -> result.attempted end) |> Enum.sum()
+    total_successful = results |> Enum.map(fn {_, result} -> result.successful end) |> Enum.sum()
+    total_failed = results |> Enum.map(fn {_, result} -> result.failed end) |> Enum.sum()
+
+    Logger.info("Email retry summary: #{total_attempted} attempted, #{total_successful} successful, #{total_failed} failed")
+
+    %{
+      events_processed: length(events_with_failed_emails),
+      total_attempted: total_attempted,
+      total_successful: total_successful,
+      total_failed: total_failed,
+      results: Map.new(results)
+    }
+  end
+
+  # Private helper functions for retry logic
+
+  defp filter_by_retry_delay(participants, delay_seconds) do
+    cutoff_time = DateTime.utc_now() |> DateTime.add(-delay_seconds, :second)
+
+    Enum.filter(participants, fn participant ->
+      email_status = EventParticipant.get_email_status(participant)
+
+      case email_status.last_sent_at do
+        nil -> true
+        timestamp_string ->
+          case DateTime.from_iso8601(timestamp_string) do
+            {:ok, timestamp, _} -> DateTime.compare(timestamp, cutoff_time) == :lt
+            _ -> true  # If we can't parse the timestamp, allow retry
+          end
+      end
+    end)
+  end
+
+  defp get_events_with_failed_emails(max_attempts) do
+    # Find events that have participants with failed emails within retry limits
+    query = from e in Event,
+            join: ep in EventParticipant, on: e.id == ep.event_id,
+            where: fragment("(?->>'email_status') IN ('failed', 'bounced')", ep.metadata),
+            where: fragment("COALESCE((?->>'email_attempts')::integer, 0) < ?", ep.metadata, ^max_attempts),
+            group_by: e.id,
+            select: e
+
+    Repo.all(query)
+  end
+
+  defp get_event_organizer(%Event{users: users}) when is_list(users) do
+    # Return the first organizer/admin user
+    List.first(users)
+  end
+  defp get_event_organizer(%Event{} = event) do
+    # If users aren't preloaded, load the first organizer
+    query = from eu in EventUser,
+            join: u in User, on: eu.user_id == u.id,
+            where: eu.event_id == ^event.id,
+            limit: 1,
+            select: u
+
+    Repo.one(query)
   end
 
 end
