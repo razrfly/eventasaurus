@@ -263,14 +263,45 @@ defmodule EventasaurusApp.EventStateMachine do
 
   @doc """
   Checks if an event has threshold-based ticketing enabled and the threshold has been met.
+
+  Handles three threshold types:
+  - "attendee_count": Checks if attendee count meets threshold_count
+  - "revenue": Checks if revenue meets threshold_revenue_cents
+  - "both": Checks if both attendee count and revenue meet their respective thresholds
   """
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_count: threshold_count}) when is_nil(threshold_count), do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_count: threshold_count}) when threshold_count <= 0, do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{} = event) do
-    # For now, we'll check if the event has enough attendees
-    # This would typically involve counting confirmed attendees/purchases
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "attendee_count", threshold_count: threshold_count}) when is_nil(threshold_count), do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "attendee_count", threshold_count: threshold_count}) when threshold_count <= 0, do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "attendee_count"} = event) do
     current_count = get_current_attendee_count(event)
     current_count >= event.threshold_count
+  end
+
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "revenue", threshold_revenue_cents: threshold_revenue_cents}) when is_nil(threshold_revenue_cents), do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "revenue", threshold_revenue_cents: threshold_revenue_cents}) when threshold_revenue_cents <= 0, do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "revenue"} = event) do
+    current_revenue = get_current_revenue(event)
+    current_revenue >= event.threshold_revenue_cents
+  end
+
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_count: threshold_count}) when is_nil(threshold_count), do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_count: threshold_count}) when threshold_count <= 0, do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_revenue_cents: threshold_revenue_cents}) when is_nil(threshold_revenue_cents), do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_revenue_cents: threshold_revenue_cents}) when threshold_revenue_cents <= 0, do: false
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both"} = event) do
+    current_count = get_current_attendee_count(event)
+    current_revenue = get_current_revenue(event)
+    current_count >= event.threshold_count && current_revenue >= event.threshold_revenue_cents
+  end
+
+  # Default case for backward compatibility or unknown threshold types
+  def threshold_met?(%EventasaurusApp.Events.Event{} = event) do
+    # Default to attendee_count behavior for backward compatibility
+    if event.threshold_count && event.threshold_count > 0 do
+      current_count = get_current_attendee_count(event)
+      current_count >= event.threshold_count
+    else
+      false
+    end
   end
 
   @doc """
@@ -282,16 +313,42 @@ defmodule EventasaurusApp.EventStateMachine do
     is_ticketed == true
   end
 
-  @doc """
+    @doc """
   Gets the current attendee count for an event.
 
-  This would typically query the database for confirmed attendees,
-  but for now returns 0 as a placeholder.
+  Counts confirmed ticket holders for the event.
   """
-  def get_current_attendee_count(%EventasaurusApp.Events.Event{} = _event) do
-    # Placeholder: In a real implementation, this would query
-    # the attendees/registrations table for confirmed participants
-    0
+  def get_current_attendee_count(%EventasaurusApp.Events.Event{} = event) do
+    alias EventasaurusApp.Events.EventParticipant
+    alias EventasaurusApp.Repo
+    import Ecto.Query
+
+    from(p in EventParticipant,
+      where: p.event_id == ^event.id and
+             p.role == :ticket_holder and
+             p.status == :confirmed_with_order,
+      select: count(p.id)
+    )
+    |> Repo.one()
+    |> Kernel.||(0)  # Return 0 if no participants found
+  end
+
+  @doc """
+  Gets the current revenue for an event.
+
+  Sums the total_cents from all confirmed orders for the event.
+  """
+  def get_current_revenue(%EventasaurusApp.Events.Event{} = event) do
+    alias EventasaurusApp.Events.Order
+    alias EventasaurusApp.Repo
+    import Ecto.Query
+
+    from(o in Order,
+      where: o.event_id == ^event.id and o.status == "confirmed",
+      select: sum(o.total_cents)
+    )
+    |> Repo.one()
+    |> Kernel.||(0)  # Return 0 if no orders found
   end
 
   @doc """
