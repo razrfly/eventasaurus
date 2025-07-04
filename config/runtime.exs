@@ -27,6 +27,9 @@ if config_env() == :prod do
   for var <- ~w(SUPABASE_URL SUPABASE_API_KEY SUPABASE_DATABASE_URL) do
     System.fetch_env!(var)
   end
+
+  # Validate required email service environment variables
+  System.fetch_env!("RESEND_API_KEY")
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want

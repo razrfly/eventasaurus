@@ -8,6 +8,24 @@ defmodule Eventasaurus.Emails do
 
   @from_email {"Eventasaurus", "invitations@eventasaur.us"}
 
+  # HTML escaping helper to prevent XSS attacks
+  defp html_escape(nil), do: ""
+  defp html_escape(text) when is_binary(text) do
+    text
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
+    |> String.replace("\"", "&quot;")
+    |> String.replace("'", "&#39;")
+  end
+  defp html_escape(text), do: html_escape(to_string(text))
+
+  # Email validation helper to prevent injection attacks
+  defp valid_email?(email) when is_binary(email) do
+    email =~ ~r/^[^\s]+@[^\s]+\.[^\s]+$/
+  end
+  defp valid_email?(_), do: false
+
   @doc """
   Creates a guest invitation email using Swoosh.Email.
 
@@ -22,6 +40,11 @@ defmodule Eventasaurus.Emails do
   - `Swoosh.Email` struct ready to be sent
   """
   def guest_invitation_email(to_email, guest_name, event, invitation_message, organizer) do
+    # Validate email format
+    unless valid_email?(to_email) do
+      raise ArgumentError, "Invalid email address: #{to_email}"
+    end
+
     subject = "You're invited to #{event.title}"
 
     new()
@@ -76,7 +99,7 @@ defmodule Eventasaurus.Emails do
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>#{event.title} - Invitation</title>
+        <title>#{html_escape(event.title)} - Invitation</title>
         <style>
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -185,18 +208,18 @@ defmodule Eventasaurus.Emails do
         <div class="email-container">
             <div class="header">
                 <h1>🎉 You're Invited!</h1>
-                <p>#{get_organizer_name(organizer)} has invited you to an event</p>
+                <p>#{html_escape(get_organizer_name(organizer))} has invited you to an event</p>
             </div>
 
             <div class="content">
-                <p>Hi #{guest_name || "there"},</p>
+                <p>Hi #{html_escape(guest_name || "there")},</p>
 
                 #{render_personal_message(invitation_message)}
 
                 <p>You've been invited to join:</p>
 
                 <div class="event-details">
-                    <h2>#{event.title}</h2>
+                    <h2>#{html_escape(event.title)}</h2>
                     #{render_event_description(event)}
 
                     <p><strong>📅 Date:</strong> #{format_event_date(event)}</p>
@@ -215,7 +238,7 @@ defmodule Eventasaurus.Emails do
                 <p>We're excited to have you join us!</p>
 
                 <p>Best regards,<br>
-                #{get_organizer_name(organizer)}<br>
+                #{html_escape(get_organizer_name(organizer))}<br>
                 <strong>The Eventasaurus Team</strong></p>
             </div>
 
@@ -269,7 +292,7 @@ defmodule Eventasaurus.Emails do
   defp render_personal_message(message) when is_binary(message) and message != "" do
     """
     <div class="personal-message">
-      "#{message}"
+      "#{html_escape(message)}"
     </div>
     """
   end
@@ -285,7 +308,7 @@ defmodule Eventasaurus.Emails do
 
   defp render_event_description(event) do
     if event.description && event.description != "" do
-      "<p>#{event.description}</p>"
+      "<p>#{html_escape(event.description)}</p>"
     else
       ""
     end
@@ -302,9 +325,9 @@ defmodule Eventasaurus.Emails do
   defp render_event_location(event) do
     case get_venue_info(event) do
       {name, address} when is_binary(name) ->
-        venue_html = "<p><strong>📍 Location:</strong> #{name}</p>"
+        venue_html = "<p><strong>📍 Location:</strong> #{html_escape(name)}</p>"
         address_html = if address && address != "" do
-          "<p style=\"margin-left: 20px; color: #666;\">#{address}</p>"
+          "<p style=\"margin-left: 20px; color: #666;\">#{html_escape(address)}</p>"
         else
           ""
         end
@@ -386,7 +409,13 @@ defmodule Eventasaurus.Emails do
   end
 
   defp build_event_url(event) do
-    base_url = Application.get_env(:eventasaurus, :base_url) || "https://eventasaur.us"
+    base_url = Application.get_env(:eventasaurus, :base_url) ||
+      case Application.get_env(:eventasaurus, :environment) do
+        :prod -> "https://eventasaur.us"
+        :dev -> "http://localhost:4000"
+        :test -> "http://localhost:4002"
+        _ -> "http://localhost:4000"
+      end
     "#{base_url}/events/#{event.slug}"
   end
 end
