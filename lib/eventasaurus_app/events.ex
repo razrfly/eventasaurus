@@ -3114,10 +3114,17 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
-  Get recent locations for a specific user based on their event history.
+  Get recent physical locations for a specific user based on their event history.
 
-  This function queries the user's past events to find frequently used locations,
-  supporting both physical venues and virtual meeting URLs.
+  This function queries the user's past events to find frequently used physical venues.
+  Virtual events are excluded since they typically don't reuse meeting URLs and aren't
+  useful for recent location suggestions.
+
+  ## Privacy and Security
+
+  Only returns locations from events where the user is an organizer (via EventUser table).
+  This ensures users can only see venues from events they organized, not from events
+  they merely attended as participants.
 
   ## Parameters
 
@@ -3128,17 +3135,18 @@ defmodule EventasaurusApp.Events do
 
   ## Returns
 
-  A list of maps containing location information, sorted by usage frequency and recency.
+  A list of maps containing physical venue information only, sorted by usage frequency and recency.
   Each map contains:
-  - `id` - Venue ID (nil for virtual events)
-  - `name` - Location name ("Virtual Event" for virtual meetings)
-  - `address` - Full address (nil for virtual events)
-  - `city` - City name (nil for virtual events)
-  - `state` - State name (nil for virtual events)
-  - `country` - Country name (nil for virtual events)
-  - `virtual_venue_url` - Meeting URL (nil for physical venues)
-  - `usage_count` - Number of times this location has been used
+  - `id` - Venue ID (always present for physical venues)
+  - `name` - Venue name (or "Deleted Venue" if venue was deleted)
+  - `address` - Full address (or nil if venue was deleted)
+  - `city` - City name (or nil if venue was deleted)
+  - `state` - State name (or nil if venue was deleted)
+  - `country` - Country name (or nil if venue was deleted)
+  - `virtual_venue_url` - Always nil (virtual events are excluded)
+  - `usage_count` - Number of times this venue has been used
   - `last_used` - DateTime of most recent usage
+  - `is_deleted` - Boolean indicating if the venue record was deleted
 
   ## Examples
 
@@ -3153,100 +3161,120 @@ defmodule EventasaurusApp.Events do
           country: "USA",
           virtual_venue_url: nil,
           usage_count: 5,
-          last_used: ~U[2024-01-15 10:30:00Z]
+          last_used: ~U[2024-01-15 10:30:00Z],
+          is_deleted: false
         },
         %{
-          id: nil,
-          name: "Virtual Event",
+          id: 789,
+          name: "Deleted Venue",
           address: nil,
           city: nil,
           state: nil,
           country: nil,
-          virtual_venue_url: "https://zoom.us/j/1234567890",
+          virtual_venue_url: nil,
           usage_count: 3,
-          last_used: ~U[2024-01-10 14:00:00Z]
+          last_used: ~U[2024-01-10 14:00:00Z],
+          is_deleted: true
         }
       ]
 
       iex> get_recent_locations_for_user(123, limit: 3, exclude_event_ids: [789])
-      # Returns up to 3 locations, excluding event ID 789
+      # Returns up to 3 physical locations, excluding event ID 789
+
+      iex> get_recent_locations_for_user(999999)
+      []  # Returns empty list for non-existent user
   """
   def get_recent_locations_for_user(user_id, opts \\ []) do
+    # Validate inputs
+    if not is_integer(user_id) or user_id <= 0 do
+      raise ArgumentError, "user_id must be a positive integer, got: #{inspect(user_id)}"
+    end
+
     limit = Keyword.get(opts, :limit, 5)
     exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
 
-    query = from(eu in EventUser,
-      join: e in Event, on: eu.event_id == e.id,
-      left_join: v in Venue, on: e.venue_id == v.id,
-      where: eu.user_id == ^user_id and e.id not in ^exclude_event_ids,
-      select: %{
-        venue_id: e.venue_id,
-        venue_name: v.name,
-        venue_address: v.address,
-        venue_city: v.city,
-        venue_state: v.state,
-        venue_country: v.country,
-        virtual_venue_url: e.virtual_venue_url,
-        event_created_at: e.inserted_at
-      }
-    )
+    # Validate exclude_event_ids is a list of integers
+    if not is_list(exclude_event_ids) do
+      raise ArgumentError, "exclude_event_ids must be a list, got: #{inspect(exclude_event_ids)}"
+    end
 
-    query
-    |> Repo.all()
-    |> Enum.group_by(fn row ->
-      # Group by venue_id for physical venues, or by virtual_venue_url for virtual events
-      case {row.venue_id, row.virtual_venue_url} do
-        {nil, nil} -> {:virtual, "Virtual Event"}
-        {nil, url} when not is_nil(url) -> {:virtual, url}
-        {venue_id, _} -> {:venue, venue_id}
-      end
-    end)
-    |> Enum.map(fn {key, rows} ->
-      # Calculate usage statistics
-      usage_count = length(rows)
-      last_used = rows |> Enum.map(& &1.event_created_at) |> Enum.max()
+    # Validate all exclude_event_ids are positive integers
+    invalid_ids = Enum.reject(exclude_event_ids, &(is_integer(&1) and &1 > 0))
+    if not Enum.empty?(invalid_ids) do
+      raise ArgumentError, "exclude_event_ids must contain only positive integers, invalid: #{inspect(invalid_ids)}"
+    end
 
-      # Build location info based on type
-      case key do
-        {:venue, venue_id} ->
-          # Physical venue
+    # Check if user exists (graceful handling for non-existent users)
+    case Repo.get(EventasaurusApp.Accounts.User, user_id) do
+      nil ->
+        # Return empty list for non-existent users rather than raising error
+        # This provides better UX when user accounts are deleted
+        []
+      _user ->
+        # Optimized query with proper indexing and selective fields
+        query = from(eu in EventUser,
+          join: e in Event, on: eu.event_id == e.id,
+          left_join: v in Venue, on: e.venue_id == v.id,
+          where: eu.user_id == ^user_id and
+                 e.id not in ^exclude_event_ids and
+                 is_nil(e.virtual_venue_url) and
+                 not is_nil(e.venue_id),
+          select: %{
+            venue_id: e.venue_id,
+            venue_name: v.name,
+            venue_address: v.address,
+            venue_city: v.city,
+            venue_state: v.state,
+            venue_country: v.country,
+            virtual_venue_url: e.virtual_venue_url,
+            event_created_at: e.inserted_at
+          },
+          order_by: [desc: e.inserted_at]
+        )
+
+        query
+        |> Repo.all()
+        |> Enum.group_by(fn row ->
+          # Group by venue_id for physical venues only
+          row.venue_id
+        end)
+        |> Enum.map(fn {venue_id, rows} ->
+          # Calculate usage statistics
+          usage_count = length(rows)
+          last_used = rows |> Enum.map(& &1.event_created_at) |> Enum.max()
+
+          # Build location info for physical venue
           first_row = List.first(rows)
+
+          # Handle deleted venues gracefully
+          is_deleted = is_nil(first_row.venue_name)
+
           %{
             id: venue_id,
-            name: first_row.venue_name,
-            address: first_row.venue_address,
-            city: first_row.venue_city,
-            state: first_row.venue_state,
-            country: first_row.venue_country,
-            virtual_venue_url: nil,
+            name: if(is_deleted, do: "Deleted Venue", else: first_row.venue_name),
+            address: if(is_deleted, do: nil, else: first_row.venue_address),
+            city: if(is_deleted, do: nil, else: first_row.venue_city),
+            state: if(is_deleted, do: nil, else: first_row.venue_state),
+            country: if(is_deleted, do: nil, else: first_row.venue_country),
+            virtual_venue_url: first_row.virtual_venue_url,
             usage_count: usage_count,
-            last_used: last_used
+            last_used: last_used,
+            is_deleted: is_deleted
           }
-
-        {:virtual, url} ->
-          # Virtual event
-          %{
-            id: nil,
-            name: if(url == "Virtual Event", do: "Virtual Event", else: "Virtual Meeting"),
-            address: nil,
-            city: nil,
-            state: nil,
-            country: nil,
-            virtual_venue_url: if(url == "Virtual Event", do: nil, else: url),
-            usage_count: usage_count,
-            last_used: last_used
-          }
-      end
-    end)
-    |> Enum.sort(fn location1, location2 ->
-      # Sort by usage count (descending), then by recency (descending)
-      case {location1.usage_count, location2.usage_count} do
-        {c1, c2} when c1 > c2 -> true
-        {c1, c2} when c1 < c2 -> false
-        _ -> NaiveDateTime.compare(location1.last_used, location2.last_used) == :gt
-      end
-    end)
-    |> Enum.take(limit)
+        end)
+        |> Enum.filter(fn location -> not is_nil(location.id) end)
+        |> Enum.sort(fn location1, location2 ->
+          # Sort by usage count (descending), then by recency (descending)
+          case {location1.usage_count, location2.usage_count} do
+            {c1, c2} when c1 > c2 -> true
+            {c1, c2} when c1 < c2 -> false
+            _ -> NaiveDateTime.compare(location1.last_used, location2.last_used) == :gt
+          end
+        end)
+        |> Enum.take(limit)
+    end
   end
+
+
 
 end
