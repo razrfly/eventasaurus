@@ -349,11 +349,17 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   Uses StripeCurrencyService when available, falls back to hardcoded list.
   """
   def supported_currency_codes do
-    case StripeCurrencyService.get_currencies() do
-      currencies when is_list(currencies) and length(currencies) > 0 ->
-        currencies |> Enum.map(&String.downcase/1)
+    try do
+      case StripeCurrencyService.get_currencies() do
+        currencies when is_list(currencies) and length(currencies) > 0 ->
+          currencies |> Enum.map(&String.downcase/1)
+        _ ->
+          # Fallback to existing hardcoded list
+          fallback_currency_codes()
+      end
+    rescue
       _ ->
-        # Fallback to existing hardcoded list
+        # Fallback if StripeCurrencyService raises any error
         fallback_currency_codes()
     end
   end
