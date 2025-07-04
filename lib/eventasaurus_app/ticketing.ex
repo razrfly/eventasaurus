@@ -835,13 +835,23 @@ defmodule EventasaurusApp.Ticketing do
 
     # Find the event organizer (assuming the first user is the organizer)
     # In a more complex system, you might have a specific organizer field
-    case event.users do
-      [organizer | _] ->
+    # Query for the first organizer directly via EventUser join table
+    # This is more efficient and handles the case where there might be no organizer role
+    organizer_query = from(u in EventasaurusApp.Accounts.User,
+      join: eu in EventasaurusApp.Events.EventUser,
+      on: u.id == eu.user_id,
+      where: eu.event_id == ^event.id,
+      limit: 1,
+      select: u
+    )
+
+    case Repo.one(organizer_query) do
+      %EventasaurusApp.Accounts.User{} = organizer ->
         case EventasaurusApp.Stripe.get_connect_account(organizer.id) do
           nil -> {:error, :no_stripe_account}
           connect_account -> {:ok, connect_account}
         end
-      [] ->
+      nil ->
         {:error, :no_organizer}
     end
   end

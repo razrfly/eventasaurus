@@ -71,6 +71,7 @@ defmodule Eventasaurus.MixProject do
 
       # Mocking library for external services in tests
       {:mox, "~> 1.0", only: :test},
+      {:mock, "~> 0.3.0", only: :test},
 
       # Browser automation for end-to-end testing
       {:wallaby, "~> 0.30.0", only: :test, runtime: false},
@@ -111,7 +112,8 @@ defmodule Eventasaurus.MixProject do
         "ecto.gen.erd",
         "cmd dot -Tpng ecto_erd.dot -o ecto_erd.png",
         "cmd rm -f ecto_erd.dot ecto_erd.svg"
-      ]
+      ],
+      "currencies.refresh": ["currencies refresh"]
     ]
   end
 end
