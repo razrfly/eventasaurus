@@ -585,6 +585,10 @@ defmodule EventasaurusWeb.EventComponents do
   attr :show_stage_transitions, :boolean, default: false, values: [true, false], doc: "whether to show full selector in edit mode"
   # Ticketing-related attributes
   attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
+  # Recent locations attributes
+  attr :recent_locations, :list, default: [], doc: "list of recent locations for the user"
+  attr :show_recent_locations, :boolean, default: false, doc: "whether to show the recent locations dropdown"
+  attr :filtered_recent_locations, :list, default: [], doc: "filtered list of recent locations based on search"
 
   def event_form(assigns) do
     assigns = assign_new(assigns, :id, fn ->
@@ -859,7 +863,7 @@ defmodule EventasaurusWeb.EventComponents do
             </div>
 
             <!-- Location -->
-            <div class="mb-4">
+            <div class="mb-4 venue-search-container">
               <h3 class="text-sm font-semibold text-gray-700 mb-2">Where</h3>
 
               <div class="flex items-center mb-2">
@@ -881,55 +885,62 @@ defmodule EventasaurusWeb.EventComponents do
                   <!-- Recent Locations Section -->
                   <%= if assigns[:recent_locations] && length(@recent_locations) > 0 do %>
                     <div class="mb-2">
-                      <button
-                        type="button"
-                        phx-click="toggle_recent_locations"
-                        class="flex items-center text-xs text-gray-600 hover:text-gray-800 mb-2"
-                      >
-                        <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Recent Locations (<%= length(@recent_locations) %>)
-                        <svg class={"w-3 h-3 ml-1 transition-transform #{if @show_recent_locations, do: "rotate-180", else: ""}"} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
+                      <div class="flex gap-2 mb-2">
+                        <button
+                          type="button"
+                          phx-click="toggle_recent_locations"
+                          class="flex items-center text-xs text-gray-600 hover:text-gray-800 recent-locations-toggle"
+                        >
+                          <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Recent Locations (<%= length(@recent_locations) %>)
+                          <svg class={"w-3 h-3 ml-1 transition-transform #{if @show_recent_locations, do: "rotate-180", else: ""}"} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          phx-click="enable_google_places"
+                          class="flex items-center text-xs text-blue-600 hover:text-blue-800 places-search-toggle"
+                          title="Enable Google Places suggestions"
+                        >
+                          <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                          Search Places
+                        </button>
+                      </div>
 
                       <%= if @show_recent_locations do %>
-                        <div class="bg-gray-50 border border-gray-200 rounded-md p-2 mb-2 max-h-48 overflow-y-auto">
+                        <div class="recent-locations-dropdown">
                           <%= for location <- @filtered_recent_locations do %>
                             <button
                               type="button"
                               phx-click="select_recent_location"
-                              phx-value-location={Jason.encode!(location)}
-                              class="w-full text-left p-2 hover:bg-white hover:shadow-sm rounded border-b border-gray-100 last:border-b-0"
+                              phx-value-location={case Jason.encode(location) do
+                                {:ok, json} -> json
+                                {:error, _} -> "{}"
+                              end}
+                              class="w-full text-left p-2 recent-location-item border-b border-gray-100 last:border-b-0"
                             >
                               <div class="flex items-start justify-between">
                                 <div class="flex-1 min-w-0">
                                   <div class="text-sm font-medium text-gray-900 truncate">
-                                    <%= if location.virtual_venue_url do %>
-                                      <svg class="w-4 h-4 inline mr-1 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                      </svg>
-                                      Virtual Meeting
-                                    <% else %>
-                                      <svg class="w-4 h-4 inline mr-1 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                      </svg>
-                                      <%= location.name %>
-                                    <% end %>
+                                    <svg class="w-4 h-4 inline mr-1 text-blue-600 location-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    <%= Map.get(location, :name) %>
                                   </div>
-                                  <%= if location.address do %>
-                                    <div class="text-xs text-gray-500 truncate"><%= location.address %></div>
-                                  <% end %>
-                                  <%= if location.virtual_venue_url do %>
-                                    <div class="text-xs text-gray-500 truncate"><%= location.virtual_venue_url %></div>
+                                  <%= if Map.get(location, :address) do %>
+                                    <div class="text-xs text-gray-500 truncate"><%= Map.get(location, :address) %></div>
                                   <% end %>
                                 </div>
                                 <div class="ml-2 flex-shrink-0">
-                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                    <%= location.usage_count %>x
+                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium usage-count-badge">
+                                    <%= Map.get(location, :usage_count) %>x
                                   </span>
                                 </div>
                               </div>
@@ -937,7 +948,7 @@ defmodule EventasaurusWeb.EventComponents do
                           <% end %>
 
                           <%= if length(@filtered_recent_locations) == 0 do %>
-                            <div class="text-center py-3 text-gray-500 text-sm">
+                            <div class="no-results-message">
                               No matching recent locations found
                             </div>
                           <% end %>
@@ -951,7 +962,7 @@ defmodule EventasaurusWeb.EventComponents do
                     id={"venue-search-#{if @action == :new, do: "new", else: "edit"}"}
                     placeholder="Search for venue or address..."
                     phx-hook="VenueSearchWithFiltering"
-                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                    class="block w-full border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm venue-search-input"
                   />
                   <!-- Hidden venue fields remain the same -->
                   <input type="hidden" name="event[venue_name]" id={"venue-name-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_name", "")} />
@@ -965,7 +976,7 @@ defmodule EventasaurusWeb.EventComponents do
 
                 <!-- Selected venue display -->
                 <%= if @selected_venue_name do %>
-                  <div class="mt-2 p-2 bg-blue-50 border border-blue-300 rounded-md text-sm">
+                  <div class="mt-2 p-3 bg-blue-50 border border-blue-300 rounded-md text-sm selected-venue-display">
                     <div class="font-medium text-blue-700"><%= @selected_venue_name %></div>
                     <div class="text-blue-600 text-xs"><%= @selected_venue_address %></div>
                   </div>
@@ -975,13 +986,13 @@ defmodule EventasaurusWeb.EventComponents do
                   <.input field={f[:virtual_venue_url]} type="text" label="Meeting URL" placeholder="https://..." class="text-sm" />
 
                   <!-- Quick Create Virtual Meeting Options -->
-                  <div class="mt-3 flex gap-2">
+                  <div class="mt-3 virtual-meeting-buttons">
                     <button
                       type="button"
                       phx-click="create_zoom_meeting"
-                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white virtual-meeting-button zoom-button focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
-                      <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-4 h-4 button-icon" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M1.5 6A1.5 1.5 0 0 1 3 4.5h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H21a1.5 1.5 0 0 1 1.5 1.5v10.5A1.5 1.5 0 0 1 21 21H3a1.5 1.5 0 0 1-1.5-1.5V6z"/>
                       </svg>
                       Create Zoom Meeting
@@ -990,9 +1001,9 @@ defmodule EventasaurusWeb.EventComponents do
                     <button
                       type="button"
                       phx-click="create_google_meet"
-                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white virtual-meeting-button google-meet-button focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                     >
-                      <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-4 h-4 button-icon" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/>
                       </svg>
                       Create Google Meet

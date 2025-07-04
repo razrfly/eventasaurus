@@ -948,44 +948,43 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   @impl true
+  def handle_event("show_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, true)}
+  end
+
+  @impl true
+  def handle_event("hide_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, false)}
+  end
+
+  @impl true
+  def handle_event("enable_google_places", _params, socket) do
+    {:noreply, push_event(socket, "enable_google_places", %{})}
+  end
+
+  @impl true
   def handle_event("select_recent_location", %{"location" => location_json}, socket) do
-    # Parse the JSON data
-    location_data = Jason.decode!(location_json)
+    # Parse the JSON data with error handling
+    location_data = case Jason.decode(location_json) do
+      {:ok, data} -> data
+      {:error, _} -> %{}
+    end
 
-    # Handle both physical venues and virtual meetings
-    {venue_name, venue_address, is_virtual, form_data_updates} =
-      case location_data do
-        %{"virtual_venue_url" => url} when not is_nil(url) ->
-          # Virtual meeting
-          {"Virtual Event", nil, true, %{
-            "virtual_venue_url" => url,
-            "venue_name" => "",
-            "venue_address" => "",
-            "venue_city" => "",
-            "venue_state" => "",
-            "venue_country" => "",
-            "venue_latitude" => nil,
-            "venue_longitude" => nil,
-            "is_virtual" => true
-          }}
+    # Handle physical venue (virtual events are excluded from recent locations)
+    venue_name = Map.get(location_data, "name", "")
+    venue_address = Map.get(location_data, "address", "")
 
-        _ ->
-          # Physical venue
-          venue_name = Map.get(location_data, "name", "")
-          venue_address = Map.get(location_data, "address", "")
-
-          {venue_name, venue_address, false, %{
-            "venue_name" => venue_name,
-            "venue_address" => venue_address,
-            "venue_city" => Map.get(location_data, "city", ""),
-            "venue_state" => Map.get(location_data, "state", ""),
-            "venue_country" => Map.get(location_data, "country", ""),
-            "venue_latitude" => Map.get(location_data, "latitude"),
-            "venue_longitude" => Map.get(location_data, "longitude"),
-            "virtual_venue_url" => "",
-            "is_virtual" => false
-          }}
-      end
+    form_data_updates = %{
+      "venue_name" => venue_name,
+      "venue_address" => venue_address,
+      "venue_city" => Map.get(location_data, "city", ""),
+      "venue_state" => Map.get(location_data, "state", ""),
+      "venue_country" => Map.get(location_data, "country", ""),
+      "venue_latitude" => Map.get(location_data, "latitude"),
+      "venue_longitude" => Map.get(location_data, "longitude"),
+      "virtual_venue_url" => "",
+      "is_virtual" => false
+    }
 
     # Update form data while preserving existing data
     form_data = Map.merge(socket.assigns.form_data || %{}, form_data_updates)
@@ -1003,7 +1002,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:changeset, changeset)
       |> assign(:selected_venue_name, venue_name)
       |> assign(:selected_venue_address, venue_address)
-      |> assign(:is_virtual, is_virtual)
+      |> assign(:is_virtual, false)
       |> assign(:show_recent_locations, false)
 
     {:noreply, socket}
@@ -1011,13 +1010,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("filter_recent_locations", %{"query" => query}, socket) do
-    filtered_locations = filter_locations(socket.assigns.recent_locations, query)
+    filtered_locations = EventasaurusWeb.Helpers.EventHelpers.filter_locations(socket.assigns.recent_locations, query)
     {:noreply, assign(socket, :filtered_recent_locations, filtered_locations)}
   end
 
   @impl true
   def handle_event("create_zoom_meeting", _params, socket) do
-    zoom_url = generate_zoom_meeting_url()
+    zoom_url = EventasaurusWeb.Helpers.EventHelpers.generate_zoom_meeting_url()
 
     # Update form data for virtual meeting
     form_data = Map.merge(socket.assigns.form_data || %{}, %{
@@ -1052,7 +1051,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("create_google_meet", _params, socket) do
-    meet_url = generate_google_meet_url()
+    meet_url = EventasaurusWeb.Helpers.EventHelpers.generate_google_meet_url()
 
     # Update form data for virtual meeting
     form_data = Map.merge(socket.assigns.form_data || %{}, %{
@@ -1570,64 +1569,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
-  # Helper function to filter locations based on search query
-  defp filter_locations(locations, query) when is_binary(query) and byte_size(query) > 0 do
-    query_lower = String.downcase(query)
 
-    Enum.filter(locations, fn location ->
-      # Check name (handle virtual events)
-      name_match = case location do
-        %{virtual_venue_url: url} when not is_nil(url) ->
-          String.contains?("virtual meeting", query_lower) or
-          String.contains?(String.downcase(url), query_lower)
-        _ ->
-          location.name && String.contains?(String.downcase(location.name), query_lower)
-      end
-
-      # Check address
-      address_match = location.address &&
-        String.contains?(String.downcase(location.address), query_lower)
-
-      # Check city
-      city_match = location.city &&
-        String.contains?(String.downcase(location.city), query_lower)
-
-      name_match || address_match || city_match
-    end)
-  end
-
-  defp filter_locations(locations, _query), do: locations
-
-  # Helper functions to generate virtual meeting URLs
-  defp generate_zoom_meeting_url do
-    meeting_id = generate_random_meeting_id(11) # Zoom meeting IDs are typically 11 digits
-    "https://zoom.us/j/#{meeting_id}"
-  end
-
-  defp generate_google_meet_url do
-    meeting_id = generate_random_meeting_id(10, :alphanum) # Google Meet uses alphanumeric codes
-    "https://meet.google.com/#{meeting_id}"
-  end
-
-  defp generate_random_meeting_id(length, type \\ :numeric) do
-    case type do
-      :numeric ->
-        1..length
-        |> Enum.map(fn _ -> Enum.random(0..9) end)
-        |> Enum.join("")
-
-      :alphanum ->
-        chars = "abcdefghijklmnopqrstuvwxyz"
-        1..length
-        |> Enum.map(fn _ ->
-          case rem(Enum.random(1..36), 2) do
-            0 -> Enum.random(0..9) |> to_string()
-            1 -> String.at(chars, Enum.random(0..25))
-          end
-        end)
-        |> Enum.join("")
-        |> String.replace(~r/(.{3})(.{4})(.{3})/, "\\1-\\2-\\3") # Add hyphens for Google Meet format
-    end
-  end
 
 end
