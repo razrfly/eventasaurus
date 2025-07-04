@@ -28,11 +28,11 @@ test.describe('Venue Search Functionality', () => {
     const venueSearchInput = await page.locator('#venue-search-new');
     await expect(venueSearchInput).toBeVisible();
     
-    // Check if the VenueSearchWithFiltering hook was mounted
+        // Check if the VenueSearchWithFiltering hook was mounted
     const hookMounted = await page.evaluate(() => {
-      return window.venueSearchHooks && window.venueSearchHooks.length >= 0;
+      return window.venueSearchHooks && window.venueSearchHooks.length > 0;
     });
-    
+
     expect(hookMounted).toBe(true);
   });
 
