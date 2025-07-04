@@ -349,11 +349,17 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   Uses StripeCurrencyService when available, falls back to hardcoded list.
   """
   def supported_currency_codes do
-    case StripeCurrencyService.get_currencies() do
-      currencies when is_list(currencies) and length(currencies) > 0 ->
-        currencies |> Enum.map(&String.downcase/1)
+    try do
+      case StripeCurrencyService.get_currencies() do
+        currencies when is_list(currencies) and length(currencies) > 0 ->
+          currencies |> Enum.map(&String.downcase/1)
+        _ ->
+          # Fallback to existing hardcoded list
+          fallback_currency_codes()
+      end
+    rescue
       _ ->
-        # Fallback to existing hardcoded list
+        # Fallback if StripeCurrencyService raises any error
         fallback_currency_codes()
     end
   end
@@ -373,12 +379,18 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   """
   def grouped_currencies_from_stripe do
     case StripeCurrencyService.get_grouped_currencies() do
-      grouped when is_map(grouped) and map_size(grouped) > 0 ->
+      grouped when is_list(grouped) and length(grouped) > 0 ->
         # Convert Stripe's grouped currencies to our format with symbols and names
+        # Filter out currencies that don't have proper names defined to avoid duplicates
         grouped
         |> Enum.map(fn {region, currencies} ->
           formatted_currencies =
             currencies
+            |> Enum.filter(fn currency_code ->
+              code = String.downcase(currency_code)
+              # Only include currencies that have specific names defined (not the fallback)
+              Map.has_key?(@currency_names, code)
+            end)
             |> Enum.map(fn currency_code ->
               code = String.downcase(currency_code)
               name = currency_name(code)
@@ -387,11 +399,16 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
             end)
           {region, formatted_currencies}
         end)
+        |> Enum.reject(fn {_region, currencies} -> Enum.empty?(currencies) end)
         |> Enum.sort_by(fn {region, _} -> region end)
       _ ->
         # Fallback to existing hardcoded grouped currencies
         supported_currencies()
     end
+  rescue
+    _ ->
+      # Fallback to existing hardcoded grouped currencies
+      supported_currencies()
   end
 
   @doc """

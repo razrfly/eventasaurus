@@ -1207,7 +1207,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           <div class="border-t border-gray-200 pt-6 mt-6">
             <h3 class="text-lg font-semibold mb-4 text-gray-900">Hosted by</h3>
             <div class="flex items-center space-x-3">
-              <%= if @event.users != [] do %>
+              <%= if Ecto.assoc_loaded?(@event.users) and @event.users != [] do %>
                 <%= avatar_img_size(hd(@event.users), :lg, class: "border border-gray-200") %>
                 <div>
                   <div class="font-medium text-gray-900"><%= hd(@event.users).name %></div>

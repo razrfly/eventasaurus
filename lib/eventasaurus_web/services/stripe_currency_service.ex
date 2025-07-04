@@ -32,6 +32,12 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
           {:ok, currencies} -> currencies
           {:error, :not_found} -> fallback_currencies()
         end
+      {:error, :expired} ->
+        refresh_currencies()
+        case get_from_cache() do
+          {:ok, currencies} -> currencies
+          _ -> fallback_currencies()
+        end
     end
   end
 
@@ -86,10 +92,30 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
 
   # Private functions
 
+  # Fetches all country specs with pagination support
+  defp fetch_all_country_specs(acc \\ [], starting_after \\ nil) do
+    params = %{limit: 100}
+    params = if starting_after, do: Map.put(params, :starting_after, starting_after), else: params
+
+    case CountrySpec.list(params) do
+      {:ok, %{data: specs, has_more: has_more}} ->
+        all_specs = acc ++ specs
+
+        if has_more do
+          last_id = List.last(specs).id
+          fetch_all_country_specs(all_specs, last_id)
+        else
+          {:ok, %{data: all_specs}}
+        end
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
   defp fetch_currencies_from_stripe do
     try do
-      # Fetch all country specs and extract unique currencies
-      case CountrySpec.list(%{limit: 100}) do
+      # Fetch all country specs and extract unique currencies with pagination
+      case fetch_all_country_specs() do
         {:ok, %{data: country_specs}} ->
           currencies =
             country_specs
