@@ -658,6 +658,67 @@ Hooks.PricingValidator = {
   }
 };
 
+// ThresholdForm Hook - Handles threshold type radio button toggling and revenue conversion
+Hooks.ThresholdForm = {
+  mounted() {
+    this.radioButtons = this.el.querySelectorAll('input[data-threshold-radio]');
+    this.attendeeThreshold = this.el.querySelector('#attendee-threshold');
+    this.revenueThreshold = this.el.querySelector('#revenue-threshold');
+    this.revenueInput = this.el.querySelector('input[data-revenue-input]');
+    this.hiddenRevenueInput = this.el.querySelector('#threshold_revenue_cents_hidden');
+
+    // Initial setup
+    this.updateVisibility();
+    this.setupRevenueConversion();
+
+    // Add event listeners
+    this.radioButtons.forEach(radio => {
+      radio.addEventListener('change', () => this.updateVisibility());
+    });
+  },
+
+  updateVisibility() {
+    const selectedType = this.el.querySelector('input[data-threshold-radio]:checked')?.value || 'attendee_count';
+    
+    // Show/hide fields based on threshold type
+    switch (selectedType) {
+      case 'attendee_count':
+        this.attendeeThreshold?.classList.remove('hidden');
+        this.revenueThreshold?.classList.add('hidden');
+        break;
+      case 'revenue':
+        this.attendeeThreshold?.classList.add('hidden');
+        this.revenueThreshold?.classList.remove('hidden');
+        break;
+      case 'both':
+        this.attendeeThreshold?.classList.remove('hidden');
+        this.revenueThreshold?.classList.remove('hidden');
+        break;
+    }
+  },
+
+  setupRevenueConversion() {
+    if (!this.revenueInput || !this.hiddenRevenueInput) return;
+
+    // Convert dollars to cents on input
+    this.revenueInput.addEventListener('input', (e) => {
+      const dollars = parseFloat(e.target.value) || 0;
+      const cents = Math.round(dollars * 100);
+      this.hiddenRevenueInput.value = cents;
+      
+      // Trigger change event for LiveView
+      this.hiddenRevenueInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // Initial conversion if there's already a value
+    if (this.revenueInput.value) {
+      const dollars = parseFloat(this.revenueInput.value) || 0;
+      const cents = Math.round(dollars * 100);
+      this.hiddenRevenueInput.value = cents;
+    }
+  }
+};
+
 // DateTimeSync Hook - Keeps end date/time in sync with start date/time
 Hooks.DateTimeSync = {
   mounted() {

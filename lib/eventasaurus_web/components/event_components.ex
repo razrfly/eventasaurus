@@ -1048,10 +1048,61 @@ defmodule EventasaurusWeb.EventComponents do
 
                 <!-- Threshold-specific fields -->
                 <%= if Map.get(@form_data, "setup_path", "confirmed") == "threshold" do %>
-                  <div class="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div class="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg" phx-hook="ThresholdForm" id="threshold-form">
                     <h4 class="text-sm font-medium text-orange-800 mb-3">Threshold Pre-Sale Settings</h4>
-                    <div class="space-y-3">
+                    <div class="space-y-4">
+                      <!-- Threshold Type Selection -->
                       <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                          Threshold Type
+                        </label>
+                        <div class="space-y-2">
+                          <label class="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="event[threshold_type]"
+                              value="attendee_count"
+                              checked={Map.get(@form_data, "threshold_type", "attendee_count") == "attendee_count"}
+                              class="form-radio text-orange-600 focus:ring-orange-500"
+                              data-threshold-radio="attendee_count"
+                            />
+                            <span class="ml-2 text-sm text-gray-700">Attendee Count</span>
+                          </label>
+                          <label class="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="event[threshold_type]"
+                              value="revenue"
+                              checked={Map.get(@form_data, "threshold_type") == "revenue"}
+                              class="form-radio text-orange-600 focus:ring-orange-500"
+                              data-threshold-radio="revenue"
+                            />
+                            <span class="ml-2 text-sm text-gray-700">Revenue Target</span>
+                          </label>
+                          <label class="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="event[threshold_type]"
+                              value="both"
+                              checked={Map.get(@form_data, "threshold_type") == "both"}
+                              class="form-radio text-orange-600 focus:ring-orange-500"
+                              data-threshold-radio="both"
+                            />
+                            <span class="ml-2 text-sm text-gray-700">Both (Attendees + Revenue)</span>
+                          </label>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">
+                          Choose what must be met for the event to be confirmed
+                        </p>
+                      </div>
+
+                      <!-- Attendee Count Field -->
+                      <div id="attendee-threshold" class={
+                        case Map.get(@form_data, "threshold_type", "attendee_count") do
+                          "revenue" -> "hidden"
+                          _ -> ""
+                        end
+                      }>
                         <label for="threshold_count" class="block text-sm font-medium text-gray-700 mb-1">
                           Minimum Attendees Required
                         </label>
@@ -1067,6 +1118,58 @@ defmodule EventasaurusWeb.EventComponents do
                         <p class="text-xs text-gray-500 mt-1">
                           Event will only be confirmed if this many people buy tickets
                         </p>
+                      </div>
+
+                      <!-- Revenue Field -->
+                      <div id="revenue-threshold" class={
+                        case Map.get(@form_data, "threshold_type", "attendee_count") do
+                          "attendee_count" -> "hidden"
+                          _ -> ""
+                        end
+                      }>
+                        <label for="threshold_revenue_cents" class="block text-sm font-medium text-gray-700 mb-1">
+                          Minimum Revenue Required
+                        </label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span class="text-gray-500 sm:text-sm">$</span>
+                          </div>
+                          <input
+                            type="number"
+                            id="threshold_revenue_cents"
+                            name="event[threshold_revenue_cents]"
+                            value={
+                              case Map.get(@form_data, "threshold_revenue_cents") do
+                                cents when is_integer(cents) and cents > 0 ->
+                                  Float.round(cents / 100, 2)
+                                cents when is_binary(cents) and cents != "" ->
+                                  case Integer.parse(cents) do
+                                    {parsed_cents, ""} when parsed_cents > 0 -> Float.round(parsed_cents / 100, 2)
+                                    _ -> ""
+                                  end
+                                _ -> ""
+                              end
+                            }
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            class="block w-full pl-7 pr-12 rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm"
+                            data-revenue-input="true"
+                          />
+                          <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span class="text-gray-500 sm:text-sm">USD</span>
+                          </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">
+                          Event will only be confirmed if this much revenue is generated
+                        </p>
+                        <!-- Hidden field to store cents value -->
+                        <input
+                          type="hidden"
+                          name="event[threshold_revenue_cents_hidden]"
+                          id="threshold_revenue_cents_hidden"
+                          value={Map.get(@form_data, "threshold_revenue_cents", "")}
+                        />
                       </div>
                     </div>
                   </div>
