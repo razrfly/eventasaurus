@@ -1249,6 +1249,233 @@ Hooks.StripePaymentElements = {
   }
 };
 
+// Combined Venue Search with Recent Location Filtering Hook
+Hooks.VenueSearchWithFiltering = {
+  mounted() {
+    if (process.env.NODE_ENV !== 'production') console.log("VenueSearchWithFiltering hook mounted on element:", this.el.id);
+    this.inputEl = this.el;
+    this.mounted = true;
+    this.debounceTimeout = null;
+    
+    // Initialize Google Places Autocomplete
+    this.initGooglePlaces();
+    
+    // Add input listener for filtering recent locations
+    this.inputEl.addEventListener('input', (e) => {
+      const query = e.target.value;
+      
+      // Debounce the filtering to avoid too many LiveView calls
+      if (this.debounceTimeout) {
+        clearTimeout(this.debounceTimeout);
+      }
+      
+      this.debounceTimeout = setTimeout(() => {
+        if (this.mounted) {
+          // Filter recent locations if there are any recent locations
+          this.pushEvent('filter_recent_locations', { query: query });
+          
+          // Auto-show recent locations when user starts typing (if there's content)
+          if (query.length > 0) {
+            // Show recent locations automatically when typing
+            this.pushEvent('toggle_recent_locations', {});
+          }
+        }
+      }, 150); // 150ms debounce
+    });
+    
+    // Handle focus to show recent locations
+    this.inputEl.addEventListener('focus', () => {
+      if (this.mounted && this.inputEl.value.length === 0) {
+        // Show recent locations on focus if input is empty
+        this.pushEvent('toggle_recent_locations', {});
+      }
+    });
+  },
+  
+  destroyed() {
+    this.mounted = false;
+    if (this.debounceTimeout) {
+      clearTimeout(this.debounceTimeout);
+    }
+    if (process.env.NODE_ENV !== 'production') console.log("VenueSearchWithFiltering hook destroyed");
+  },
+  
+  initGooglePlaces() {
+    if (!this.mounted) return;
+    
+    // Check if Google Maps API is loaded and ready
+    if (window.google && google.maps && google.maps.places) {
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps already loaded, initializing autocomplete");
+      setTimeout(() => this.initClassicAutocomplete(), 100);
+    } else {
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps not yet loaded, will initialize when ready");
+      // Add a global callback for when Google Maps loads
+      window.initGooglePlaces = () => {
+        if (this.mounted) {
+          setTimeout(() => this.initClassicAutocomplete(), 100);
+        }
+      };
+    }
+  },
+  
+  // Google Places Autocomplete initialization (reused from existing hook)
+  initClassicAutocomplete() {
+    if (!this.mounted) return;
+    
+    try {
+      if (process.env.NODE_ENV !== 'production') console.log("Initializing Google Places Autocomplete");
+      
+      // Create the autocomplete object
+      const options = {
+        types: ['establishment', 'geocode']
+      };
+      
+      const autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+      
+      // When a place is selected from Google Places
+      autocomplete.addListener('place_changed', () => {
+        if (!this.mounted) return;
+        
+        if (process.env.NODE_ENV !== 'production') console.group("Google Places selection process");
+        const place = autocomplete.getPlace();
+        if (process.env.NODE_ENV !== 'production') console.log("Place selected:", place);
+        
+        if (!place.geometry) {
+          if (process.env.NODE_ENV !== 'production') console.error("No place geometry received");
+          if (process.env.NODE_ENV !== 'production') console.groupEnd();
+          return;
+        }
+        
+        // Get place details
+        const venueName = place.name || '';
+        const venueAddress = place.formatted_address || '';
+        let city = '', state = '', country = '';
+        
+        // Get address components
+        if (place.address_components) {
+          if (process.env.NODE_ENV !== 'production') console.log("Processing address components:", place.address_components);
+          for (const component of place.address_components) {
+            if (component.types.includes('locality')) {
+              city = component.long_name;
+            } else if (component.types.includes('administrative_area_level_1')) {
+              state = component.long_name;
+            } else if (component.types.includes('country')) {
+              country = component.long_name;
+            }
+          }
+        }
+        
+        // Get coordinates
+        let lat = null, lng = null;
+        if (place.geometry && place.geometry.location) {
+          lat = place.geometry.location.lat();
+          lng = place.geometry.location.lng();
+        }
+        
+        // Map field IDs to expected form data keys
+        const fieldMappings = {
+          'venue_name': venueName,
+          'venue_address': venueAddress,
+          'venue_city': city,
+          'venue_state': state,
+          'venue_country': country,
+          'venue_latitude': lat,
+          'venue_longitude': lng
+        };
+        
+        // Direct DOM updates for each field
+        if (process.env.NODE_ENV !== 'production') console.log("Updating DOM fields...");
+        Object.entries(fieldMappings).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            this.directUpdateField(key, value);
+          }
+        });
+        
+        // Prepare data for LiveView
+        const venueData = {
+          name: venueName,
+          address: venueAddress,
+          city: city,
+          state: state,
+          country: country,
+          latitude: lat,
+          longitude: lng
+        };
+        
+        // Send to LiveView
+        if (process.env.NODE_ENV !== 'production') console.log("Pushing venue data to LiveView:", venueData);
+        this.pushEvent('venue_selected', venueData);
+        
+        if (process.env.NODE_ENV !== 'production') console.groupEnd();
+      });
+      
+      if (process.env.NODE_ENV !== 'production') console.log("Google Places Autocomplete initialized");
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') console.error("Error in Google Places Autocomplete initialization:", error);
+    }
+  },
+  
+  // Direct DOM update to ensure form fields are updated (reused from existing hook)
+  directUpdateField(id, value) {
+    if (!this.mounted) return;
+    
+    if (process.env.NODE_ENV !== 'production') console.group(`Updating field ${id}`);
+    
+    // Determine form type by examining the input element's ID
+    const formType = this.inputEl.id.includes("new") ? "new" : "edit";
+    if (process.env.NODE_ENV !== 'production') console.log(`Form context detected: ${formType}`);
+    
+    // Look for the element using direct ID with suffix
+    let field = document.getElementById(`${id}-${formType}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${id}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    
+    // If not found, try without suffix
+    if (!field) {
+      field = document.getElementById(id);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${id}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
+    
+    // If not found, try with venue_ instead of venue-
+    if (!field) {
+      const altId = id.replace('venue-', 'venue_');
+      field = document.getElementById(altId);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${altId}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
+    
+    // If still not found, try with venue_ instead of venue- and the suffix
+    if (!field) {
+      const altId = id.replace('venue-', 'venue_');
+      field = document.getElementById(`${altId}-${formType}`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${altId}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
+    
+    // If still not found, try the event[] prefixed version (for Phoenix forms)
+    if (!field) {
+      const selector = `[name="event[${id.replace('venue-', 'venue_')}]"]`;
+      field = document.querySelector(selector);
+      if (process.env.NODE_ENV !== 'production') console.log(`Field by selector ${selector}: ${field ? 'FOUND' : 'NOT FOUND'}`);
+    }
+    
+    if (field) {
+      // Set the value directly
+      const oldValue = field.value;
+      field.value = value || '';
+      
+      // Log the update
+      if (process.env.NODE_ENV !== 'production') console.log(`Updated value: "${oldValue}" -> "${value}"`);
+      
+      // Trigger input and change events to ensure form controllers detect the change
+      field.dispatchEvent(new Event('input', {bubbles: true}));
+      field.dispatchEvent(new Event('change', {bubbles: true}));
+      if (process.env.NODE_ENV !== 'production') console.log("Events dispatched: input, change");
+    } else {
+      if (process.env.NODE_ENV !== 'production') console.error(`Field ${id} not found in DOM`);
+    }
+    
+    if (process.env.NODE_ENV !== 'production') console.groupEnd();
+  }
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
