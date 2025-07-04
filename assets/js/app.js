@@ -702,9 +702,15 @@ Hooks.ThresholdForm = {
 
     // Convert dollars to cents on input
     this.revenueInput.addEventListener('input', (e) => {
-      const dollars = parseFloat(e.target.value) || 0;
-      const cents = Math.round(dollars * 100);
-      this.hiddenRevenueInput.value = cents;
+      const value = e.target.value.trim();
+      if (value === '') {
+        // Set empty string for empty input
+        this.hiddenRevenueInput.value = '';
+      } else {
+        const dollars = parseFloat(value) || 0;
+        const cents = Math.round(dollars * 100);
+        this.hiddenRevenueInput.value = cents;
+      }
       
       // Trigger change event for LiveView
       this.hiddenRevenueInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -712,9 +718,12 @@ Hooks.ThresholdForm = {
 
     // Initial conversion if there's already a value
     if (this.revenueInput.value) {
-      const dollars = parseFloat(this.revenueInput.value) || 0;
-      const cents = Math.round(dollars * 100);
-      this.hiddenRevenueInput.value = cents;
+      const value = this.revenueInput.value.trim();
+      if (value !== '') {
+        const dollars = parseFloat(value) || 0;
+        const cents = Math.round(dollars * 100);
+        this.hiddenRevenueInput.value = cents;
+      }
     }
   }
 };

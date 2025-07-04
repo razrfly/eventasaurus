@@ -81,6 +81,17 @@ defmodule EventasaurusApp.Events.Event do
 
   @doc false
   def changeset(event, attrs) do
+    # Convert empty strings to nil for threshold_revenue_cents
+    attrs = case Map.get(attrs, "threshold_revenue_cents") do
+      value when value == "" or value == nil -> Map.put(attrs, "threshold_revenue_cents", nil)
+      value when is_binary(value) ->
+        case String.trim(value) do
+          "" -> Map.put(attrs, "threshold_revenue_cents", nil)
+          _ -> attrs
+        end
+      _ -> attrs
+    end
+
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
