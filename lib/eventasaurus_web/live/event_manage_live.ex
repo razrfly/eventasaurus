@@ -749,9 +749,14 @@ defmodule EventasaurusWeb.EventManageLive do
       "failed_email" ->
         Enum.filter(participants, &email_failed?/1)
 
-      status when status in ["accepted", "declined", "cancelled", "confirmed_with_order"] ->
-        status_atom = String.to_existing_atom(status)
-        Enum.filter(participants, fn p -> p.status == status_atom end)
+      "accepted" ->
+        Enum.filter(participants, fn p -> p.status == :accepted end)
+      "declined" ->
+        Enum.filter(participants, fn p -> p.status == :declined end)
+      "cancelled" ->
+        Enum.filter(participants, fn p -> p.status == :cancelled end)
+      "confirmed_with_order" ->
+        Enum.filter(participants, fn p -> p.status == :confirmed_with_order end)
 
       _ ->
         participants
