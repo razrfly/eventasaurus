@@ -58,6 +58,8 @@ defmodule Eventasaurus.Application do
       {Task.Supervisor, name: Eventasaurus.TaskSupervisor},
       # Start PostHog analytics service
       Eventasaurus.Services.PosthogService,
+      # Start Stripe Currency Service for caching supported currencies
+      EventasaurusWeb.Services.StripeCurrencyService,
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry
