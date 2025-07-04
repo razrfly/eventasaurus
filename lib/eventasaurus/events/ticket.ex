@@ -38,7 +38,7 @@ defmodule EventasaurusApp.Events.Ticket do
     |> validate_number(:quantity, greater_than: 0, message: "must be greater than 0")
     |> validate_length(:title, min: 1, max: 255)
     |> validate_length(:description, max: 1000)
-    |> validate_inclusion(:currency, ["usd", "eur", "gbp", "cad", "aud", "jpy"], message: "must be a supported currency")
+    |> validate_inclusion(:currency, EventasaurusWeb.Helpers.CurrencyHelpers.supported_currency_codes(), message: "must be a supported currency")
     |> validate_inclusion(:pricing_model, @pricing_models, message: "must be a valid pricing model")
     |> validate_availability_window()
     |> foreign_key_constraint(:event_id)
