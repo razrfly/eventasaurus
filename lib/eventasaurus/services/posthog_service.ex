@@ -15,6 +15,20 @@ defmodule Eventasaurus.Services.PosthogService do
   # Client API
 
   @doc """
+  Checks if PostHog is properly configured for event tracking.
+  """
+  def configured?() do
+    !!get_api_key()
+  end
+
+  @doc """
+  Checks if PostHog is properly configured for analytics.
+  """
+  def analytics_configured?() do
+    !!(get_private_api_key() && get_project_id())
+  end
+
+  @doc """
   Starts the PostHog service GenServer.
   """
   def start_link(_opts \\ []) do
@@ -130,11 +144,15 @@ defmodule Eventasaurus.Services.PosthogService do
 
     cond do
       !api_key ->
-        Logger.warning("PostHog API key not configured - event tracking disabled")
+        # Log only once per application start, not for every event
+        if not Application.get_env(:eventasaurus, :posthog_warning_logged, false) do
+          Logger.info("PostHog not configured - event tracking disabled. Set POSTHOG_PUBLIC_API_KEY to enable.")
+          Application.put_env(:eventasaurus, :posthog_warning_logged, true)
+        end
         {:error, :no_api_key}
 
       !user_id or user_id == "" ->
-        Logger.warning("Invalid user_id for PostHog event: #{event_name}")
+        Logger.debug("Skipping PostHog event #{event_name} - invalid user_id")
         {:error, :invalid_user_id}
 
       true ->
@@ -223,16 +241,23 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp fetch_analytics_from_api(event_id, date_range) do
-    api_key = get_api_key()
+    api_key = get_private_api_key()  # Use private key for analytics
     project_id = get_project_id()
 
     cond do
       !api_key ->
-        Logger.warning("PostHog private API key not configured - analytics will be unavailable")
+        # Log only once per application start, not for every analytics call
+        if not Application.get_env(:eventasaurus, :posthog_analytics_warning_logged, false) do
+          Logger.info("PostHog analytics not configured - private API key missing. Set POSTHOG_PRIVATE_API_KEY to enable.")
+          Application.put_env(:eventasaurus, :posthog_analytics_warning_logged, true)
+        end
         {:error, :no_api_key}
 
       !project_id ->
-        Logger.warning("PostHog project ID not configured - analytics will be unavailable. Please set POSTHOG_PROJECT_ID environment variable")
+        if not Application.get_env(:eventasaurus, :posthog_project_warning_logged, false) do
+          Logger.info("PostHog analytics not configured - project ID missing. Set POSTHOG_PROJECT_ID to enable.")
+          Application.put_env(:eventasaurus, :posthog_project_warning_logged, true)
+        end
         {:error, :no_project_id}
 
       true ->
@@ -257,7 +282,7 @@ defmodule Eventasaurus.Services.PosthogService do
             end
 
           {:error, reason} ->
-            Logger.error("Invalid event_id provided: #{inspect(event_id)}")
+            Logger.debug("Invalid event_id provided for PostHog analytics: #{inspect(event_id)}")
             {:error, reason}
         end
     end
@@ -399,6 +424,10 @@ defmodule Eventasaurus.Services.PosthogService do
         Logger.debug("PostHog event sent successfully: #{event_name}")
         {:ok, :sent}
 
+      {:ok, %HTTPoison.Response{status_code: 401, body: response_body}} ->
+        Logger.warning("PostHog authentication failed - check your API key configuration: #{response_body}")
+        {:error, {:api_error, 401}}
+
       {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
         Logger.warning("PostHog event failed with status #{status_code}: #{response_body}")
         {:error, {:api_error, status_code}}
@@ -410,11 +439,17 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp get_api_key do
-    System.get_env("POSTHOG_PRIVATE_API_KEY")
+    # For event tracking, use the project API key (same as public key in PostHog)
+    System.get_env("POSTHOG_PUBLIC_API_KEY") || System.get_env("POSTHOG_API_KEY")
   end
 
   defp get_project_id do
     System.get_env("POSTHOG_PROJECT_ID")
+  end
+
+  defp get_private_api_key do
+    # For analytics queries, use the personal/private API key
+    System.get_env("POSTHOG_PRIVATE_API_KEY") || System.get_env("POSTHOG_PERSONAL_API_KEY")
   end
 
   defp sanitize_event_id(event_id) when is_binary(event_id) do
