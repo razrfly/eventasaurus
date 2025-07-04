@@ -1710,10 +1710,13 @@ defmodule EventasaurusWeb.EventComponents do
   # Helper function to format cents as dollars for display
   defp format_cents_as_dollars(nil), do: ""
   defp format_cents_as_dollars(""), do: ""
-  defp format_cents_as_dollars(cents) when is_integer(cents) and cents > 0, do: Float.round(cents / 100, 2)
+  defp format_cents_as_dollars(cents) when is_integer(cents) and cents > 0 do
+    Float.round(cents / 100, 2) |> Float.to_string()
+  end
   defp format_cents_as_dollars(cents) when is_binary(cents) do
     case Integer.parse(cents) do
-      {parsed, ""} when parsed > 0 -> Float.round(parsed / 100, 2)
+      {parsed, ""} when parsed > 0 ->
+        Float.round(parsed / 100, 2) |> Float.to_string()
       _ -> ""
     end
   end
