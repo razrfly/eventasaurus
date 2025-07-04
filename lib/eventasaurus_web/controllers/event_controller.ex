@@ -248,18 +248,9 @@ defmodule EventasaurusWeb.EventController do
          {:ok, updated_event} <- Events.pick_date(event, start_at, opts) do
 
       conn
-      |> put_flash(:info, "Event date updated successfully")
       |> json(%{
         success: true,
-        event: %{
-          id: updated_event.id,
-          slug: updated_event.slug,
-          status: updated_event.status,
-          computed_phase: updated_event.computed_phase,
-          start_at: updated_event.start_at,
-          ends_at: updated_event.ends_at,
-          timezone: updated_event.timezone
-        }
+        event: serialize_event_for_json(updated_event, :scheduling)
       })
     else
       {:error, :not_found} ->
@@ -294,16 +285,9 @@ defmodule EventasaurusWeb.EventController do
          {:ok, updated_event} <- Events.enable_polling(event, polling_deadline) do
 
       conn
-      |> put_flash(:info, "Polling enabled successfully")
       |> json(%{
         success: true,
-        event: %{
-          id: updated_event.id,
-          slug: updated_event.slug,
-          status: updated_event.status,
-          computed_phase: updated_event.computed_phase,
-          polling_deadline: updated_event.polling_deadline
-        }
+        event: serialize_event_for_json(updated_event, :polling)
       })
     else
       {:error, :not_found} ->
@@ -345,16 +329,9 @@ defmodule EventasaurusWeb.EventController do
          {:ok, updated_event} <- Events.set_threshold(event, threshold_count) do
 
       conn
-      |> put_flash(:info, "Threshold set successfully")
       |> json(%{
         success: true,
-        event: %{
-          id: updated_event.id,
-          slug: updated_event.slug,
-          status: updated_event.status,
-          computed_phase: updated_event.computed_phase,
-          threshold_count: updated_event.threshold_count
-        }
+        event: serialize_event_for_json(updated_event, :threshold)
       })
     else
       {:error, :not_found} ->
@@ -400,15 +377,9 @@ defmodule EventasaurusWeb.EventController do
          {:ok, updated_event} <- Events.enable_ticketing(event, ticketing_options) do
 
       conn
-      |> put_flash(:info, "Ticketing enabled successfully")
       |> json(%{
         success: true,
-        event: %{
-          id: updated_event.id,
-          slug: updated_event.slug,
-          status: updated_event.status,
-          computed_phase: updated_event.computed_phase
-        }
+        event: serialize_event_for_json(updated_event, [:is_ticketed, :taxation_type])
       })
     else
       {:error, :not_found} ->
@@ -438,19 +409,9 @@ defmodule EventasaurusWeb.EventController do
          {:ok, updated_event} <- Events.add_details(event, details) do
 
       conn
-      |> put_flash(:info, "Event details updated successfully")
       |> json(%{
         success: true,
-        event: %{
-          id: updated_event.id,
-          slug: updated_event.slug,
-          status: updated_event.status,
-          computed_phase: updated_event.computed_phase,
-          title: updated_event.title,
-          description: updated_event.description,
-          tagline: updated_event.tagline,
-          theme: updated_event.theme
-        }
+        event: serialize_event_for_json(updated_event, :details)
       })
     else
       {:error, :not_found} ->
@@ -478,16 +439,9 @@ defmodule EventasaurusWeb.EventController do
          {:ok, updated_event} <- Events.publish_event(event) do
 
       conn
-      |> put_flash(:info, "Event published successfully")
       |> json(%{
         success: true,
-        event: %{
-          id: updated_event.id,
-          slug: updated_event.slug,
-          status: updated_event.status,
-          computed_phase: updated_event.computed_phase,
-          visibility: updated_event.visibility
-        }
+        event: serialize_event_for_json(updated_event, :publish)
       })
     else
       {:error, :not_found} ->
@@ -508,6 +462,81 @@ defmodule EventasaurusWeb.EventController do
   end
 
   ## Helper Functions for Action API
+
+  defp serialize_event_for_json(event, fields \\ :default) do
+    base_fields = %{
+      id: event.id,
+      slug: event.slug,
+      status: event.status,
+      computed_phase: event.computed_phase
+    }
+
+    case fields do
+      :default ->
+        base_fields
+
+      :full ->
+        Map.merge(base_fields, %{
+          title: event.title,
+          description: event.description,
+          tagline: event.tagline,
+          theme: event.theme,
+          taxation_type: event.taxation_type,
+          is_ticketed: event.is_ticketed,
+          start_at: event.start_at,
+          ends_at: event.ends_at,
+          timezone: event.timezone,
+          visibility: event.visibility
+        })
+
+      :details ->
+        Map.merge(base_fields, %{
+          title: event.title,
+          description: event.description,
+          tagline: event.tagline,
+          theme: event.theme,
+          taxation_type: event.taxation_type,
+          is_ticketed: event.is_ticketed
+        })
+
+      :scheduling ->
+        Map.merge(base_fields, %{
+          start_at: event.start_at,
+          ends_at: event.ends_at,
+          timezone: event.timezone,
+          taxation_type: event.taxation_type,
+          is_ticketed: event.is_ticketed
+        })
+
+      :polling ->
+        Map.merge(base_fields, %{
+          polling_deadline: event.polling_deadline,
+          taxation_type: event.taxation_type,
+          is_ticketed: event.is_ticketed
+        })
+
+      :threshold ->
+        Map.merge(base_fields, %{
+          threshold_count: event.threshold_count,
+          taxation_type: event.taxation_type,
+          is_ticketed: event.is_ticketed
+        })
+
+      :publish ->
+        Map.merge(base_fields, %{
+          visibility: event.visibility,
+          taxation_type: event.taxation_type,
+          is_ticketed: event.is_ticketed
+        })
+
+      custom_fields when is_list(custom_fields) ->
+        custom_data = custom_fields
+        |> Enum.reduce(%{}, fn field, acc ->
+          Map.put(acc, field, Map.get(event, field))
+        end)
+        Map.merge(base_fields, custom_data)
+    end
+  end
 
   defp get_event_with_auth(conn, slug) do
     case Events.get_event_by_slug(slug) do
@@ -558,13 +587,14 @@ defmodule EventasaurusWeb.EventController do
   end
 
   defp extract_event_details(params) do
-    allowed_fields = ["title", "description", "tagline", "cover_image_url", "theme"]
+    allowed_fields = ["title", "description", "tagline", "cover_image_url", "theme", "taxation_type"]
     atom_map = %{
       "title" => :title,
       "description" => :description,
       "tagline" => :tagline,
       "cover_image_url" => :cover_image_url,
-      "theme" => :theme
+      "theme" => :theme,
+      "taxation_type" => :taxation_type
     }
 
     params

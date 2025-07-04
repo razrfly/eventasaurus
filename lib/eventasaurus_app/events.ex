@@ -2020,7 +2020,8 @@ defmodule EventasaurusApp.Events do
     # In the future, this would set up ticket types, pricing, etc.
     # Clear threshold_count since ticketing means the event is confirmed regardless of threshold
     attrs = %{
-      threshold_count: nil
+      threshold_count: nil,
+      is_ticketed: true
     }
 
     changeset = Event.changeset_with_inferred_status(event, attrs)
@@ -2037,7 +2038,7 @@ defmodule EventasaurusApp.Events do
   """
   def add_details(%Event{} = event, details) do
     # Filter to only allowed detail fields
-    allowed_fields = [:title, :description, :tagline, :cover_image_url, :external_image_data, :theme, :theme_customizations]
+    allowed_fields = [:title, :description, :tagline, :cover_image_url, :external_image_data, :theme, :theme_customizations, :taxation_type]
     attrs = Map.take(details, allowed_fields)
 
     # Use regular changeset since we don't want to change status

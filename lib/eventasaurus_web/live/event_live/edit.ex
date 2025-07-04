@@ -87,39 +87,11 @@ defmodule EventasaurusWeb.EventLive.Edit do
               true -> "confirmed"
             end
 
-            # Prepare form data
-            form_data = %{
-              "start_date" => start_date,
-              "start_time" => start_time,
-              "ends_date" => ends_date,
-              "ends_time" => ends_time,
-              "timezone" => event.timezone,
-              "is_virtual" => is_virtual,
-              "cover_image_url" => event.cover_image_url,
-              "external_image_data" => event.external_image_data,
-              "venue_name" => venue_name,
-              "venue_address" => venue_address,
-              "venue_city" => venue_city,
-              "venue_state" => venue_state,
-              "venue_country" => venue_country,
-              "venue_latitude" => venue_latitude,
-              "venue_longitude" => venue_longitude,
-              "enable_date_polling" => enable_date_polling,
-              "selected_poll_dates" => selected_poll_dates,
-              "polling_deadline" => if(event.polling_deadline, do: DateTime.to_iso8601(event.polling_deadline), else: ""),
-              "polling_deadline_date" => polling_deadline_date,
-              "polling_deadline_time" => polling_deadline_time,
-              "is_ticketed" => event.is_ticketed,
-              "setup_path" => setup_path,
-              "requires_threshold" => Map.get(event, :requires_threshold, false)
-            }
-
             # Load existing tickets for the event
-            existing_tickets = if event.is_ticketed do
-              Ticketing.list_tickets_for_event(event.id)
-            else
-              []
-            end
+            existing_tickets = Ticketing.list_tickets_for_event(event.id)
+
+            # Fix is_ticketed flag based on actual ticket existence
+            actual_is_ticketed = length(existing_tickets) > 0
 
             # Load recent locations for the user (excluding current event)
             recent_locations = Events.get_recent_locations_for_user(user.id,
@@ -135,7 +107,33 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:form, to_form(changeset))
               |> assign(:changeset, changeset)
               |> assign(:user, user)
-              |> assign(:form_data, form_data)
+              |> assign(:form_data, %{
+                "start_date" => start_date,
+                "start_time" => start_time,
+                "ends_date" => ends_date,
+                "ends_time" => ends_time,
+                "timezone" => event.timezone,
+                "is_virtual" => is_virtual,
+                "cover_image_url" => event.cover_image_url,
+                "external_image_data" => event.external_image_data,
+                "venue_name" => venue_name,
+                "venue_address" => venue_address,
+                "venue_city" => venue_city,
+                "venue_state" => venue_state,
+                "venue_country" => venue_country,
+                "venue_latitude" => venue_latitude,
+                "venue_longitude" => venue_longitude,
+                "enable_date_polling" => enable_date_polling,
+                "selected_poll_dates" => selected_poll_dates,
+                "polling_deadline" => if(event.polling_deadline, do: DateTime.to_iso8601(event.polling_deadline), else: ""),
+                "polling_deadline_date" => polling_deadline_date,
+                "polling_deadline_time" => polling_deadline_time,
+                "is_ticketed" => actual_is_ticketed,
+                "setup_path" => setup_path,
+                "requires_threshold" => Map.get(event, :requires_threshold, false),
+                "taxation_type" => determine_edit_taxation_default(event),
+                "taxation_type_reasoning" => get_taxation_reasoning_for_edit(event)
+              })
               |> assign(:is_virtual, is_virtual)
               |> assign(:selected_venue_name, venue_name)
               |> assign(:selected_venue_address, venue_address)
@@ -348,6 +346,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> Events.change_event(final_event_params)
       |> Map.put(:action, :validate)
       |> validate_date_polling(final_event_params)
+      # Add validation to prevent ticketless when tickets exist
+      |> Events.Event.validate_tickets_taxation_consistency(length(socket.assigns.tickets || []))
 
     Logger.info("=== VALIDATION STEP ===")
     Logger.info("Validation changeset valid?: #{validation_changeset.valid?}")
@@ -661,7 +661,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
     current_bool = current_value in [true, "true"]
     new_value = !current_bool
 
-    form_data = Map.put(socket.assigns.form_data, "is_ticketed", new_value)
+    # Update form_data with smart taxation type changes
+    form_data = socket.assigns.form_data
+    |> Map.put("is_ticketed", new_value)
+    |> update_taxation_for_ticketing_change(new_value)
 
     # Reset ticketing-related assigns when disabling ticketing
     socket = if new_value do
@@ -1543,6 +1546,99 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
+  # ============================================================================
+  # Smart Default Value Helpers for Edit Mode
+  # ============================================================================
 
+  # Determines smart default for taxation_type when editing existing events
+  defp determine_edit_taxation_default(event) do
+    # If event already has a taxation_type, use it
+    if event.taxation_type && event.taxation_type != "" do
+      event.taxation_type
+    else
+      # For existing events without taxation_type, infer from other characteristics
+      cond do
+        # If event has ticketing enabled, default to ticketed_event
+        event.is_ticketed == true ->
+          "ticketed_event"
+        # If event has paid elements, still suggest ticketed_event
+        has_paid_elements?(event) ->
+          "ticketed_event"
+        # Default fallback to ticketless
+        true ->
+          "ticketless"
+      end
+    end
+  end
+
+  # Provides reasoning for taxation type selection in edit mode
+  defp get_taxation_reasoning_for_edit(event) do
+
+    cond do
+      # Event already has taxation_type set
+      event.taxation_type && event.taxation_type != "" ->
+        case event.taxation_type do
+          "ticketless" -> "Currently ticketless - no payment processing needed"
+          "ticketed_event" -> "Configured for standard ticketed events"
+          "contribution_collection" -> "Configured for contribution-based events"
+          _ -> "Custom taxation configuration"
+        end
+
+      # Inferred from event characteristics
+      event.is_ticketed == true ->
+        "Recommended because ticketing is enabled for this event"
+
+      has_paid_elements?(event) ->
+        "Suggested due to paid elements in this event"
+
+      # Default reasoning
+      true ->
+        "Default setting for events without specific taxation requirements"
+    end
+  end
+
+  # Helper to check if event has paid elements
+  defp has_paid_elements?(event) do
+    # Check if event has tickets or other paid components
+    event.is_ticketed == true
+  end
+
+
+
+  # Updates taxation type when ticketing status changes
+  # Note: With the new UX, this is less relevant since taxation is only shown when tickets exist
+  defp update_taxation_for_ticketing_change(form_data, is_ticketed) do
+    current_taxation = Map.get(form_data, "taxation_type", "ticketless")
+
+    case {is_ticketed, current_taxation} do
+      # If enabling ticketing and currently ticketless, change to ticketed_event
+      {true, "ticketless"} ->
+        form_data
+        |> Map.put("taxation_type", "ticketed_event")
+        |> Map.put("taxation_type_reasoning", "Changed to ticketed_event because tickets were added")
+
+      # If disabling ticketing and currently ticketed_event, revert to ticketless
+      {false, "ticketed_event"} ->
+        form_data
+        |> Map.put("taxation_type", "ticketless")
+        |> Map.put("taxation_type_reasoning", "Reverted to ticketless since no tickets exist")
+
+      # For contribution_collection, keep it even if ticketing disabled (donations don't require formal ticketing)
+      {false, "contribution_collection"} ->
+        form_data
+        |> Map.put("taxation_type_reasoning", "Maintained contribution collection configuration")
+
+      # Otherwise, keep current selection
+      _ ->
+        form_data
+        |> Map.put("taxation_type_reasoning",
+          case current_taxation do
+            "ticketless" -> "No tickets exist - automatically ticketless"
+            "ticketed_event" -> "Standard ticketed event configuration"
+            "contribution_collection" -> "Contribution-based event configuration"
+            _ -> "Current configuration maintained"
+          end)
+    end
+  end
 
 end

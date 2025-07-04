@@ -80,15 +80,27 @@ defmodule EventasaurusApp.Ticketing do
 
   """
   def create_ticket(%Event{} = event, attrs \\ %{}) do
-    %Ticket{}
-    |> Ticket.changeset(Map.put(attrs, :event_id, event.id))
-    |> Repo.insert()
-    |> case do
-      {:ok, ticket} ->
-        maybe_broadcast_ticket_update(ticket, :created)
-        {:ok, ticket}
-      error ->
-        error
+    # Validate that tickets can be created for this event
+    case validate_ticketing_allowed(event) do
+      :ok ->
+        %Ticket{}
+        |> Ticket.changeset(Map.put(attrs, :event_id, event.id))
+        |> Repo.insert()
+        |> case do
+          {:ok, ticket} ->
+            maybe_broadcast_ticket_update(ticket, :created)
+            {:ok, ticket}
+          error ->
+            error
+        end
+
+      {:error, reason} ->
+        # Create a changeset with the validation error
+        changeset =
+          %Ticket{}
+          |> Ticket.changeset(Map.put(attrs, :event_id, event.id))
+          |> Ecto.Changeset.add_error(:event_id, reason)
+        {:error, changeset}
     end
   end
 
@@ -462,7 +474,11 @@ defmodule EventasaurusApp.Ticketing do
       # Lock the ticket row to prevent concurrent modifications
       locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
 
-      with :ok <- validate_ticket_availability(locked_ticket, quantity),
+      # Load event to check taxation type
+      event = Repo.get!(Event, locked_ticket.event_id)
+
+      with :ok <- validate_payment_processing_allowed(event),
+           :ok <- validate_ticket_availability(locked_ticket, quantity),
            :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
            {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
            {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
@@ -927,7 +943,11 @@ defmodule EventasaurusApp.Ticketing do
       # Lock the ticket row to prevent concurrent modifications
       locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
 
-      with :ok <- validate_ticket_availability(locked_ticket, quantity),
+      # Load event to check taxation type
+      event = Repo.get!(Event, locked_ticket.event_id)
+
+      with :ok <- validate_payment_processing_allowed(event),
+           :ok <- validate_ticket_availability(locked_ticket, quantity),
            :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
            {:ok, pricing} <- calculate_order_pricing(locked_ticket, quantity, custom_price_cents, tip_cents),
            {:ok, connect_account} <- get_event_organizer_stripe_account(locked_ticket.event_id),
@@ -998,7 +1018,11 @@ defmodule EventasaurusApp.Ticketing do
       else
         event_id = hd(event_ids)
 
-        with {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
+        # Load event to check taxation type
+        event = Repo.get!(Event, event_id)
+
+        with :ok <- validate_payment_processing_allowed(event),
+             {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
              {:ok, {orders, total_amount, line_items}} <- create_orders_and_line_items(user, order_items, connect_account),
              {:ok, checkout_session} <- create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id) do
 
@@ -1172,7 +1196,11 @@ defmodule EventasaurusApp.Ticketing do
         end
 
         # Now create the multi-ticket checkout session
-        with {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
+        # Load event to check taxation type
+        event = Repo.get!(Event, event_id)
+
+        with :ok <- validate_payment_processing_allowed(event),
+             {:ok, connect_account} <- get_event_organizer_stripe_account(event_id),
              {:ok, {orders, total_amount, line_items}} <- create_guest_orders_and_line_items(user, order_items, connect_account, name, email),
              {:ok, checkout_session} <- create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id, customer_email: email) do
 
@@ -1432,6 +1460,20 @@ defmodule EventasaurusApp.Ticketing do
       _pid -> true
     end
   end
+
+    # Validates whether ticketing functionality is allowed for an event
+  defp validate_ticketing_allowed(%Event{taxation_type: "ticketless"}) do
+    {:error, "Tickets cannot be created for ticketless events. Change the event's taxation type to 'Ticketed Event' or 'Contribution Collection' to enable ticketing."}
+  end
+
+  defp validate_ticketing_allowed(%Event{}), do: :ok
+
+  # Validates whether payment processing is allowed for an event
+  defp validate_payment_processing_allowed(%Event{taxation_type: "ticketless"}) do
+    {:error, :ticketless_payment_blocked}
+  end
+
+  defp validate_payment_processing_allowed(%Event{}), do: :ok
 
   # Guest checkout helper functions
 

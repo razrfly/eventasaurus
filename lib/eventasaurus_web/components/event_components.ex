@@ -692,6 +692,8 @@ defmodule EventasaurusWeb.EventComponents do
               <.input field={f[:title]} type="text" label="Event Title" required class="text-lg" />
             </div>
 
+
+
             <!-- Date & Time (compact) -->
             <div class="mb-4">
               <h3 class="text-sm font-semibold text-gray-700 mb-2">When</h3>
@@ -1288,8 +1290,33 @@ defmodule EventasaurusWeb.EventComponents do
                     </div>
                   </div>
                 </div>
+
+                <!-- Event Taxation Classification (show only when tickets exist) -->
+                <%= if length(@tickets || []) > 0 do %>
+                  <div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex items-center mb-2">
+                      <svg class="w-4 h-4 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                      </svg>
+                      <h4 class="text-sm font-medium text-blue-800">Payment Processing Type</h4>
+                    </div>
+                    <.taxation_type_selector
+                      field={f[:taxation_type]}
+                      value={Map.get(@form_data, "taxation_type", "ticketed_event")}
+                      errors={f[:taxation_type].errors}
+                      required={true}
+                      reasoning={Map.get(@form_data, "taxation_type_reasoning", "")}
+                      hide_ticketless={true}
+                    />
+                  </div>
+                <% end %>
               <% end %>
               </div>
+            <% end %>
+
+            <!-- Hidden field to ensure taxation_type is submitted for ticketless events -->
+            <%= unless length(@tickets || []) > 0 do %>
+              <input type="hidden" name="event[taxation_type]" value="ticketless" />
             <% end %>
           </div>
         </div>
