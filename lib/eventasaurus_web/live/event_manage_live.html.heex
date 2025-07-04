@@ -376,8 +376,29 @@
                 </svg>
               </div>
 
+              <!-- Email Status Filter -->
+              <div class="relative">
+                <select 
+                  name="email_status_filter"
+                  value={@guests_email_filter || ""}
+                  class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style="background-image: none !important;"
+                >
+                  <option value="" selected={@guests_email_filter == nil}>All Email Status</option>
+                  <option value="not_sent" selected={@guests_email_filter == "not_sent"}>Not Sent</option>
+                  <option value="sending" selected={@guests_email_filter == "sending"}>Sending</option>
+                  <option value="sent" selected={@guests_email_filter == "sent"}>Sent</option>
+                  <option value="delivered" selected={@guests_email_filter == "delivered"}>Delivered</option>
+                  <option value="failed" selected={@guests_email_filter == "failed"}>Failed</option>
+                  <option value="bounced" selected={@guests_email_filter == "bounced"}>Bounced</option>
+                </select>
+                <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+              </div>
+
               <!-- Clear Filters -->
-              <%= if @guests_source_filter || @guests_status_filter do %>
+              <%= if @guests_source_filter || @guests_status_filter || @guests_email_filter do %>
                 <button
                   phx-click="clear_guest_filters"
                   type="button"
@@ -394,7 +415,7 @@
 
           <!-- Guest List -->
           <div class="divide-y divide-gray-200">
-            <%= for participant <- get_filtered_participants(@participants, @guests_source_filter, @guests_status_filter) do %>
+            <%= for participant <- get_filtered_participants(@participants, @guests_source_filter, @guests_status_filter, @guests_email_filter) do %>
               <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
                 <div class="flex items-center justify-between">
                   <!-- User Info with Avatar -->
@@ -447,9 +468,9 @@
                   </div>
 
                   <!-- Status and Actions -->
-                  <div class="flex items-center gap-4 flex-shrink-0">
-                    <div class="text-right">
-                      <div class="text-sm text-gray-500 mb-1">
+                                      <div class="flex items-center gap-4 flex-shrink-0">
+                    <div class="text-right space-y-1">
+                      <div class="text-sm text-gray-500">
                         Registered <%= Calendar.strftime(participant.inserted_at, "%m/%d/%Y") %>
                       </div>
                       <!-- Status Badge -->
@@ -457,6 +478,12 @@
                       <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{status_class}"}>
                         <%= status_text %>
                       </span>
+                      <!-- Email Status Badge -->
+                      <% email_status = EventasaurusApp.Events.EventParticipant.get_email_status(participant).status %>
+                      <div class="flex items-center gap-1">
+                        <span class="text-xs text-gray-500">Email:</span>
+                        <.email_status_badge status={email_status} class="text-xs" />
+                      </div>
                     </div>
                     
                     <!-- Actions Menu -->
@@ -488,6 +515,21 @@
                               </svg>
                               Send Email
                             </a>
+                            
+                            <!-- Show retry button only if email failed or needs retry -->
+                            <% participant_email_status = EventasaurusApp.Events.EventParticipant.get_email_status(participant) %>
+                            <%= if participant_email_status.status in ["failed", "bounced"] && EventasaurusApp.Events.EventParticipant.can_retry_email?(participant) do %>
+                              <button 
+                                phx-click="retry_participant_email"
+                                phx-value-participant_id={participant.id}
+                                class="flex items-center w-full px-4 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                              >
+                                <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Retry Email
+                              </button>
+                            <% end %>
                           <% end %>
                           
                           <%= if participant.status != :cancelled do %>

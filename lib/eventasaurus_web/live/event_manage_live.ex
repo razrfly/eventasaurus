@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.EventManageLive do
   alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   import EventasaurusWeb.Components.GuestInvitationModal
+  import EventasaurusWeb.EmailStatusComponents
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
@@ -60,6 +61,7 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:participants_loading, false)
                |> assign(:guests_source_filter, nil)  # Guest filtering state
                |> assign(:guests_status_filter, nil)  # Guest filtering state
+               |> assign(:guests_email_filter, nil)  # Email status filtering state
                |> assign(:tickets, tickets)
                |> assign(:orders, orders)
                |> assign(:analytics_data, analytics_data)  # Required for insights tab
@@ -303,25 +305,34 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_event("filter_guests", %{"source_filter" => source, "status_filter" => status}, socket) do
-    source_filter = if source == "", do: nil, else: source
+  def handle_event("filter_guests", params, socket) do
+    source_filter = case Map.get(params, "source_filter") do
+      "" -> nil
+      source -> source
+    end
 
-    status_filter = if status == "" do
-      nil
-    else
-      try do
-        String.to_existing_atom(status)
-      rescue
-        ArgumentError ->
-          # Handle invalid status atom
-          nil
-      end
+    status_filter = case Map.get(params, "status_filter") do
+      "" -> nil
+      status ->
+        try do
+          String.to_existing_atom(status)
+        rescue
+          ArgumentError ->
+            # Handle invalid status atom
+            nil
+        end
+    end
+
+    email_filter = case Map.get(params, "email_status_filter") do
+      "" -> nil
+      email_status -> email_status
     end
 
     {:noreply,
      socket
      |> assign(:guests_source_filter, source_filter)
-     |> assign(:guests_status_filter, status_filter)}
+     |> assign(:guests_status_filter, status_filter)
+     |> assign(:guests_email_filter, email_filter)}
   end
 
   @impl true
@@ -329,7 +340,8 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply,
      socket
      |> assign(:guests_source_filter, nil)
-     |> assign(:guests_status_filter, nil)}
+     |> assign(:guests_status_filter, nil)
+     |> assign(:guests_email_filter, nil)}
   end
 
   @impl true
@@ -373,6 +385,38 @@ defmodule EventasaurusWeb.EventManageLive do
 
       :error ->
         {:noreply, put_flash(socket, :error, "Invalid participant ID")}
+    end
+  end
+
+  @impl true
+  def handle_event("retry_participant_email", %{"participant_id" => participant_id}, socket) do
+    participant_id = String.to_integer(participant_id)
+    event = socket.assigns.event
+
+    # Find the participant
+    participant = Enum.find(socket.assigns.participants, &(&1.id == participant_id))
+
+    if participant do
+      case Events.retry_single_email(participant, event) do
+        :ok ->
+          # Refresh participants to show updated email status
+          updated_participants = Events.list_event_participants(event, limit: socket.assigns.participants_loaded)
+                               |> Enum.sort_by(& &1.inserted_at, :desc)
+
+          {:noreply,
+           socket
+           |> assign_participants_with_stats(updated_participants)
+           |> put_flash(:info, "Email retry initiated for #{participant.user.name || participant.user.email}")}
+
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to retry email: #{reason}")}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Participant not found")}
     end
   end
 
@@ -431,6 +475,31 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
+  def handle_event("load_more_participants", _params, socket) do
+    if socket.assigns.participants_loaded < socket.assigns.participants_count do
+      socket = assign(socket, :participants_loading, true)
+
+      # Load next batch of participants
+      next_batch = Events.list_event_participants(
+        socket.assigns.event,
+        limit: 20,
+        offset: socket.assigns.participants_loaded
+      ) |> Enum.sort_by(& &1.inserted_at, :desc)
+
+      # Combine with existing participants
+      updated_participants = socket.assigns.participants ++ next_batch
+
+      {:noreply,
+       socket
+       |> assign_participants_with_stats(updated_participants)
+       |> assign(:participants_loaded, socket.assigns.participants_loaded + length(next_batch))
+       |> assign(:participants_loading, false)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_info(:refresh_analytics, socket) do
     # Periodic refresh of analytics data
     analytics_data = fetch_analytics_data(socket.assigns.event.id)
@@ -479,30 +548,7 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-    @impl true
-  def handle_event("load_more_participants", _params, socket) do
-    if socket.assigns.participants_loaded < socket.assigns.participants_count do
-      socket = assign(socket, :participants_loading, true)
 
-      # Load next batch of participants
-      next_batch = Events.list_event_participants(
-        socket.assigns.event,
-        limit: 20,
-        offset: socket.assigns.participants_loaded
-      ) |> Enum.sort_by(& &1.inserted_at, :desc)
-
-      # Combine with existing participants
-      updated_participants = socket.assigns.participants ++ next_batch
-
-      {:noreply,
-       socket
-       |> assign_participants_with_stats(updated_participants)
-       |> assign(:participants_loaded, socket.assigns.participants_loaded + length(next_batch))
-       |> assign(:participants_loading, false)}
-    else
-      {:noreply, socket}
-    end
-  end
 
   # Helper functions
 
@@ -671,11 +717,12 @@ defmodule EventasaurusWeb.EventManageLive do
 
 # Guest filtering and UI helper functions
 
-  # Helper function to filter participants by source and status
-    defp get_filtered_participants(participants, source_filter, status_filter) do
+  # Helper function to filter participants by source, status, and email status
+  defp get_filtered_participants(participants, source_filter, status_filter, email_filter) do
     participants
     |> filter_by_source(source_filter)
     |> filter_by_status(status_filter)
+    |> filter_by_email_status(email_filter)
   end
 
   defp filter_by_source(participants, nil), do: participants
@@ -703,6 +750,16 @@ defmodule EventasaurusWeb.EventManageLive do
   defp filter_by_status(participants, nil), do: participants
   defp filter_by_status(participants, status) do
     Enum.filter(participants, fn p -> p.status == status end)
+  end
+
+  defp filter_by_email_status(participants, nil), do: participants
+  defp filter_by_email_status(participants, email_status) do
+    alias EventasaurusApp.Events.EventParticipant
+
+    Enum.filter(participants, fn p ->
+      current_status = EventParticipant.get_email_status(p).status
+      current_status == email_status
+    end)
   end
 
   # Helper functions to get badge data (safer than Phoenix.HTML.raw)
