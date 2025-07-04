@@ -185,14 +185,19 @@ defmodule EventasaurusApp.Events.Event do
 
   defp validate_threshold_count(changeset) do
     status = get_field(changeset, :status)
+    threshold_type = get_field(changeset, :threshold_type)
     threshold_count = get_field(changeset, :threshold_count)
 
-    case {status, threshold_count} do
-      {:threshold, nil} ->
-        add_error(changeset, :threshold_count, "is required when status is threshold")
-      {:threshold, count} when is_integer(count) and count > 0 ->
+    case {status, threshold_type, threshold_count} do
+      # For threshold events with revenue-only type, threshold_count is not required
+      {:threshold, "revenue", _} ->
         changeset
-      {:threshold, _} ->
+      # For attendee_count and both types, threshold_count is required
+      {:threshold, type, nil} when type in ["attendee_count", "both"] ->
+        add_error(changeset, :threshold_count, "is required when threshold type is #{type}")
+      {:threshold, _type, count} when is_integer(count) and count > 0 ->
+        changeset
+      {:threshold, _type, _} ->
         add_error(changeset, :threshold_count, "must be a positive integer")
       _ -> changeset
     end

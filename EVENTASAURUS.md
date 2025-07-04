@@ -135,6 +135,89 @@ mix currencies.refresh
 # - Fall back to hardcoded currencies if API unavailable
 ```
 
+## Event Threshold System
+
+Eventasaurus supports event thresholds to ensure events reach minimum attendance or revenue goals before proceeding.
+
+### Threshold Types
+
+Events can have three types of thresholds:
+
+1. **Attendee Count** - Event needs a minimum number of confirmed attendees
+2. **Revenue** - Event needs to reach a minimum revenue amount  
+3. **Both** - Event needs to meet both attendee count AND revenue thresholds
+
+### Features
+
+- ✅ **Flexible threshold configuration** - Choose attendee, revenue, or both
+- ✅ **Real-time threshold tracking** - Automatic calculation of current progress
+- ✅ **Visual progress indicators** - Progress bars showing threshold completion
+- ✅ **Smart validation** - Ensures threshold configuration makes sense
+- ✅ **Query functions** - Easy filtering of events by threshold status
+
+### Setting Event Thresholds
+
+When creating or editing an event:
+
+1. **Select threshold type** using radio buttons:
+   - "Attendee Count" - Set minimum number of attendees
+   - "Revenue" - Set minimum revenue amount  
+   - "Both" - Set both attendee and revenue minimums
+
+2. **Set threshold values**:
+   - **Threshold Count**: Number of confirmed attendees needed
+   - **Threshold Revenue**: Minimum revenue amount (in dollars)
+
+3. **Threshold validation**:
+   - Attendee count must be positive for "attendee_count" and "both" types
+   - Revenue amount must be positive for "revenue" and "both" types
+   - Values are automatically converted (dollars to cents internally)
+
+### Checking Threshold Status
+
+```elixir
+# Check if an event has met its threshold
+EventasaurusApp.Events.Event.threshold_met?(event)
+
+# Get events by threshold status
+EventasaurusApp.Events.list_threshold_events()
+EventasaurusApp.Events.list_threshold_met_events()
+EventasaurusApp.Events.list_threshold_pending_events()
+
+# Filter events by threshold type
+EventasaurusApp.Events.list_events_by_threshold_type("revenue")
+EventasaurusApp.Events.list_events_by_threshold_type("attendee_count")
+EventasaurusApp.Events.list_events_by_threshold_type("both")
+
+# Filter by minimum values
+EventasaurusApp.Events.list_events_by_min_revenue(5000) # $50.00
+EventasaurusApp.Events.list_events_by_min_attendee_count(10)
+```
+
+### Threshold Progress Display
+
+The threshold progress component automatically shows:
+- Current attendee count vs. threshold goal
+- Current revenue vs. threshold goal (for revenue thresholds)
+- Visual progress bars with completion percentages
+- Color-coded status (green when met, orange when pending)
+
+### Database Schema
+
+```sql
+-- New threshold fields added to events table
+ALTER TABLE events ADD COLUMN threshold_type VARCHAR(255) DEFAULT 'attendee_count';
+ALTER TABLE events ADD COLUMN threshold_revenue_cents INTEGER;
+ALTER TABLE events ADD CONSTRAINT valid_threshold_type 
+  CHECK (threshold_type IN ('attendee_count', 'revenue', 'both'));
+```
+
+### Migration Notes
+
+- Existing events automatically default to "attendee_count" threshold type
+- All existing functionality remains unchanged
+- New fields are optional and validated appropriately
+
 ## Testing
 
 Run the full test suite:
@@ -199,7 +282,7 @@ All currency selection forms use the standardized `currency_select` component:
   id="event_currency" 
   name="event[currency]" 
   value={@event.currency}
-  use_stripe_data={true} 
+  user={@user}
 />
 ```
 
