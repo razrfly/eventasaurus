@@ -60,8 +60,7 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:participants_loaded, length(initial_participants))
                |> assign(:participants_loading, false)
                |> assign(:guests_source_filter, nil)  # Guest filtering state
-               |> assign(:guests_status_filter, nil)  # Guest filtering state
-               |> assign(:guests_email_filter, nil)  # Email status filtering state
+               |> assign(:guests_status_filter, nil)  # Smart combined status filtering state
                |> assign(:tickets, tickets)
                |> assign(:orders, orders)
                |> assign(:analytics_data, analytics_data)  # Required for insights tab
@@ -313,26 +312,13 @@ defmodule EventasaurusWeb.EventManageLive do
 
     status_filter = case Map.get(params, "status_filter") do
       "" -> nil
-      status ->
-        try do
-          String.to_existing_atom(status)
-        rescue
-          ArgumentError ->
-            # Handle invalid status atom
-            nil
-        end
-    end
-
-    email_filter = case Map.get(params, "email_status_filter") do
-      "" -> nil
-      email_status -> email_status
+      status -> status  # Keep as string for combined filtering
     end
 
     {:noreply,
      socket
      |> assign(:guests_source_filter, source_filter)
-     |> assign(:guests_status_filter, status_filter)
-     |> assign(:guests_email_filter, email_filter)}
+     |> assign(:guests_status_filter, status_filter)}
   end
 
   @impl true
@@ -340,8 +326,7 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply,
      socket
      |> assign(:guests_source_filter, nil)
-     |> assign(:guests_status_filter, nil)
-     |> assign(:guests_email_filter, nil)}
+     |> assign(:guests_status_filter, nil)}
   end
 
   @impl true
@@ -717,12 +702,11 @@ defmodule EventasaurusWeb.EventManageLive do
 
 # Guest filtering and UI helper functions
 
-  # Helper function to filter participants by source, status, and email status
-  defp get_filtered_participants(participants, source_filter, status_filter, email_filter) do
+  # Helper function to filter participants by source and combined status
+  defp get_filtered_participants(participants, source_filter, status_filter) do
     participants
     |> filter_by_source(source_filter)
-    |> filter_by_status(status_filter)
-    |> filter_by_email_status(email_filter)
+    |> filter_by_combined_status(status_filter)
   end
 
   defp filter_by_source(participants, nil), do: participants
@@ -747,19 +731,50 @@ defmodule EventasaurusWeb.EventManageLive do
     end)
   end
 
-  defp filter_by_status(participants, nil), do: participants
-  defp filter_by_status(participants, status) do
-    Enum.filter(participants, fn p -> p.status == status end)
-  end
-
-  defp filter_by_email_status(participants, nil), do: participants
-  defp filter_by_email_status(participants, email_status) do
+  defp filter_by_combined_status(participants, nil), do: participants
+  defp filter_by_combined_status(participants, combined_status) do
     alias EventasaurusApp.Events.EventParticipant
 
-    Enum.filter(participants, fn p ->
-      current_status = EventParticipant.get_email_status(p).status
-      current_status == email_status
-    end)
+    case combined_status do
+      "pending_email_sent" ->
+        participants
+        |> Enum.filter(&(&1.status == :pending))
+        |> Enum.filter(&email_was_sent?/1)
+
+      "pending_no_email" ->
+        participants
+        |> Enum.filter(&(&1.status == :pending))
+        |> Enum.filter(&email_not_sent?/1)
+
+      "failed_email" ->
+        Enum.filter(participants, &email_failed?/1)
+
+      status when status in ["accepted", "declined", "cancelled", "confirmed_with_order"] ->
+        status_atom = String.to_existing_atom(status)
+        Enum.filter(participants, fn p -> p.status == status_atom end)
+
+      _ ->
+        participants
+    end
+  end
+
+  # Helper functions for email status checks
+  defp email_was_sent?(participant) do
+    alias EventasaurusApp.Events.EventParticipant
+    email_status = EventParticipant.get_email_status(participant).status
+    email_status in ["sent", "delivered", "bounced"]
+  end
+
+  defp email_not_sent?(participant) do
+    alias EventasaurusApp.Events.EventParticipant
+    email_status = EventParticipant.get_email_status(participant).status
+    email_status in ["not_sent", "sending", "retrying"]
+  end
+
+  defp email_failed?(participant) do
+    alias EventasaurusApp.Events.EventParticipant
+    email_status = EventParticipant.get_email_status(participant).status
+    email_status in ["failed", "bounced"]
   end
 
   # Helper functions to get badge data (safer than Phoenix.HTML.raw)

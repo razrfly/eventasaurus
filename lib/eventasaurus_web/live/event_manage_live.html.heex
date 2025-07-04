@@ -356,7 +356,7 @@
                 </svg>
               </div>
 
-              <!-- Status Filter -->
+              <!-- Smart Combined Status Filter -->
               <div class="relative">
                 <select 
                   name="status_filter"
@@ -364,33 +364,14 @@
                   class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   style="background-image: none !important;"
                 >
-                  <option value="" selected={@guests_status_filter == nil}>All Statuses</option>
-                  <option value="pending" selected={@guests_status_filter == :pending}>Pending</option>
-                  <option value="accepted" selected={@guests_status_filter == :accepted}>Accepted</option>
-                  <option value="confirmed_with_order" selected={@guests_status_filter == :confirmed_with_order}>Confirmed with Order</option>
-                  <option value="declined" selected={@guests_status_filter == :declined}>Declined</option>
-                  <option value="cancelled" selected={@guests_status_filter == :cancelled}>Cancelled</option>
-                </select>
-                <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-                </svg>
-              </div>
-
-              <!-- Email Status Filter -->
-              <div class="relative">
-                <select 
-                  name="email_status_filter"
-                  value={@guests_email_filter || ""}
-                  class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  style="background-image: none !important;"
-                >
-                  <option value="" selected={@guests_email_filter == nil}>All Email Status</option>
-                  <option value="not_sent" selected={@guests_email_filter == "not_sent"}>Not Sent</option>
-                  <option value="sending" selected={@guests_email_filter == "sending"}>Sending</option>
-                  <option value="sent" selected={@guests_email_filter == "sent"}>Sent</option>
-                  <option value="delivered" selected={@guests_email_filter == "delivered"}>Delivered</option>
-                  <option value="failed" selected={@guests_email_filter == "failed"}>Failed</option>
-                  <option value="bounced" selected={@guests_email_filter == "bounced"}>Bounced</option>
+                  <option value="" selected={@guests_status_filter == nil}>All Participants</option>
+                  <option value="pending_email_sent" selected={@guests_status_filter == "pending_email_sent"}>Pending (Email Sent)</option>
+                  <option value="pending_no_email" selected={@guests_status_filter == "pending_no_email"}>Pending (No Email)</option>
+                  <option value="accepted" selected={@guests_status_filter == "accepted"}>Accepted</option>
+                  <option value="declined" selected={@guests_status_filter == "declined"}>Declined</option>
+                  <option value="cancelled" selected={@guests_status_filter == "cancelled"}>Cancelled</option>
+                  <option value="confirmed_with_order" selected={@guests_status_filter == "confirmed_with_order"}>Confirmed with Order</option>
+                  <option value="failed_email" selected={@guests_status_filter == "failed_email"}>Failed Email Delivery</option>
                 </select>
                 <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
@@ -398,7 +379,7 @@
               </div>
 
               <!-- Clear Filters -->
-              <%= if @guests_source_filter || @guests_status_filter || @guests_email_filter do %>
+              <%= if @guests_source_filter || @guests_status_filter do %>
                 <button
                   phx-click="clear_guest_filters"
                   type="button"
@@ -415,7 +396,7 @@
 
           <!-- Guest List -->
           <div class="divide-y divide-gray-200">
-            <%= for participant <- get_filtered_participants(@participants, @guests_source_filter, @guests_status_filter, @guests_email_filter) do %>
+            <%= for participant <- get_filtered_participants(@participants, @guests_source_filter, @guests_status_filter) do %>
               <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
                 <div class="flex items-center justify-between">
                   <!-- User Info with Avatar -->
@@ -468,21 +449,20 @@
                   </div>
 
                   <!-- Status and Actions -->
-                                      <div class="flex items-center gap-4 flex-shrink-0">
-                    <div class="text-right space-y-1">
-                      <div class="text-sm text-gray-500">
-                        Registered <%= Calendar.strftime(participant.inserted_at, "%m/%d/%Y") %>
-                      </div>
-                      <!-- Status Badge -->
-                      <% {status_text, status_class} = get_status_badge_data(participant.status) %>
-                      <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{status_class}"}>
-                        <%= status_text %>
-                      </span>
-                      <!-- Email Status Badge -->
-                      <% email_status = EventasaurusApp.Events.EventParticipant.get_email_status(participant).status %>
-                      <div class="flex items-center gap-1">
-                        <span class="text-xs text-gray-500">Email:</span>
-                        <.email_status_badge status={email_status} class="text-xs" />
+                  <div class="flex items-center gap-4 flex-shrink-0">
+                    <div class="text-right">
+                      <div class="flex items-center gap-2 justify-end mb-1">
+                        <div class="text-sm text-gray-500">
+                          <%= Calendar.strftime(participant.inserted_at, "%m/%d") %>
+                        </div>
+                        <!-- Status Badge -->
+                        <% {status_text, status_class} = get_status_badge_data(participant.status) %>
+                        <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{status_class}"}>
+                          <%= status_text %>
+                        </span>
+                        <!-- Compact Email Status Indicator -->
+                        <% email_status = EventasaurusApp.Events.EventParticipant.get_email_status(participant) %>
+                        <.compact_email_indicator email_status={email_status} class="text-base" />
                       </div>
                     </div>
                     
