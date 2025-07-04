@@ -32,6 +32,12 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
           {:ok, currencies} -> currencies
           {:error, :not_found} -> fallback_currencies()
         end
+      {:error, :expired} ->
+        refresh_currencies()
+        case get_from_cache() do
+          {:ok, currencies} -> currencies
+          _ -> fallback_currencies()
+        end
     end
   end
 
