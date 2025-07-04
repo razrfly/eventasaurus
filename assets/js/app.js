@@ -1088,26 +1088,26 @@ Hooks.VenueSearchWithFiltering = {
     if (this.autocomplete) {
       this.googlePlacesEnabled = false;
       
-      // Disable the autocomplete by setting empty types
-      this.autocomplete.setOptions({
-        types: []
-      });
+      // Disable the autocomplete by unbinding it
+      if (this.autocomplete.unbindAll) {
+        this.autocomplete.unbindAll();
+      } else {
+        // Fallback: set restrictive bounds to effectively disable
+        this.autocomplete.setOptions({
+          types: [],
+          bounds: new google.maps.LatLngBounds(
+            new google.maps.LatLng(0, 0),
+            new google.maps.LatLng(0, 0)
+          ),
+          strictBounds: true
+        });
+      }
       
       // Force hide any visible suggestions dropdown
       const pacContainers = document.querySelectorAll('.pac-container');
       pacContainers.forEach(container => {
         container.style.display = 'none';
       });
-      
-      // Additional cleanup: trigger escape key to close suggestions
-      try {
-        google.maps.event.trigger(this.autocomplete, 'keydown', { 
-          keyCode: 27, 
-          key: 'Escape' 
-        });
-      } catch (error) {
-        // Ignore any errors in hiding suggestions
-      }
       
       if (process.env.NODE_ENV !== 'production') console.log("Google Places disabled and suggestions hidden");
     }

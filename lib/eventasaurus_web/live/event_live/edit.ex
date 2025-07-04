@@ -1016,72 +1016,46 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("create_zoom_meeting", _params, socket) do
-    zoom_url = EventasaurusWeb.Helpers.EventHelpers.generate_zoom_meeting_url()
-
-    # Update form data for virtual meeting
-    form_data = Map.merge(socket.assigns.form_data || %{}, %{
-      "virtual_venue_url" => zoom_url,
-      "is_virtual" => true,
-      "venue_name" => "",
-      "venue_address" => "",
-      "venue_city" => "",
-      "venue_state" => "",
-      "venue_country" => "",
-      "venue_latitude" => nil,
-      "venue_longitude" => nil
-    })
-
-    # Update the changeset
-    changeset =
-      socket.assigns.event
-      |> Events.change_event(form_data)
-      |> Map.put(:action, :validate)
-
-    socket =
-      socket
-      |> assign(:form_data, form_data)
-      |> assign(:changeset, changeset)
-      |> assign(:selected_venue_name, "Zoom Meeting")
-      |> assign(:selected_venue_address, zoom_url)
-      |> assign(:is_virtual, true)
-      |> assign(:show_recent_locations, false)
-
-    {:noreply, socket}
+    {:noreply, create_virtual_meeting(socket, :zoom)}
   end
 
   @impl true
   def handle_event("create_google_meet", _params, socket) do
-    meet_url = EventasaurusWeb.Helpers.EventHelpers.generate_google_meet_url()
+    {:noreply, create_virtual_meeting(socket, :google_meet)}
+  end
 
-    # Update form data for virtual meeting
+  defp create_virtual_meeting(socket, meeting_type) do
+    {url, label} = case meeting_type do
+      :zoom ->
+        {EventasaurusWeb.Helpers.EventHelpers.generate_zoom_meeting_url(), "Zoom Meeting"}
+      :google_meet ->
+        {EventasaurusWeb.Helpers.EventHelpers.generate_google_meet_url(), "Google Meet"}
+    end
+
     form_data = Map.merge(socket.assigns.form_data || %{}, %{
-      "virtual_venue_url" => meet_url,
-      "is_virtual" => true,
-      "venue_name" => "",
-      "venue_address" => "",
-      "venue_city" => "",
-      "venue_state" => "",
-      "venue_country" => "",
-      "venue_latitude" => nil,
-      "venue_longitude" => nil
+      "virtual_venue_url" => url,
+      "is_virtual"        => true,
+      "venue_name"        => "",
+      "venue_address"     => "",
+      "venue_city"        => "",
+      "venue_state"       => "",
+      "venue_country"     => "",
+      "venue_latitude"    => nil,
+      "venue_longitude"   => nil
     })
 
-    # Update the changeset
     changeset =
       socket.assigns.event
       |> Events.change_event(form_data)
       |> Map.put(:action, :validate)
 
-    socket =
-      socket
-      |> assign(:form_data, form_data)
-      |> assign(:changeset, changeset)
-      |> assign(:selected_venue_name, "Google Meet")
-      |> assign(:selected_venue_address, meet_url)
-      |> assign(:is_virtual, true)
-      |> assign(:show_recent_locations, false)
-
-    {:noreply, socket}
+    socket
+    |> assign(:form_data, form_data)
+    |> assign(:changeset, changeset)
+    |> assign(:selected_venue_name, label)
+    |> assign(:selected_venue_address, url)
+    |> assign(:is_virtual, true)
+    |> assign(:show_recent_locations, false)
   end
 
   # ========== Info Handlers ==========

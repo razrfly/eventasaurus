@@ -83,6 +83,7 @@ defmodule EventasaurusApp.Events.Event do
                    :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :canceled_at, :selected_poll_dates, :is_ticketed, :virtual_venue_url])
     |> validate_required([:title, :timezone, :visibility])
+    |> validate_virtual_venue_url()
     |> maybe_validate_start_at()
     |> validate_length(:title, min: 3, max: 100)
     |> validate_length(:tagline, max: 255)
@@ -206,6 +207,24 @@ defmodule EventasaurusApp.Events.Event do
       _ ->
         changeset
     end
+  end
+
+  defp validate_virtual_venue_url(changeset) do
+    case get_change(changeset, :virtual_venue_url) do
+      nil -> changeset
+      "" -> changeset
+      url ->
+        if valid_url?(url) do
+          changeset
+        else
+          add_error(changeset, :virtual_venue_url, "must be a valid URL")
+        end
+    end
+  end
+
+  defp valid_url?(url) do
+    uri = URI.parse(url)
+    uri.scheme in ["http", "https"] && uri.host != nil
   end
 
   @doc """
