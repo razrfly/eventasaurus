@@ -102,8 +102,16 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
         all_specs = acc ++ specs
 
         if has_more do
-          last_id = List.last(specs).id
-          fetch_all_country_specs(all_specs, last_id)
+          # Defensive check: ensure specs is not empty before accessing last element
+          case specs do
+            [] ->
+              # If specs is empty but has_more is true, this is an API inconsistency
+              # Return what we have so far to avoid infinite recursion
+              {:ok, %{data: all_specs}}
+            _ ->
+              last_id = List.last(specs).id
+              fetch_all_country_specs(all_specs, last_id)
+          end
         else
           {:ok, %{data: all_specs}}
         end
@@ -113,27 +121,35 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
   end
 
   defp fetch_currencies_from_stripe do
-    try do
-      # Fetch all country specs and extract unique currencies with pagination
-      case fetch_all_country_specs() do
-        {:ok, %{data: country_specs}} ->
-          currencies =
-            country_specs
-            |> Enum.flat_map(fn spec -> spec.supported_payment_currencies || [] end)
-            |> Enum.uniq()
-            |> Enum.sort()
-            |> Enum.map(&String.upcase/1)
+    # Check if Stripe API key is configured
+    api_key = Application.get_env(:stripity_stripe, :api_key)
 
-          {:ok, currencies}
+    if is_nil(api_key) or api_key == "" or api_key == "sk_test_YOUR_TEST_KEY_HERE" do
+      Logger.info("StripeCurrencyService: Stripe API key not configured, using fallback currencies")
+      {:error, :no_api_key}
+    else
+      try do
+        # Fetch all country specs and extract unique currencies with pagination
+        case fetch_all_country_specs() do
+          {:ok, %{data: country_specs}} ->
+            currencies =
+              country_specs
+              |> Enum.flat_map(fn spec -> spec.supported_payment_currencies || [] end)
+              |> Enum.uniq()
+              |> Enum.sort()
+              |> Enum.map(&String.upcase/1)
 
-        {:error, reason} ->
-          Logger.error("StripeCurrencyService: Stripe API error: #{inspect(reason)}")
-          {:error, reason}
+            {:ok, currencies}
+
+          {:error, reason} ->
+            Logger.error("StripeCurrencyService: Stripe API error: #{inspect(reason)}")
+            {:error, reason}
+        end
+      rescue
+        exception ->
+          Logger.error("StripeCurrencyService: Exception fetching currencies: #{inspect(exception)}")
+          {:error, exception}
       end
-    rescue
-      exception ->
-        Logger.error("StripeCurrencyService: Exception fetching currencies: #{inspect(exception)}")
-        {:error, exception}
     end
   end
 
