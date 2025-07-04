@@ -24,6 +24,16 @@ config :eventasaurus, :supabase,
   }
 
 # Configure PostHog settings for development
+# PostHog provides analytics and event tracking for your application
+# To enable PostHog, set the following environment variables:
+# - POSTHOG_PUBLIC_API_KEY: Your PostHog project API key (for event tracking)
+# - POSTHOG_PRIVATE_API_KEY: Your PostHog personal API key (for analytics queries)
+# - POSTHOG_PROJECT_ID: Your PostHog project ID (for analytics queries)
+#
+# Get these from your PostHog dashboard:
+# 1. Project API Key: Project Settings > API Keys
+# 2. Personal API Key: Personal Settings > Personal API Keys
+# 3. Project ID: Project Settings > Project Variables
 config :eventasaurus, :posthog,
   api_key: System.get_env("POSTHOG_PUBLIC_API_KEY"),
   api_host: "https://eu.i.posthog.com"
