@@ -749,7 +749,10 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("add_ticket_form", _params, socket) do
-    default_currency = get_user_default_currency(socket.assigns.user)
+    default_currency = case socket.assigns.user.default_currency do
+      currency when currency not in [nil, ""] -> currency
+      _ -> "usd"
+    end
 
     socket =
       socket
@@ -802,7 +805,10 @@ defmodule EventasaurusWeb.EventLive.New do
         "price" => format_price_from_cents(ticket.base_price_cents),
         "minimum_price" => format_price_from_cents(Map.get(ticket, :minimum_price_cents, 0)),
         "suggested_price" => format_price_from_cents(Map.get(ticket, :suggested_price_cents, ticket.base_price_cents)),
-        "currency" => Map.get(ticket, :currency, get_user_default_currency(socket.assigns.user)),
+        "currency" => Map.get(ticket, :currency, case socket.assigns.user.default_currency do
+          currency when currency not in [nil, ""] -> currency
+          _ -> "usd"
+        end),
         "quantity" => Integer.to_string(ticket.quantity),
         "starts_at" => format_datetime_for_input(ticket.starts_at),
         "ends_at" => format_datetime_for_input(ticket.ends_at),
@@ -936,7 +942,10 @@ defmodule EventasaurusWeb.EventLive.New do
               base_price_cents: price_cents,
               minimum_price_cents: minimum_price_cents,
               suggested_price_cents: suggested_price_cents,
-              currency: Map.get(ticket_data, "currency", get_user_default_currency(socket.assigns.user)),
+              currency: Map.get(ticket_data, "currency", case socket.assigns.user.default_currency do
+                currency when currency not in [nil, ""] -> currency
+                _ -> "usd"
+              end),
               quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
                 {n, _} when n >= 0 -> n
                 _ -> 0
@@ -1301,7 +1310,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
         case is_ticketed? and length(socket.assigns.tickets) > 0 do
           true ->
-            case create_tickets_for_event(event_with_poll, socket.assigns.tickets) do
+            case create_tickets_for_event(event_with_poll, socket.assigns.tickets, socket.assigns.user) do
               :ok ->
                 {:noreply,
                  socket
@@ -1331,16 +1340,19 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   # Helper function to create tickets for an event
-  defp create_tickets_for_event(event, tickets) do
+  defp create_tickets_for_event(event, tickets, organizer_user \\ nil) do
     alias EventasaurusApp.Ticketing
     alias EventasaurusApp.Repo
 
     # Use a transaction to ensure all tickets are created atomically
     Repo.transaction(fn ->
       Enum.each(tickets, fn ticket_data ->
-        # Get event organizer's default currency as fallback
-        organizer = List.first(event.users) || %{default_currency: "usd"}
-        default_currency = get_user_default_currency(organizer)
+        # Get organizer's default currency as fallback
+        # Use the passed organizer_user or fall back to USD
+        default_currency = case organizer_user do
+          %{default_currency: currency} when currency not in [nil, ""] -> currency
+          _ -> "usd"
+        end
 
         ticket_attrs = %{
           title: Map.get(ticket_data, :title),
@@ -1402,14 +1414,7 @@ defmodule EventasaurusWeb.EventLive.New do
   # Ticketing Helper Functions
   # ============================================================================
 
-  # Get user's default currency with fallback to USD
-  defp get_user_default_currency(user) do
-    case user.default_currency do
-      nil -> "usd"
-      "" -> "usd"
-      currency -> currency
-    end
-  end
+
 
   defp format_datetime_for_input(nil), do: ""
   defp format_datetime_for_input(%DateTime{} = datetime) do

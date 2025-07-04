@@ -1,6 +1,5 @@
 defmodule EventasaurusWeb.Helpers.CurrencyHelpersTest do
   use ExUnit.Case, async: false
-  import Mock
 
   alias EventasaurusWeb.Helpers.CurrencyHelpers
 
