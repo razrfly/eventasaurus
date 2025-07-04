@@ -2072,7 +2072,7 @@ defmodule EventasaurusApp.Events do
               username: u.username,
               participation_count: count(p.id),
               last_participation: max(e.start_at),
-              event_ids: fragment("array_agg(?)", e.id)
+              event_ids: fragment("array_agg(DISTINCT ?)", e.id)
             },
             order_by: [desc: count(p.id), desc: max(e.start_at)]
 
@@ -2125,7 +2125,7 @@ defmodule EventasaurusApp.Events do
               username: u.username,
               participation_count: count(p.id),
               last_participation: max(e.start_at),
-              event_ids: fragment("array_agg(?)", e.id)
+              event_ids: fragment("array_agg(DISTINCT ?)", e.id)
             },
             order_by: [desc: count(p.id), desc: max(e.start_at)]
 
@@ -2551,11 +2551,70 @@ defmodule EventasaurusApp.Events do
         participant_attrs = build_participant_attrs(event, organizer, user, invitation_message, current_time, metadata, mode)
 
         case create_event_participant(participant_attrs) do
-          {:ok, _participant} -> {:ok, :created}
+          {:ok, participant} ->
+            # Send email for invitation mode only
+            if mode == :invitation do
+              send_invitation_email(user, event, invitation_message, organizer)
+            end
+            {:ok, :created}
           {:error, changeset} -> {:error, changeset}
         end
       _existing_participant ->
         {:ok, :already_exists}
+    end
+  end
+
+  # Send invitation email to the invited user
+  defp send_invitation_email(user, event, invitation_message, organizer) do
+    # Load event with venue for email context
+    event_with_venue = get_event_with_venue(event.id)
+
+    # Send email asynchronously to avoid blocking the user flow
+    Task.start(fn ->
+      guest_name = get_user_display_name(user)
+
+      case Eventasaurus.Emails.send_guest_invitation(
+        user.email,
+        guest_name,
+        event_with_venue,
+        invitation_message,
+        organizer
+      ) do
+        {:ok, _response} ->
+          require Logger
+          Logger.info("Guest invitation email sent successfully",
+            user_id: user.id,
+            event_id: event.id,
+            organizer_id: organizer.id
+          )
+
+        {:error, reason} ->
+          require Logger
+          Logger.error("Failed to send guest invitation email",
+            user_id: user.id,
+            event_id: event.id,
+            organizer_id: organizer.id,
+            reason: inspect(reason)
+          )
+      end
+    end)
+  end
+
+  # Get event with venue preloaded for email templates
+  defp get_event_with_venue(event_id) do
+    Repo.one!(
+      from e in Event,
+      where: e.id == ^event_id,
+      preload: [:venue]
+    )
+  end
+
+  # Get user display name for emails
+  defp get_user_display_name(user) do
+    cond do
+      user.name && user.name != "" -> user.name
+      user.username && user.username != "" -> user.username
+      true -> nil
     end
   end
 

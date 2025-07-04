@@ -28,6 +28,9 @@ config :eventasaurus, :posthog,
   api_key: System.get_env("POSTHOG_PUBLIC_API_KEY"),
   api_host: "https://eu.i.posthog.com"
 
+# Configure base URL for email links
+config :eventasaurus, :base_url, "http://localhost:4000"
+
 
 
 config :eventasaurus, EventasaurusWeb.Endpoint,
@@ -95,6 +98,9 @@ config :phoenix_live_view,
   debug_heex_annotations: true,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
+
+# Configure mailer for development - use local mailbox
+config :eventasaurus, Eventasaurus.Mailer, adapter: Swoosh.Adapters.Local
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
