@@ -24,6 +24,9 @@ defmodule EventasaurusWeb.EventLive.New do
         today = Date.utc_today() |> Date.to_iso8601()
         venues = Venues.list_venues()
 
+        # Load recent locations for the user
+        recent_locations = Events.get_recent_locations_for_user(user.id, limit: 5)
+
         # Auto-select a random default image
         random_image = EventasaurusWeb.Services.DefaultImagesService.get_random_image()
 
@@ -91,6 +94,10 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:ticket_form_data, %{})
           |> assign(:editing_ticket_id, nil)
           |> assign(:show_additional_options, false)
+          # Recent locations assigns
+          |> assign(:recent_locations, recent_locations)
+          |> assign(:show_recent_locations, false)
+          |> assign(:filtered_recent_locations, recent_locations)
 
         {:ok, socket}
 
@@ -446,39 +453,57 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:selected_venue_name, venue_name)
       |> assign(:selected_venue_address, venue_address)
       |> assign(:is_virtual, false)
+      |> assign(:show_recent_locations, false)
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("place_selected", %{"details" => place_details}, socket) do
-    # Extract address components from place details
-    address_components = Map.get(place_details, "address_components", [])
+  def handle_event("toggle_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, !socket.assigns.show_recent_locations)}
+  end
 
-    # Extract individual address components
-    street_number = get_address_component(address_components, "street_number") || ""
-    route = get_address_component(address_components, "route") || ""
-    locality = get_address_component(address_components, "locality")
+  @impl true
+  def handle_event("show_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, true)}
+  end
 
-    administrative_area_level_1 =
-      get_address_component(address_components, "administrative_area_level_1")
+  @impl true
+  def handle_event("hide_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, false)}
+  end
 
-    country = get_address_component(address_components, "country")
-    postal_code = get_address_component(address_components, "postal_code")
+  @impl true
+  def handle_event("enable_google_places", _params, socket) do
+    {:noreply, push_event(socket, "enable_google_places", %{})}
+  end
 
-    # Construct full address
-    street_address = [street_number, route] |> Enum.reject(&(&1 == "")) |> Enum.join(" ")
+  @impl true
+  def handle_event("select_recent_location", %{"location" => location_json}, socket) do
+    # Parse the JSON data with error handling
+    location_data = case Jason.decode(location_json) do
+      {:ok, data} -> data
+      {:error, _} -> %{}
+    end
 
-    # Prepare form data with the extracted information
-    form_data = %{
-      "venue_address" => street_address,
-      "venue_city" => locality || "",
-      "venue_state" => administrative_area_level_1 || "",
-      "venue_country" => country || "",
-      "venue_postal_code" => postal_code || "",
-      "venue_latitude" => place_details["geometry"]["location"]["lat"],
-      "venue_longitude" => place_details["geometry"]["location"]["lng"]
+    # Handle physical venue (virtual events are excluded from recent locations)
+    venue_name = Map.get(location_data, "name", "")
+    venue_address = Map.get(location_data, "address", "")
+
+    form_data_updates = %{
+      "venue_name" => venue_name,
+      "venue_address" => venue_address,
+      "venue_city" => Map.get(location_data, "city", ""),
+      "venue_state" => Map.get(location_data, "state", ""),
+      "venue_country" => Map.get(location_data, "country", ""),
+      "venue_latitude" => Map.get(location_data, "latitude"),
+      "venue_longitude" => Map.get(location_data, "longitude"),
+      "virtual_venue_url" => "",
+      "is_virtual" => false
     }
+
+    # Update form data while preserving existing data
+    form_data = Map.merge(socket.assigns.form_data || %{}, form_data_updates)
 
     # Update the changeset
     changeset =
@@ -486,14 +511,23 @@ defmodule EventasaurusWeb.EventLive.New do
       |> Events.change_event(form_data)
       |> Map.put(:action, :validate)
 
-    # Update the socket with the new information
-    {:noreply,
-     socket
-     |> assign(:form_data, form_data)
-     |> assign(:changeset, changeset)
-     |> assign(:selected_venue_name, place_details["name"])
-     |> assign(:selected_venue_address, street_address)
-     |> assign(:is_virtual, false)}
+    # Update the socket with full information
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:selected_venue_name, venue_name)
+      |> assign(:selected_venue_address, venue_address)
+      |> assign(:is_virtual, false)
+      |> assign(:show_recent_locations, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_recent_locations", %{"query" => query}, socket) do
+    filtered_locations = EventasaurusWeb.Helpers.EventHelpers.filter_locations(socket.assigns.recent_locations, query)
+    {:noreply, assign(socket, :filtered_recent_locations, filtered_locations)}
   end
 
   @impl true
@@ -992,6 +1026,120 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("create_zoom_meeting", _params, socket) do
+    zoom_url = EventasaurusWeb.Helpers.EventHelpers.generate_zoom_meeting_url()
+
+    # Update form data for virtual meeting
+    form_data = (socket.assigns.form_data || %{})
+    |> Map.put("virtual_venue_url", zoom_url)
+    |> Map.put("is_virtual", true)
+    |> Map.put("venue_name", "")
+    |> Map.put("venue_address", "")
+    |> Map.put("venue_city", "")
+    |> Map.put("venue_state", "")
+    |> Map.put("venue_country", "")
+    |> Map.put("venue_latitude", nil)
+    |> Map.put("venue_longitude", nil)
+
+    # Update the changeset
+    changeset =
+      %Event{}
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:selected_venue_name, "Zoom Meeting")
+      |> assign(:selected_venue_address, zoom_url)
+      |> assign(:is_virtual, true)
+      |> assign(:show_recent_locations, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("create_google_meet", _params, socket) do
+    meet_url = EventasaurusWeb.Helpers.EventHelpers.generate_google_meet_url()
+
+    # Update form data for virtual meeting
+    form_data = (socket.assigns.form_data || %{})
+    |> Map.put("virtual_venue_url", meet_url)
+    |> Map.put("is_virtual", true)
+    |> Map.put("venue_name", "")
+    |> Map.put("venue_address", "")
+    |> Map.put("venue_city", "")
+    |> Map.put("venue_state", "")
+    |> Map.put("venue_country", "")
+    |> Map.put("venue_latitude", nil)
+    |> Map.put("venue_longitude", nil)
+
+    # Update the changeset
+    changeset =
+      %Event{}
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:selected_venue_name, "Google Meet")
+      |> assign(:selected_venue_address, meet_url)
+      |> assign(:is_virtual, true)
+      |> assign(:show_recent_locations, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("place_selected", %{"details" => place_details}, socket) do
+    # Extract address components from place details
+    address_components = Map.get(place_details, "address_components", [])
+
+    # Extract individual address components
+    street_number = get_address_component(address_components, "street_number") || ""
+    route = get_address_component(address_components, "route") || ""
+    locality = get_address_component(address_components, "locality")
+
+    administrative_area_level_1 =
+      get_address_component(address_components, "administrative_area_level_1")
+
+    country = get_address_component(address_components, "country")
+    postal_code = get_address_component(address_components, "postal_code")
+
+    # Construct full address
+    street_address = [street_number, route] |> Enum.reject(&(&1 == "")) |> Enum.join(" ")
+
+    # Prepare form data with the extracted information
+    form_data = %{
+      "venue_address" => street_address,
+      "venue_city" => locality || "",
+      "venue_state" => administrative_area_level_1 || "",
+      "venue_country" => country || "",
+      "venue_postal_code" => postal_code || "",
+      "venue_latitude" => place_details["geometry"]["location"]["lat"],
+      "venue_longitude" => place_details["geometry"]["location"]["lng"]
+    }
+
+    # Update the changeset
+    changeset =
+      %Event{}
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    # Update the socket with the new information
+    {:noreply,
+     socket
+     |> assign(:form_data, form_data)
+     |> assign(:changeset, changeset)
+     |> assign(:selected_venue_name, place_details["name"])
+     |> assign(:selected_venue_address, street_address)
+     |> assign(:is_virtual, false)}
+  end
+
   # Validation helper for flexible pricing
   defp validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
     case pricing_model do
@@ -1458,5 +1606,7 @@ defmodule EventasaurusWeb.EventLive.New do
     |> assign(:ticket_form_data, %{})
     |> assign(:editing_ticket_id, nil)
   end
+
+
 
 end

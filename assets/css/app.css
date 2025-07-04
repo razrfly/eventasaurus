@@ -475,4 +475,287 @@ body[class*="theme-"] .theme-card:hover {
   }
 }
 
-/* Custom CSS can go here */ 
+/* Custom CSS can go here */
+
+/* ============================================================================
+   VENUE SEARCH COMPONENT ENHANCEMENTS
+   ============================================================================ */
+
+/* Enhanced venue search container */
+.venue-search-container {
+  position: relative;
+}
+
+/* Recent locations dropdown enhancements */
+.recent-locations-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  max-height: 12rem;
+  overflow-y: auto;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Recent location item hover enhancement */
+.recent-location-item {
+  transition: all 0.15s ease-in-out;
+  border-radius: 0.25rem;
+  margin: 0.125rem;
+}
+
+.recent-location-item:hover {
+  background-color: #f8fafc;
+  transform: translateX(2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Virtual meeting buttons enhancement */
+.virtual-meeting-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.virtual-meeting-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease-in-out;
+  transform: translateY(0);
+}
+
+.virtual-meeting-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.virtual-meeting-button:active {
+  transform: translateY(0);
+}
+
+/* Zoom button specific styling */
+.zoom-button {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border: none;
+}
+
+.zoom-button:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+}
+
+/* Google Meet button specific styling */
+.google-meet-button {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  border: none;
+}
+
+.google-meet-button:hover {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+}
+
+/* Enhanced search input focus state */
+.venue-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+/* Recent locations toggle button enhancement */
+.recent-locations-toggle {
+  transition: all 0.2s ease-in-out;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.recent-locations-toggle:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+/* Places search toggle button enhancement */
+.places-search-toggle {
+  transition: all 0.2s ease-in-out;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.places-search-toggle:hover {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Selected venue display enhancement */
+.selected-venue-display {
+  position: relative;
+  overflow: hidden;
+}
+
+.selected-venue-display::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to bottom, #3b82f6, #1e40af);
+  border-radius: 0 0.25rem 0.25rem 0;
+}
+
+/* Usage count badge enhancement */
+.usage-count-badge {
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile responsive enhancements */
+@media (max-width: 768px) {
+  .recent-locations-dropdown {
+    max-height: 10rem;
+    border-radius: 0 0 0.375rem 0.375rem;
+  }
+  
+  .virtual-meeting-buttons {
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  
+  .virtual-meeting-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .recent-location-item {
+    padding: 0.75rem;
+  }
+}
+
+/* Focus indicators for accessibility */
+.venue-search-container button:focus,
+.venue-search-container input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Loading state for search */
+.venue-search-loading {
+  position: relative;
+}
+
+.venue-search-loading::after {
+  content: '';
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Enhanced dropdown scrollbar */
+.recent-locations-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.recent-locations-dropdown::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.recent-locations-dropdown::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.recent-locations-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* No results state styling */
+.no-results-message {
+  padding: 1.5rem;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Location icon enhancement */
+.location-icon {
+  flex-shrink: 0;
+  transition: color 0.2s ease-in-out;
+}
+
+.recent-location-item:hover .location-icon {
+  color: #3b82f6;
+}
+
+/* Button icon spacing */
+.button-icon {
+  margin-right: 0.375rem;
+  flex-shrink: 0;
+}
+
+/* Enhanced border radius for consistency */
+.venue-search-input {
+  border-radius: 0.5rem;
+}
+
+.venue-search-input:focus + .recent-locations-dropdown {
+  border-top: 1px solid #3b82f6;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .recent-locations-dropdown {
+    border-width: 2px;
+  }
+  
+  .recent-location-item:hover {
+    background-color: #000;
+    color: #fff;
+  }
+  
+  .usage-count-badge {
+    background: #000;
+    color: #fff;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .recent-locations-dropdown,
+  .recent-location-item,
+  .virtual-meeting-button,
+  .recent-locations-toggle,
+  .places-search-toggle {
+    animation: none;
+    transition: none;
+  }
+} 
