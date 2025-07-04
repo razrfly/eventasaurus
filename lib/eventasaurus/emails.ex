@@ -410,12 +410,8 @@ defmodule Eventasaurus.Emails do
 
   defp build_event_url(event) do
     base_url = Application.get_env(:eventasaurus, :base_url) ||
-      case Application.get_env(:eventasaurus, :environment) do
-        :prod -> "https://eventasaur.us"
-        :dev -> "http://localhost:4000"
-        :test -> "http://localhost:4002"
-        _ -> "http://localhost:4000"
-      end
+      raise "Missing :base_url configuration - please ensure it's set in config files"
+
     "#{base_url}/events/#{event.slug}"
   end
 end
