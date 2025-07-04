@@ -81,15 +81,19 @@ defmodule EventasaurusApp.Events.Event do
 
   @doc false
   def changeset(event, attrs) do
-    # Convert empty strings to nil for threshold_revenue_cents
-    attrs = case Map.get(attrs, "threshold_revenue_cents") do
-      value when value == "" or value == nil -> Map.put(attrs, "threshold_revenue_cents", nil)
-      value when is_binary(value) ->
-        case String.trim(value) do
-          "" -> Map.put(attrs, "threshold_revenue_cents", nil)
-          _ -> attrs
-        end
-      _ -> attrs
+    # Convert empty strings to nil for threshold_revenue_cents (only for string-keyed maps)
+    attrs = if is_map(attrs) and Map.has_key?(attrs, "threshold_revenue_cents") do
+      case Map.get(attrs, "threshold_revenue_cents") do
+        value when value == "" or value == nil -> Map.put(attrs, "threshold_revenue_cents", nil)
+        value when is_binary(value) ->
+          case String.trim(value) do
+            "" -> Map.put(attrs, "threshold_revenue_cents", nil)
+            _ -> attrs
+          end
+        _ -> attrs
+      end
+    else
+      attrs
     end
 
     event
