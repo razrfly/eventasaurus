@@ -56,16 +56,17 @@ defmodule EventasaurusWeb.Helpers.EventHelpers do
         |> Enum.join("")
 
       :alphanum ->
-        chars = "abcdefghijklmnopqrstuvwxyz"
-        1..length
-        |> Enum.map(fn _ ->
-          case rem(Enum.random(1..36), 2) do
-            0 -> Enum.random(0..9) |> to_string()
-            1 -> String.at(chars, Enum.random(0..25))
-          end
-        end)
+        chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+        result = 1..length
+        |> Enum.map(fn _ -> String.at(chars, Enum.random(0..35)) end)
         |> Enum.join("")
-        |> String.replace(~r/(.{3})(.{4})(.{3})/, "\\1-\\2-\\3") # Add hyphens for Google Meet format
+
+        # Only add hyphens for Google Meet format (10 chars)
+        if length == 10 do
+          String.replace(result, ~r/(.{3})(.{4})(.{3})/, "\\1-\\2-\\3")
+        else
+          result
+        end
     end
   end
 end
