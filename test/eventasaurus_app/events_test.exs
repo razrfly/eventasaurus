@@ -219,4 +219,36 @@ defmodule EventasaurusApp.EventsTest do
       assert email_participant.metadata["email_provided"] == "directnew@example.com"
     end
   end
+
+  describe "threshold functionality" do
+    test "threshold_met?/1 returns false for attendee_count threshold when not met" do
+      event = event_fixture(%{
+        threshold_type: "attendee_count",
+        threshold_count: 5
+      })
+
+      # By default, there are no participants, so threshold should not be met
+      assert Event.threshold_met?(event) == false
+    end
+
+    test "threshold_met?/1 returns false for revenue threshold when not met" do
+      event = event_fixture(%{
+        threshold_type: "revenue",
+        threshold_revenue_cents: 10000
+      })
+
+      # By default, there are no orders, so threshold should not be met
+      assert Event.threshold_met?(event) == false
+    end
+
+    test "threshold query functions exist and return results" do
+      # Test that our new query functions exist and return empty lists by default
+      assert Events.list_threshold_events() == []
+      assert Events.list_events_by_threshold_type("attendee_count") == []
+      assert Events.list_threshold_met_events() == []
+      assert Events.list_threshold_pending_events() == []
+      assert Events.list_events_by_min_revenue(1000) == []
+      assert Events.list_events_by_min_attendee_count(5) == []
+    end
+  end
 end

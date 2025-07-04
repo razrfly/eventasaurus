@@ -23,8 +23,10 @@ defmodule EventasaurusApp.Events.Event do
 
   # Valid status values for the enum constraint
   @valid_statuses [:draft, :polling, :threshold, :confirmed, :canceled]
+  @valid_threshold_types ["attendee_count", "revenue", "both"]
 
   def valid_statuses, do: @valid_statuses
+  def valid_threshold_types, do: @valid_threshold_types
 
   schema "events" do
     field :title, :string
@@ -40,6 +42,8 @@ defmodule EventasaurusApp.Events.Event do
     field :status, Ecto.Enum, values: [:draft, :polling, :threshold, :confirmed, :canceled], default: :confirmed
     field :polling_deadline, :utc_datetime
     field :threshold_count, :integer
+    field :threshold_type, :string, default: "attendee_count"
+    field :threshold_revenue_cents, :integer
     field :canceled_at, :utc_datetime
     field :is_ticketed, :boolean, default: false
     field :virtual_venue_url, :string # for virtual meeting URLs
@@ -77,11 +81,27 @@ defmodule EventasaurusApp.Events.Event do
 
   @doc false
   def changeset(event, attrs) do
+    # Convert empty strings to nil for threshold_revenue_cents (only for string-keyed maps)
+    attrs = if is_map(attrs) and Map.has_key?(attrs, "threshold_revenue_cents") do
+      case Map.get(attrs, "threshold_revenue_cents") do
+        value when value == "" or value == nil -> Map.put(attrs, "threshold_revenue_cents", nil)
+        value when is_binary(value) ->
+          case String.trim(value) do
+            "" -> Map.put(attrs, "threshold_revenue_cents", nil)
+            _ -> attrs
+          end
+        _ -> attrs
+      end
+    else
+      attrs
+    end
+
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
                    :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
-                   :canceled_at, :selected_poll_dates, :is_ticketed, :virtual_venue_url])
+                   :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
+                   :is_ticketed, :virtual_venue_url])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
     |> maybe_validate_start_at()
@@ -92,6 +112,9 @@ defmodule EventasaurusApp.Events.Event do
     |> validate_slug()
     |> validate_polling_deadline()
     |> validate_threshold_count()
+    |> validate_threshold_type()
+    |> validate_threshold_revenue_cents()
+    |> validate_threshold_consistency()
     |> validate_canceled_at()
     |> validate_status_consistency()
     |> foreign_key_constraint(:venue_id)
@@ -109,6 +132,52 @@ defmodule EventasaurusApp.Events.Event do
       _invalid_status ->
         valid_statuses_str = @valid_statuses |> Enum.map(&to_string/1) |> Enum.join(", ")
         add_error(changeset, :status, "must be one of: #{valid_statuses_str}")
+    end
+  end
+
+  defp validate_threshold_type(changeset) do
+    case get_field(changeset, :threshold_type) do
+      nil ->
+        put_change(changeset, :threshold_type, "attendee_count")
+      threshold_type when threshold_type in @valid_threshold_types ->
+        changeset
+      _invalid_type ->
+        valid_types_str = @valid_threshold_types |> Enum.join(", ")
+        add_error(changeset, :threshold_type, "must be one of: #{valid_types_str}")
+    end
+  end
+
+  defp validate_threshold_revenue_cents(changeset) do
+    case get_field(changeset, :threshold_revenue_cents) do
+      nil -> changeset
+      revenue when is_integer(revenue) and revenue >= 0 -> changeset
+      _invalid_revenue ->
+        add_error(changeset, :threshold_revenue_cents, "must be a non-negative integer")
+    end
+  end
+
+  defp validate_threshold_consistency(changeset) do
+    threshold_type = get_field(changeset, :threshold_type)
+    threshold_count = get_field(changeset, :threshold_count)
+    threshold_revenue_cents = get_field(changeset, :threshold_revenue_cents)
+    status = get_field(changeset, :status)
+
+    case {status, threshold_type, threshold_count, threshold_revenue_cents} do
+      # If status is threshold, we need appropriate threshold values
+      {:threshold, "attendee_count", nil, _} ->
+        add_error(changeset, :threshold_count, "is required when threshold type is attendee_count")
+
+      {:threshold, "revenue", _, nil} ->
+        add_error(changeset, :threshold_revenue_cents, "is required when threshold type is revenue")
+
+      {:threshold, "both", nil, _} ->
+        add_error(changeset, :threshold_count, "is required when threshold type is both")
+
+      {:threshold, "both", _, nil} ->
+        add_error(changeset, :threshold_revenue_cents, "is required when threshold type is both")
+
+      _ ->
+        changeset
     end
   end
 
@@ -131,14 +200,19 @@ defmodule EventasaurusApp.Events.Event do
 
   defp validate_threshold_count(changeset) do
     status = get_field(changeset, :status)
+    threshold_type = get_field(changeset, :threshold_type)
     threshold_count = get_field(changeset, :threshold_count)
 
-    case {status, threshold_count} do
-      {:threshold, nil} ->
-        add_error(changeset, :threshold_count, "is required when status is threshold")
-      {:threshold, count} when is_integer(count) and count > 0 ->
+    case {status, threshold_type, threshold_count} do
+      # For threshold events with revenue-only type, threshold_count is not required
+      {:threshold, "revenue", _} ->
         changeset
-      {:threshold, _} ->
+      # For attendee_count and both types, threshold_count is required
+      {:threshold, type, nil} when type in ["attendee_count", "both"] ->
+        add_error(changeset, :threshold_count, "is required when threshold type is #{type}")
+      {:threshold, _type, count} when is_integer(count) and count > 0 ->
+        changeset
+      {:threshold, _type, _} ->
         add_error(changeset, :threshold_count, "must be a positive integer")
       _ -> changeset
     end

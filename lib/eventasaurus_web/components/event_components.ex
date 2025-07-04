@@ -1048,10 +1048,61 @@ defmodule EventasaurusWeb.EventComponents do
 
                 <!-- Threshold-specific fields -->
                 <%= if Map.get(@form_data, "setup_path", "confirmed") == "threshold" do %>
-                  <div class="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div class="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg" phx-hook="ThresholdForm" id="threshold-form">
                     <h4 class="text-sm font-medium text-orange-800 mb-3">Threshold Pre-Sale Settings</h4>
-                    <div class="space-y-3">
+                    <div class="space-y-4">
+                      <!-- Threshold Type Selection -->
                       <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                          Threshold Type
+                        </label>
+                        <div class="space-y-2">
+                          <label class="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="event[threshold_type]"
+                              value="attendee_count"
+                              checked={Map.get(@form_data, "threshold_type", "attendee_count") == "attendee_count"}
+                              class="form-radio text-orange-600 focus:ring-orange-500"
+                              data-threshold-radio="attendee_count"
+                            />
+                            <span class="ml-2 text-sm text-gray-700">Attendee Count</span>
+                          </label>
+                          <label class="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="event[threshold_type]"
+                              value="revenue"
+                              checked={Map.get(@form_data, "threshold_type") == "revenue"}
+                              class="form-radio text-orange-600 focus:ring-orange-500"
+                              data-threshold-radio="revenue"
+                            />
+                            <span class="ml-2 text-sm text-gray-700">Revenue Target</span>
+                          </label>
+                          <label class="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="event[threshold_type]"
+                              value="both"
+                              checked={Map.get(@form_data, "threshold_type") == "both"}
+                              class="form-radio text-orange-600 focus:ring-orange-500"
+                              data-threshold-radio="both"
+                            />
+                            <span class="ml-2 text-sm text-gray-700">Both (Attendees + Revenue)</span>
+                          </label>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">
+                          Choose what must be met for the event to be confirmed
+                        </p>
+                      </div>
+
+                      <!-- Attendee Count Field -->
+                      <div id="attendee-threshold" class={
+                        case Map.get(@form_data, "threshold_type", "attendee_count") do
+                          "revenue" -> "hidden"
+                          _ -> ""
+                        end
+                      }>
                         <label for="threshold_count" class="block text-sm font-medium text-gray-700 mb-1">
                           Minimum Attendees Required
                         </label>
@@ -1067,6 +1118,58 @@ defmodule EventasaurusWeb.EventComponents do
                         <p class="text-xs text-gray-500 mt-1">
                           Event will only be confirmed if this many people buy tickets
                         </p>
+                      </div>
+
+                      <!-- Revenue Field -->
+                      <div id="revenue-threshold" class={
+                        case Map.get(@form_data, "threshold_type", "attendee_count") do
+                          "attendee_count" -> "hidden"
+                          _ -> ""
+                        end
+                      }>
+                        <label for="threshold_revenue_cents" class="block text-sm font-medium text-gray-700 mb-1">
+                          Minimum Revenue Required
+                        </label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span class="text-gray-500 sm:text-sm">$</span>
+                          </div>
+                          <input
+                            type="number"
+                            id="threshold_revenue_cents"
+                            name="event[threshold_revenue_cents]"
+                            value={
+                              case Map.get(@form_data, "threshold_revenue_cents") do
+                                cents when is_integer(cents) and cents > 0 ->
+                                  Float.round(cents / 100, 2)
+                                cents when is_binary(cents) and cents != "" ->
+                                  case Integer.parse(cents) do
+                                    {parsed_cents, ""} when parsed_cents > 0 -> Float.round(parsed_cents / 100, 2)
+                                    _ -> ""
+                                  end
+                                _ -> ""
+                              end
+                            }
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            class="block w-full pl-7 pr-12 rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm"
+                            data-revenue-input="true"
+                          />
+                          <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span class="text-gray-500 sm:text-sm">USD</span>
+                          </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">
+                          Event will only be confirmed if this much revenue is generated
+                        </p>
+                        <!-- Hidden field to store cents value -->
+                        <input
+                          type="hidden"
+                          name="event[threshold_revenue_cents_hidden]"
+                          id="threshold_revenue_cents_hidden"
+                          value={Map.get(@form_data, "threshold_revenue_cents", "")}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1412,6 +1515,208 @@ defmodule EventasaurusWeb.EventComponents do
       "threshold" -> "Final Stage"
       _ -> "Unknown"
     end
+  end
+
+  # ============================================================================
+  # Threshold Progress Component
+  # ============================================================================
+
+  @doc """
+  Renders a threshold progress display showing current progress toward the event threshold.
+
+  ## Examples
+
+      <.threshold_progress event={@event} />
+      <.threshold_progress event={@event} class="mb-4" />
+  """
+  attr :event, :map, required: true, doc: "The event with threshold data"
+  attr :class, :string, default: "", doc: "Additional CSS classes"
+  attr :show_details, :boolean, default: true, doc: "Whether to show detailed progress text"
+
+  def threshold_progress(assigns) do
+    # Only show progress for threshold events that have threshold requirements
+    if assigns.event.threshold_type && assigns.event.threshold_type != "attendee_count" or
+       (assigns.event.threshold_type == "attendee_count" && assigns.event.threshold_count) do
+
+      current_attendees = EventasaurusApp.EventStateMachine.get_current_attendee_count(assigns.event)
+      current_revenue = EventasaurusApp.EventStateMachine.get_current_revenue(assigns.event)
+      threshold_met = EventasaurusApp.EventStateMachine.threshold_met?(assigns.event)
+
+      assigns = assign(assigns, %{
+        current_attendees: current_attendees,
+        current_revenue: current_revenue,
+        threshold_met: threshold_met,
+        show_progress: true
+      })
+
+      ~H"""
+      <div class={["threshold-progress", @class]}>
+        <%= if @show_progress do %>
+          <%= case @event.threshold_type do %>
+            <% "attendee_count" -> %>
+              <.render_attendee_progress
+                current={@current_attendees}
+                target={@event.threshold_count}
+                met={@threshold_met}
+                show_details={@show_details}
+              />
+            <% "revenue" -> %>
+              <.render_revenue_progress
+                current={@current_revenue}
+                target={@event.threshold_revenue_cents}
+                met={@threshold_met}
+                show_details={@show_details}
+                currency={Map.get(@event, :currency, "USD")}
+              />
+            <% "both" -> %>
+              <div class="space-y-3">
+                <.render_attendee_progress
+                  current={@current_attendees}
+                  target={@event.threshold_count}
+                  met={@current_attendees >= (@event.threshold_count || 0)}
+                  show_details={@show_details}
+                  label="Attendees"
+                />
+                <.render_revenue_progress
+                  current={@current_revenue}
+                  target={@event.threshold_revenue_cents}
+                  met={@current_revenue >= (@event.threshold_revenue_cents || 0)}
+                  show_details={@show_details}
+                  currency={Map.get(@event, :currency, "USD")}
+                  label="Revenue"
+                />
+                <div class={[
+                  "text-center text-sm font-medium mt-2",
+                  if(@threshold_met, do: "text-green-600", else: "text-orange-600")
+                ]}>
+                  <%= if @threshold_met do %>
+                    ✅ Both thresholds met!
+                  <% else %>
+                    ⏳ Both thresholds must be met
+                  <% end %>
+                </div>
+              </div>
+            <% _ -> %>
+              <!-- Unknown threshold type, show nothing -->
+          <% end %>
+        <% end %>
+      </div>
+      """
+    else
+      assigns = assign(assigns, show_progress: false)
+
+      ~H"""
+      <div class={@class}>
+        <!-- No threshold requirements for this event -->
+      </div>
+      """
+    end
+  end
+
+  # Helper component for rendering attendee progress
+  attr :current, :integer, required: true
+  attr :target, :integer, required: true
+  attr :met, :boolean, required: true
+  attr :show_details, :boolean, default: true
+  attr :label, :string, default: "Attendees"
+
+  defp render_attendee_progress(assigns) do
+    percentage = if assigns.target && assigns.target > 0 do
+      min(round((assigns.current / assigns.target) * 100), 100)
+    else
+      0
+    end
+
+    assigns = assign(assigns, percentage: percentage)
+
+    ~H"""
+    <div class="attendee-progress">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-sm font-medium text-gray-700"><%= @label %></span>
+        <%= if @show_details do %>
+          <span class={[
+            "text-sm font-semibold",
+            if(@met, do: "text-green-600", else: "text-gray-600")
+          ]}>
+            <%= @current %> / <%= @target %>
+            <%= if @met, do: "✅", else: "" %>
+          </span>
+        <% end %>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-3">
+        <div
+          class={[
+            "h-3 rounded-full transition-all duration-300 ease-in-out",
+            if(@met, do: "bg-green-500", else: "bg-orange-500")
+          ]}
+          style={"width: #{@percentage}%"}
+        >
+        </div>
+      </div>
+      <%= if @show_details do %>
+        <div class="text-xs text-gray-500 mt-1 text-center">
+          <%= @percentage %>% towards goal
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # Helper component for rendering revenue progress
+  attr :current, :integer, required: true
+  attr :target, :integer, required: true
+  attr :met, :boolean, required: true
+  attr :show_details, :boolean, default: true
+  attr :currency, :string, default: "USD"
+  attr :label, :string, default: "Revenue"
+
+  defp render_revenue_progress(assigns) do
+    percentage = if assigns.target && assigns.target > 0 do
+      min(round((assigns.current / assigns.target) * 100), 100)
+    else
+      0
+    end
+
+    current_formatted = EventasaurusWeb.Helpers.CurrencyHelpers.format_currency(assigns.current, assigns.currency)
+    target_formatted = EventasaurusWeb.Helpers.CurrencyHelpers.format_currency(assigns.target, assigns.currency)
+
+    assigns = assign(assigns, %{
+      percentage: percentage,
+      current_formatted: current_formatted,
+      target_formatted: target_formatted
+    })
+
+    ~H"""
+    <div class="revenue-progress">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-sm font-medium text-gray-700"><%= @label %></span>
+        <%= if @show_details do %>
+          <span class={[
+            "text-sm font-semibold",
+            if(@met, do: "text-green-600", else: "text-gray-600")
+          ]}>
+            <%= @current_formatted %> / <%= @target_formatted %>
+            <%= if @met, do: "✅", else: "" %>
+          </span>
+        <% end %>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-3">
+        <div
+          class={[
+            "h-3 rounded-full transition-all duration-300 ease-in-out",
+            if(@met, do: "bg-green-500", else: "bg-orange-500")
+          ]}
+          style={"width: #{@percentage}%"}
+        >
+        </div>
+      </div>
+      <%= if @show_details do %>
+        <div class="text-xs text-gray-500 mt-1 text-center">
+          <%= @percentage %>% towards goal
+        </div>
+      <% end %>
+    </div>
+    """
   end
 
 end

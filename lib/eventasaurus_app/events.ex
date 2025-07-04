@@ -86,6 +86,83 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Returns the list of events that are currently in threshold pre-sale mode.
+  """
+  def list_threshold_events do
+    query = from e in Event,
+            where: e.status == :threshold,
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
+  Returns the list of events filtered by threshold type.
+
+  ## Parameters
+  - threshold_type: "attendee_count", "revenue", or "both"
+  """
+  def list_events_by_threshold_type(threshold_type) when threshold_type in ["attendee_count", "revenue", "both"] do
+    query = from e in Event,
+            where: e.threshold_type == ^threshold_type,
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
+  Returns the list of events that have met their threshold requirements.
+  """
+  def list_threshold_met_events do
+    list_threshold_events()
+    |> Enum.filter(&EventasaurusApp.EventStateMachine.threshold_met?/1)
+  end
+
+  @doc """
+  Returns the list of events that have NOT yet met their threshold requirements.
+  """
+  def list_threshold_pending_events do
+    list_threshold_events()
+    |> Enum.reject(&EventasaurusApp.EventStateMachine.threshold_met?/1)
+  end
+
+  @doc """
+  Returns the list of events filtered by minimum revenue threshold.
+
+  ## Parameters
+  - min_revenue_cents: Minimum revenue threshold in cents
+  """
+  def list_events_by_min_revenue(min_revenue_cents) when is_integer(min_revenue_cents) do
+    query = from e in Event,
+            where: e.threshold_type in ["revenue", "both"] and
+                   not is_nil(e.threshold_revenue_cents) and
+                   e.threshold_revenue_cents >= ^min_revenue_cents,
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
+  Returns the list of events filtered by minimum attendee count threshold.
+
+  ## Parameters
+  - min_attendee_count: Minimum attendee count threshold
+  """
+  def list_events_by_min_attendee_count(min_attendee_count) when is_integer(min_attendee_count) do
+    query = from e in Event,
+            where: e.threshold_type in ["attendee_count", "both"] and
+                   not is_nil(e.threshold_count) and
+                   e.threshold_count >= ^min_attendee_count,
+            preload: [:venue, :users]
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
   Gets a single event.
 
   Raises `Ecto.NoResultsError` if the Event does not exist.
