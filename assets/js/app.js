@@ -661,24 +661,26 @@ Hooks.PricingValidator = {
 // ThresholdForm Hook - Handles threshold type radio button toggling and revenue conversion
 Hooks.ThresholdForm = {
   mounted() {
-    this.radioButtons = this.el.querySelectorAll('input[data-threshold-radio]');
+    // Get form elements
+    this.form = this.el.querySelector('form');
+    this.thresholdTypeInputs = this.el.querySelectorAll('input[name="event[threshold_type]"]');
     this.attendeeThreshold = this.el.querySelector('#attendee-threshold');
     this.revenueThreshold = this.el.querySelector('#revenue-threshold');
-    this.revenueInput = this.el.querySelector('input[data-revenue-input]');
-    this.hiddenRevenueInput = this.el.querySelector('#threshold_revenue_cents_hidden');
+    this.revenueInput = document.getElementById('threshold_revenue_dollars');
+    this.hiddenRevenueInput = document.getElementById('threshold_revenue_cents');
 
     // Initial setup
     this.updateVisibility();
     this.setupRevenueConversion();
 
     // Add event listeners
-    this.radioButtons.forEach(radio => {
+    this.thresholdTypeInputs.forEach(radio => {
       radio.addEventListener('change', () => this.updateVisibility());
     });
   },
 
   updateVisibility() {
-    const selectedType = this.el.querySelector('input[data-threshold-radio]:checked')?.value || 'attendee_count';
+    const selectedType = this.el.querySelector('input[name="event[threshold_type]"]:checked')?.value || 'attendee_count';
     
     // Show/hide fields based on threshold type
     switch (selectedType) {

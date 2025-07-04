@@ -81,27 +81,15 @@ defmodule EventasaurusApp.Events.Event do
 
   @doc false
   def changeset(event, attrs) do
-    # Convert empty strings to nil for threshold_revenue_cents (only for string-keyed maps)
-    attrs = if is_map(attrs) and Map.has_key?(attrs, "threshold_revenue_cents") do
-      case Map.get(attrs, "threshold_revenue_cents") do
-        value when value == "" or value == nil -> Map.put(attrs, "threshold_revenue_cents", nil)
-        value when is_binary(value) ->
-          case String.trim(value) do
-            "" -> Map.put(attrs, "threshold_revenue_cents", nil)
-            _ -> attrs
-          end
-        _ -> attrs
-      end
-    else
-      attrs
-    end
+    # Convert empty strings to nil for threshold_revenue_cents
+    attrs = normalize_threshold_revenue_cents(attrs)
 
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
                    :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
-                   :is_ticketed, :virtual_venue_url])
+                   :virtual_venue_url, :is_ticketed])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
     |> maybe_validate_start_at()
@@ -121,6 +109,22 @@ defmodule EventasaurusApp.Events.Event do
     |> unique_constraint(:slug)
     |> maybe_generate_slug()
   end
+
+  # Helper function to normalize threshold_revenue_cents field
+  defp normalize_threshold_revenue_cents(attrs) when is_map(attrs) do
+    case Map.get(attrs, "threshold_revenue_cents") do
+      nil -> attrs
+      "" -> Map.put(attrs, "threshold_revenue_cents", nil)
+      value when is_binary(value) ->
+        if String.trim(value) == "" do
+          Map.put(attrs, "threshold_revenue_cents", nil)
+        else
+          attrs
+        end
+      _ -> attrs
+    end
+  end
+  defp normalize_threshold_revenue_cents(attrs), do: attrs
 
   # Note: Transition logic is handled by Machinery state machine
   # See lib/eventasaurus_app/event_state_machine.ex for transition rules
