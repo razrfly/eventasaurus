@@ -175,11 +175,19 @@ defmodule EventasaurusWeb.EventLive.New do
         {form_data, socket.assigns.show_all_timezones}
       end
 
+    # Sync is_virtual assign with form_data
+    is_virtual = case Map.get(form_data, "is_virtual") do
+      "true" -> true
+      true -> true
+      _ -> false
+    end
+
     socket =
       socket
       |> assign(:changeset, changeset)
       |> assign(:form_data, form_data)
       |> assign(:show_all_timezones, show_all_timezones)
+      |> assign(:is_virtual, is_virtual)
 
     {:noreply, assign(socket, form: to_form(changeset))}
   end

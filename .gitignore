@@ -57,4 +57,7 @@ node_modules/
 
 # Task files
 # tasks.json
-# tasks/ 
+# tasks/
+
+# Playwright test results
+test-results/ 
