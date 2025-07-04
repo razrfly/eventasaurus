@@ -1416,6 +1416,141 @@ Hooks.StripePaymentElements = {
   }
 };
 
+// TaxationTypeValidator hook for enhanced taxation type selection validation
+Hooks.TaxationTypeValidator = {
+  mounted() {
+    this.setupValidation();
+  },
+
+  updated() {
+    this.setupValidation();
+  },
+
+  setupValidation() {
+    const radioButtons = this.el.querySelectorAll('input[type="radio"][name*="taxation_type"]');
+    const helpTooltip = this.el.querySelector('[data-role="help-tooltip"]');
+    const errorContainer = this.el.querySelector('[data-role="error-container"]');
+    
+    if (radioButtons.length === 0) return;
+
+    // Add immediate feedback on radio button change
+    radioButtons.forEach(radio => {
+      radio.addEventListener('change', () => {
+        this.validateSelection();
+        this.showSelectionFeedback(radio.value);
+      });
+
+      // Add keyboard support for tooltip
+      radio.addEventListener('keydown', (e) => {
+        if (e.key === 'F1' || (e.ctrlKey && e.key === 'h')) {
+          e.preventDefault();
+          this.toggleTooltip();
+        }
+      });
+    });
+
+    // Validate on form submission attempt
+    const form = this.el.closest('form');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        if (!this.validateSelection()) {
+          e.preventDefault();
+          this.showValidationError('Please select a taxation classification for your event');
+          return false;
+        }
+      });
+    }
+
+    // Initial validation
+    this.validateSelection();
+  },
+
+  validateSelection() {
+    const radioButtons = this.el.querySelectorAll('input[type="radio"][name*="taxation_type"]');
+    const selectedRadio = Array.from(radioButtons).find(radio => radio.checked);
+    const isValid = !!selectedRadio;
+
+    // Update visual validation state
+    this.updateValidationState(isValid);
+
+    return isValid;
+  },
+
+  updateValidationState(isValid) {
+    const fieldset = this.el.querySelector('fieldset');
+    const errorContainer = this.el.querySelector('[data-role="error-container"]');
+
+    if (fieldset) {
+      if (isValid) {
+        fieldset.classList.remove('border-red-500', 'bg-red-50');
+        fieldset.classList.add('border-green-500', 'bg-green-50');
+      } else {
+        fieldset.classList.remove('border-green-500', 'bg-green-50');
+        fieldset.classList.add('border-red-500', 'bg-red-50');
+      }
+    }
+
+    if (errorContainer && !isValid) {
+      this.showValidationError('This field is required');
+    }
+  },
+
+  showSelectionFeedback(selectedValue) {
+    // Clear any previous validation errors
+    this.clearValidationError();
+
+    // Show selection confirmation
+    const confirmationContainer = this.el.querySelector('[data-role="confirmation-container"]');
+    if (confirmationContainer) {
+      const message = selectedValue === 'ticketed_event' 
+        ? 'Selected: Ticketed Event - Standard event with paid tickets'
+        : 'Selected: Contribution Collection - Donation-based event';
+      
+      confirmationContainer.innerHTML = `
+        <div class="flex items-center gap-2 text-green-700 bg-green-50 p-2 rounded-md">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+          </svg>
+          <span class="text-sm font-medium">${message}</span>
+        </div>
+      `;
+    }
+  },
+
+  showValidationError(message) {
+    const errorContainer = this.el.querySelector('[data-role="error-container"]');
+    if (errorContainer) {
+      errorContainer.innerHTML = `
+        <div class="flex items-center gap-2 text-red-700 bg-red-50 p-2 rounded-md" role="alert" aria-live="polite">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+          </svg>
+          <span class="text-sm font-medium">${message}</span>
+        </div>
+      `;
+    }
+  },
+
+  clearValidationError() {
+    const errorContainer = this.el.querySelector('[data-role="error-container"]');
+    if (errorContainer) {
+      errorContainer.innerHTML = '';
+    }
+  },
+
+  toggleTooltip() {
+    const helpTooltip = this.el.querySelector('[data-role="help-tooltip"]');
+    if (helpTooltip) {
+      const isVisible = !helpTooltip.classList.contains('hidden');
+      if (isVisible) {
+        helpTooltip.classList.add('hidden');
+      } else {
+        helpTooltip.classList.remove('hidden');
+      }
+    }
+  }
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
