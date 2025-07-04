@@ -44,7 +44,7 @@ defmodule EventasaurusApp.Events.Order do
     |> validate_number(:total_cents, greater_than: 0, message: "must be greater than 0")
     |> validate_number(:application_fee_amount, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_application_fee_amount()
-    |> validate_inclusion(:currency, ["usd", "eur", "gbp", "cad", "aud"], message: "must be a supported currency")
+    |> validate_inclusion(:currency, EventasaurusWeb.Helpers.CurrencyHelpers.supported_currency_codes(), message: "must be a supported currency")
     |> validate_inclusion(:status, @valid_statuses, message: "must be a valid status")
     |> validate_total_calculation()
     |> foreign_key_constraint(:user_id)

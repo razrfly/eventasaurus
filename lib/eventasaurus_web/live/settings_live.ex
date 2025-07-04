@@ -238,16 +238,13 @@ defmodule EventasaurusWeb.SettingsLive do
                   <h3 class="text-lg font-medium text-gray-900 mb-4">Preferences</h3>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <.input field={@form[:default_currency]} type="select" label="Default Currency" options={[
-                        {"USD - US Dollar", "USD"},
-                        {"EUR - Euro", "EUR"},
-                        {"GBP - British Pound", "GBP"},
-                        {"CAD - Canadian Dollar", "CAD"},
-                        {"AUD - Australian Dollar", "AUD"},
-                        {"JPY - Japanese Yen", "JPY"},
-                        {"CHF - Swiss Franc", "CHF"},
-                        {"SEK - Swedish Krona", "SEK"}
-                      ]} />
+                      <label class="block text-sm font-semibold leading-6 text-zinc-800 mb-2">Default Currency</label>
+                      <.currency_select
+                        name="user[default_currency]"
+                        id="user_default_currency"
+                        value={Phoenix.HTML.Form.input_value(@form, :default_currency)}
+                        prompt="Select Currency"
+                      />
                     </div>
 
                     <div>

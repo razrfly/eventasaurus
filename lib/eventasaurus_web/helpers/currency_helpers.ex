@@ -3,6 +3,8 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
   Helpers for formatting and handling currency across the application.
   """
 
+  alias EventasaurusWeb.Services.StripeCurrencyService
+
   @currency_symbols %{
     # Major Global Currencies
     "usd" => "$",
@@ -344,10 +346,52 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpers do
 
   @doc """
   Returns only the currency codes (without names) for validation purposes.
+  Uses StripeCurrencyService when available, falls back to hardcoded list.
   """
   def supported_currency_codes do
+    case StripeCurrencyService.get_currencies() do
+      currencies when is_list(currencies) and length(currencies) > 0 ->
+        currencies |> Enum.map(&String.downcase/1)
+      _ ->
+        # Fallback to existing hardcoded list
+        fallback_currency_codes()
+    end
+  end
+
+  @doc """
+  Returns the fallback currency codes when StripeCurrencyService is unavailable.
+  Uses the existing hardcoded currency list.
+  """
+  def fallback_currency_codes do
     supported_currencies_flat()
     |> Enum.map(fn {code, _name} -> code end)
+  end
+
+  @doc """
+  Returns grouped currencies from Stripe API with fallback to hardcoded list.
+  Returns a map with regions as keys and currency lists as values.
+  """
+  def grouped_currencies_from_stripe do
+    case StripeCurrencyService.get_grouped_currencies() do
+      grouped when is_map(grouped) and map_size(grouped) > 0 ->
+        # Convert Stripe's grouped currencies to our format with symbols and names
+        grouped
+        |> Enum.map(fn {region, currencies} ->
+          formatted_currencies =
+            currencies
+            |> Enum.map(fn currency_code ->
+              code = String.downcase(currency_code)
+              name = currency_name(code)
+              symbol = currency_symbol(code)
+              {code, "#{name} (#{symbol})"}
+            end)
+          {region, formatted_currencies}
+        end)
+        |> Enum.sort_by(fn {region, _} -> region end)
+      _ ->
+        # Fallback to existing hardcoded grouped currencies
+        supported_currencies()
+    end
   end
 
   @doc """

@@ -749,10 +749,12 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("add_ticket_form", _params, socket) do
+    default_currency = get_user_default_currency(socket.assigns.user)
+
     socket =
       socket
       |> assign(:show_ticket_modal, true)
-      |> assign(:ticket_form_data, %{"currency" => "usd"})
+      |> assign(:ticket_form_data, %{"currency" => default_currency})
       |> assign(:editing_ticket_id, nil)
 
     {:noreply, socket}
@@ -800,7 +802,7 @@ defmodule EventasaurusWeb.EventLive.New do
         "price" => format_price_from_cents(ticket.base_price_cents),
         "minimum_price" => format_price_from_cents(Map.get(ticket, :minimum_price_cents, 0)),
         "suggested_price" => format_price_from_cents(Map.get(ticket, :suggested_price_cents, ticket.base_price_cents)),
-        "currency" => Map.get(ticket, :currency, "usd"),
+        "currency" => Map.get(ticket, :currency, get_user_default_currency(socket.assigns.user)),
         "quantity" => Integer.to_string(ticket.quantity),
         "starts_at" => format_datetime_for_input(ticket.starts_at),
         "ends_at" => format_datetime_for_input(ticket.ends_at),
@@ -934,7 +936,7 @@ defmodule EventasaurusWeb.EventLive.New do
               base_price_cents: price_cents,
               minimum_price_cents: minimum_price_cents,
               suggested_price_cents: suggested_price_cents,
-              currency: Map.get(ticket_data, "currency", "usd"),
+              currency: Map.get(ticket_data, "currency", get_user_default_currency(socket.assigns.user)),
               quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
                 {n, _} when n >= 0 -> n
                 _ -> 0
@@ -1336,6 +1338,10 @@ defmodule EventasaurusWeb.EventLive.New do
     # Use a transaction to ensure all tickets are created atomically
     Repo.transaction(fn ->
       Enum.each(tickets, fn ticket_data ->
+        # Get event organizer's default currency as fallback
+        organizer = List.first(event.users) || %{default_currency: "usd"}
+        default_currency = get_user_default_currency(organizer)
+
         ticket_attrs = %{
           title: Map.get(ticket_data, :title),
           description: Map.get(ticket_data, :description),
@@ -1343,7 +1349,7 @@ defmodule EventasaurusWeb.EventLive.New do
           base_price_cents: Map.get(ticket_data, :base_price_cents),
           minimum_price_cents: Map.get(ticket_data, :minimum_price_cents) || Map.get(ticket_data, :base_price_cents),
           suggested_price_cents: Map.get(ticket_data, :suggested_price_cents),
-          currency: Map.get(ticket_data, :currency, "usd"),
+          currency: Map.get(ticket_data, :currency, default_currency),
           quantity: Map.get(ticket_data, :quantity),
           starts_at: Map.get(ticket_data, :starts_at),
           ends_at: Map.get(ticket_data, :ends_at),
@@ -1395,6 +1401,15 @@ defmodule EventasaurusWeb.EventLive.New do
   # ============================================================================
   # Ticketing Helper Functions
   # ============================================================================
+
+  # Get user's default currency with fallback to USD
+  defp get_user_default_currency(user) do
+    case user.default_currency do
+      nil -> "usd"
+      "" -> "usd"
+      currency -> currency
+    end
+  end
 
   defp format_datetime_for_input(nil), do: ""
   defp format_datetime_for_input(%DateTime{} = datetime) do
