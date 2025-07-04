@@ -121,6 +121,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
               []
             end
 
+            # Load recent locations for the user (excluding current event)
+            recent_locations = Events.get_recent_locations_for_user(user.id,
+              limit: 5,
+              exclude_event_ids: [event.id]
+            )
+
             # Set up the socket with all required assigns
             socket =
               socket
@@ -143,10 +149,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:page, 1)
               |> assign(:per_page, 20)
               |> assign_new(:image_tab, fn -> "unsplash" end)
-                          |> assign(:enable_date_polling, enable_date_polling)
-            |> assign(:setup_path, setup_path)
-            |> assign(:mode, "compact")
-            |> assign(:show_stage_transitions, false)
+              |> assign(:enable_date_polling, enable_date_polling)
+              |> assign(:setup_path, setup_path)
+              |> assign(:mode, "compact")
+              |> assign(:show_stage_transitions, false)
               |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
@@ -157,6 +163,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:ticket_form_data, %{})
               |> assign(:editing_ticket_id, nil)
               |> assign(:show_additional_options, false)
+              # Recent locations assigns
+              |> assign(:recent_locations, recent_locations)
+              |> assign(:show_recent_locations, false)
+              |> assign(:filtered_recent_locations, recent_locations)
 
             {:ok, socket}
           else
@@ -403,6 +413,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> assign(:selected_venue_name, venue_name)
     |> assign(:selected_venue_address, venue_address)
     |> assign(:is_virtual, false)
+    |> assign(:show_recent_locations, false)
 
     {:noreply, socket}
   end
@@ -931,6 +942,148 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("toggle_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, !socket.assigns.show_recent_locations)}
+  end
+
+  @impl true
+  def handle_event("show_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, true)}
+  end
+
+  @impl true
+  def handle_event("hide_recent_locations", _params, socket) do
+    {:noreply, assign(socket, :show_recent_locations, false)}
+  end
+
+  @impl true
+  def handle_event("enable_google_places", _params, socket) do
+    {:noreply, push_event(socket, "enable_google_places", %{})}
+  end
+
+  @impl true
+  def handle_event("select_recent_location", %{"location" => location_json}, socket) do
+    # Parse the JSON data with error handling
+    location_data = case Jason.decode(location_json) do
+      {:ok, data} -> data
+      {:error, _} -> %{}
+    end
+
+    # Handle physical venue (virtual events are excluded from recent locations)
+    venue_name = Map.get(location_data, "name", "")
+    venue_address = Map.get(location_data, "address", "")
+
+    form_data_updates = %{
+      "venue_name" => venue_name,
+      "venue_address" => venue_address,
+      "venue_city" => Map.get(location_data, "city", ""),
+      "venue_state" => Map.get(location_data, "state", ""),
+      "venue_country" => Map.get(location_data, "country", ""),
+      "venue_latitude" => Map.get(location_data, "latitude"),
+      "venue_longitude" => Map.get(location_data, "longitude"),
+      "virtual_venue_url" => "",
+      "is_virtual" => false
+    }
+
+    # Update form data while preserving existing data
+    form_data = Map.merge(socket.assigns.form_data || %{}, form_data_updates)
+
+    # Update the changeset
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    # Update the socket with full information
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:selected_venue_name, venue_name)
+      |> assign(:selected_venue_address, venue_address)
+      |> assign(:is_virtual, false)
+      |> assign(:show_recent_locations, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_recent_locations", %{"query" => query}, socket) do
+    filtered_locations = EventasaurusWeb.Helpers.EventHelpers.filter_locations(socket.assigns.recent_locations, query)
+    {:noreply, assign(socket, :filtered_recent_locations, filtered_locations)}
+  end
+
+  @impl true
+  def handle_event("create_zoom_meeting", _params, socket) do
+    zoom_url = EventasaurusWeb.Helpers.EventHelpers.generate_zoom_meeting_url()
+
+    # Update form data for virtual meeting
+    form_data = Map.merge(socket.assigns.form_data || %{}, %{
+      "virtual_venue_url" => zoom_url,
+      "is_virtual" => true,
+      "venue_name" => "",
+      "venue_address" => "",
+      "venue_city" => "",
+      "venue_state" => "",
+      "venue_country" => "",
+      "venue_latitude" => nil,
+      "venue_longitude" => nil
+    })
+
+    # Update the changeset
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:selected_venue_name, "Zoom Meeting")
+      |> assign(:selected_venue_address, zoom_url)
+      |> assign(:is_virtual, true)
+      |> assign(:show_recent_locations, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("create_google_meet", _params, socket) do
+    meet_url = EventasaurusWeb.Helpers.EventHelpers.generate_google_meet_url()
+
+    # Update form data for virtual meeting
+    form_data = Map.merge(socket.assigns.form_data || %{}, %{
+      "virtual_venue_url" => meet_url,
+      "is_virtual" => true,
+      "venue_name" => "",
+      "venue_address" => "",
+      "venue_city" => "",
+      "venue_state" => "",
+      "venue_country" => "",
+      "venue_latitude" => nil,
+      "venue_longitude" => nil
+    })
+
+    # Update the changeset
+    changeset =
+      socket.assigns.event
+      |> Events.change_event(form_data)
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+      |> assign(:selected_venue_name, "Google Meet")
+      |> assign(:selected_venue_address, meet_url)
+      |> assign(:is_virtual, true)
+      |> assign(:show_recent_locations, false)
+
+    {:noreply, socket}
+  end
+
   # ========== Info Handlers ==========
 
   @impl true
@@ -1415,4 +1568,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         {:ok, price_cents, price_cents}
     end
   end
+
+
+
 end
