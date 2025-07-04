@@ -262,47 +262,43 @@ defmodule EventasaurusApp.EventStateMachine do
   end
 
   @doc """
-  Checks if an event has threshold-based ticketing enabled and the threshold has been met.
-
-  Handles three threshold types:
-  - "attendee_count": Checks if attendee count meets threshold_count
-  - "revenue": Checks if revenue meets threshold_revenue_cents
-  - "both": Checks if both attendee count and revenue meet their respective thresholds
+  Checks if an event has met its threshold requirements.
+  Returns true if the event meets its threshold criteria, false otherwise.
   """
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "attendee_count", threshold_count: threshold_count}) when is_nil(threshold_count), do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "attendee_count", threshold_count: threshold_count}) when threshold_count <= 0, do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "attendee_count"} = event) do
-    current_count = get_current_attendee_count(event)
-    current_count >= event.threshold_count
-  end
+  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: threshold_type} = event)
+      when threshold_type in ["attendee_count", "revenue", "both"] do
+    case threshold_type do
+      "attendee_count" ->
+        valid_threshold?(event.threshold_count) &&
+          get_current_attendee_count(event) >= event.threshold_count
 
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "revenue", threshold_revenue_cents: threshold_revenue_cents}) when is_nil(threshold_revenue_cents), do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "revenue", threshold_revenue_cents: threshold_revenue_cents}) when threshold_revenue_cents <= 0, do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "revenue"} = event) do
-    current_revenue = get_current_revenue(event)
-    current_revenue >= event.threshold_revenue_cents
-  end
+      "revenue" ->
+        valid_threshold?(event.threshold_revenue_cents) &&
+          get_current_revenue(event) >= event.threshold_revenue_cents
 
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_count: threshold_count}) when is_nil(threshold_count), do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_count: threshold_count}) when threshold_count <= 0, do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_revenue_cents: threshold_revenue_cents}) when is_nil(threshold_revenue_cents), do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both", threshold_revenue_cents: threshold_revenue_cents}) when threshold_revenue_cents <= 0, do: false
-  def threshold_met?(%EventasaurusApp.Events.Event{threshold_type: "both"} = event) do
-    current_count = get_current_attendee_count(event)
-    current_revenue = get_current_revenue(event)
-    current_count >= event.threshold_count && current_revenue >= event.threshold_revenue_cents
+      "both" ->
+        valid_threshold?(event.threshold_count) &&
+          valid_threshold?(event.threshold_revenue_cents) &&
+          get_current_attendee_count(event) >= event.threshold_count &&
+          get_current_revenue(event) >= event.threshold_revenue_cents
+    end
   end
 
   # Default case for backward compatibility or unknown threshold types
   def threshold_met?(%EventasaurusApp.Events.Event{} = event) do
     # Default to attendee_count behavior for backward compatibility
-    if event.threshold_count && event.threshold_count > 0 do
+    if valid_threshold?(event.threshold_count) do
       current_count = get_current_attendee_count(event)
       current_count >= event.threshold_count
     else
       false
     end
   end
+
+  # Helper function to validate threshold values
+  defp valid_threshold?(value) when is_nil(value), do: false
+  defp valid_threshold?(value) when is_integer(value), do: value > 0
+  defp valid_threshold?(_), do: false
 
   @doc """
   Checks if an event has ticketing functionality enabled.

@@ -1127,7 +1127,7 @@ defmodule EventasaurusWeb.EventComponents do
                           _ -> ""
                         end
                       }>
-                        <label for="threshold_revenue_cents" class="block text-sm font-medium text-gray-700 mb-1">
+                        <label for="threshold_revenue_dollars" class="block text-sm font-medium text-gray-700 mb-1">
                           Minimum Revenue Required
                         </label>
                         <div class="mt-1 relative rounded-md shadow-sm">
@@ -1136,20 +1136,9 @@ defmodule EventasaurusWeb.EventComponents do
                           </div>
                           <input
                             type="number"
-                            id="threshold_revenue_cents"
-                            name="event[threshold_revenue_cents]"
-                            value={
-                              case Map.get(@form_data, "threshold_revenue_cents") do
-                                cents when is_integer(cents) and cents > 0 ->
-                                  Float.round(cents / 100, 2)
-                                cents when is_binary(cents) and cents != "" ->
-                                  case Integer.parse(cents) do
-                                    {parsed_cents, ""} when parsed_cents > 0 -> Float.round(parsed_cents / 100, 2)
-                                    _ -> ""
-                                  end
-                                _ -> ""
-                              end
-                            }
+                            id="threshold_revenue_dollars"
+                            name="event[threshold_revenue_dollars]"
+                            value={format_cents_as_dollars(Map.get(@form_data, "threshold_revenue_cents"))}
                             min="0"
                             step="0.01"
                             placeholder="0.00"
@@ -1166,8 +1155,8 @@ defmodule EventasaurusWeb.EventComponents do
                         <!-- Hidden field to store cents value -->
                         <input
                           type="hidden"
-                          name="event[threshold_revenue_cents_hidden]"
-                          id="threshold_revenue_cents_hidden"
+                          name="event[threshold_revenue_cents]"
+                          id="threshold_revenue_cents"
                           value={Map.get(@form_data, "threshold_revenue_cents", "")}
                         />
                       </div>
@@ -1534,9 +1523,8 @@ defmodule EventasaurusWeb.EventComponents do
   attr :show_details, :boolean, default: true, doc: "Whether to show detailed progress text"
 
   def threshold_progress(assigns) do
-    # Only show progress for threshold events that have threshold requirements
-    if assigns.event.threshold_type && assigns.event.threshold_type != "attendee_count" or
-       (assigns.event.threshold_type == "attendee_count" && assigns.event.threshold_count) do
+    # Only show progress for events with valid threshold requirements
+    if threshold_has_valid_targets?(assigns.event) do
 
       current_attendees = EventasaurusApp.EventStateMachine.get_current_attendee_count(assigns.event)
       current_revenue = EventasaurusApp.EventStateMachine.get_current_revenue(assigns.event)
@@ -1718,5 +1706,29 @@ defmodule EventasaurusWeb.EventComponents do
     </div>
     """
   end
+
+  # Helper function to format cents as dollars for display
+  defp format_cents_as_dollars(nil), do: ""
+  defp format_cents_as_dollars(""), do: ""
+  defp format_cents_as_dollars(cents) when is_integer(cents) and cents > 0, do: Float.round(cents / 100, 2)
+  defp format_cents_as_dollars(cents) when is_binary(cents) do
+    case Integer.parse(cents) do
+      {parsed, ""} when parsed > 0 -> Float.round(parsed / 100, 2)
+      _ -> ""
+    end
+  end
+  defp format_cents_as_dollars(_), do: ""
+
+  def threshold_has_valid_targets?(%{threshold_type: "attendee_count"} = event),
+    do: event.threshold_count && event.threshold_count > 0
+
+  def threshold_has_valid_targets?(%{threshold_type: "revenue"} = event),
+    do: event.threshold_revenue_cents && event.threshold_revenue_cents > 0
+
+  def threshold_has_valid_targets?(%{threshold_type: "both"} = event),
+    do: (event.threshold_count && event.threshold_count > 0) &&
+        (event.threshold_revenue_cents && event.threshold_revenue_cents > 0)
+
+  def threshold_has_valid_targets?(_), do: false
 
 end
