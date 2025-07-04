@@ -91,21 +91,13 @@ if config_env() == :prod do
 
   # ## Configuring the mailer
   #
-  # In production you need to configure the mailer to use a different adapter.
-  # Also, you may need to configure the Swoosh API client of your choice if you
-  # are not using SMTP. Here is an example of the configuration:
-  #
-  #     config :eventasaurus, Eventasaurus.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # For this example you need include a HTTP client required by Swoosh API client.
-  # Swoosh supports Hackney and Finch out of the box:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Hackney
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+  # Configure Resend for production email sending
+  config :eventasaurus, Eventasaurus.Mailer,
+    adapter: Swoosh.Adapters.Resend,
+    api_key: System.get_env("RESEND_API_KEY")
+
+  # Configure Swoosh API client
+  config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
   # Configure the database for production
   # Note: Supabase typically requires verify_none in containerized environments
@@ -142,6 +134,9 @@ if config_env() == :prod do
   config :eventasaurus, :posthog,
     api_key: System.get_env("POSTHOG_PUBLIC_API_KEY"),
     api_host: "https://eu.i.posthog.com"
+
+  # Configure base URL for email links
+  config :eventasaurus, :base_url, "https://eventasaur.us"
 
 
 end
