@@ -270,7 +270,126 @@ defmodule EventasaurusWeb.EmailStatusComponents do
     """
   end
 
+  @doc """
+  Renders a compact email status indicator with tooltip.
+  """
+  attr :email_status, :map, required: true
+  attr :class, :string, default: "w-4 h-4"
+
+  def compact_email_indicator(assigns) do
+    ~H"""
+    <div class="relative inline-flex items-center group">
+      <.compact_email_icon status={@email_status.status} class={@class} />
+
+      <!-- Tooltip on hover -->
+      <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2
+                  opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                  bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap
+                  pointer-events-none z-10">
+        <%= format_email_tooltip(@email_status) %>
+        <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
+          <div class="border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders compact email status icons with better visual representation.
+  """
+  attr :status, :string, required: true
+  attr :class, :string, default: "w-4 h-4"
+
+  def compact_email_icon(assigns) do
+    ~H"""
+    <span :if={@status == "not_sent"} class={["text-gray-400", @class]} title="Email not sent">
+      📭
+    </span>
+    <span :if={@status == "sending"} class={["text-blue-500", @class]} title="Sending email">
+      ⏳
+    </span>
+    <span :if={@status == "sent"} class={["text-green-500", @class]} title="Email sent">
+      📧
+    </span>
+    <span :if={@status == "delivered"} class={["text-green-600", @class]} title="Email delivered">
+      ✅
+    </span>
+    <span :if={@status == "failed"} class={["text-red-500", @class]} title="Email failed">
+      ❌
+    </span>
+    <span :if={@status == "bounced"} class={["text-orange-500", @class]} title="Email bounced">
+      ⚠️
+    </span>
+    <span :if={@status == "retrying"} class={["text-yellow-500", @class]} title="Retrying email">
+      🔄
+    </span>
+    <span :if={@status not in ["not_sent", "sending", "sent", "delivered", "failed", "bounced", "retrying"]} class={["text-gray-400", @class]} title="Unknown status">
+      ❓
+    </span>
+    """
+  end
+
   # Private helper functions
+
+  defp format_email_tooltip(email_status) do
+    case email_status.status do
+      "sent" ->
+        if email_status.last_sent_at do
+          "Email sent #{time_ago(email_status.last_sent_at)}"
+        else
+          "Email sent"
+        end
+      "delivered" ->
+        if email_status.last_sent_at do
+          "Email delivered #{time_ago(email_status.last_sent_at)}"
+        else
+          "Email delivered"
+        end
+      "failed" ->
+        if email_status.last_error do
+          "Email failed: #{email_status.last_error}"
+        else
+          "Email failed"
+        end
+      "bounced" ->
+        if email_status.last_sent_at do
+          "Email bounced #{time_ago(email_status.last_sent_at)}"
+        else
+          "Email bounced"
+        end
+      "not_sent" ->
+        "Email not sent"
+      "sending" ->
+        "Sending email..."
+      "retrying" ->
+        "Retrying email (attempt #{email_status.attempts || 1})"
+      _ ->
+        "Unknown email status"
+    end
+  end
+
+  defp time_ago(datetime_string) when is_binary(datetime_string) do
+    case DateTime.from_iso8601(datetime_string) do
+      {:ok, datetime, _} -> time_ago(datetime)
+      _ -> "recently"
+    end
+  end
+
+  defp time_ago(%DateTime{} = datetime) do
+    now = DateTime.utc_now()
+    diff = DateTime.diff(now, datetime, :second)
+
+    cond do
+      diff < 60 -> "just now"
+      diff < 3600 -> "#{div(diff, 60)}m ago"
+      diff < 86400 -> "#{div(diff, 3600)}h ago"
+      diff < 2592000 -> "#{div(diff, 86400)}d ago"
+      true -> "#{div(diff, 2592000)}mo ago"
+    end
+  end
+
+  defp time_ago(_), do: "recently"
 
   defp badge_classes(status) do
     case status do
@@ -295,6 +414,5 @@ defmodule EventasaurusWeb.EmailStatusComponents do
       0
     end
   end
-
 
 end
