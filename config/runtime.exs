@@ -151,5 +151,12 @@ if config_env() == :prod do
   # Configure base URL for email links
   config :eventasaurus, :base_url, "https://eventasaur.us"
 
+  # Configure Stripe for production
+  # Set the following environment variables:
+  # - STRIPE_SECRET_KEY: Your Stripe secret key
+  # - STRIPE_CONNECT_CLIENT_ID: Your Stripe Connect client ID
+  config :stripity_stripe,
+    api_key: System.get_env("STRIPE_SECRET_KEY"),
+    connect_client_id: System.get_env("STRIPE_CONNECT_CLIENT_ID")
 
 end
