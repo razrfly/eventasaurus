@@ -42,6 +42,7 @@ defmodule EventasaurusApp.Events.Event do
     field :threshold_count, :integer
     field :canceled_at, :utc_datetime
     field :is_ticketed, :boolean, default: false
+    field :virtual_venue_url, :string # for virtual meeting URLs
 
     # Theme fields for the theming system
     field :theme, Ecto.Enum,
@@ -80,7 +81,7 @@ defmodule EventasaurusApp.Events.Event do
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
                    :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
-                   :canceled_at, :selected_poll_dates, :is_ticketed])
+                   :canceled_at, :selected_poll_dates, :is_ticketed, :virtual_venue_url])
     |> validate_required([:title, :timezone, :visibility])
     |> maybe_validate_start_at()
     |> validate_length(:title, min: 3, max: 100)
