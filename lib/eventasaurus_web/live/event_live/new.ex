@@ -895,6 +895,7 @@ defmodule EventasaurusWeb.EventLive.New do
       if length(updated_tickets) == 0 do
         form_data = socket.assigns.form_data
           |> Map.put("is_ticketed", false)
+          |> Map.put("taxation_type", "ticketless")  # Update taxation type to match non-ticketed status
           |> Map.put("setup_path", "confirmed")  # Keep as confirmed but without ticketing
         {form_data, "confirmed", false}
       else
@@ -1024,6 +1025,7 @@ defmodule EventasaurusWeb.EventLive.New do
             updated_form_data =
               socket.assigns.form_data
               |> Map.put("is_ticketed", true)
+              |> Map.put("taxation_type", "ticketed_event")  # Update taxation type to match ticketed status
               |> Map.put("setup_path", "confirmed")  # Default to confirmed when tickets are added
 
             socket =
