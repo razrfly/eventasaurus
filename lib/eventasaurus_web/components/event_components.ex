@@ -182,7 +182,12 @@ defmodule EventasaurusWeb.EventComponents do
         <h3 class="text-lg font-semibold text-gray-900">Select Tickets</h3>
         <div class="text-sm text-gray-500">
           <%= if Enum.any?(@tickets, &(&1.base_price_cents && &1.base_price_cents > 0)) do %>
-            Prices in USD
+            <% currencies = @tickets |> Enum.map(&(&1.currency || "usd")) |> Enum.uniq %>
+            <%= if length(currencies) == 1 do %>
+              Prices in <%= String.upcase(hd(currencies)) %>
+            <% else %>
+              Prices vary by ticket
+            <% end %>
           <% else %>
             Free Event
           <% end %>
@@ -291,7 +296,8 @@ defmodule EventasaurusWeb.EventComponents do
                 <%= if total_amount == 0 do %>
                   Free
                 <% else %>
-                  <%= format_currency(total_amount, "usd") %>
+                  <% currency = @tickets |> Enum.find(&(Map.get(@selected_tickets, &1.id, 0) > 0)) |> Map.get(:currency, "usd") %>
+                  <%= format_currency(total_amount, currency) %>
                 <% end %>
               </div>
             </div>

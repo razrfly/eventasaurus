@@ -254,6 +254,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
     Logger.info("=== SUBMIT EVENT HANDLER CALLED ===")
     Logger.info("Event params keys: #{inspect(Map.keys(event_params))}")
 
+    # Apply taxation consistency logic before further processing
+    event_params = apply_taxation_consistency(event_params)
+    Logger.info("Taxation consistency applied: #{inspect(Map.take(event_params, ["taxation_type", "is_ticketed"]))}")
+
     # Decode external_image_data if it's a JSON string
     event_params =
       case Map.get(event_params, "external_image_data") do
@@ -1638,6 +1642,28 @@ defmodule EventasaurusWeb.EventLive.Edit do
             "contribution_collection" -> "Contribution-based event configuration"
             _ -> "Current configuration maintained"
           end)
+    end
+  end
+
+  defp apply_taxation_consistency(event_params) do
+    taxation_type = Map.get(event_params, "taxation_type", "ticketless")
+    is_ticketed = Map.get(event_params, "is_ticketed", false)
+
+    # Normalize is_ticketed to boolean
+    is_ticketed_bool = is_ticketed in [true, "true", "on"]
+
+    case {taxation_type, is_ticketed_bool} do
+      # Force is_ticketed to false for contribution_collection and ticketless
+      {"contribution_collection", _} ->
+        Map.put(event_params, "is_ticketed", false)
+      {"ticketless", _} ->
+        Map.put(event_params, "is_ticketed", false)
+      # For ticketed_event, preserve the original value
+      {"ticketed_event", _} ->
+        Map.put(event_params, "is_ticketed", is_ticketed_bool)
+      # Default case
+      _ ->
+        Map.put(event_params, "is_ticketed", is_ticketed_bool)
     end
   end
 

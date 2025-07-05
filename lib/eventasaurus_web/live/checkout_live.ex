@@ -170,23 +170,21 @@ defmodule EventasaurusWeb.CheckoutLive do
   end
 
   @impl true
-  def handle_event("update_guest_form", %{"value" => value} = params, socket) do
-    field = case params do
-      %{"field" => field} -> field
-      _ -> nil
-    end
+      def handle_event("update_guest_form", %{"guest_form" => guest_form_params}, socket) do
+    # Merge the new form parameters with existing form data
+    updated_form = Map.merge(socket.assigns.guest_form, guest_form_params)
 
-    if field do
-      updated_form = Map.put(socket.assigns.guest_form, field, value)
-      # Clear validation errors when user starts typing
-      {:noreply,
-       socket
-       |> assign(:guest_form, updated_form)
-       |> assign(:errors, [])
-       |> clear_flash()}
-    else
-      {:noreply, socket}
-    end
+    # Clear validation errors when user starts typing
+    {:noreply,
+     socket
+     |> assign(:guest_form, updated_form)
+     |> assign(:errors, [])
+     |> clear_flash()}
+  end
+
+  # Fallback handler for malformed parameters
+  def handle_event("update_guest_form", _params, socket) do
+    {:noreply, socket}
   end
 
   # Private helper functions
@@ -921,17 +919,16 @@ defmodule EventasaurusWeb.CheckoutLive do
                       </div>
                     <% end %>
 
-                    <div class="max-w-md mx-auto space-y-6">
+                    <form phx-change="update_guest_form" class="max-w-md mx-auto space-y-6">
                       <div>
-                        <label for="guest_name" class="block text-lg font-medium text-gray-900 mb-3">
+                        <label for="guest_form_name" class="block text-lg font-medium text-gray-900 mb-3">
                           Full Name <span class="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
-                          id="guest_name"
+                          name="guest_form[name]"
+                          id="guest_form_name"
                           value={@guest_form["name"]}
-                          phx-keyup="update_guest_form"
-                          phx-value-field="name"
                           phx-debounce="300"
                           class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                           placeholder="Enter your full name"
@@ -940,22 +937,23 @@ defmodule EventasaurusWeb.CheckoutLive do
                       </div>
 
                       <div>
-                        <label for="guest_email" class="block text-lg font-medium text-gray-900 mb-3">
+                        <label for="guest_form_email" class="block text-lg font-medium text-gray-900 mb-3">
                           Email Address <span class="text-red-500">*</span>
                         </label>
                         <input
                           type="email"
-                          id="guest_email"
+                          name="guest_form[email]"
+                          id="guest_form_email"
                           value={@guest_form["email"]}
-                          phx-keyup="update_guest_form"
-                          phx-value-field="email"
                           phx-debounce="300"
                           class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                           placeholder="Enter your email address"
                           disabled={@processing}
                         />
                       </div>
+                    </form>
 
+                    <div class="max-w-md mx-auto space-y-6">
                       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <p class="text-sm text-blue-800">
                           <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -1151,10 +1149,10 @@ defmodule EventasaurusWeb.CheckoutLive do
                           <div class="text-lg font-semibold text-green-600">Free</div>
                         <% else %>
                           <div class="text-lg font-semibold text-gray-900">
-                            <%= CurrencyHelpers.format_currency(item.total_price, "usd") %>
+                            <%= CurrencyHelpers.format_currency(item.total_price, item.ticket.currency || "usd") %>
                           </div>
                           <div class="text-sm text-gray-500">
-                            <%= CurrencyHelpers.format_currency(item.unit_price, "usd") %> each
+                            <%= CurrencyHelpers.format_currency(item.unit_price, item.ticket.currency || "usd") %> each
                           </div>
                         <% end %>
                       </div>
@@ -1177,7 +1175,7 @@ defmodule EventasaurusWeb.CheckoutLive do
                         <%= if item.total_price == 0 do %>
                           Free
                         <% else %>
-                          <%= CurrencyHelpers.format_currency(item.total_price, "usd") %>
+                          <%= CurrencyHelpers.format_currency(item.total_price, item.ticket.currency || "usd") %>
                         <% end %>
                       </span>
                     </div>
@@ -1190,7 +1188,8 @@ defmodule EventasaurusWeb.CheckoutLive do
                     <div class="flex justify-between text-sm mb-2">
                       <span class="text-gray-600">Subtotal</span>
                       <span class="text-gray-900">
-                        <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>
+                        <% currency = @order_items |> List.first() |> Map.get(:ticket) |> Map.get(:currency, "usd") %>
+                        <%= CurrencyHelpers.format_currency(@total_amount, currency) %>
                       </span>
                     </div>
                   <% end %>
@@ -1220,11 +1219,12 @@ defmodule EventasaurusWeb.CheckoutLive do
                       <%= if @total_amount == 0 do %>
                         Free
                       <% else %>
+                        <% currency = @order_items |> List.first() |> Map.get(:ticket) |> Map.get(:currency, "usd") %>
                         <%= case @tax_info.display_mode do %>
                           <% :estimate -> %>
-                            <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>*
+                            <%= CurrencyHelpers.format_currency(@total_amount, currency) %>*
                           <% _ -> %>
-                            <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>
+                            <%= CurrencyHelpers.format_currency(@total_amount, currency) %>
                         <% end %>
                       <% end %>
                     </span>
