@@ -897,6 +897,9 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   defp create_stripe_payment_intent(%Order{} = order, connect_account) do
+    # Get the event to pass taxation information to Stripe
+    event = Repo.get!(Event, order.event_id)
+
     metadata = %{
       "order_id" => to_string(order.id),
       "event_id" => to_string(order.event_id),
@@ -910,7 +913,8 @@ defmodule EventasaurusApp.Ticketing do
       order.currency,
       connect_account,
       order.application_fee_amount,
-      metadata
+      metadata,
+      event
     )
   end
 

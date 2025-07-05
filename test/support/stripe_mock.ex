@@ -27,7 +27,7 @@ defmodule EventasaurusApp.StripeMock do
     }}
   end
 
-  def create_payment_intent(%{} = _params, _connect_account) do
+  def create_payment_intent(_amount_cents, _currency, _connect_account, _application_fee_amount, _metadata, _event \\ nil) do
     {:ok, %{
       "id" => "pi_test_mock_intent",
       "client_secret" => "pi_test_mock_intent_secret_test"
