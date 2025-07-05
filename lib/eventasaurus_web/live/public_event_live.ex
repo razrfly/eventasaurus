@@ -43,15 +43,16 @@ defmodule EventasaurusWeb.PublicEventLive do
           # Load participants for social proof
           participants = Events.list_event_participants(event)
 
-          # Load tickets for ticketed events
-          tickets = if event.is_ticketed do
+          # Load tickets for events that have ticket types (ticketed_event or contribution_collection)
+          should_show_tickets = event.taxation_type in ["ticketed_event", "contribution_collection"]
+          tickets = if should_show_tickets do
             Ticketing.list_tickets_for_event(event.id)
           else
             []
           end
 
-          # Subscribe to real-time ticket updates for ticketed events
-          subscribed_to_tickets = if event.is_ticketed do
+          # Subscribe to real-time ticket updates for events with tickets
+          subscribed_to_tickets = if should_show_tickets do
             Ticketing.subscribe()
             true
           else
@@ -118,6 +119,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:selected_tickets, %{})  # Map of ticket_id => quantity
            |> assign(:ticket_loading, false)
            |> assign(:subscribed_to_tickets, subscribed_to_tickets)
+           |> assign(:should_show_tickets, should_show_tickets)
            # Meta tag data for social sharing
            |> assign(:meta_title, event.title)
            |> assign(:meta_description, description)
@@ -870,8 +872,8 @@ defmodule EventasaurusWeb.PublicEventLive do
   # ======== REAL-TIME TICKET UPDATES ========
 
   def handle_info({:ticket_update, %{ticket: updated_ticket, action: action}}, socket) do
-    # Only update if this is for the current event
-    if updated_ticket.event_id == socket.assigns.event.id do
+    # Only update if this is for the current event and we're showing tickets
+    if updated_ticket.event_id == socket.assigns.event.id and socket.assigns.should_show_tickets do
       # Set loading state
       socket = assign(socket, :ticket_loading, true)
 
@@ -1292,8 +1294,8 @@ defmodule EventasaurusWeb.PublicEventLive do
 
                  <!-- Right sidebar -->
          <div class="sidebar-content lg:col-span-1">
-          <!-- Ticket Selection Section (for ticketed events) -->
-          <%= if @event.is_ticketed and @event.status in [:confirmed] do %>
+          <!-- Ticket Selection Section (for events with tickets) -->
+          <%= if @should_show_tickets and @event.status in [:confirmed] do %>
             <.ticket_selection_component
               tickets={@tickets}
               selected_tickets={@selected_tickets}

@@ -463,7 +463,7 @@ defmodule EventasaurusWeb.EventController do
 
   ## Helper Functions for Action API
 
-  defp serialize_event_for_json(event, fields \\ :default) do
+  defp serialize_event_for_json(event, fields) do
     base_fields = %{
       id: event.id,
       slug: event.slug,

@@ -292,7 +292,7 @@ defmodule Eventasaurus.Emails do
   defp render_personal_message(message) when is_binary(message) and message != "" do
     """
     <div class="personal-message">
-      "#{html_escape(message)}"
+      #{html_escape(message)}
     </div>
     """
   end
@@ -415,7 +415,8 @@ defmodule Eventasaurus.Emails do
   end
 
   defp get_default_base_url do
-    case Application.get_env(:eventasaurus, :environment) || Mix.env() do
+    env = Application.get_env(:eventasaurus, :environment) || :prod
+    case env do
       :test -> "http://localhost:4002"
       :dev -> "http://localhost:4000"
       _ -> "https://eventasaur.us"

@@ -32,7 +32,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   def generate_hash(event) when is_map(event) do
     event
     |> build_fingerprint()
-    |> Jason.encode!()
+    |> Jason.encode!(pretty: false, sort_keys: true)
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
     |> String.slice(0, 8)
@@ -52,7 +52,13 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   """
   @spec generate_url_path(map()) :: String.t()
   def generate_url_path(event) when is_map(event) do
-    slug = Map.get(event, :slug, "event-#{Map.get(event, :id)}")
+    # Use the same robust slug generation logic
+    slug = case {Map.get(event, :slug), Map.get(event, :id)} do
+      {slug, _} when is_binary(slug) and slug != "" -> slug
+      {_, id} when not is_nil(id) -> "event-#{id}"
+      _ -> "unknown-event-#{System.unique_integer([:positive])}"
+    end
+
     hash = generate_hash(event)
     "/events/#{slug}/social-card-#{hash}.png"
   end
@@ -101,8 +107,15 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
   # Private helper functions
 
   defp build_fingerprint(event) do
+    # Ensure we always have a valid slug, even if :id is missing
+    slug = case {Map.get(event, :slug), Map.get(event, :id)} do
+      {slug, _} when is_binary(slug) and slug != "" -> slug
+      {_, id} when not is_nil(id) -> "event-#{id}"
+      _ -> "unknown-event-#{System.unique_integer([:positive])}"
+    end
+
     %{
-      slug: Map.get(event, :slug, "event-#{Map.get(event, :id)}"),
+      slug: slug,
       title: Map.get(event, :title, ""),
       description: Map.get(event, :description, ""),
       cover_image_url: Map.get(event, :cover_image_url, ""),
