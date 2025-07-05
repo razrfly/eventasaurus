@@ -43,7 +43,8 @@ defmodule EventasaurusApp.EventsFixtures do
       "start_at" => ~U[2024-12-01 10:00:00Z],
       "timezone" => "UTC",
       "slug" => "test-event-#{System.unique_integer([:positive])}",
-      "status" => :confirmed
+      "status" => :confirmed,
+      "taxation_type" => "ticketless"
     }, string_attrs)
 
     {:ok, event} = Events.create_event(final_attrs)
@@ -58,8 +59,8 @@ defmodule EventasaurusApp.EventsFixtures do
       {:ok, _} = Events.add_user_to_event(event, organizer)
     end
 
-    # Reload the event with users preloaded
-    Events.get_event!(event.id) |> EventasaurusApp.Repo.preload(:users)
+    # Use the same approach as get_event! to ensure consistency with the API
+    Events.get_event!(event.id)
   end
 
   @doc """
