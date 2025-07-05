@@ -28,8 +28,9 @@ defmodule EventasaurusWeb.CheckoutLive do
             {:ok, validated_selection} ->
               order_items = build_order_items(tickets, validated_selection)
               total_amount = calculate_total_amount(order_items)
+              tax_info = calculate_tax_info(event, total_amount)
 
-                                          # Get user from socket assigns (set by auth hook)
+              # Get user from socket assigns (set by auth hook)
               user = socket.assigns[:user]
               is_guest = is_nil(user)
 
@@ -40,6 +41,7 @@ defmodule EventasaurusWeb.CheckoutLive do
                |> assign(:selected_tickets, validated_selection)
                |> assign(:order_items, order_items)
                |> assign(:total_amount, total_amount)
+               |> assign(:tax_info, tax_info)
                |> assign(:processing, false)
                |> assign(:errors, [])
                |> assign(:user, user)
@@ -289,15 +291,59 @@ defmodule EventasaurusWeb.CheckoutLive do
     Enum.reduce(order_items, 0, fn item, acc -> acc + item.total_price end)
   end
 
+  defp calculate_tax_info(event, total_amount) do
+    case event.taxation_type do
+      "ticketed_event" ->
+        # For ticketed events, tax will be calculated by Stripe automatically
+        # We provide estimates here for display purposes
+        # Note: Actual tax amount will be determined by Stripe based on customer location
+        %{
+          is_taxable: true,
+          display_mode: :estimate,
+          estimated_tax_amount: 0, # Stripe calculates this dynamically
+          tax_note: "Tax will be calculated based on your location at checkout"
+        }
+
+      "contribution_collection" ->
+        # Contribution collections are tax-exempt
+        %{
+          is_taxable: false,
+          display_mode: :exempt,
+          estimated_tax_amount: 0,
+          tax_note: "Tax-exempt contribution"
+        }
+
+      "ticketless" ->
+        # Ticketless events have no tax processing
+        %{
+          is_taxable: false,
+          display_mode: :none,
+          estimated_tax_amount: 0,
+          tax_note: nil
+        }
+
+      _ ->
+        # Default fallback
+        %{
+          is_taxable: false,
+          display_mode: :none,
+          estimated_tax_amount: 0,
+          tax_note: nil
+        }
+    end
+  end
+
   defp update_checkout_totals(socket, updated_selection) do
     order_items = build_order_items(socket.assigns.tickets, updated_selection)
     total_amount = calculate_total_amount(order_items)
+    tax_info = calculate_tax_info(socket.assigns.event, total_amount)
 
     {:noreply,
      socket
      |> assign(:selected_tickets, updated_selection)
      |> assign(:order_items, order_items)
      |> assign(:total_amount, total_amount)
+     |> assign(:tax_info, tax_info)
      |> preserve_auth_state()
      |> clear_flash()}
   end
@@ -550,8 +596,6 @@ defmodule EventasaurusWeb.CheckoutLive do
          |> put_flash(:error, "An error occurred. Please try again.")}
     end
   end
-
-
 
   def validate_guest_form(guest_form) do
     name = String.trim(guest_form["name"] || "")
@@ -1141,16 +1185,63 @@ defmodule EventasaurusWeb.CheckoutLive do
                 </div>
 
                 <div class="border-t border-gray-200 pt-4 mb-6">
+                  <!-- Subtotal -->
+                  <%= if @total_amount > 0 do %>
+                    <div class="flex justify-between text-sm mb-2">
+                      <span class="text-gray-600">Subtotal</span>
+                      <span class="text-gray-900">
+                        <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>
+                      </span>
+                    </div>
+                  <% end %>
+
+                  <!-- Tax Information -->
+                  <%= case @tax_info.display_mode do %>
+                    <% :estimate -> %>
+                      <div class="flex justify-between text-sm mb-2">
+                        <span class="text-gray-600">Tax</span>
+                        <span class="text-gray-600 italic">Calculated at checkout</span>
+                      </div>
+                    <% :exempt -> %>
+                      <div class="flex justify-between text-sm mb-2">
+                        <span class="text-gray-600">Tax</span>
+                        <span class="text-green-600">Exempt</span>
+                      </div>
+                    <% :none -> %>
+                      <!-- No tax line shown for ticketless events -->
+                    <% _ -> %>
+                      <!-- Default: no tax line -->
+                  <% end %>
+
+                  <!-- Total -->
                   <div class="flex justify-between items-center">
                     <span class="text-lg font-semibold text-gray-900">Total</span>
                     <span class="text-xl font-bold text-gray-900">
                       <%= if @total_amount == 0 do %>
                         Free
                       <% else %>
-                        <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>
+                        <%= case @tax_info.display_mode do %>
+                          <% :estimate -> %>
+                            <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>*
+                          <% _ -> %>
+                            <%= CurrencyHelpers.format_currency(@total_amount, "usd") %>
+                        <% end %>
                       <% end %>
                     </span>
                   </div>
+
+                  <!-- Tax Note -->
+                  <%= if @tax_info.tax_note do %>
+                    <div class="mt-2">
+                      <p class="text-xs text-gray-500">
+                        <%= if @tax_info.display_mode == :estimate do %>
+                          * <%= @tax_info.tax_note %>
+                        <% else %>
+                          <%= @tax_info.tax_note %>
+                        <% end %>
+                      </p>
+                    </div>
+                  <% end %>
                 </div>
 
                 <div class="text-center">

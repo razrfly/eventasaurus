@@ -10,7 +10,7 @@ defmodule Eventasaurus.Services.SocialCardHash do
   @doc """
   Generates a short hash for cache busting based on event data.
 
-  Uses MD5 hash of image_url + updated_at timestamp to create a unique
+  Uses SHA-256 hash of image_url + updated_at timestamp to create a unique
   identifier that changes when the event's visual content changes.
 
   ## Parameters
@@ -19,40 +19,40 @@ defmodule Eventasaurus.Services.SocialCardHash do
 
   ## Returns
 
-    * 8-character lowercase hex string
+    * 16-character lowercase hex string
 
   ## Examples
 
       iex> event = %{image_url: "https://example.com/image.jpg", updated_at: ~N[2023-01-01 12:00:00]}
       iex> Eventasaurus.Services.SocialCardHash.generate_hash(event)
-      "a1b2c3d4"
+      "a1b2c3d4e5f6789a"
 
   """
   @spec generate_hash(map()) :: String.t()
   def generate_hash(%{image_url: image_url, updated_at: updated_at}) do
     hash_input = "#{image_url || ""}#{updated_at}"
 
-    :crypto.hash(:md5, hash_input)
+    :crypto.hash(:sha256, hash_input)
     |> Base.encode16(case: :lower)
-    |> binary_part(0, 8)
+    |> binary_part(0, 16)
   end
 
   def generate_hash(%{image_url: image_url}) do
     # Fallback for events without updated_at timestamp
     hash_input = "#{image_url || ""}#{DateTime.utc_now()}"
 
-    :crypto.hash(:md5, hash_input)
+    :crypto.hash(:sha256, hash_input)
     |> Base.encode16(case: :lower)
-    |> binary_part(0, 8)
+    |> binary_part(0, 16)
   end
 
   def generate_hash(_event) do
     # Fallback for events with missing required fields
     hash_input = "#{DateTime.utc_now()}"
 
-    :crypto.hash(:md5, hash_input)
+    :crypto.hash(:sha256, hash_input)
     |> Base.encode16(case: :lower)
-    |> binary_part(0, 8)
+    |> binary_part(0, 16)
   end
 
   @doc """
@@ -71,7 +71,7 @@ defmodule Eventasaurus.Services.SocialCardHash do
 
       iex> event = %{image_url: "https://example.com/image.jpg", updated_at: ~N[2023-01-01 12:00:00]}
       iex> Eventasaurus.Services.SocialCardHash.generate_filename("123", event)
-      "123-a1b2c3d4.png"
+      "123-a1b2c3d4e5f6789a.png"
 
   """
   @spec generate_filename(String.t(), map()) :: String.t()

@@ -11,6 +11,7 @@ defmodule Eventasaurus.Services.PosthogService do
 
   @api_base "https://eu.i.posthog.com/api"
   @cache_ttl_ms 5 * 60 * 1000  # 5 minutes
+  @max_cache_entries 100  # Prevent unbounded cache growth
 
   # Client API
 
@@ -168,7 +169,7 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   @impl true
-  def handle_call({:get_analytics, event_id, date_range}, _from, state) do
+  def handle_call({:get_analytics, event_id, date_range}, from, state) do
     cache_key = "analytics_#{event_id}_#{date_range}"
     current_time = System.monotonic_time(:millisecond)
 
@@ -177,35 +178,52 @@ defmodule Eventasaurus.Services.PosthogService do
         if current_time - ts < @cache_ttl_ms do
           {:reply, {:ok, data}, state}
         else
-          fetch_and_cache_analytics(event_id, date_range, current_time, state, cache_key)
+          # Spawn async task to avoid blocking
+          spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
+          {:noreply, state}
         end
       _ ->
-        fetch_and_cache_analytics(event_id, date_range, current_time, state, cache_key)
+        # Spawn async task to avoid blocking
+        spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
+        {:noreply, state}
     end
   end
 
-  defp fetch_and_cache_analytics(event_id, date_range, current_time, state, cache_key) do
-    case fetch_analytics_from_api(event_id, date_range) do
-      {:ok, analytics_data} ->
-        updated_state = Map.put(state, cache_key, %{
-          timestamp: current_time,
-          data: analytics_data
-        })
-        {:reply, {:ok, analytics_data}, updated_state}
-      {:error, reason} ->
-        # Return analytics data with error information for graceful degradation
-        error_analytics = %{
-          unique_visitors: 0,
-          registrations: 0,
-          votes_cast: 0,
-          ticket_checkouts: 0,
-          registration_rate: 0.0,
-          checkout_conversion_rate: 0.0,
-          error: format_error_message(reason),
-          has_error: true
-        }
-        {:reply, {:ok, error_analytics}, state}
+  @impl true
+  def handle_cast({:cache_analytics_result, cache_key, current_time, analytics_data, from}, state) do
+    # Store the result and reply to the original caller
+    updated_state = Map.put(state, cache_key, %{
+      timestamp: current_time,
+      data: analytics_data
+    })
+
+    # Clean up cache if it's getting too large
+    final_state = if map_size(updated_state) > @max_cache_entries do
+      cleanup_old_cache_entries(updated_state, current_time)
+    else
+      updated_state
     end
+
+    GenServer.reply(from, {:ok, analytics_data})
+    {:noreply, final_state}
+  end
+
+  @impl true
+  def handle_cast({:cache_analytics_error, reason, from}, state) do
+    # Return error analytics data for graceful degradation
+    error_analytics = %{
+      unique_visitors: 0,
+      registrations: 0,
+      votes_cast: 0,
+      ticket_checkouts: 0,
+      registration_rate: 0.0,
+      checkout_conversion_rate: 0.0,
+      error: format_error_message(reason),
+      has_error: true
+    }
+
+    GenServer.reply(from, {:ok, error_analytics})
+    {:noreply, state}
   end
 
   @impl true
@@ -468,4 +486,31 @@ defmodule Eventasaurus.Services.PosthogService do
   defp sanitize_event_id(_event_id) do
     {:error, :invalid_event_id}
   end
+
+  # Spawn async task to fetch analytics without blocking GenServer
+  defp spawn_async_fetch(event_id, date_range, current_time, cache_key, from) do
+    parent_pid = self()
+
+    Task.start(fn ->
+      case fetch_analytics_from_api(event_id, date_range) do
+        {:ok, analytics_data} ->
+          GenServer.cast(parent_pid, {:cache_analytics_result, cache_key, current_time, analytics_data, from})
+        {:error, reason} ->
+          GenServer.cast(parent_pid, {:cache_analytics_error, reason, from})
+      end
+    end)
+  end
+
+  # Clean up old cache entries to prevent unbounded growth
+  defp cleanup_old_cache_entries(state, _current_time) do
+    # Keep only entries that are still within TTL or the most recent ones
+    sorted_entries =
+      state
+      |> Enum.sort_by(fn {_key, %{timestamp: ts}} -> ts end, :desc)
+      |> Enum.take(@max_cache_entries - 10)  # Remove oldest 10 entries
+
+    Enum.into(sorted_entries, %{})
+  end
+
+
 end

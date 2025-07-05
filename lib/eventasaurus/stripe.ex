@@ -20,7 +20,7 @@ defmodule EventasaurusApp.Stripe do
     @callback get_payment_intent(binary(), binary() | nil) :: {:ok, map()} | {:error, term()}
     @callback get_checkout_session(binary()) :: {:ok, map()} | {:error, term()}
     @callback create_checkout_session(map()) :: {:ok, map()} | {:error, term()}
-    @callback create_payment_intent(map(), binary() | nil) :: {:ok, map()} | {:error, term()}
+    @callback create_payment_intent(integer(), binary(), map(), integer(), map(), map() | nil) :: {:ok, map()} | {:error, term()}
   end
 
   @doc """
@@ -161,14 +161,20 @@ defmodule EventasaurusApp.Stripe do
   def exchange_oauth_code(_), do: {:error, "Invalid authorization code"}
 
   @doc """
-  Creates a Payment Intent for a Stripe Connect account with application fees.
+  Creates a Payment Intent for a Stripe Connect account with application fees and tax handling.
+
+  The taxation behavior is determined by the event's taxation_type:
+  - "ticketed_event": Standard tax collection with automatic tax calculation
+  - "contribution_collection": Tax-exempt contribution handling
+  - "ticketless": No tax processing (free events)
   """
-  def create_payment_intent(amount_cents, currency, connect_account, application_fee_amount, metadata \\ %{}) do
+  def create_payment_intent(amount_cents, currency, connect_account, application_fee_amount, metadata \\ %{}, event \\ nil) do
     Logger.info("Creating Payment Intent for Stripe Connect account",
       amount_cents: amount_cents,
       currency: currency,
       stripe_user_id: connect_account.stripe_user_id,
-      application_fee_amount: application_fee_amount
+      application_fee_amount: application_fee_amount,
+      taxation_type: if(event, do: event.taxation_type, else: "unknown")
     )
 
     url = "https://api.stripe.com/v1/payment_intents"
@@ -182,9 +188,11 @@ defmodule EventasaurusApp.Stripe do
     # Build metadata with order information
     full_metadata = Map.merge(%{
       "platform" => "eventasaurus",
-      "connect_account_id" => to_string(connect_account.id)
+      "connect_account_id" => to_string(connect_account.id),
+      "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
     }, metadata)
 
+    # Base body parameters
     body_params = %{
       "amount" => amount_cents,
       "currency" => currency,
@@ -192,6 +200,13 @@ defmodule EventasaurusApp.Stripe do
       "transfer_data[destination]" => connect_account.stripe_user_id,
       "automatic_payment_methods[enabled]" => "true"
     }
+
+    # Add tax configuration based on event taxation type
+    body_params = if event do
+      add_tax_configuration(body_params, event)
+    else
+      body_params
+    end
 
     # Add metadata to body params
     body_params_with_metadata =
@@ -757,6 +772,27 @@ defmodule EventasaurusApp.Stripe do
     end
   end
 
+  defp add_tax_configuration(body_params, event) do
+    case event.taxation_type do
+      "ticketed_event" ->
+        # For ticketed events, enable automatic tax calculation
+        body_params
+        |> Map.put("automatic_tax[enabled]", "true")
+        |> Map.put("automatic_tax[liability][type]", "self")
 
+      "contribution_collection" ->
+        # For contributions, mark as tax-exempt
+        body_params
+        |> Map.put("automatic_tax[enabled]", "true")
+        |> Map.put("automatic_tax[liability][type]", "exempt")
 
+      "ticketless" ->
+        # No tax processing for free/ticketless events
+        body_params
+
+      _ ->
+        # Default to no special tax handling
+        body_params
+    end
+  end
 end
