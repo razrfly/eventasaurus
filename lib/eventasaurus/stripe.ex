@@ -838,21 +838,24 @@ defmodule EventasaurusApp.Stripe do
 
     case event.taxation_type do
       "ticketed_event" ->
-        # For ticketed events, enable automatic tax calculation only in live mode
-        # In test mode, automatic tax requires a valid business address in Stripe dashboard
+        # TODO: Enable automatic tax in test mode once Stripe dashboard is configured
+        # with a valid business address. This is required for automatic tax to work
+        # in test mode. Reference: https://stripe.com/docs/tax/testing
+        # Track this technical debt in GitHub issue #XXX
         if is_test_mode do
           body_params
-          # Temporarily disable automatic tax in test mode until Stripe dashboard is configured
         else
           body_params
           |> Map.put("automatic_tax[enabled]", "true")
         end
 
       "contribution_collection" ->
-        # For contributions, enable tax only in live mode
+        # TODO: Enable automatic tax in test mode once Stripe dashboard is configured
+        # with a valid business address. This is required for automatic tax to work
+        # in test mode. Reference: https://stripe.com/docs/tax/testing
+        # Track this technical debt in GitHub issue #XXX
         if is_test_mode do
           body_params
-          # Temporarily disable automatic tax in test mode
         else
           body_params
           |> Map.put("automatic_tax[enabled]", "true")
@@ -870,18 +873,16 @@ defmodule EventasaurusApp.Stripe do
 
   # Helper function to get full image URL for Stripe
   defp get_full_image_url(image_url) do
-    cond do
-      String.starts_with?(image_url, "http") ->
+    case URI.parse(image_url) do
+      %URI{scheme: scheme} when scheme in ["http", "https"] ->
         # Already a full URL
         image_url
-      String.starts_with?(image_url, "/") ->
-        # Relative URL, prepend base URL
-        base_url = get_base_url()
-        "#{base_url}#{image_url}"
-      true ->
-        # Assume it's a relative path, prepend base URL with /
-        base_url = get_base_url()
-        "#{base_url}/#{image_url}"
+      %URI{path: "/" <> _rest} ->
+        # Absolute path, prepend base URL
+        "#{get_base_url()}#{image_url}"
+      _ ->
+        # Relative path, prepend base URL with /
+        "#{get_base_url()}/#{image_url}"
     end
   end
 end

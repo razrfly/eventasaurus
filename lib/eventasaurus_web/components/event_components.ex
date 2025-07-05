@@ -296,7 +296,10 @@ defmodule EventasaurusWeb.EventComponents do
                 <%= if total_amount == 0 do %>
                   Free
                 <% else %>
-                  <% currency = @tickets |> Enum.find(&(Map.get(@selected_tickets, &1.id, 0) > 0)) |> Map.get(:currency, "usd") %>
+                  <% currency = case Enum.find(@tickets, &(Map.get(@selected_tickets, &1.id, 0) > 0)) do
+                    nil -> "usd"
+                    ticket -> Map.get(ticket, :currency, "usd")
+                  end %>
                   <%= format_currency(total_amount, currency) %>
                 <% end %>
               </div>
