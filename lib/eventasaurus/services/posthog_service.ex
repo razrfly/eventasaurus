@@ -171,6 +171,7 @@ defmodule Eventasaurus.Services.PosthogService do
   @impl true
   def handle_call({:get_analytics, event_id, date_range}, from, state) do
     cache_key = "analytics_#{event_id}_#{date_range}"
+    pending_key = "pending_#{cache_key}"
     current_time = System.monotonic_time(:millisecond)
 
     case Map.get(state, cache_key) do
@@ -178,38 +179,75 @@ defmodule Eventasaurus.Services.PosthogService do
         if current_time - ts < @cache_ttl_ms do
           {:reply, {:ok, data}, state}
         else
-          # Spawn async task to avoid blocking
-          spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
-          {:noreply, state}
+          # Cache expired, check if we already have a pending request
+          case Map.get(state, pending_key) do
+            nil ->
+              # No pending request, spawn async task and track it
+              spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
+              updated_state = Map.put(state, pending_key, [from])
+              {:noreply, updated_state}
+            pending_requests ->
+              # Add to existing pending requests queue
+              updated_state = Map.put(state, pending_key, [from | pending_requests])
+              {:noreply, updated_state}
+          end
         end
       _ ->
-        # Spawn async task to avoid blocking
-        spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
-        {:noreply, state}
+        # No cache entry, check if we already have a pending request
+        case Map.get(state, pending_key) do
+          nil ->
+            # No pending request, spawn async task and track it
+            spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
+            updated_state = Map.put(state, pending_key, [from])
+            {:noreply, updated_state}
+          pending_requests ->
+            # Add to existing pending requests queue
+            updated_state = Map.put(state, pending_key, [from | pending_requests])
+            {:noreply, updated_state}
+        end
     end
   end
 
   @impl true
-  def handle_cast({:cache_analytics_result, cache_key, current_time, analytics_data, from}, state) do
-    # Store the result and reply to the original caller
+  def handle_cast({:cache_analytics_result, cache_key, current_time, analytics_data, _from}, state) do
+    pending_key = "pending_#{cache_key}"
+
+    # Store the result
     updated_state = Map.put(state, cache_key, %{
       timestamp: current_time,
       data: analytics_data
     })
 
-    # Clean up cache if it's getting too large
-    final_state = if map_size(updated_state) > @max_cache_entries do
-      cleanup_old_cache_entries(updated_state, current_time)
-    else
-      updated_state
+    # Reply to all pending requests
+    case Map.get(state, pending_key) do
+      nil ->
+        # No pending requests (shouldn't happen but handle gracefully)
+        :ok
+      pending_requests ->
+        Enum.each(pending_requests, fn from ->
+          GenServer.reply(from, {:ok, analytics_data})
+        end)
     end
 
-    GenServer.reply(from, {:ok, analytics_data})
+    # Remove pending requests entry and clean up cache if needed
+    final_state =
+      updated_state
+      |> Map.delete(pending_key)
+      |> then(fn state ->
+        if map_size(state) > @max_cache_entries do
+          cleanup_old_cache_entries(state, current_time)
+        else
+          state
+        end
+      end)
+
     {:noreply, final_state}
   end
 
-  @impl true
-  def handle_cast({:cache_analytics_error, reason, from}, state) do
+    @impl true
+  def handle_cast({:cache_analytics_error, cache_key, reason, _from}, state) do
+    pending_key = "pending_#{cache_key}"
+
     # Return error analytics data for graceful degradation
     error_analytics = %{
       unique_visitors: 0,
@@ -222,8 +260,18 @@ defmodule Eventasaurus.Services.PosthogService do
       has_error: true
     }
 
-    GenServer.reply(from, {:ok, error_analytics})
-    {:noreply, state}
+    # Reply to all pending requests for this specific cache_key
+    case Map.get(state, pending_key) do
+      nil ->
+        # No pending requests (shouldn't happen but handle gracefully)
+        {:noreply, state}
+      pending_requests ->
+        Enum.each(pending_requests, fn from ->
+          GenServer.reply(from, {:ok, error_analytics})
+        end)
+        updated_state = Map.delete(state, pending_key)
+        {:noreply, updated_state}
+    end
   end
 
   @impl true
@@ -496,7 +544,7 @@ defmodule Eventasaurus.Services.PosthogService do
         {:ok, analytics_data} ->
           GenServer.cast(parent_pid, {:cache_analytics_result, cache_key, current_time, analytics_data, from})
         {:error, reason} ->
-          GenServer.cast(parent_pid, {:cache_analytics_error, reason, from})
+          GenServer.cast(parent_pid, {:cache_analytics_error, cache_key, reason, from})
       end
     end)
   end
