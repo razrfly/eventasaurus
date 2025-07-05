@@ -272,29 +272,35 @@ defmodule EventasaurusApp.Stripe do
   - Flexible pricing (pay-what-you-want above minimum)
   - Custom pricing with tips
   - Idempotency via idempotency_key
+  - Automatic tax configuration based on event taxation type
   """
-  def create_checkout_session(%{
-    amount_cents: amount_cents,
-    currency: currency,
-    connect_account: connect_account,
-    application_fee_amount: application_fee_amount,
-    success_url: success_url,
-    cancel_url: cancel_url,
-    metadata: metadata,
-    idempotency_key: idempotency_key,
-    pricing_model: pricing_model,
-    allow_promotion_codes: allow_promotion_codes
-  } = params) do
+  def create_checkout_session(params) when is_map(params) do
+                # Extract required parameters with defaults
+    amount_cents = Map.fetch!(params, :amount_cents)
+    currency = Map.fetch!(params, :currency)
+    connect_account = Map.fetch!(params, :connect_account)
+    application_fee_amount = Map.fetch!(params, :application_fee_amount)
+
+    success_url = Map.fetch!(params, :success_url)
+    cancel_url = Map.fetch!(params, :cancel_url)
+    metadata = Map.fetch!(params, :metadata)
+    idempotency_key = Map.fetch!(params, :idempotency_key)
+    pricing_model = Map.fetch!(params, :pricing_model)
+    allow_promotion_codes = Map.get(params, :allow_promotion_codes, false)
 
     # Extract customer information for pre-filling
     customer_email = Map.get(params, :customer_email)
+
+    # Extract event information for enhanced product details and tax configuration
+    event = Map.get(params, :event)
 
     Logger.info("Creating Stripe Checkout Session",
       amount_cents: amount_cents,
       currency: currency,
       pricing_model: pricing_model,
       stripe_user_id: connect_account.stripe_user_id,
-      application_fee_amount: application_fee_amount
+      application_fee_amount: application_fee_amount,
+      taxation_type: if(event, do: event.taxation_type, else: "unknown")
     )
 
     url = "https://api.stripe.com/v1/checkout/sessions"
@@ -310,16 +316,47 @@ defmodule EventasaurusApp.Stripe do
     full_metadata = Map.merge(%{
       "platform" => "eventasaurus",
       "connect_account_id" => to_string(connect_account.id),
-      "pricing_model" => pricing_model
+      "pricing_model" => pricing_model,
+      "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
     }, metadata)
 
-    # Base line item configuration - let Stripe handle tax calculation
+    # Enhanced product information with event details
+    product_name = Map.get(params, :ticket_name, "Event Ticket")
+    product_description = if event do
+      # Use event description if available, fallback to ticket description
+      event_desc = if event.description && String.trim(event.description) != "" do
+        String.slice(event.description, 0, 500) # Stripe has limits on description length
+      else
+        Map.get(params, :ticket_description, "")
+      end
+
+      # Include event date if available
+      date_info = if event.start_at do
+        formatted_date = Calendar.strftime(event.start_at, "%B %d, %Y at %I:%M %p")
+        "Event Date: #{formatted_date}\n\n"
+      else
+        ""
+      end
+
+      "#{date_info}#{event_desc}"
+    else
+      Map.get(params, :ticket_description, "")
+    end
+
+    # Base line item configuration
     line_item = %{
       "price_data[currency]" => currency,
-      "price_data[product_data][name]" => Map.get(params, :ticket_name, "Event Ticket"),
-      "price_data[product_data][description]" => Map.get(params, :ticket_description, ""),
+      "price_data[product_data][name]" => product_name,
+      "price_data[product_data][description]" => product_description,
       "quantity" => Map.get(params, :quantity, 1)
     }
+
+    # Add event image if available
+    line_item = if event && event.cover_image_url do
+      Map.put(line_item, "price_data[product_data][images][0]", get_full_image_url(event.cover_image_url))
+    else
+      line_item
+    end
 
     # Configure pricing based on model - use base amount without tax
     line_item = case pricing_model do
@@ -356,12 +393,27 @@ defmodule EventasaurusApp.Stripe do
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => allow_promotion_codes || false,
 
-      # Line items (temporarily disable automatic tax until Stripe account is configured)
+      # Line items
       "line_items[0][price_data][currency]" => line_item["price_data[currency]"],
       "line_items[0][price_data][product_data][name]" => line_item["price_data[product_data][name]"],
+      "line_items[0][price_data][product_data][description]" => line_item["price_data[product_data][description]"],
       "line_items[0][price_data][unit_amount]" => line_item["price_data[unit_amount]"],
       "line_items[0][quantity]" => line_item["quantity"]
     }
+
+    # Add product image if available
+    body_params = if Map.has_key?(line_item, "price_data[product_data][images][0]") do
+      Map.put(body_params, "line_items[0][price_data][product_data][images][0]", line_item["price_data[product_data][images][0]"])
+    else
+      body_params
+    end
+
+    # Add tax configuration based on event taxation type
+    body_params = if event do
+      add_tax_configuration(body_params, event)
+    else
+      body_params
+    end
 
     # Add customer information for pre-filling if available
     body_params = if customer_email do
@@ -436,23 +488,27 @@ defmodule EventasaurusApp.Stripe do
       {:ok, %{"id" => "cs_...", "url" => "https://checkout.stripe.com/..."}}
 
   """
-  def create_multi_line_checkout_session(%{
-    line_items: line_items,
-    connect_account: connect_account,
-    application_fee_amount: application_fee_amount,
-    success_url: success_url,
-    cancel_url: cancel_url,
-    metadata: metadata,
-    idempotency_key: idempotency_key
-  } = params) do
+  def create_multi_line_checkout_session(params) when is_map(params) do
+    # Extract required parameters
+    line_items = Map.fetch!(params, :line_items)
+    connect_account = Map.fetch!(params, :connect_account)
+    application_fee_amount = Map.fetch!(params, :application_fee_amount)
+    success_url = Map.fetch!(params, :success_url)
+    cancel_url = Map.fetch!(params, :cancel_url)
+    metadata = Map.fetch!(params, :metadata)
+    idempotency_key = Map.fetch!(params, :idempotency_key)
 
     # Extract customer information for pre-filling
     customer_email = Map.get(params, :customer_email)
 
+    # Extract event information for tax configuration
+    event = Map.get(params, :event)
+
     Logger.info("Creating Multi-Line Stripe Checkout Session",
       line_items_count: length(line_items),
       stripe_user_id: connect_account.stripe_user_id,
-      application_fee_amount: application_fee_amount
+      application_fee_amount: application_fee_amount,
+      taxation_type: if(event, do: event.taxation_type, else: "unknown")
     )
 
     url = "https://api.stripe.com/v1/checkout/sessions"
@@ -467,7 +523,8 @@ defmodule EventasaurusApp.Stripe do
     # Build metadata with order and pricing information
     full_metadata = Map.merge(%{
       "platform" => "eventasaurus",
-      "connect_account_id" => to_string(connect_account.id)
+      "connect_account_id" => to_string(connect_account.id),
+      "taxation_type" => if(event, do: event.taxation_type, else: "unknown")
     }, metadata)
 
     # Calculate expiry time (30 minutes from now = 1800 seconds)
@@ -483,10 +540,14 @@ defmodule EventasaurusApp.Stripe do
       "payment_intent_data[application_fee_amount]" => application_fee_amount,
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => false
-
-      # Note: Automatic tax collection disabled until Stripe account is configured
-      # "automatic_tax[enabled]" => "true"
     }
+
+    # Add tax configuration based on event taxation type
+    body_params = if event do
+      add_tax_configuration(body_params, event)
+    else
+      body_params
+    end
 
     # Add customer information for pre-filling if available
     body_params = if customer_email do
@@ -520,47 +581,45 @@ defmodule EventasaurusApp.Stripe do
     case HTTPoison.post(url, body, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
         case Jason.decode(response_body) do
-          {:ok, checkout_session} ->
-            Logger.info("Successfully created Multi-Line Checkout Session",
-              session_id: checkout_session["id"],
-              url: checkout_session["url"],
-              expires_at: checkout_session["expires_at"]
+          {:ok, session_data} ->
+            Logger.info("Multi-Line Stripe Checkout Session created successfully",
+              session_id: session_data["id"],
+              url: session_data["url"]
             )
-            {:ok, checkout_session}
-
+            {:ok, session_data}
           {:error, decode_error} ->
-            Logger.error("Failed to decode Multi-Line Checkout Session response",
-              error: inspect(decode_error),
-              response_body: redact_secrets(response_body)
-            )
-            {:error, "Invalid response format from Stripe"}
+            Logger.error("Failed to decode Stripe checkout session response", error: inspect(decode_error))
+            {:error, "Failed to decode Stripe response"}
         end
 
-      {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
-        case Jason.decode(response_body) do
+      {:ok, %HTTPoison.Response{status_code: status_code, body: error_body}} ->
+        case Jason.decode(error_body) do
           {:ok, error_data} ->
             Logger.error("Stripe Multi-Line Checkout Session error",
               status_code: status_code,
               error_type: error_data["error"]["type"],
-              error_message: error_data["error"]["message"]
+              error_message: error_data["error"]["message"],
+              error_code: error_data["error"]["code"],
+              error_param: error_data["error"]["param"],
+              full_error: error_data["error"]
             )
-            {:error, error_data["error"]["message"] || "Multi-Line Checkout Session creation failed"}
+            {:error, error_data["error"]["message"] || "Multi-line checkout session creation failed"}
 
           {:error, _} ->
             Logger.error("Stripe Multi-Line Checkout Session error with invalid JSON",
               status_code: status_code,
-              response_body: redact_secrets(response_body)
+              error_body: redact_secrets(error_body)
             )
             {:error, "Stripe returned an error: HTTP #{status_code}"}
         end
 
       {:error, %HTTPoison.Error{reason: reason}} ->
-        Logger.error("HTTP error during Multi-Line Checkout Session creation", reason: inspect(reason))
+        Logger.error("HTTP error during Stripe checkout session creation", reason: inspect(reason))
         {:error, "Network error connecting to Stripe: #{inspect(reason)}"}
 
       {:error, error} ->
-        Logger.error("Unexpected error during Multi-Line Checkout Session creation", error: inspect(error))
-        {:error, "Unexpected error during Multi-Line Checkout Session creation"}
+        Logger.error("Unexpected error during Stripe checkout session creation", error: inspect(error))
+        {:error, "Unexpected error during checkout session creation"}
     end
   end
 
@@ -773,18 +832,31 @@ defmodule EventasaurusApp.Stripe do
   end
 
   defp add_tax_configuration(body_params, event) do
+    # Check if we're in test mode by looking at the secret key
+    secret_key = get_stripe_secret_key()
+    is_test_mode = String.starts_with?(secret_key, "sk_test_")
+
     case event.taxation_type do
       "ticketed_event" ->
-        # For ticketed events, enable automatic tax calculation
-        body_params
-        |> Map.put("automatic_tax[enabled]", "true")
-        |> Map.put("automatic_tax[liability][type]", "self")
+        # For ticketed events, enable automatic tax calculation only in live mode
+        # In test mode, automatic tax requires a valid business address in Stripe dashboard
+        if is_test_mode do
+          body_params
+          # Temporarily disable automatic tax in test mode until Stripe dashboard is configured
+        else
+          body_params
+          |> Map.put("automatic_tax[enabled]", "true")
+        end
 
       "contribution_collection" ->
-        # For contributions, mark as tax-exempt
-        body_params
-        |> Map.put("automatic_tax[enabled]", "true")
-        |> Map.put("automatic_tax[liability][type]", "exempt")
+        # For contributions, enable tax only in live mode
+        if is_test_mode do
+          body_params
+          # Temporarily disable automatic tax in test mode
+        else
+          body_params
+          |> Map.put("automatic_tax[enabled]", "true")
+        end
 
       "ticketless" ->
         # No tax processing for free/ticketless events
@@ -793,6 +865,23 @@ defmodule EventasaurusApp.Stripe do
       _ ->
         # Default to no special tax handling
         body_params
+    end
+  end
+
+  # Helper function to get full image URL for Stripe
+  defp get_full_image_url(image_url) do
+    cond do
+      String.starts_with?(image_url, "http") ->
+        # Already a full URL
+        image_url
+      String.starts_with?(image_url, "/") ->
+        # Relative URL, prepend base URL
+        base_url = get_base_url()
+        "#{base_url}#{image_url}"
+      true ->
+        # Assume it's a relative path, prepend base URL with /
+        base_url = get_base_url()
+        "#{base_url}/#{image_url}"
     end
   end
 end

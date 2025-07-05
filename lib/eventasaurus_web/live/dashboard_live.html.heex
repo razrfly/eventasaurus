@@ -148,6 +148,26 @@
                     <%= if event.venue, do: event.venue.name, else: "-" %>
                   <% end %>
                 </:col>
+                <:col :let={event} label="Tax Status">
+                  <%= case event.taxation_type do %>
+                    <% "ticketed_event" -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                        💳 Ticketed
+                      </span>
+                    <% "contribution_collection" -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                        🎁 Contribution
+                      </span>
+                    <% "ticketless" -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                        📋 Ticketless
+                      </span>
+                    <% _ -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                        📋 Ticketless
+                      </span>
+                  <% end %>
+                </:col>
               </.table>
             </div>
           <% end %>
@@ -192,6 +212,26 @@
                     <span class="text-gray-500 italic">Virtual</span>
                   <% else %>
                     <%= if event.venue, do: event.venue.name, else: "-" %>
+                  <% end %>
+                </:col>
+                <:col :let={event} label="Tax Status">
+                  <%= case event.taxation_type do %>
+                    <% "ticketed_event" -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                        💳 Ticketed
+                      </span>
+                    <% "contribution_collection" -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                        🎁 Contribution
+                      </span>
+                    <% "ticketless" -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                        📋 Ticketless
+                      </span>
+                    <% _ -> %>
+                      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                        📋 Ticketless
+                      </span>
                   <% end %>
                 </:col>
               </.table>
