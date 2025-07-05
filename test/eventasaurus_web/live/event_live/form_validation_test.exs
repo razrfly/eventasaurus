@@ -279,4 +279,240 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       end
     end
   end
+
+  describe "Taxation Type Integration" do
+    test "new event form loads with taxation_type selector and smart defaults", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, html} = live(conn, ~p"/events/new")
+
+      # Verify taxation type selector is present in the form
+      assert html =~ "taxation-type-selector"
+      assert has_element?(view, "fieldset[role='radiogroup']")
+
+      # Verify default options are present
+      assert has_element?(view, "input[type='radio'][value='ticketed_event']")
+      assert has_element?(view, "input[type='radio'][value='contribution_collection']")
+
+      # Verify default selection (ticketed_event should be selected by default)
+      assert element(view, "input[type='radio'][value='ticketed_event']") |> render() =~ "checked"
+
+      # Verify smart default reasoning is displayed
+      assert html =~ "Smart Default:" or html =~ "Recommended for most events"
+
+      # Verify accessibility attributes
+      assert html =~ "aria-required=\"true\""
+      assert html =~ "role=\"radiogroup\""
+    end
+
+    test "form accepts valid taxation_type values and creates event correctly", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+
+      # Test both valid taxation types
+      test_cases = [
+        {"ticketed_event", "Test Ticketed Event"},
+        {"contribution_collection", "Test Contribution Event"}
+      ]
+
+      for {taxation_type, event_title} <- test_cases do
+        # Clear any previous events
+        EventasaurusApp.Repo.delete_all(EventasaurusApp.Events.Event)
+
+        {:ok, view, _html} = live(conn, ~p"/events/new")
+
+        form_data = %{
+          "event[title]" => event_title,
+          "event[tagline]" => "Test event for #{taxation_type}",
+          "event[start_date]" => "2025-12-01",
+          "event[start_time]" => "19:00",
+          "event[ends_date]" => "2025-12-01",
+          "event[ends_time]" => "21:00",
+          "event[timezone]" => "America/Los_Angeles",
+          "event[taxation_type]" => taxation_type
+        }
+
+        view
+        |> form("form[data-test-id='event-form']", form_data)
+        |> render_submit()
+
+        # Verify event was created with correct taxation_type
+        events = EventasaurusApp.Events.list_events()
+        assert length(events) == 1
+        [event] = events
+        assert event.title == event_title
+        assert event.taxation_type == taxation_type
+
+        # Should redirect to event show page
+        assert_redirected(view, "/events/#{event.slug}")
+      end
+    end
+
+    test "edit form loads existing taxation_type value correctly", %{conn: conn} do
+      # Create event with specific taxation_type
+      event = insert(:event,
+        title: "Existing Event",
+        taxation_type: "contribution_collection"
+      )
+      {conn, _user} = log_in_event_organizer(conn, event)
+
+      {:ok, view, html} = live(conn, ~p"/events/#{event.slug}/edit")
+
+      # Verify the form loads with existing taxation_type selected
+      assert html =~ "taxation-type-selector"
+      assert element(view, "input[type='radio'][value='contribution_collection']") |> render() =~ "checked"
+
+      # Verify the other option is not selected
+      refute element(view, "input[type='radio'][value='ticketed_event']") |> render() =~ "checked"
+
+      # Verify reasoning displays for existing configuration
+      assert html =~ "Previously configured" or html =~ "Currently configured"
+    end
+
+    test "edit form allows changing taxation_type and saves correctly", %{conn: conn} do
+      # Create event with one taxation type
+      event = insert(:event,
+        title: "Event to Update",
+        taxation_type: "ticketed_event"
+      )
+      {conn, _user} = log_in_event_organizer(conn, event)
+
+      {:ok, view, _html} = live(conn, ~p"/events/#{event.slug}/edit")
+
+      # Change taxation_type to different value
+      updated_data = %{
+        "event[taxation_type]" => "contribution_collection"
+      }
+
+      view
+      |> form("form[data-test-id='event-form']", updated_data)
+      |> render_submit()
+
+      # Verify event was updated in database
+      updated_event = EventasaurusApp.Repo.reload!(event)
+      assert updated_event.taxation_type == "contribution_collection"
+
+      # Should redirect to event show page
+      assert_redirected(view, "/events/#{event.slug}")
+    end
+
+    test "taxation_type selection can be changed via form interaction", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Initial state - should default to ticketed_event
+      assert element(view, "input[type='radio'][value='ticketed_event']") |> render() =~ "checked"
+
+      # Change to contribution_collection via form data
+      view
+      |> form("form[data-test-id='event-form']", %{"event[taxation_type]" => "contribution_collection"})
+      |> render_change()
+
+      # Verify the change took effect through form validation
+      html = render(view)
+      assert html =~ "contribution_collection"
+    end
+
+    test "taxation_type selector displays help information correctly", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, html} = live(conn, ~p"/events/new")
+
+      # Verify JavaScript hook is attached
+      assert html =~ "phx-hook=\"TaxationTypeValidator\""
+
+      # Verify help tooltip functionality elements are present
+      assert html =~ "data-role=\"help-tooltip\""
+      assert html =~ "Click for detailed information"
+
+      # Verify descriptive content is present
+      assert html =~ "Ticketed Event"
+      assert html =~ "Contribution Collection"
+      assert html =~ "Standard events with paid tickets"
+      assert html =~ "Donation-based events"
+    end
+
+    test "taxation_type form validation works with server-side validation", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Submit form with missing required fields (but valid taxation_type)
+      partial_data = %{
+        "event[title]" => "",  # Missing title should cause validation error
+        "event[taxation_type]" => "ticketed_event"  # Valid taxation type
+      }
+
+      capture_log(fn ->
+        result = view
+        |> form("form[data-test-id='event-form']", partial_data)
+        |> render_submit()
+
+        case result do
+          {:error, {:redirect, _}} ->
+            # If redirected, check if validation actually prevented creation
+            events = EventasaurusApp.Events.list_events()
+            # Should not create event with missing title
+            assert length(events) == 0
+          html when is_binary(html) ->
+            # Stayed on form due to validation errors
+            assert has_element?(view, "form[data-test-id='event-form']")
+        end
+      end)
+
+      # Verify form maintains taxation_type selection after validation
+      html = render(view)
+      assert element(view, "input[type='radio'][value='ticketed_event']") |> render() =~ "checked"
+    end
+
+    test "taxation_type accessibility features work correctly", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, html} = live(conn, ~p"/events/new")
+
+      # Check for comprehensive accessibility attributes
+      assert html =~ "role=\"radiogroup\""
+      assert html =~ "aria-required=\"true\""
+      assert html =~ "aria-labelledby=\"taxation-type-legend\""
+      assert html =~ "aria-describedby=\"taxation-type-description taxation-type-help\""
+
+      # Check for screen reader content
+      assert html =~ "Instructions for screen readers:"
+      assert html =~ "Use arrow keys to navigate"
+
+      # Check for proper form labeling
+      assert html =~ "Event Taxation Classification"
+      assert html =~ "required" # Required field indicator
+    end
+
+    test "taxation_type integrates properly with form submission flow", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Complete form with all required fields including taxation_type
+      complete_form_data = %{
+        "event[title]" => "Complete Test Event",
+        "event[tagline]" => "A fully filled form",
+        "event[start_date]" => "2025-12-01",
+        "event[start_time]" => "19:00",
+        "event[ends_date]" => "2025-12-01",
+        "event[ends_time]" => "21:00",
+        "event[timezone]" => "America/Los_Angeles",
+        "event[taxation_type]" => "contribution_collection",
+        "event[description]" => "Test event description"
+      }
+
+      view
+      |> form("form[data-test-id='event-form']", complete_form_data)
+      |> render_submit()
+
+      # Verify successful submission and event creation
+      events = EventasaurusApp.Events.list_events()
+      assert length(events) == 1
+
+      [event] = events
+      assert event.title == "Complete Test Event"
+      assert event.taxation_type == "contribution_collection"
+      assert event.tagline == "A fully filled form"
+
+      # Should redirect to event show page
+      assert_redirected(view, "/events/#{event.slug}")
+    end
+  end
+
 end

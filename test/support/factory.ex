@@ -54,6 +54,7 @@ defmodule EventasaurusApp.Factory do
       status: :confirmed,
       theme: :minimal,
       theme_customizations: %{},
+      taxation_type: "ticketed_event",
       venue: build(:venue)
     }
   end

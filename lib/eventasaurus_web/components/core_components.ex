@@ -463,6 +463,134 @@ defmodule EventasaurusWeb.CoreComponents do
   end
 
   @doc """
+  Renders a taxation type selector component for event classification.
+
+  This component allows users to select between "ticketless", "ticketed_event", and "contribution_collection"
+  taxation types with interactive help tooltips and comprehensive error handling.
+  """
+  attr :field, Phoenix.HTML.FormField,
+    doc: "a form field struct retrieved from the form, for example: @form[:email]"
+
+  attr :value, :string, default: "ticketless", doc: "the current selected value"
+  attr :errors, :list, default: [], doc: "list of error tuples for this field"
+  attr :required, :boolean, default: false, doc: "whether the field is required"
+  attr :class, :string, default: "", doc: "additional CSS classes for the container"
+  attr :reasoning, :string, default: "", doc: "explanation for why this default was chosen"
+  attr :hide_ticketless, :boolean, default: false, doc: "whether to hide the ticketless option (when tickets exist)"
+
+  def taxation_type_selector(assigns) do
+    ~H"""
+    <div class={"taxation-type-selector #{@class}"} phx-hook="TaxationTypeValidator" id={"#{@field.name}-taxation-selector"}>
+      <!-- Error container for validation messages -->
+      <%= if @errors != [] do %>
+        <div data-role="error-container" class="mb-2">
+          <%= for {error, _} <- @errors do %>
+            <div class="flex items-center gap-2 text-red-700 bg-red-50 border border-red-200 p-3 rounded-md" role="alert" aria-live="polite" aria-atomic="true">
+              <.icon name="hero-exclamation-triangle-mini" class="w-4 h-4 flex-shrink-0" />
+              <div class="flex-1">
+                <span class="text-sm font-medium">
+                  <%= case error do %>
+                    <% "can't be blank" -> %>
+                      Please select a taxation type for your event
+                    <% "is invalid" -> %>
+                      Please choose either Ticketless Event, Ticketed Event, or Contribution Collection
+                    <% error -> %>
+                      <%= error %>
+                  <% end %>
+                </span>
+                <div class="text-xs text-red-600 mt-1">
+                  Need help deciding? Click "Click for detailed information" below for guidance.
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+
+
+
+      <div class="space-y-2" role="radiogroup" aria-required={if @required, do: "true", else: "false"}>
+
+        <!-- Ticketless Event Option (hidden when tickets exist) -->
+        <%= unless @hide_ticketless do %>
+          <label class="flex items-center gap-2 p-2 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer transition-colors group focus-within:ring-2 focus-within:ring-blue-500">
+            <input
+              type="radio"
+              name={@field.name}
+              value="ticketless"
+              checked={@value == "ticketless"}
+              class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 focus:ring-2"
+              aria-describedby="ticketless-event-description"
+            />
+            <div class="w-4 h-4 text-gray-500">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-medium text-gray-900 group-hover:text-blue-900">Ticketless Event</div>
+              <div id="ticketless-event-description" class="text-xs text-gray-600">
+                Free events with no payment processing
+              </div>
+            </div>
+          </label>
+        <% end %>
+
+        <!-- Ticketed Event Option -->
+        <label class="flex items-center gap-2 p-2 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer transition-colors group focus-within:ring-2 focus-within:ring-blue-500">
+          <input
+            type="radio"
+            name={@field.name}
+            value="ticketed_event"
+            checked={@value == "ticketed_event"}
+            class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 focus:ring-2"
+            aria-describedby="ticketed-event-description"
+          />
+          <!-- Ticket Icon -->
+          <div class="w-4 h-4 text-gray-500 group-hover:text-blue-600">
+            <svg fill="currentColor" viewBox="0 0 24 24">
+              <path d="M22 10v4a1 1 0 01-.6.92l-1.83.73a2.5 2.5 0 000 4.7l1.83.73A1 1 0 0122 22H2a1 1 0 01-.6-.92l1.83-.73a2.5 2.5 0 000-4.7L1.4 14.92A1 1 0 012 14v-4a1 1 0 01.6-.92l1.83-.73a2.5 2.5 0 000-4.7L2.6 2.92A1 1 0 012 2h20a1 1 0 01.6.92l-1.83.73a2.5 2.5 0 000 4.7l1.83.73A1 1 0 0122 10zM20 11.18l-1.83-.73a4.5 4.5 0 010-8.45L20 1.18v10zm-2 1.64a4.5 4.5 0 010 8.45V12.82zm-2-8.64v14.64H8V4.18h8zM6 12.82a4.5 4.5 0 010-8.45V12.82zM4 1.18L5.83 2a4.5 4.5 0 010 8.45L4 11.18v-10z"/>
+            </svg>
+          </div>
+          <div class="flex-1">
+            <div class="text-sm font-medium text-gray-900 group-hover:text-blue-900">Ticketed Event</div>
+            <div id="ticketed-event-description" class="text-xs text-gray-600">
+              Paid tickets with standard taxation
+            </div>
+          </div>
+        </label>
+
+        <!-- Contribution Collection Option -->
+        <label class="flex items-center gap-2 p-2 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer transition-colors group focus-within:ring-2 focus-within:ring-blue-500">
+          <input
+            type="radio"
+            name={@field.name}
+            value="contribution_collection"
+            checked={@value == "contribution_collection"}
+            class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 focus:ring-2"
+            aria-describedby="contribution-collection-description"
+          />
+          <!-- Donation/Heart Icon -->
+          <div class="w-4 h-4 text-gray-500 group-hover:text-blue-600">
+            <svg fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </div>
+          <div class="flex-1">
+            <div class="text-sm font-medium text-gray-900 group-hover:text-blue-900">Contribution Collection</div>
+            <div id="contribution-collection-description" class="text-xs text-gray-600">
+              Donation-based events and fundraising
+            </div>
+          </div>
+        </label>
+      </div>
+
+
+    </div>
+    """
+  end
+
+  @doc """
   Renders a header with title.
   """
   attr :class, :string, default: nil
@@ -751,8 +879,6 @@ defmodule EventasaurusWeb.CoreComponents do
     </a>
     """
   end
-
-
 
   @doc """
   Renders a currency select component with all supported currencies.

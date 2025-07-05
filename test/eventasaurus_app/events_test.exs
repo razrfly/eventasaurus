@@ -10,25 +10,38 @@ defmodule EventasaurusApp.EventsTest do
   describe "events" do
     test "list_events/0 returns all events" do
       event = event_fixture()
-      assert Events.list_events() == [event]
+      events = Events.list_events()
+      assert length(events) == 1
+
+      returned_event = List.first(events)
+      assert returned_event.id == event.id
+      assert returned_event.title == event.title
+      assert returned_event.taxation_type == "ticketless"
     end
 
     test "get_event!/1 returns the event with given id" do
       event = event_fixture()
-      assert Events.get_event!(event.id) == event
+      returned_event = Events.get_event!(event.id)
+
+      assert returned_event.id == event.id
+      assert returned_event.title == event.title
+      assert returned_event.taxation_type == "ticketless"
+      # get_event! should preload users
+      assert is_list(returned_event.users)
     end
 
     test "create_event/1 with valid data creates a event" do
       valid_attrs = %{
         title: "Some title",
         description: "Some description",
-        start_at: ~N[2024-05-21 14:20:00]
+        start_at: ~N[2024-05-21 14:20:00],
+        timezone: "UTC"
       }
 
       assert {:ok, %Event{} = event} = Events.create_event(valid_attrs)
       assert event.title == "Some title"
       assert event.description == "Some description"
-      assert event.start_at == ~N[2024-05-21 14:20:00]
+      assert event.start_at == ~U[2024-05-21 14:20:00Z]
     end
 
     test "create_event/1 with invalid data returns error changeset" do
@@ -249,6 +262,186 @@ defmodule EventasaurusApp.EventsTest do
       assert Events.list_threshold_pending_events() == []
       assert Events.list_events_by_min_revenue(1000) == []
       assert Events.list_events_by_min_attendee_count(5) == []
+    end
+  end
+
+  describe "taxation_type validation" do
+    @describetag :taxation_type
+    test "create_event/1 with valid taxation_type 'ticketed_event' succeeds" do
+      valid_attrs = %{
+        title: "Paid Concert",
+        description: "A ticketed music event",
+        start_at: ~N[2024-12-01 20:00:00],
+        timezone: "UTC",
+        taxation_type: "ticketed_event",
+        is_ticketed: true
+      }
+
+      assert {:ok, %Event{} = event} = Events.create_event(valid_attrs)
+      assert event.taxation_type == "ticketed_event"
+      assert event.is_ticketed == true
+    end
+
+    test "create_event/1 with valid taxation_type 'contribution_collection' succeeds" do
+      valid_attrs = %{
+        title: "Charity Fundraiser",
+        description: "A non-profit fundraising event",
+        start_at: ~N[2024-12-01 18:00:00],
+        timezone: "UTC",
+        taxation_type: "contribution_collection",
+        is_ticketed: false
+      }
+
+      assert {:ok, %Event{} = event} = Events.create_event(valid_attrs)
+      assert event.taxation_type == "contribution_collection"
+      assert event.is_ticketed == false
+    end
+
+    test "create_event/1 with valid taxation_type 'ticketless' succeeds" do
+      valid_attrs = %{
+        title: "Free Community Event",
+        description: "A ticketless community gathering",
+        start_at: ~N[2024-12-01 16:00:00],
+        timezone: "UTC",
+        taxation_type: "ticketless",
+        is_ticketed: false
+      }
+
+      assert {:ok, %Event{} = event} = Events.create_event(valid_attrs)
+      assert event.taxation_type == "ticketless"
+      assert event.is_ticketed == false
+    end
+
+    test "create_event/1 defaults taxation_type to 'ticketless' when not provided" do
+      valid_attrs = %{
+        title: "Default Event",
+        description: "An event with default taxation",
+        start_at: ~N[2024-12-01 15:00:00],
+        timezone: "UTC"
+      }
+
+      assert {:ok, %Event{} = event} = Events.create_event(valid_attrs)
+      assert event.taxation_type == "ticketless"
+    end
+
+    test "create_event/1 with invalid taxation_type returns error changeset" do
+      invalid_attrs = %{
+        title: "Invalid Event",
+        description: "An event with invalid taxation type",
+        start_at: ~N[2024-12-01 15:00:00],
+        timezone: "UTC",
+        taxation_type: "invalid_type"
+      }
+
+      assert {:error, %Ecto.Changeset{} = changeset} = Events.create_event(invalid_attrs)
+      assert "must be one of: ticketed_event, contribution_collection, ticketless" in errors_on(changeset).taxation_type
+    end
+
+    test "Event.changeset/2 validates taxation_type against valid values" do
+      # Test valid values
+      changeset1 = Event.changeset(%Event{}, %{taxation_type: "ticketed_event"})
+      refute changeset1.errors[:taxation_type]
+
+      changeset2 = Event.changeset(%Event{}, %{taxation_type: "contribution_collection"})
+      refute changeset2.errors[:taxation_type]
+
+      changeset3 = Event.changeset(%Event{}, %{taxation_type: "ticketless"})
+      refute changeset3.errors[:taxation_type]
+
+      # Test invalid value
+      changeset4 = Event.changeset(%Event{}, %{taxation_type: "invalid_type"})
+      assert changeset4.errors[:taxation_type]
+    end
+
+    test "Event.changeset/2 enforces business rule: contribution_collection events cannot be ticketed" do
+      # Valid combination: contribution_collection + is_ticketed=false
+      changeset1 = Event.changeset(%Event{}, %{
+        taxation_type: "contribution_collection",
+        is_ticketed: false
+      })
+      refute changeset1.errors[:is_ticketed]
+
+      # Invalid combination: contribution_collection + is_ticketed=true
+      changeset2 = Event.changeset(%Event{}, %{
+        taxation_type: "contribution_collection",
+        is_ticketed: true
+      })
+      assert changeset2.errors[:is_ticketed]
+      assert "must be false for contribution collection events" in errors_on(changeset2).is_ticketed
+    end
+
+    test "Event.changeset/2 enforces business rule: ticketless events cannot be ticketed" do
+      # Valid combination: ticketless + is_ticketed=false
+      changeset1 = Event.changeset(%Event{}, %{
+        taxation_type: "ticketless",
+        is_ticketed: false
+      })
+      refute changeset1.errors[:is_ticketed]
+
+      # Invalid combination: ticketless + is_ticketed=true
+      changeset2 = Event.changeset(%Event{}, %{
+        taxation_type: "ticketless",
+        is_ticketed: true
+      })
+      assert changeset2.errors[:is_ticketed]
+      assert "must be false for ticketless events" in errors_on(changeset2).is_ticketed
+    end
+
+    test "Event.changeset/2 allows all combinations for ticketed_event taxation type" do
+      # Both combinations should be valid for ticketed_event
+      changeset1 = Event.changeset(%Event{}, %{
+        taxation_type: "ticketed_event",
+        is_ticketed: true
+      })
+      refute changeset1.errors[:taxation_type]
+
+      changeset2 = Event.changeset(%Event{}, %{
+        taxation_type: "ticketed_event",
+        is_ticketed: false  # Free events can still be taxed as ticketed events
+      })
+      refute changeset2.errors[:taxation_type]
+    end
+
+    test "update_event/2 can change taxation_type while respecting business rules" do
+      # Create event as ticketed_event
+      event = event_fixture(%{
+        taxation_type: "ticketed_event",
+        is_ticketed: true
+      })
+
+      # Can update to contribution_collection if is_ticketed is also updated to false
+      update_attrs = %{
+        taxation_type: "contribution_collection",
+        is_ticketed: false
+      }
+
+      assert {:ok, %Event{} = updated_event} = Events.update_event(event, update_attrs)
+      assert updated_event.taxation_type == "contribution_collection"
+      assert updated_event.is_ticketed == false
+    end
+
+    test "update_event/2 fails when trying to set invalid taxation_type combination" do
+      event = event_fixture(%{
+        taxation_type: "ticketed_event",
+        is_ticketed: false
+      })
+
+      # Try to set contribution_collection but leave is_ticketed as true
+      invalid_attrs = %{
+        taxation_type: "contribution_collection",
+        is_ticketed: true
+      }
+
+      assert {:error, %Ecto.Changeset{} = changeset} = Events.update_event(event, invalid_attrs)
+      assert "must be false for contribution collection events" in errors_on(changeset).is_ticketed
+    end
+
+    test "Event.valid_taxation_types/0 returns all valid taxation types" do
+      valid_types = Event.valid_taxation_types()
+      assert "ticketed_event" in valid_types
+      assert "contribution_collection" in valid_types
+      assert "ticketless" in valid_types
+      assert length(valid_types) == 3
     end
   end
 end

@@ -44,12 +44,21 @@ defmodule EventasaurusWeb.EventLive.New do
           }
         end
 
-        # Update form_data with the random image
+        # Enhanced default value logic for taxation_type
+        # Smart default based on event characteristics
+        default_taxation_type = determine_smart_taxation_default(%{
+          "is_ticketed" => false,  # New events default to no ticketing
+          "setup_path" => "confirmed"
+        })
+
+        # Update form_data with the random image and smart defaults
         initial_form_data = %{
           "start_date" => today,
           "ends_date" => today,
           "enable_date_polling" => false,
-          "slug" => Nanoid.generate(10)
+          "slug" => Nanoid.generate(10),
+          "taxation_type" => default_taxation_type,
+          "taxation_type_reasoning" => get_taxation_reasoning(default_taxation_type, false)
         }
 
         form_data_with_image = case cover_image_url do
@@ -634,21 +643,6 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   # Handle successful image upload
-  def handle_event("image_upload_success", %{"url" => url, "path" => path}, socket) do
-    socket =
-      socket
-      |> assign(:cover_image_url, url)
-      |> assign(:external_image_data, %{
-        "source" => "upload",
-        "url" => url,
-        "path" => path
-      })
-      |> put_flash(:info, "Image uploaded successfully!")
-
-    {:noreply, socket}
-  end
-
-  # Handle image selection from UI components (actual event name used by UI)
   @impl true
   def handle_event("image_selected", %{"cover_image_url" => image_url} = params, socket) do
     # Determine source and extract image data based on what's present in params
@@ -772,7 +766,10 @@ defmodule EventasaurusWeb.EventLive.New do
     current_bool = current_value in [true, "true"]
     new_value = !current_bool
 
-    form_data = Map.put(socket.assigns.form_data, "is_ticketed", new_value)
+    # Update form_data with smart taxation type changes
+    form_data = socket.assigns.form_data
+    |> Map.put("is_ticketed", new_value)
+    |> update_taxation_for_ticketing_change(new_value)
 
     # Reset ticketing-related assigns when disabling ticketing
     socket = if new_value do
@@ -893,7 +890,26 @@ defmodule EventasaurusWeb.EventLive.New do
         Enum.reject(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
     end
 
-    socket = assign(socket, :tickets, updated_tickets)
+    # If no tickets remain, update ticketing status
+    {updated_form_data, setup_path, is_ticketed} =
+      if length(updated_tickets) == 0 do
+        form_data = socket.assigns.form_data
+          |> Map.put("is_ticketed", false)
+          |> Map.put("taxation_type", "ticketless")  # Update taxation type to match non-ticketed status
+          |> Map.put("setup_path", "confirmed")  # Keep as confirmed but without ticketing
+        {form_data, "confirmed", false}
+      else
+        # Keep current ticketing status if tickets still exist
+        {socket.assigns.form_data, socket.assigns.setup_path, socket.assigns.is_ticketed}
+      end
+
+    socket =
+      socket
+      |> assign(:tickets, updated_tickets)
+      |> assign(:form_data, updated_form_data)
+      |> assign(:is_ticketed, is_ticketed)
+      |> assign(:setup_path, setup_path)
+
     {:noreply, socket}
   end
 
@@ -1005,9 +1021,19 @@ defmodule EventasaurusWeb.EventLive.New do
                 end)
             end
 
+            # Update form_data to reflect ticketing is enabled
+            updated_form_data =
+              socket.assigns.form_data
+              |> Map.put("is_ticketed", true)
+              |> Map.put("taxation_type", "ticketed_event")  # Update taxation type to match ticketed status
+              |> Map.put("setup_path", "confirmed")  # Default to confirmed when tickets are added
+
             socket =
               socket
               |> assign(:tickets, updated_tickets)
+              |> assign(:form_data, updated_form_data)
+              |> assign(:is_ticketed, true)
+              |> assign(:setup_path, "confirmed")
               |> assign(:show_ticket_modal, false)
               |> assign(:ticket_form_data, %{})
               |> assign(:editing_ticket_id, nil)
@@ -1615,6 +1641,74 @@ defmodule EventasaurusWeb.EventLive.New do
     |> assign(:editing_ticket_id, nil)
   end
 
+  # ============================================================================
+  # Smart Default Value Helpers
+  # ============================================================================
 
+  # Determines smart default for taxation_type based on event characteristics
+  defp determine_smart_taxation_default(event_attrs) do
+    is_ticketed = Map.get(event_attrs, "is_ticketed", false)
+
+    cond do
+      # If ticketing is explicitly enabled, default to ticketed_event
+      is_ticketed == true or is_ticketed == "true" ->
+        "ticketed_event"
+
+      # For new events with no ticketing, default to ticketless
+      # But this will be hidden until tickets are added
+      true ->
+        "ticketless"
+    end
+  end
+
+  # Provides reasoning for why a taxation type was selected as default
+  defp get_taxation_reasoning(taxation_type, is_existing_event) do
+    case {taxation_type, is_existing_event} do
+      {"ticketless", false} ->
+        "Recommended for most events as they don't collect money"
+
+      {"ticketed_event", false} ->
+        "Recommended for events with admission fees or ticket sales"
+
+      {"contribution_collection", false} ->
+        "Suggested for donation-based or fundraising events"
+
+      {"ticketless", true} ->
+        "Currently configured as a free event with no payment processing"
+
+      {"ticketed_event", true} ->
+        "Currently configured for standard ticketed events"
+
+      {"contribution_collection", true} ->
+        "Currently configured for contribution-based events"
+
+      _ ->
+        "Standard configuration for event taxation"
+    end
+  end
+
+  # Updates taxation type when ticketing status changes
+  defp update_taxation_for_ticketing_change(form_data, is_ticketed) do
+    current_taxation = Map.get(form_data, "taxation_type", "ticketless")
+
+    case {is_ticketed, current_taxation} do
+      # If enabling ticketing and currently non-revenue type, change to ticketed_event
+      {true, taxation_type} when taxation_type in ["ticketless", "contribution_collection"] ->
+        form_data
+        |> Map.put("taxation_type", "ticketed_event")
+        |> Map.put("taxation_type_reasoning", "Changed to ticketed_event because ticketing was enabled")
+
+      # If disabling ticketing and currently ticketed_event, suggest ticketless (most common case)
+      {false, "ticketed_event"} ->
+        form_data
+        |> Map.put("taxation_type", "ticketless")
+        |> Map.put("taxation_type_reasoning", "Changed to ticketless for non-ticketed events")
+
+      # Otherwise, keep current selection but update reasoning
+      _ ->
+        Map.put(form_data, "taxation_type_reasoning",
+          get_taxation_reasoning(current_taxation, true))
+    end
+  end
 
 end

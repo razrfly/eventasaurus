@@ -24,9 +24,11 @@ defmodule EventasaurusApp.Events.Event do
   # Valid status values for the enum constraint
   @valid_statuses [:draft, :polling, :threshold, :confirmed, :canceled]
   @valid_threshold_types ["attendee_count", "revenue", "both"]
+  @valid_taxation_types ["ticketed_event", "contribution_collection", "ticketless"]
 
   def valid_statuses, do: @valid_statuses
   def valid_threshold_types, do: @valid_threshold_types
+  def valid_taxation_types, do: @valid_taxation_types
 
   schema "events" do
     field :title, :string
@@ -46,6 +48,7 @@ defmodule EventasaurusApp.Events.Event do
     field :threshold_revenue_cents, :integer
     field :canceled_at, :utc_datetime
     field :is_ticketed, :boolean, default: false
+    field :taxation_type, :string, default: "ticketless"
     field :virtual_venue_url, :string # for virtual meeting URLs
 
     # Theme fields for the theming system
@@ -89,7 +92,7 @@ defmodule EventasaurusApp.Events.Event do
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
                    :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
-                   :virtual_venue_url, :is_ticketed])
+                   :virtual_venue_url, :is_ticketed, :taxation_type])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
     |> maybe_validate_start_at()
@@ -103,10 +106,13 @@ defmodule EventasaurusApp.Events.Event do
     |> validate_threshold_type()
     |> validate_threshold_revenue_cents()
     |> validate_threshold_consistency()
+    |> validate_taxation_type()
+    |> validate_taxation_consistency()
     |> validate_canceled_at()
     |> validate_status_consistency()
     |> foreign_key_constraint(:venue_id)
     |> unique_constraint(:slug)
+    |> check_constraint(:taxation_type, name: :valid_taxation_type)
     |> maybe_generate_slug()
   end
 
@@ -148,6 +154,53 @@ defmodule EventasaurusApp.Events.Event do
       _invalid_type ->
         valid_types_str = @valid_threshold_types |> Enum.join(", ")
         add_error(changeset, :threshold_type, "must be one of: #{valid_types_str}")
+    end
+  end
+
+  defp validate_taxation_type(changeset) do
+    case get_field(changeset, :taxation_type) do
+      nil ->
+        put_change(changeset, :taxation_type, "ticketless")
+      taxation_type when taxation_type in @valid_taxation_types ->
+        changeset
+      _invalid_type ->
+        valid_types_str = @valid_taxation_types |> Enum.join(", ")
+        add_error(changeset, :taxation_type, "must be one of: #{valid_types_str}")
+    end
+  end
+
+  defp validate_taxation_consistency(changeset) do
+    taxation_type = get_field(changeset, :taxation_type)
+    is_ticketed = get_field(changeset, :is_ticketed)
+
+    case {taxation_type, is_ticketed} do
+      # Ticketless events cannot have ticketing enabled
+      {"ticketless", true} ->
+        add_error(changeset, :is_ticketed, "must be false for ticketless events")
+      # Contribution collections cannot have ticketing enabled
+      {"contribution_collection", true} ->
+        add_error(changeset, :is_ticketed, "must be false for contribution collection events")
+      # All other combinations are valid
+      _ ->
+        changeset
+    end
+  end
+
+  @doc """
+  Validates that events with existing tickets cannot be set to ticketless.
+  This should be called when updating an event that might have tickets.
+  """
+  def validate_tickets_taxation_consistency(%Ecto.Changeset{} = changeset, tickets_count \\ 0) do
+    taxation_type = get_field(changeset, :taxation_type)
+
+    case {taxation_type, tickets_count} do
+      # Cannot set to ticketless if tickets exist
+      {"ticketless", count} when count > 0 ->
+        add_error(changeset, :taxation_type, "cannot be set to ticketless when tickets exist. Please delete all tickets first or choose a different taxation type.")
+
+      # All other combinations are valid
+      _ ->
+        changeset
     end
   end
 
