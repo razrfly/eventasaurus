@@ -289,7 +289,7 @@ defmodule EventasaurusWeb.CheckoutLive do
     Enum.reduce(order_items, 0, fn item, acc -> acc + item.total_price end)
   end
 
-  defp calculate_tax_info(event, total_amount) do
+  defp calculate_tax_info(event, _total_amount) do
     case event.taxation_type do
       "ticketed_event" ->
         # For ticketed events, tax will be calculated by Stripe automatically
@@ -1188,7 +1188,10 @@ defmodule EventasaurusWeb.CheckoutLive do
                     <div class="flex justify-between text-sm mb-2">
                       <span class="text-gray-600">Subtotal</span>
                       <span class="text-gray-900">
-                        <% currency = @order_items |> List.first() |> Map.get(:ticket) |> Map.get(:currency, "usd") %>
+                        <% currency = case List.first(@order_items) do
+                          nil -> "usd"
+                          %{ticket: t} -> t.currency || "usd"
+                        end %>
                         <%= CurrencyHelpers.format_currency(@total_amount, currency) %>
                       </span>
                     </div>
@@ -1219,7 +1222,10 @@ defmodule EventasaurusWeb.CheckoutLive do
                       <%= if @total_amount == 0 do %>
                         Free
                       <% else %>
-                        <% currency = @order_items |> List.first() |> Map.get(:ticket) |> Map.get(:currency, "usd") %>
+                        <% currency = case List.first(@order_items) do
+                          nil -> "usd"
+                          %{ticket: t} -> t.currency || "usd"
+                        end %>
                         <%= case @tax_info.display_mode do %>
                           <% :estimate -> %>
                             <%= CurrencyHelpers.format_currency(@total_amount, currency) %>*

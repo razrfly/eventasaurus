@@ -147,30 +147,55 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
 
   defp sanitize_theme_customizations(customizations) when is_map(customizations) do
     # Only allow known safe keys and validate values
+    # Handle both string and atom keys
+    allowed_keys = [:colors, :fonts, :spacing, "colors", "fonts", "spacing"]
+
     customizations
-    |> Map.take([:colors, :fonts, :spacing])
-    |> Enum.into(%{}, fn {key, value} -> {key, sanitize_theme_value(key, value)} end)
+    |> Map.take(allowed_keys)
+    |> Enum.into(%{}, fn {key, value} ->
+      normalized_key = normalize_key(key)
+      {normalized_key, sanitize_theme_value(normalized_key, value)}
+    end)
   end
   defp sanitize_theme_customizations(_), do: %{}
 
   defp sanitize_theme_value(:colors, colors) when is_map(colors) do
+    allowed_keys = [:primary, :secondary, :accent, :text, :background, "primary", "secondary", "accent", "text", "background"]
+
     colors
-    |> Map.take([:primary, :secondary, :accent, :text, :background])
-    |> Enum.into(%{}, fn {key, value} -> {key, validate_color(value)} end)
+    |> Map.take(allowed_keys)
+    |> Enum.into(%{}, fn {key, value} ->
+      normalized_key = normalize_key(key)
+      {normalized_key, validate_color(value)}
+    end)
   end
   defp sanitize_theme_value(:fonts, fonts) when is_map(fonts) do
     # Only allow safe font properties
+    allowed_keys = [:family, :size, :weight, "family", "size", "weight"]
+
     fonts
-    |> Map.take([:family, :size, :weight])
-    |> Enum.into(%{}, fn {key, value} -> {key, sanitize_text(to_string(value))} end)
+    |> Map.take(allowed_keys)
+    |> Enum.into(%{}, fn {key, value} ->
+      normalized_key = normalize_key(key)
+      {normalized_key, sanitize_text(to_string(value))}
+    end)
   end
   defp sanitize_theme_value(:spacing, spacing) when is_map(spacing) do
     # Only allow numeric spacing values
+    allowed_keys = [:margin, :padding, :gap, "margin", "padding", "gap"]
+
     spacing
-    |> Map.take([:margin, :padding, :gap])
-    |> Enum.into(%{}, fn {key, value} -> {key, sanitize_numeric_value(value)} end)
+    |> Map.take(allowed_keys)
+    |> Enum.into(%{}, fn {key, value} ->
+      normalized_key = normalize_key(key)
+      {normalized_key, sanitize_numeric_value(value)}
+    end)
   end
   defp sanitize_theme_value(_, _), do: %{}
+
+  # Helper to normalize keys to atoms
+  defp normalize_key(key) when is_atom(key), do: key
+  defp normalize_key(key) when is_binary(key), do: String.to_atom(key)
 
   defp sanitize_numeric_value(value) when is_integer(value) and value >= 0 and value <= 100, do: value
   defp sanitize_numeric_value(value) when is_binary(value) do
