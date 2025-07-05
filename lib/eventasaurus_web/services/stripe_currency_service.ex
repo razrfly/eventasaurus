@@ -121,13 +121,17 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
   end
 
   defp fetch_currencies_from_stripe do
-    # Check if Stripe API key is configured
-    api_key = Application.get_env(:stripity_stripe, :api_key)
+    # Check if Stripe API key is configured - check environment variable directly
+    # to avoid timing issues with Application config loading
+    api_key = System.get_env("STRIPE_SECRET_KEY") || Application.get_env(:stripity_stripe, :api_key)
 
     if is_nil(api_key) or api_key == "" or api_key == "sk_test_YOUR_TEST_KEY_HERE" do
       Logger.info("StripeCurrencyService: Stripe API key not configured, using fallback currencies")
       {:error, :no_api_key}
     else
+      # Ensure Stripe is configured with the API key before making calls
+      Application.put_env(:stripity_stripe, :api_key, api_key)
+
       try do
         # Fetch all country specs and extract unique currencies with pagination
         case fetch_all_country_specs() do
