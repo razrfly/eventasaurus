@@ -30,6 +30,9 @@ node_modules/
 /priv/static/images/**/*-*.webp
 /priv/static/images/**/*-*.svg
 
+# Coverage reports
+cover/
+
 # Environment variables
 .env
 
