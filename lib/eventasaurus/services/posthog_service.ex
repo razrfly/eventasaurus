@@ -551,13 +551,28 @@ defmodule Eventasaurus.Services.PosthogService do
 
   # Clean up old cache entries to prevent unbounded growth
   defp cleanup_old_cache_entries(state, _current_time) do
-    # Keep only entries that are still within TTL or the most recent ones
-    sorted_entries =
+    # Filter out pending_* entries since they don't have timestamp structure
+    # and should be managed by async task completion handlers
+    cache_entries =
       state
+      |> Enum.filter(fn {key, value} ->
+        # Only keep cache entries (not pending requests)
+        not String.starts_with?(key, "pending_") and is_map(value) and Map.has_key?(value, :timestamp)
+      end)
       |> Enum.sort_by(fn {_key, %{timestamp: ts}} -> ts end, :desc)
       |> Enum.take(@max_cache_entries - 10)  # Remove oldest 10 entries
 
-    Enum.into(sorted_entries, %{})
+    # Preserve pending_* entries and add back the filtered cache entries
+    pending_entries =
+      state
+      |> Enum.filter(fn {key, _value} ->
+        String.starts_with?(key, "pending_")
+      end)
+
+    # Combine the kept cache entries with all pending entries
+    cache_entries
+    |> Enum.concat(pending_entries)
+    |> Enum.into(%{})
   end
 
 
