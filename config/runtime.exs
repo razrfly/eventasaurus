@@ -98,9 +98,9 @@ if config_env() == :prod do
 
   # ## Configuring the mailer
   #
-  # Configure Resend for production email sending
+  # Configure Resend for production email sending using Resend's Swoosh adapter
   config :eventasaurus, Eventasaurus.Mailer,
-    adapter: Swoosh.Adapters.Resend,
+    adapter: Resend.Swoosh.Adapter,
     api_key: System.get_env("RESEND_API_KEY")
 
   # Configure Swoosh API client
