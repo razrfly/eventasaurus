@@ -10,7 +10,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
   @spec sanitize_event_data(map()) :: map()
   def sanitize_event_data(event) do
     %{
-      id: event.id,
+      id: Map.get(event, :id),
       title: sanitize_text(Map.get(event, :title, "")),
       description: sanitize_text(Map.get(event, :description, "")),
       cover_image_url: validate_image_url(Map.get(event, :cover_image_url)),
@@ -148,26 +148,26 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
   defp sanitize_theme_customizations(customizations) when is_map(customizations) do
     # Only allow known safe keys and validate values
     customizations
-    |> Map.take(["colors", "fonts", "spacing"])
+    |> Map.take([:colors, :fonts, :spacing])
     |> Enum.into(%{}, fn {key, value} -> {key, sanitize_theme_value(key, value)} end)
   end
   defp sanitize_theme_customizations(_), do: %{}
 
-  defp sanitize_theme_value("colors", colors) when is_map(colors) do
+  defp sanitize_theme_value(:colors, colors) when is_map(colors) do
     colors
-    |> Map.take(["primary", "secondary", "accent", "text", "background"])
+    |> Map.take([:primary, :secondary, :accent, :text, :background])
     |> Enum.into(%{}, fn {key, value} -> {key, validate_color(value)} end)
   end
-  defp sanitize_theme_value("fonts", fonts) when is_map(fonts) do
+  defp sanitize_theme_value(:fonts, fonts) when is_map(fonts) do
     # Only allow safe font properties
     fonts
-    |> Map.take(["family", "size", "weight"])
+    |> Map.take([:family, :size, :weight])
     |> Enum.into(%{}, fn {key, value} -> {key, sanitize_text(to_string(value))} end)
   end
-  defp sanitize_theme_value("spacing", spacing) when is_map(spacing) do
+  defp sanitize_theme_value(:spacing, spacing) when is_map(spacing) do
     # Only allow numeric spacing values
     spacing
-    |> Map.take(["margin", "padding", "gap"])
+    |> Map.take([:margin, :padding, :gap])
     |> Enum.into(%{}, fn {key, value} -> {key, sanitize_numeric_value(value)} end)
   end
   defp sanitize_theme_value(_, _), do: %{}

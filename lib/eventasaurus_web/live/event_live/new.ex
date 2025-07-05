@@ -210,6 +210,10 @@ defmodule EventasaurusWeb.EventLive.New do
     event_params = process_datetime_fields(event_params)
     Logger.debug("[submit] processed params: #{inspect(event_params)}")
 
+    # Apply taxation consistency logic before further processing
+    event_params = apply_taxation_consistency(event_params)
+    Logger.debug("[submit] taxation consistency applied: #{inspect(event_params)}")
+
     # Decode external_image_data if it's a JSON string
     event_params =
       case Map.get(event_params, "external_image_data") do
@@ -994,7 +998,7 @@ defmodule EventasaurusWeb.EventLive.New do
               base_price_cents: price_cents,
               minimum_price_cents: minimum_price_cents,
               suggested_price_cents: suggested_price_cents,
-              currency: Map.get(ticket_data, "currency", get_currency_with_fallback(socket.assigns.user)),
+                              currency: Map.get(ticket_data, "currency", get_currency_with_fallback(socket.assigns.user)),
               quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
                 {n, _} when n >= 0 -> n
                 _ -> 0
@@ -1708,6 +1712,28 @@ defmodule EventasaurusWeb.EventLive.New do
       _ ->
         Map.put(form_data, "taxation_type_reasoning",
           get_taxation_reasoning(current_taxation, true))
+    end
+  end
+
+  defp apply_taxation_consistency(event_params) do
+    taxation_type = Map.get(event_params, "taxation_type", "ticketless")
+    is_ticketed = Map.get(event_params, "is_ticketed", false)
+
+    # Normalize is_ticketed to boolean
+    is_ticketed_bool = is_ticketed in [true, "true", "on"]
+
+    case {taxation_type, is_ticketed_bool} do
+      # Force is_ticketed to false for contribution_collection and ticketless
+      {"contribution_collection", _} ->
+        Map.put(event_params, "is_ticketed", false)
+      {"ticketless", _} ->
+        Map.put(event_params, "is_ticketed", false)
+      # For ticketed_event, preserve the original value
+      {"ticketed_event", _} ->
+        Map.put(event_params, "is_ticketed", is_ticketed_bool)
+      # Default case
+      _ ->
+        Map.put(event_params, "is_ticketed", is_ticketed_bool)
     end
   end
 

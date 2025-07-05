@@ -77,6 +77,39 @@
         </div>
       <% end %>
 
+      <!-- Tax Information -->
+      <%= if @order.total_cents > 0 do %>
+        <div class="border-t border-gray-200 pt-4 space-y-2">
+          <!-- Subtotal -->
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500">Subtotal:</span>
+            <span class="text-sm text-gray-900"><%= format_price(@order.subtotal_cents, @order.currency) %></span>
+          </div>
+          
+          <!-- Tax Display -->
+          <%= cond do %>
+            <% @order.tax_cents > 0 -> %>
+              <!-- Show actual tax amount -->
+              <div class="flex justify-between items-center">
+                <span class="text-sm font-medium text-gray-500">Tax:</span>
+                <span class="text-sm text-gray-900"><%= format_price(@order.tax_cents, @order.currency) %></span>
+              </div>
+            <% @order.event && @order.event.taxation_type == "contribution_collection" -> %>
+              <!-- Tax-exempt status -->
+              <div class="flex justify-between items-center">
+                <span class="text-sm font-medium text-gray-500">Tax:</span>
+                <span class="text-sm text-green-600 bg-green-100 px-2 py-1 rounded-full">Tax-exempt contribution</span>
+              </div>
+            <% true -> %>
+              <!-- No tax applicable (ticketed events without tax calculated yet, etc.) -->
+              <div class="flex justify-between items-center">
+                <span class="text-sm font-medium text-gray-500">Tax:</span>
+                <span class="text-sm text-gray-500">Not applicable</span>
+              </div>
+          <% end %>
+        </div>
+      <% end %>
+
       <!-- Total Amount -->
       <div class="border-t border-gray-200 pt-4">
         <div class="flex justify-between items-center">

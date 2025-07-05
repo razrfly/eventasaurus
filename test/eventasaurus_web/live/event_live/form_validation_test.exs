@@ -515,4 +515,72 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
     end
   end
 
+  describe "taxation_type consistency enforcement" do
+    test "form submission automatically sets is_ticketed=false for contribution_collection", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Submit form with contribution_collection + is_ticketed=true (invalid combination)
+      form_data = %{
+        "event[title]" => "Test Contribution Event",
+        "event[tagline]" => "Test event for contribution collection",
+        "event[start_date]" => "2025-12-01",
+        "event[start_time]" => "19:00",
+        "event[ends_date]" => "2025-12-01",
+        "event[ends_time]" => "21:00",
+        "event[timezone]" => "America/Los_Angeles",
+        "event[taxation_type]" => "contribution_collection",
+        "event[is_ticketed]" => "true"  # This should be automatically corrected
+      }
+
+      view
+      |> form("form[data-test-id='event-form']", form_data)
+      |> render_submit()
+
+      # Verify event was created with corrected is_ticketed value
+      events = EventasaurusApp.Events.list_events()
+      assert length(events) == 1
+      [event] = events
+      assert event.title == "Test Contribution Event"
+      assert event.taxation_type == "contribution_collection"
+      assert event.is_ticketed == false  # Should be automatically corrected
+
+      # Should redirect to event show page
+      assert_redirected(view, "/events/#{event.slug}")
+    end
+
+    test "form submission preserves is_ticketed=true for ticketed_event", %{conn: conn} do
+      {conn, _user} = register_and_log_in_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/events/new")
+
+      # Submit form with ticketed_event + is_ticketed=true (valid combination)
+      form_data = %{
+        "event[title]" => "Test Ticketed Event",
+        "event[tagline]" => "Test event for ticketed events",
+        "event[start_date]" => "2025-12-01",
+        "event[start_time]" => "19:00",
+        "event[ends_date]" => "2025-12-01",
+        "event[ends_time]" => "21:00",
+        "event[timezone]" => "America/Los_Angeles",
+        "event[taxation_type]" => "ticketed_event",
+        "event[is_ticketed]" => "true"
+      }
+
+      view
+      |> form("form[data-test-id='event-form']", form_data)
+      |> render_submit()
+
+      # Verify event was created with preserved is_ticketed value
+      events = EventasaurusApp.Events.list_events()
+      assert length(events) == 1
+      [event] = events
+      assert event.title == "Test Ticketed Event"
+      assert event.taxation_type == "ticketed_event"
+      assert event.is_ticketed == true  # Should be preserved
+
+      # Should redirect to event show page
+      assert_redirected(view, "/events/#{event.slug}")
+    end
+  end
+
 end

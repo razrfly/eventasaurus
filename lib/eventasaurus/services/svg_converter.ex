@@ -46,11 +46,11 @@ defmodule Eventasaurus.Services.SvgConverter do
     # Write SVG content to temporary file
     with :ok <- File.write(svg_path, svg_content),
          {_, 0} <- System.cmd("rsvg-convert", [
-           svg_path,
            "-o", png_path,
            "--width", "800",
            "--height", "419",
-           "--format", "png"
+           "--format", "png",
+           svg_path
          ]) do
       # Clean up SVG file and temporary images after successful conversion
       File.rm(svg_path)

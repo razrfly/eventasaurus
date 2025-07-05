@@ -897,6 +897,9 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   defp create_stripe_payment_intent(%Order{} = order, connect_account) do
+    # Get the event to pass taxation information to Stripe
+    event = Repo.get!(Event, order.event_id)
+
     metadata = %{
       "order_id" => to_string(order.id),
       "event_id" => to_string(order.event_id),
@@ -910,7 +913,8 @@ defmodule EventasaurusApp.Ticketing do
       order.currency,
       connect_account,
       order.application_fee_amount,
-      metadata
+      metadata,
+      event
     )
   end
 
@@ -1276,6 +1280,9 @@ defmodule EventasaurusApp.Ticketing do
     # Get ticket info for session
     ticket = Repo.preload(ticket, :event)
 
+    # Load event for tax configuration and enhanced product information
+    event = ticket.event
+
     # Get user information for pre-filling Stripe checkout
     user = Repo.get!(User, order.user_id)
 
@@ -1288,7 +1295,7 @@ defmodule EventasaurusApp.Ticketing do
     # Build URLs
     base_url = get_base_url()
     success_url = "#{base_url}/orders/#{order.id}/success?session_id={CHECKOUT_SESSION_ID}"
-    cancel_url = "#{base_url}/#{ticket.event.slug}"
+    cancel_url = "#{base_url}/#{event.slug}"
 
     metadata = %{
       "order_id" => to_string(order.id),
@@ -1315,30 +1322,14 @@ defmodule EventasaurusApp.Ticketing do
       allow_promotion_codes: false,
       quantity: order.quantity,
       ticket_name: ticket.title,
-      ticket_description: "#{ticket.event.title} - #{ticket.title}",
+      ticket_description: "#{event.title} - #{ticket.title}",
       # Pre-fill customer information
-      customer_email: customer_email
+      customer_email: customer_email,
+      # Pass event for tax configuration and enhanced product information
+      event: event
     }
 
-    # Add minimum price for flexible pricing
-    checkout_params = if pricing_model == "flexible" do
-      Map.put(checkout_params, :minimum_price_cents, Map.get(pricing_snapshot, "minimum_price_cents"))
-    else
-      checkout_params
-    end
-
-    case stripe_impl().create_checkout_session(checkout_params) do
-      {:ok, session} ->
-        Logger.info("Successfully created Stripe checkout session", session_id: session["id"])
-        {:ok, session}
-
-      {:error, error} ->
-        Logger.error("Failed to create Stripe checkout session",
-          error: error,
-          checkout_params: Map.drop(checkout_params, [:idempotency_key])
-        )
-        {:error, error}
-    end
+    stripe_impl().create_checkout_session(checkout_params)
   end
 
   defp get_base_url do
@@ -1522,7 +1513,7 @@ defmodule EventasaurusApp.Ticketing do
         {:error, :user_confirmation_required} ->
           # User was created via OTP but email confirmation is required
           Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
-          # Create user with pending confirmation ID - TODO: implement cleanup for unconfirmed users
+          # Create user with temporary supabase_id - will be updated when they confirm email
           temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
           case Accounts.create_user(%{
             email: email,
@@ -1627,6 +1618,7 @@ defmodule EventasaurusApp.Ticketing do
 
   defp create_line_item_for_order(order, ticket) do
     ticket = Repo.preload(ticket, :event)
+    event = ticket.event
     pricing_snapshot = order.pricing_snapshot || %{}
     pricing_model = Map.get(pricing_snapshot, "pricing_model", "fixed")
 
@@ -1642,14 +1634,42 @@ defmodule EventasaurusApp.Ticketing do
         div(order.subtotal_cents, quantity)
     end
 
+    # Enhanced product description with event details
+    product_description = if event.description && String.trim(event.description) != "" do
+      # Include event date if available
+      date_info = if event.start_at do
+        formatted_date = Calendar.strftime(event.start_at, "%B %d, %Y at %I:%M %p")
+        "Event Date: #{formatted_date}\n\n"
+      else
+        ""
+      end
+
+      event_desc = String.slice(event.description, 0, 500) # Stripe has limits on description length
+      "#{date_info}#{event_desc}"
+    else
+      "#{event.title} - #{ticket.title}"
+    end
+
+    # Build base product data
+    product_data = %{
+      name: ticket.title,
+      description: product_description
+    }
+
+    # Add event image if available
+    product_data = if event.cover_image_url do
+      # Get full image URL for Stripe
+      full_image_url = get_full_image_url(event.cover_image_url)
+      Map.put(product_data, :images, [full_image_url])
+    else
+      product_data
+    end
+
     %{
       price_data: %{
         currency: order.currency,
         unit_amount: unit_amount,
-        product_data: %{
-          name: ticket.title,
-          description: "#{ticket.event.title} - #{ticket.title}"
-        }
+        product_data: product_data
       },
       quantity: order.quantity,
       metadata: %{
@@ -1660,8 +1680,25 @@ defmodule EventasaurusApp.Ticketing do
     }
   end
 
+  # Helper function to get full image URL for Stripe
+  defp get_full_image_url(image_url) do
+    cond do
+      String.starts_with?(image_url, "http") ->
+        # Already a full URL
+        image_url
+      String.starts_with?(image_url, "/") ->
+        # Relative URL, prepend base URL
+        base_url = get_base_url()
+        "#{base_url}#{image_url}"
+      true ->
+        # Assume it's a relative path, prepend base URL with /
+        base_url = get_base_url()
+        "#{base_url}/#{image_url}"
+    end
+  end
+
   defp create_multi_line_stripe_checkout_session(orders, line_items, connect_account, event_id, opts \\ []) do
-    # Get event for cancel URL
+    # Get event for cancel URL and tax configuration
     event = Repo.get!(Event, event_id)
 
     # Calculate total application fee from base amounts (before tax)
@@ -1704,7 +1741,9 @@ defmodule EventasaurusApp.Ticketing do
       metadata: metadata,
       idempotency_key: idempotency_key,
       # Pre-fill customer information
-      customer_email: customer_email
+      customer_email: customer_email,
+      # Pass event for tax configuration
+      event: event
     }
 
     stripe_impl().create_multi_line_checkout_session(checkout_params)
