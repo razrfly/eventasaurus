@@ -620,7 +620,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     # Ensure consistent structure for Unsplash data
     external_image_data = %{
-      "id" => unsplash_data["id"],
+      "id" => Map.get(unsplash_data, "id", "unknown_unsplash_#{System.unique_integer()}"),
       "url" => cover_image_url,
       "source" => "unsplash",
       "metadata" => unsplash_data
@@ -650,7 +650,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   def handle_event("image_selected", %{"cover_image_url" => cover_image_url, "tmdb_data" => tmdb_data}, socket) do
     # Ensure consistent structure for TMDB data
     external_image_data = %{
-      "id" => tmdb_data["id"],
+      "id" => Map.get(tmdb_data, "id", "unknown_tmdb_#{System.unique_integer()}"),
       "url" => cover_image_url,
       "source" => "tmdb",
       "metadata" => tmdb_data
