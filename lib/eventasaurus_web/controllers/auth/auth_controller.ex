@@ -220,15 +220,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
         conn
         |> put_session(:access_token, access_token)
         |> put_session(:refresh_token, refresh_token)
-        |> put_flash(:info, "Successfully signed in!")
-        |> redirect(to: ~p"/dashboard")
+        |> handle_post_auth_actions(access_token)
+        |> handle_auth_redirect()
 
       %{"access_token" => access_token} ->
         Logger.info("Callback with access token only - storing session")
         conn
         |> put_session(:access_token, access_token)
-        |> put_flash(:info, "Successfully signed in!")
-        |> redirect(to: ~p"/dashboard")
+        |> handle_post_auth_actions(access_token)
+        |> handle_auth_redirect()
 
       %{"error" => error, "error_description" => description} ->
         Logger.error("Callback error: #{error} - #{description}")
@@ -449,4 +449,129 @@ defmodule EventasaurusWeb.Auth.AuthController do
       |> redirect(to: ~p"/auth/login")
     end
   end
-end
+
+  # ============ PRIVATE FUNCTIONS ============
+
+  @doc """
+  Handle post-authentication actions like processing pending interest registrations.
+  """
+  defp handle_post_auth_actions(conn, access_token) do
+    try do
+      # Get user data from access token
+      case EventasaurusApp.Auth.Client.get_user(access_token) do
+        {:ok, supabase_user} ->
+          # Check for pending interest event ID in user metadata
+          user_metadata = Map.get(supabase_user, "user_metadata", %{})
+          pending_event_id = Map.get(user_metadata, "pending_interest_event_id")
+
+          if pending_event_id do
+            process_pending_interest(conn, access_token, pending_event_id)
+          else
+            conn
+          end
+
+        {:error, reason} ->
+          Logger.warning("Could not get user data for post-auth actions: #{inspect(reason)}")
+          conn
+      end
+    rescue
+      error ->
+        Logger.warning("Error in post-auth actions: #{inspect(error)}")
+        conn
+    end
+  end
+
+  @doc """
+  Process pending interest registration for a user after successful authentication.
+  """
+  defp process_pending_interest(conn, access_token, event_id) do
+    try do
+      # First ensure the user is synced with local database
+      case EventasaurusApp.Auth.Client.get_user(access_token) do
+        {:ok, supabase_user} ->
+          case EventasaurusApp.Auth.SupabaseSync.sync_user(supabase_user) do
+            {:ok, local_user} ->
+              # Try to register interest
+              case register_user_interest(local_user.id, event_id) do
+                {:ok, event} ->
+                  Logger.info("Successfully registered interest for user #{local_user.id} in event #{event_id}")
+                  conn
+                  |> put_flash(:info, "Welcome! Your interest in '#{event.title}' has been registered.")
+                  |> put_session(:just_registered_interest, true)
+
+                {:error, reason} ->
+                  Logger.warning("Failed to register interest: #{inspect(reason)}")
+                  conn
+              end
+
+            {:error, reason} ->
+              Logger.warning("Failed to sync user for interest registration: #{inspect(reason)}")
+              conn
+          end
+
+        {:error, reason} ->
+          Logger.warning("Failed to get user data for interest registration: #{inspect(reason)}")
+          conn
+      end
+    rescue
+      error ->
+        Logger.warning("Error processing pending interest: #{inspect(error)}")
+        conn
+    end
+  end
+
+  @doc """
+  Register a user's interest in an event using the participant API.
+  """
+  defp register_user_interest(user_id, event_id) do
+    try do
+      # Parse event_id to integer if it's a string
+      event_id = if is_binary(event_id), do: String.to_integer(event_id), else: event_id
+
+      # Get the event first to validate it exists
+      case EventasaurusApp.Events.get_event(event_id) do
+        nil ->
+          {:error, :event_not_found}
+
+        event ->
+          # Use the participant status API to register interest
+          case EventasaurusApp.Events.update_participant_status(user_id, event_id, :interested) do
+            {:ok, _participant} ->
+              {:ok, event}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+      end
+    rescue
+      ArgumentError ->
+        Logger.warning("Invalid event_id format: #{inspect(event_id)}")
+        {:error, :invalid_event_id}
+
+      error ->
+        Logger.warning("Error registering user interest: #{inspect(error)}")
+                 {:error, :registration_failed}
+     end
+   end
+
+   @doc """
+   Handle redirect after successful authentication, considering if interest was just registered.
+   """
+   defp handle_auth_redirect(conn) do
+     cond do
+       # User just registered interest - redirect back to event
+       get_session(conn, :just_registered_interest) ->
+         # Flash message should already be set by process_pending_interest
+         conn
+         |> delete_session(:just_registered_interest)
+         |> redirect(to: ~p"/dashboard")  # For now, redirect to dashboard
+         # TODO: Could redirect to event page if we store event slug in session
+
+       # Normal authentication - redirect to dashboard
+       true ->
+         conn
+         |> put_flash(:info, "Successfully signed in!")
+         |> redirect(to: ~p"/dashboard")
+     end
+   end
+ end

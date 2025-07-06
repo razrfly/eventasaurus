@@ -6,6 +6,8 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
   def update(assigns, socket) do
     initial_data = %{"name" => "", "email" => ""}
     form = to_form(initial_data)
+    intended_status = Map.get(assigns, :intended_status, :accepted)
+    modal_texts = get_modal_texts(intended_status)
 
     {:ok,
      socket
@@ -13,6 +15,8 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
      |> assign(:form, form)
      |> assign(:form_data, initial_data)
      |> assign(:loading, false)
+     |> assign(:intended_status, intended_status)
+     |> assign(:modal_texts, modal_texts)
     }
   end
 
@@ -51,11 +55,11 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
 
         case Events.register_user_for_event(socket.assigns.event.id, name, email) do
           {:ok, :new_registration, _participant} ->
-            send(self(), {:registration_success, :new_registration, name, email})
+            send(self(), {:registration_success, :new_registration, name, email, socket.assigns.intended_status})
             {:noreply, assign(socket, :loading, false)}
 
           {:ok, :existing_user_registered, _participant} ->
-            send(self(), {:registration_success, :existing_user_registered, name, email})
+            send(self(), {:registration_success, :existing_user_registered, name, email, socket.assigns.intended_status})
             {:noreply, assign(socket, :loading, false)}
 
           {:error, :already_registered} ->
@@ -109,6 +113,23 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
     errors
   end
 
+  defp get_modal_texts(intended_status) do
+    case intended_status do
+      :interested ->
+        %{
+          title: "Register Your Interest",
+          description: "We'll create an account for you so you can manage your interest.",
+          button: "Register Interest"
+        }
+      _ ->
+        %{
+          title: "Register for Event",
+          description: "We'll create an account for you so you can manage your registration.",
+          button: "Register for Event"
+        }
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" phx-click="close" phx-target={@myself}>
@@ -117,7 +138,7 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
         <!-- Modal Header -->
         <div class="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
-            <h2 class="text-xl font-semibold text-gray-900">Register for Event</h2>
+            <h2 class="text-xl font-semibold text-gray-900"><%= @modal_texts.title %></h2>
             <p class="text-sm text-gray-500 mt-1"><%= @event.title %></p>
           </div>
           <button
@@ -135,7 +156,7 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
         <div class="p-6">
           <div class="mb-6">
             <h3 class="text-lg font-medium text-gray-900 mb-2">Your Info</h3>
-            <p class="text-sm text-gray-600">We'll create an account for you so you can manage your registration.</p>
+            <p class="text-sm text-gray-600"><%= @modal_texts.description %></p>
           </div>
 
           <.form
@@ -204,9 +225,9 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Registering...
+                  <%= if @intended_status == :interested, do: "Registering Interest...", else: "Registering..." %>
                 <% else %>
-                  Register for Event
+                  <%= @modal_texts.button %>
                 <% end %>
               </button>
             </div>

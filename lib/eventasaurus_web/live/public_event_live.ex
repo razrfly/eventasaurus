@@ -61,15 +61,16 @@ defmodule EventasaurusWeb.PublicEventLive do
 
           # Determine registration status if user is authenticated
           Logger.debug("PublicEventLive.mount - auth_user: #{inspect(socket.assigns.auth_user)}")
-          {registration_status, user} = case ensure_user_struct(socket.assigns.auth_user) do
+          {registration_status, user, user_participant_status} = case ensure_user_struct(socket.assigns.auth_user) do
             {:ok, user} ->
               Logger.debug("PublicEventLive.mount - user found: #{inspect(user)}")
               status = Events.get_user_registration_status(event, user)
-              Logger.debug("PublicEventLive.mount - registration status: #{inspect(status)}")
-              {status, user}
+              participant_status = Events.get_user_participant_status(event, user)
+              Logger.debug("PublicEventLive.mount - registration status: #{inspect(status)}, participant status: #{inspect(participant_status)}")
+              {status, user, participant_status}
             {:error, reason} ->
               Logger.debug("PublicEventLive.mount - no user found, reason: #{inspect(reason)}")
-              {:not_authenticated, nil}
+              {:not_authenticated, nil, nil}
           end
 
           # Load date poll data if event has polling enabled
@@ -105,6 +106,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:participants, participants)
            |> assign(:registration_status, registration_status)
            |> assign(:user, user)
+           |> assign(:user_participant_status, user_participant_status)
            |> assign(:theme, theme)
            |> assign(:show_registration_modal, false)
            |> assign(:just_registered, false)
@@ -115,6 +117,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:pending_vote, nil)
            |> assign(:show_vote_modal, false)
            |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users
+           |> assign(:show_interest_modal, false)
            |> assign(:tickets, tickets)
            |> assign(:selected_tickets, %{})  # Map of ticket_id => quantity
            |> assign(:ticket_loading, false)
@@ -153,19 +156,12 @@ defmodule EventasaurusWeb.PublicEventLive do
     :ok
   end
 
+  # ==================== EVENT HANDLERS ====================
+  # All handle_event/3 functions grouped together to avoid compilation issues
+
+
+
   @impl true
-  def handle_event("show_registration_modal", _params, socket) do
-    {:noreply, assign(socket, :show_registration_modal, true)}
-  end
-
-  def handle_event("close_vote_modal", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:show_vote_modal, false)
-     |> assign(:pending_vote, nil)
-    }
-  end
-
   def handle_event("save_all_votes", _params, socket) do
     # Only for anonymous users with temporary votes
     case ensure_user_struct(socket.assigns.auth_user) do
@@ -177,55 +173,81 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   def handle_event("one_click_register", _params, socket) do
+    handle_event("register_with_status", %{"status" => "accepted"}, socket)
+  end
+
+    def handle_event("register_with_status", %{"status" => status}, socket) do
+    status_atom = String.to_atom(status)
+
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
-        case Events.one_click_register(socket.assigns.event, user) do
-          {:ok, _participant} ->
+        # Check if user wants to remove existing status (toggle off)
+        current_status = socket.assigns.user_participant_status
+
+        action_result = if current_status == status_atom do
+          # User has this status already, remove it
+          Events.remove_user_participant_status(socket.assigns.event, user)
+        else
+          # User either has no status or different status, set new one
+          Events.update_user_participant_status(socket.assigns.event, user, status_atom)
+        end
+
+        case action_result do
+          {:ok, _} ->
             # Reload participants to show updated count and list
             updated_participants = Events.list_event_participants(socket.assigns.event)
+            new_user_status = Events.get_user_participant_status(socket.assigns.event, user)
+
+            message = if current_status == status_atom do
+              case status_atom do
+                :accepted -> "Registration cancelled."
+                :interested -> "Interest removed."
+                _ -> "Status removed."
+              end
+            else
+              case status_atom do
+                :accepted -> "You're now registered for #{socket.assigns.event.title}!"
+                :interested -> "Thanks for your interest in #{socket.assigns.event.title}!"
+                _ -> "Your status has been updated!"
+              end
+            end
 
             {:noreply,
              socket
-             |> assign(:registration_status, :registered)
-             |> assign(:just_registered, false)  # Existing users don't need email verification
+             |> assign(:registration_status, Events.get_user_registration_status(socket.assigns.event, user))
+             |> assign(:user_participant_status, new_user_status)
+             |> assign(:just_registered, false)
              |> assign(:participants, updated_participants)
-             |> put_flash(:info, "You're now registered for #{socket.assigns.event.title}!")
+             |> put_flash(:info, message)
              |> push_event("track_event", %{
-                 event: "event_registration_completed",
+                 event: "participant_status_updated",
                  properties: %{
                    event_id: socket.assigns.event.id,
                    event_title: socket.assigns.event.title,
                    event_slug: socket.assigns.event.slug,
                    user_type: "authenticated",
+                   status: if(current_status == status_atom, do: :removed, else: status_atom),
                    registration_method: "one_click"
                  }
                })
             }
 
-          {:error, :already_registered} ->
+          {:error, :not_found} when current_status == status_atom ->
             {:noreply,
              socket
-             |> put_flash(:error, "You're already registered for this event.")
-            }
-
-          {:error, :organizer_cannot_register} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "As an event organizer, you don't need to register for your own event.")
+             |> put_flash(:info, "Status already removed.")
             }
 
           {:error, reason} ->
             {:noreply,
              socket
-             |> put_flash(:error, "Unable to register: #{inspect(reason)}")
+             |> put_flash(:error, "Unable to update status: #{inspect(reason)}")
             }
         end
 
       {:error, _} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Please log in to register for this event.")
-        }
+        # For unauthenticated users, show the registration modal with intended status
+        {:noreply, socket |> assign(:show_registration_modal, true) |> assign(:intended_status, status_atom)}
     end
   end
 
@@ -346,121 +368,79 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, push_navigate(socket, to: "/events/#{event_slug}/edit")}
   end
 
-  def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
+  def handle_event("toggle_participant_status", %{"status" => status}, socket) do
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
-        # Authenticated user - proceed with normal voting flow
-        option_id_int = String.to_integer(option_id)
-        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
+        status_atom = String.to_atom(status)
 
-                if option do
-          vote_type_atom = String.to_atom(vote_type)
+        # Check if user already has this status
+        current_status = Events.get_user_participant_status(socket.assigns.event, user)
 
-          case Events.cast_vote(option, user, vote_type_atom) do
-            {:ok, _vote} ->
-              # Reload user votes and voting summary
-              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+        case current_status do
+          ^status_atom ->
+            # User already has this status, remove it
+            case Events.remove_user_participant_status(socket.assigns.event, user) do
+              {:ok, _} ->
+                updated_participants = Events.list_event_participants(socket.assigns.event)
+                new_status = Events.get_user_participant_status(socket.assigns.event, user)
 
-              {:noreply,
-               socket
-               |> assign(:user_votes, user_votes)
-               |> assign(:voting_summary, voting_summary)
-               |> put_flash(:info, "Your vote has been recorded!")
-               |> push_event("track_event", %{
-                   event: "event_date_vote_cast",
-                   properties: %{
-                     event_id: socket.assigns.event.id,
-                     event_title: socket.assigns.event.title,
-                     event_slug: socket.assigns.event.slug,
-                     poll_id: socket.assigns.date_poll.id,
-                     option_id: option.id,
-                     vote_type: vote_type_atom,
-                     user_type: "authenticated"
-                   }
-                 })
-              }
+                {:noreply,
+                 socket
+                 |> assign(:participants, updated_participants)
+                 |> assign(:user_participant_status, new_status)
+                 |> put_flash(:info, "Status updated successfully!")
+                }
 
-            {:error, reason} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
-              }
-          end
-        else
-          {:noreply,
-           socket
-           |> put_flash(:error, "Invalid voting option")
-          }
+              {:error, reason} ->
+                {:noreply,
+                 socket
+                 |> put_flash(:error, "Unable to update status: #{inspect(reason)}")
+                }
+            end
+
+          _ ->
+            # User doesn't have this status, set it
+            case Events.update_user_participant_status(socket.assigns.event, user, status_atom) do
+              {:ok, _participant} ->
+                updated_participants = Events.list_event_participants(socket.assigns.event)
+                new_status = Events.get_user_participant_status(socket.assigns.event, user)
+
+                {:noreply,
+                 socket
+                 |> assign(:participants, updated_participants)
+                 |> assign(:user_participant_status, new_status)
+                 |> put_flash(:info, "Status updated successfully!")
+                 |> push_event("track_event", %{
+                     event: "participant_status_updated",
+                     properties: %{
+                       event_id: socket.assigns.event.id,
+                       event_slug: socket.assigns.event.slug,
+                       status: status_atom,
+                       user_type: "authenticated"
+                     }
+                   })
+                }
+
+              {:error, reason} ->
+                {:noreply,
+                 socket
+                 |> put_flash(:error, "Unable to update status: #{inspect(reason)}")
+                }
+            end
         end
 
       {:error, _} ->
-        # Anonymous user - store vote temporarily in assigns
-        option_id_int = String.to_integer(option_id)
-
-        # Validate option exists
-        unless Enum.any?(socket.assigns.date_options, &(&1.id == option_id_int)) do
-          {:noreply, put_flash(socket, :error, "Invalid voting option")}
+        # For unauthenticated users trying to express interest, show modal
+        if status == "interested" do
+          {:noreply, assign(socket, :show_interest_modal, true)}
         else
-          vote_type_atom = String.to_atom(vote_type)
-
-          updated_temp_votes = Map.put(socket.assigns.temp_votes, option_id_int, vote_type_atom)
-
           {:noreply,
            socket
-           |> assign(:temp_votes, updated_temp_votes)
+           |> put_flash(:error, "Please log in to update your status.")
           }
         end
     end
   end
-
-  def handle_event("remove_vote", %{"option_id" => option_id}, socket) do
-    case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
-        option_id_int = String.to_integer(option_id)
-        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
-
-        if option do
-          case Events.remove_user_vote(option, user) do
-            {:ok, _} ->
-              # Reload user votes and voting summary
-              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
-
-              {:noreply,
-               socket
-               |> assign(:user_votes, user_votes)
-               |> assign(:voting_summary, voting_summary)
-               |> put_flash(:info, "Your vote has been removed.")
-              }
-
-            {:error, reason} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
-              }
-          end
-        else
-          {:noreply,
-           socket
-           |> put_flash(:error, "Invalid voting option")
-          }
-        end
-
-      {:error, _} ->
-        # Anonymous user - remove from temporary votes
-        option_id_int = String.to_integer(option_id)
-        updated_temp_votes = Map.delete(socket.assigns.temp_votes, option_id_int)
-
-        {:noreply,
-         socket
-         |> assign(:temp_votes, updated_temp_votes)
-         |> put_flash(:info, "Vote removed from your temporary votes.")
-        }
-    end
-  end
-
-  # ======== TICKET SELECTION HANDLERS ========
 
   def handle_event("increase_ticket_quantity", %{"ticket_id" => ticket_id}, socket) do
     ticket_id = String.to_integer(ticket_id)
@@ -540,25 +520,37 @@ defmodule EventasaurusWeb.PublicEventLive do
             |> Enum.map(fn {id, qty} -> {Integer.to_string(id), qty} end)
             |> URI.encode_query()
 
-          {:noreply,
-           socket
-           |> push_event("track_event", %{
-               event: "ticket_checkout_initiated",
-               properties: %{
-                 event_id: socket.assigns.event.id,
-                 event_title: socket.assigns.event.title,
-                 event_slug: socket.assigns.event.slug,
-                 user_type: "anonymous",
-                 ticket_selections: selected_tickets,
-                 total_tickets: Enum.sum(Map.values(selected_tickets))
-               }
-             })
-           |> redirect(to: "/events/#{socket.assigns.event.slug}/checkout?" <> query)
-          }
+          path = "/#{socket.assigns.event.slug}/checkout?#{query}"
+          {:noreply, push_navigate(socket, to: path)}
 
-        user ->
-          # User is logged in - create Stripe hosted checkout session directly
-          create_authenticated_stripe_checkout(socket, user, selected_tickets)
+        _user ->
+          # User is logged in - proceed directly to payment
+          assign(socket, :ticket_loading, true)
+
+          # Convert selected tickets to the format expected by Stripe checkout
+          ticket_items =
+            selected_tickets
+            |> Enum.map(fn {ticket_id, quantity} ->
+              ticket = Enum.find(socket.assigns.tickets, &(&1.id == ticket_id))
+              %{ticket_id: ticket_id, quantity: quantity, ticket: ticket}
+            end)
+
+          case Ticketing.create_multi_ticket_checkout_session(
+            socket.assigns.user,
+            ticket_items
+          ) do
+            {:ok, checkout_url} ->
+              {:noreply,
+               socket
+               |> assign(:ticket_loading, false)
+               |> redirect(external: checkout_url)}
+
+            {:error, reason} ->
+              {:noreply,
+               socket
+               |> assign(:ticket_loading, false)
+               |> put_flash(:error, "Unable to proceed to payment: #{reason}")}
+          end
       end
     end
   end
@@ -567,108 +559,185 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, assign(socket, :show_registration_modal, true)}
   end
 
-  # Authenticated user Stripe hosted checkout
-  defp create_authenticated_stripe_checkout(socket, user, selected_tickets) do
-    # For now, handle single ticket type only (can be extended for multiple types)
-    case get_single_ticket_selection(socket.assigns.tickets, selected_tickets) do
-      {:ok, ticket, quantity} ->
-        Logger.info("Creating Stripe hosted checkout for authenticated user",
-          user_id: user.id,
-          event_slug: socket.assigns.event.slug,
-          ticket_id: ticket.id,
-          quantity: quantity
-        )
+  def handle_event("show_interest_modal", _params, socket) do
+    {:noreply, assign(socket, :show_interest_modal, true)}
+  end
 
-        case Ticketing.create_checkout_session(user, ticket, %{quantity: quantity}) do
-          {:ok, %{checkout_url: checkout_url, session_id: session_id}} ->
-            Logger.info("Stripe hosted checkout session created",
-              user_id: user.id,
-              session_id: session_id
-            )
+  def handle_event("close_interest_modal", _params, socket) do
+    {:noreply, assign(socket, :show_interest_modal, false)}
+  end
 
-            # Redirect to Stripe hosted checkout
-            {:noreply,
-             socket
-             |> push_event("track_event", %{
-                 event: "ticket_checkout_initiated",
-                 properties: %{
-                   event_id: socket.assigns.event.id,
-                   event_title: socket.assigns.event.title,
-                   event_slug: socket.assigns.event.slug,
-                   user_type: "authenticated",
-                   ticket_id: ticket.id,
-                   ticket_title: ticket.title,
-                   quantity: quantity,
-                   session_id: session_id
-                 }
-               })
-             |> redirect(external: checkout_url)}
+  def handle_event("show_registration_modal", _params, socket) do
+    {:noreply, assign(socket, :show_registration_modal, true)}
+  end
 
-          {:error, :no_stripe_account} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+  def handle_event("close_vote_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_vote_modal, false)
+     |> assign(:pending_vote, nil)
+    }
+  end
 
-          {:error, :ticket_unavailable} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "Sorry, these tickets are no longer available.")}
+  def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:ok, user} ->
+        # Authenticated user - proceed with normal voting flow
+        option_id_int = String.to_integer(option_id)
+        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
 
-          {:error, reason} ->
-            Logger.error("Failed to create authenticated checkout session",
-              user_id: user.id,
-              ticket_id: ticket.id,
-              reason: inspect(reason)
-            )
-            {:noreply,
-             socket
-             |> put_flash(:error, "Unable to process payment. Please try again.")}
+        if option do
+          vote_type_atom = String.to_atom(vote_type)
+
+          case Events.cast_vote(option, user, vote_type_atom) do
+            {:ok, _vote} ->
+              # Reload user votes and voting summary
+              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+              {:noreply,
+               socket
+               |> assign(:user_votes, user_votes)
+               |> assign(:voting_summary, voting_summary)
+               |> put_flash(:info, "Vote cast successfully!")
+              }
+
+            {:error, :already_voted} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "You have already voted for this option.")
+              }
+
+            {:error, reason} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
+              }
+          end
+        else
+          {:noreply,
+           socket
+           |> put_flash(:error, "Invalid voting option.")
+          }
         end
 
-      # Multiple ticket types are now supported in both checkout flows
+      {:error, _} ->
+        # Anonymous user - store vote temporarily and update UI immediately
+        option_id_int = String.to_integer(option_id)
+        vote_type_atom = String.to_atom(vote_type)
 
-      {:error, :no_tickets_selected} ->
+        # Update temporary votes
+        updated_temp_votes = Map.put(socket.assigns.temp_votes, option_id_int, vote_type_atom)
+
         {:noreply,
          socket
-         |> put_flash(:error, "Please select at least one ticket before proceeding.")}
+         |> assign(:temp_votes, updated_temp_votes)
+         |> put_flash(:info, "Vote saved temporarily. Sign in to make it permanent!")
+        }
     end
   end
 
-  # TEMPORARY compatibility shim: when multiple tickets are selected, only the first is returned.
-  # TODO: Remove once all callers support multi-ticket flows.
-  defp get_single_ticket_selection(tickets, selected_tickets) do
-    selected_items =
-      selected_tickets
-      |> Enum.filter(fn {_id, qty} -> qty > 0 end)
-      |> Enum.map(fn {ticket_id, quantity} ->
-        ticket = Enum.find(tickets, &(&1.id == ticket_id))
-        {ticket, quantity}
-      end)
-      |> Enum.filter(fn {ticket, _qty} -> ticket != nil end)
+  def handle_event("remove_vote", %{"option_id" => option_id}, socket) do
+    case ensure_user_struct(socket.assigns.auth_user) do
+      {:ok, user} ->
+        # Authenticated user - remove from database
+        option_id_int = String.to_integer(option_id)
+        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
 
-    case selected_items do
-      [] -> {:error, :no_tickets_selected}
-      # Multiple ticket types are now supported - we only use this function for legacy compatibility
-      [{ticket, quantity}] -> {:ok, ticket, quantity}
-      multiple_items ->
-        # TEMPORARY: returning only the first ticket for legacy compatibility
-        Logger.warning("get_single_ticket_selection called with multiple items; returning first for compatibility")
-        {:ok, hd(multiple_items) |> elem(0), hd(multiple_items) |> elem(1)}
+        if option do
+          case Events.remove_user_vote(option, user) do
+            {:ok, _} ->
+              # Reload user votes and voting summary
+              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+
+              {:noreply,
+               socket
+               |> assign(:user_votes, user_votes)
+               |> assign(:voting_summary, voting_summary)
+               |> put_flash(:info, "Vote removed successfully!")
+              }
+
+            {:error, :vote_not_found} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "No vote found to remove.")
+              }
+
+            {:error, reason} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
+              }
+          end
+        else
+          {:noreply,
+           socket
+           |> put_flash(:error, "Invalid voting option.")
+          }
+        end
+
+      {:error, _} ->
+        # Anonymous user - remove from temporary votes
+        option_id_int = String.to_integer(option_id)
+        updated_temp_votes = Map.delete(socket.assigns.temp_votes, option_id_int)
+
+        {:noreply,
+         socket
+         |> assign(:temp_votes, updated_temp_votes)
+         |> put_flash(:info, "Temporary vote removed!")
+        }
     end
+  end
+
+  # ==================== INFO HANDLERS ====================
+
+  @impl true
+  def handle_info({:participant_status_toggle, status}, socket) do
+    handle_event("toggle_participant_status", %{"status" => Atom.to_string(status)}, socket)
   end
 
   @impl true
-  def handle_info(:close_registration_modal, socket) do
-    {:noreply, assign(socket, :show_registration_modal, false)}
+  def handle_info({:magic_link_sent, email}, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_interest_modal, false)
+     |> put_flash(:info, "Magic link sent to #{email}! Check your email to complete registration and express interest.")
+     |> push_event("track_event", %{
+         event: "interest_magic_link_sent",
+         properties: %{
+           event_id: socket.assigns.event.id,
+           event_slug: socket.assigns.event.slug,
+           email_domain: email |> String.split("@") |> List.last()
+         }
+       })
+    }
   end
 
-  # ======== HANDLE_INFO CALLBACKS ========
+  @impl true
+  def handle_info({:magic_link_error, reason}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:error, "Failed to send magic link: #{reason}")
+    }
+  end
 
-  def handle_info({:registration_success, type, _name, _email}, socket) do
+  @impl true
+  def handle_info({:close_interest_modal}, socket) do
+    {:noreply, assign(socket, :show_interest_modal, false)}
+  end
+
+  @impl true
+  def handle_info({:registration_success, type, _name, _email, intended_status}, socket) do
+    action_text = case intended_status do
+      :interested -> "expressed interest in"
+      _ -> "registered for"
+    end
+
     message = case type do
-      :new_registration -> "Successfully registered for #{socket.assigns.event.title}! Please check your email for a magic link to create your account."
-      :existing_user_registered -> "Successfully registered for #{socket.assigns.event.title}!"
-      :registered -> "Successfully registered for #{socket.assigns.event.title}!"
+      :new_registration -> "Successfully #{action_text} #{socket.assigns.event.title}! Please check your email for a magic link to create your account."
+      :existing_user_registered -> "Successfully #{action_text} #{socket.assigns.event.title}!"
+      :registered -> "Successfully #{action_text} #{socket.assigns.event.title}!"
       :already_registered -> "You are already registered for this event."
     end
 
@@ -688,6 +757,7 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> put_flash(:info, message)
      |> assign(:just_registered, just_registered)
      |> assign(:show_registration_modal, false)
+     |> assign(:registration_status, :registered)  # Update registration status to show success UI
      |> assign(:participants, updated_participants)
      |> push_event("track_event", %{
          event: "event_registration_completed",
@@ -707,6 +777,13 @@ defmodule EventasaurusWeb.PublicEventLive do
        })}
   end
 
+  # Backward compatibility for old format without intended_status
+  @impl true
+  def handle_info({:registration_success, type, _name, _email}, socket) do
+    handle_info({:registration_success, type, _name, _email, :accepted}, socket)
+  end
+
+  @impl true
   def handle_info({:registration_error, reason}, socket) do
     error_message = case reason do
       :already_registered ->
@@ -728,6 +805,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
+  @impl true
   def handle_info(:close_vote_modal, socket) do
     {:noreply,
      socket
@@ -736,6 +814,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
+  @impl true
   def handle_info({:vote_success, type, _name, email}, socket) do
     message = case type do
       :new_voter ->
@@ -790,6 +869,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
+  @impl true
   def handle_info({:vote_error, reason}, socket) do
     error_message = case reason do
       :event_not_found ->
@@ -812,6 +892,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
+  @impl true
   def handle_info({:save_all_votes_for_user, event_id, name, email, temp_votes, date_options}, socket) do
     # Convert temp_votes map to the format expected by bulk operations
     votes_data = for {option_id, vote_type} <- temp_votes do
@@ -869,8 +950,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
-  # ======== REAL-TIME TICKET UPDATES ========
-
+  @impl true
   def handle_info({:ticket_update, %{ticket: updated_ticket, action: action}}, socket) do
     # Only update if this is for the current event and we're showing tickets
     if updated_ticket.event_id == socket.assigns.event.id and socket.assigns.should_show_tickets do
@@ -904,6 +984,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
+  @impl true
   def handle_info({:order_update, %{order: _order, action: _action}}, socket) do
     # Handle order updates if needed for this event
     # For now, we mainly care about ticket availability changes
@@ -1228,66 +1309,20 @@ defmodule EventasaurusWeb.PublicEventLive do
           </div>
 
                     <!-- Participants section -->
-          <%
-            # Filter valid participants once for consistency across all UI elements
-            valid_participants = Enum.filter(@participants, fn participant ->
-              participant.user && participant.user.name
-            end)
-          %>
-          <%= if length(valid_participants) > 0 do %>
+          <%= if length(@participants) > 0 do %>
             <div class="border-t border-gray-200 pt-6 mt-6">
-              <%
-                displayed_avatars = Enum.take(valid_participants, 10)
-                remaining_count = length(valid_participants) - length(displayed_avatars)
-              %>
-
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">
-                  <%= length(valid_participants) %> Going
-                </h3>
-              </div>
-
-                                          <!-- Stacked Avatars -->
-              <div class="flex items-center mb-3">
-                <%!-- Show only the first 10 valid participants --%>
-                <%= for {participant, index} <- Enum.with_index(displayed_avatars) do %>
-                  <div class={[
-                    "relative group",
-                    if(index > 0, do: "-ml-2", else: "")
-                  ]}
-                    role="img"
-                    aria-label={participant.user.name}
-                    aria-describedby={"tooltip-#{participant.id}"}
-                    tabindex="0">
-                    <%= avatar_img_size(participant.user, :md,
-                          class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
-                        ) %>
-
-                    <!-- Tooltip on hover -->
-                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
-                         role="tooltip"
-                         id={"tooltip-#{participant.id}"}
-                         aria-hidden="true">
-                      <%= participant.user.name %>
-                      <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                    </div>
-                  </div>
-                <% end %>
-
-                <%!-- Show overflow indicator only if there are more valid participants than displayed --%>
-                <%= if remaining_count > 0 do %>
-                  <div class="relative -ml-2 w-10 h-10 bg-gray-100 rounded-full border-2 border-white flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm">
-                    +<%= remaining_count %>
-                  </div>
-                <% end %>
-              </div>
-
-              <!-- Participant Names -->
-              <%= if length(valid_participants) > 0 do %>
-                <div class="text-sm text-gray-600 dark:text-gray-400">
-                  <%= format_participant_summary(valid_participants) %>
-                </div>
-              <% end %>
+              <.live_component
+                module={EventasaurusWeb.ParticipantStatusDisplayComponent}
+                id="participant-status-display"
+                participants={@participants}
+                show_avatars={true}
+                max_avatars={10}
+                avatar_size={:md}
+                show_counts={true}
+                show_status_labels={true}
+                layout={:horizontal}
+                class="mb-4"
+              />
             </div>
           <% end %>
         </div>
@@ -1318,16 +1353,29 @@ defmodule EventasaurusWeb.PublicEventLive do
 
             <%= case @registration_status do %>
               <% :not_authenticated -> %>
-                <!-- Anonymous user - show current registration modal -->
+                <!-- Anonymous user - show registration and interest options -->
                 <button
                   id="register-now-btn"
-                  phx-click="show_registration_modal"
-                  class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg w-full flex items-center justify-center transition-colors duration-200"
+                  phx-click="register_with_status"
+                  phx-value-status="accepted"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg w-full flex items-center justify-center transition-colors duration-200 mb-3"
                 >
                   Register for Event
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
+                </button>
+
+                <!-- Interest Button for Anonymous Users -->
+                <button
+                  phx-click="register_with_status"
+                  phx-value-status="interested"
+                  class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg w-full flex items-center justify-center transition-colors duration-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  Interested
                 </button>
 
               <% :not_registered -> %>
@@ -1339,11 +1387,26 @@ defmodule EventasaurusWeb.PublicEventLive do
                     <div class="text-sm text-gray-500"><%= @user.email %></div>
                   </div>
                 </div>
+
+                <!-- Primary Registration Button -->
                 <button
-                  phx-click="one_click_register"
-                  class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg w-full transition-colors duration-200"
+                  phx-click="register_with_status"
+                  phx-value-status="accepted"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg w-full transition-colors duration-200 mb-3"
                 >
                   One-Click Register
+                </button>
+
+                <!-- Secondary Interest Button -->
+                <button
+                  phx-click="register_with_status"
+                  phx-value-status="interested"
+                  class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg w-full flex items-center justify-center transition-colors duration-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  Interested
                 </button>
 
               <% :registered -> %>
@@ -1389,6 +1452,18 @@ defmodule EventasaurusWeb.PublicEventLive do
                       </div>
                     </div>
                   <% end %>
+
+                  <!-- Interest Button for Registered Users -->
+                  <button
+                    phx-click="register_with_status"
+                    phx-value-status="interested"
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg w-full flex items-center justify-center transition-colors duration-200 mb-4"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                    <%= if @user_participant_status == :interested, do: "Remove Interest", else: "Mark as Interested" %>
+                  </button>
 
                   <button
                     phx-click="cancel_registration"
@@ -1540,6 +1615,7 @@ defmodule EventasaurusWeb.PublicEventLive do
         module={EventRegistrationComponent}
         id="registration-modal"
         event={@event}
+        intended_status={Map.get(assigns, :intended_status, :accepted)}
       />
     <% end %>
 
@@ -1550,6 +1626,16 @@ defmodule EventasaurusWeb.PublicEventLive do
         event={@event}
         temp_votes={@temp_votes}
         date_options={@date_options}
+      />
+    <% end %>
+
+    <%= if @show_interest_modal do %>
+      <.live_component
+        module={EventasaurusWeb.InterestAuthModal}
+        id="interest-auth-modal"
+        event={@event}
+        show={@show_interest_modal}
+        on_close="close_interest_modal"
       />
     <% end %>
 
