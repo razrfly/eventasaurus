@@ -620,9 +620,9 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_event("select_image", %{"source" => source, "image_url" => image_url, "image_data" => image_data} = params, socket) do
     external_data = %{
-      "source" => source,
-      "url" => image_url,
       "id" => params["id"] || image_data["id"] || "unknown",
+      "url" => image_url,
+      "source" => source,
       "metadata" => image_data
     }
 
@@ -659,10 +659,11 @@ defmodule EventasaurusWeb.EventLive.New do
         {"unknown", %{}}
     end
 
+    # Ensure consistent structure
     external_data = %{
-      "source" => source,
-      "url" => image_url,
       "id" => image_data["id"] || "unknown",
+      "url" => image_url,
+      "source" => source,
       "metadata" => image_data
     }
 
@@ -708,10 +709,15 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_event("select_default_image", %{"image_url" => image_url, "filename" => filename, "category" => category}, socket) do
     external_data = %{
-      "source" => "default",
-      "url" => image_url,
       "id" => filename,
-      "category" => category
+      "url" => image_url,
+      "source" => "default",
+      "category" => category,
+      "metadata" => %{
+        "filename" => filename,
+        "category" => category,
+        "title" => String.replace(filename, ".png", "") |> String.replace("_", " ") |> String.split("-") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+      }
     }
 
     # Update form_data with the new image

@@ -93,19 +93,22 @@ class PostHogManager {
       const posthogApiKey = window.POSTHOG_API_KEY;
       const posthogHost = window.POSTHOG_HOST || 'https://eu.i.posthog.com';
       
-      console.log('PostHog initialization attempt:', {
-        apiKeyPresent: !!posthogApiKey,
-        apiKeyLength: posthogApiKey ? posthogApiKey.length : 0,
-        host: posthogHost,
-        privacyConsent: this.privacyConsent,
-        userAgent: navigator.userAgent,
-        isOnline: this.isOnline,
-        protocol: window.location.protocol,
-        domain: window.location.hostname
-      });
+      // Only log initialization attempt if API key is present
+      if (posthogApiKey) {
+        console.log('PostHog initialization attempt:', {
+          apiKeyPresent: !!posthogApiKey,
+          apiKeyLength: posthogApiKey ? posthogApiKey.length : 0,
+          host: posthogHost,
+          privacyConsent: this.privacyConsent,
+          userAgent: navigator.userAgent,
+          isOnline: this.isOnline,
+          protocol: window.location.protocol,
+          domain: window.location.hostname
+        });
+      }
       
       if (!posthogApiKey) {
-        console.warn('PostHog API key not found - analytics will be disabled');
+        // Silently disable analytics when no API key is present
         this.isLoading = false;
         return;
       }
