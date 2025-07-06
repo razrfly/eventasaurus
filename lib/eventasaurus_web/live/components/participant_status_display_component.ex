@@ -194,7 +194,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
 
   defp status_label(:accepted), do: "Going"
   defp status_label(:interested), do: "Interested"
-  defp status_label(:pending), do: "Pending"
+  defp status_label(:pending), do: "Going"
   defp status_label(:declined), do: "Declined"
   defp status_label(:cancelled), do: "Cancelled"
   defp status_label(:confirmed_with_order), do: "Confirmed"
