@@ -103,10 +103,11 @@ defmodule Eventasaurus.MixProject do
       test: ["test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus"],
-      "assets.deploy": [
+                  "assets.deploy": [
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
-        "phx.digest"
+        "phx.digest",
+        "cmd find priv/static -type f ! -name '*.gz' ! -name 'cache_manifest.json' ! -name '*-????????????????????????????????.*' -delete"
       ],
       "erd.gen.png": [
         "ecto.gen.erd",
