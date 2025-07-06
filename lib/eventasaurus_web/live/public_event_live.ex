@@ -1453,18 +1453,6 @@ defmodule EventasaurusWeb.PublicEventLive do
                     </div>
                   <% end %>
 
-                  <!-- Interest Button for Registered Users -->
-                  <button
-                    phx-click="register_with_status"
-                    phx-value-status="interested"
-                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg w-full flex items-center justify-center transition-colors duration-200 mb-4"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                    <%= if @user_participant_status == :interested, do: "Remove Interest", else: "Mark as Interested" %>
-                  </button>
-
                   <button
                     phx-click="cancel_registration"
                     phx-confirm="Are you sure you want to cancel your registration?"
