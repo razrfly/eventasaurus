@@ -216,11 +216,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
   defp status_label_color(:confirmed_with_order), do: "text-green-500"
   defp status_label_color(_), do: "text-gray-400"
 
-# Removed unused avatar styling functions since we're using the original white border styling
-
-  defp avatar_size_classes(:sm), do: "w-6 h-6"
-  defp avatar_size_classes(:md), do: "w-8 h-8"
-  defp avatar_size_classes(:lg), do: "w-10 h-10"
+  # Removed unused avatar styling functions since we're using the original white border styling
 
   defp get_layout_classes(:horizontal), do: "flex items-center"
   defp get_layout_classes(:vertical), do: "flex flex-col space-y-4"
