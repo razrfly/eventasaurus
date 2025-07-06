@@ -654,16 +654,8 @@ defmodule EventasaurusWeb.EventComponents do
                 </div>
               <% end %>
 
-              <%= if @external_image_data do %>
-                <div class="mt-2 text-xs text-gray-500">
-                  <%= if @external_image_data["source"] == "unsplash" && @external_image_data["photographer_name"] do %>
-                    Photo by <a href={@external_image_data["photographer_url"]} target="_blank" rel="noopener noreferrer" class="underline"><%= @external_image_data["photographer_name"] %></a> on <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" class="underline">Unsplash</a>
-                  <% end %>
-                  <%= if @external_image_data["source"] == "tmdb" && @external_image_data["url"] do %>
-                    Image from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" class="underline">TMDB</a>
-                  <% end %>
-                </div>
-              <% end %>
+              <!-- Image attribution -->
+              <.image_attribution external_image_data={@external_image_data} />
 
               <!-- Hidden fields for image data -->
               <%= hidden_input f, :cover_image_url %>
@@ -1769,5 +1761,70 @@ defmodule EventasaurusWeb.EventComponents do
         (event.threshold_revenue_cents && event.threshold_revenue_cents > 0)
 
   def threshold_has_valid_targets?(_), do: false
+
+  # Image attribution component for Unsplash and TMDB images
+  attr :external_image_data, :map, required: true
+  attr :class, :string, default: "text-xs text-gray-500 mt-2"
+
+  def image_attribution(assigns) do
+    ~H"""
+    <%= if @external_image_data do %>
+      <div class={@class}>
+        <%= if @external_image_data["source"] == "unsplash" && get_in(@external_image_data, ["metadata", "user"]) do %>
+          <% user = @external_image_data["metadata"]["user"] %>
+          Photo by
+          <a
+            href={user["profile_url"] <> "?utm_source=eventasaurus&utm_medium=referral"}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline hover:text-gray-700 transition-colors"
+          >
+            <%= user["name"] %>
+          </a>
+          on
+          <a
+            href="https://unsplash.com?utm_source=eventasaurus&utm_medium=referral"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline hover:text-gray-700 transition-colors"
+          >
+            Unsplash
+          </a>
+        <% end %>
+
+        <%= if @external_image_data["source"] == "tmdb" && get_in(@external_image_data, ["metadata"]) do %>
+          <% metadata = @external_image_data["metadata"] %>
+          <div class="flex flex-col space-y-1">
+            <div>
+              "<%= metadata["title"] %>" (<%= format_tmdb_year(metadata["release_date"]) %>) -
+              <a
+                href={"https://www.themoviedb.org/#{metadata["type"]}/#{metadata["id"]}"}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="underline hover:text-gray-700 transition-colors"
+              >
+                View on TMDB
+              </a>
+            </div>
+            <div class="text-gray-400">
+              This product uses the TMDB API but is not endorsed or certified by TMDB.
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+    """
+  end
+
+  # Helper function to format TMDB release year
+  defp format_tmdb_year(nil), do: "N/A"
+  defp format_tmdb_year(""), do: "N/A"
+  defp format_tmdb_year(date_string) when is_binary(date_string) do
+    case String.split(date_string, "-") do
+      [year | _] -> year
+      _ -> "N/A"
+    end
+  end
+  defp format_tmdb_year(_), do: "N/A"
 
 end
