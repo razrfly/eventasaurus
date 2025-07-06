@@ -103,11 +103,20 @@ defmodule Eventasaurus.MixProject do
       test: ["test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind eventasaurus", "esbuild eventasaurus"],
-                  "assets.deploy": [
+      "assets.deploy": [
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
         "phx.digest",
-        "cmd find priv/static -type f ! -name '*.gz' ! -name 'cache_manifest.json' ! -name '*-????????????????????????????????.*' -delete"
+        "cmd bash -c \"
+          echo 'Cleaning up specific image files that cause duplication...'
+
+          # Only remove specific files that we know cause duplication issues
+          # Check for existence before deletion to avoid errors
+          [ -f 'priv/static/images/logos/general.png' ] && rm -f 'priv/static/images/logos/general.png'
+          [ -f 'priv/static/images/logos/general.webp' ] && rm -f 'priv/static/images/logos/general.webp'
+
+          echo 'Image cleanup completed'
+        \""
       ],
       "erd.gen.png": [
         "ecto.gen.erd",
