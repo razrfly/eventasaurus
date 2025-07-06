@@ -3445,7 +3445,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Lists all users with a specific status for an event.
 
-  Returns list of User structs with EventParticipant metadata.
+  Returns list of EventParticipant structs with preloaded users.
   Only accessible to event organizers.
   """
   def list_participants_by_status(%Event{} = event, status) when is_atom(status) do
@@ -3455,7 +3455,25 @@ defmodule EventasaurusApp.Events do
             order_by: [desc: ep.inserted_at]
 
     Repo.all(query)
-    |> Enum.map(& &1.user)
+  end
+
+  @doc """
+  Lists participants with a specific status for an event with pagination.
+
+  Returns list of EventParticipant structs with preloaded users.
+  Only accessible to event organizers.
+  """
+  def list_participants_by_status(%Event{} = event, status, page, per_page) when is_atom(status) and is_integer(page) and is_integer(per_page) do
+    offset = (page - 1) * per_page
+
+    query = from ep in EventParticipant,
+            where: ep.event_id == ^event.id and ep.status == ^status,
+            preload: [:user],
+            order_by: [desc: ep.inserted_at],
+            limit: ^per_page,
+            offset: ^offset
+
+    Repo.all(query)
   end
 
   @doc """
@@ -3606,6 +3624,7 @@ defmodule EventasaurusApp.Events do
   """
   def list_interested_users(%Event{} = event) do
     list_participants_by_status(event, :interested)
+    |> Enum.map(& &1.user)
   end
 
   @doc """

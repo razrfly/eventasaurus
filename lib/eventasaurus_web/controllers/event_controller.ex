@@ -812,46 +812,53 @@ defmodule EventasaurusWeb.EventController do
               if status in valid_statuses do
                 status_atom = String.to_atom(status)
 
-                # Parse pagination parameters
-                page = params |> Map.get("page", "1") |> String.to_integer()
-                per_page = params |> Map.get("per_page", "20") |> String.to_integer() |> min(100)
+                # Parse pagination parameters safely
+                with {:ok, page} <- safe_parse_integer(Map.get(params, "page", "1")),
+                     {:ok, per_page} <- safe_parse_integer(Map.get(params, "per_page", "20")) do
 
-                # Get participants by status
-                participants = Events.list_participants_by_status(event, status_atom)
-                total_count = length(participants)
+                  # Validate pagination parameters
+                  page = max(1, page)
+                  per_page = min(100, max(1, per_page))
 
-                # Simple pagination
-                start_index = (page - 1) * per_page
-                paginated_participants = participants
-                                      |> Enum.slice(start_index, per_page)
-                                      |> Enum.map(fn user ->
-                                        participant = Events.get_event_participant_by_event_and_user(event, user)
-                                        %{
-                                          id: user.id,
-                                          name: user.name,
-                                          email: user.email,
-                                          status: status,
-                                          updated_at: participant.updated_at,
-                                          metadata: participant.metadata
-                                        }
-                                      end)
+                  # Get total count for pagination
+                  total_count = Events.count_participants_by_status(event, status_atom)
+                  total_pages = ceil(total_count / per_page)
 
-                total_pages = ceil(total_count / per_page)
+                  # Get paginated participants directly from database
+                  participants = Events.list_participants_by_status(event, status_atom, page, per_page)
 
-                conn
-                |> json(%{
-                  success: true,
-                  data: %{
-                    participants: paginated_participants,
-                    status: status,
-                    pagination: %{
-                      current_page: page,
-                      total_pages: total_pages,
-                      total_count: total_count,
-                      per_page: per_page
+                  paginated_participants = participants
+                                        |> Enum.map(fn participant ->
+                                          %{
+                                            id: participant.user.id,
+                                            name: participant.user.name,
+                                            email: participant.user.email,
+                                            status: status,
+                                            updated_at: participant.updated_at,
+                                            metadata: participant.metadata
+                                          }
+                                        end)
+
+                  conn
+                  |> json(%{
+                    success: true,
+                    data: %{
+                      participants: paginated_participants,
+                      status: status,
+                      pagination: %{
+                        current_page: page,
+                        total_pages: total_pages,
+                        total_count: total_count,
+                        per_page: per_page
+                      }
                     }
-                  }
-                })
+                  })
+                else
+                  {:error, _} ->
+                    conn
+                    |> put_status(:bad_request)
+                    |> json(%{error: "Invalid pagination parameters. Please provide valid integers for 'page' and 'per_page'."})
+                end
               else
                 conn
                 |> put_status(:bad_request)
@@ -912,4 +919,14 @@ defmodule EventasaurusWeb.EventController do
         end
     end
   end
+
+  # Helper functions
+  defp safe_parse_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> {:ok, integer}
+      _ -> {:error, :invalid_integer}
+    end
+  end
+  defp safe_parse_integer(value) when is_integer(value), do: {:ok, value}
+  defp safe_parse_integer(_), do: {:error, :invalid_integer}
 end
