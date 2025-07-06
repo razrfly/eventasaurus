@@ -178,6 +178,13 @@ defmodule EventasaurusWeb.Router do
     post "/:slug/enable-ticketing", EventController, :enable_ticketing
     post "/:slug/add-details", EventController, :add_details
     post "/:slug/publish", EventController, :publish
+
+    # Generic participant status management API endpoints
+    put "/:slug/participant-status", EventController, :update_participant_status
+    delete "/:slug/participant-status", EventController, :remove_participant_status
+    get "/:slug/participant-status", EventController, :get_participant_status
+    get "/:slug/participants/:status", EventController, :list_participants_by_status
+    get "/:slug/participant-analytics", EventController, :participant_analytics
   end
 
   # Public ticket verification routes (no auth required)

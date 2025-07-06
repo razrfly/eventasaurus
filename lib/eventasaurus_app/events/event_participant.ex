@@ -5,7 +5,7 @@ defmodule EventasaurusApp.Events.EventParticipant do
 
   schema "event_participants" do
     field :role, Ecto.Enum, values: [:invitee, :poll_voter, :ticket_holder]
-    field :status, Ecto.Enum, values: [:pending, :accepted, :declined, :cancelled, :confirmed_with_order]
+    field :status, Ecto.Enum, values: [:pending, :accepted, :declined, :cancelled, :confirmed_with_order, :interested]
     field :source, :string
     field :metadata, :map
 

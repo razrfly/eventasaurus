@@ -1,6 +1,7 @@
 defmodule EventasaurusWeb.EventController do
   use EventasaurusWeb, :controller
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.EventParticipant
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Venues
 
@@ -620,4 +621,295 @@ defmodule EventasaurusWeb.EventController do
     Accounts.find_or_create_from_supabase(supabase_user)
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
+
+  ## Generic Participant Status Management API Actions
+
+  @doc """
+  Updates the current user's participant status for an event.
+
+  Expects a "status" parameter in the request body with a valid EventParticipant status:
+  "pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"
+  """
+  def update_participant_status(conn, %{"slug" => slug} = params) do
+    status = params["status"]
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            # Validate status is a valid EventParticipant status
+            valid_statuses = ["pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"]
+
+            if status in valid_statuses do
+              status_atom = String.to_atom(status)
+
+              case Events.update_participant_status(event, user, status_atom) do
+                {:ok, participant} ->
+                  count = Events.count_participants_by_status(event, status_atom)
+
+                  conn
+                  |> put_status(:ok)
+                  |> json(%{
+                    success: true,
+                    data: %{
+                      status: status,
+                      updated_at: participant.updated_at,
+                      event: %{
+                        slug: event.slug,
+                        participant_count: count
+                      }
+                    }
+                  })
+
+                {:error, changeset} ->
+                  conn
+                  |> put_status(:unprocessable_entity)
+                  |> json(%{error: "Unable to update participant status", details: format_changeset_errors(changeset)})
+              end
+            else
+              conn
+              |> put_status(:bad_request)
+              |> json(%{error: "Invalid status. Valid statuses are: #{Enum.join(valid_statuses, ", ")}"})
+            end
+
+          {:error, _} ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "Authentication required"})
+        end
+    end
+  end
+
+  @doc """
+  Removes the current user's participation status from an event.
+
+  Can optionally specify which status to remove via query parameter "status".
+  If no status specified, removes any participation record for the user.
+  """
+  def remove_participant_status(conn, %{"slug" => slug} = params) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            # Optional status filter for removal
+            status_filter = case params["status"] do
+              status when is_binary(status) -> String.to_atom(status)
+              _ -> nil
+            end
+
+            case Events.remove_participant_status(event, user, status_filter) do
+              {:ok, :removed} ->
+                conn
+                |> json(%{
+                  success: true,
+                  data: %{
+                    status: "removed",
+                    event: %{
+                      slug: event.slug
+                    }
+                  }
+                })
+
+              {:ok, :not_participant} ->
+                conn
+                |> json(%{
+                  success: true,
+                  data: %{
+                    status: "not_participant",
+                    event: %{
+                      slug: event.slug
+                    }
+                  }
+                })
+
+              {:error, reason} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "Unable to remove participant status", details: inspect(reason)})
+            end
+
+          {:error, _} ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "Authentication required"})
+        end
+    end
+  end
+
+  @doc """
+  Gets the current user's participant status for an event.
+  """
+  def get_participant_status(conn, %{"slug" => slug}) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            case Events.get_event_participant_by_event_and_user(event, user) do
+              %EventParticipant{status: status, metadata: metadata, updated_at: updated_at} ->
+                conn
+                |> json(%{
+                  success: true,
+                  data: %{
+                    status: Atom.to_string(status),
+                    updated_at: updated_at,
+                    metadata: metadata
+                  }
+                })
+
+              nil ->
+                conn
+                |> json(%{
+                  success: true,
+                  data: %{
+                    status: "not_participant",
+                    updated_at: nil,
+                    metadata: nil
+                  }
+                })
+            end
+
+          {:error, _} ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "Authentication required"})
+        end
+    end
+  end
+
+  @doc """
+  Lists participants by status for an event (organizers only).
+
+  The status is provided as a URL parameter, e.g., /events/my-event/participants/interested
+  """
+  def list_participants_by_status(conn, %{"slug" => slug, "status" => status} = params) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            if Events.user_can_manage_event?(user, event) do
+              # Validate status
+              valid_statuses = ["pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"]
+
+              if status in valid_statuses do
+                status_atom = String.to_atom(status)
+
+                # Parse pagination parameters
+                page = params |> Map.get("page", "1") |> String.to_integer()
+                per_page = params |> Map.get("per_page", "20") |> String.to_integer() |> min(100)
+
+                # Get participants by status
+                participants = Events.list_participants_by_status(event, status_atom)
+                total_count = length(participants)
+
+                # Simple pagination
+                start_index = (page - 1) * per_page
+                paginated_participants = participants
+                                      |> Enum.slice(start_index, per_page)
+                                      |> Enum.map(fn user ->
+                                        participant = Events.get_event_participant_by_event_and_user(event, user)
+                                        %{
+                                          id: user.id,
+                                          name: user.name,
+                                          email: user.email,
+                                          status: status,
+                                          updated_at: participant.updated_at,
+                                          metadata: participant.metadata
+                                        }
+                                      end)
+
+                total_pages = ceil(total_count / per_page)
+
+                conn
+                |> json(%{
+                  success: true,
+                  data: %{
+                    participants: paginated_participants,
+                    status: status,
+                    pagination: %{
+                      current_page: page,
+                      total_pages: total_pages,
+                      total_count: total_count,
+                      per_page: per_page
+                    }
+                  }
+                })
+              else
+                conn
+                |> put_status(:bad_request)
+                |> json(%{error: "Invalid status. Valid statuses are: #{Enum.join(valid_statuses, ", ")}"})
+              end
+            else
+              conn
+              |> put_status(:forbidden)
+              |> json(%{error: "You don't have permission to view this event's data"})
+            end
+
+          {:error, _} ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "Authentication required"})
+        end
+    end
+  end
+
+  @doc """
+  Gets participant analytics for an event (organizers only).
+
+  Returns statistics for all participant statuses.
+  """
+  def participant_analytics(conn, %{"slug" => slug}) do
+    case Events.get_event_by_slug(slug) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Event not found"})
+
+      event ->
+        case ensure_user_struct(conn.assigns.auth_user) do
+          {:ok, user} ->
+            if Events.user_can_manage_event?(user, event) do
+              analytics = Events.get_participant_analytics(event)
+
+              conn
+              |> json(%{
+                success: true,
+                data: %{
+                  analytics: analytics,
+                  trends: %{
+                    daily_changes: [] # Placeholder - can be enhanced with actual daily tracking
+                  }
+                }
+              })
+            else
+              conn
+              |> put_status(:forbidden)
+              |> json(%{error: "You don't have permission to view this event's data"})
+            end
+
+          {:error, _} ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "Authentication required"})
+        end
+    end
+  end
 end
