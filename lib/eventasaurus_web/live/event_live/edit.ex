@@ -533,11 +533,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
   def handle_event("select_default_image", params, socket) do
     %{"image_url" => image_url, "filename" => filename, "category" => category} = params
 
-    external_image_data = %{"source" => "default",
-                            "url" => image_url,
-                            "filename" => filename,
-                            "category" => category,
-                            "title" => String.replace(filename, ".png", "") |> String.replace("_", " ") |> String.split("-") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")}
+    external_image_data = %{
+      "id" => filename,
+      "url" => image_url,
+      "source" => "default",
+      "category" => category,
+      "metadata" => %{
+        "filename" => filename,
+        "category" => category,
+        "title" => String.replace(filename, ".png", "") |> String.replace("_", " ") |> String.split("-") |> Enum.map(&String.capitalize/1) |> Enum.join(" ")
+      }
+    }
 
     form_data =
       socket.assigns.form_data
@@ -612,9 +618,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
       end)
     end
 
+    # Ensure consistent structure for Unsplash data
+    external_image_data = %{
+      "id" => unsplash_data["id"],
+      "url" => cover_image_url,
+      "source" => "unsplash",
+      "metadata" => unsplash_data
+    }
+
     form_data =
       socket.assigns.form_data
-      |> Map.put("external_image_data", unsplash_data)
+      |> Map.put("external_image_data", external_image_data)
       |> Map.put("cover_image_url", cover_image_url)
 
     changeset =
@@ -627,16 +641,24 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
       |> assign(:cover_image_url, cover_image_url)
-      |> assign(:external_image_data, unsplash_data)
+      |> assign(:external_image_data, external_image_data)
       |> assign(:show_image_picker, false)
     }
   end
 
   @impl true
   def handle_event("image_selected", %{"cover_image_url" => cover_image_url, "tmdb_data" => tmdb_data}, socket) do
+    # Ensure consistent structure for TMDB data
+    external_image_data = %{
+      "id" => tmdb_data["id"],
+      "url" => cover_image_url,
+      "source" => "tmdb",
+      "metadata" => tmdb_data
+    }
+
     form_data =
       socket.assigns.form_data
-      |> Map.put("external_image_data", tmdb_data)
+      |> Map.put("external_image_data", external_image_data)
       |> Map.put("cover_image_url", cover_image_url)
 
     changeset =
@@ -649,7 +671,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
       |> assign(:cover_image_url, cover_image_url)
-      |> assign(:external_image_data, tmdb_data)
+      |> assign(:external_image_data, external_image_data)
       |> assign(:show_image_picker, false)
     }
   end
