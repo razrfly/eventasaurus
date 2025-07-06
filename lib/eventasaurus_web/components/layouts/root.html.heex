@@ -70,7 +70,7 @@
     <script src="https://js.stripe.com/v3/"></script>
     
     <!-- Alpine.js for interactive components -->
-    <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" integrity="sha384-Gw6PsBNTl99MjSPjggl7tihi3NsAc9wAHjk6S2q5P2YkjnGsOBYP7T2S2PqYnJyTe" crossorigin="anonymous"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" integrity="sha384-l8f0VcPi/M1iHPv8egOnY/15TDwqgbOR1anMIJWvU6nLRgZVLTLSaNqi/TOoT5Fh" crossorigin="anonymous"></script>
     
     <!-- Supabase configuration meta tags -->
     <meta name="supabase-url" content={supabase_url} />
@@ -101,7 +101,7 @@
 <% end %>      </script>
     <% else %>
       <script>
-        console.warn("PostHog API key not found - analytics will be disabled");
+        // PostHog disabled (no API key configured)
         window.POSTHOG_API_KEY = null;
       </script>
     <% end %>
@@ -140,9 +140,15 @@
     </script>
     
     <% maps_api_key = System.get_env("GOOGLE_MAPS_API_KEY") |> String.trim() %>
-    <script async defer
-      src={"https://maps.googleapis.com/maps/api/js?key=#{maps_api_key}&libraries=places&v=weekly&callback=initGoogleMaps"}
-      onerror="handleGoogleMapsError()">
+    <script>
+      (function() {
+        const script = document.createElement('script');
+        script.src = "https://maps.googleapis.com/maps/api/js?key=<%= maps_api_key %>&libraries=places&v=weekly&callback=initGoogleMaps&loading=async";
+        script.async = true;
+        script.defer = true;
+        script.onerror = handleGoogleMapsError;
+        document.head.appendChild(script);
+      })();
     </script>
 
     <!-- Mobile Navigation Script -->
