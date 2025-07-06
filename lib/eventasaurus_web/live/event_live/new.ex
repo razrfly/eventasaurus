@@ -620,7 +620,7 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_event("select_image", %{"source" => source, "image_url" => image_url, "image_data" => image_data} = params, socket) do
     external_data = %{
-      "id" => params["id"] || image_data["id"] || "unknown",
+      "id" => Map.get(params, "id") || Map.get(image_data, "id", "unknown_#{source}_#{System.unique_integer()}"),
       "url" => image_url,
       "source" => source,
       "metadata" => image_data
@@ -661,7 +661,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
     # Ensure consistent structure
     external_data = %{
-      "id" => image_data["id"] || "unknown",
+      "id" => Map.get(image_data, "id", "unknown_#{source}_#{System.unique_integer()}"),
       "url" => image_url,
       "source" => source,
       "metadata" => image_data
