@@ -107,21 +107,12 @@ defmodule Eventasaurus.MixProject do
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
         "phx.digest",
-        "cmd bash -c \"
-          echo 'Cleaning up specific image files that cause duplication...'
-
-          # Only remove specific files that we know cause duplication issues
-          # Check for existence before deletion to avoid errors
-          [ -f 'priv/static/images/logos/general.png' ] && rm -f 'priv/static/images/logos/general.png'
-          [ -f 'priv/static/images/logos/general.webp' ] && rm -f 'priv/static/images/logos/general.webp'
-
-          echo 'Image cleanup completed'
-        \""
+        "cmd find priv/static -type f ! -name '*.gz' ! -name 'cache_manifest.json' ! -name '*-????????????????????????????????.*' -delete"
       ],
       "erd.gen.png": [
         "ecto.gen.erd",
-        "cmd dot -Tpng ecto_erd.dot -o ecto_erd.png",
-        "cmd rm -f ecto_erd.dot ecto_erd.svg"
+        "cmd dot -Tpng eventasaurus.dot -o ecto_erd.png",
+        "cmd rm eventasaurus.dot"
       ],
       "currencies.refresh": ["currencies refresh"]
     ]
