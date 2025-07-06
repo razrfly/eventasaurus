@@ -779,8 +779,8 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   # Backward compatibility for old format without intended_status
   @impl true
-  def handle_info({:registration_success, type, _name, _email}, socket) do
-    handle_info({:registration_success, type, _name, _email, :accepted}, socket)
+  def handle_info({:registration_success, type, name, email}, socket) do
+    handle_info({:registration_success, type, name, email, :accepted}, socket)
   end
 
   @impl true
@@ -1761,30 +1761,6 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
-  # Helper function to format participant summary consistently
-  defp format_participant_summary(participants) when length(participants) <= 3 do
-    participants
-    |> Enum.filter(fn participant -> participant.user && participant.user.name end)
-    |> Enum.map(& &1.user.name)
-    |> Enum.join(", ")
-  end
 
-  defp format_participant_summary(participants) do
-    # Take first 3 for consistency instead of random selection
-    valid_participants = Enum.filter(participants, fn participant ->
-      participant.user && participant.user.name
-    end)
-
-    shown_participants = Enum.take(valid_participants, 3)
-    remaining_count = length(valid_participants) - 3
-
-    names = shown_participants |> Enum.map(& &1.user.name) |> Enum.join(", ")
-
-    if remaining_count > 0 do
-      "#{names} and #{remaining_count} others"
-    else
-      names
-    end
-  end
 
 end

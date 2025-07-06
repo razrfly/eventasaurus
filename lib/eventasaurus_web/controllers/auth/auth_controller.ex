@@ -452,9 +452,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   # ============ PRIVATE FUNCTIONS ============
 
-  @doc """
-  Handle post-authentication actions like processing pending interest registrations.
-  """
+  # Handle post-authentication actions like processing pending interest registrations.
   defp handle_post_auth_actions(conn, access_token) do
     try do
       # Get user data from access token
@@ -481,9 +479,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
     end
   end
 
-  @doc """
-  Process pending interest registration for a user after successful authentication.
-  """
+  # Process pending interest registration for a user after successful authentication.
   defp process_pending_interest(conn, access_token, event_id) do
     try do
       # First ensure the user is synced with local database
@@ -520,9 +516,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
     end
   end
 
-  @doc """
-  Register a user's interest in an event using the participant API.
-  """
+  # Register a user's interest in an event using the participant API.
   defp register_user_interest(user_id, event_id) do
     try do
       # Parse event_id to integer if it's a string
@@ -554,9 +548,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
      end
    end
 
-   @doc """
-   Handle redirect after successful authentication, considering if interest was just registered.
-   """
+   # Handle redirect after successful authentication, considering if interest was just registered.
    defp handle_auth_redirect(conn) do
      cond do
        # User just registered interest - redirect back to event
