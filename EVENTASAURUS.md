@@ -28,7 +28,7 @@ Event management platform built with Phoenix LiveView.
    # Add these to your shell profile (e.g., ~/.zshrc)
    # Required for development with Supabase
    export SUPABASE_URL=http://127.0.0.1:54321
-   export SUPABASE_API_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   export SUPABASE_API_KEY=12345
    export SUPABASE_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
    
    # Optional: Stripe configuration for currency management
