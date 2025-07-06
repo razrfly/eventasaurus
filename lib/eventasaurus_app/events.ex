@@ -3353,6 +3353,282 @@ defmodule EventasaurusApp.Events do
     end
   end
 
+  # Generic Participant Status Management Functions
 
+  @doc """
+  Updates a user's participant status for an event.
+
+  Creates or updates an EventParticipant record with the specified status.
+  If participant already exists with different status, updates to new status.
+  If already has target status, returns existing record.
+
+  Valid statuses: :pending, :accepted, :declined, :cancelled, :confirmed_with_order, :interested
+
+  Returns:
+  - {:ok, participant} - User status updated successfully
+  - {:error, changeset} - Validation failed
+  """
+  def update_participant_status(%Event{} = event, %User{} = user, status) when is_atom(status) do
+    case get_event_participant_by_event_and_user(event, user) do
+      nil ->
+        # Create new participant with specified status
+        create_event_participant(%{
+          event_id: event.id,
+          user_id: user.id,
+          role: :invitee,
+          status: status,
+          metadata: %{
+            "#{status}_at" => DateTime.utc_now(),
+            source: "api"
+          }
+        })
+
+      existing_participant ->
+        # Update existing participant to new status
+        update_event_participant(existing_participant, %{
+          status: status,
+          metadata: Map.merge(existing_participant.metadata || %{}, %{
+            "#{status}_at" => DateTime.utc_now(),
+            previous_status: existing_participant.status
+          })
+        })
+    end
+  end
+
+  @doc """
+  Removes a user's participation status from an event.
+
+  If status_filter is provided, only removes if user has that specific status.
+  If status_filter is nil, removes any participation record.
+
+  Returns:
+  - {:ok, :removed} - Participation successfully removed
+  - {:ok, :not_participant} - User was not a participant (or didn't have specified status)
+  - {:error, reason} - Delete operation failed
+  """
+  def remove_participant_status(%Event{} = event, %User{} = user, status_filter \\ nil) do
+    case get_event_participant_by_event_and_user(event, user) do
+      %EventParticipant{status: current_status} = participant ->
+        should_remove = case status_filter do
+          nil -> true  # Remove any participation
+          ^current_status -> true  # Status matches filter
+          _ -> false  # Status doesn't match filter
+        end
+
+        if should_remove do
+          case delete_event_participant(participant) do
+            {:ok, _} -> {:ok, :removed}
+            {:error, reason} -> {:error, reason}
+          end
+        else
+          {:ok, :not_participant}
+        end
+
+      nil ->
+        # User not a participant
+        {:ok, :not_participant}
+    end
+  end
+
+  @doc """
+  Checks if a user has a specific status for an event.
+
+  Returns true if user has EventParticipant record with the specified status.
+  """
+  def user_has_status?(%Event{} = event, %User{} = user, status) when is_atom(status) do
+    case get_event_participant_by_event_and_user(event, user) do
+      %EventParticipant{status: ^status} -> true
+      _ -> false
+    end
+  end
+
+  @doc """
+  Lists all users with a specific status for an event.
+
+  Returns list of User structs with EventParticipant metadata.
+  Only accessible to event organizers.
+  """
+  def list_participants_by_status(%Event{} = event, status) when is_atom(status) do
+    query = from ep in EventParticipant,
+            where: ep.event_id == ^event.id and ep.status == ^status,
+            preload: [:user],
+            order_by: [desc: ep.inserted_at]
+
+    Repo.all(query)
+    |> Enum.map(& &1.user)
+  end
+
+  @doc """
+  Counts users with a specific status for an event.
+
+  Returns integer count of participants with the specified status.
+  """
+  def count_participants_by_status(%Event{} = event, status) when is_atom(status) do
+    from(ep in EventParticipant,
+      where: ep.event_id == ^event.id and ep.status == ^status,
+      select: count(ep.id)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Gets comprehensive participant analytics for an event.
+
+  Returns map with counts for all participant statuses and overall statistics.
+  Only accessible to event organizers.
+  """
+  def get_participant_analytics(%Event{} = event) do
+    # Get counts for all possible statuses
+    status_counts = from(ep in EventParticipant,
+      where: ep.event_id == ^event.id,
+      group_by: ep.status,
+      select: {ep.status, count(ep.id)}
+    )
+    |> Repo.all()
+    |> Enum.into(%{})
+
+    # Calculate totals
+    total_participants = Enum.sum(Map.values(status_counts))
+
+    # Build comprehensive analytics
+    %{
+      status_counts: %{
+        pending: Map.get(status_counts, :pending, 0),
+        accepted: Map.get(status_counts, :accepted, 0),
+        declined: Map.get(status_counts, :declined, 0),
+        cancelled: Map.get(status_counts, :cancelled, 0),
+        confirmed_with_order: Map.get(status_counts, :confirmed_with_order, 0),
+        interested: Map.get(status_counts, :interested, 0)
+      },
+      total_participants: total_participants,
+      engagement_metrics: %{
+        response_rate: calculate_response_rate(status_counts),
+        conversion_rate: calculate_conversion_rate(status_counts),
+        interest_ratio: calculate_interest_ratio(status_counts, total_participants)
+      }
+    }
+  end
+
+  # Helper functions for analytics calculations
+  defp calculate_response_rate(status_counts) do
+    responded = (status_counts[:accepted] || 0) + (status_counts[:declined] || 0)
+    total = Enum.sum(Map.values(status_counts))
+    if total > 0, do: responded / total, else: 0
+  end
+
+  defp calculate_conversion_rate(status_counts) do
+    converted = (status_counts[:accepted] || 0) + (status_counts[:confirmed_with_order] || 0)
+    total = Enum.sum(Map.values(status_counts))
+    if total > 0, do: converted / total, else: 0
+  end
+
+  defp calculate_interest_ratio(status_counts, total_participants) do
+    interested = status_counts[:interested] || 0
+    if total_participants > 0, do: interested / total_participants, else: 0
+  end
+
+  # LiveView Support Functions
+
+  @doc """
+  Gets a user's current participant status for an event.
+
+  Returns the status atom or nil if not a participant.
+  """
+  def get_user_participant_status(%Event{} = event, %User{} = user) do
+    case get_event_participant_by_event_and_user(event, user) do
+      nil -> nil
+      participant -> participant.status
+    end
+  end
+
+  @doc """
+  Updates a user's participant status for an event.
+
+  If the user is not already a participant, creates a new participant record.
+  If the user is already a participant, updates their status.
+  """
+  def update_user_participant_status(%Event{} = event, %User{} = user, status) do
+    update_participant_status(event, user, status)
+  end
+
+  @doc """
+  Removes a user's participant status for an event.
+
+  Deletes the participant record entirely.
+  """
+  def remove_user_participant_status(%Event{} = event, %User{} = user) do
+    case remove_participant_status(event, user) do
+      {:ok, :removed} -> {:ok, :removed}
+      {:ok, :not_participant} -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Legacy wrapper functions for backward compatibility
+  @doc """
+  Legacy wrapper for mark_user_interested/2.
+  Use update_participant_status/3 instead.
+  """
+  def mark_user_interested(%Event{} = event, %User{} = user) do
+    update_participant_status(event, user, :interested)
+  end
+
+  @doc """
+  Legacy wrapper for remove_user_interest/2.
+  Use remove_participant_status/3 instead.
+  """
+  def remove_user_interest(%Event{} = event, %User{} = user) do
+    remove_participant_status(event, user, :interested)
+  end
+
+  @doc """
+  Legacy wrapper for user_is_interested?/2.
+  Use user_has_status/3 instead.
+  """
+  def user_is_interested?(%Event{} = event, %User{} = user) do
+    user_has_status?(event, user, :interested)
+  end
+
+  @doc """
+  Legacy wrapper for get_user_interest_status/2.
+  Returns participant status or :not_participant.
+  """
+  def get_user_interest_status(%Event{} = event, %User{} = user) do
+    case get_event_participant_by_event_and_user(event, user) do
+      %EventParticipant{status: status} -> status
+      nil -> :not_participant
+    end
+  end
+
+  @doc """
+  Legacy wrapper for list_interested_users/1.
+  Use list_participants_by_status/2 instead.
+  """
+  def list_interested_users(%Event{} = event) do
+    list_participants_by_status(event, :interested)
+  end
+
+  @doc """
+  Legacy wrapper for count_interested_users/1.
+  Use count_participants_by_status/2 instead.
+  """
+  def count_interested_users(%Event{} = event) do
+    count_participants_by_status(event, :interested)
+  end
+
+  @doc """
+  Legacy wrapper for get_event_interest_stats/1.
+  Use get_participant_analytics/1 instead.
+  """
+  def get_event_interest_stats(%Event{} = event) do
+    analytics = get_participant_analytics(event)
+
+    %{
+      interested_count: analytics.status_counts.interested,
+      total_participants: analytics.total_participants,
+      interest_ratio: analytics.engagement_metrics.interest_ratio,
+      conversion_potential: analytics.status_counts.interested
+    }
+  end
 
 end

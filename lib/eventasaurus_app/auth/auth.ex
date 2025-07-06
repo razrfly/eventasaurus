@@ -213,6 +213,18 @@ defmodule EventasaurusApp.Auth do
     end
   end
 
+  @doc """
+  Send a magic link to the provided email address.
+
+  This automatically creates a user if they don't exist and sends
+  a magic link for passwordless authentication.
+
+  Returns `{:ok, response}` on success or `{:error, reason}` on failure.
+  """
+  def send_magic_link(email, user_metadata \\ %{}) do
+    Client.sign_in_with_otp(email, user_metadata)
+  end
+
   # Helper function to extract the token from different formats
   defp extract_token(auth_data) do
     cond do
