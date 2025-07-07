@@ -79,4 +79,11 @@
   editing_ticket_id={@editing_ticket_id}
   show_additional_options={@show_additional_options}
   on_close={JS.push("close_ticket_modal")}
+/>
+
+<.live_component
+  module={RichDataImportModal}
+  id="rich-data-import-modal"
+  show={@show_rich_data_import}
+  on_close="close_rich_data_import"
 /> 
