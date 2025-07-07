@@ -1048,7 +1048,7 @@ defmodule EventasaurusWeb.PublicEventLive do
       <% end %>
     <% end %>
 
-    <div class="container mx-auto px-4 sm:px-6 py-6 sm:py-12 max-w-7xl">
+    <div class="container mx-auto px-4 sm:px-6 py-3 sm:py-6 max-w-7xl">
       <div class="event-page-grid grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-12">
         <div class="main-content lg:col-span-2">
 
@@ -1067,32 +1067,28 @@ defmodule EventasaurusWeb.PublicEventLive do
                 <% end %>
 
                 <!-- When Section -->
-                <div class="mb-3">
-                  <h3 class="font-semibold text-gray-900 mb-1">When</h3>
-                  <div class="text-gray-700">
-                    <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%a, %b %d") %>
-                    <%= if @event.ends_at do %>
-                      · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %> - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
-                    <% else %>
-                      · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
-                    <% end %>
-                    <span class="text-gray-500"><%= @event.timezone %></span>
+                <div class="flex items-start gap-3 mb-3">
+                  <div class="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <.icon name="hero-calendar-days" class="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900 mb-1">When</h3>
+                    <div class="text-gray-700">
+                      <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%a, %b %d") %>
+                      <%= if @event.ends_at do %>
+                        · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(~r/\b0(\d)/, "\\1") %> - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(~r/\b0(\d)/, "\\1") %>
+                      <% else %>
+                        · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(~r/\b0(\d)/, "\\1") %>
+                      <% end %>
+                      <span class="text-gray-500"><%= @event.timezone %></span>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Where Section -->
-                <div class="flex items-start gap-3">
-                  <div class="flex-shrink-0">
-                    <%= if @event.venue_id == nil do %>
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    <% else %>
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    <% end %>
+                <div class="flex items-start gap-3 mb-3">
+                  <div class="flex-shrink-0 w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <.icon name="hero-map-pin" class="w-4 h-4 text-green-600" />
                   </div>
                   <div>
                     <h3 class="font-semibold text-gray-900 mb-1">Where</h3>
@@ -1100,11 +1096,37 @@ defmodule EventasaurusWeb.PublicEventLive do
                       <p class="text-gray-700">Virtual Event</p>
                     <% else %>
                       <%= if @venue do %>
-                        <p class="text-gray-700"><%= @venue.address %></p>
+                        <div class="text-gray-700">
+                          <div><%= @venue.name %></div>
+                          <div class="text-sm text-gray-600"><%= @venue.address %></div>
+                        </div>
                       <% else %>
                         <p class="text-gray-600">Location details not available</p>
                       <% end %>
                     <% end %>
+                  </div>
+                </div>
+
+                <!-- Event Type Section -->
+                <div class="flex items-start gap-3 mb-3">
+                  <div class="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <.icon name="hero-ticket" class="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900 mb-1">Event</h3>
+                    <div class="text-gray-700">
+                      <%= case @event.taxation_type do %>
+                        <% "ticketed_event" -> %>
+                          <div>Ticketed Event</div>
+                          <div class="text-sm text-gray-600">Requires ticket purchase</div>
+                        <% "contribution_collection" -> %>
+                          <div>Contribution Collection</div>
+                          <div class="text-sm text-gray-600">Free with optional contributions</div>
+                        <% _ -> %>
+                          <div>Free Event</div>
+                          <div class="text-sm text-gray-600">Free registration</div>
+                      <% end %>
+                    </div>
                   </div>
                 </div>
               </div>
