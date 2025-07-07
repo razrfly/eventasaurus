@@ -99,7 +99,12 @@ defmodule EventasaurusWeb.PublicEventLive do
 
           # Use movie backdrop as social image if available, otherwise use default
           social_image_url = if event.rich_external_data && event.rich_external_data["metadata"] && event.rich_external_data["metadata"]["backdrop_path"] do
-            EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(event.rich_external_data["metadata"]["backdrop_path"], "w1280")
+            backdrop_path = event.rich_external_data["metadata"]["backdrop_path"]
+            if is_binary(backdrop_path) && backdrop_path != "" do
+              EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(backdrop_path, "w1280")
+            else
+              social_card_url(socket, event)
+            end
           else
             social_card_url(socket, event)
           end
@@ -1728,7 +1733,12 @@ defmodule EventasaurusWeb.PublicEventLive do
 
     <!-- Structured Data for SEO -->
     <script type="application/ld+json">
-      <%= raw Jason.encode!(@structured_data) %>
+      <%= case Jason.encode(@structured_data) do %>
+        <% {:ok, json} -> %>
+          <%= raw json %>
+        <% {:error, _reason} -> %>
+          <!-- Structured data encoding failed -->
+      <% end %>
     </script>
 
          <script>

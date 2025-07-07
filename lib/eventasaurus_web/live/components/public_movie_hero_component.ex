@@ -12,6 +12,13 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
 
   @impl true
   def update(assigns, socket) do
+    required_keys = [:rich_data, :event]
+    missing_keys = required_keys -- Map.keys(assigns)
+
+    if missing_keys != [] do
+      raise ArgumentError, "Missing required assigns: #{inspect(missing_keys)}"
+    end
+
     {:ok,
      socket
      |> assign(assigns)

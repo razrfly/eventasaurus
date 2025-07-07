@@ -94,24 +94,16 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
   end
 
   @impl true
-  def handle_event("scroll_left", _params, socket) do
-    {:noreply,
-     socket
-     |> push_event("scroll_cast_carousel", %{
-       target: "cast-carousel-#{socket.assigns.id}",
-       direction: "left",
-       amount: 300
-     })}
-  end
+  def handle_event("scroll_" <> direction, _params, socket) when direction in ["left", "right"] do
+    # Calculate scroll amount based on viewport or make it configurable
+    scroll_amount = socket.assigns[:scroll_amount] || 300
 
-  @impl true
-  def handle_event("scroll_right", _params, socket) do
     {:noreply,
      socket
      |> push_event("scroll_cast_carousel", %{
        target: "cast-carousel-#{socket.assigns.id}",
-       direction: "right",
-       amount: 300
+       direction: direction,
+       amount: scroll_amount
      })}
   end
 
