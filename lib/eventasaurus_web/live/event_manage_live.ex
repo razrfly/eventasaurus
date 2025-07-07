@@ -628,7 +628,7 @@ defmodule EventasaurusWeb.EventManageLive do
       # Prevent user from removing themselves
       {:noreply, put_flash(socket, :error, "You cannot remove yourself as an organizer.")}
     else
-      case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id_int) do
+      case EventasaurusApp.Accounts.get_user(user_id_int) do
         nil ->
           {:noreply, put_flash(socket, :error, "User not found.")}
 
@@ -654,28 +654,61 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_info(:refresh_analytics, socket) do
-    # Periodic refresh of analytics data
-    analytics_data = fetch_analytics_data(socket.assigns.event.id)
-
-    # Schedule next refresh
-    Process.send_after(self(), :refresh_analytics, 300_000) # 5 minutes
+    event = socket.assigns.event
+    analytics_data = fetch_analytics_data(event.id)
 
     {:noreply,
      socket
-     |> assign(:analytics_data, analytics_data)}
+     |> assign(:analytics, analytics_data)}
   end
 
   @impl true
   def handle_info({:search_users_for_organizers, query}, socket) do
-    handle_search_users(socket, query, :initial)
+    handle_user_search(socket, query, :initial)
   end
 
   @impl true
   def handle_info({:search_users_for_organizers, query, :load_more}, socket) do
-    handle_search_users(socket, query, :load_more)
+    handle_user_search(socket, query, :load_more)
   end
 
-  defp handle_search_users(socket, query, mode) do
+  @impl true
+  def handle_info(:load_historical_suggestions, socket) do
+    event = socket.assigns.event
+    organizer = socket.assigns.user
+
+    try do
+      # Get current participants' user IDs to exclude them from suggestions
+      current_participant_user_ids = socket.assigns.participants
+                                   |> Enum.map(& &1.user_id)
+
+      # Get historical participants using our guest invitation module
+      suggestions = Events.get_participant_suggestions(organizer,
+        exclude_event_ids: [event.id],
+        exclude_user_ids: current_participant_user_ids,
+        limit: 20
+      )
+
+      {:noreply,
+       socket
+       |> assign(:historical_suggestions, suggestions)
+       |> assign(:suggestions_loading, false)}
+    rescue
+      error ->
+        require Logger
+        Logger.error("Guest invitation modal crashed while loading suggestions: #{inspect(error)}")
+        Logger.error("Stacktrace: #{Exception.format_stacktrace(__STACKTRACE__)}")
+        Logger.error("Socket assigns: event=#{event.id}, user=#{organizer.id}")
+
+        {:noreply,
+         socket
+         |> assign(:historical_suggestions, [])
+         |> assign(:suggestions_loading, false)
+         |> put_flash(:error, "Failed to load suggestions")}
+    end
+  end
+
+  defp handle_user_search(socket, query, mode) do
     event = socket.assigns.event
     current_user = socket.assigns.user
 
@@ -747,44 +780,6 @@ defmodule EventasaurusWeb.EventManageLive do
          |> assign(:organizer_search_total_shown, 0)}
     end
   end
-
-  @impl true
-  def handle_info(:load_historical_suggestions, socket) do
-    event = socket.assigns.event
-    organizer = socket.assigns.user
-
-    try do
-      # Get current participants' user IDs to exclude them from suggestions
-      current_participant_user_ids = socket.assigns.participants
-                                   |> Enum.map(& &1.user_id)
-
-      # Get historical participants using our guest invitation module
-      suggestions = Events.get_participant_suggestions(organizer,
-        exclude_event_ids: [event.id],
-        exclude_user_ids: current_participant_user_ids,
-        limit: 20
-      )
-
-      {:noreply,
-       socket
-       |> assign(:historical_suggestions, suggestions)
-       |> assign(:suggestions_loading, false)}
-    rescue
-      error ->
-        require Logger
-        Logger.error("Guest invitation modal crashed while loading suggestions: #{inspect(error)}")
-        Logger.error("Stacktrace: #{Exception.format_stacktrace(__STACKTRACE__)}")
-        Logger.error("Socket assigns: event=#{event.id}, user=#{organizer.id}")
-
-        {:noreply,
-         socket
-         |> assign(:historical_suggestions, [])
-         |> assign(:suggestions_loading, false)
-         |> put_flash(:error, "Failed to load suggestions")}
-    end
-  end
-
-
 
   # Helper functions
 

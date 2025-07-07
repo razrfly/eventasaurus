@@ -154,11 +154,12 @@ defmodule EventasaurusWeb.UserSearchController do
       })
 
     rescue
-      error ->
+      e in [Ecto.QueryError, DBConnection.ConnectionError] ->
         Logger.error("User search failed",
           query: query,
           user_id: current_user.id,
-          error: inspect(error)
+          error: Exception.message(e),
+          stacktrace: __STACKTRACE__
         )
 
         conn
