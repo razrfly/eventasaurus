@@ -249,6 +249,14 @@
         </div>
       </div>
 
+      <!-- Rich Data Display for Movies/TV Shows -->
+      <%= if @event.rich_external_data && (@event.rich_external_data["type"] == "movie" || @event.rich_external_data["type"] == :movie) do %>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-6">Movie Details</h3>
+          <.movie_rich_data_display rich_data={@event.rich_external_data} />
+        </div>
+      <% end %>
+
       <!-- Guests Section (when there are participants) -->
       <%= if @participants && length(@participants) > 0 do %>
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
