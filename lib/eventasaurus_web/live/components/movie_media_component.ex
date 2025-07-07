@@ -112,7 +112,10 @@ defmodule EventasaurusWeb.Live.Components.MovieMediaComponent do
   def handle_event("open_image_modal", %{"index" => index}, socket) do
     # This would typically open a modal or lightbox
     # For now, we'll just track the selected image
-    {:noreply, assign(socket, :selected_image_index, String.to_integer(index))}
+    case Integer.parse(index) do
+      {idx, _} -> {:noreply, assign(socket, :selected_image_index, idx)}
+      :error -> {:noreply, socket}
+    end
   end
 
   # Private function components
@@ -121,7 +124,7 @@ defmodule EventasaurusWeb.Live.Components.MovieMediaComponent do
     ~H"""
     <div class="relative group">
       <div class="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
-        <%= if @video["key"] do %>
+        <%= if @video["key"] && get_video_thumbnail(@video) do %>
           <img
             src={get_video_thumbnail(@video)}
             alt={@video["name"]}

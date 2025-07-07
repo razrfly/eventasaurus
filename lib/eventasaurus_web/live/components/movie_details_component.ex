@@ -63,7 +63,7 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
               <div>
                 <dt class="text-sm font-medium text-gray-500">Languages</dt>
                 <dd class="text-sm text-gray-900">
-                  <%= @spoken_languages |> Enum.map(& &1["english_name"]) |> Enum.join(", ") %>
+                  <%= @spoken_languages |> Enum.map(& &1["english_name"]) |> Enum.reject(&is_nil/1) |> Enum.join(", ") %>
                 </dd>
               </div>
             <% end %>
@@ -117,7 +117,7 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
                 <%= if company["logo_path"] do %>
                   <img
                     src={RichDataDisplayComponent.tmdb_image_url(company["logo_path"], "w200")}
-                    alt={company["name"]}
+                    alt={company["name"] || "Company Logo"}
                     class="h-12 w-auto mx-auto mb-2 object-contain"
                     loading="lazy"
                   />
@@ -126,7 +126,7 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
                     <.icon name="hero-building-office" class="h-6 w-6 text-gray-400" />
                   </div>
                 <% end %>
-                <p class="text-xs text-gray-600 line-clamp-2"><%= company["name"] %></p>
+                <p class="text-xs text-gray-600 line-clamp-2"><%= company["name"] || "Unknown Company" %></p>
               </div>
             <% end %>
           </div>

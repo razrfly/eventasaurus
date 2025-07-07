@@ -348,6 +348,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   end
 
   defp build_tmdb_url(%{tmdb_id: id, type: :movie}), do: "https://www.themoviedb.org/movie/#{id}"
+  defp build_tmdb_url(%{tmdb_id: id, type: :tv}), do: "https://www.themoviedb.org/tv/#{id}"
   defp build_tmdb_url(%{tmdb_id: id, name: _}), do: "https://www.themoviedb.org/tv/#{id}"
   defp build_tmdb_url(%{tmdb_id: id}), do: "https://www.themoviedb.org/movie/#{id}"
 
