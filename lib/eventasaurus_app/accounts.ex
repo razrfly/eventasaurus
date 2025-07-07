@@ -155,6 +155,133 @@ defmodule EventasaurusApp.Accounts do
 
   def find_or_create_guest_user(_), do: {:error, :invalid_email}
 
+  @doc """
+  Searches for users that can be added as event organizers.
+
+  Searches by name, username, or email and only returns users with public profiles
+  unless the searcher has admin privileges for the event. Supports pagination and
+  limits results for performance and privacy.
+
+  ## Parameters
+  - query: String to search for in name, username, or email
+  - opts: Keyword list with options
+    - :limit - Maximum results to return (default: 20, max: 50)
+    - :offset - Number of records to skip for pagination (default: 0)
+    - :exclude_user_id - User ID to exclude from results (typically the searcher)
+    - :include_private - Whether to include users with private profiles (default: false)
+    - :event_id - Event ID to provide context for filtering (excludes existing organizers)
+    - :requesting_user_id - User ID of the person making the request (for permission checking)
+
+  ## Examples
+      iex> search_users_for_organizers("john")
+      [%User{name: "John Doe", username: "johndoe"}, ...]
+
+      iex> search_users_for_organizers("john", limit: 10, exclude_user_id: 5, event_id: 123)
+      [%User{name: "John Smith", username: "johnsmith"}, ...]
+  """
+  def search_users_for_organizers(query, opts \\ []) when is_binary(query) do
+    limit = Keyword.get(opts, :limit, 20) |> min(50)  # Cap at 50 for performance
+    offset = Keyword.get(opts, :offset, 0)
+    exclude_user_id = Keyword.get(opts, :exclude_user_id)
+    include_private = Keyword.get(opts, :include_private, false)
+    event_id = Keyword.get(opts, :event_id)
+    requesting_user_id = Keyword.get(opts, :requesting_user_id)
+
+    # Sanitize query - remove extra whitespace and limit length
+    clean_query = query |> String.trim() |> String.slice(0, 100)
+
+    # Return empty if query too short to avoid expensive searches
+    if String.length(clean_query) < 2 do
+      []
+    else
+      search_pattern = "%#{clean_query}%"
+
+      base_query = from u in User,
+        where: (
+          ilike(u.name, ^search_pattern) or
+          ilike(u.username, ^search_pattern) or
+          ilike(u.email, ^search_pattern)
+        ),
+        limit: ^limit,
+        offset: ^offset,
+        order_by: [
+          # Prioritize exact username matches, then name matches
+          desc: fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.username, ^clean_query),
+          desc: fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.name, ^clean_query),
+          asc: u.name
+        ],
+        select: %{
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          email: u.email,
+          profile_public: u.profile_public
+        }
+
+      # Add privacy filter - include private profiles if user can manage the event
+      query_with_privacy = if include_private or can_see_private_profiles?(requesting_user_id, event_id) do
+        base_query
+      else
+        from u in base_query, where: u.profile_public == true
+      end
+
+      # Exclude users who are already organizers of this event
+      query_with_event_filter = if event_id do
+        from u in query_with_privacy,
+          left_join: eu in EventasaurusApp.Events.EventUser,
+          on: eu.user_id == u.id and eu.event_id == ^event_id,
+          where: is_nil(eu.id)
+      else
+        query_with_privacy
+      end
+
+      # Exclude specific user if provided
+      final_query = if exclude_user_id do
+        from u in query_with_event_filter, where: u.id != ^exclude_user_id
+      else
+        query_with_event_filter
+      end
+
+      Repo.all(final_query)
+    end
+  end
+
+  # Helper function to determine if user can see private profiles
+  defp can_see_private_profiles?(requesting_user_id, event_id) do
+    # If no event context, can't see private profiles
+    if is_nil(requesting_user_id) or is_nil(event_id) do
+      false
+    else
+      # Check if requesting user can manage the event
+      case get_user(requesting_user_id) do
+        %User{} = user ->
+          case EventasaurusApp.Events.get_event(event_id) do
+            %EventasaurusApp.Events.Event{} = event ->
+              EventasaurusApp.Events.user_can_manage_event?(user, event)
+            _ -> false
+          end
+        _ -> false
+      end
+    end
+  end
+
+  @doc """
+  Returns the safe public fields that can be exposed in search results.
+  This provides explicit control over data exposure to prevent accidentally
+  leaking sensitive information.
+  """
+  def safe_public_fields do
+    [:id, :name, :username, :profile_public]
+  end
+
+  @doc """
+  Returns the safe public fields plus email for authorized contexts.
+  Only use when the requester has proper authorization.
+  """
+  def safe_public_fields_with_email do
+    safe_public_fields() ++ [:email]
+  end
+
   # Helper function to extract name from email consistently
   defp extract_name_from_email(email) when is_binary(email) do
     email
