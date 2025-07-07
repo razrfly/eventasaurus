@@ -10,7 +10,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.ReservedSlugs
-  alias EventasaurusWeb.Components.RichDataDisplayComponent
+
 
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
 
@@ -96,8 +96,31 @@ defmodule EventasaurusWeb.PublicEventLive do
 
           # Prepare meta tag data for social sharing
           event_url = url(socket, ~p"/#{event.slug}")
-          social_image_url = social_card_url(socket, event)
-          description = truncate_description(event.description || "Join us for #{event.title}")
+
+          # Use movie backdrop as social image if available, otherwise use default
+          social_image_url = if event.rich_external_data && event.rich_external_data["metadata"] && event.rich_external_data["metadata"]["backdrop_path"] do
+            EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(event.rich_external_data["metadata"]["backdrop_path"], "w1280")
+          else
+            social_card_url(socket, event)
+          end
+
+          # Enhanced description with movie data
+          description = if event.rich_external_data && event.rich_external_data["title"] do
+            movie_title = event.rich_external_data["title"]
+            movie_overview = event.rich_external_data["metadata"]["overview"]
+
+            base_description = event.description || "Join us for #{event.title}"
+            movie_description = if movie_overview && String.length(movie_overview) > 0 do
+              truncated_overview = String.slice(movie_overview, 0, 200)
+              if String.length(movie_overview) > 200, do: truncated_overview <> "...", else: truncated_overview
+            else
+              "A special screening of #{movie_title}"
+            end
+
+            "#{base_description} - #{movie_description}"
+          else
+            truncate_description(event.description || "Join us for #{event.title}")
+          end
 
           {:ok,
            socket
@@ -129,6 +152,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:meta_description, description)
            |> assign(:meta_image, social_image_url)
            |> assign(:meta_url, event_url)
+           |> assign(:structured_data, generate_structured_data(event, event_url))
            # Track event page view
            |> push_event("track_event", %{
                event: "event_page_viewed",
@@ -1702,6 +1726,11 @@ defmodule EventasaurusWeb.PublicEventLive do
       />
     <% end %>
 
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+      <%= raw Jason.encode!(@structured_data) %>
+    </script>
+
          <script>
        // Simple clipboard functionality
        document.getElementById('copy-link-btn').addEventListener('click', function() {
@@ -1796,6 +1825,72 @@ defmodule EventasaurusWeb.PublicEventLive do
       });
     </script>
     """
+  end
+
+  # Helper function to generate structured data (JSON-LD) for SEO
+  defp generate_structured_data(event, event_url) do
+    base_schema = %{
+      "@context" => "https://schema.org",
+      "@type" => "Event",
+      "name" => event.title,
+      "startDate" => event.start_at,
+      "endDate" => event.ends_at,
+      "url" => event_url,
+      "description" => event.description,
+      "eventStatus" => "https://schema.org/EventScheduled"
+    }
+
+    # Add movie schema if TMDB data is available
+    if event.rich_external_data && event.rich_external_data["title"] && event.rich_external_data["type"] == "movie" do
+      movie_data = event.rich_external_data
+      metadata = movie_data["metadata"] || %{}
+
+      movie_schema = %{
+        "@type" => "Movie",
+        "name" => movie_data["title"],
+        "description" => metadata["overview"],
+        "datePublished" => metadata["release_date"],
+        "genre" => metadata["genres"] || [],
+        "aggregateRating" => if metadata["vote_average"] do
+          %{
+            "@type" => "AggregateRating",
+            "ratingValue" => metadata["vote_average"],
+            "ratingCount" => metadata["vote_count"],
+            "bestRating" => 10
+          }
+        end,
+        "image" => if metadata["poster_path"] do
+          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(metadata["poster_path"], "w500")
+        end
+      }
+
+      # Add cast information if available
+      cast_schema = if movie_data["cast"] do
+        Enum.take(movie_data["cast"], 5)
+        |> Enum.map(fn cast_member ->
+          %{
+            "@type" => "Person",
+            "name" => cast_member["name"],
+            "image" => if cast_member["profile_path"] do
+              EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(cast_member["profile_path"], "w185")
+            end
+          }
+        end)
+      end
+
+      movie_schema = if cast_schema, do: Map.put(movie_schema, "actor", cast_schema), else: movie_schema
+
+      # Combine event and movie schemas
+      Map.merge(base_schema, %{
+        "workFeatured" => movie_schema,
+        "about" => movie_schema,
+        "image" => if metadata["backdrop_path"] do
+          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(metadata["backdrop_path"], "w1280")
+        end
+      })
+    else
+      base_schema
+    end
   end
 
   # Helper function to generate social card URL

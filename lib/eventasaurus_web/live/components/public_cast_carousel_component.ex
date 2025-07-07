@@ -23,7 +23,7 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
   def render(assigns) do
     ~H"""
     <div class="bg-white">
-      <div class="max-w-6xl mx-auto px-4 py-8">
+      <div class="max-w-6xl mx-auto px-4 py-6 lg:py-8">
         <h2 class="text-2xl font-bold text-gray-900 mb-6">Cast & Crew</h2>
 
         <%= if @display_cast && length(@display_cast) > 0 do %>
@@ -57,6 +57,11 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
               id={"cast-carousel-#{@id}"}
               class="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
               style="scroll-behavior: smooth; -webkit-overflow-scrolling: touch;"
+              role="region"
+              aria-label="Cast and crew carousel"
+              tabindex="0"
+              phx-hook="CastCarouselKeyboard"
+              data-component-id={@myself}
             >
               <%= for cast_member <- @display_cast do %>
                 <.cast_card cast_member={cast_member} />
@@ -66,23 +71,13 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
 
           <!-- Mobile Grid -->
           <div class="md:hidden">
-            <div class="grid grid-cols-3 gap-4">
-              <%= for cast_member <- Enum.take(@display_cast, 6) do %>
+            <div class="grid grid-cols-4 gap-3 sm:gap-4">
+              <%= for cast_member <- Enum.take(@display_cast, 8) do %>
                 <.cast_card_mobile cast_member={cast_member} />
               <% end %>
             </div>
 
-            <%= if length(@display_cast) > 6 do %>
-              <div class="mt-4 text-center">
-                <button
-                  phx-click="show_all_cast"
-                  phx-target={@myself}
-                  class="text-indigo-600 hover:text-indigo-500 font-medium"
-                >
-                  View All <%= length(@display_cast) %> Cast Members
-                </button>
-              </div>
-            <% end %>
+
           </div>
 
         <% else %>
@@ -120,13 +115,7 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
      })}
   end
 
-  @impl true
-  def handle_event("show_all_cast", _params, socket) do
-    # For now, just show a message - this could be expanded to a modal
-    {:noreply,
-     socket
-     |> put_flash(:info, "Full cast listing feature coming soon!")}
-  end
+
 
   # Private function components
 

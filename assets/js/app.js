@@ -1554,6 +1554,40 @@ Hooks.TaxationTypeValidator = {
   }
 };
 
+// Cast Carousel Keyboard Navigation Hook
+Hooks.CastCarouselKeyboard = {
+  mounted() {
+    this.handleKeydown = this.handleKeydown.bind(this);
+    this.el.addEventListener('keydown', this.handleKeydown);
+    
+    // Add focus styling
+    this.el.addEventListener('focus', () => {
+      this.el.style.outline = '2px solid #4F46E5';
+      this.el.style.outlineOffset = '2px';
+    });
+    
+    this.el.addEventListener('blur', () => {
+      this.el.style.outline = 'none';
+    });
+  },
+
+  destroyed() {
+    this.el.removeEventListener('keydown', this.handleKeydown);
+  },
+
+  handleKeydown(event) {
+    const componentId = this.el.dataset.componentId;
+    
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      this.pushEvent('scroll_left', {}, componentId);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      this.pushEvent('scroll_right', {}, componentId);
+    }
+  }
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
