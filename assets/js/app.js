@@ -1566,6 +1566,20 @@ topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"});
 window.addEventListener("phx:page-loading-start", info => topbar.show());
 window.addEventListener("phx:page-loading-stop", info => topbar.hide());
 
+// Cast Carousel Scroll Handler
+window.addEventListener("phx:scroll_cast_carousel", (e) => {
+  const { target, direction, amount } = e.detail;
+  const carousel = document.getElementById(target);
+  
+  if (carousel) {
+    const scrollAmount = direction === "left" ? -amount : amount;
+    carousel.scrollBy({
+      left: scrollAmount,
+      behavior: "smooth"
+    });
+  }
+});
+
 // PostHog event tracking listener with enhanced error handling
 window.addEventListener("phx:track_event", (e) => {
   if (e.detail) {
