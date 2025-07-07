@@ -106,8 +106,7 @@ defmodule Eventasaurus.MixProject do
       "assets.deploy": [
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
-        "phx.digest",
-        "cmd find priv/static -type f ! -name '*.gz' ! -name 'cache_manifest.json' ! -name '*-????????????????????????????????.*' -delete"
+        "phx.digest"
       ],
       "erd.gen.png": [
         "ecto.gen.erd",

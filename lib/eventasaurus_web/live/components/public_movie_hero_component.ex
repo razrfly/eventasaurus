@@ -129,7 +129,9 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
                 <!-- Event Date/Time -->
                 <div class="flex items-center gap-3">
                   <div class="flex-shrink-0 w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                    <.icon name="hero-calendar-days" class="w-4 h-4 text-white" />
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
                   </div>
                   <div class="text-white">
                     <div class="font-medium">
@@ -144,7 +146,10 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
                 <!-- Event Location -->
                 <div class="flex items-center gap-3">
                   <div class="flex-shrink-0 w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                    <.icon name="hero-map-pin" class="w-4 h-4 text-white" />
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
                   </div>
                   <div class="text-white">
                     <div class="font-medium">
@@ -165,7 +170,9 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
                 <!-- Event Type -->
                 <div class="flex items-center gap-3">
                   <div class="flex-shrink-0 w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                    <.icon name="hero-ticket" class="w-4 h-4 text-white" />
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                    </svg>
                   </div>
                   <div class="text-white">
                     <div class="font-medium">
@@ -323,14 +330,14 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
         start_time = dt
         |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
         |> Calendar.strftime("%I:%M %p")
-        |> String.replace(~r/\b0(\d)/, "\\1")
+        |> String.replace(~r/^0(\d)/, "\\1")
 
         end_time = case event.ends_at do
           %DateTime{} = end_dt ->
             end_dt
             |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
             |> Calendar.strftime("%I:%M %p")
-            |> String.replace(~r/\b0(\d)/, "\\1")
+            |> String.replace(~r/^0(\d)/, "\\1")
           _ -> nil
         end
 
