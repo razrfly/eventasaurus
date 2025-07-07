@@ -598,6 +598,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :recent_locations, :list, default: [], doc: "list of recent locations for the user"
   attr :show_recent_locations, :boolean, default: false, doc: "whether to show the recent locations dropdown"
   attr :filtered_recent_locations, :list, default: [], doc: "filtered list of recent locations based on search"
+  attr :rich_external_data, :map, default: %{}, doc: "rich data imported from external APIs (TMDB, Spotify, etc.)"
 
   def event_form(assigns) do
     assigns = assign_new(assigns, :id, fn ->
@@ -683,6 +684,97 @@ defmodule EventasaurusWeb.EventComponents do
               <p class="mt-1 text-xs text-gray-500">
                 Customize your event page appearance
               </p>
+            </div>
+
+            <!-- Rich Data Import Section -->
+            <div class="mt-6">
+              <h2 class="text-lg font-semibold mb-3 text-gray-800">Rich Data</h2>
+
+              <!-- Current rich data display -->
+              <%= if @rich_external_data && @rich_external_data != %{} do %>
+                <div class="mb-4">
+                  <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div class="flex items-start justify-between">
+                      <div class="flex items-start">
+                        <svg class="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                        <div class="flex-1">
+                          <h4 class="text-sm font-semibold text-green-800">Rich Data Imported</h4>
+
+                          <!-- TMDB Data Display -->
+                          <%= if @rich_external_data["title"] do %>
+                            <div class="mt-2">
+                              <p class="text-sm font-medium text-green-900"><%= @rich_external_data["title"] %></p>
+                              <div class="flex items-center gap-2 mt-1">
+                                <%= if @rich_external_data["metadata"] && @rich_external_data["metadata"]["release_date"] do %>
+                                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <%= String.slice(@rich_external_data["metadata"]["release_date"], 0, 4) %>
+                                  </span>
+                                <% end %>
+                                <%= if @rich_external_data["type"] do %>
+                                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    <%= String.capitalize(to_string(@rich_external_data["type"])) %>
+                                  </span>
+                                <% end %>
+                                <%= if @rich_external_data["provider"] do %>
+                                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    <%= String.upcase(to_string(@rich_external_data["provider"])) %>
+                                  </span>
+                                <% end %>
+                              </div>
+                              <%= if @rich_external_data["description"] && String.length(@rich_external_data["description"]) > 0 do %>
+                                <p class="text-xs text-green-700 mt-2 line-clamp-2"><%= @rich_external_data["description"] %></p>
+                              <% end %>
+                            </div>
+                          <% else %>
+                            <p class="text-xs text-green-700 mt-1">External data successfully imported</p>
+                          <% end %>
+                        </div>
+                      </div>
+
+                      <!-- Clear/Remove button -->
+                      <button
+                        type="button"
+                        phx-click="clear_rich_data"
+                        class="text-green-600 hover:text-green-800 transition-colors ml-2"
+                        title="Remove imported data"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+
+              <!-- Import button -->
+              <button
+                type="button"
+                phx-click="show_rich_data_import"
+                class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+              >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                <%= if @rich_external_data && @rich_external_data != %{} do %>
+                  Change Rich Data
+                <% else %>
+                  Import Rich Data
+                <% end %>
+              </button>
+
+              <p class="mt-2 text-xs text-gray-500">
+                Import comprehensive details from movies, TV shows, music, and more
+              </p>
+
+              <!-- Hidden field for rich data -->
+              <%= if @rich_external_data do %>
+                <% encoded_rich_data =
+                  if is_map(@rich_external_data), do: Jason.encode!(@rich_external_data), else: @rich_external_data || "{}" %>
+                <%= hidden_input f, :rich_external_data, value: encoded_rich_data %>
+              <% end %>
             </div>
           </div>
 
@@ -875,7 +967,7 @@ defmodule EventasaurusWeb.EventComponents do
                     type="checkbox"
                     name="event[is_virtual]"
                     value="true"
-                    checked={Map.get(@form_data, "is_virtual", false) == true}
+                    checked={Map.get(@form_data, "is_virtual") in [true, "true"]}
                     phx-click="toggle_virtual"
                     class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
@@ -1396,12 +1488,33 @@ defmodule EventasaurusWeb.EventComponents do
   defp get_polling_deadline_date(form_data) do
     case Map.get(form_data, "polling_deadline") do
       %DateTime{} = datetime ->
-        Date.to_iso8601(DateTime.to_date(datetime))
+        # Convert UTC datetime to the event's timezone for display
+        timezone = Map.get(form_data, "timezone", "UTC")
+        case DateTime.shift_zone(datetime, timezone) do
+          {:ok, shifted_datetime} ->
+            Date.to_iso8601(DateTime.to_date(shifted_datetime))
+          {:error, _} ->
+            # Fallback to UTC if timezone conversion fails
+            Date.to_iso8601(DateTime.to_date(datetime))
+        end
       date_string when is_binary(date_string) and date_string != "" ->
-        # If it's already a date string, extract just the date part
-        case String.split(date_string, "T") do
-          [date_part | _] -> date_part
-          _ -> date_string
+        # First try to parse as a DateTime and convert timezone
+        case DateTime.from_iso8601(date_string) do
+          {:ok, datetime, _} ->
+            timezone = Map.get(form_data, "timezone", "UTC")
+            case DateTime.shift_zone(datetime, timezone) do
+              {:ok, shifted_datetime} ->
+                Date.to_iso8601(DateTime.to_date(shifted_datetime))
+              {:error, _} ->
+                # Fallback to UTC date
+                Date.to_iso8601(DateTime.to_date(datetime))
+            end
+          {:error, _} ->
+            # Fallback to string parsing
+            case String.split(date_string, "T") do
+              [date_part | _] -> date_part
+              _ -> date_string
+            end
         end
       _ ->
         # Default to one week from today
@@ -1412,16 +1525,40 @@ defmodule EventasaurusWeb.EventComponents do
   defp get_polling_deadline_time(form_data) do
     case Map.get(form_data, "polling_deadline") do
       %DateTime{} = datetime ->
-        # Format time as HH:MM for the time_select component
-        time = DateTime.to_time(datetime)
-        "#{String.pad_leading(Integer.to_string(time.hour), 2, "0")}:#{String.pad_leading(Integer.to_string(time.minute), 2, "0")}"
+        # Convert UTC datetime to the event's timezone for display
+        timezone = Map.get(form_data, "timezone", "UTC")
+        case DateTime.shift_zone(datetime, timezone) do
+          {:ok, shifted_datetime} ->
+            time = DateTime.to_time(shifted_datetime)
+            "#{String.pad_leading(Integer.to_string(time.hour), 2, "0")}:#{String.pad_leading(Integer.to_string(time.minute), 2, "0")}"
+          {:error, _} ->
+            # Fallback to UTC if timezone conversion fails
+            time = DateTime.to_time(datetime)
+            "#{String.pad_leading(Integer.to_string(time.hour), 2, "0")}:#{String.pad_leading(Integer.to_string(time.minute), 2, "0")}"
+        end
       iso when is_binary(iso) and iso != "" ->
-        case String.split(iso, "T") do
-          [_date, time_part] ->
-            # Strip seconds/timezone → "HH:MM"
-            String.slice(time_part, 0, 5)
-          _ ->
-            "22:00"
+        # First try to parse as a DateTime and convert timezone
+        case DateTime.from_iso8601(iso) do
+          {:ok, datetime, _} ->
+            timezone = Map.get(form_data, "timezone", "UTC")
+            case DateTime.shift_zone(datetime, timezone) do
+              {:ok, shifted_datetime} ->
+                time = DateTime.to_time(shifted_datetime)
+                "#{String.pad_leading(Integer.to_string(time.hour), 2, "0")}:#{String.pad_leading(Integer.to_string(time.minute), 2, "0")}"
+              {:error, _} ->
+                # Fallback to UTC time
+                time = DateTime.to_time(datetime)
+                "#{String.pad_leading(Integer.to_string(time.hour), 2, "0")}:#{String.pad_leading(Integer.to_string(time.minute), 2, "0")}"
+            end
+          {:error, _} ->
+            # Fallback to string parsing
+            case String.split(iso, "T") do
+              [_date, time_part] ->
+                # Strip seconds/timezone → "HH:MM"
+                String.slice(time_part, 0, 5)
+              _ ->
+                "22:00"
+            end
         end
       _ ->
         # Default to 10 PM
