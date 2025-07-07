@@ -1554,6 +1554,40 @@ Hooks.TaxationTypeValidator = {
   }
 };
 
+// Cast Carousel Keyboard Navigation Hook
+Hooks.CastCarouselKeyboard = {
+  mounted() {
+    this.handleKeydown = this.handleKeydown.bind(this);
+    this.el.addEventListener('keydown', this.handleKeydown);
+    
+    // Add focus styling
+    this.el.addEventListener('focus', () => {
+      this.el.style.outline = '2px solid #4F46E5';
+      this.el.style.outlineOffset = '2px';
+    });
+    
+    this.el.addEventListener('blur', () => {
+      this.el.style.outline = 'none';
+    });
+  },
+
+  destroyed() {
+    this.el.removeEventListener('keydown', this.handleKeydown);
+  },
+
+  handleKeydown(event) {
+    const componentId = this.el.dataset.componentId;
+    
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      this.pushEvent('scroll_left', {}, componentId);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      this.pushEvent('scroll_right', {}, componentId);
+    }
+  }
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
@@ -1565,6 +1599,20 @@ let liveSocket = new LiveSocket("/live", Socket, {
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"});
 window.addEventListener("phx:page-loading-start", info => topbar.show());
 window.addEventListener("phx:page-loading-stop", info => topbar.hide());
+
+// Cast Carousel Scroll Handler
+window.addEventListener("phx:scroll_cast_carousel", (e) => {
+  const { target, direction, amount } = e.detail;
+  const carousel = document.getElementById(target);
+  
+  if (carousel) {
+    const scrollAmount = direction === "left" ? -amount : amount;
+    carousel.scrollBy({
+      left: scrollAmount,
+      behavior: "smooth"
+    });
+  }
+});
 
 // PostHog event tracking listener with enhanced error handling
 window.addEventListener("phx:track_event", (e) => {

@@ -1271,7 +1271,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:form_data, updated_form_data)
       |> assign(:changeset, changeset)
       |> assign(:show_rich_data_import, false)
-      |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
+      |> put_flash(:info, "Rich data imported successfully! '#{data["metadata"]["title"] || "Content"}' has been added to your event.")
 
     {:noreply, socket}
   end
