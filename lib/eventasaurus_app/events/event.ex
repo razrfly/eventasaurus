@@ -41,6 +41,7 @@ defmodule EventasaurusApp.Events.Event do
     field :slug, :string
     field :cover_image_url, :string # for user uploads
     field :external_image_data, :map # for Unsplash/TMDB images
+    field :rich_external_data, :map, default: %{} # for comprehensive external API data
     field :status, Ecto.Enum, values: [:draft, :polling, :threshold, :confirmed, :canceled], default: :confirmed
     field :polling_deadline, :utc_datetime
     field :threshold_count, :integer
@@ -90,7 +91,7 @@ defmodule EventasaurusApp.Events.Event do
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
                    :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
-                   :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
+                   :rich_external_data, :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
                    :virtual_venue_url, :is_ticketed, :taxation_type])
     |> validate_required([:title, :timezone, :visibility])
@@ -524,4 +525,143 @@ defmodule EventasaurusApp.Events.Event do
   def inferred_status(%__MODULE__{} = event) do
     EventStateMachine.infer_status(event)
   end
+
+  # ============================================================================
+  # Rich External Data Helper Functions
+  # ============================================================================
+
+  @doc """
+  Gets TMDB data from rich_external_data field.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{"tmdb" => %{"id" => 123, "title" => "Movie"}}}
+      iex> Event.get_tmdb_data(event)
+      %{"id" => 123, "title" => "Movie"}
+
+      iex> event = %Event{rich_external_data: %{}}
+      iex> Event.get_tmdb_data(event)
+      nil
+  """
+  def get_tmdb_data(%__MODULE__{rich_external_data: nil}), do: nil
+  def get_tmdb_data(%__MODULE__{rich_external_data: data}) when is_map(data) do
+    Map.get(data, "tmdb")
+  end
+  def get_tmdb_data(%__MODULE__{}), do: nil
+
+  @doc """
+  Sets TMDB data in rich_external_data field.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{}}
+      iex> tmdb_data = %{"id" => 123, "title" => "Movie"}
+      iex> Event.put_tmdb_data(event, tmdb_data)
+      %Event{rich_external_data: %{"tmdb" => %{"id" => 123, "title" => "Movie"}}}
+  """
+  def put_tmdb_data(%__MODULE__{} = event, tmdb_data) when is_map(tmdb_data) do
+    rich_data = event.rich_external_data || %{}
+    updated_data = Map.put(rich_data, "tmdb", tmdb_data)
+    %{event | rich_external_data: updated_data}
+  end
+
+  @doc """
+  Checks if event has TMDB data.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{"tmdb" => %{"id" => 123}}}
+      iex> Event.has_tmdb_data?(event)
+      true
+
+      iex> event = %Event{rich_external_data: %{}}
+      iex> Event.has_tmdb_data?(event)
+      false
+  """
+  def has_tmdb_data?(%__MODULE__{} = event) do
+    case get_tmdb_data(event) do
+      nil -> false
+      data when is_map(data) -> map_size(data) > 0
+      _ -> false
+    end
+  end
+
+  @doc """
+  Gets provider data from rich_external_data field.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{"spotify" => %{"id" => "abc123"}}}
+      iex> Event.get_provider_data(event, "spotify")
+      %{"id" => "abc123"}
+  """
+  def get_provider_data(%__MODULE__{rich_external_data: nil}, _provider), do: nil
+  def get_provider_data(%__MODULE__{rich_external_data: data}, provider) when is_map(data) and is_binary(provider) do
+    Map.get(data, provider)
+  end
+  def get_provider_data(%__MODULE__{}, _provider), do: nil
+
+  @doc """
+  Sets provider data in rich_external_data field.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{}}
+      iex> Event.put_provider_data(event, "spotify", %{"id" => "abc123"})
+      %Event{rich_external_data: %{"spotify" => %{"id" => "abc123"}}}
+  """
+  def put_provider_data(%__MODULE__{} = event, provider, data) when is_binary(provider) and is_map(data) do
+    rich_data = event.rich_external_data || %{}
+    updated_data = Map.put(rich_data, provider, data)
+    %{event | rich_external_data: updated_data}
+  end
+
+  @doc """
+  Removes provider data from rich_external_data field.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{"tmdb" => %{"id" => 123}, "spotify" => %{"id" => "abc"}}}
+      iex> Event.remove_provider_data(event, "spotify")
+      %Event{rich_external_data: %{"tmdb" => %{"id" => 123}}}
+  """
+  def remove_provider_data(%__MODULE__{} = event, provider) when is_binary(provider) do
+    rich_data = event.rich_external_data || %{}
+    updated_data = Map.delete(rich_data, provider)
+    %{event | rich_external_data: updated_data}
+  end
+
+  @doc """
+  Checks if event has any external provider data.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{"tmdb" => %{"id" => 123}}}
+      iex> Event.has_external_data?(event)
+      true
+
+      iex> event = %Event{rich_external_data: %{}}
+      iex> Event.has_external_data?(event)
+      false
+  """
+  def has_external_data?(%__MODULE__{rich_external_data: nil}), do: false
+  def has_external_data?(%__MODULE__{rich_external_data: data}) when is_map(data) do
+    map_size(data) > 0
+  end
+  def has_external_data?(%__MODULE__{}), do: false
+
+  @doc """
+  Lists all providers that have data for this event.
+
+  ## Examples
+
+      iex> event = %Event{rich_external_data: %{"tmdb" => %{"id" => 123}, "spotify" => %{"id" => "abc"}}}
+      iex> Event.list_providers(event)
+      ["tmdb", "spotify"]
+  """
+  def list_providers(%__MODULE__{rich_external_data: nil}), do: []
+  def list_providers(%__MODULE__{rich_external_data: data}) when is_map(data) do
+    Map.keys(data)
+  end
+  def list_providers(%__MODULE__{}), do: []
 end

@@ -16,6 +16,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Services.DefaultImagesService
   alias EventasaurusApp.Ticketing
   alias EventasaurusWeb.Helpers.ImageHelpers
+  alias EventasaurusWeb.Components.RichDataImportModal
+  alias EventasaurusWeb.Services.RichDataManager
 
   @valid_setup_paths ~w[polling confirmed threshold]
 
@@ -133,7 +135,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "setup_path" => setup_path,
                 "requires_threshold" => Map.get(event, :requires_threshold, false),
                 "taxation_type" => determine_edit_taxation_default(event),
-                "taxation_type_reasoning" => get_taxation_reasoning_for_edit(event)
+                "taxation_type_reasoning" => get_taxation_reasoning_for_edit(event),
+                "rich_external_data" => event.rich_external_data || %{}
               })
               |> assign(:is_virtual, is_virtual)
               |> assign(:selected_venue_name, venue_name)
@@ -166,6 +169,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:recent_locations, recent_locations)
               |> assign(:show_recent_locations, false)
               |> assign(:filtered_recent_locations, recent_locations)
+              # Rich data import assigns
+              |> assign(:show_rich_data_import, false)
+              |> assign(:rich_external_data, event.rich_external_data || %{})
 
             {:ok, socket}
           else
@@ -268,6 +274,19 @@ defmodule EventasaurusWeb.EventLive.Edit do
           case Jason.decode(json_string) do
             {:ok, decoded_data} -> Map.put(event_params, "external_image_data", decoded_data)
             {:error, _} -> Map.put(event_params, "external_image_data", nil)
+          end
+        data when is_map(data) -> event_params
+      end
+
+    # Decode rich_external_data if it's a JSON string
+    event_params =
+      case Map.get(event_params, "rich_external_data") do
+        nil -> event_params
+        "" -> Map.put(event_params, "rich_external_data", %{})
+        json_string when is_binary(json_string) ->
+          case Jason.decode(json_string) do
+            {:ok, decoded_data} -> Map.put(event_params, "rich_external_data", decoded_data)
+            {:error, _} -> Map.put(event_params, "rich_external_data", %{})
           end
         data when is_map(data) -> event_params
       end
@@ -1144,8 +1163,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, socket}
   end
 
-
-
   # ============================================================================
   # Ticketing Helper Functions
   # ============================================================================
@@ -1690,6 +1707,110 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
+  # ========== Rich Data Import Handlers ==========
 
+  @impl true
+  def handle_event("show_rich_data_import", _params, socket) do
+    {:noreply, assign(socket, :show_rich_data_import, true)}
+  end
+
+  @impl true
+  def handle_event("close_rich_data_import", _params, socket) do
+    {:noreply, assign(socket, :show_rich_data_import, false)}
+  end
+
+  @impl true
+  def handle_event("clear_rich_data", _params, socket) do
+    socket =
+      socket
+      |> assign(:rich_external_data, %{})
+      |> put_flash(:info, "Rich data has been removed from your event.")
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:rich_data_search, query, provider}, socket) do
+    # Convert provider string to atom
+    provider_atom = String.to_existing_atom(provider)
+
+    case RichDataManager.search(query, %{providers: [provider_atom]}) do
+      {:ok, results} ->
+        # Flatten the results from the map format to a list
+        flattened_results =
+          results
+          |> Enum.flat_map(fn {_provider_id, result} ->
+              case result do
+                {:ok, items} when is_list(items) ->
+                  # Add provider information to each item
+                  Enum.map(items, fn item ->
+                    Map.put(item, :provider, provider_atom)
+                  end)
+                {:error, _} -> []
+                _ -> []
+              end
+            end)
+
+        send_update(RichDataImportModal,
+          id: "rich-data-import-modal",
+          search_results: flattened_results,
+          loading: false,
+          error: nil
+        )
+
+      {:error, reason} ->
+        send_update(RichDataImportModal,
+          id: "rich-data-import-modal",
+          search_results: [],
+          loading: false,
+          error: "Search failed: #{reason}"
+        )
+    end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:rich_data_import, id, provider, type}, socket) do
+    require Logger
+    Logger.debug("handle_info rich_data_import called with id: #{id}, provider: #{provider}, type: #{type}")
+
+    # Convert provider string to atom
+    provider_atom = String.to_existing_atom(provider)
+    type_atom = String.to_existing_atom(type)
+
+    case RichDataManager.get_details(provider_atom, id, type_atom, %{}) do
+      {:ok, details} ->
+        Logger.debug("RichDataManager.get_details returned success, importing data")
+
+        # Call the existing import handler with the fetched data
+        send(self(), {:rich_data_import, details})
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        Logger.error("Failed to fetch rich data for import: #{inspect(reason)}")
+        {:noreply, put_flash(socket, :error, "Failed to import data: #{reason}")}
+    end
+  end
+
+  @impl true
+  def handle_info({:rich_data_import, data}, socket) do
+    # Store the imported data and close modal
+    socket =
+      socket
+      |> assign(:rich_external_data, data)
+      |> assign(:show_rich_data_import, false)
+      |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:close_rich_data_modal}, socket) do
+    {:noreply, assign(socket, :show_rich_data_import, false)}
+  end
+
+  # ========== End Rich Data Import Handlers ==========
 
 end
