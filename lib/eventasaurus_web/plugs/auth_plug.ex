@@ -99,7 +99,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def require_authenticated_api_user(conn, _opts) do
     if conn.assigns[:auth_user] do
       conn = maybe_refresh_token_api(conn)
-
       # Check if connection was halted by maybe_refresh_token_api
       if conn.halted do
         conn

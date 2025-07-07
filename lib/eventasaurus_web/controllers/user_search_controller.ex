@@ -186,6 +186,7 @@ defmodule EventasaurusWeb.UserSearchController do
     end
   end
 
+
   # Enhanced format function that conditionally exposes user information
   # based on privacy levels and requester privileges
   defp format_user_search_result_with_context(user, requesting_user, event_id) do
