@@ -391,6 +391,42 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Adds multiple users as organizers to an event.
+  Returns the count of successfully added organizers.
+  """
+  def add_organizers_to_event(%Event{} = event, user_ids) when is_list(user_ids) do
+    # Get existing organizer user IDs for this event
+    existing_organizer_ids = from(eu in EventUser,
+                                  where: eu.event_id == ^event.id,
+                                  select: eu.user_id)
+                            |> Repo.all()
+
+    # Filter out user IDs that are already organizers
+    new_user_ids = user_ids -- existing_organizer_ids
+
+    # Prepare organizer records for bulk insert
+    timestamp = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    organizer_records = Enum.map(new_user_ids, fn user_id ->
+      %{
+        event_id: event.id,
+        user_id: user_id,
+        role: nil,
+        inserted_at: timestamp,
+        updated_at: timestamp
+      }
+    end)
+
+    case organizer_records do
+      [] -> 0  # No new organizers to add
+      records ->
+        # Use insert_all for better performance
+        {count, _} = Repo.insert_all(EventUser, records)
+        count
+    end
+  end
+
+  @doc """
   Lists all organizers of an event.
   """
   def list_event_organizers(%Event{} = event) do

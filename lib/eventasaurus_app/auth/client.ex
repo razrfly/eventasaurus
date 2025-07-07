@@ -214,6 +214,37 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Validate a JWT access token for integrity and expiration.
+
+  This function validates the token by attempting to fetch user data
+  with it, which will fail if the token is invalid or expired.
+
+  Returns {:ok, token_data} on success or {:error, reason} on failure.
+  """
+  def validate_token(token) do
+    url = "#{get_auth_url()}/user"
+
+    case HTTPoison.get(url, auth_headers(token)) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        user_data = Jason.decode!(response_body)
+        {:ok, user_data}
+
+      {:ok, %{status_code: 401, body: _}} ->
+        {:error, :expired}
+
+      {:ok, %{status_code: 403, body: _}} ->
+        {:error, :invalid}
+
+      {:ok, %{status_code: _code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        {:error, error["message"] || "Token validation failed"}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
   Get the current user information using their access token.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.

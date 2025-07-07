@@ -278,6 +278,71 @@
               </.link>
             </div>
           </div>
+
+          <!-- Event Organizers -->
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="font-semibold text-gray-900">Event Organizers</h3>
+              <button
+                phx-click="open_organizer_search_modal"
+                class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add
+              </button>
+            </div>
+            
+            <div class="space-y-3">
+              <%= for organizer <- @organizers do %>
+                <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  <div class="flex items-center gap-3">
+                    <img 
+                      src={EventasaurusApp.Avatars.generate_user_avatar(organizer, size: 32)}
+                      alt={"#{organizer.name || organizer.email} avatar"}
+                      class="h-8 w-8 rounded-full object-cover"
+                    />
+                    <div>
+                      <div class="font-medium text-gray-900 text-sm">
+                        <%= organizer.name || organizer.email %>
+                      </div>
+                      <%= if organizer.name do %>
+                        <div class="text-xs text-gray-500"><%= organizer.email %></div>
+                      <% end %>
+                    </div>
+                  </div>
+                  
+                  <%= if organizer.id != @user.id do %>
+                    <button
+                      phx-click="remove_organizer"
+                      phx-value-user_id={organizer.id}
+                      data-confirm={"Remove #{organizer.name || organizer.email} as an organizer?"}
+                      class="p-1 text-gray-400 hover:text-red-600 focus:outline-none"
+                      title="Remove organizer"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  <% else %>
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      You
+                    </span>
+                  <% end %>
+                </div>
+              <% end %>
+              
+              <%= if length(@organizers) == 0 do %>
+                <div class="text-center py-6 text-gray-500">
+                  <svg class="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <p class="text-sm">No organizers assigned yet</p>
+                </div>
+              <% end %>
+            </div>
+          </div>
         </div>
       </div>
     <% end %>
@@ -1012,4 +1077,149 @@
   on_invite_selected="send_invitations"
   on_add_directly="add_guests_directly"
   on_search_suggestions="search_suggestions"
-/> 
+/>
+
+<!-- Organizer Search Modal -->
+  <.modal
+    id="organizer-search-modal"
+    show={@show_organizer_search_modal}
+    on_cancel={JS.push("close_organizer_search_modal")}
+    on_confirm={JS.push("add_selected_organizers")}
+    disabled={length(@selected_organizer_results) == 0}
+  >
+  <:title>Add Event Organizer</:title>
+
+  <!-- Search Bar -->
+  <div class="mb-4 sm:mb-6">
+    <label for="organizer-search" class="block text-sm font-medium text-zinc-700 mb-2">
+      Search for users by name, username, or email
+    </label>
+    <div class="relative">
+      <.icon name="hero-magnifying-glass" class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      <input
+        type="text"
+        id="organizer-search"
+        value={@organizer_search_query}
+        phx-keyup="search_organizers"
+        phx-debounce="300"
+        placeholder="Start typing to search..."
+        class="block w-full pl-8 pr-3 py-3 sm:py-2 border border-zinc-300 rounded-lg sm:rounded-md text-base sm:text-sm leading-5 bg-white placeholder-zinc-500 focus:outline-none focus:placeholder-zinc-400 focus:ring-2 focus:ring-zinc-500 focus:border-zinc-500 touch-manipulation text-left"
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+      />
+    </div>
+  </div>
+
+  <!-- Search results or messages -->
+  <%= if @organizer_search_loading do %>
+    <div class="flex items-center justify-center py-8 sm:py-12">
+      <svg class="animate-spin h-6 w-6 sm:h-5 sm:w-5 text-zinc-600" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span class="ml-2 text-sm sm:text-sm text-zinc-600">Searching...</span>
+    </div>
+  <% else %>
+    <%= if @organizer_search_error do %>
+      <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+        <div class="flex">
+          <.icon name="hero-exclamation-triangle" class="h-5 w-5 text-red-400 flex-shrink-0" />
+          <div class="ml-3">
+            <p class="text-sm text-red-800"><%= @organizer_search_error %></p>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+    <%= if length(@organizer_search_results) > 0 do %>
+      <!-- Result count display -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 text-sm text-zinc-600 gap-1 sm:gap-0">
+        <span>Showing <%= @organizer_search_total_shown %> user<%= if @organizer_search_total_shown != 1, do: "s" %></span>
+        <%= if @organizer_search_has_more do %>
+          <span class="text-blue-600 font-medium">More results available</span>
+        <% end %>
+      </div>
+
+      <!-- Results list with improved mobile layout -->
+      <div class="space-y-2 sm:space-y-2 max-h-64 sm:max-h-80 overflow-y-auto">
+        <%= for user <- @organizer_search_results do %>
+          <div class="flex items-center p-4 sm:p-3 border border-zinc-200 rounded-lg hover:bg-zinc-50 active:bg-zinc-100 cursor-pointer transition-colors touch-manipulation"
+               phx-click="toggle_organizer_selection"
+               phx-value-user_id={user["id"]}>
+            <div class="flex-shrink-0">
+              <img 
+                src={user["avatar_url"]}
+                alt={"#{user["name"] || user["email"]} avatar"}
+                class="h-12 w-12 sm:h-10 sm:w-10 rounded-full object-cover"
+              />
+            </div>
+            <div class="ml-3 sm:ml-3 flex-1 min-w-0">
+              <div class="flex items-start sm:items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <p class="text-base sm:text-sm font-medium text-zinc-900 truncate">
+                    <%= user["name"] || user["email"] %>
+                  </p>
+                  <%= if user["name"] do %>
+                    <p class="text-sm sm:text-xs text-zinc-500 truncate"><%= user["email"] %></p>
+                  <% end %>
+                  <%= if user["username"] do %>
+                    <p class="text-sm sm:text-xs text-zinc-400 truncate">@<%= user["username"] %></p>
+                  <% end %>
+                </div>
+                <div class="flex-shrink-0 ml-2">
+                  <%= if user["id"] in @selected_organizer_results do %>
+                    <div class="inline-flex items-center px-3 py-1.5 sm:px-2.5 sm:py-0.5 rounded-full text-sm sm:text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                      <.icon name="hero-check" class="w-4 h-4 sm:w-3 sm:h-3 mr-1 flex-shrink-0" />
+                      <span class="hidden sm:inline">Selected</span>
+                      <span class="sm:hidden">✓</span>
+                    </div>
+                  <% else %>
+                    <div class="inline-flex items-center px-3 py-1.5 sm:px-2.5 sm:py-0.5 rounded-full text-sm sm:text-xs font-medium bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-800 transition-colors">
+                      <span class="hidden sm:inline">Select</span>
+                      <span class="sm:hidden">+</span>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Load More button -->
+      <%= if @organizer_search_has_more and not @organizer_search_loading do %>
+        <div class="mt-4 text-center">
+          <button
+            phx-click="load_more_organizers"
+            class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-3 sm:py-2 border border-zinc-300 text-base sm:text-sm font-medium rounded-lg sm:rounded-md text-zinc-700 bg-white hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors touch-manipulation"
+          >
+            <.icon name="hero-chevron-down" class="w-5 h-5 sm:w-4 sm:h-4 mr-2" />
+            Load More Users
+          </button>
+        </div>
+      <% end %>
+    <% else %>
+      <%= if String.length(@organizer_search_query) >= 2 do %>
+        <div class="text-center py-8 sm:py-8">
+          <.icon name="hero-magnifying-glass" class="w-10 h-10 sm:w-8 sm:h-8 mx-auto text-zinc-400" />
+          <p class="mt-3 sm:mt-2 text-base sm:text-sm text-zinc-500 px-4">No users found matching "<%= @organizer_search_query %>"</p>
+          <p class="mt-2 text-sm text-zinc-400 px-4">Try a different search term or check spelling</p>
+        </div>
+      <% else %>
+        <div class="text-center py-8 sm:py-8">
+          <.icon name="hero-magnifying-glass" class="w-10 h-10 sm:w-8 sm:h-8 mx-auto text-zinc-400" />
+          <p class="mt-3 sm:mt-2 text-base sm:text-sm text-zinc-500 px-4">Start typing to search for users</p>
+          <p class="mt-2 text-sm text-zinc-400 px-4">Search by name, username, or email</p>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+
+  <:confirm>
+    <span class="sm:hidden">Add (<%= length(@selected_organizer_results) %>)</span>
+    <span class="hidden sm:inline">Add Selected (<%= length(@selected_organizer_results) %>)</span>
+  </:confirm>
+  <:cancel>Cancel</:cancel>
+</.modal> 

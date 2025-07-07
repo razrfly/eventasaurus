@@ -99,7 +99,19 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def require_authenticated_api_user(conn, _opts) do
     if conn.assigns[:auth_user] do
       conn = maybe_refresh_token_api(conn)
-      conn
+      # Enhanced: Validate JWT token integrity
+      case validate_jwt_token(conn) do
+        {:ok, conn} -> conn
+        {:error, reason} ->
+          conn
+          |> put_status(:unauthorized)
+          |> Phoenix.Controller.json(%{
+            success: false,
+            error: "token_invalid",
+            message: "Authentication token is invalid: #{reason}"
+          })
+          |> halt()
+      end
     else
       conn
       |> put_status(:unauthorized)
@@ -154,6 +166,76 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       |> halt()
     else
       conn
+    end
+  end
+
+  @doc """
+  Validates user permissions for specific actions.
+
+  This plug checks if the authenticated user has the required permissions
+  for the requested action. Permissions are checked against user roles
+  and specific resource access rights.
+
+  ## Usage
+
+      plug :require_permission, action: :manage_events
+      plug :require_permission, action: :search_users, resource: :event
+  """
+  def require_permission(conn, opts) do
+    action = Keyword.get(opts, :action)
+    resource = Keyword.get(opts, :resource)
+
+    case validate_user_permission(conn.assigns[:user], action, resource, conn.params) do
+      :ok -> conn
+      {:error, reason} ->
+        conn
+        |> put_status(:forbidden)
+        |> Phoenix.Controller.json(%{
+          success: false,
+          error: "insufficient_permissions",
+          message: reason
+        })
+        |> halt()
+    end
+  end
+
+  @doc """
+  Enhanced input sanitization and validation for API requests.
+
+  This plug sanitizes and validates all input parameters according to
+  security best practices, preventing injection attacks and ensuring
+  data integrity. Logs security events for monitoring.
+
+  ## Usage
+
+      plug :sanitize_and_validate_input
+  """
+  def sanitize_and_validate_input(conn, _opts) do
+    case sanitize_request_params(conn.params) do
+      {:ok, sanitized_params} ->
+        # Log potential security concerns if significant sanitization occurred
+        if params_were_modified?(conn.params, sanitized_params) do
+          log_security_event(conn, "input_sanitized", %{
+            original_params: sanitize_params_for_logging(conn.params),
+            sanitized_params: sanitize_params_for_logging(sanitized_params)
+          })
+        end
+        %{conn | params: sanitized_params}
+      {:error, errors} ->
+        # Log security violation attempt
+        log_security_event(conn, "input_validation_failed", %{
+          errors: errors,
+          params: sanitize_params_for_logging(conn.params)
+        })
+        conn
+        |> put_status(:bad_request)
+        |> Phoenix.Controller.json(%{
+          success: false,
+          error: "invalid_input",
+          message: "Request contains invalid or unsafe parameters",
+          details: errors
+        })
+        |> halt()
     end
   end
 
@@ -315,5 +397,273 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
     # Only allow recovery if explicitly set in session and user is authenticated
     recovery_state == true && conn.assigns[:auth_user] != nil
+  end
+
+  @doc """
+  Validates JWT token integrity and expiration.
+
+  Checks the JWT token stored in the session for validity,
+  ensuring it hasn't been tampered with and hasn't expired.
+  """
+  def validate_jwt_token(conn) do
+    access_token = get_session(conn, :access_token)
+
+    if access_token do
+      case Client.validate_token(access_token) do
+        {:ok, _token_data} ->
+          {:ok, conn}
+        {:error, :expired} ->
+          # Token expired, try to refresh
+          case maybe_refresh_token_api(conn) do
+            %{halted: true} = _conn -> {:error, "token_expired"}
+            conn -> {:ok, conn}
+          end
+        {:error, reason} ->
+          {:error, "token_invalid: #{reason}"}
+      end
+    else
+      {:error, "no_token"}
+    end
+  end
+
+  # Enhanced permission validation with role-based access control
+  defp validate_user_permission(nil, _action, _resource, _params), do: {:error, "User not authenticated"}
+  defp validate_user_permission(user, action, resource, params) do
+    case {action, resource} do
+      {:search_users, _} ->
+        # Basic permission: authenticated users can search
+        # Enhanced: Ensure user has a valid profile
+        if user.email && user.name do
+          :ok
+        else
+          {:error, "Complete profile required for user search"}
+        end
+
+      {:manage_events, _} ->
+        # Check if user can manage the specific event
+        event_id = params["event_id"]
+        if event_id do
+          case validate_event_management_permission(user, event_id) do
+            :ok -> :ok
+            {:error, reason} -> {:error, reason}
+          end
+        else
+          {:error, "Event ID required for event management"}
+        end
+
+      {:add_organizers, _} ->
+        # Only event creators and existing organizers can add new organizers
+        event_id = params["event_id"]
+        if event_id do
+          case validate_organizer_management_permission(user, event_id) do
+            :ok -> :ok
+            {:error, reason} -> {:error, reason}
+          end
+        else
+          {:error, "Event ID required for organizer management"}
+        end
+
+      {unknown_action, _} ->
+        {:error, "Unknown action: #{unknown_action}"}
+    end
+  end
+
+  # Helper function to validate event management permissions
+  defp validate_event_management_permission(user, event_id) do
+    case EventasaurusApp.Events.get_event(event_id) do
+      %EventasaurusApp.Events.Event{} = event ->
+        if EventasaurusApp.Events.user_can_manage_event?(user, event) do
+          :ok
+        else
+          {:error, "You don't have permission to manage this event"}
+        end
+      nil ->
+        {:error, "Event not found"}
+    end
+  end
+
+  # Helper function to validate organizer management permissions
+  defp validate_organizer_management_permission(user, event_id) do
+    case EventasaurusApp.Events.get_event(event_id) do
+      %EventasaurusApp.Events.Event{} = event ->
+        if EventasaurusApp.Events.user_is_organizer?(event, user) do
+          :ok
+        else
+          {:error, "Only event organizers can add new organizers"}
+        end
+      nil ->
+        {:error, "Event not found"}
+    end
+  end
+
+  # Enhanced input sanitization
+  defp sanitize_request_params(params) when is_map(params) do
+    sanitized =
+      params
+      |> Enum.map(&sanitize_param/1)
+      |> Enum.reduce({%{}, []}, fn
+        {:ok, {key, value}}, {acc_params, acc_errors} ->
+          {Map.put(acc_params, key, value), acc_errors}
+        {:error, error}, {acc_params, acc_errors} ->
+          {acc_params, [error | acc_errors]}
+      end)
+
+    case sanitized do
+      {params, []} -> {:ok, params}
+      {_params, errors} -> {:error, errors}
+    end
+  end
+
+  defp sanitize_param({key, value}) do
+    case sanitize_value(key, value) do
+      {:ok, sanitized_value} -> {:ok, {key, sanitized_value}}
+      {:error, reason} -> {:error, "Invalid #{key}: #{reason}"}
+    end
+  end
+
+  defp sanitize_value("q", value) when is_binary(value) do
+    # Enhanced search query sanitization - comprehensive XSS and injection prevention
+    sanitized =
+      value
+      |> String.trim()
+      |> String.replace(~r/[<>\"'&%]/, "")  # Remove HTML/script injection chars
+      |> String.replace(~r/javascript:/i, "")  # Remove javascript: protocol
+      |> String.replace(~r/data:/i, "")  # Remove data: protocol
+      |> String.replace(~r/vbscript:/i, "")  # Remove vbscript: protocol
+      |> String.replace(~r/on\w+\s*=/i, "")  # Remove event handlers (onclick, onload, etc.)
+      |> String.replace(~r/\s+/, " ")  # Normalize whitespace
+      |> String.slice(0, 100)  # Limit length
+
+    if String.length(sanitized) >= 2 do
+      {:ok, sanitized}
+    else
+      {:error, "Search query must be at least 2 characters"}
+    end
+  end
+
+  defp sanitize_value(key, value) when key in ["page", "per_page", "event_id"] do
+    case safe_parse_positive_integer(value, nil) do
+      nil -> {:error, "Must be a positive integer"}
+      int when int > 0 and int <= 10000 -> {:ok, int}  # Reasonable upper limit
+      _ -> {:error, "Must be a positive integer within reasonable limits"}
+    end
+  end
+
+  # Enhanced validation for string fields that might contain user content
+  defp sanitize_value(key, value) when key in ["title", "description", "name"] and is_binary(value) do
+    sanitized =
+      value
+      |> String.trim()
+      |> sanitize_html_content()
+      |> String.slice(0, 255)  # Reasonable length limit for most text fields
+
+    {:ok, sanitized}
+  end
+
+  # Enhanced validation for URL fields
+  defp sanitize_value(key, value) when key in ["website_url", "callback_url", "redirect_url"] and is_binary(value) do
+    if String.match?(value, ~r/^https?:\/\/[\w\-\.]+(:\d+)?(\/.*)?$/i) do
+      {:ok, value}
+    else
+      {:error, "Must be a valid HTTP/HTTPS URL"}
+    end
+  end
+
+  # Enhanced validation for email fields
+  defp sanitize_value(key, value) when key in ["email"] and is_binary(value) do
+    if String.match?(value, ~r/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) do
+      {:ok, String.downcase(String.trim(value))}
+    else
+      {:error, "Must be a valid email address"}
+    end
+  end
+
+  defp sanitize_value(_key, value), do: {:ok, value}
+
+  # Helper function to sanitize HTML content
+  defp sanitize_html_content(content) when is_binary(content) do
+    content
+    |> String.replace(~r/<script[^>]*>.*?<\/script>/is, "")  # Remove script tags
+    |> String.replace(~r/<[^>]+>/, "")  # Remove all HTML tags
+    |> String.replace(~r/javascript:/i, "")
+    |> String.replace(~r/data:/i, "")
+    |> String.replace(~r/vbscript:/i, "")
+    |> String.replace(~r/on\w+\s*=/i, "")
+    |> String.replace(~r/[<>\"'&%]/, "")
+  end
+
+  # Helper function for safe integer parsing (reused from existing code)
+  defp safe_parse_positive_integer(value, _default) when is_integer(value) and value > 0, do: value
+  defp safe_parse_positive_integer(value, default) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} when int > 0 -> int
+      _ -> default
+    end
+  end
+  defp safe_parse_positive_integer(nil, default), do: default
+  defp safe_parse_positive_integer(_, default), do: default
+
+  # Security logging functions
+  defp log_security_event(conn, event_type, details) do
+    user_id = get_in(conn.assigns, [:user, :id]) || "anonymous"
+    remote_ip = get_remote_ip(conn)
+    user_agent = get_req_header(conn, "user-agent") |> List.first() || "unknown"
+
+    require Logger
+    Logger.warning("Security Event: #{event_type}", [
+      event_type: event_type,
+      user_id: user_id,
+      remote_ip: remote_ip,
+      user_agent: user_agent,
+      path: conn.request_path,
+      method: conn.method,
+      details: details,
+      timestamp: DateTime.utc_now()
+    ])
+  end
+
+  defp params_were_modified?(original_params, sanitized_params) do
+    # Compare the two parameter maps to detect if sanitization made changes
+    # This helps identify potential security issues in requests
+    original_params != sanitized_params
+  end
+
+  defp sanitize_params_for_logging(params) when is_map(params) do
+    # Sanitize sensitive data before logging to prevent exposing secrets
+    params
+    |> Enum.map(fn {key, value} -> {key, sanitize_value_for_logging(key, value)} end)
+    |> Enum.into(%{})
+  end
+
+  defp sanitize_value_for_logging(key, _value) when key in ["password", "token", "secret", "key"] do
+    "[REDACTED]"
+  end
+
+  defp sanitize_value_for_logging(key, value) when key in ["email"] and is_binary(value) do
+    # Partially obscure email addresses for privacy
+    case String.split(value, "@") do
+      [user, domain] when byte_size(user) > 2 ->
+        "#{String.slice(user, 0, 2)}***@#{domain}"
+      _ ->
+        "***@***"
+    end
+  end
+
+  defp sanitize_value_for_logging(_key, value) when is_binary(value) and byte_size(value) > 100 do
+    # Truncate very long values to prevent log bloat
+    "#{String.slice(value, 0, 100)}... [TRUNCATED]"
+  end
+
+  defp sanitize_value_for_logging(_key, value), do: value
+
+  defp get_remote_ip(conn) do
+    case get_req_header(conn, "x-forwarded-for") do
+      [ip | _] -> ip
+      [] ->
+        case :inet.ntoa(conn.remote_ip) do
+          ip when is_list(ip) -> to_string(ip)
+          _ -> "unknown"
+        end
+    end
   end
 end
