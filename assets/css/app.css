@@ -794,4 +794,70 @@ body[class*="theme-"] .theme-card:hover {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+/* ============================================================================
+   PERFORMANCE OPTIMIZATIONS FOR ENHANCED PUBLIC EVENTS
+   ============================================================================ */
+
+/* Lazy loading placeholders */
+.lazy-image {
+  transition: opacity 0.3s ease;
+}
+
+.lazy-image[data-loading="true"] {
+  opacity: 0.5;
+  background: linear-gradient(90deg, #f0f0f0 25%, transparent 37%, #f0f0f0 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.5s ease infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* Movie Hero Background Performance Optimizations */
+.movie-hero-backdrop {
+  will-change: transform;
+  backface-visibility: hidden;
+  /* Smooth backdrop images */
+  image-rendering: optimizeQuality;
+}
+
+/* Image optimization for different screen sizes */
+@media (max-width: 768px) {
+  .movie-hero-backdrop {
+    background-size: cover;
+    background-position: center;
+  }
+  
+  /* Mobile-specific image loading optimizations */
+  .cast-carousel-mobile img {
+    loading: lazy;
+    will-change: auto;
+  }
+}
+
+/* Touch-friendly interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Accessibility: Reduce motion when requested */
+@media (prefers-reduced-motion: reduce) {
+  .lazy-image,
+  .movie-hero-backdrop,
+  .shimmer {
+    animation: none !important;
+    transition: none !important;
+  }
+  
+  .scrollbar-hide {
+    scroll-behavior: auto !important;
+  }
 } 

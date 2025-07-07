@@ -21,14 +21,15 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="relative min-h-[40vh] md:min-h-[50vh] bg-gray-900 rounded-lg overflow-hidden">
+    <div class="relative min-h-[30vh] md:min-h-[50vh] bg-gray-900 rounded-lg overflow-hidden">
       <!-- Movie Backdrop -->
       <%= if @has_backdrop do %>
         <img
           src={@backdrop_url}
-          alt={@movie_title}
+          alt={"#{@movie_title} - Movie backdrop"}
           class="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
+          aria-hidden="true"
         />
       <% end %>
 
@@ -37,15 +38,15 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
 
       <!-- Hero Content -->
       <div class="absolute inset-0 flex items-end">
-        <div class="w-full p-6 lg:p-8">
-          <div class="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto">
+        <div class="w-full p-4 sm:p-6 lg:p-8">
+          <div class="flex flex-col lg:flex-row gap-4 lg:gap-6 max-w-6xl mx-auto">
             <!-- Movie Poster -->
             <%= if @has_poster do %>
               <div class="flex-shrink-0">
                 <img
                   src={@poster_url}
                   alt={"#{@movie_title} poster"}
-                  class="w-32 h-48 lg:w-40 lg:h-60 object-cover rounded-lg shadow-2xl"
+                  class="w-24 h-36 md:w-32 md:h-48 lg:w-40 lg:h-60 object-cover rounded-lg shadow-2xl"
                   loading="lazy"
                 />
               </div>
@@ -104,7 +105,7 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
             </div>
 
             <!-- Event Details Card -->
-            <div class="flex-shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 min-w-80">
+            <div class="flex-shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-4 lg:p-6 border border-white/20 lg:min-w-80">
               <div class="space-y-4">
                 <!-- Event Title -->
                 <div>
@@ -315,14 +316,14 @@ defmodule EventasaurusWeb.Live.Components.PublicMovieHeroComponent do
         start_time = dt
         |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
         |> Calendar.strftime("%I:%M %p")
-        |> String.replace(" 0", " ")
+        |> String.replace(~r/\b0(\d)/, "\\1")
 
         end_time = case event.ends_at do
           %DateTime{} = end_dt ->
             end_dt
             |> EventasaurusWeb.TimezoneHelpers.convert_to_timezone(timezone)
             |> Calendar.strftime("%I:%M %p")
-            |> String.replace(" 0", " ")
+            |> String.replace(~r/\b0(\d)/, "\\1")
           _ -> nil
         end
 
