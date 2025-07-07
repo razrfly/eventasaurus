@@ -370,8 +370,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> Events.change_event(final_event_params)
       |> Map.put(:action, :validate)
       |> validate_date_polling(final_event_params)
-      # Add validation to prevent ticketless when tickets exist
-      |> Events.Event.validate_tickets_taxation_consistency(length(socket.assigns.tickets || []))
 
     Logger.info("=== VALIDATION STEP ===")
     Logger.info("Validation changeset valid?: #{validation_changeset.valid?}")
@@ -1261,10 +1259,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_info({:rich_data_import, data}, socket) do
-    # Store the imported data and close modal
+    # Store the imported data in both the assign and form_data
+    updated_form_data = Map.put(socket.assigns.form_data, "rich_external_data", data)
+
+    # Update the changeset to reflect the new data
+    changeset = Events.change_event(socket.assigns.event, updated_form_data)
+
     socket =
       socket
       |> assign(:rich_external_data, data)
+      |> assign(:form_data, updated_form_data)
+      |> assign(:changeset, changeset)
       |> assign(:show_rich_data_import, false)
       |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
 

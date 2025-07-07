@@ -6,6 +6,7 @@ defmodule EventasaurusWeb.EventManageLive do
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   import EventasaurusWeb.Components.GuestInvitationModal
   import EventasaurusWeb.EmailStatusComponents
+  import EventasaurusWeb.EventHTML, only: [movie_rich_data_display: 1]
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
