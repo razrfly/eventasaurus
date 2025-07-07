@@ -99,18 +99,24 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   def require_authenticated_api_user(conn, _opts) do
     if conn.assigns[:auth_user] do
       conn = maybe_refresh_token_api(conn)
-      # Enhanced: Validate JWT token integrity
-      case validate_jwt_token(conn) do
-        {:ok, conn} -> conn
-        {:error, reason} ->
-          conn
-          |> put_status(:unauthorized)
-          |> Phoenix.Controller.json(%{
-            success: false,
-            error: "token_invalid",
-            message: "Authentication token is invalid: #{reason}"
-          })
-          |> halt()
+
+      # Check if connection was halted by maybe_refresh_token_api
+      if conn.halted do
+        conn
+      else
+        # Enhanced: Validate JWT token integrity
+        case validate_jwt_token(conn) do
+          {:ok, conn} -> conn
+          {:error, _reason} ->
+            conn
+            |> put_status(:unauthorized)
+            |> Phoenix.Controller.json(%{
+              success: false,
+              error: "token_invalid",
+              message: "Authentication failed"
+            })
+            |> halt()
+        end
       end
     else
       conn
@@ -414,9 +420,11 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
           {:ok, conn}
         {:error, :expired} ->
           # Token expired, try to refresh
-          case maybe_refresh_token_api(conn) do
-            %{halted: true} = _conn -> {:error, "token_expired"}
-            conn -> {:ok, conn}
+          refreshed_conn = maybe_refresh_token_api(conn)
+          if refreshed_conn.halted do
+            {:error, "token_expired"}
+          else
+            {:ok, refreshed_conn}
           end
         {:error, reason} ->
           {:error, "token_invalid: #{reason}"}
