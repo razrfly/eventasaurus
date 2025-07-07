@@ -49,6 +49,9 @@ defmodule EventasaurusWeb.EventManageLive do
               # Fetch analytics data for insights tab
               analytics_data = fetch_analytics_data(event.id)
 
+              # Load event organizers
+              organizers = Events.list_event_organizers(event)
+
               {:ok,
                socket
                |> assign(:event, event)
@@ -74,7 +77,18 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:manual_emails, "")
                |> assign(:invitation_message, "")
                |> assign(:add_mode, "invite")
-               |> assign(:open_participant_menu, nil)}  # Track which dropdown is open
+               |> assign(:open_participant_menu, nil)  # Track which dropdown is open
+               # Organizer management state
+               |> assign(:organizers, organizers)
+               |> assign(:show_organizer_search_modal, false)
+               |> assign(:organizer_search_query, "")
+               |> assign(:organizer_search_results, [])
+               |> assign(:organizer_search_loading, false)
+               |> assign(:organizer_search_error, nil)
+               |> assign(:selected_organizer_results, [])
+               |> assign(:organizer_search_offset, 0)
+               |> assign(:organizer_search_has_more, false)
+               |> assign(:organizer_search_total_shown, 0)}
             end
         end
     end
@@ -485,6 +499,200 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
+  # Organizer Search Modal Events
+
+  @impl true
+  def handle_event("open_organizer_search_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_organizer_search_modal, true)
+     |> assign(:organizer_search_query, "")
+     |> assign(:organizer_search_results, [])
+     |> assign(:organizer_search_loading, false)
+     |> assign(:organizer_search_error, nil)
+     |> assign(:selected_organizer_results, [])
+     |> assign(:organizer_search_offset, 0)
+     |> assign(:organizer_search_has_more, false)
+     |> assign(:organizer_search_total_shown, 0)}
+  end
+
+  @impl true
+  def handle_event("close_organizer_search_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_organizer_search_modal, false)
+     |> assign(:organizer_search_query, "")
+     |> assign(:organizer_search_results, [])
+     |> assign(:organizer_search_error, nil)
+     |> assign(:selected_organizer_results, [])
+     |> assign(:organizer_search_offset, 0)
+     |> assign(:organizer_search_has_more, false)
+     |> assign(:organizer_search_total_shown, 0)}
+  end
+
+  @impl true
+  def handle_event("search_organizers", %{"value" => query}, socket) do
+    if String.length(String.trim(query)) >= 2 do
+      socket =
+        socket
+        |> assign(:organizer_search_query, query)
+        |> assign(:organizer_search_loading, true)
+        |> assign(:organizer_search_error, nil)
+        |> assign(:organizer_search_offset, 0)  # Reset pagination for new search
+        |> assign(:organizer_search_has_more, false)
+        |> assign(:organizer_search_total_shown, 0)
+
+      # Make HTTP request to user search API
+      send(self(), {:search_users_for_organizers, query})
+      {:noreply, socket}
+    else
+      {:noreply,
+       socket
+       |> assign(:organizer_search_query, query)
+       |> assign(:organizer_search_results, [])
+       |> assign(:organizer_search_loading, false)
+       |> assign(:organizer_search_offset, 0)
+       |> assign(:organizer_search_has_more, false)
+       |> assign(:organizer_search_total_shown, 0)}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_organizer_selection", %{"user_id" => user_id}, socket) do
+    user_id = String.to_integer(user_id)
+    current_selections = socket.assigns.selected_organizer_results
+
+    updated_selections = if user_id in current_selections do
+      List.delete(current_selections, user_id)
+    else
+      [user_id | current_selections]
+    end
+
+    {:noreply, assign(socket, :selected_organizer_results, updated_selections)}
+  end
+
+  @impl true
+  def handle_event("load_more_organizers", _params, socket) do
+    query = socket.assigns.organizer_search_query
+
+    if String.length(String.trim(query)) >= 2 do
+      socket =
+        socket
+        |> assign(:organizer_search_loading, true)
+        |> assign(:organizer_search_error, nil)
+
+      # Load more results with current offset
+      send(self(), {:search_users_for_organizers, query, :load_more})
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("add_selected_organizers", _params, socket) do
+    event = socket.assigns.event
+    selected_user_ids = socket.assigns.selected_organizer_results
+
+    if length(selected_user_ids) > 0 do
+      # Get the selected users from search results
+      selected_users = socket.assigns.organizer_search_results
+                      |> Enum.filter(&(&1["id"] in selected_user_ids))
+
+      # Add each user as an organizer
+      results = Enum.map(selected_users, fn user_data ->
+        # Find or create user record
+        case EventasaurusApp.Repo.get_by(EventasaurusApp.Accounts.User, email: user_data["email"]) do
+          nil ->
+            # User doesn't exist in our system - this shouldn't happen with our search
+            {:error, "User not found: #{user_data["email"]}"}
+
+          user ->
+            # Check if user is already an organizer
+            if Events.user_is_organizer?(event, user) do
+              {:error, "#{user.name || user.email} is already an organizer"}
+            else
+              # Add as organizer
+              case Events.add_user_to_event(event, user, "organizer") do
+                {:ok, _event_user} ->
+                  {:ok, user.name || user.email}
+                {:error, _changeset} ->
+                  {:error, "Failed to add #{user.name || user.email}"}
+              end
+            end
+        end
+      end)
+
+      # Process results
+      successful_adds = Enum.filter(results, &match?({:ok, _}, &1))
+      failed_adds = Enum.filter(results, &match?({:error, _}, &1))
+
+      # Reload organizers
+      updated_organizers = Events.list_event_organizers(event)
+
+      # Build flash messages
+      socket = if length(successful_adds) > 0 do
+        success_names = Enum.map(successful_adds, fn {:ok, name} -> name end)
+        success_message = "Successfully added #{length(successful_adds)} organizer(s): #{Enum.join(success_names, ", ")}"
+        put_flash(socket, :info, success_message)
+      else
+        socket
+      end
+
+      socket = if length(failed_adds) > 0 do
+        error_messages = Enum.map(failed_adds, fn {:error, msg} -> msg end)
+        error_message = "Some additions failed: #{Enum.join(error_messages, "; ")}"
+        put_flash(socket, :error, error_message)
+      else
+        socket
+      end
+
+      {:noreply,
+       socket
+       |> assign(:organizers, updated_organizers)
+       |> assign(:show_organizer_search_modal, false)
+       |> assign(:organizer_search_results, [])
+       |> assign(:selected_organizer_results, [])}
+    else
+      {:noreply, put_flash(socket, :error, "Please select at least one user to add as an organizer.")}
+    end
+  end
+
+  @impl true
+  def handle_event("remove_organizer", %{"user_id" => user_id}, socket) do
+    event = socket.assigns.event
+    current_user = socket.assigns.user
+
+    user_id_int = String.to_integer(user_id)
+
+    if user_id_int == current_user.id do
+      # Prevent user from removing themselves
+      {:noreply, put_flash(socket, :error, "You cannot remove yourself as an organizer.")}
+    else
+      case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id_int) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "User not found.")}
+
+        user ->
+          case Events.remove_user_from_event(event, user) do
+            {1, _} ->
+              # Successfully removed
+              updated_organizers = Events.list_event_organizers(event)
+              {:noreply,
+               socket
+               |> assign(:organizers, updated_organizers)
+               |> put_flash(:info, "Successfully removed #{user.name || user.email} as an organizer.")}
+
+            {0, _} ->
+              {:noreply, put_flash(socket, :error, "User is not an organizer of this event.")}
+
+            _ ->
+              {:noreply, put_flash(socket, :error, "Failed to remove organizer.")}
+          end
+      end
+    end
+  end
+
   @impl true
   def handle_info(:refresh_analytics, socket) do
     # Periodic refresh of analytics data
@@ -498,7 +706,90 @@ defmodule EventasaurusWeb.EventManageLive do
      |> assign(:analytics_data, analytics_data)}
   end
 
-    @impl true
+  @impl true
+  def handle_info({:search_users_for_organizers, query}, socket) do
+    handle_search_users(socket, query, :initial)
+  end
+
+  @impl true
+  def handle_info({:search_users_for_organizers, query, :load_more}, socket) do
+    handle_search_users(socket, query, :load_more)
+  end
+
+  defp handle_search_users(socket, query, mode) do
+    event = socket.assigns.event
+    current_user = socket.assigns.user
+
+    # Determine offset based on mode
+    offset = case mode do
+      :initial -> 0
+      :load_more -> socket.assigns.organizer_search_offset
+    end
+
+    # Use Accounts context directly for better performance
+    search_opts = [
+      limit: 21,  # Get 21 to check if there are more results
+      offset: offset,
+      exclude_user_id: current_user.id,
+      event_id: event.id,
+      requesting_user_id: current_user.id
+    ]
+
+    try do
+      users = EventasaurusApp.Accounts.search_users_for_organizers(query, search_opts)
+
+      # Check if there are more results by seeing if we got 21 results
+      has_more = length(users) > 20
+      display_users = Enum.take(users, 20)  # Only show 20
+
+      # Format users for the template (ensure consistent structure)
+      formatted_users = Enum.map(display_users, fn user ->
+        %{
+          "id" => user.id,
+          "name" => user.name,
+          "username" => user.username,
+          "email" => user.email,
+          "profile_public" => user.profile_public,
+          "avatar_url" => EventasaurusApp.Avatars.generate_user_avatar(user, size: 40)
+        }
+      end)
+
+      # Update results based on mode
+      {updated_results, new_offset, new_total} = case mode do
+        :initial ->
+          {formatted_users, 20, length(formatted_users)}
+        :load_more ->
+          existing_results = socket.assigns.organizer_search_results
+          combined_results = existing_results ++ formatted_users
+          {combined_results, offset + 20, length(combined_results)}
+      end
+
+      {:noreply,
+       socket
+       |> assign(:organizer_search_results, updated_results)
+       |> assign(:organizer_search_loading, false)
+       |> assign(:organizer_search_error, nil)
+       |> assign(:organizer_search_offset, new_offset)
+       |> assign(:organizer_search_has_more, has_more)
+       |> assign(:organizer_search_total_shown, new_total)}
+
+    rescue
+      error ->
+        require Logger
+        Logger.error("User search failed: #{inspect(error)}")
+
+        {:noreply,
+         socket
+         |> assign(:organizer_search_results, [])
+         |> assign(:organizer_search_loading, false)
+         |> assign(:organizer_search_error, "Search failed. Please try again.")
+         |> assign(:organizer_search_offset, 0)
+         |> assign(:organizer_search_has_more, false)
+         |> assign(:organizer_search_total_shown, 0)}
+    end
+  end
+
+  @impl true
   def handle_info(:load_historical_suggestions, socket) do
     event = socket.assigns.event
     organizer = socket.assigns.user
@@ -546,8 +837,6 @@ defmodule EventasaurusWeb.EventManageLive do
     |> assign(:participants, participants)
     |> assign(:participant_stats, participant_stats)
   end
-
-
 
   defp calculate_participant_stats(participants) do
     %{

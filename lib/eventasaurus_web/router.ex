@@ -26,6 +26,28 @@ defmodule EventasaurusWeb.Router do
     plug :assign_user_struct
   end
 
+  # Enhanced API pipeline with CSRF protection for sensitive operations
+  pipeline :api_csrf_protected do
+    plug :accepts, ["json"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :protect_from_forgery
+    plug :fetch_auth_user
+    plug :assign_user_struct
+  end
+
+  # Secure user search pipeline (combines security measures for user data access)
+  pipeline :secure_user_api do
+    plug :accepts, ["json"]
+    plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 60, window: 60_000  # 60 requests per minute
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :protect_from_forgery
+    plug :fetch_auth_user
+    plug :assign_user_struct
+  end
+
   pipeline :image do
     plug :accepts, ["png", "jpg", "jpeg", "gif", "webp"]
   end
@@ -277,6 +299,13 @@ defmodule EventasaurusWeb.Router do
 
     get "/:order_id/success", CheckoutController, :success
     get "/cancel", CheckoutController, :cancel
+  end
+
+  # User search API routes (require authentication, CSRF protection, enhanced security, and rate limiting)
+  scope "/api/users", EventasaurusWeb do
+    pipe_through [:secure_user_api, :api_authenticated]
+
+    get "/search", UserSearchController, :search
   end
 
   # Order management API routes (require authentication)
