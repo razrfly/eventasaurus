@@ -536,7 +536,7 @@ defmodule EventasaurusWeb.EventLive.New do
       # Update the changeset with the new timezone
       changeset =
         %Event{}
-        |> Event.changeset(form_data)
+        |> Events.change_event(form_data)
         |> Map.put(:action, :validate)
 
       {:noreply,
