@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Services.DefaultImagesService
   alias EventasaurusApp.Ticketing
+  alias EventasaurusWeb.Helpers.ImageHelpers
 
   @valid_setup_paths ~w[polling confirmed threshold]
 
@@ -541,7 +542,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
       "metadata" => %{
         "filename" => filename,
         "category" => category,
-        "title" => generate_title_from_filename(filename)
+        "title" => ImageHelpers.title_from_filename(filename)
       }
     }
 
@@ -1689,18 +1690,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
-  # Helper function to generate a clean title from filename
-  defp generate_title_from_filename(filename) do
-    filename
-    |> String.replace(~r/\.(png|jpg|jpeg|gif)$/i, "")
-    |> String.replace(~r/[_-]/, " ")
-    |> String.split(" ")
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(" ")
-    |> case do
-      "" -> filename  # fallback to original filename if processing fails
-      title -> title
-    end
-  end
+
 
 end
