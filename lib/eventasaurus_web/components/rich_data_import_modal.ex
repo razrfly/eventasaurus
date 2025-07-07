@@ -154,11 +154,7 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
                         <div class="flex-1 min-w-0">
                           <h3 class="font-medium text-gray-900 truncate"><%= result.title %></h3>
                           <%!-- Extract year from metadata --%>
-                          <% year = case result.metadata do
-                               %{release_date: date} when is_binary(date) and date != "" -> String.slice(date, 0, 4)
-                               %{first_air_date: date} when is_binary(date) and date != "" -> String.slice(date, 0, 4)
-                               _ -> nil
-                             end %>
+                          <% year = extract_year_from_metadata(result.metadata) %>
                           <%= if year do %>
                             <p class="text-sm text-gray-500"><%= year %></p>
                           <% end %>
@@ -325,5 +321,13 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
        |> assign(:error, nil)}
     end
   end
+
+  defp extract_year_from_metadata(%{release_date: date}) when is_binary(date) and date != "" do
+    String.slice(date, 0, 4)
+  end
+  defp extract_year_from_metadata(%{first_air_date: date}) when is_binary(date) and date != "" do
+    String.slice(date, 0, 4)
+  end
+  defp extract_year_from_metadata(_), do: nil
 
 end
