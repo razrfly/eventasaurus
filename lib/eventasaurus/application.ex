@@ -60,6 +60,10 @@ defmodule Eventasaurus.Application do
       Eventasaurus.Services.PosthogService,
       # Start Stripe Currency Service for caching supported currencies
       EventasaurusWeb.Services.StripeCurrencyService,
+      # Start TMDB Service for movie/TV data caching
+      EventasaurusWeb.Services.TmdbService,
+      # Start Rich Data Manager for external API providers
+      EventasaurusWeb.Services.RichDataManager,
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry

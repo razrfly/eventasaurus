@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.ReservedSlugs
+  alias EventasaurusWeb.Components.RichDataDisplayComponent
 
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
 
@@ -1075,6 +1076,22 @@ defmodule EventasaurusWeb.PublicEventLive do
             <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
               <h2 class="text-xl font-semibold mb-4 text-gray-900">About This Event</h2>
               <p class="text-gray-500">No description provided for this event.</p>
+            </div>
+          <% end %>
+
+          <!-- Rich Data Display -->
+          <%= if @event.rich_external_data &&
+                  @event.rich_external_data != %{} &&
+                  @event.rich_external_data != "{}" &&
+                  @event.rich_external_data["tmdb"] do %>
+            <div class="mb-8">
+              <.live_component
+                module={RichDataDisplayComponent}
+                id="event-rich-data"
+                rich_data={@event.rich_external_data["tmdb"]}
+                sections={[:hero, :overview, :cast, :media, :details]}
+                compact={false}
+              />
             </div>
           <% end %>
 
