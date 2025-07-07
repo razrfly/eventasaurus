@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Live.Components.MovieCastComponent do
 
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
-  alias EventasaurusWeb.RichDataDisplayComponent
+  alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
 
   @impl true
   def update(assigns, socket) do

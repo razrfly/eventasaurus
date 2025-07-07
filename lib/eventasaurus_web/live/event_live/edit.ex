@@ -1073,6 +1073,26 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, create_virtual_meeting(socket, :google_meet)}
   end
 
+  @impl true
+  def handle_event("show_rich_data_import", _params, socket) do
+    {:noreply, assign(socket, :show_rich_data_import, true)}
+  end
+
+  @impl true
+  def handle_event("close_rich_data_import", _params, socket) do
+    {:noreply, assign(socket, :show_rich_data_import, false)}
+  end
+
+  @impl true
+  def handle_event("clear_rich_data", _params, socket) do
+    socket =
+      socket
+      |> assign(:rich_external_data, %{})
+      |> put_flash(:info, "Rich data has been removed from your event.")
+
+    {:noreply, socket}
+  end
+
   defp create_virtual_meeting(socket, meeting_type) do
     {url, label} = case meeting_type do
       :zoom ->
@@ -1161,6 +1181,99 @@ defmodule EventasaurusWeb.EventLive.Edit do
     socket = assign(socket, :form_data, form_data)
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:rich_data_search, query, provider}, socket) do
+    case safe_provider_conversion(provider) do
+      {:ok, provider_atom} ->
+        case RichDataManager.search(query, %{providers: [provider_atom]}) do
+          {:ok, results} ->
+            # Flatten the results from the map format to a list
+            flattened_results =
+              results
+              |> Enum.flat_map(fn {_provider_id, result} ->
+                  case result do
+                    {:ok, items} when is_list(items) ->
+                      # Add provider information to each item
+                      Enum.map(items, fn item ->
+                        Map.put(item, :provider, provider_atom)
+                      end)
+                    {:error, _} -> []
+                    _ -> []
+                  end
+                end)
+
+            send_update(RichDataImportModal,
+              id: "rich-data-import-modal",
+              search_results: flattened_results,
+              loading: false,
+              error: nil
+            )
+
+          {:error, reason} ->
+            send_update(RichDataImportModal,
+              id: "rich-data-import-modal",
+              search_results: [],
+              loading: false,
+              error: "Search failed: #{reason}"
+            )
+        end
+
+      {:error, reason} ->
+        send_update(RichDataImportModal,
+          id: "rich-data-import-modal",
+          search_results: [],
+          loading: false,
+          error: reason
+        )
+    end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:rich_data_import, id, provider, type}, socket) do
+    require Logger
+    Logger.debug("handle_info rich_data_import called with id: #{id}, provider: #{provider}, type: #{type}")
+
+    case safe_provider_type_conversion(provider, type) do
+      {:ok, provider_atom, type_atom} ->
+        case RichDataManager.get_details(provider_atom, id, type_atom, %{}) do
+          {:ok, details} ->
+            Logger.debug("RichDataManager.get_details returned success, importing data")
+
+            # Call the existing import handler with the fetched data
+            send(self(), {:rich_data_import, details})
+
+            {:noreply, socket}
+
+          {:error, reason} ->
+            Logger.error("Failed to fetch rich data for import: #{inspect(reason)}")
+            {:noreply, put_flash(socket, :error, "Failed to import data: #{reason}")}
+        end
+
+      {:error, reason} ->
+        Logger.error("Invalid provider or type in import: provider=#{provider}, type=#{type}")
+        {:noreply, put_flash(socket, :error, reason)}
+    end
+  end
+
+  @impl true
+  def handle_info({:rich_data_import, data}, socket) do
+    # Store the imported data and close modal
+    socket =
+      socket
+      |> assign(:rich_external_data, data)
+      |> assign(:show_rich_data_import, false)
+      |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:close_rich_data_modal}, socket) do
+    {:noreply, assign(socket, :show_rich_data_import, false)}
   end
 
   # ============================================================================
@@ -1707,110 +1820,25 @@ defmodule EventasaurusWeb.EventLive.Edit do
     end
   end
 
-  # ========== Rich Data Import Handlers ==========
+  # Helper functions for safe provider/type conversion
 
-  @impl true
-  def handle_event("show_rich_data_import", _params, socket) do
-    {:noreply, assign(socket, :show_rich_data_import, true)}
-  end
-
-  @impl true
-  def handle_event("close_rich_data_import", _params, socket) do
-    {:noreply, assign(socket, :show_rich_data_import, false)}
-  end
-
-  @impl true
-  def handle_event("clear_rich_data", _params, socket) do
-    socket =
-      socket
-      |> assign(:rich_external_data, %{})
-      |> put_flash(:info, "Rich data has been removed from your event.")
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:rich_data_search, query, provider}, socket) do
-    # Convert provider string to atom
-    provider_atom = String.to_existing_atom(provider)
-
-    case RichDataManager.search(query, %{providers: [provider_atom]}) do
-      {:ok, results} ->
-        # Flatten the results from the map format to a list
-        flattened_results =
-          results
-          |> Enum.flat_map(fn {_provider_id, result} ->
-              case result do
-                {:ok, items} when is_list(items) ->
-                  # Add provider information to each item
-                  Enum.map(items, fn item ->
-                    Map.put(item, :provider, provider_atom)
-                  end)
-                {:error, _} -> []
-                _ -> []
-              end
-            end)
-
-        send_update(RichDataImportModal,
-          id: "rich-data-import-modal",
-          search_results: flattened_results,
-          loading: false,
-          error: nil
-        )
-
-      {:error, reason} ->
-        send_update(RichDataImportModal,
-          id: "rich-data-import-modal",
-          search_results: [],
-          loading: false,
-          error: "Search failed: #{reason}"
-        )
-    end
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:rich_data_import, id, provider, type}, socket) do
-    require Logger
-    Logger.debug("handle_info rich_data_import called with id: #{id}, provider: #{provider}, type: #{type}")
-
-    # Convert provider string to atom
-    provider_atom = String.to_existing_atom(provider)
-    type_atom = String.to_existing_atom(type)
-
-    case RichDataManager.get_details(provider_atom, id, type_atom, %{}) do
-      {:ok, details} ->
-        Logger.debug("RichDataManager.get_details returned success, importing data")
-
-        # Call the existing import handler with the fetched data
-        send(self(), {:rich_data_import, details})
-
-        {:noreply, socket}
-
-      {:error, reason} ->
-        Logger.error("Failed to fetch rich data for import: #{inspect(reason)}")
-        {:noreply, put_flash(socket, :error, "Failed to import data: #{reason}")}
+  defp safe_provider_conversion(provider) do
+    case provider do
+      "tmdb" -> {:ok, :tmdb}
+      "spotify" -> {:ok, :spotify}
+      _ -> {:error, "Invalid provider: #{provider}"}
     end
   end
 
-  @impl true
-  def handle_info({:rich_data_import, data}, socket) do
-    # Store the imported data and close modal
-    socket =
-      socket
-      |> assign(:rich_external_data, data)
-      |> assign(:show_rich_data_import, false)
-      |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
-
-    {:noreply, socket}
+  defp safe_provider_type_conversion(provider, type) do
+    case {provider, type} do
+      {"tmdb", "movie"} -> {:ok, :tmdb, :movie}
+      {"tmdb", "tv"} -> {:ok, :tmdb, :tv}
+      {"spotify", "artist"} -> {:ok, :spotify, :artist}
+      {"spotify", "album"} -> {:ok, :spotify, :album}
+      {"spotify", "track"} -> {:ok, :spotify, :track}
+      _ -> {:error, "Invalid provider/type combination: #{provider}/#{type}"}
+    end
   end
-
-  @impl true
-  def handle_info({:close_rich_data_modal}, socket) do
-    {:noreply, assign(socket, :show_rich_data_import, false)}
-  end
-
-  # ========== End Rich Data Import Handlers ==========
 
 end

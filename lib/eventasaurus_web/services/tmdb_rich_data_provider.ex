@@ -39,7 +39,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   end
 
   @impl true
-  def get_details(id, type, options \\ %{}) do
+  def get_details(id, type, _options \\ %{}) do
     case type do
       :movie ->
         case TmdbService.get_movie_details(id) do
@@ -351,8 +351,8 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   defp build_tmdb_url(%{tmdb_id: id, name: _}), do: "https://www.themoviedb.org/tv/#{id}"
   defp build_tmdb_url(%{tmdb_id: id}), do: "https://www.themoviedb.org/movie/#{id}"
 
-  defp maybe_add_external_url(urls, key, nil, _base_url), do: urls
-  defp maybe_add_external_url(urls, key, "", _base_url), do: urls
+  defp maybe_add_external_url(urls, _key, nil, _base_url), do: urls
+  defp maybe_add_external_url(urls, _key, "", _base_url), do: urls
   defp maybe_add_external_url(urls, key, id, base_url) do
     Map.put(urls, key, "#{base_url}#{id}")
   end

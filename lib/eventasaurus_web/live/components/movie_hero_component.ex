@@ -8,12 +8,14 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
 
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
-  alias EventasaurusWeb.RichDataDisplayComponent
+  alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
 
   @impl true
   def update(assigns, socket) do
-    require Logger
-    Logger.debug("MovieHeroComponent update called with rich_data: #{inspect(assigns[:rich_data])}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("MovieHeroComponent update called with rich_data: #{inspect(assigns[:rich_data])}")
+    end
 
     {:ok,
      socket

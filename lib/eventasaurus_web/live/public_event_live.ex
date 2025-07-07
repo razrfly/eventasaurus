@@ -1080,10 +1080,7 @@ defmodule EventasaurusWeb.PublicEventLive do
           <% end %>
 
           <!-- Rich Data Display -->
-          <%= if @event.rich_external_data &&
-                  @event.rich_external_data != %{} &&
-                  @event.rich_external_data != "{}" &&
-                  @event.rich_external_data["tmdb"] do %>
+          <%= if @event.rich_external_data["tmdb"] do %>
             <div class="mb-8">
               <.live_component
                 module={RichDataDisplayComponent}
