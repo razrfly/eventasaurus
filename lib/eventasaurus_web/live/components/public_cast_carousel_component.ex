@@ -7,7 +7,6 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
   """
 
   use EventasaurusWeb, :live_component
-  import EventasaurusWeb.CoreComponents
   alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
 
   @impl true
