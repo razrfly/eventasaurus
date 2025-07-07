@@ -79,19 +79,21 @@ defmodule EventasaurusWeb.EventHTML do
         <div class="flex gap-6">
           <%= if length(posters) > 0 do %>
             <% poster = List.first(posters) %>
-            <div class="flex-shrink-0">
-              <img
-                src={tmdb_image_url(poster["file_path"], "w300")}
-                alt={metadata["title"] || "Movie poster"}
-                class="w-32 h-48 object-cover rounded-lg shadow-md"
-              />
-            </div>
+            <%= if is_map(poster) && poster["file_path"] do %>
+              <div class="flex-shrink-0">
+                <img
+                  src={tmdb_image_url(poster["file_path"], "w300")}
+                  alt={metadata["title"] || "Movie poster"}
+                  class="w-32 h-48 object-cover rounded-lg shadow-md"
+                />
+              </div>
+            <% end %>
           <% end %>
 
           <div class="flex-1">
             <h2 class="text-2xl font-bold text-gray-900 mb-2">
               <%= metadata["title"] %>
-              <%= if metadata["release_date"] do %>
+              <%= if metadata["release_date"] && is_binary(metadata["release_date"]) && String.length(metadata["release_date"]) >= 4 do %>
                 <span class="text-gray-600 font-normal">(<%= String.slice(metadata["release_date"], 0, 4) %>)</span>
               <% end %>
             </h2>
@@ -127,7 +129,7 @@ defmodule EventasaurusWeb.EventHTML do
                 </div>
               <% end %>
 
-              <%= if metadata["vote_average"] do %>
+              <%= if metadata["vote_average"] && is_number(metadata["vote_average"]) do %>
                 <div>
                   <span class="font-medium text-gray-900">Rating:</span>
                   <span class="text-gray-700"><%= Float.round(metadata["vote_average"], 1) %>/10</span>
@@ -145,26 +147,28 @@ defmodule EventasaurusWeb.EventHTML do
         </div>
 
         <!-- Cast Section -->
-        <%= if length(cast) > 0 do %>
+        <%= if is_list(cast) && length(cast) > 0 do %>
           <div class="border-t border-gray-200 pt-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Cast</h3>
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               <%= for actor <- Enum.take(cast, 8) do %>
-                <div class="text-center">
-                  <%= if actor["profile_path"] do %>
-                    <img
-                      src={tmdb_image_url(actor["profile_path"], "w185")}
-                      alt={actor["name"]}
-                      class="w-16 h-16 rounded-full object-cover mx-auto mb-2"
-                    />
-                  <% else %>
-                    <div class="w-16 h-16 bg-gray-300 rounded-full mx-auto mb-2 flex items-center justify-center">
-                      <span class="text-gray-500 text-xs">No Photo</span>
-                    </div>
-                  <% end %>
-                  <p class="font-medium text-sm text-gray-900"><%= actor["name"] %></p>
-                  <p class="text-xs text-gray-600"><%= actor["character"] %></p>
-                </div>
+                <%= if is_map(actor) do %>
+                  <div class="text-center">
+                    <%= if actor["profile_path"] do %>
+                      <img
+                        src={tmdb_image_url(actor["profile_path"], "w185")}
+                        alt={actor["name"] || "Actor"}
+                        class="w-16 h-16 rounded-full object-cover mx-auto mb-2"
+                      />
+                    <% else %>
+                      <div class="w-16 h-16 bg-gray-300 rounded-full mx-auto mb-2 flex items-center justify-center">
+                        <span class="text-gray-500 text-xs">No Photo</span>
+                      </div>
+                    <% end %>
+                    <p class="font-medium text-sm text-gray-900"><%= actor["name"] || "Unknown" %></p>
+                    <p class="text-xs text-gray-600"><%= actor["character"] || "" %></p>
+                  </div>
+                <% end %>
               <% end %>
             </div>
           </div>
@@ -188,9 +192,15 @@ defmodule EventasaurusWeb.EventHTML do
     """
   end
 
-  # Helper function to generate TMDB image URLs
+  # Helper function to generate TMDB image URLs with input validation
   defp tmdb_image_url(path, size) when is_binary(path) do
-    "https://image.tmdb.org/t/p/#{size}#{path}"
+    # Validate that path starts with "/" and contains only safe characters
+    # TMDB image paths follow the pattern: /[alphanumeric chars and some symbols].(jpg|png|webp)
+    if String.match?(path, ~r{^/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$}i) do
+      "https://image.tmdb.org/t/p/#{size}#{path}"
+    else
+      nil
+    end
   end
   defp tmdb_image_url(_, _), do: nil
 end
