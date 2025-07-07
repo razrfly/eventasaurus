@@ -52,6 +52,7 @@ defmodule EventasaurusWeb.CoreComponents do
   attr :show, :boolean, default: false
   attr :on_cancel, :any, default: nil
   attr :on_confirm, :any, default: nil
+  attr :disabled, :boolean, default: false
   slot :inner_block, required: true
   slot :title
   slot :confirm
@@ -68,49 +69,50 @@ defmodule EventasaurusWeb.CoreComponents do
     >
       <div id={"#{@id}-bg"} class="bg-zinc-50/90 fixed inset-0 transition-opacity" aria-hidden="true" />
       <div class="fixed inset-0 overflow-y-auto">
-        <div class="flex min-h-full items-center justify-center">
-          <div class="w-full max-w-3xl p-4 sm:p-6 lg:py-8">
+        <div class="flex min-h-full items-center justify-center p-2 sm:p-4">
+          <div class="w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-2xl xl:max-w-3xl">
             <div
               id={"#{@id}-container"}
               phx-window-keydown={@on_cancel}
               phx-key="escape"
               phx-click-away={@on_cancel}
               class={[
-                "shadow-zinc-700/10 ring-zinc-700/10 relative rounded-2xl bg-white p-8 shadow-lg ring-1 transition",
+                "shadow-zinc-700/10 ring-zinc-700/10 relative rounded-xl sm:rounded-2xl bg-white p-4 sm:p-6 lg:p-8 shadow-lg ring-1 transition",
                 if(@show, do: "block", else: "hidden")
               ]}
             >
-              <div class="absolute top-6 right-6">
+              <div class="absolute top-4 right-4 sm:top-6 sm:right-6">
                 <button
                   phx-click={@on_cancel}
                   type="button"
-                  class="-m-3 flex-none p-3 opacity-20 hover:opacity-40"
+                  class="-m-2 sm:-m-3 flex-none p-2 sm:p-3 opacity-40 hover:opacity-60 transition-opacity"
                   aria-label={gettext("close")}
                 >
-                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
+                  <.icon name="hero-x-mark-solid" class="h-5 w-5 text-zinc-500" />
                 </button>
               </div>
               <div id={"#{@id}-content"}>
                 <header :if={@title != []}>
-                  <h1 class="text-lg font-semibold leading-8 text-zinc-800">
+                  <h1 class="text-lg sm:text-xl font-semibold leading-6 sm:leading-8 text-zinc-800 pr-8">
                     <%= render_slot(@title) %>
                   </h1>
                 </header>
                 <%= render_slot(@inner_block) %>
-                <div :if={@confirm != [] or @cancel != []} class="ml-6 mb-4 flex items-center gap-5">
+                <div :if={@confirm != [] or @cancel != []} class="mt-6 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-5">
                   <.button
                     :for={confirm <- @confirm}
                     id={"#{@id}-confirm"}
                     phx-click={@on_confirm}
                     phx-disable-with
-                    class="py-2 px-3"
+                    disabled={@disabled}
+                    class="w-full sm:w-auto py-3 sm:py-2 px-4 sm:px-3 order-first"
                   >
                     <%= render_slot(confirm) %>
                   </.button>
                   <.link
                     :for={cancel <- @cancel}
                     phx-click={@on_cancel}
-                    class="text-sm font-semibold leading-6 text-zinc-900 hover:text-zinc-700"
+                    class="text-sm font-semibold leading-6 text-zinc-900 hover:text-zinc-700 text-center py-2 sm:py-0 order-last"
                   >
                     <%= render_slot(cancel) %>
                   </.link>
