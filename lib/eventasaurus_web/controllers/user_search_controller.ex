@@ -87,7 +87,7 @@ defmodule EventasaurusWeb.UserSearchController do
     end
   end
 
-    defp process_user_search(conn, current_user, query, page, per_page, event_id) do
+  defp process_user_search(conn, current_user, query, page, per_page, event_id) do
     # If event_id is provided, verify user has permission to manage that event
     if event_id do
       case validate_event_permissions(current_user, event_id) do
@@ -184,8 +184,6 @@ defmodule EventasaurusWeb.UserSearchController do
         {:error, "Event not found"}
     end
   end
-
-
 
   # Enhanced format function that conditionally exposes user information
   # based on privacy levels and requester privileges

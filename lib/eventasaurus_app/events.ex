@@ -401,11 +401,14 @@ defmodule EventasaurusApp.Events do
                                   select: eu.user_id)
                             |> Repo.all()
 
-    # Filter out user IDs that are already organizers
-    new_user_ids = user_ids -- existing_organizer_ids
+    # Filter out user IDs that are already organizers and deduplicate
+    new_user_ids =
+      user_ids
+      |> Enum.uniq()
+      |> Kernel.--(existing_organizer_ids)
 
     # Prepare organizer records for bulk insert
-    timestamp = DateTime.utc_now() |> DateTime.truncate(:second)
+    timestamp = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     organizer_records = Enum.map(new_user_ids, fn user_id ->
       %{
@@ -420,8 +423,14 @@ defmodule EventasaurusApp.Events do
     case organizer_records do
       [] -> 0  # No new organizers to add
       records ->
-        # Use insert_all for better performance
-        {count, _} = Repo.insert_all(EventUser, records)
+        # Use insert_all with conflict handling for better performance and safety
+        {count, _} =
+          Repo.insert_all(
+            EventUser,
+            records,
+            on_conflict: :nothing,
+            conflict_target: [:event_id, :user_id]
+          )
         count
     end
   end

@@ -595,64 +595,23 @@ defmodule EventasaurusWeb.EventManageLive do
     selected_user_ids = socket.assigns.selected_organizer_results
 
     if length(selected_user_ids) > 0 do
-      # Get the selected users from search results
-      selected_users = socket.assigns.organizer_search_results
-                      |> Enum.filter(&(&1["id"] in selected_user_ids))
+      # Use the new bulk addition function from Events context
+      case Events.add_organizers_to_event(event, selected_user_ids) do
+        count when count > 0 ->
+          # Reload organizers
+          updated_organizers = Events.list_event_organizers(event)
 
-      # Add each user as an organizer
-      results = Enum.map(selected_users, fn user_data ->
-        # Find or create user record
-        case EventasaurusApp.Repo.get_by(EventasaurusApp.Accounts.User, email: user_data["email"]) do
-          nil ->
-            # User doesn't exist in our system - this shouldn't happen with our search
-            {:error, "User not found: #{user_data["email"]}"}
+          {:noreply,
+           socket
+           |> assign(:organizers, updated_organizers)
+           |> assign(:show_organizer_search_modal, false)
+           |> assign(:organizer_search_results, [])
+           |> assign(:selected_organizer_results, [])
+           |> put_flash(:info, "Successfully added #{count} organizer(s)")}
 
-          user ->
-            # Check if user is already an organizer
-            if Events.user_is_organizer?(event, user) do
-              {:error, "#{user.name || user.email} is already an organizer"}
-            else
-              # Add as organizer
-              case Events.add_user_to_event(event, user, "organizer") do
-                {:ok, _event_user} ->
-                  {:ok, user.name || user.email}
-                {:error, _changeset} ->
-                  {:error, "Failed to add #{user.name || user.email}"}
-              end
-            end
-        end
-      end)
-
-      # Process results
-      successful_adds = Enum.filter(results, &match?({:ok, _}, &1))
-      failed_adds = Enum.filter(results, &match?({:error, _}, &1))
-
-      # Reload organizers
-      updated_organizers = Events.list_event_organizers(event)
-
-      # Build flash messages
-      socket = if length(successful_adds) > 0 do
-        success_names = Enum.map(successful_adds, fn {:ok, name} -> name end)
-        success_message = "Successfully added #{length(successful_adds)} organizer(s): #{Enum.join(success_names, ", ")}"
-        put_flash(socket, :info, success_message)
-      else
-        socket
+        0 ->
+          {:noreply, put_flash(socket, :info, "All selected users are already organizers")}
       end
-
-      socket = if length(failed_adds) > 0 do
-        error_messages = Enum.map(failed_adds, fn {:error, msg} -> msg end)
-        error_message = "Some additions failed: #{Enum.join(error_messages, "; ")}"
-        put_flash(socket, :error, error_message)
-      else
-        socket
-      end
-
-      {:noreply,
-       socket
-       |> assign(:organizers, updated_organizers)
-       |> assign(:show_organizer_search_modal, false)
-       |> assign(:organizer_search_results, [])
-       |> assign(:selected_organizer_results, [])}
     else
       {:noreply, put_flash(socket, :error, "Please select at least one user to add as an organizer.")}
     end

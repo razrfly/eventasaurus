@@ -236,7 +236,7 @@ defmodule EventasaurusWeb.EventManageOrganizerTest do
       assert render(view) =~ "Please select at least one user"
     end
 
-            test "handles errors when user doesn't exist", %{conn: conn, event: event} do
+    test "handles errors when user doesn't exist", %{conn: conn, event: event} do
       {:ok, view, _html} = live(conn, ~p"/events/#{event.slug}")
 
       # Open modal
