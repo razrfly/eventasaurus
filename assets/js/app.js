@@ -1694,4 +1694,15 @@ document.addEventListener("DOMContentLoaded", function() {
   
   // Initialize Supabase client
   initSupabaseClient();
+  
+  // Initialize Stagewise toolbar in development mode
+  if (process.env.NODE_ENV === 'development') {
+    import('@stagewise/toolbar').then(({ initToolbar }) => {
+      initToolbar({
+        plugins: [],
+      });
+    }).catch(err => {
+      console.log('Stagewise toolbar not available:', err);
+    });
+  }
 });

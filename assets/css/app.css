@@ -838,7 +838,6 @@ body[class*="theme-"] .theme-card:hover {
   
   /* Mobile-specific image loading optimizations */
   .cast-carousel-mobile img {
-    loading: lazy;
     will-change: auto;
   }
 }
@@ -860,4 +859,5 @@ body[class*="theme-"] .theme-card:hover {
   .scrollbar-hide {
     scroll-behavior: auto !important;
   }
-} 
+}
+
