@@ -157,9 +157,131 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_info({:rich_data_search, query, provider}, socket) do
-    # Convert provider string to atom
-    provider_atom = String.to_existing_atom(provider)
+    # Convert provider string to atom safely
+    case provider do
+      "tmdb" ->
+        perform_rich_data_search(query, :tmdb, socket)
+      "spotify" ->
+        perform_rich_data_search(query, :spotify, socket)
+      _ ->
+        require Logger
+        Logger.error("Invalid provider in search: #{provider}")
+        send_update(RichDataImportModal,
+          id: "rich-data-import-modal",
+          search_results: [],
+          loading: false,
+          error: "Invalid provider specified"
+        )
+        {:noreply, socket}
+    end
+  end
 
+  @impl true
+  def handle_info({:rich_data_preview, id, provider, type}, socket) do
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("handle_info rich_data_preview called with id: #{id}, provider: #{provider}, type: #{type}")
+    end
+
+    # Convert provider string to atom safely
+    {provider_atom, type_atom} = case {provider, type} do
+      {"tmdb", "movie"} -> {:tmdb, :movie}
+      {"tmdb", "tv"} -> {:tmdb, :tv}
+      {"spotify", "artist"} -> {:spotify, :artist}
+      {"spotify", "album"} -> {:spotify, :album}
+      {"spotify", "track"} -> {:spotify, :track}
+      _ ->
+        require Logger
+        Logger.error("Invalid provider or type: provider=#{provider}, type=#{type}")
+        send_update(RichDataImportModal,
+          id: "rich-data-import-modal",
+          search_results: [],
+          loading: false,
+          error: "Invalid provider or type specified"
+        )
+        {:noreply, socket}
+    end
+
+    case RichDataManager.get_details(provider_atom, id, type_atom, %{}) do
+      {:ok, details} ->
+        if Application.get_env(:eventasaurus, :env) == :dev do
+          require Logger
+          Logger.debug("RichDataManager.get_details returned success, details keys: #{inspect(Map.keys(details))}")
+        end
+
+        send_update(RichDataImportModal,
+          id: "rich-data-import-modal",
+          preview_data: details,
+          loading: false,
+          error: nil
+        )
+
+        if Application.get_env(:eventasaurus, :env) == :dev do
+          require Logger
+          Logger.debug("send_update called for RichDataImportModal with preview_data")
+        end
+
+      {:error, reason} ->
+        require Logger
+        Logger.error("RichDataManager.get_details failed with reason: #{inspect(reason)}")
+
+        send_update(RichDataImportModal,
+          id: "rich-data-import-modal",
+          preview_data: nil,
+          loading: false,
+          error: "Preview failed: #{reason}"
+        )
+    end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:rich_data_import, id, provider, type}, socket) do
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("handle_info rich_data_import called with id: #{id}, provider: #{provider}, type: #{type}")
+    end
+
+    # Convert provider string to atom safely
+    case {provider, type} do
+      {"tmdb", "movie"} ->
+        handle_rich_data_details(:tmdb, id, :movie, socket)
+      {"tmdb", "tv"} ->
+        handle_rich_data_details(:tmdb, id, :tv, socket)
+      {"spotify", "artist"} ->
+        handle_rich_data_details(:spotify, id, :artist, socket)
+      {"spotify", "album"} ->
+        handle_rich_data_details(:spotify, id, :album, socket)
+      {"spotify", "track"} ->
+        handle_rich_data_details(:spotify, id, :track, socket)
+      _ ->
+        require Logger
+        Logger.error("Invalid provider or type in import: provider=#{provider}, type=#{type}")
+        {:noreply, put_flash(socket, :error, "Invalid provider or type specified")}
+    end
+  end
+
+  @impl true
+  def handle_info({:rich_data_import, data}, socket) do
+    # Store the imported data
+    socket =
+      socket
+      |> assign(:rich_external_data, data)
+      |> assign(:show_rich_data_import, false)
+      |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:close_rich_data_modal}, socket) do
+    {:noreply, assign(socket, :show_rich_data_import, false)}
+  end
+
+  # ========== Private Helper Functions ==========
+
+  defp perform_rich_data_search(query, provider_atom, socket) do
     case RichDataManager.search(query, %{providers: [provider_atom]}) do
       {:ok, results} ->
         # Flatten the results from the map format to a list
@@ -196,54 +318,13 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply, socket}
   end
 
-  @impl true
-  def handle_info({:rich_data_preview, id, provider, type}, socket) do
-    require Logger
-    Logger.debug("handle_info rich_data_preview called with id: #{id}, provider: #{provider}, type: #{type}")
-
-    # Convert provider string to atom
-    provider_atom = String.to_existing_atom(provider)
-    type_atom = String.to_existing_atom(type)
-
+  defp handle_rich_data_details(provider_atom, id, type_atom, socket) do
     case RichDataManager.get_details(provider_atom, id, type_atom, %{}) do
       {:ok, details} ->
-        Logger.debug("RichDataManager.get_details returned success, details keys: #{inspect(Map.keys(details))}")
-
-        send_update(RichDataImportModal,
-          id: "rich-data-import-modal",
-          preview_data: details,
-          loading: false,
-          error: nil
-        )
-
-        Logger.debug("send_update called for RichDataImportModal with preview_data")
-
-      {:error, reason} ->
-        Logger.error("RichDataManager.get_details failed with reason: #{inspect(reason)}")
-
-        send_update(RichDataImportModal,
-          id: "rich-data-import-modal",
-          preview_data: nil,
-          loading: false,
-          error: "Preview failed: #{reason}"
-        )
-    end
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:rich_data_import, id, provider, type}, socket) do
-    require Logger
-    Logger.debug("handle_info rich_data_import called with id: #{id}, provider: #{provider}, type: #{type}")
-
-    # Convert provider string to atom
-    provider_atom = String.to_existing_atom(provider)
-    type_atom = String.to_existing_atom(type)
-
-    case RichDataManager.get_details(provider_atom, id, type_atom, %{}) do
-      {:ok, details} ->
-        Logger.debug("RichDataManager.get_details returned success, importing data")
+        if Application.get_env(:eventasaurus, :env) == :dev do
+          require Logger
+          Logger.debug("RichDataManager.get_details returned success, importing data")
+        end
 
         # Call the existing import handler with the fetched data
         send(self(), {:rich_data_import, details})
@@ -251,36 +332,22 @@ defmodule EventasaurusWeb.EventLive.New do
         {:noreply, socket}
 
       {:error, reason} ->
+        require Logger
         Logger.error("Failed to fetch rich data for import: #{inspect(reason)}")
         {:noreply, put_flash(socket, :error, "Failed to import data: #{reason}")}
     end
-  end
-
-  @impl true
-  def handle_info({:rich_data_import, data}, socket) do
-    # Store the imported data
-    socket =
-      socket
-      |> assign(:rich_external_data, data)
-      |> assign(:show_rich_data_import, false)
-      |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:close_rich_data_modal}, socket) do
-    {:noreply, assign(socket, :show_rich_data_import, false)}
   end
 
   # ========== Handle Event Implementations ==========
 
   @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
-    require Logger
-    Logger.debug("[validate] incoming params: #{inspect(event_params)}")
-    Logger.debug("[validate] current socket is_virtual: #{inspect(socket.assigns.is_virtual)}")
-    Logger.debug("[validate] current form_data is_virtual: #{inspect(Map.get(socket.assigns.form_data, "is_virtual"))}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[validate] incoming params: #{inspect(event_params)}")
+      Logger.debug("[validate] current socket is_virtual: #{inspect(socket.assigns.is_virtual)}")
+      Logger.debug("[validate] current form_data is_virtual: #{inspect(Map.get(socket.assigns.form_data, "is_virtual"))}")
+    end
 
     # Always preserve cover_image_url if not present in params
     cover_image_url =
@@ -311,11 +378,18 @@ defmodule EventasaurusWeb.EventLive.New do
          end).()
       |> Map.put("is_virtual", is_virtual_value)
 
-    Logger.debug("[validate] final is_virtual in params: #{inspect(event_params["is_virtual"])}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[validate] final is_virtual in params: #{inspect(event_params["is_virtual"])}")
+    end
 
     # Merge all params with current form_data, preserving existing values
     form_data = Map.merge(socket.assigns.form_data, event_params)
-    Logger.debug("[validate] final form_data is_virtual: #{inspect(Map.get(form_data, "is_virtual"))}")
+
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[validate] final form_data is_virtual: #{inspect(Map.get(form_data, "is_virtual"))}")
+    end
 
     changeset =
       %Event{}
@@ -332,16 +406,26 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("submit", %{"event" => event_params}, socket) do
-    require Logger
-    Logger.debug("[submit] incoming params: #{inspect(event_params)}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[submit] incoming params: #{inspect(event_params)}")
+    end
 
     # Process datetime fields - combine date and time into datetime
     event_params = process_datetime_fields(event_params)
-    Logger.debug("[submit] processed params: #{inspect(event_params)}")
+
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[submit] processed params: #{inspect(event_params)}")
+    end
 
     # Apply taxation consistency logic before further processing
     event_params = apply_taxation_consistency(event_params)
-    Logger.debug("[submit] taxation consistency applied: #{inspect(event_params)}")
+
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[submit] taxation consistency applied: #{inspect(event_params)}")
+    end
 
     # Decode external_image_data if it's a JSON string
     event_params =
@@ -466,44 +550,22 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("toggle_virtual", %{"value" => value}, socket) do
-    require Logger
-    Logger.debug("toggle_virtual called with value: #{inspect(value)}")
+  def handle_event("toggle_virtual", params, socket) do
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("toggle_virtual called with params: #{inspect(params)}")
+    end
 
-    # Determine the new state based on the checkbox value
-    is_virtual = value == "true"
-    Logger.debug("Setting is_virtual to: #{inspect(is_virtual)}")
+    # Determine the new state based on the params
+    is_virtual = case params do
+      %{"value" => value} -> value == "true"
+      _ -> !socket.assigns.is_virtual
+    end
 
-    # Reset selected venue if toggling to virtual
-    socket =
-      if is_virtual do
-        socket
-        |> assign(:selected_venue_name, nil)
-        |> assign(:selected_venue_address, nil)
-      else
-        socket
-      end
-
-    # Update form_data to reflect this change
-    form_data =
-      socket.assigns.form_data
-      |> Map.put("is_virtual", is_virtual)
-
-    Logger.debug("Updated form_data is_virtual: #{inspect(Map.get(form_data, "is_virtual"))}")
-
-    {:noreply,
-     socket
-     |> assign(:is_virtual, is_virtual)
-     |> assign(:form_data, form_data)}
-  end
-
-  @impl true
-  def handle_event("toggle_virtual", _params, socket) do
-    require Logger
-    Logger.debug("toggle_virtual called without value, toggling current state")
-
-    is_virtual = !socket.assigns.is_virtual
-    Logger.debug("Toggling is_virtual to: #{inspect(is_virtual)}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("Setting is_virtual to: #{inspect(is_virtual)}")
+    end
 
     # Reset selected venue if toggling to virtual
     socket =
@@ -520,7 +582,10 @@ defmodule EventasaurusWeb.EventLive.New do
       socket.assigns.form_data
       |> Map.put("is_virtual", is_virtual)
 
-    Logger.debug("Updated form_data is_virtual: #{inspect(Map.get(form_data, "is_virtual"))}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("Updated form_data is_virtual: #{inspect(Map.get(form_data, "is_virtual"))}")
+    end
 
     {:noreply,
      socket
@@ -784,8 +849,10 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("image_uploaded", %{"publicUrl" => image_url, "path" => path}, socket) do
-    require Logger
-    Logger.debug("[handle_event :image_uploaded] Image uploaded successfully: #{inspect(image_url)}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[handle_event :image_uploaded] Image uploaded successfully: #{inspect(image_url)}")
+    end
 
     # Create external_image_data for the uploaded image
     external_image_data = %{

@@ -181,7 +181,7 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   # ============================================================================
 
   @impl true
-  def init(opts) do
+  def init(_opts) do
     # Initialize provider registry
     :ets.new(@registry_table, [:named_table, :public, :set])
 

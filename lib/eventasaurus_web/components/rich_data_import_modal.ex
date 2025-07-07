@@ -8,8 +8,7 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
 
   use EventasaurusWeb, :live_component
 
-  alias EventasaurusWeb.Services.RichDataManager
-  alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
+
 
   @impl true
   def render(assigns) do
@@ -147,14 +146,14 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
                       phx-target={@myself}
                     >
                       <div class="flex items-start space-x-4">
-                        <%# Get poster image from images list %>
+                        <%!-- Get poster image from images list --%>
                         <% poster_image = Enum.find(result.images || [], fn img -> img.type == :poster end) %>
                         <%= if poster_image do %>
                           <img src={poster_image.url} alt={result.title} class="w-16 h-24 object-cover rounded-lg flex-shrink-0" />
                         <% end %>
                         <div class="flex-1 min-w-0">
                           <h3 class="font-medium text-gray-900 truncate"><%= result.title %></h3>
-                          <%# Extract year from metadata %>
+                          <%!-- Extract year from metadata --%>
                           <% year = case result.metadata do
                                %{release_date: date} when is_binary(date) and date != "" -> String.slice(date, 0, 4)
                                %{first_air_date: date} when is_binary(date) and date != "" -> String.slice(date, 0, 4)
@@ -202,8 +201,10 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
 
   @impl true
   def update(assigns, socket) do
-    require Logger
-    Logger.debug("RichDataImportModal update called with assigns: #{inspect(Map.keys(assigns))}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("RichDataImportModal update called with assigns: #{inspect(Map.keys(assigns))}")
+    end
 
     {:ok,
      socket
@@ -233,26 +234,6 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
     perform_search(query, socket)
   end
 
-  # Remove the duplicate search handler and replace with a helper function
-  defp perform_search(query, socket) do
-    if String.trim(query) == "" do
-      {:noreply,
-       socket
-       |> assign(:search_query, "")
-       |> assign(:search_results, [])
-       |> assign(:error, nil)
-       |> assign(:loading, false)}
-    else
-      send(self(), {:rich_data_search, query, socket.assigns.current_provider})
-
-      {:noreply,
-       socket
-       |> assign(:search_query, query)
-       |> assign(:loading, true)
-       |> assign(:error, nil)}
-    end
-  end
-
   @impl true
   def handle_event("set_provider", %{"provider" => provider}, socket) do
     {:noreply,
@@ -265,8 +246,10 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
 
   @impl true
   def handle_event("import_result", %{"id" => id, "provider" => provider, "type" => type}, socket) do
-    require Logger
-    Logger.debug("RichDataImportModal import_result called with id: #{id}, provider: #{provider}, type: #{type}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("RichDataImportModal import_result called with id: #{id}, provider: #{provider}, type: #{type}")
+    end
 
     # Send message to parent to trigger import
     send(self(), {:rich_data_import, id, provider, type})
@@ -279,8 +262,10 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
 
   @impl true
   def handle_event("preview_result", %{"id" => id, "provider" => provider, "type" => type}, socket) do
-    require Logger
-    Logger.debug("RichDataImportModal handle_event preview_result called with id: #{id}, provider: #{provider}, type: #{type}")
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("RichDataImportModal handle_event preview_result called with id: #{id}, provider: #{provider}, type: #{type}")
+    end
 
     # Send message to parent to get preview data
     send(self(), {:rich_data_preview, id, provider, type})
@@ -303,13 +288,12 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
     if socket.assigns.preview_data do
       send(self(), {:rich_data_import, socket.assigns.preview_data})
 
-      # Close modal and show success feedback
+      # Close modal
       {:noreply,
        socket
        |> assign(:preview_data, nil)
        |> assign(:search_results, [])
        |> assign(:search_query, "")
-       |> assign(:show_success, true)
       }
     else
       {:noreply, socket}
@@ -321,4 +305,25 @@ defmodule EventasaurusWeb.Components.RichDataImportModal do
     send(self(), {:close_rich_data_modal})
     {:noreply, socket}
   end
+
+  # Remove the duplicate search handler and replace with a helper function
+  defp perform_search(query, socket) do
+    if String.trim(query) == "" do
+      {:noreply,
+       socket
+       |> assign(:search_query, "")
+       |> assign(:search_results, [])
+       |> assign(:error, nil)
+       |> assign(:loading, false)}
+    else
+      send(self(), {:rich_data_search, query, socket.assigns.current_provider})
+
+      {:noreply,
+       socket
+       |> assign(:search_query, query)
+       |> assign(:loading, true)
+       |> assign(:error, nil)}
+    end
+  end
+
 end

@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
 
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
-  alias EventasaurusWeb.RichDataDisplayComponent
+  alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
 
   @impl true
   def update(assigns, socket) do
@@ -235,13 +235,13 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
     # Format as millions for readability
     cond do
       amount >= 1_000_000_000 ->
-        "#{Float.round(amount / 1_000_000_000, 1)}B"
+        "$#{Float.round(amount / 1_000_000_000, 1)}B"
       amount >= 1_000_000 ->
-        "#{Float.round(amount / 1_000_000, 1)}M"
+        "$#{Float.round(amount / 1_000_000, 1)}M"
       amount >= 1_000 ->
-        "#{Float.round(amount / 1_000, 0)}K"
-             true ->
-         "$#{:erlang.float_to_binary(amount / 1.0, decimals: 0)}"
+        "$#{trunc(amount / 1_000)}K"
+      true ->
+        "$#{amount}"
     end
   end
   defp format_currency(_), do: "Unknown"
