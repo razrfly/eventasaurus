@@ -995,72 +995,98 @@ defmodule EventasaurusWeb.PublicEventLive do
   @impl true
   def render(assigns) do
     ~H"""
-         <!-- Public Event Show Page with mobile-first layout -->
-     <div class="container mx-auto px-4 sm:px-6 py-6 sm:py-12 max-w-7xl">
-       <div class="event-page-grid grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-12">
-                 <div class="main-content lg:col-span-2">
-          <!-- Date/time and main info -->
-          <div class="flex items-start gap-4 mb-8">
-            <div class="bg-white border border-gray-200 rounded-lg p-3 w-16 h-16 flex flex-col items-center justify-center text-center font-medium shadow-sm">
-              <div class="text-xs text-gray-500 uppercase tracking-wide"><%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%b") %></div>
-              <div class="text-xl font-semibold text-gray-900"><%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%d") %></div>
-            </div>
-            <div>
-              <h1 class="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight"><%= @event.title %></h1>
-              <%= if @event.tagline do %>
-                <p class="text-lg text-gray-600 mb-4"><%= @event.tagline %></p>
-              <% end %>
+    <!-- Public Event Show Page with enhanced movie display -->
 
-              <!-- When Section -->
-              <div class="mb-3">
-                <h3 class="font-semibold text-gray-900 mb-1">When</h3>
-                <div class="text-gray-700">
-                  <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%a, %b %d") %>
-                  <%= if @event.ends_at do %>
-                    · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %> - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
-                  <% else %>
-                    · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
-                  <% end %>
-                  <span class="text-gray-500"><%= @event.timezone %></span>
-                </div>
+
+
+    <!-- Enhanced Movie Hero Section (when TMDB data is available) -->
+    <%= if @event.rich_external_data && @event.rich_external_data["title"] && @event.rich_external_data["type"] == "movie" do %>
+      <.live_component
+        module={EventasaurusWeb.Live.Components.PublicMovieHeroComponent}
+        id="public-movie-hero"
+        rich_data={@event.rich_external_data}
+        event={@event}
+        venue={@venue}
+      />
+
+      <!-- Cast Carousel Section -->
+      <%= if @event.rich_external_data["cast"] do %>
+        <.live_component
+          module={EventasaurusWeb.Live.Components.PublicCastCarouselComponent}
+          id="public-cast-carousel"
+          cast={@event.rich_external_data["cast"]}
+        />
+      <% end %>
+    <% end %>
+
+    <div class="container mx-auto px-4 sm:px-6 py-6 sm:py-12 max-w-7xl">
+      <div class="event-page-grid grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-12">
+        <div class="main-content lg:col-span-2">
+
+          <!-- Fallback Event Display (when no TMDB data) -->
+          <%= if !@event.rich_external_data || !@event.rich_external_data["title"] || @event.rich_external_data["type"] != "movie" do %>
+            <!-- Date/time and main info -->
+            <div class="flex items-start gap-4 mb-8">
+              <div class="bg-white border border-gray-200 rounded-lg p-3 w-16 h-16 flex flex-col items-center justify-center text-center font-medium shadow-sm">
+                <div class="text-xs text-gray-500 uppercase tracking-wide"><%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%b") %></div>
+                <div class="text-xl font-semibold text-gray-900"><%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%d") %></div>
               </div>
+              <div>
+                <h1 class="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight"><%= @event.title %></h1>
+                <%= if @event.tagline do %>
+                  <p class="text-lg text-gray-600 mb-4"><%= @event.tagline %></p>
+                <% end %>
 
-              <!-- Where Section -->
-              <div class="flex items-start gap-3">
-                <div class="flex-shrink-0">
-                  <%= if @event.venue_id == nil do %>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  <% else %>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  <% end %>
-                </div>
-                <div>
-                  <h3 class="font-semibold text-gray-900 mb-1">Where</h3>
-                  <%= if @event.venue_id == nil do %>
-                    <p class="text-gray-700">Virtual Event</p>
-                  <% else %>
-                    <%= if @venue do %>
-                      <p class="text-gray-700"><%= @venue.address %></p>
+                <!-- When Section -->
+                <div class="mb-3">
+                  <h3 class="font-semibold text-gray-900 mb-1">When</h3>
+                  <div class="text-gray-700">
+                    <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%a, %b %d") %>
+                    <%= if @event.ends_at do %>
+                      · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %> - <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.ends_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
                     <% else %>
-                      <p class="text-gray-600">Location details not available</p>
+                      · <%= EventasaurusWeb.TimezoneHelpers.convert_to_timezone(@event.start_at, @event.timezone) |> Calendar.strftime("%I:%M %p") |> String.replace(" 0", " ") %>
                     <% end %>
-                  <% end %>
+                    <span class="text-gray-500"><%= @event.timezone %></span>
+                  </div>
+                </div>
+
+                <!-- Where Section -->
+                <div class="flex items-start gap-3">
+                  <div class="flex-shrink-0">
+                    <%= if @event.venue_id == nil do %>
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    <% else %>
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    <% end %>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900 mb-1">Where</h3>
+                    <%= if @event.venue_id == nil do %>
+                      <p class="text-gray-700">Virtual Event</p>
+                    <% else %>
+                      <%= if @venue do %>
+                        <p class="text-gray-700"><%= @venue.address %></p>
+                      <% else %>
+                        <p class="text-gray-600">Location details not available</p>
+                      <% end %>
+                    <% end %>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Cover image -->
-          <%= if @event.cover_image_url && @event.cover_image_url != "" do %>
-            <div class="relative w-full aspect-video rounded-xl overflow-hidden mb-8 shadow-lg border border-gray-200">
-              <img src={@event.cover_image_url} alt={@event.title} class="absolute inset-0 w-full h-full object-cover" />
-            </div>
-            <!-- Image attribution -->
+            <!-- Cover image -->
+            <%= if @event.cover_image_url && @event.cover_image_url != "" do %>
+              <div class="relative w-full aspect-video rounded-xl overflow-hidden mb-8 shadow-lg border border-gray-200">
+                <img src={@event.cover_image_url} alt={@event.title} class="absolute inset-0 w-full h-full object-cover" />
+              </div>
+              <!-- Image attribution -->
             <EventasaurusWeb.EventComponents.image_attribution external_image_data={@event.external_image_data} class="text-xs text-gray-500 -mt-6 mb-6 px-1" />
           <% end %>
 
@@ -1079,18 +1105,9 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
           <% end %>
 
-          <!-- Rich Data Display -->
-          <%= if @event.rich_external_data["tmdb"] do %>
-            <div class="mb-8">
-              <.live_component
-                module={RichDataDisplayComponent}
-                id="event-rich-data"
-                rich_data={@event.rich_external_data["tmdb"]}
-                sections={[:hero, :overview, :cast, :media, :details]}
-                compact={false}
-              />
-            </div>
           <% end %>
+
+          <!-- About section (shared for all events) -->
 
                      <!-- Date Voting Interface (only show for polling events) -->
            <%= if @event.status == :polling and not is_nil(@date_poll) and @date_options != [] do %>
