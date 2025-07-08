@@ -38,6 +38,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   alias EventasaurusWeb.PollListComponent
   alias EventasaurusWeb.PollCreationComponent
   alias EventasaurusWeb.PollDetailsComponent
+  alias EventasaurusWeb.OptionSuggestionComponent
+  alias EventasaurusWeb.VotingInterfaceComponent
   alias EventasaurusWeb.ResultsDisplayComponent
 
   @impl true
@@ -54,100 +56,206 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:integration_stats, %{})}
   end
 
-  @impl true
+    @impl true
   def update(assigns, socket) do
-    # Get polls from assigns (loaded separately in parent LiveView)
-    polls = assigns[:polls] || []
+    # Handle partial updates - if event is not in assigns, keep the existing one
+    event = assigns[:event] || socket.assigns[:event]
+    current_user = assigns[:current_user] || socket.assigns[:current_user]
 
-    # Subscribe to real-time updates for all polls in this event
-    if connected?(socket) do
-      # Subscribe to event-level poll updates using the new PubSub service
-      PollPubSubService.subscribe_to_event_polls(assigns.event.id)
+    # Only proceed if we have the required data
+    if event && current_user do
+      # Get polls from assigns (loaded separately in parent LiveView)
+      polls = assigns[:polls] || socket.assigns[:polls] || []
 
-      # Also subscribe to each individual poll for detailed updates
-      for poll <- polls do
-        PollPubSubService.subscribe_to_poll(poll.id)
+      # Subscribe to real-time updates for all polls in this event
+      if connected?(socket) do
+        # Subscribe to event-level poll updates using the new PubSub service
+        PollPubSubService.subscribe_to_event_polls(event.id)
+
+        # Also subscribe to each individual poll for detailed updates
+        for poll <- polls do
+          PollPubSubService.subscribe_to_poll(poll.id)
+        end
       end
-    end
 
-    # Calculate integration statistics using the polls data
-    integration_stats = calculate_integration_stats_with_polls(polls)
+      # Calculate integration statistics using the polls data
+      integration_stats = calculate_integration_stats_with_polls(polls)
 
-    # Determine user permissions
-    can_create_polls = if assigns.current_user do
-      Events.can_create_poll?(assigns.current_user, assigns.event)
+      # Determine user permissions
+      can_create_polls = Events.can_create_poll?(current_user, event)
+      is_organizer = Events.user_is_organizer?(event, current_user)
+
+      # Handle editing poll - show creation modal when editing_poll is set, unless explicitly set to false
+      showing_creation_modal = case assigns[:showing_creation_modal] do
+        false -> false  # Explicitly set to false, don't show modal
+        true -> true    # Explicitly set to true, show modal
+        nil -> socket.assigns[:showing_creation_modal] || assigns[:editing_poll] != nil  # Use default logic
+      end
+
+      # Use parent's show_poll_details state if provided
+      active_view = if Map.get(assigns, :show_poll_details, false) do
+        "poll_details"
+      else
+        Map.get(socket.assigns, :active_view, "overview")
+      end
+
+      {:ok,
+       socket
+       |> assign(assigns)
+       |> assign(:event, event)
+       |> assign(:current_user, current_user)
+       |> assign_new(:integration_mode, fn -> "embedded" end)
+       |> assign_new(:show_creation_prompt, fn -> true end)
+       |> assign_new(:compact_mode, fn -> false end)
+       |> assign_new(:open_poll_menu, fn -> nil end)
+       |> assign(:integration_stats, integration_stats)
+       |> assign(:can_create_polls, can_create_polls)
+       |> assign(:is_organizer, is_organizer)
+       |> assign(:showing_creation_modal, showing_creation_modal)
+       |> assign(:active_view, active_view)}
     else
-      false
+      # If we don't have required data, just assign what we have and wait for full update
+      {:ok, assign(socket, assigns)}
     end
-    is_organizer = if assigns.current_user do
-      Events.user_is_organizer?(assigns.event, assigns.current_user)
-    else
-      false
-    end
-
-    # Handle editing poll - show creation modal when editing_poll is set
-    showing_creation_modal = socket.assigns.showing_creation_modal || assigns[:editing_poll] != nil
-
-    {:ok,
-     socket
-     |> assign(assigns)
-     |> assign_new(:integration_mode, fn -> "embedded" end)
-     |> assign_new(:show_creation_prompt, fn -> true end)
-     |> assign_new(:compact_mode, fn -> false end)
-     |> assign(:integration_stats, integration_stats)
-     |> assign(:can_create_polls, can_create_polls)
-     |> assign(:is_organizer, is_organizer)
-     |> assign(:showing_creation_modal, showing_creation_modal)}
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div class={"polling-integration #{@integration_mode}-mode"}>
-      <!-- Integration Header -->
-      <%= render_integration_header(assigns) %>
+    <div class="event-poll-integration-component">
+      <!-- Match the exact guests tab structure -->
+      <div class="divide-y divide-gray-200">
+        <%= for poll <- (@polls || []) do %>
+          <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+            <div class="flex items-center justify-between">
+              <!-- Poll Info (matching user info structure) -->
+              <div class="flex items-center gap-3 flex-1 min-w-0">
+                <!-- Poll Icon (matching avatar) -->
+                <div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                  <svg class="h-5 w-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 mb-1">
+                    <div class="font-medium text-gray-900 truncate">
+                      <%= poll.title %>
+                    </div>
+                    <!-- Poll Type Badge (matching source badge) -->
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <%= String.capitalize(to_string(Map.get(poll, :poll_type, "poll"))) %>
+                    </span>
+                  </div>
+                  <div class="text-sm text-gray-500 truncate">
+                    <%= poll.description || "No description provided" %>
+                  </div>
+                  <!-- Poll Creation Details (matching invitation details) -->
+                  <div class="text-xs text-gray-400 mt-1">
+                    <%= if poll.inserted_at do %>
+                      Created <%= format_relative_time(poll.inserted_at) %>
+                    <% else %>
+                      Created recently
+                    <% end %>
+                    <%= case Map.get(poll, :created_by) do %>
+                      <% %{name: name} when is_binary(name) -> %>by <%= name %>
+                      <% _ -> %>
+                    <% end %>
+                  </div>
+                </div>
+              </div>
 
-      <!-- Navigation for Different Views -->
-      <%= if @integration_mode in ["tab", "sidebar"] do %>
-        <%= render_navigation_tabs(assigns) %>
-      <% end %>
+              <!-- Status and Actions (matching guests structure) -->
+              <div class="flex items-center gap-4 flex-shrink-0">
+                <div class="text-right">
+                  <div class="flex items-center gap-2 justify-end mb-1">
+                    <div class="text-sm text-gray-500">
+                      <%= if poll.inserted_at do %>
+                        <%= Calendar.strftime(poll.inserted_at, "%m/%d") %>
+                      <% else %>
+                        --/--
+                      <% end %>
+                    </div>
+                    <!-- Status Badge -->
+                    <% status = Map.get(poll, :status, "active") %>
+                    <% {status_text, status_class} = get_poll_status_badge_data(status) %>
+                    <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium #{status_class}"}>
+                      <%= status_text %>
+                    </span>
+                    <!-- Vote Count Indicator -->
+                    <div class="text-sm font-medium text-gray-900">
+                      <%= get_poll_vote_count(poll) %> votes
+                    </div>
+                  </div>
+                </div>
 
-      <!-- Main Content Area -->
-      <div class="integration-content">
-        <%= case @active_view do %>
-          <% "overview" -> %>
-            <%= render_overview_section(assigns) %>
+                <!-- Actions Menu (matching guests actions) -->
+                <div class="relative">
+                  <button
+                    phx-click="toggle_poll_menu"
+                    phx-value-poll_id={poll.id}
+                    phx-target={@myself}
+                    class="p-2 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-full"
+                    aria-label="Poll actions"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
 
-          <% "create" -> %>
-            <%= render_creation_section(assigns) %>
+                  <%= if @open_poll_menu == poll.id do %>
+                    <div
+                      phx-click-away="close_poll_menu"
+                      phx-target={@myself}
+                      class="absolute right-0 z-10 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                    >
+                      <div class="py-1">
+                        <button
+                          phx-click="edit_poll"
+                          phx-value-poll_id={poll.id}
+                          phx-target={@myself}
+                          class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Edit Poll
+                        </button>
 
-          <% "manage" -> %>
-            <%= render_management_section(assigns) %>
+                        <%= if Map.get(poll, :status, "active") == "active" do %>
+                          <button
+                            phx-click="close_poll"
+                            phx-value-poll_id={poll.id}
+                            phx-target={@myself}
+                            class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Close Poll
+                          </button>
+                        <% end %>
 
-          <% "analytics" -> %>
-            <%= render_analytics_section(assigns) %>
-
-          <% "poll_details" -> %>
-            <%= render_poll_details_section(assigns) %>
+                        <button
+                          phx-click="delete_poll"
+                          phx-value-poll_id={poll.id}
+                          phx-target={@myself}
+                          data-confirm="Are you sure you want to delete this poll?"
+                          class="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                        >
+                          <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          </div>
         <% end %>
       </div>
-
-      <!-- Floating Action Button (for embedded mode) -->
-      <%= if @integration_mode == "embedded" and @can_create_polls and length(@polls || []) > 0 do %>
-        <div class="fixed bottom-6 right-6 z-50">
-          <button
-            type="button"
-            class="inline-flex items-center justify-center p-3 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
-            phx-click="show_creation_modal"
-            phx-target={@myself}
-            title="Create New Poll"
-          >
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-        </div>
-      <% end %>
 
       <!-- Poll Creation Modal -->
       <%= if @showing_creation_modal do %>
@@ -160,9 +268,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           poll={@editing_poll}
         />
       <% end %>
-
-      <!-- Messages -->
-      <%= render_flash_messages(assigns) %>
     </div>
     """
   end
@@ -208,20 +313,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
             </div>
           <% end %>
 
-          <!-- Create Poll Button -->
-          <%= if @can_create_polls and @integration_mode != "embedded" do %>
-            <button
-              type="button"
-              class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              phx-click="show_creation_modal"
-              phx-target={@myself}
-            >
-              <svg class="-ml-0.5 mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-              </svg>
-              New Poll
-            </button>
-          <% end %>
+
         </div>
       </div>
     </div>
@@ -496,6 +588,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           </button>
         </div>
 
+        <!-- Poll Details Component (metadata and stats) -->
         <.live_component
           module={PollDetailsComponent}
           id="selected-poll-details"
@@ -505,6 +598,49 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           compact_view={false}
           show_metadata={true}
         />
+
+        <!-- Option Suggestion Component (for list_building phase) -->
+        <%= if @selected_poll.phase == "list_building" do %>
+          <div class="mt-6">
+            <.live_component
+              module={OptionSuggestionComponent}
+              id="poll-option-suggestions"
+              poll={@selected_poll}
+              user={@current_user}
+              event={@event}
+              is_creator={@current_user.id == @selected_poll.created_by_id}
+              max_options={@selected_poll.max_options_per_user || 3}
+            />
+          </div>
+        <% end %>
+
+        <!-- Voting Interface Component (for voting phase) -->
+        <%= if @selected_poll.phase == "voting" do %>
+          <div class="mt-6">
+            <.live_component
+              module={VotingInterfaceComponent}
+              id="poll-voting-interface"
+              poll={@selected_poll}
+              user={@current_user}
+              user_votes={[]}
+              loading={false}
+            />
+          </div>
+        <% end %>
+
+        <!-- Results Display Component (for closed phase) -->
+        <%= if @selected_poll.phase == "closed" do %>
+          <div class="mt-6">
+            <.live_component
+              module={ResultsDisplayComponent}
+              id="poll-results-display"
+              poll={@selected_poll}
+              show_voter_details={false}
+              compact_view={false}
+            />
+          </div>
+        <% end %>
+
       <% else %>
         <div class="text-center py-8 text-gray-500">
           <p>No poll selected.</p>
@@ -624,6 +760,65 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   end
 
   @impl true
+  def handle_event("toggle_poll_menu", %{"poll_id" => poll_id}, socket) do
+    poll_id = String.to_integer(poll_id)
+    current_open = socket.assigns[:open_poll_menu]
+
+    new_open = if current_open == poll_id, do: nil, else: poll_id
+
+    {:noreply, assign(socket, :open_poll_menu, new_open)}
+  end
+
+  @impl true
+  def handle_event("close_poll_menu", _params, socket) do
+    {:noreply, assign(socket, :open_poll_menu, nil)}
+  end
+
+  @impl true
+  def handle_event("edit_poll", %{"poll_id" => poll_id}, socket) do
+    poll_id = String.to_integer(poll_id)
+    poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+
+    {:noreply,
+     socket
+     |> assign(:showing_creation_modal, true)
+     |> assign(:editing_poll, poll)
+     |> assign(:open_poll_menu, nil)}
+  end
+
+  @impl true
+  def handle_event("close_poll", %{"poll_id" => poll_id}, socket) do
+    # Handle closing a poll - you'd implement this based on your business logic
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("delete_poll", %{"poll_id" => poll_id}, socket) do
+    poll_id = String.to_integer(poll_id)
+    poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+
+    case poll && Events.delete_poll(poll) do
+      {:ok, _} ->
+        # Remove the poll from the list and recalculate stats
+        updated_polls = Enum.reject(socket.assigns.polls, &(&1.id == poll_id))
+        integration_stats = calculate_integration_stats_with_polls(updated_polls)
+
+        {:noreply,
+         socket
+         |> assign(:polls, updated_polls)
+         |> assign(:integration_stats, integration_stats)
+         |> assign(:open_poll_menu, nil)
+         |> assign(:success_message, "Poll deleted successfully!")}
+
+      {:error, _changeset} ->
+        {:noreply, assign(socket, :error_message, "Failed to delete poll. Please try again.")}
+
+      nil ->
+        {:noreply, assign(socket, :error_message, "Poll not found.")}
+    end
+  end
+
+  @impl true
   def handle_event("show_creation_modal", _params, socket) do
     {:noreply, assign(socket, :showing_creation_modal, true)}
   end
@@ -648,6 +843,9 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   @impl true
   def handle_event("back_to_overview", _params, socket) do
+    # Notify parent to close poll details view
+    send(self(), {:close_poll_details})
+
     {:noreply,
      socket
      |> assign(:selected_poll, nil)
@@ -689,7 +887,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:polls, updated_polls)
      |> assign(:integration_stats, integration_stats)
      |> assign(:success_message, "Poll created successfully!")
-     |> assign(:showing_creation_modal, false)}
+     |> assign(:showing_creation_modal, false)
+     |> assign(:editing_poll, nil)}
   end
 
   def handle_info({:poll_updated, updated_poll}, socket) do
@@ -811,8 +1010,28 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     {:noreply, assign(socket, :error_message, "Duplicate option detected: #{message.suggested_option.title}")}
   end
 
+  def handle_info({:poll_saved, _poll, _message}, socket) do
+    # Close modal after successful poll save/update
+    {:noreply,
+     socket
+     |> assign(:showing_creation_modal, false)
+     |> assign(:editing_poll, nil)}
+  end
+
   def handle_info(_msg, socket) do
     {:noreply, socket}
+  end
+
+  # Handle messages from child components
+  def handle_info({:close_poll_creation_modal}, socket) do
+    # Close the modal and reset all editing states
+    send(self(), {:close_poll_editing})
+    {:noreply,
+     socket
+     |> assign(:showing_creation_modal, false)
+     |> assign(:showing_poll_details, false)
+     |> assign(:editing_poll, nil)
+     |> assign(:selected_poll, nil)}
   end
 
   # Private helper functions
@@ -910,6 +1129,43 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
       "voting" -> "voting"
       "closed" -> "results"
       _ -> phase
+    end
+  end
+
+  # Helper functions for the new guests-style layout
+  defp get_poll_status_badge_data(status) do
+    case status do
+      "active" -> {"Active", "bg-green-100 text-green-800"}
+      "closed" -> {"Closed", "bg-gray-100 text-gray-800"}
+      "draft" -> {"Draft", "bg-yellow-100 text-yellow-800"}
+      _ -> {"Unknown", "bg-gray-100 text-gray-800"}
+    end
+  end
+
+  defp get_poll_vote_count(poll) do
+    # This would need to be calculated based on your poll votes structure
+    # For now, return a placeholder
+    0
+  end
+
+  defp format_relative_time(datetime) when is_nil(datetime), do: "unknown"
+
+  defp format_relative_time(datetime) do
+    now = DateTime.utc_now()
+
+    # Convert NaiveDateTime to DateTime if needed
+    datetime_utc = case datetime do
+      %DateTime{} = dt -> dt
+      %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
+      _ -> now
+    end
+
+    case DateTime.diff(now, datetime_utc, :day) do
+      0 -> "today"
+      1 -> "yesterday"
+      days when days < 7 -> "#{days} days ago"
+      days when days < 30 -> "#{div(days, 7)} weeks ago"
+      days -> "#{div(days, 30)} months ago"
     end
   end
 end
