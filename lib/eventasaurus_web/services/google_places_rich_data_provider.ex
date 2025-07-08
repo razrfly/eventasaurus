@@ -5,6 +5,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   Fetches detailed venue, restaurant, and activity information with caching optimization.
   """
 
+  @behaviour EventasaurusWeb.Services.RichDataProviderBehaviour
+
 
 
   require Logger
@@ -17,7 +19,40 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   @rate_limit_window 1000  # 1 second in ms
   @rate_limit_max_requests 10  # Max requests per second
 
+  @impl true
+  def provider_id, do: :google_places
+
+  @impl true
+  def provider_name, do: "Google Places"
+
+  @impl true
   def supported_types, do: [:venue, :restaurant, :activity]
+
+  @impl true
+  def search(_query, _options \\ %{}) do
+    # Implementation for searching places
+    {:ok, []}
+  end
+
+  @impl true
+  def get_details(_id, _type, _options \\ %{}) do
+    # Implementation for getting place details
+    {:ok, %{}}
+  end
+
+  @impl true
+  def get_cached_details(_id, _type, _options \\ %{}) do
+    # Implementation for cached place details
+    {:ok, %{}}
+  end
+
+  @impl true
+  def validate_config do
+    case get_api_key() do
+      nil -> {:error, "Google Places API key not configured"}
+      _key -> :ok
+    end
+  end
 
   def can_handle?(external_data) when is_map(external_data) do
     # Check for Google Places specific fields

@@ -93,6 +93,7 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:organizer_search_total_shown, 0)
                # Poll management state
                |> assign(:polls, [])
+               |> assign(:polls_count, load_poll_count(event))  # Load just the count for tab display
                |> assign(:total_poll_participants, 0)
                |> assign(:total_votes, 0)
                |> assign(:polls_loading, false)
@@ -674,6 +675,18 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
+  def handle_event("show_poll_creation_modal", _params, socket) do
+    # Update the poll integration component to show the creation modal
+    send_update(EventasaurusWeb.EventPollIntegrationComponent,
+      id: "event-poll-integration",
+      showing_creation_modal: true,
+      editing_poll: nil
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info(:refresh_analytics, socket) do
     event = socket.assigns.event
     analytics_data = fetch_analytics_data(event.id)
@@ -734,6 +747,13 @@ defmodule EventasaurusWeb.EventManageLive do
     # Reload polls data to include the new poll
     polls = Events.list_polls(socket.assigns.event)
 
+    # Update the poll integration component to close the modal
+    send_update(EventasaurusWeb.EventPollIntegrationComponent,
+      id: "event-poll-integration",
+      showing_creation_modal: false,
+      editing_poll: nil
+    )
+
     {:noreply,
      socket
      |> assign(:polls, polls)
@@ -763,6 +783,26 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
+  def handle_info({:delete_poll, poll}, socket) do
+    case Events.delete_poll(poll) do
+      {:ok, _deleted_poll} ->
+        # Reload event data to refresh polls list
+        event = Events.get_event!(socket.assigns.event.id)
+        |> EventasaurusApp.Repo.preload([:polls])
+
+        {:noreply,
+         socket
+         |> assign(:event, event)
+         |> put_flash(:info, "Poll deleted successfully")}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to delete poll")}
+    end
+  end
+
+  @impl true
   def handle_info({:show_error, message}, socket) do
     {:noreply,
      socket
@@ -770,7 +810,35 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
+  def handle_info({:poll_deleted, _poll}, socket) do
+    # Reload event data to refresh polls list
+    event = Events.get_event!(socket.assigns.event.id)
+    |> EventasaurusApp.Repo.preload([:polls])
+
+    {:noreply,
+     socket
+     |> assign(:event, event)
+     |> assign(:show_poll_details, false)
+     |> assign(:selected_poll, nil)
+     |> put_flash(:info, "Poll deleted successfully")}
+  end
+
+  @impl true
   def handle_info({:close_poll_editing}, socket) do
+    {:noreply,
+     socket
+     |> assign(:editing_poll, nil)}
+  end
+
+    @impl true
+  def handle_info({:close_poll_creation_modal}, socket) do
+    # Update the poll integration component to close the modal
+    send_update(EventasaurusWeb.EventPollIntegrationComponent,
+      id: "event-poll-integration",
+      showing_creation_modal: false,
+      editing_poll: nil
+    )
+
     {:noreply,
      socket
      |> assign(:editing_poll, nil)
@@ -779,10 +847,9 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_info({:close_poll_creation_modal}, socket) do
+  def handle_info({:close_poll_details}, socket) do
     {:noreply,
      socket
-     |> assign(:editing_poll, nil)
      |> assign(:selected_poll, nil)
      |> assign(:show_poll_details, false)}
   end
@@ -1186,14 +1253,23 @@ defmodule EventasaurusWeb.EventManageLive do
     event = socket.assigns.event
 
     try do
-      # Load all polls for the event
-      polls = Events.list_polls(event)
+      # Load all polls for the event safely
+      polls = case Events.list_polls(event) do
+        polls when is_list(polls) -> polls
+        _ -> []
+      end
 
-      # Get poll statistics
-      poll_stats = Events.get_event_poll_stats(event)
+      # Get poll statistics safely
+      poll_stats = case Events.get_event_poll_stats(event) do
+        %{total_participants: total_participants} when is_integer(total_participants) ->
+          %{total_participants: total_participants}
+        _ ->
+          %{total_participants: 0}
+      end
 
       socket
       |> assign(:polls, polls)
+      |> assign(:polls_count, length(polls))
       |> assign(:total_poll_participants, poll_stats.total_participants)
       |> assign(:total_votes, count_total_votes(polls))
       |> assign(:polls_loading, false)
@@ -1202,6 +1278,7 @@ defmodule EventasaurusWeb.EventManageLive do
         Logger.error("Failed to load poll data: #{inspect(error)}")
         socket
         |> assign(:polls, [])
+        |> assign(:polls_count, 0)
         |> assign(:total_poll_participants, 0)
         |> assign(:total_votes, 0)
         |> assign(:polls_loading, false)
@@ -1209,11 +1286,37 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-  defp count_total_votes(polls) do
-    polls
-    |> Enum.flat_map(fn poll -> poll.poll_options || [] end)
-    |> Enum.flat_map(fn option -> option.votes || [] end)
-    |> length()
+  defp load_poll_count(event) do
+    try do
+      # Load polls and count them
+      polls = Events.list_polls(event)
+      length(polls)
+    rescue
+      _ -> 0
+    end
   end
+
+  defp count_total_votes(polls) when is_list(polls) do
+    try do
+      polls
+      |> Enum.flat_map(fn poll ->
+        case Map.get(poll, :poll_options) do
+          options when is_list(options) -> options
+          _ -> []
+        end
+      end)
+      |> Enum.flat_map(fn option ->
+        case Map.get(option, :votes) do
+          votes when is_list(votes) -> votes
+          _ -> []
+        end
+      end)
+      |> length()
+    rescue
+      _ -> 0
+    end
+  end
+
+  defp count_total_votes(_), do: 0
 
 end

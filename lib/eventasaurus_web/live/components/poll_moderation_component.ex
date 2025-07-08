@@ -251,19 +251,35 @@ defmodule EventasaurusWeb.PollModerationComponent do
       <!-- Danger Zone -->
       <div class="px-6 py-4 bg-red-50 border-t border-gray-200">
         <h4 class="text-md font-medium text-red-900 mb-3">Danger Zone</h4>
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-red-700">Reset all votes and start over</p>
-            <p class="text-xs text-red-600">This action cannot be undone</p>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-red-700">Reset all votes and start over</p>
+              <p class="text-xs text-red-600">This action cannot be undone</p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex items-center px-3 py-2 border border-red-300 text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              phx-click="reset_poll_votes"
+              phx-target={@myself}
+            >
+              Reset All Votes
+            </button>
           </div>
-          <button
-            type="button"
-            class="inline-flex items-center px-3 py-2 border border-red-300 text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            phx-click="reset_poll_votes"
-            phx-target={@myself}
-          >
-            Reset All Votes
-          </button>
+          <div class="flex items-center justify-between pt-3 border-t border-red-200">
+            <div>
+              <p class="text-sm text-red-700">Delete this poll permanently</p>
+              <p class="text-xs text-red-600">This will remove the poll and all associated data</p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex items-center px-3 py-2 border border-red-300 text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              phx-click="delete_poll"
+              phx-target={@myself}
+            >
+              Delete Poll
+            </button>
+          </div>
         </div>
       </div>
 
@@ -644,6 +660,15 @@ defmodule EventasaurusWeb.PollModerationComponent do
   end
 
   @impl true
+  def handle_event("delete_poll", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:showing_confirmation, true)
+     |> assign(:confirmation_message, "Are you sure you want to delete this poll? This action cannot be undone and will remove all associated data.")
+     |> assign(:confirmation_action, "delete_poll_confirmed")}
+  end
+
+  @impl true
   def handle_event("confirm_action", _params, socket) do
     case socket.assigns.confirmation_action do
       "hide" -> handle_bulk_hide(socket)
@@ -654,6 +679,7 @@ defmodule EventasaurusWeb.PollModerationComponent do
       "reopen_list_building_confirmed" -> handle_reopen_list_building(socket)
       "reopen_voting_confirmed" -> handle_reopen_voting(socket)
       "reset_votes_confirmed" -> handle_reset_votes(socket)
+      "delete_poll_confirmed" -> handle_delete_poll(socket)
       _ -> socket
     end
     |> clear_confirmation()
@@ -698,12 +724,20 @@ defmodule EventasaurusWeb.PollModerationComponent do
   defp calculate_moderation_stats(poll) do
     total_options = length(poll.poll_options || [])
     hidden_options = poll.poll_options
-    |> Enum.count(&(not &1.is_visible))
+    |> Enum.count(&(&1.status != "active"))
 
     user_suggestions = poll.poll_options
-    |> Enum.count(&(&1.creator_id != poll.creator_id))
+    |> Enum.count(&(&1.suggested_by_id != poll.created_by_id))
 
-    total_votes = length(poll.poll_votes || [])
+    # Calculate total votes by going through poll options
+    total_votes = poll.poll_options
+    |> Enum.reduce(0, fn option, acc ->
+      votes = case option do
+        %{votes: votes} when is_list(votes) -> length(votes)
+        _ -> 0
+      end
+      acc + votes
+    end)
 
     %{
       total_options: total_options,
@@ -714,12 +748,14 @@ defmodule EventasaurusWeb.PollModerationComponent do
   end
 
   defp can_user_moderate_poll?(user, poll, event) do
-    user.id == poll.creator_id || Events.user_is_organizer?(event, user)
+    user.id == poll.created_by_id || Events.user_is_organizer?(event, user)
   end
 
-  defp get_vote_count_for_option(option, poll) do
-    poll.poll_votes
-    |> Enum.count(&(&1.poll_option_id == option.id))
+  defp get_vote_count_for_option(option, _poll) do
+    case option do
+      %{votes: votes} when is_list(votes) -> length(votes)
+      _ -> 0
+    end
   end
 
   defp format_relative_time(datetime) do
@@ -842,5 +878,17 @@ defmodule EventasaurusWeb.PollModerationComponent do
     {:ok, _} = Events.clear_all_poll_votes(socket.assigns.poll.id)
     send(self(), {:votes_reset, socket.assigns.poll.id})
     {:noreply, socket}
+  end
+
+  defp handle_delete_poll(socket) do
+    case Events.delete_poll(socket.assigns.poll) do
+      {:ok, _} ->
+        send(self(), {:poll_deleted, socket.assigns.poll})
+        {:noreply, socket}
+
+      {:error, _} ->
+        send(self(), {:show_error, "Failed to delete poll"})
+        {:noreply, socket}
+    end
   end
 end
