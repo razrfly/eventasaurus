@@ -29,21 +29,34 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   def supported_types, do: [:venue, :restaurant, :activity]
 
   @impl true
-  def search(_query, _options \\ %{}) do
-    # Implementation for searching places
-    {:ok, []}
+  def search(query, options \\ %{}) do
+    with :ok <- check_rate_limit(),
+         {:ok, results} <- search_places_api(query, options) do
+      {:ok, results}
+    else
+      {:error, :rate_limited} -> {:ok, []}
+      {:error, _reason} -> {:ok, []}
+    end
   end
 
   @impl true
-  def get_details(_id, _type, _options \\ %{}) do
-    # Implementation for getting place details
-    {:ok, %{}}
+  def get_details(_provider_id, content_id, _content_type, options \\ %{}) do
+    # Use existing fetch_rich_data functionality
+    external_data = %{"place_id" => content_id}
+    case fetch_rich_data(external_data, Enum.into(options, [])) do
+      {:ok, rich_data} -> {:ok, rich_data}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @impl true
-  def get_cached_details(_id, _type, _options \\ %{}) do
-    # Implementation for cached place details
-    {:ok, %{}}
+  def get_cached_details(_provider_id, content_id, _content_type, _options \\ %{}) do
+    cache_key = "place_details_#{content_id}"
+    case Cachex.get(@cache_name, cache_key) do
+      {:ok, nil} -> {:error, :not_found}
+      {:ok, cached_data} -> {:ok, cached_data}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @impl true
@@ -83,6 +96,36 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   end
 
   # Private functions
+
+  defp search_places_api(query, _options) do
+    api_key = get_api_key()
+
+    if api_key do
+      url = "https://maps.googleapis.com/maps/api/place/textsearch/json?" <>
+        URI.encode_query(%{
+          query: query,
+          key: api_key
+        })
+
+      case HTTPoison.get(url, [], timeout: 10_000, recv_timeout: 10_000) do
+        {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, %{"results" => results, "status" => "OK"}} ->
+              {:ok, results}
+            {:ok, %{"status" => status}} ->
+              {:error, "API returned status: #{status}"}
+            {:error, reason} ->
+              {:error, "JSON decode error: #{inspect(reason)}"}
+          end
+        {:ok, %HTTPoison.Response{status_code: status_code}} ->
+          {:error, "HTTP #{status_code}"}
+        {:error, %HTTPoison.Error{reason: reason}} ->
+          {:error, "HTTP error: #{inspect(reason)}"}
+      end
+    else
+      {:error, "No API key configured"}
+    end
+  end
 
   defp check_rate_limit do
     current_time = System.monotonic_time(:millisecond)
