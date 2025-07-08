@@ -74,6 +74,16 @@ config :phoenix_live_view, :debug_heex_annotations, true
 # Configure time zone database
 config :elixir, :time_zone_database, TimeZoneInfo.TimeZoneDatabase
 
+# Configure Hammer for rate limiting
+config :hammer,
+  backend: {
+    Hammer.Backend.ETS,
+    [
+      expiry_ms: 60_000 * 60 * 4,  # 4 hours
+      cleanup_interval_ms: 60_000 * 10  # 10 minutes
+    ]
+  }
+
 # Avatar configuration
 config :eventasaurus, :avatars,
   provider: :dicebear,

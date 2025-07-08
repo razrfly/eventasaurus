@@ -8,6 +8,8 @@ defmodule EventasaurusWeb.EventManageLive do
   import EventasaurusWeb.EmailStatusComponents
   import EventasaurusWeb.EventHTML, only: [movie_rich_data_display: 1]
 
+  require Logger
+
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
     # Check authentication first
@@ -88,7 +90,15 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:selected_organizer_results, [])
                |> assign(:organizer_search_offset, 0)
                |> assign(:organizer_search_has_more, false)
-               |> assign(:organizer_search_total_shown, 0)}
+               |> assign(:organizer_search_total_shown, 0)
+               # Poll management state
+               |> assign(:polls, [])
+               |> assign(:total_poll_participants, 0)
+               |> assign(:total_votes, 0)
+               |> assign(:polls_loading, false)
+               |> assign(:editing_poll, nil)
+               |> assign(:selected_poll, nil)
+               |> assign(:show_poll_details, false)}
             end
         end
     end
@@ -96,6 +106,17 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
+    socket = case tab do
+      "polls" ->
+        # Load poll data when switching to polls tab
+        socket
+        |> assign(:polls_loading, true)
+        |> load_poll_data()
+
+      _ ->
+        socket
+    end
+
     {:noreply, assign(socket, :active_tab, tab)}
   end
 
@@ -708,6 +729,64 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
+    @impl true
+  def handle_info({:poll_saved, _poll, message}, socket) do
+    # Reload polls data to include the new poll
+    polls = Events.list_polls(socket.assigns.event)
+
+    {:noreply,
+     socket
+     |> assign(:polls, polls)
+     |> assign(:editing_poll, nil)
+     |> assign(:selected_poll, nil)
+     |> assign(:show_poll_details, false)
+     |> put_flash(:info, message)}
+  end
+
+  @impl true
+  def handle_info({:view_poll, poll}, socket) do
+    # Handle poll viewing/editing
+    {:noreply,
+     socket
+     |> assign(:selected_poll, poll)
+     |> assign(:show_poll_details, true)}
+  end
+
+  @impl true
+  def handle_info({:edit_poll, poll}, socket) do
+    # Handle poll editing (similar to view_poll for now)
+    {:noreply,
+     socket
+     |> assign(:selected_poll, poll)
+     |> assign(:show_poll_details, true)
+     |> assign(:editing_poll, poll)}
+  end
+
+  @impl true
+  def handle_info({:show_error, message}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:error, message)}
+  end
+
+  @impl true
+  def handle_info({:close_poll_editing}, socket) do
+    {:noreply,
+     socket
+     |> assign(:editing_poll, nil)
+     |> assign(:selected_poll, nil)
+     |> assign(:show_poll_details, false)}
+  end
+
+  @impl true
+  def handle_info({:close_poll_creation_modal}, socket) do
+    {:noreply,
+     socket
+     |> assign(:editing_poll, nil)
+     |> assign(:selected_poll, nil)
+     |> assign(:show_poll_details, false)}
+  end
+
   defp handle_user_search(socket, query, mode) do
     event = socket.assigns.event
     current_user = socket.assigns.user
@@ -1100,6 +1179,41 @@ defmodule EventasaurusWeb.EventManageLive do
           _ -> "Unknown"
         end
     end
+  end
+
+  # Poll data loading function
+  defp load_poll_data(socket) do
+    event = socket.assigns.event
+
+    try do
+      # Load all polls for the event
+      polls = Events.list_polls(event)
+
+      # Get poll statistics
+      poll_stats = Events.get_event_poll_stats(event)
+
+      socket
+      |> assign(:polls, polls)
+      |> assign(:total_poll_participants, poll_stats.total_participants)
+      |> assign(:total_votes, count_total_votes(polls))
+      |> assign(:polls_loading, false)
+    rescue
+      error ->
+        Logger.error("Failed to load poll data: #{inspect(error)}")
+        socket
+        |> assign(:polls, [])
+        |> assign(:total_poll_participants, 0)
+        |> assign(:total_votes, 0)
+        |> assign(:polls_loading, false)
+        |> put_flash(:error, "Failed to load poll data")
+    end
+  end
+
+  defp count_total_votes(polls) do
+    polls
+    |> Enum.flat_map(fn poll -> poll.poll_options || [] end)
+    |> Enum.flat_map(fn option -> option.votes || [] end)
+    |> length()
   end
 
 end

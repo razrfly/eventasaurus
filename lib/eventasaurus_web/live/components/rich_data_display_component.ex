@@ -1,32 +1,58 @@
 defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
   @moduledoc """
-  A reusable LiveView component for displaying rich external data (movies, TV shows).
+  A generic reusable LiveView component for displaying rich external data.
 
-  Inspired by TMDB's movie page design, this component provides a comprehensive
-  view of movie/TV data including hero section, cast, crew, media, and details.
+  Uses a data adapter system to normalize different data sources (TMDB, Google Places, etc.)
+  into a standardized format, then leverages a section registry to dynamically select
+  the appropriate display components for each content type.
+
+  ## Key Features:
+  - **Automatic Data Adaptation**: Detects and normalizes different data formats
+  - **Dynamic Section Selection**: Uses registry to map content types to components
+  - **Flexible Display Modes**: Supports compact and full display modes
+  - **Extensible Architecture**: Easy to add new content types and sections
 
   ## Attributes:
-  - rich_data: Map containing the rich external data from TMDB
-  - show_sections: List of sections to display (default: all)
+  - rich_data: Raw external data (will be automatically adapted)
+  - show_sections: List of sections to display (default: auto-detected)
   - compact: Boolean for compact display mode (default: false)
   - loading: Boolean for loading state (default: false)
   - error: String for error message (default: nil)
   - class: Additional CSS classes
+  - force_adapter: Atom to force specific adapter (optional)
 
   ## Usage:
       <.live_component
-        module={EventasaurusWeb.RichDataDisplayComponent}
+        module={EventasaurusWeb.Live.Components.RichDataDisplayComponent}
         id="rich-data-display"
-        rich_data={@event.rich_external_data["tmdb"]}
-        show_sections={[:hero, :overview, :cast, :media, :details]}
+        rich_data={@raw_data}
         compact={false}
+        show_sections={[:hero, :overview, :cast]}
       />
+
+  ## Automatic Content Type Detection:
+
+  The component automatically detects content type from the data:
+  - TMDB data → :movie/:tv with sections [:hero, :overview, :cast, :media, :details]
+  - Google Places data → :venue/:restaurant/:activity with sections [:hero, :details, :reviews, :photos]
+  - Future data types → Automatically supported through adapter registration
+
+  ## Extension:
+
+  To add support for new data types:
+  1. Create an adapter implementing `RichDataAdapterBehaviour`
+  2. Register it with `RichDataAdapterManager`
+  3. Create section components and register them with `RichDataSectionRegistry`
+
   """
 
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
 
-  @default_sections [:hero, :overview, :cast, :media, :details]
+  alias EventasaurusWeb.Live.Components.{
+    RichDataAdapterManager,
+    RichDataSectionRegistry
+  }
 
   @impl true
   def update(assigns, socket) do
@@ -36,12 +62,12 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
     {:ok,
      socket
      |> assign(assigns)
-     |> assign_new(:show_sections, fn -> @default_sections end)
      |> assign_new(:compact, fn -> false end)
      |> assign_new(:loading, fn -> false end)
      |> assign_new(:error, fn -> nil end)
      |> assign_new(:class, fn -> "" end)
-     |> assign_computed_data()}
+     |> assign_new(:force_adapter, fn -> nil end)
+     |> process_rich_data()}
   end
 
   @impl true
@@ -50,7 +76,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
     <div class={["rich-data-display", @class]}>
       <%= if @loading do %>
         <div class="animate-pulse">
-          <.loading_skeleton />
+          <.loading_skeleton content_type={@content_type} />
         </div>
       <% end %>
 
@@ -66,55 +92,9 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
         </div>
       <% end %>
 
-      <%= if @rich_data && !@loading && !@error do %>
+      <%= if @standardized_data && !@loading && !@error do %>
         <div class="space-y-8">
-          <%= if :hero in @show_sections do %>
-            <.live_component
-              module={EventasaurusWeb.Live.Components.MovieHeroComponent}
-              id="movie-hero"
-              rich_data={@rich_data}
-              compact={@compact}
-            />
-          <% end %>
-
-          <%= if :overview in @show_sections do %>
-            <.live_component
-              module={EventasaurusWeb.Live.Components.MovieOverviewComponent}
-              id="movie-overview"
-              rich_data={@rich_data}
-              compact={@compact}
-            />
-          <% end %>
-
-          <%= if :cast in @show_sections and @rich_data["cast"] do %>
-            <.live_component
-              module={EventasaurusWeb.Live.Components.MovieCastComponent}
-              id="movie-cast"
-              cast={@rich_data["cast"]}
-              crew={@rich_data["crew"]}
-              director={@rich_data["director"]}
-              compact={@compact}
-            />
-          <% end %>
-
-          <%= if :media in @show_sections and (@rich_data["videos"] || @rich_data["images"]) do %>
-            <.live_component
-              module={EventasaurusWeb.Live.Components.MovieMediaComponent}
-              id="movie-media"
-              videos={@rich_data["videos"] || []}
-              images={@rich_data["images"] || %{}}
-              compact={@compact}
-            />
-          <% end %>
-
-          <%= if :details in @show_sections do %>
-            <.live_component
-              module={EventasaurusWeb.Live.Components.MovieDetailsComponent}
-              id="movie-details"
-              rich_data={@rich_data}
-              compact={@compact}
-            />
-          <% end %>
+          <%= render_sections(assigns) %>
         </div>
       <% end %>
     </div>
@@ -123,17 +103,91 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
 
   # Private function components
 
+  defp render_sections(assigns) do
+    ~H"""
+    <%= for section_name <- @display_sections do %>
+      <%= render_section(assigns, section_name) %>
+    <% end %>
+    """
+  end
+
+  defp render_section(assigns, section_name) do
+    component_module = RichDataSectionRegistry.get_section_component(assigns.content_type, section_name)
+
+    if component_module do
+      assigns = Map.put(assigns, :section_name, section_name)
+      render_dynamic_section(assigns, component_module)
+    else
+      assigns
+      |> Map.put(:section_name, section_name)
+      |> render_unsupported_section()
+    end
+  end
+
+  defp render_dynamic_section(assigns, component_module) do
+    # Generate unique ID for this section component
+    section_id = "#{assigns.content_type}-#{assigns.section_name}"
+
+    # Extract section-specific data from standardized data
+    section_data = get_section_data(assigns.standardized_data, assigns.section_name)
+
+    assigns = assign(assigns, :component_module, component_module)
+    assigns = assign(assigns, :section_id, section_id)
+    assigns = assign(assigns, :section_data, section_data)
+
+    ~H"""
+    <.live_component
+      module={@component_module}
+      id={@section_id}
+      rich_data={@section_data}
+      compact={@compact}
+    />
+    """
+  end
+
+  defp render_unsupported_section(assigns) do
+    ~H"""
+    <%= if Application.get_env(:eventasaurus, :env) == :dev do %>
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div class="flex">
+          <.icon name="hero-exclamation-triangle" class="h-5 w-5 text-yellow-400" />
+          <div class="ml-3">
+            <h3 class="text-sm font-medium text-yellow-800">Development Notice</h3>
+            <p class="mt-1 text-sm text-yellow-700">
+              No component registered for section :<%= @section_name %> of type :<%= @content_type %>
+            </p>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    """
+  end
+
   defp loading_skeleton(assigns) do
     ~H"""
     <div class="space-y-6">
-      <!-- Hero skeleton -->
-      <div class="relative aspect-video bg-gray-200 rounded-lg overflow-hidden">
-        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        <div class="absolute bottom-6 left-6 right-6">
-          <div class="h-8 bg-gray-300 rounded w-3/4 mb-4" />
-          <div class="h-4 bg-gray-300 rounded w-1/2" />
-        </div>
-      </div>
+      <%= case @content_type do %>
+        <% type when type in [:movie, :tv] -> %>
+          <!-- Movie/TV skeleton -->
+          <div class="relative aspect-video bg-gray-200 rounded-lg overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+            <div class="absolute bottom-6 left-6 right-6">
+              <div class="h-8 bg-gray-300 rounded w-3/4 mb-4" />
+              <div class="h-4 bg-gray-300 rounded w-1/2" />
+            </div>
+          </div>
+        <% type when type in [:venue, :restaurant, :activity] -> %>
+          <!-- Venue skeleton -->
+          <div class="relative aspect-video lg:aspect-[21/9] bg-gray-200 rounded-lg overflow-hidden">
+            <div class="absolute bottom-6 left-6 right-6">
+              <div class="h-6 bg-gray-300 rounded w-2/3 mb-2" />
+              <div class="h-4 bg-gray-300 rounded w-1/2" />
+            </div>
+          </div>
+        <% _ -> %>
+          <!-- Generic skeleton -->
+          <div class="h-48 bg-gray-200 rounded-lg" />
+      <% end %>
 
       <!-- Content skeleton -->
       <div class="space-y-4">
@@ -144,25 +198,39 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
         </div>
       </div>
 
-      <!-- Cast skeleton -->
-      <div class="space-y-4">
-        <div class="h-6 bg-gray-200 rounded w-1/4" />
-        <div class="flex space-x-4">
-          <%= for _ <- 1..4 do %>
-            <div class="flex-shrink-0">
-              <div class="w-16 h-16 bg-gray-200 rounded-full" />
-              <div class="h-3 bg-gray-200 rounded w-12 mt-2" />
-            </div>
-          <% end %>
+      <%= if @content_type in [:movie, :tv] do %>
+        <!-- Cast skeleton for movies -->
+        <div class="space-y-4">
+          <div class="h-6 bg-gray-200 rounded w-1/4" />
+          <div class="flex space-x-4">
+            <%= for _ <- 1..4 do %>
+              <div class="flex-shrink-0">
+                <div class="w-16 h-16 bg-gray-200 rounded-full" />
+                <div class="h-3 bg-gray-200 rounded w-12 mt-2" />
+              </div>
+            <% end %>
+          </div>
         </div>
-      </div>
+      <% end %>
+
+      <%= if @content_type in [:venue, :restaurant, :activity] do %>
+        <!-- Photos skeleton for venues -->
+        <div class="space-y-4">
+          <div class="h-6 bg-gray-200 rounded w-1/4" />
+          <div class="grid grid-cols-4 gap-2">
+            <%= for _ <- 1..4 do %>
+              <div class="aspect-square bg-gray-200 rounded" />
+            <% end %>
+          </div>
+        </div>
+      <% end %>
     </div>
     """
   end
 
-  # Public helper functions
+  # Public helper functions (maintaining backward compatibility)
 
-    @doc """
+  @doc """
   Generates a TMDB image URL for the given path and size.
 
   ## Examples
@@ -180,35 +248,57 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
 
   # Private functions
 
-  defp assign_computed_data(socket) do
-    rich_data = socket.assigns[:rich_data]
+  defp process_rich_data(socket) do
+    raw_data = socket.assigns[:rich_data]
+    force_adapter = socket.assigns[:force_adapter]
 
-    socket
-    |> assign(:has_backdrop, has_backdrop_image?(rich_data))
-    |> assign(:has_poster, has_poster_image?(rich_data))
-    |> assign(:media_type, get_media_type(rich_data))
-  end
+    case adapt_raw_data(raw_data, force_adapter) do
+      {:ok, standardized_data} ->
+        socket
+        |> assign(:standardized_data, standardized_data)
+        |> assign(:content_type, standardized_data.type)
+        |> assign(:display_sections, determine_display_sections(socket.assigns, standardized_data))
+        |> assign(:adaptation_error, nil)
 
-  defp has_backdrop_image?(nil), do: false
-  defp has_backdrop_image?(rich_data) do
-    backdrop_path = rich_data["backdrop_path"]
-    is_binary(backdrop_path) && backdrop_path != ""
-  end
-
-  defp has_poster_image?(nil), do: false
-  defp has_poster_image?(rich_data) do
-    poster_path = rich_data["poster_path"]
-    is_binary(poster_path) && poster_path != ""
-  end
-
-  defp get_media_type(nil), do: :unknown
-  defp get_media_type(rich_data) do
-    case rich_data["type"] do
-      "movie" -> :movie
-      "tv" -> :tv
-      _ -> :unknown
+      {:error, reason} ->
+        socket
+        |> assign(:standardized_data, nil)
+        |> assign(:content_type, :unknown)
+        |> assign(:display_sections, [])
+        |> assign(:adaptation_error, reason)
+        |> assign(:error, "Failed to process data: #{reason}")
     end
   end
 
+  defp adapt_raw_data(nil, _), do: {:error, "No data provided"}
+  defp adapt_raw_data(raw_data, nil) do
+    RichDataAdapterManager.adapt_data(raw_data)
+  end
+  defp adapt_raw_data(raw_data, force_adapter) do
+    RichDataAdapterManager.adapt_data(raw_data, force_adapter)
+  end
 
+  defp determine_display_sections(assigns, standardized_data) do
+    # Use explicitly provided sections if available
+    if assigns[:show_sections] && is_list(assigns[:show_sections]) do
+      assigns[:show_sections]
+    else
+      # Auto-determine based on content type and compact mode
+      content_type = standardized_data.type
+
+      if assigns[:compact] do
+        RichDataSectionRegistry.get_compact_sections(content_type)
+      else
+        RichDataSectionRegistry.get_default_sections(content_type)
+      end
+    end
+  end
+
+  defp get_section_data(standardized_data, section_name) do
+    # Extract section-specific data from the standardized format
+    section_data = get_in(standardized_data, [:sections, section_name]) || %{}
+
+    # Merge with global data that all sections might need
+    Map.merge(standardized_data, section_data)
+  end
 end

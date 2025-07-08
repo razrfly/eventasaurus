@@ -31,10 +31,12 @@ defmodule EventasaurusWeb.Services.RichDataManager do
   require Logger
 
   alias EventasaurusWeb.Services.TmdbRichDataProvider
+  alias EventasaurusWeb.Services.GooglePlacesRichDataProvider
 
   @registry_table :rich_data_providers
   @default_providers [
-    TmdbRichDataProvider
+    TmdbRichDataProvider,
+    GooglePlacesRichDataProvider
   ]
 
   # ============================================================================
