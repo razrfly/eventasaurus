@@ -24,7 +24,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.PollVote
+
 
   @impl true
   def mount(socket) do
@@ -384,102 +384,131 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   @impl true
   def handle_event("cast_binary_vote", %{"option-id" => option_id, "vote" => vote}, socket) do
     socket = assign(socket, :loading, true)
-    option_id = String.to_integer(option_id)
 
-    case submit_binary_vote(socket, option_id, vote) do
-      {:ok, _vote} ->
-        new_vote_state = Map.put(socket.assigns.vote_state, option_id, vote)
-        send(self(), {:vote_cast, option_id, vote})
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        case submit_binary_vote(socket, option_id, vote) do
+          {:ok, _vote} ->
+            new_vote_state = Map.put(socket.assigns.vote_state, option_id, vote)
+            send(self(), {:vote_cast, option_id, vote})
 
-        {:noreply,
-         socket
-         |> assign(:loading, false)
-         |> assign(:vote_state, new_vote_state)}
+            {:noreply,
+             socket
+             |> assign(:loading, false)
+             |> assign(:vote_state, new_vote_state)}
 
+          {:error, _} ->
+            send(self(), {:show_error, "Failed to cast vote"})
+            {:noreply, assign(socket, :loading, false)}
+        end
       {:error, _} ->
-        send(self(), {:show_error, "Failed to cast vote"})
+        send(self(), {:show_error, "Invalid option ID"})
         {:noreply, assign(socket, :loading, false)}
     end
   end
 
   @impl true
   def handle_event("toggle_approval_vote", %{"option-id" => option_id}, socket) do
-    option_id = String.to_integer(option_id)
-    current_vote = socket.assigns.vote_state[option_id]
-    new_vote = if current_vote == "approved", do: nil, else: "approved"
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        current_vote = socket.assigns.vote_state[option_id]
+        new_vote = if current_vote == "approved", do: nil, else: "approved"
 
-    socket = assign(socket, :loading, true)
+        socket = assign(socket, :loading, true)
 
-    case submit_approval_vote(socket, option_id, new_vote) do
-      {:ok, _} ->
-        new_vote_state = if new_vote do
-          Map.put(socket.assigns.vote_state, option_id, new_vote)
-        else
-          Map.delete(socket.assigns.vote_state, option_id)
+        case submit_approval_vote(socket, option_id, new_vote) do
+          {:ok, _} ->
+            new_vote_state = if new_vote do
+              Map.put(socket.assigns.vote_state, option_id, new_vote)
+            else
+              Map.delete(socket.assigns.vote_state, option_id)
+            end
+
+            send(self(), {:vote_cast, option_id, new_vote})
+
+            {:noreply,
+             socket
+             |> assign(:loading, false)
+             |> assign(:vote_state, new_vote_state)}
+
+          {:error, :option_not_found} ->
+            send(self(), {:show_error, "Option not found"})
+            {:noreply, assign(socket, :loading, false)}
+
+          {:error, _} ->
+            send(self(), {:show_error, "Failed to update vote"})
+            {:noreply, assign(socket, :loading, false)}
         end
-
-        send(self(), {:vote_cast, option_id, new_vote})
-
-        {:noreply,
-         socket
-         |> assign(:loading, false)
-         |> assign(:vote_state, new_vote_state)}
-
       {:error, _} ->
-        send(self(), {:show_error, "Failed to update vote"})
-        {:noreply, assign(socket, :loading, false)}
+        send(self(), {:show_error, "Invalid option ID"})
+        {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("cast_star_vote", %{"option-id" => option_id, "rating" => rating}, socket) do
     socket = assign(socket, :loading, true)
-    option_id = String.to_integer(option_id)
-    rating = String.to_integer(rating)
 
-    case submit_star_vote(socket, option_id, rating) do
-      {:ok, _vote} ->
-        new_vote_state = Map.put(socket.assigns.vote_state, option_id, rating)
-        send(self(), {:vote_cast, option_id, rating})
+    with {:ok, option_id} <- safe_string_to_integer(option_id),
+         {:ok, rating} <- safe_string_to_integer(rating) do
+      case submit_star_vote(socket, option_id, rating) do
+        {:ok, _vote} ->
+          new_vote_state = Map.put(socket.assigns.vote_state, option_id, rating)
+          send(self(), {:vote_cast, option_id, rating})
 
-        {:noreply,
-         socket
-         |> assign(:loading, false)
-         |> assign(:vote_state, new_vote_state)}
+          {:noreply,
+           socket
+           |> assign(:loading, false)
+           |> assign(:vote_state, new_vote_state)}
 
+        {:error, :option_not_found} ->
+          send(self(), {:show_error, "Option not found"})
+          {:noreply, assign(socket, :loading, false)}
+
+        {:error, _} ->
+          send(self(), {:show_error, "Failed to cast vote"})
+          {:noreply, assign(socket, :loading, false)}
+      end
+    else
       {:error, _} ->
-        send(self(), {:show_error, "Failed to cast vote"})
+        send(self(), {:show_error, "Invalid option ID or rating"})
         {:noreply, assign(socket, :loading, false)}
     end
   end
 
   @impl true
   def handle_event("clear_star_vote", %{"option-id" => option_id}, socket) do
-    option_id = String.to_integer(option_id)
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        case clear_vote(socket, option_id) do
+          {:ok, _} ->
+            new_vote_state = Map.delete(socket.assigns.vote_state, option_id)
+            send(self(), {:vote_cleared, option_id})
 
-    case clear_vote(socket, option_id) do
-      {:ok, _} ->
-        new_vote_state = Map.delete(socket.assigns.vote_state, option_id)
-        send(self(), {:vote_cleared, option_id})
+            {:noreply, assign(socket, :vote_state, new_vote_state)}
 
-        {:noreply, assign(socket, :vote_state, new_vote_state)}
-
+          {:error, _} ->
+            send(self(), {:show_error, "Failed to clear vote"})
+            {:noreply, socket}
+        end
       {:error, _} ->
-        send(self(), {:show_error, "Failed to clear vote"})
+        send(self(), {:show_error, "Invalid option ID"})
         {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("add_to_ranking", %{"option-id" => option_id}, socket) do
-    option_id = String.to_integer(option_id)
-    option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-
-    if option do
-      new_ranked_options = socket.assigns.ranked_options ++ [option]
-      {:noreply, assign(socket, :ranked_options, new_ranked_options)}
-    else
-      {:noreply, socket}
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        case find_poll_option(socket, option_id) do
+          nil -> {:noreply, socket}
+          option ->
+            new_ranked_options = socket.assigns.ranked_options ++ [option]
+            {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+        end
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
@@ -500,43 +529,55 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def handle_event("move_option_up", %{"option-id" => option_id}, socket) do
-    option_id = String.to_integer(option_id)
-    ranked_options = socket.assigns.ranked_options
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        ranked_options = socket.assigns.ranked_options
 
-    case Enum.find_index(ranked_options, &(&1.id == option_id)) do
-      nil -> {:noreply, socket}
-      0 -> {:noreply, socket}  # Already at top
-      index ->
-        new_ranked_options = ranked_options
-        |> List.delete_at(index)
-        |> List.insert_at(index - 1, Enum.at(ranked_options, index))
+        case Enum.find_index(ranked_options, &(&1.id == option_id)) do
+          nil -> {:noreply, socket}
+          0 -> {:noreply, socket}  # Already at top
+          index ->
+            new_ranked_options = ranked_options
+            |> List.delete_at(index)
+            |> List.insert_at(index - 1, Enum.at(ranked_options, index))
 
-        {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+            {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+        end
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("move_option_down", %{"option-id" => option_id}, socket) do
-    option_id = String.to_integer(option_id)
-    ranked_options = socket.assigns.ranked_options
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        ranked_options = socket.assigns.ranked_options
 
-    case Enum.find_index(ranked_options, &(&1.id == option_id)) do
-      nil -> {:noreply, socket}
-      index when index == length(ranked_options) - 1 -> {:noreply, socket}  # Already at bottom
-      index ->
-        new_ranked_options = ranked_options
-        |> List.delete_at(index)
-        |> List.insert_at(index + 1, Enum.at(ranked_options, index))
+        case Enum.find_index(ranked_options, &(&1.id == option_id)) do
+          nil -> {:noreply, socket}
+          index when index == length(ranked_options) - 1 -> {:noreply, socket}  # Already at bottom
+          index ->
+            new_ranked_options = ranked_options
+            |> List.delete_at(index)
+            |> List.insert_at(index + 1, Enum.at(ranked_options, index))
 
-        {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+            {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+        end
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("remove_from_ranking", %{"option-id" => option_id}, socket) do
-    option_id = String.to_integer(option_id)
-    new_ranked_options = Enum.reject(socket.assigns.ranked_options, &(&1.id == option_id))
-    {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        new_ranked_options = Enum.reject(socket.assigns.ranked_options, &(&1.id == option_id))
+        {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+      {:error, _} ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -571,7 +612,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       "star" ->
         user_votes
         |> Enum.reduce(%{}, fn vote, acc ->
-          rating = vote.vote_numeric |> Decimal.to_integer()
+          rating = case vote.vote_numeric do
+            %Decimal{} = decimal -> Decimal.to_integer(decimal)
+            nil -> 0
+            other when is_integer(other) -> other
+            _ -> 0
+          end
           Map.put(acc, vote.poll_option_id, rating)
         end)
 
@@ -582,33 +628,42 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   defp initialize_ranked_options(poll_options, user_votes) do
+    # Create a lookup map for better performance
+    options_map = Map.new(poll_options, &{&1.id, &1})
+
     # Sort user votes by rank and return corresponding options
     user_votes
     |> Enum.sort_by(& &1.vote_rank)
     |> Enum.map(fn vote ->
-      Enum.find(poll_options, &(&1.id == vote.poll_option_id))
+      Map.get(options_map, vote.poll_option_id)
     end)
     |> Enum.reject(&is_nil/1)
   end
 
   defp submit_binary_vote(socket, option_id, vote_value) do
-    option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-    Events.cast_binary_vote(socket.assigns.poll, option, socket.assigns.user, vote_value)
+    case find_poll_option(socket, option_id) do
+      nil -> {:error, :option_not_found}
+      option -> Events.cast_binary_vote(socket.assigns.poll, option, socket.assigns.user, vote_value)
+    end
   end
 
   defp submit_approval_vote(socket, option_id, vote_value) do
-    option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-
-    if vote_value do
-      Events.cast_approval_vote(socket.assigns.poll, option, socket.assigns.user, true)
-    else
-      Events.remove_user_vote(option, socket.assigns.user)
+    case find_poll_option(socket, option_id) do
+      nil -> {:error, :option_not_found}
+      option ->
+        if vote_value do
+          Events.cast_approval_vote(socket.assigns.poll, option, socket.assigns.user, true)
+        else
+          Events.remove_user_vote(option, socket.assigns.user)
+        end
     end
   end
 
   defp submit_star_vote(socket, option_id, rating) do
-    option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-    Events.cast_star_vote(socket.assigns.poll, option, socket.assigns.user, rating)
+    case find_poll_option(socket, option_id) do
+      nil -> {:error, :option_not_found}
+      option -> Events.cast_star_vote(socket.assigns.poll, option, socket.assigns.user, rating)
+    end
   end
 
   defp submit_ranked_votes(socket) do
@@ -621,11 +676,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   defp clear_vote(socket, option_id) do
-    option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-    case option do
+    case find_poll_option(socket, option_id) do
       nil -> {:ok, nil}
       option -> Events.remove_user_vote(option, socket.assigns.user)
     end
+  end
+
+  defp find_poll_option(socket, option_id) do
+    Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
   end
 
   defp clear_all_user_votes(socket) do
@@ -716,4 +774,13 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       _ -> "Not set"
     end
   end
+
+  defp safe_string_to_integer(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {int, ""} -> {:ok, int}
+      _ -> {:error, :invalid_integer}
+    end
+  end
+
+  defp safe_string_to_integer(_), do: {:error, :invalid_input}
 end

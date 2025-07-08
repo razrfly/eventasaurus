@@ -31,7 +31,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
-  alias Phoenix.PubSub
+
   alias EventasaurusWeb.Services.PollPubSubService
 
   # Import the other polling components
@@ -794,26 +794,23 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:success_message, "Poll phase changed to #{format_phase_name(message.new_phase)}")}
   end
 
-  def handle_info(%{type: :poll_counters_updated, poll_id: poll_id} = message, socket) do
+  def handle_info(%{type: :poll_counters_updated, poll_id: _poll_id} = _message, socket) do
     # Update counters - mainly affects statistics
     integration_stats = calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
     {:noreply, assign(socket, :integration_stats, integration_stats)}
   end
 
-  @impl true
-  def handle_info(%{type: :participant_joined, poll_id: poll_id} = message, socket) do
+  def handle_info(%{type: :participant_joined, poll_id: _poll_id} = _message, socket) do
     # Update participant count
     integration_stats = calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
     {:noreply, assign(socket, :integration_stats, integration_stats)}
   end
 
-  @impl true
   def handle_info(%{type: :duplicate_detected} = message, socket) do
     # Show a notification about duplicate detection
     {:noreply, assign(socket, :error_message, "Duplicate option detected: #{message.suggested_option.title}")}
   end
 
-  @impl true
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end
@@ -853,7 +850,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           nil -> []
         end
       end)
-      |> Enum.map(&(&1.user_id))
+      |> Enum.map(&(&1.voter_id))
       |> Enum.uniq()
       |> length()
 

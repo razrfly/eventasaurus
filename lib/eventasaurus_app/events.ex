@@ -1505,6 +1505,25 @@ defmodule EventasaurusApp.Events do
     end
   end
 
+  def remove_user_vote(%PollOption{} = poll_option, %User{} = user) do
+    case get_user_poll_vote(poll_option, user) do
+      nil ->
+        {:ok, :no_vote_found}
+      vote ->
+        case Repo.delete(vote) do
+          {:ok, deleted_vote} ->
+            # Broadcast poll update
+            poll = Repo.get!(Poll, poll_option.poll_id)
+            broadcast_poll_update(poll, :votes_updated)
+            {:ok, deleted_vote}
+          error ->
+            error
+        end
+    end
+  end
+
+
+
   @doc """
   Gets vote tally for a specific date option.
   """
@@ -3982,21 +4001,6 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
-  Removes a user's vote for a specific poll option.
-  """
-  def remove_user_vote(%PollOption{} = poll_option, %User{} = user) do
-    case get_user_poll_vote(poll_option, user) do
-      nil -> {:ok, :no_vote_to_remove}
-      vote ->
-        result = Repo.delete(vote)
-        # Get poll for broadcasting
-        poll = Repo.get!(Poll, poll_option.poll_id)
-        broadcast_poll_update(poll, :votes_updated)
-        result
-    end
-  end
-
-  @doc """
   Returns all votes by a user for a poll.
   """
   def list_user_poll_votes(%Poll{} = poll, %User{} = user) do
@@ -4332,6 +4336,8 @@ defmodule EventasaurusApp.Events do
     broadcast_poll_update(poll, :votes_updated)
     {:ok, count}
   end
+
+
 
   @doc """
   Checks if a user can vote on a poll based on current phase and permissions.
