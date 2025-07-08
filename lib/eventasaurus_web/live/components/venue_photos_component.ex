@@ -319,6 +319,8 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
       <div class="relative min-h-screen flex items-center justify-center p-4">
         <div
           class="relative max-w-6xl w-full"
+          phx-click="stop_propagation"
+          phx-target={@myself}
         >
           <!-- Photo -->
           <div class="relative">
@@ -493,6 +495,12 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
   end
 
   def handle_event("handle_keydown", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("stop_propagation", _params, socket) do
+    # This prevents click events from bubbling up to close the modal
     {:noreply, socket}
   end
 

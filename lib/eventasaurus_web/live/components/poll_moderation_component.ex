@@ -727,7 +727,7 @@ defmodule EventasaurusWeb.PollModerationComponent do
     |> Enum.count(&(&1.status != "active"))
 
     user_suggestions = poll.poll_options
-    |> Enum.count(&(&1.suggested_by_id != &1.created_by_id))
+    |> Enum.count(&(&1.suggested_by_id != poll.created_by_id))
 
     # Calculate total votes by going through poll options
     total_votes = poll.poll_options
