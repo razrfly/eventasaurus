@@ -79,6 +79,7 @@ defmodule EventasaurusApp.Events.Event do
     has_one :date_poll, EventasaurusApp.Events.EventDatePoll
     has_many :tickets, EventasaurusApp.Events.Ticket, on_delete: :delete_all
     has_many :orders, EventasaurusApp.Events.Order, on_delete: :delete_all
+    has_many :polls, EventasaurusApp.Events.Poll, on_delete: :delete_all
 
     timestamps()
   end
