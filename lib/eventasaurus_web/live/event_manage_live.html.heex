@@ -873,7 +873,7 @@
               <div class="text-center">
                 <div class="text-lg font-bold text-orange-600">
                   <%= if assigns[:polls] do %>
-                    <%= Enum.count(@polls, &(&1.phase == "active")) %>
+                    <%= Enum.count(@polls, &(&1.phase in ["list_building", "voting"])) %>
                   <% else %>
                     0
                   <% end %>
