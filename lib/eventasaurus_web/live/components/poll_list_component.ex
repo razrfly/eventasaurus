@@ -181,11 +181,14 @@ defmodule EventasaurusWeb.PollListComponent do
 
   @impl true
   def handle_event("view_poll", %{"poll-id" => poll_id}, socket) do
-    poll_id = String.to_integer(poll_id)
-    poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
-
-    if poll do
-      send(self(), {:view_poll, poll})
+    case safe_string_to_integer(poll_id) do
+      {:ok, poll_id} ->
+        poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+        if poll do
+          send(self(), {:view_poll, poll})
+        end
+      {:error, _} ->
+        send(self(), {:show_error, "Invalid poll ID"})
     end
 
     {:noreply, socket}
@@ -193,11 +196,14 @@ defmodule EventasaurusWeb.PollListComponent do
 
   @impl true
   def handle_event("edit_poll", %{"poll-id" => poll_id}, socket) do
-    poll_id = String.to_integer(poll_id)
-    poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
-
-    if poll && poll.created_by_id == socket.assigns.user.id do
-      send(self(), {:edit_poll, poll})
+    case safe_string_to_integer(poll_id) do
+      {:ok, poll_id} ->
+        poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+        if poll && poll.created_by_id == socket.assigns.user.id do
+          send(self(), {:edit_poll, poll})
+        end
+      {:error, _} ->
+        send(self(), {:show_error, "Invalid poll ID"})
     end
 
     {:noreply, socket}
@@ -205,22 +211,27 @@ defmodule EventasaurusWeb.PollListComponent do
 
   @impl true
   def handle_event("transition_poll_phase", %{"poll-id" => poll_id}, socket) do
-    poll_id = String.to_integer(poll_id)
-    poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+    case safe_string_to_integer(poll_id) do
+      {:ok, poll_id} ->
+        poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
 
-    if poll && poll.created_by_id == socket.assigns.user.id do
-      case transition_poll_phase(poll) do
-        {:ok, updated_poll} ->
-          send(self(), {:poll_phase_transitioned, updated_poll})
-          {:noreply, socket}
+        if poll && poll.created_by_id == socket.assigns.user.id do
+          case transition_poll_phase(poll) do
+            {:ok, updated_poll} ->
+              send(self(), {:poll_phase_transitioned, updated_poll})
+              {:noreply, socket}
 
-        {:error, changeset} ->
-          errors = changeset.errors |> Enum.map(fn {field, {msg, _}} -> "#{field}: #{msg}" end) |> Enum.join(", ")
-          send(self(), {:show_error, "Failed to transition poll: #{errors}"})
+            {:error, changeset} ->
+              errors = changeset.errors |> Enum.map(fn {field, {msg, _}} -> "#{field}: #{msg}" end) |> Enum.join(", ")
+              send(self(), {:show_error, "Failed to transition poll: #{errors}"})
+              {:noreply, socket}
+          end
+        else
           {:noreply, socket}
-      end
-    else
-      {:noreply, socket}
+        end
+      {:error, _} ->
+        send(self(), {:show_error, "Invalid poll ID"})
+        {:noreply, socket}
     end
   end
 
@@ -307,4 +318,13 @@ defmodule EventasaurusWeb.PollListComponent do
       true -> 0
     end
   end
+
+  defp safe_string_to_integer(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {int, ""} -> {:ok, int}
+      _ -> {:error, :invalid_integer}
+    end
+  end
+
+  defp safe_string_to_integer(_), do: {:error, :invalid_input}
 end

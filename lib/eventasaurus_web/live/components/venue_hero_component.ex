@@ -158,7 +158,7 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
         <!-- Rating -->
         <%= if @rating && @rating > 0 do %>
           <div class="flex items-center gap-1" role="listitem" aria-label={get_rating_aria_label(@rating, @user_ratings_total)}>
-            <.icon name="hero-star-solid" class="h-4 w-4 text-yellow-400" aria-hidden="true" />
+            <.icon name="hero-star-solid" class="h-4 w-4 text-yellow-400" />
             <span class="font-medium" aria-label={"Rating: #{format_rating(@rating)} out of 5 stars"}>
               <%= format_rating(@rating) %>
             </span>
@@ -272,7 +272,7 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
       _ -> nil
     end
 
-    images = [primary_image, secondary_image] |> Enum.filter(& &1)
+    _images = [primary_image, secondary_image] |> Enum.filter(& &1)
 
     socket
     |> assign(:title, title)
@@ -288,31 +288,7 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     |> assign(:secondary_photo_url, if(secondary_image, do: secondary_image["url"], else: nil))
   end
 
-  defp has_photos?(images) when is_list(images) do
-    length(images) > 0
-  end
-  defp has_photos?(_), do: false
 
-  defp has_secondary_photo?(images) when is_list(images) do
-    length(images) > 1
-  end
-  defp has_secondary_photo?(_), do: false
-
-  defp get_primary_photo_url(images) when is_list(images) do
-    case List.first(images) do
-      %{"url" => url} -> url
-      _ -> nil
-    end
-  end
-  defp get_primary_photo_url(_), do: nil
-
-  defp get_secondary_photo_url(images) when is_list(images) do
-    case Enum.at(images, 1) do
-      %{"url" => url} -> url
-      _ -> nil
-    end
-  end
-  defp get_secondary_photo_url(_), do: nil
 
   defp format_rating(rating) when is_number(rating) do
     :erlang.float_to_binary(rating, decimals: 1)
@@ -329,6 +305,8 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     end
   end
 
+  defp format_ratings_count(_), do: ""
+
   defp format_number_with_commas(num) when is_integer(num) do
     num
     |> Integer.to_string()
@@ -340,7 +318,6 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     |> Enum.map(&Enum.join/1)
     |> Enum.join(",")
   end
-  defp format_ratings_count(_), do: ""
 
   defp format_price_level(nil), do: nil
   defp format_price_level(0), do: "💸 Free"

@@ -7,7 +7,6 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
   """
 
   use EventasaurusWeb, :live_component
-  import EventasaurusWeb.CoreComponents
 
   # Performance constants
   @photos_per_page 12
@@ -320,7 +319,6 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
       <div class="relative min-h-screen flex items-center justify-center p-4">
         <div
           class="relative max-w-6xl w-full"
-          phx-click={JS.stop_propagation()}
         >
           <!-- Photo -->
           <div class="relative">

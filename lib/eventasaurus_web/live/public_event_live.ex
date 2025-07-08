@@ -10,7 +10,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.ReservedSlugs
-  alias EventasaurusWeb.EventPollIntegrationComponent
+
 
 
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
