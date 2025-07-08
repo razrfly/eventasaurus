@@ -44,9 +44,9 @@ defmodule EventasaurusWeb.PollModerationComponent do
   def update(assigns, socket) do
     # Subscribe to real-time updates
     if connected?(socket) do
-      PubSub.subscribe(EventasaurusApp.PubSub, "polls:#{assigns.poll.id}")
-      PubSub.subscribe(EventasaurusApp.PubSub, "votes:poll:#{assigns.poll.id}")
-      PubSub.subscribe(EventasaurusApp.PubSub, "poll_options:#{assigns.poll.id}")
+      PubSub.subscribe(Eventasaurus.PubSub, "polls:#{assigns.poll.id}")
+      PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{assigns.poll.id}")
+      PubSub.subscribe(Eventasaurus.PubSub, "poll_options:#{assigns.poll.id}")
     end
 
     # Check permissions
@@ -404,16 +404,18 @@ defmodule EventasaurusWeb.PollModerationComponent do
 
   # Render Option Management Row
   defp render_option_management_row(assigns, option) do
+    assigns = assign(assigns, :option, option)
+
     ~H"""
-    <div class={"flex items-center justify-between p-3 border rounded-lg #{if option.id in @selected_options, do: "border-indigo-300 bg-indigo-50", else: "border-gray-200"} #{unless option.is_visible, do: "opacity-60"}"}>
+    <div class={"flex items-center justify-between p-3 border rounded-lg #{if @option.id in @selected_options, do: "border-indigo-300 bg-indigo-50", else: "border-gray-200"} #{unless @option.is_visible, do: "opacity-60"}"}>
       <div class="flex items-center space-x-3">
         <!-- Selection Checkbox -->
         <input
           type="checkbox"
           class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
-          checked={option.id in @selected_options}
+          checked={@option.id in @selected_options}
           phx-click="toggle_option_selection"
-          phx-value-option-id={option.id}
+          phx-value-option-id={@option.id}
           phx-target={@myself}
         />
 
@@ -421,35 +423,35 @@ defmodule EventasaurusWeb.PollModerationComponent do
         <div class="flex-1 min-w-0">
           <div class="flex items-center space-x-2">
             <h5 class="text-sm font-medium text-gray-900">
-              <%= option.title %>
+              <%= @option.title %>
             </h5>
-            <%= unless option.is_visible do %>
+            <%= unless @option.is_visible do %>
               <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                 Hidden
               </span>
             <% end %>
           </div>
 
-          <%= if option.description do %>
-            <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+          <%= if @option.description do %>
+            <p class="text-sm text-gray-500 mt-1"><%= @option.description %></p>
           <% end %>
 
           <div class="flex items-center space-x-4 text-xs text-gray-400 mt-1">
-            <span>Added by <%= option.creator.name || option.creator.email %></span>
-            <span><%= get_vote_count_for_option(option, @poll) %> votes</span>
-            <span><%= format_relative_time(option.inserted_at) %></span>
+            <span>Added by <%= @option.creator.name || @option.creator.email %></span>
+            <span><%= get_vote_count_for_option(@option, @poll) %> votes</span>
+            <span><%= format_relative_time(@option.inserted_at) %></span>
           </div>
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div class="flex items-center space-x-2">
-        <%= if option.is_visible do %>
+        <%= if @option.is_visible do %>
           <button
             type="button"
             class="text-sm text-yellow-600 hover:text-yellow-500"
             phx-click="hide_option"
-            phx-value-option-id={option.id}
+            phx-value-option-id={@option.id}
             phx-target={@myself}
             title="Hide option"
           >
@@ -463,7 +465,7 @@ defmodule EventasaurusWeb.PollModerationComponent do
             type="button"
             class="text-sm text-green-600 hover:text-green-500"
             phx-click="show_option"
-            phx-value-option-id={option.id}
+            phx-value-option-id={@option.id}
             phx-target={@myself}
             title="Show option"
           >
@@ -478,7 +480,7 @@ defmodule EventasaurusWeb.PollModerationComponent do
           type="button"
           class="text-sm text-red-600 hover:text-red-500"
           phx-click="delete_option"
-          phx-value-option-id={option.id}
+          phx-value-option-id={@option.id}
           phx-target={@myself}
           title="Delete option"
         >
@@ -542,13 +544,20 @@ defmodule EventasaurusWeb.PollModerationComponent do
   def handle_event("hide_option", %{"option-id" => option_id}, socket) do
     option_id = String.to_integer(option_id)
 
-    case Events.update_poll_option_status(option_id, false) do
-      {:ok, _option} ->
-        send(self(), {:option_updated, option_id, "hidden"})
-        {:noreply, socket}
+    case Events.get_poll_option(option_id) do
+      {:ok, poll_option} ->
+        case Events.update_poll_option_status(poll_option, false) do
+          {:ok, _option} ->
+            send(self(), {:option_updated, option_id, "hidden"})
+            {:noreply, socket}
+
+          {:error, _} ->
+            send(self(), {:show_error, "Failed to hide option"})
+            {:noreply, socket}
+        end
 
       {:error, _} ->
-        send(self(), {:show_error, "Failed to hide option"})
+        send(self(), {:show_error, "Option not found"})
         {:noreply, socket}
     end
   end
@@ -557,13 +566,20 @@ defmodule EventasaurusWeb.PollModerationComponent do
   def handle_event("show_option", %{"option-id" => option_id}, socket) do
     option_id = String.to_integer(option_id)
 
-    case Events.update_poll_option_status(option_id, true) do
-      {:ok, _option} ->
-        send(self(), {:option_updated, option_id, "shown"})
-        {:noreply, socket}
+    case Events.get_poll_option(option_id) do
+      {:ok, poll_option} ->
+        case Events.update_poll_option_status(poll_option, true) do
+          {:ok, _option} ->
+            send(self(), {:option_updated, option_id, "shown"})
+            {:noreply, socket}
+
+          {:error, _} ->
+            send(self(), {:show_error, "Failed to show option"})
+            {:noreply, socket}
+        end
 
       {:error, _} ->
-        send(self(), {:show_error, "Failed to show option"})
+        send(self(), {:show_error, "Option not found"})
         {:noreply, socket}
     end
   end
@@ -649,7 +665,6 @@ defmodule EventasaurusWeb.PollModerationComponent do
   end
 
   # PubSub Event Handlers
-  @impl true
   def handle_info({:poll_updated, updated_poll}, socket) do
     moderation_stats = calculate_moderation_stats(updated_poll)
 
@@ -659,14 +674,12 @@ defmodule EventasaurusWeb.PollModerationComponent do
      |> assign(:moderation_stats, moderation_stats)}
   end
 
-  @impl true
   def handle_info({:option_updated, _option_id, _action}, socket) do
     # The poll will be updated via PubSub, so we just need to recalculate stats
     moderation_stats = calculate_moderation_stats(socket.assigns.poll)
     {:noreply, assign(socket, :moderation_stats, moderation_stats)}
   end
 
-  @impl true
   def handle_info({:votes_updated, updated_poll}, socket) do
     moderation_stats = calculate_moderation_stats(updated_poll)
 
@@ -676,7 +689,6 @@ defmodule EventasaurusWeb.PollModerationComponent do
      |> assign(:moderation_stats, moderation_stats)}
   end
 
-  @impl true
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end
@@ -747,7 +759,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
   # Bulk action handlers
   defp handle_bulk_hide(socket) do
     Enum.each(socket.assigns.selected_options, fn option_id ->
-      Events.update_poll_option_status(option_id, false)
+      case Events.get_poll_option(option_id) do
+        {:ok, poll_option} -> Events.update_poll_option_status(poll_option, false)
+        {:error, _} -> :ok  # Skip if option not found
+      end
     end)
 
     send(self(), {:bulk_action_completed, "hide", length(socket.assigns.selected_options)})
@@ -756,7 +771,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
 
   defp handle_bulk_show(socket) do
     Enum.each(socket.assigns.selected_options, fn option_id ->
-      Events.update_poll_option_status(option_id, true)
+      case Events.get_poll_option(option_id) do
+        {:ok, poll_option} -> Events.update_poll_option_status(poll_option, true)
+        {:error, _} -> :ok  # Skip if option not found
+      end
     end)
 
     send(self(), {:bulk_action_completed, "show", length(socket.assigns.selected_options)})
@@ -821,14 +839,8 @@ defmodule EventasaurusWeb.PollModerationComponent do
   end
 
   defp handle_reset_votes(socket) do
-    case Events.clear_all_poll_votes(socket.assigns.poll.id) do
-      {:ok, _} ->
-        send(self(), {:votes_reset, socket.assigns.poll.id})
-        {:noreply, socket}
-
-      {:error, _} ->
-        send(self(), {:show_error, "Failed to reset votes"})
-        {:noreply, socket}
-    end
+    {:ok, _} = Events.clear_all_poll_votes(socket.assigns.poll.id)
+    send(self(), {:votes_reset, socket.assigns.poll.id})
+    {:noreply, socket}
   end
 end

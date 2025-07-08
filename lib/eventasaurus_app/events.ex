@@ -3871,6 +3871,83 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Reorders poll options by moving a dragged option relative to a target option.
+
+  ## Parameters
+  - dragged_option_id: ID of the option being moved
+  - target_option_id: ID of the option to position relative to
+  - direction: "before" or "after" - where to position the dragged option
+
+  ## Returns
+  - {:ok, updated_poll} on success
+  - {:error, reason} on failure
+  """
+  def reorder_poll_option(dragged_option_id, target_option_id, direction) when direction in ["before", "after"] do
+    Repo.transaction(fn ->
+      # Get both options and validate they exist and belong to the same poll
+      dragged_option = Repo.get!(PollOption, dragged_option_id)
+      target_option = Repo.get!(PollOption, target_option_id)
+
+      if dragged_option.poll_id != target_option.poll_id do
+        Repo.rollback("Options belong to different polls")
+      end
+
+      # Get all poll options ordered by current order_index
+      all_options = from(po in PollOption,
+                         where: po.poll_id == ^dragged_option.poll_id,
+                         order_by: [asc: po.order_index, asc: po.id])
+                    |> Repo.all()
+
+      # Calculate new order indices
+      {new_orders, updated_count} = calculate_new_order_indices(all_options, dragged_option, target_option, direction)
+
+      # Update the order indices in the database
+      if updated_count > 0 do
+        Enum.each(new_orders, fn {option_id, new_index} ->
+          from(po in PollOption, where: po.id == ^option_id)
+          |> Repo.update_all(set: [order_index: new_index])
+        end)
+      end
+
+      # Return the updated poll with preloaded options
+      get_poll!(dragged_option.poll_id)
+    end)
+  rescue
+    Ecto.NoResultsError ->
+      {:error, "Option not found"}
+  end
+
+  # Helper function to calculate new order indices
+  defp calculate_new_order_indices(all_options, dragged_option, target_option, direction) do
+    # Remove dragged option from the list
+    other_options = Enum.reject(all_options, &(&1.id == dragged_option.id))
+
+    # Find target position in the filtered list
+    target_index = Enum.find_index(other_options, &(&1.id == target_option.id))
+
+    if target_index == nil do
+      {[], 0}
+    else
+      insert_index = if direction == "after", do: target_index + 1, else: target_index
+
+      # Insert dragged option at new position
+      new_ordered_options = List.insert_at(other_options, insert_index, dragged_option)
+
+      # Calculate which options need their order_index updated
+      new_orders = new_ordered_options
+                  |> Enum.with_index()
+                  |> Enum.filter(fn {option, new_index} ->
+                       option.order_index != new_index
+                     end)
+                  |> Enum.map(fn {option, new_index} ->
+                       {option.id, new_index}
+                     end)
+
+      {new_orders, length(new_orders)}
+    end
+  end
+
+  @doc """
   Deletes a poll option.
   """
   def delete_poll_option(%PollOption{} = poll_option) do
@@ -3902,6 +3979,21 @@ defmodule EventasaurusApp.Events do
             preload: [:voter]
 
     Repo.one(query)
+  end
+
+  @doc """
+  Removes a user's vote for a specific poll option.
+  """
+  def remove_user_vote(%PollOption{} = poll_option, %User{} = user) do
+    case get_user_poll_vote(poll_option, user) do
+      nil -> {:ok, :no_vote_to_remove}
+      vote ->
+        result = Repo.delete(vote)
+        # Get poll for broadcasting
+        poll = Repo.get!(Poll, poll_option.poll_id)
+        broadcast_poll_update(poll, :votes_updated)
+        result
+    end
   end
 
   @doc """
@@ -4335,14 +4427,14 @@ defmodule EventasaurusApp.Events do
 
   defp broadcast_poll_update(poll, event_type) do
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       "polls:#{poll.id}",
       {event_type, poll}
     )
 
     # Also broadcast to event channel for real-time event updates
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       "events:#{poll.event_id}",
       {:poll_updated, poll}
     )
@@ -4384,21 +4476,6 @@ defmodule EventasaurusApp.Events do
         poll = get_poll!(poll_id)
         broadcast_poll_update(poll, :votes_cleared)
         {:ok, deleted_count}
-    end
-  end
-
-  @doc """
-  Removes a user's vote for a specific poll option (overload for PollOption).
-  """
-  def remove_user_vote(%PollOption{} = poll_option, %User{} = user) do
-    case get_user_poll_vote(poll_option, user) do
-      nil -> {:ok, :no_vote_to_remove}
-      vote ->
-        result = Repo.delete(vote)
-        # Get poll for broadcasting
-        poll = Repo.get!(Poll, poll_option.poll_id)
-        broadcast_poll_update(poll, :votes_updated)
-        result
     end
   end
 
@@ -4689,7 +4766,7 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  defp handle_threshold_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = finalizer) do
+  defp handle_threshold_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = _finalizer) do
     # Check if poll results indicate enough interest to confirm event
     analytics = get_poll_analytics(poll)
 
@@ -4710,21 +4787,21 @@ defmodule EventasaurusApp.Events do
   defp broadcast_event_poll_activity(%Event{} = event, activity_type, %Poll{} = poll, %User{} = user) do
     # Broadcast to event-specific channel for event page updates
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       "events:#{event.id}",
       {:poll_activity, activity_type, poll, user}
     )
 
     # Broadcast to general event participants channel
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       "event_participants:#{event.id}",
       {:poll_activity, activity_type, poll, user}
     )
 
     # Broadcast to organizers channel for management updates
     Phoenix.PubSub.broadcast(
-      EventasaurusApp.PubSub,
+      Eventasaurus.PubSub,
       "event_organizers:#{event.id}",
       {:poll_activity, activity_type, poll, user}
     )

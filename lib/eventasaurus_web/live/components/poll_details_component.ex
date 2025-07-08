@@ -41,8 +41,8 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   def update(assigns, socket) do
     # Subscribe to real-time poll updates
     if connected?(socket) do
-      PubSub.subscribe(EventasaurusApp.PubSub, "polls:#{assigns.poll.id}")
-      PubSub.subscribe(EventasaurusApp.PubSub, "votes:poll:#{assigns.poll.id}")
+      PubSub.subscribe(Eventasaurus.PubSub, "polls:#{assigns.poll.id}")
+      PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{assigns.poll.id}")
     end
 
     # Calculate poll statistics
@@ -393,7 +393,6 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   end
 
   # PubSub Event Handlers
-  @impl true
   def handle_info({:poll_updated, updated_poll}, socket) do
     poll_stats = calculate_poll_statistics(updated_poll)
 
@@ -403,14 +402,12 @@ defmodule EventasaurusWeb.PollDetailsComponent do
      |> assign(:poll_stats, poll_stats)}
   end
 
-  @impl true
   def handle_info({:vote_cast, _option_id, _vote}, socket) do
     # Recalculate statistics when votes are cast
     poll_stats = calculate_poll_statistics(socket.assigns.poll)
     {:noreply, assign(socket, :poll_stats, poll_stats)}
   end
 
-  @impl true
   def handle_info({:votes_updated, updated_poll}, socket) do
     poll_stats = calculate_poll_statistics(updated_poll)
 
@@ -420,7 +417,6 @@ defmodule EventasaurusWeb.PollDetailsComponent do
      |> assign(:poll_stats, poll_stats)}
   end
 
-  @impl true
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end

@@ -11,6 +11,59 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Drag and drop specific styles */
+.touch-dragging {
+  @apply transform transition-transform duration-150 ease-out;
+  position: relative !important;
+  z-index: 50 !important;
+}
+
+.drag-handle {
+  @apply cursor-move text-gray-400 hover:text-gray-600 transition-colors duration-150;
+  touch-action: none;
+}
+
+.drag-handle:hover {
+  @apply text-gray-600;
+}
+
+.dragging {
+  @apply opacity-50 scale-95 transform transition-all duration-150;
+}
+
+.drop-zone {
+  @apply bg-blue-50 border-blue-200 border-2 border-dashed transition-all duration-150;
+}
+
+/* Visual feedback for draggable items */
+[data-draggable="true"] {
+  @apply transition-all duration-150 ease-out;
+}
+
+[data-draggable="true"]:hover .drag-handle {
+  @apply text-gray-600;
+}
+
+/* Mobile touch feedback */
+@media (hover: none) and (pointer: coarse) {
+  .drag-handle {
+    @apply text-gray-500;
+    padding: 0.75rem;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Larger touch targets for mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem;
+  }
+}
+
 /* ============================================================================
    EVENTASAURUS THEME SYSTEM - SELECTIVE STYLING ARCHITECTURE
    
@@ -859,6 +912,190 @@ body[class*="theme-"] .theme-card:hover {
   
   .scrollbar-hide {
     scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   MOBILE POLLING INTERFACE OPTIMIZATIONS
+   ============================================================================ */
+
+/* Mobile-optimized search dropdown */
+@media (max-width: 768px) {
+  .search-dropdown {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 90vw !important;
+    max-width: none !important;
+    max-height: 70vh !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+    z-index: 1000 !important;
+  }
+  
+  .search-dropdown-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 999 !important;
+  }
+  
+  .search-result-item {
+    padding: 1rem !important;
+    min-height: 60px !important;
+    border-bottom: 1px solid #e5e7eb !important;
+  }
+  
+  .search-result-item:last-child {
+    border-bottom: none !important;
+  }
+  
+  /* Touch-friendly form elements */
+  .suggestion-form input,
+  .suggestion-form textarea,
+  .suggestion-form button {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    min-height: 44px !important;
+    padding: 0.75rem !important;
+  }
+  
+  .suggestion-form button {
+    padding: 0.875rem 1.5rem !important;
+    font-weight: 600 !important;
+  }
+  
+  /* Mobile option cards */
+  .option-card {
+    padding: 1rem !important;
+    margin-bottom: 0.5rem !important;
+    border-radius: 8px !important;
+  }
+  
+  .option-card-actions {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    margin-top: 0.75rem !important;
+  }
+  
+  .option-card-actions button {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+  }
+  
+  /* Mobile drag and drop improvements */
+  .mobile-drag-indicator {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  
+  /* Better touch feedback */
+  .touch-active:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+  
+  /* Mobile-optimized loading states */
+  .mobile-loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+  }
+  
+  .mobile-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e5e7eb;
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  /* Mobile keyboard handling */
+  .keyboard-adjust {
+    padding-bottom: env(keyboard-inset-height, 0);
+    transition: padding-bottom 0.3s ease;
+  }
+  
+  .form-container-mobile {
+    position: relative;
+    z-index: 100;
+  }
+  
+  .form-container-mobile.keyboard-visible {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 1.5rem;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+}
+
+/* Enhanced touch states */
+@media (hover: none) and (pointer: coarse) {
+  .interactive-element:active {
+    background-color: rgba(59, 130, 246, 0.1);
+    transform: scale(0.98);
+    transition: all 0.1s ease;
+  }
+  
+  .suggestion-button:active {
+    background-color: #2563eb !important;
+    transform: scale(0.98);
+  }
+  
+  .cancel-button:active {
+    background-color: #f3f4f6 !important;
+    transform: scale(0.98);
+  }
+}
+
+/* Mobile-specific performance optimizations */
+@media (max-width: 768px) {
+  /* Use transform instead of changing position for better performance */
+  .mobile-optimized-animation {
+    will-change: transform, opacity;
+  }
+  
+  /* Reduce motion for users who prefer it */
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-optimized-animation {
+      will-change: auto;
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+  
+  /* Optimize scrolling performance */
+  .mobile-scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 }
 

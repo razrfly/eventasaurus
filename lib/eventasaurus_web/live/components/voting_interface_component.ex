@@ -541,20 +541,15 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def handle_event("clear_all_votes", _params, socket) do
-    case clear_all_user_votes(socket) do
-      {:ok, _} ->
-        empty_state = case socket.assigns.poll.voting_system do
-          "ranked" -> %{}
-          _ -> %{}
-        end
+    {:ok, _} = clear_all_user_votes(socket)
 
-        send(self(), {:all_votes_cleared})
-        {:noreply, assign(socket, :vote_state, empty_state)}
-
-      {:error, _} ->
-        send(self(), {:show_error, "Failed to clear votes"})
-        {:noreply, socket}
+    empty_state = case socket.assigns.poll.voting_system do
+      "ranked" -> %{}
+      _ -> %{}
     end
+
+    send(self(), {:all_votes_cleared})
+    {:noreply, assign(socket, :vote_state, empty_state)}
   end
 
   # Private helper functions
