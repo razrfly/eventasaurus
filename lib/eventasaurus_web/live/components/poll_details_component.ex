@@ -80,9 +80,9 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
             <!-- Phase Status -->
             <div class="mt-3 flex items-center space-x-4">
-              <%= render_phase_badge(@poll.status) %>
+              <%= render_phase_badge(@poll.phase) %>
               <span class="text-sm text-gray-500">
-                Created by <%= @poll.creator.name || @poll.creator.email %>
+                Created by <%= @poll.created_by.name || @poll.created_by.email %>
               </span>
               <span class="text-sm text-gray-500">
                 <%= format_relative_time(@poll.inserted_at) %>
@@ -187,7 +187,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
         <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div class="flex items-center justify-between">
             <div class="flex space-x-4">
-              <%= unless @poll.status == "closed" do %>
+              <%= unless @poll.phase == "closed" do %>
                 <button
                   type="button"
                   class="text-sm text-indigo-600 hover:text-indigo-500"
@@ -198,7 +198,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
                 </button>
               <% end %>
 
-              <%= if @poll.status == "voting" do %>
+              <%= if @poll.phase == "voting" do %>
                 <button
                   type="button"
                   class="text-sm text-indigo-600 hover:text-indigo-500"
@@ -209,7 +209,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
                 </button>
               <% end %>
 
-              <%= if @can_moderate && @poll.status != "closed" do %>
+              <%= if @can_moderate && @poll.phase != "closed" do %>
                 <button
                   type="button"
                   class="text-sm text-indigo-600 hover:text-indigo-500"
@@ -232,8 +232,8 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   end
 
   # Phase Badge Rendering
-  defp render_phase_badge(status) do
-    {text, class} = case status do
+  defp render_phase_badge(phase) do
+    {text, class} = case phase do
       "list_building" -> {"Building List", "bg-blue-100 text-blue-800"}
       "voting" -> {"Voting Open", "bg-green-100 text-green-800"}
       "closed" -> {"Closed", "bg-gray-100 text-gray-800"}
@@ -252,7 +252,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   # Phase Action Buttons
   defp render_phase_actions(assigns) do
     ~H"""
-    <%= case @poll.status do %>
+    <%= case @poll.phase do %>
       <% "list_building" -> %>
         <%= if length(@poll.poll_options) > 0 do %>
           <button
@@ -290,12 +290,12 @@ defmodule EventasaurusWeb.PollDetailsComponent do
       <div class="flex items-center space-x-8">
         <!-- List Building Phase -->
         <div class="flex items-center">
-          <div class={"flex items-center justify-center w-8 h-8 rounded-full #{if @poll.status in ["list_building", "voting", "closed"], do: "bg-blue-500 text-white", else: "bg-gray-300 text-gray-500"}"}>
+          <div class={"flex items-center justify-center w-8 h-8 rounded-full #{if @poll.phase in ["list_building", "voting", "closed"], do: "bg-blue-500 text-white", else: "bg-gray-300 text-gray-500"}"}>
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
           </div>
-          <span class={"ml-2 text-sm #{if @poll.status == "list_building", do: "font-medium text-blue-600", else: "text-gray-500"}"}>
+          <span class={"ml-2 text-sm #{if @poll.phase == "list_building", do: "font-medium text-blue-600", else: "text-gray-500"}"}>
             List Building
           </span>
         </div>
@@ -309,12 +309,12 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
         <!-- Voting Phase -->
         <div class="flex items-center">
-          <div class={"flex items-center justify-center w-8 h-8 rounded-full #{if @poll.status in ["voting", "closed"], do: "bg-green-500 text-white", else: "bg-gray-300 text-gray-500"}"}>
+          <div class={"flex items-center justify-center w-8 h-8 rounded-full #{if @poll.phase in ["voting", "closed"], do: "bg-green-500 text-white", else: "bg-gray-300 text-gray-500"}"}>
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
           </div>
-          <span class={"ml-2 text-sm #{if @poll.status == "voting", do: "font-medium text-green-600", else: "text-gray-500"}"}>
+          <span class={"ml-2 text-sm #{if @poll.phase == "voting", do: "font-medium text-green-600", else: "text-gray-500"}"}>
             Voting
           </span>
         </div>
@@ -328,12 +328,12 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
         <!-- Closed Phase -->
         <div class="flex items-center">
-          <div class={"flex items-center justify-center w-8 h-8 rounded-full #{if @poll.status == "closed", do: "bg-gray-500 text-white", else: "bg-gray-300 text-gray-500"}"}>
+          <div class={"flex items-center justify-center w-8 h-8 rounded-full #{if @poll.phase == "closed", do: "bg-gray-500 text-white", else: "bg-gray-300 text-gray-500"}"}>
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
           </div>
-          <span class={"ml-2 text-sm #{if @poll.status == "closed", do: "font-medium text-gray-600", else: "text-gray-500"}"}>
+          <span class={"ml-2 text-sm #{if @poll.phase == "closed", do: "font-medium text-gray-600", else: "text-gray-500"}"}>
             Closed
           </span>
         </div>
@@ -425,11 +425,32 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   defp calculate_poll_statistics(poll) do
     total_options = length(poll.poll_options || [])
-    total_votes = length(poll.poll_votes || [])
+
+    # Since poll_votes are associated with poll_options, we need to collect them
+    # For now, we'll provide safe defaults if poll data isn't fully loaded
+    poll_votes = case poll.poll_options do
+      options when is_list(options) ->
+        Enum.flat_map(options, fn option ->
+          case option do
+            %{poll_votes: votes} when is_list(votes) -> votes
+            _ -> []
+          end
+        end)
+      _ -> []
+    end
+
+    total_votes = length(poll_votes)
 
     # Count unique participants
-    unique_participants = poll.poll_votes
-    |> Enum.map(& &1.user_id)
+    unique_participants = poll_votes
+    |> Enum.map(fn vote ->
+      case vote do
+        %{voter_id: voter_id} -> voter_id
+        %{user_id: user_id} -> user_id
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
     |> length()
 
@@ -456,7 +477,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   defp can_user_moderate_poll?(user, poll, event) do
     # User can moderate if they are the poll creator or event organizer
-    user.id == poll.creator_id || Events.user_is_organizer?(event, user)
+    user.id == poll.created_by_id || Events.user_is_organizer?(event, user)
   end
 
   # UI Helper Functions
@@ -464,10 +485,8 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   defp get_poll_type_emoji(poll_type) do
     case poll_type do
       "movie" -> "🎬"
-      "book" -> "📚"
       "restaurant" -> "🍽️"
       "activity" -> "🎯"
-      "music" -> "🎵"
       "custom" -> "📝"
       _ -> "📝"
     end
@@ -486,10 +505,8 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   defp format_poll_type(poll_type) do
     case poll_type do
       "movie" -> "Movie"
-      "book" -> "Book"
       "restaurant" -> "Restaurant"
       "activity" -> "Activity"
-      "music" -> "Music"
       "custom" -> "Custom"
       _ -> String.capitalize(poll_type)
     end
@@ -567,7 +584,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   end
 
   defp get_current_phase_duration(poll) do
-    case poll.status do
+    case poll.phase do
       "list_building" ->
         if poll.list_building_deadline do
           "Phase deadline: #{format_deadline(poll.list_building_deadline)}"

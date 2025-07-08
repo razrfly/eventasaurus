@@ -319,6 +319,7 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
       <div class="relative min-h-screen flex items-center justify-center p-4">
         <div
           class="relative max-w-6xl w-full"
+          phx-click={fn -> nil end}
         >
           <!-- Photo -->
           <div class="relative">

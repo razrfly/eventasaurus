@@ -789,10 +789,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp get_search_options_for_poll_type(poll_type) do
     case poll_type do
       "movie" -> %{providers: [:tmdb], types: [:movie]}
-      "book" -> %{providers: [:tmdb], types: [:movie]}  # Use TMDB as fallback for now
       "restaurant" -> %{providers: [:google_places], types: [:restaurant]}
       "activity" -> %{providers: [:google_places], types: [:activity, :venue]}
-      "music" -> %{providers: [:tmdb], types: [:movie]}  # Use TMDB as fallback for now
       _ -> %{}
     end
   end
@@ -873,10 +871,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp get_phase_title(poll_type) do
     case poll_type do
       "movie" -> "Suggest Movies"
-      "book" -> "Suggest Books"
       "restaurant" -> "Suggest Restaurants"
       "activity" -> "Suggest Activities"
-      "music" -> "Suggest Music"
       _ -> "Suggest Options"
     end
   end
@@ -896,10 +892,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp suggest_button_text(poll_type) do
     case poll_type do
       "movie" -> "Suggest Movie"
-      "book" -> "Suggest Book"
       "restaurant" -> "Suggest Restaurant"
       "activity" -> "Suggest Activity"
-      "music" -> "Suggest Music"
       _ -> "Add Option"
     end
   end
@@ -907,10 +901,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_title_label(poll_type) do
     case poll_type do
       "movie" -> "Movie Title"
-      "book" -> "Book Title"
       "restaurant" -> "Restaurant Name"
       "activity" -> "Activity Name"
-      "music" -> "Song/Album/Artist"
       _ -> "Option Title"
     end
   end
@@ -918,10 +910,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_title_placeholder(poll_type) do
     case poll_type do
       "movie" -> "e.g., The Matrix, Inception, Pulp Fiction"
-      "book" -> "e.g., Dune, 1984, The Great Gatsby"
       "restaurant" -> "e.g., Joe's Pizza, The French Laundry"
       "activity" -> "e.g., Hiking, Bowling, Museum Visit"
-      "music" -> "e.g., Bohemian Rhapsody, Abbey Road, Radiohead"
       _ -> "Enter your suggestion..."
     end
   end
@@ -929,10 +919,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_description_placeholder(poll_type) do
     case poll_type do
       "movie" -> "Brief plot summary or why you recommend it..."
-      "book" -> "Genre, author, or why you recommend it..."
       "restaurant" -> "Cuisine type, location, or special notes..."
       "activity" -> "Location, duration, or what makes it fun..."
-      "music" -> "Artist, genre, or why you recommend it..."
       _ -> "Additional details or context..."
     end
   end
@@ -940,10 +928,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_type_text(poll_type) do
     case poll_type do
       "movie" -> "movies"
-      "book" -> "books"
       "restaurant" -> "restaurants"
       "activity" -> "activities"
-      "music" -> "music"
       _ -> "options"
     end
   end
