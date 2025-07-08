@@ -10,19 +10,19 @@ defmodule EventasaurusApp.Repo.Migrations.AddTrigramIndexesForSearchOptimization
 
         # Trigram index for user names (supports ILIKE with wildcards)
     execute """
-    CREATE INDEX users_name_gin_trgm_index
+    CREATE INDEX IF NOT EXISTS users_name_gin_trgm_index
     ON users USING gin (name gin_trgm_ops)
     """
 
     # Trigram index for user emails (supports ILIKE with wildcards)
     execute """
-    CREATE INDEX users_email_gin_trgm_index
+    CREATE INDEX IF NOT EXISTS users_email_gin_trgm_index
     ON users USING gin (email gin_trgm_ops)
     """
 
     # Trigram index for usernames (supports ILIKE with wildcards)
     execute """
-    CREATE INDEX users_username_gin_trgm_index
+    CREATE INDEX IF NOT EXISTS users_username_gin_trgm_index
     ON users USING gin (username gin_trgm_ops)
     """
   end

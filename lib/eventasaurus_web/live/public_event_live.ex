@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.ReservedSlugs
+  alias EventasaurusWeb.EventPollIntegrationComponent
 
 
   import EventasaurusWeb.EventComponents, only: [ticket_selection_component: 1]
@@ -158,6 +159,8 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:meta_image, social_image_url)
            |> assign(:meta_url, event_url)
            |> assign(:structured_data, generate_structured_data(event, event_url))
+           # Load event polls for display
+           |> load_event_polls()
            # Track event page view
            |> push_event("track_event", %{
                event: "event_page_viewed",
@@ -1724,6 +1727,31 @@ defmodule EventasaurusWeb.PublicEventLive do
       </div>
     </div>
 
+    <!-- Event Polls Section -->
+    <%= if assigns[:event_polls] && length(@event_polls) > 0 do %>
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2m0 0V3a1 1 0 011 1v4a1 1 0 01-1 1h-2m-6 0h8m-8 0V8a1 1 0 01-1-1V3a1 1 0 011-1h2"/>
+            </svg>
+            Event Polls
+          </h2>
+
+          <!-- Polls Integration Component -->
+          <.live_component
+            module={EventasaurusWeb.EventPollIntegrationComponent}
+            id="public-event-polls"
+            event={@event}
+            current_user={@user}
+            integration_mode="embedded"
+            show_creation_prompt={false}
+            compact_mode={true}
+          />
+        </div>
+      </div>
+    <% end %>
+
     <%= if @show_registration_modal do %>
       <.live_component
         module={EventRegistrationComponent}
@@ -1963,6 +1991,23 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
+  # Load event polls for display on public event page
+  defp load_event_polls(socket) do
+    event = socket.assigns.event
 
+    try do
+      # Load all public polls for this event
+      event_polls = Events.list_polls(event)
+      |> Enum.filter(fn poll -> poll.visibility == :public end)
+
+      socket
+      |> assign(:event_polls, event_polls)
+    rescue
+      error ->
+        Logger.error("Failed to load event polls: #{inspect(error)}")
+        socket
+        |> assign(:event_polls, [])
+    end
+  end
 
 end

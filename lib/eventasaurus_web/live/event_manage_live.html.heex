@@ -93,6 +93,25 @@
       </button>
       <button 
         phx-click="switch_tab" 
+        phx-value-tab="polls"
+        class={[
+          "py-4 px-1 border-b-2 font-semibold whitespace-nowrap transition hover:text-blue-700",
+          if @active_tab == "polls" do
+            "border-blue-500 text-blue-600"
+          else
+            "border-transparent text-gray-700 hover:text-black hover:border-gray-300"
+          end
+        ]}
+      >
+        Polls
+        <%= if assigns[:polls] && length(@polls) > 0 do %>
+          <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-600">
+            <%= length(@polls) %>
+          </span>
+        <% end %>
+      </button>
+      <button 
+        phx-click="switch_tab" 
         phx-value-tab="insights"
         class={[
           "py-4 px-1 border-b-2 font-semibold whitespace-nowrap transition hover:text-blue-700",
@@ -804,6 +823,92 @@
               </div>
             <% end %>
           </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <!-- Polls Tab -->
+    <%= if @active_tab == "polls" do %>
+      <div class="space-y-6">
+        <!-- Polls Management Header -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-bold text-gray-900">Event Polls</h3>
+              <p class="text-sm text-gray-500">Create and manage polls for your event</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <%= if assigns[:polls] && length(@polls) > 0 do %>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                  <%= length(@polls) %> Active <%= if length(@polls) == 1, do: "Poll", else: "Polls" %>
+                </span>
+              <% else %>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600">
+                  No Polls Yet
+                </span>
+              <% end %>
+            </div>
+          </div>
+          
+          <!-- Quick Stats -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <svg class="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                </div>
+                <div class="ml-4">
+                  <div class="text-sm font-medium text-indigo-900">Total Polls</div>
+                  <div class="text-2xl font-bold text-indigo-600"><%= if assigns[:polls], do: length(@polls), else: 0 %></div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </div>
+                <div class="ml-4">
+                  <div class="text-sm font-medium text-green-900">Participants</div>
+                  <div class="text-2xl font-bold text-green-600"><%= if assigns[:total_poll_participants], do: @total_poll_participants, else: 0 %></div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <svg class="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                  </svg>
+                </div>
+                <div class="ml-4">
+                  <div class="text-sm font-medium text-purple-900">Total Votes</div>
+                  <div class="text-2xl font-bold text-purple-600"><%= if assigns[:total_votes], do: @total_votes, else: 0 %></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Event Poll Integration Component -->
+        <%= if @event do %>
+          <.live_component
+            module={EventasaurusWeb.EventPollIntegrationComponent}
+            id="event-poll-integration"
+            event={@event}
+            polls={@polls || []}
+            current_user={@user}
+            is_creator={true}
+            editing_poll={@editing_poll}
+            selected_poll={@selected_poll}
+            show_poll_details={@show_poll_details}
+          />
         <% end %>
       </div>
     <% end %>
