@@ -5,8 +5,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
-@import 'heroicons/24/outline/styles.css';
-@import 'heroicons/24/solid/styles.css';
+
 
 @tailwind base;
 @tailwind components;
