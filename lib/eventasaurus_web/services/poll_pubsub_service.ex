@@ -327,7 +327,7 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
     |> Enum.count(&(not &1.is_visible))
   end
 
-  defp count_poll_participants(poll) do
+  defp count_poll_participants(_poll) do
     # This would need to be calculated based on actual participants
     # For now, return a placeholder
     0

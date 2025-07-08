@@ -246,7 +246,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
   @spec validate_standardized_data(standardized_data()) :: :ok | {:error, [String.t()]}
   def validate_standardized_data(data) when is_map(data) do
     required_fields = [:id, :type, :title]
-    optional_fields = [:description, :primary_image, :secondary_image, :rating,
+    _optional_fields = [:description, :primary_image, :secondary_image, :rating,
                       :year, :status, :categories, :tags, :external_urls, :sections]
 
     errors = []

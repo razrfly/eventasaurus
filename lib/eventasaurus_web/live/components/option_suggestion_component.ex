@@ -533,11 +533,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   @impl true
-  def handle_event("hide_search_dropdown", _params, socket) do
-    {:noreply, assign(socket, show_search_dropdown: false, search_results: [])}
-  end
-
-  @impl true
   def handle_event("submit_suggestion", %{"poll_option" => option_params}, socket) do
     socket = assign(socket, :loading, true)
 
@@ -581,42 +576,66 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def handle_event("hide_option", %{"option-id" => option_id}, socket) do
-    case Events.update_poll_option_status(option_id, "hidden") do
-      {:ok, option} ->
-        # Broadcast visibility change via PubSub
-        PollPubSubService.broadcast_option_visibility_changed(
-          socket.assigns.poll,
-          option,
-          :hidden,
-          socket.assigns.user
-        )
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
+        if option do
+          case Events.update_poll_option_status(option, "hidden") do
+            {:ok, option} ->
+              # Broadcast visibility change via PubSub
+              PollPubSubService.broadcast_option_visibility_changed(
+                socket.assigns.poll,
+                option,
+                :hidden,
+                socket.assigns.user
+              )
 
-        send(self(), {:option_updated, option})
-        {:noreply, socket}
+              send(self(), {:option_updated, option})
+              {:noreply, socket}
 
+            {:error, _} ->
+              send(self(), {:show_error, "Failed to hide option"})
+              {:noreply, socket}
+          end
+        else
+          send(self(), {:show_error, "Option not found"})
+          {:noreply, socket}
+        end
       {:error, _} ->
-        send(self(), {:show_error, "Failed to hide option"})
+        send(self(), {:show_error, "Invalid option ID"})
         {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("show_option", %{"option-id" => option_id}, socket) do
-    case Events.update_poll_option_status(option_id, "active") do
-      {:ok, option} ->
-        # Broadcast visibility change via PubSub
-        PollPubSubService.broadcast_option_visibility_changed(
-          socket.assigns.poll,
-          option,
-          :shown,
-          socket.assigns.user
-        )
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
+        if option do
+          case Events.update_poll_option_status(option, "active") do
+            {:ok, option} ->
+              # Broadcast visibility change via PubSub
+              PollPubSubService.broadcast_option_visibility_changed(
+                socket.assigns.poll,
+                option,
+                :shown,
+                socket.assigns.user
+              )
 
-        send(self(), {:option_updated, option})
-        {:noreply, socket}
+              send(self(), {:option_updated, option})
+              {:noreply, socket}
 
+            {:error, _} ->
+              send(self(), {:show_error, "Failed to show option"})
+              {:noreply, socket}
+          end
+        else
+          send(self(), {:show_error, "Option not found"})
+          {:noreply, socket}
+        end
       {:error, _} ->
-        send(self(), {:show_error, "Failed to show option"})
+        send(self(), {:show_error, "Invalid option ID"})
         {:noreply, socket}
     end
   end
@@ -957,4 +976,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     # In a full implementation, this would use the DuplicateDetectionService
     []
   end
+
+  defp safe_string_to_integer(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {int, ""} -> {:ok, int}
+      _ -> {:error, :invalid_integer}
+    end
+  end
+
+  defp safe_string_to_integer(_), do: {:error, :invalid_input}
 end

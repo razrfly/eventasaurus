@@ -109,11 +109,13 @@ defmodule EventasaurusApp.Events.Poll do
       status -> Map.put(attrs, :phase, status)
     end
 
-    poll
+    changeset = poll
     |> cast(attrs, [:phase])
     |> validate_required([:phase])
     |> validate_inclusion(:phase, ~w(list_building voting closed))
-    |> validate_phase_transition(poll.phase, get_field(__MODULE__, :phase))
+
+    new_phase = get_field(changeset, :phase)
+    validate_phase_transition(changeset, poll.phase, new_phase)
   end
 
   @doc """
