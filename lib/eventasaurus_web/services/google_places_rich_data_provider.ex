@@ -34,8 +34,11 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
          {:ok, results} <- search_places_api(query, options) do
       {:ok, results}
     else
-      {:error, :rate_limited} -> {:ok, []}
-      {:error, _reason} -> {:ok, []}
+      {:error, :rate_limited} = error -> error
+      {:error, reason} ->
+        require Logger
+        Logger.warning("Google Places search failed: #{inspect(reason)}")
+        {:error, :api_error}
     end
   end
 
