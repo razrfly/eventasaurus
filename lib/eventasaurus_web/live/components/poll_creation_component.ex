@@ -88,8 +88,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <%= if @show do %>
-      <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class={if @show, do: "fixed inset-0 z-50 overflow-y-auto", else: "hidden"} aria-labelledby="modal-title" role="dialog" aria-modal="true">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
           <!-- Background overlay -->
           <div
@@ -100,7 +99,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
 
           <!-- Modal panel -->
           <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-            <.form for={@changeset} phx-submit="submit_poll" phx-target={@myself} phx-change="validate">
+            <.form for={@changeset} phx-submit="submit_poll" phx-target={@myself} phx-change="validate" :let={f}>
               <div class="bg-white px-6 pt-6 pb-4">
                 <div class="flex items-center mb-4">
                   <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100">
@@ -128,7 +127,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                       type="text"
                       name="poll[title]"
                       id="poll_title"
-                      value={Phoenix.HTML.Form.input_value(@changeset, :title)}
+                      value={Phoenix.HTML.Form.input_value(f, :title)}
                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                       placeholder="What should participants vote on?"
                     />
@@ -148,7 +147,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                       rows="3"
                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                       placeholder="Provide additional context or instructions (optional)"
-                    ><%= Phoenix.HTML.Form.input_value(@changeset, :description) %></textarea>
+                    ><%= Phoenix.HTML.Form.input_value(f, :description) %></textarea>
                     <%= if error = @changeset.errors[:description] do %>
                       <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
                     <% end %>
@@ -166,7 +165,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                             type="radio"
                             name="poll[poll_type]"
                             value={value}
-                            checked={Phoenix.HTML.Form.input_value(@changeset, :poll_type) == value}
+                            checked={Phoenix.HTML.Form.input_value(f, :poll_type) == value}
                             class="sr-only peer"
                           />
                           <div class="p-3 border-2 border-gray-200 rounded-lg cursor-pointer transition-all peer-checked:border-indigo-500 peer-checked:bg-indigo-50 hover:border-gray-300">
@@ -198,7 +197,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                             type="radio"
                             name="poll[voting_system]"
                             value={value}
-                            checked={Phoenix.HTML.Form.input_value(@changeset, :voting_system) == value}
+                            checked={Phoenix.HTML.Form.input_value(f, :voting_system) == value}
                             class="sr-only peer"
                           />
                           <div class="p-3 border-2 border-gray-200 rounded-lg cursor-pointer transition-all peer-checked:border-indigo-500 peer-checked:bg-indigo-50 hover:border-gray-300">
@@ -236,7 +235,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                           type="number"
                           name="poll[max_options_per_user]"
                           id="max_options_per_user"
-                          value={Phoenix.HTML.Form.input_value(@changeset, :max_options_per_user) || 3}
+                          value={Phoenix.HTML.Form.input_value(f, :max_options_per_user) || 3}
                           min="1"
                           max="10"
                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -256,7 +255,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                           type="checkbox"
                           name="poll[auto_finalize]"
                           id="auto_finalize"
-                          checked={Phoenix.HTML.Form.input_value(@changeset, :auto_finalize)}
+                          checked={Phoenix.HTML.Form.input_value(f, :auto_finalize)}
                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                         />
                       </div>
@@ -332,8 +331,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
             </.form>
           </div>
         </div>
-      </div>
-    <% end %>
+    </div>
     """
   end
 
@@ -402,7 +400,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
   end
 
   defp format_datetime_local(changeset, field) do
-    case Phoenix.HTML.Form.input_value(changeset, field) do
+    case Ecto.Changeset.get_field(changeset, field) do
       %DateTime{} = datetime ->
         datetime
         |> DateTime.to_naive()

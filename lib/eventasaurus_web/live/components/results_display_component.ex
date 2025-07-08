@@ -21,7 +21,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   """
 
   use EventasaurusWeb, :live_component
-  alias EventasaurusApp.Events
+
   alias Phoenix.PubSub
 
   @impl true
@@ -37,7 +37,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   def update(assigns, socket) do
     # Subscribe to real-time vote updates
     if connected?(socket) do
-      PubSub.subscribe(EventasaurusApp.PubSub, "votes:poll:#{assigns.poll.id}")
+      PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{assigns.poll.id}")
     end
 
     # Calculate analytics
@@ -330,7 +330,6 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   end
 
   # Event Handlers
-  @impl true
   def handle_info({:vote_cast, _option_id, _vote}, socket) do
     # Recalculate analytics when votes are cast
     analytics = calculate_vote_analytics(socket.assigns.poll)
@@ -342,7 +341,6 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
      |> assign(:total_voters, total_voters)}
   end
 
-  @impl true
   def handle_info({:vote_cleared, _option_id}, socket) do
     # Recalculate analytics when votes are cleared
     analytics = calculate_vote_analytics(socket.assigns.poll)
@@ -354,7 +352,6 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
      |> assign(:total_voters, total_voters)}
   end
 
-  @impl true
   def handle_info({:votes_updated, poll}, socket) do
     # Update poll data and recalculate analytics
     analytics = calculate_vote_analytics(poll)
