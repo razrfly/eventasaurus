@@ -743,7 +743,7 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
     @impl true
-  def handle_info({:poll_saved, _poll, message}, socket) do
+  def handle_info({:poll_saved, poll, message}, socket) do
     # Reload polls data to include the new poll
     polls = Events.list_polls(socket.assigns.event)
 
@@ -754,17 +754,29 @@ defmodule EventasaurusWeb.EventManageLive do
       editing_poll: nil
     )
 
-    {:noreply,
-     socket
-     |> assign(:polls, polls)
-     |> assign(:editing_poll, nil)
-     |> assign(:selected_poll, nil)
-     |> assign(:show_poll_details, false)
-     |> put_flash(:info, message)}
+    # Smart redirect: For new poll creation, redirect to poll details view
+    # For poll edits, just close the modal
+    if String.contains?(message, "created") do
+      {:noreply,
+       socket
+       |> assign(:polls, polls)
+       |> assign(:editing_poll, nil)
+       |> assign(:selected_poll, poll)
+       |> assign(:show_poll_details, true)
+       |> put_flash(:info, "Poll created successfully! Add options to get started.")}
+    else
+      {:noreply,
+       socket
+       |> assign(:polls, polls)
+       |> assign(:editing_poll, nil)
+       |> assign(:selected_poll, nil)
+       |> assign(:show_poll_details, false)
+       |> put_flash(:info, message)}
+    end
   end
 
   @impl true
-  def handle_info({:view_poll, poll}, socket) do
+  def handle_info({:view_poll_details, poll}, socket) do
     # Handle poll viewing/editing
     {:noreply,
      socket
@@ -848,6 +860,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_info({:close_poll_details}, socket) do
+    # Close poll details view and go back to overview
     {:noreply,
      socket
      |> assign(:selected_poll, nil)
