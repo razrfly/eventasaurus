@@ -659,7 +659,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
     {:noreply,
      socket
-     |> assign(:analytics, analytics_data)}
+     |> assign(:analytics_data, analytics_data)}
   end
 
   @impl true
