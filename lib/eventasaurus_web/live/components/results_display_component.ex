@@ -308,7 +308,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
         <!-- Rating Distribution -->
         <%= unless @compact_view do %>
           <div class="grid grid-cols-5 gap-1 mt-3">
-            <%= for star <- 5..1 do %>
+            <%= for star <- 5..1//-1 do %>
               <div class="text-center">
                 <div class="text-xs text-gray-500 mb-1"><%= star %>★</div>
                 <div class="bg-gray-200 rounded h-16 flex items-end">
@@ -364,7 +364,6 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
      |> assign(:total_voters, total_voters)}
   end
 
-  @impl true
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end
@@ -486,7 +485,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
 
   defp count_unique_voters(poll) do
     poll.poll_votes
-    |> Enum.map(& &1.user_id)
+    |> Enum.map(& &1.voter_id)
     |> Enum.uniq()
     |> length()
   end

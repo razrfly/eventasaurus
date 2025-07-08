@@ -90,13 +90,13 @@ defmodule Eventasaurus.MixProject do
 
             # Enhanced polling system dependencies
       # Caching for API responses and poll results
-      {:cachex, "~> 3.6"},
+      {:cachex, "~> 4.1"},
 
       # Data encryption for sensitive information
       {:cloak, "~> 1.1"},
 
       # Rate limiting for API endpoints
-      {:hammer, "~> 6.1"},
+      {:hammer, "~> 7.0"},
 
     ]
   end

@@ -7,7 +7,7 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
   """
 
   use EventasaurusWeb, :live_component
-  import EventasaurusWeb.CoreComponents
+
 
   @impl true
   def update(assigns, socket) do
@@ -304,10 +304,7 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
     (assigns[:types] && length(assigns[:types]) > 0)
   end
 
-  defp format_rating(rating) when is_number(rating) do
-    :erlang.float_to_binary(rating, decimals: 1)
-  end
-  defp format_rating(_), do: "N/A"
+
 
   defp format_ratings_count(count) when is_integer(count) do
     cond do
@@ -338,21 +335,5 @@ defmodule EventasaurusWeb.Live.Components.VenueDetailsComponent do
   end
   defp filter_relevant_types(_), do: []
 
-  defp format_place_type(type) when is_binary(type) do
-    type
-    |> String.replace("_", " ")
-    |> String.split()
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(" ")
-  end
-  defp format_place_type(_), do: ""
 
-  defp format_website_display(url) when is_binary(url) do
-    url
-    |> String.replace(~r/^https?:\/\//, "")
-    |> String.replace(~r/^www\./, "")
-    |> String.split("/")
-    |> List.first()
-  end
-  defp format_website_display(_), do: ""
 end

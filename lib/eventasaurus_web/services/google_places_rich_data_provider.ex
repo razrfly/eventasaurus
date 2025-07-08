@@ -5,10 +5,9 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   Fetches detailed venue, restaurant, and activity information with caching optimization.
   """
 
-  @behaviour EventasaurusWeb.Services.RichDataProvider
+
 
   require Logger
-  alias EventasaurusWeb.Services.RichDataManager
 
   # Cache keys and TTL
   @cache_name :google_places_cache
@@ -18,10 +17,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   @rate_limit_window 1000  # 1 second in ms
   @rate_limit_max_requests 10  # Max requests per second
 
-  @impl true
   def supported_types, do: [:venue, :restaurant, :activity]
 
-  @impl true
   def can_handle?(external_data) when is_map(external_data) do
     # Check for Google Places specific fields
     has_place_id = Map.has_key?(external_data, "place_id")
@@ -32,10 +29,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     has_place_id and has_google_fields
   end
 
-  @impl true
   def can_handle?(_), do: false
 
-  @impl true
   def fetch_rich_data(external_data, opts \\ []) do
     with :ok <- check_rate_limit(),
          {:ok, enhanced_data} <- fetch_enhanced_place_details(external_data, opts),
@@ -43,7 +38,7 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
       {:ok, processed_data}
     else
       {:error, :rate_limited} ->
-        Logger.warn("Google Places API rate limited")
+                  Logger.warning("Google Places API rate limited")
         {:ok, create_fallback_data(external_data)}
 
       {:error, reason} ->
@@ -80,7 +75,7 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
 
       {:error, _} ->
         # Cache error, allow request but log warning
-        Logger.warn("Rate limit cache error, allowing request")
+        Logger.warning("Rate limit cache error, allowing request")
         :ok
     end
   end
@@ -98,7 +93,7 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
         {:ok, merged_data}
 
       {:error, reason} ->
-        Logger.warn("Failed to fetch enhanced place details: #{inspect(reason)}")
+        Logger.warning("Failed to fetch enhanced place details: #{inspect(reason)}")
         {:ok, external_data}  # Fallback to original data
     end
   end

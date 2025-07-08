@@ -7,7 +7,7 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
   alias EventasaurusApp.Events.PollOption
 
   @default_similarity_threshold 0.8
-  @high_similarity_threshold 0.9
+
 
   @doc """
   Analyzes a new poll option suggestion for potential duplicates.
