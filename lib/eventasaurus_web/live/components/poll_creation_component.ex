@@ -31,12 +31,10 @@ defmodule EventasaurusWeb.PollCreationComponent do
   alias EventasaurusApp.Events.Poll
 
   @poll_types [
+    {"custom", "General Poll", "📝", "Create a custom poll"},
     {"movie", "Movie", "🎬", "Vote on movies to watch"},
-    {"book", "Book", "📚", "Choose books to read"},
     {"restaurant", "Restaurant", "🍽️", "Pick places to eat"},
-    {"activity", "Activity", "🎯", "Select activities to do"},
-    {"music", "Music", "🎵", "Vote on music or playlists"},
-    {"custom", "Custom", "📝", "Create a custom poll"}
+    {"activity", "Activity", "🎯", "Select activities to do"}
   ]
 
   @voting_systems [
@@ -52,7 +50,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
      socket
      |> assign(:loading, false)
      |> assign(:show, false)
-     |> assign(:poll, nil)}
+     |> assign(:poll, nil)
+     |> assign(:show_advanced_options, false)}
   end
 
   @impl true
@@ -101,20 +100,13 @@ defmodule EventasaurusWeb.PollCreationComponent do
           <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
             <.form for={@changeset} phx-submit="submit_poll" phx-target={@myself} phx-change="validate" :let={f}>
               <div class="bg-white px-6 pt-6 pb-4">
-                <div class="flex items-center mb-4">
-                  <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100">
-                    <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                  </div>
-                  <div class="ml-4">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      <%= if @is_editing, do: "Edit Poll", else: "Create New Poll" %>
-                    </h3>
-                    <p class="text-sm text-gray-500">
-                      <%= if @is_editing, do: "Update poll details and settings", else: "Set up a new poll for your event participants" %>
-                    </p>
-                  </div>
+                <div class="mb-4">
+                  <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                    <%= if @is_editing, do: "Edit Poll", else: "Create New Poll" %>
+                  </h3>
+                  <p class="text-sm text-gray-500">
+                    <%= if @is_editing, do: "Update poll details and settings", else: "Set up a new poll for your event participants" %>
+                  </p>
                 </div>
 
                 <div class="space-y-6">
@@ -187,43 +179,60 @@ defmodule EventasaurusWeb.PollCreationComponent do
 
                   <!-- Voting System Selection -->
                   <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-3">
+                    <label for="voting_system" class="block text-sm font-medium text-gray-700 mb-2">
                       Voting System <span class="text-red-500">*</span>
                     </label>
-                    <div class="space-y-2">
-                      <%= for {value, label, description} <- @voting_systems do %>
-                        <label class="relative">
-                          <input
-                            type="radio"
-                            name="poll[voting_system]"
+                    <div class="relative">
+                      <select
+                        name="poll[voting_system]"
+                        id="voting_system"
+                        class="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none;"
+                      >
+                        <option value="" disabled={true} selected={Phoenix.HTML.Form.input_value(f, :voting_system) == nil}>Select a voting system...</option>
+                        <%= for {value, label, description} <- @voting_systems do %>
+                          <option
                             value={value}
-                            checked={Phoenix.HTML.Form.input_value(f, :voting_system) == value}
-                            class="sr-only peer"
-                          />
-                          <div class="p-3 border-2 border-gray-200 rounded-lg cursor-pointer transition-all peer-checked:border-indigo-500 peer-checked:bg-indigo-50 hover:border-gray-300">
-                            <div class="flex items-center justify-between">
-                              <div>
-                                <div class="text-sm font-medium text-gray-900"><%= label %></div>
-                                <div class="text-xs text-gray-500"><%= description %></div>
-                              </div>
-                              <div class="peer-checked:text-indigo-600">
-                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        </label>
-                      <% end %>
+                            selected={Phoenix.HTML.Form.input_value(f, :voting_system) == value}
+                            title={description}
+                          >
+                            <%= label %> - <%= description %>
+                          </option>
+                        <% end %>
+                      </select>
+                      <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                      </div>
                     </div>
                     <%= if error = @changeset.errors[:voting_system] do %>
                       <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
                     <% end %>
                   </div>
 
-                  <!-- Configuration Options -->
-                  <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="text-sm font-medium text-gray-900 mb-3">Configuration</h4>
+                  <!-- Advanced Options Toggle -->
+                  <div class="border-t pt-4">
+                    <button
+                      type="button"
+                      phx-click="toggle_advanced_options"
+                      phx-target={@myself}
+                      class="flex items-center justify-between w-full text-left text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                    >
+                      <span>Advanced Options</span>
+                      <svg class={[
+                        "w-4 h-4 transition-transform",
+                        if(@show_advanced_options, do: "rotate-180", else: "rotate-0")
+                      ]} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </button>
+                  </div>
+
+                  <%= if @show_advanced_options do %>
+                    <!-- Configuration Options -->
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                      <h4 class="text-sm font-medium text-gray-900 mb-3">Configuration</h4>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <!-- Max Options Per User -->
@@ -298,6 +307,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                       </div>
                     </div>
                   </div>
+                  <% end %>
                 </div>
               </div>
 
@@ -339,6 +349,11 @@ defmodule EventasaurusWeb.PollCreationComponent do
   def handle_event("close_modal", _params, socket) do
     send(self(), {:close_poll_creation_modal})
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_advanced_options", _params, socket) do
+    {:noreply, assign(socket, :show_advanced_options, !socket.assigns.show_advanced_options)}
   end
 
   @impl true
