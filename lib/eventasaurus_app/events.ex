@@ -13,6 +13,9 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Events.EventDateVote
   alias EventasaurusApp.Venues.Venue
 
+  # Generic polling system aliases
+  alias EventasaurusApp.Events.{Poll, PollOption, PollVote}
+
   alias EventasaurusApp.GuestInvitations
   require Logger
 
@@ -3693,6 +3696,1111 @@ defmodule EventasaurusApp.Events do
       interest_ratio: analytics.engagement_metrics.interest_ratio,
       conversion_potential: analytics.status_counts.interested
     }
+  end
+
+  # =================
+  # Generic Polling System
+  # =================
+
+  @doc """
+  Returns the list of polls for an event.
+  """
+  def list_polls(%Event{} = event) do
+    query = from p in Poll,
+            where: p.event_id == ^event.id,
+            order_by: [asc: p.inserted_at],
+            preload: [:created_by, :poll_options]
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Returns the list of active polls (not closed) for an event.
+  """
+  def list_active_polls(%Event{} = event) do
+    query = from p in Poll,
+            where: p.event_id == ^event.id and p.phase != "closed",
+            order_by: [asc: p.inserted_at],
+            preload: [:created_by, :poll_options]
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Gets a single poll.
+  """
+  def get_poll!(id) do
+    Repo.get!(Poll, id)
+    |> Repo.preload([:event, :created_by, poll_options: [:suggested_by, :votes]])
+  end
+
+  @doc """
+  Gets a poll for a specific event and poll type.
+  """
+  def get_event_poll(%Event{} = event, poll_type) do
+    query = from p in Poll,
+            where: p.event_id == ^event.id and p.poll_type == ^poll_type,
+            preload: [:created_by, poll_options: [:suggested_by, :votes]]
+
+    Repo.one(query)
+  end
+
+  @doc """
+  Creates a poll.
+  """
+  def create_poll(attrs \\ %{}) do
+    %Poll{}
+    |> Poll.creation_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates a poll.
+  """
+  def update_poll(%Poll{} = poll, attrs) do
+    poll
+    |> Poll.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Transitions a poll to a new phase.
+  """
+  def transition_poll_phase(%Poll{} = poll, new_phase) do
+    poll
+    |> Poll.phase_transition_changeset(new_phase)
+    |> Repo.update()
+  end
+
+  @doc """
+  Finalizes a poll with selected options.
+  """
+  def finalize_poll(%Poll{} = poll, option_ids, finalized_date \\ nil) do
+    poll
+    |> Poll.finalization_changeset(option_ids, finalized_date)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a poll.
+  """
+  def delete_poll(%Poll{} = poll) do
+    Repo.delete(poll)
+  end
+
+  # =================
+  # Poll Options
+  # =================
+
+  @doc """
+  Returns the list of options for a poll.
+  """
+  def list_poll_options(%Poll{} = poll) do
+    query = from po in PollOption,
+            where: po.poll_id == ^poll.id and po.status == "active",
+            order_by: [asc: po.order_index, asc: po.inserted_at],
+            preload: [:suggested_by, :votes]
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Returns all options for a poll (including hidden/removed).
+  """
+  def list_all_poll_options(%Poll{} = poll) do
+    query = from po in PollOption,
+            where: po.poll_id == ^poll.id,
+            order_by: [asc: po.order_index, asc: po.inserted_at],
+            preload: [:suggested_by, :votes]
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Gets a single poll option.
+  """
+  def get_poll_option!(id) do
+    Repo.get!(PollOption, id)
+    |> Repo.preload([:poll, :suggested_by, :votes])
+  end
+
+  @doc """
+  Gets a single poll option, returns nil if not found.
+  """
+  def get_poll_option(id) do
+    case Repo.get(PollOption, id) do
+      nil -> nil
+      option -> Repo.preload(option, [:poll, :suggested_by, :votes])
+    end
+  end
+
+  @doc """
+  Creates a poll option.
+  """
+  def create_poll_option(attrs \\ %{}) do
+    %PollOption{}
+    |> PollOption.creation_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates a poll option.
+  """
+  def update_poll_option(%PollOption{} = poll_option, attrs) do
+    poll_option
+    |> PollOption.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Updates a poll option status (for moderation).
+  """
+  def update_poll_option_status(%PollOption{} = poll_option, status) do
+    poll_option
+    |> PollOption.status_changeset(status)
+    |> Repo.update()
+  end
+
+  @doc """
+  Enriches a poll option with external API data.
+  """
+  def enrich_poll_option(%PollOption{} = poll_option, external_data) do
+    poll_option
+    |> PollOption.enrichment_changeset(external_data)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a poll option.
+  """
+  def delete_poll_option(%PollOption{} = poll_option) do
+    Repo.delete(poll_option)
+  end
+
+  # =================
+  # Poll Votes
+  # =================
+
+  @doc """
+  Returns the list of votes for a poll option.
+  """
+  def list_poll_votes(%PollOption{} = poll_option) do
+    query = from pv in PollVote,
+            where: pv.poll_option_id == ^poll_option.id,
+            order_by: [desc: pv.voted_at],
+            preload: [:voter]
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Returns the votes for a poll option by a specific user.
+  """
+  def get_user_poll_vote(%PollOption{} = poll_option, %User{} = user) do
+    query = from pv in PollVote,
+            where: pv.poll_option_id == ^poll_option.id and pv.voter_id == ^user.id,
+            preload: [:voter]
+
+    Repo.one(query)
+  end
+
+  @doc """
+  Returns all votes by a user for a poll.
+  """
+  def list_user_poll_votes(%Poll{} = poll, %User{} = user) do
+    query = from pv in PollVote,
+            join: po in PollOption, on: pv.poll_option_id == po.id,
+            where: po.poll_id == ^poll.id and pv.voter_id == ^user.id,
+            preload: [:poll_option, :voter]
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Creates a vote based on voting system.
+  """
+  def create_poll_vote(poll_option, user, vote_data, voting_system) do
+    attrs = Map.merge(vote_data, %{
+      poll_option_id: poll_option.id,
+      voter_id: user.id
+    })
+
+    changeset = case voting_system do
+      "binary" -> PollVote.binary_vote_changeset(%PollVote{}, attrs)
+      "approval" -> PollVote.approval_vote_changeset(%PollVote{}, attrs)
+      "ranked" -> PollVote.ranked_vote_changeset(%PollVote{}, attrs)
+      "star" -> PollVote.star_vote_changeset(%PollVote{}, attrs)
+      _ -> PollVote.changeset(%PollVote{}, attrs)
+    end
+
+    Repo.insert(changeset)
+  end
+
+  @doc """
+  Updates a poll vote.
+  """
+  def update_poll_vote(%PollVote{} = poll_vote, attrs) do
+    poll_vote
+    |> PollVote.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a poll vote.
+  """
+  def delete_poll_vote(%PollVote{} = poll_vote) do
+    Repo.delete(poll_vote)
+  end
+
+  # =================
+  # Poll Analytics
+  # =================
+
+  @doc """
+  Gets vote counts and statistics for a poll.
+  """
+  def get_poll_analytics(%Poll{} = poll) do
+    poll_with_options = Repo.preload(poll, [poll_options: :votes])
+
+    vote_counts = poll_with_options.poll_options
+    |> Enum.map(fn option ->
+      votes = option.votes
+      total_votes = length(votes)
+
+      vote_breakdown = case poll.voting_system do
+        "binary" -> count_binary_votes(votes)
+        "approval" -> %{selected: total_votes}
+        "ranked" -> count_ranked_votes(votes)
+        "star" -> count_star_votes(votes)
+      end
+
+      %{
+        option_id: option.id,
+        option_title: option.title,
+        total_votes: total_votes,
+        vote_breakdown: vote_breakdown,
+        average_score: calculate_average_score(votes)
+      }
+    end)
+
+    %{
+      poll_id: poll.id,
+      poll_title: poll.title,
+      voting_system: poll.voting_system,
+      phase: poll.phase,
+      total_options: length(poll_with_options.poll_options),
+      vote_counts: vote_counts,
+      total_voters: count_unique_voters(poll_with_options)
+    }
+  end
+
+  # Helper functions for vote counting
+  defp count_binary_votes(votes) do
+    Enum.reduce(votes, %{yes: 0, no: 0}, fn vote, acc ->
+      case vote.vote_value do
+        "yes" -> %{acc | yes: acc.yes + 1}
+        "no" -> %{acc | no: acc.no + 1}
+        _ -> acc
+      end
+    end)
+  end
+
+  defp count_ranked_votes(votes) do
+    votes
+    |> Enum.group_by(& &1.vote_rank)
+    |> Enum.map(fn {rank, votes} -> {rank, length(votes)} end)
+    |> Enum.into(%{})
+  end
+
+  defp count_star_votes(votes) do
+    votes
+    |> Enum.group_by(fn vote ->
+      vote.vote_numeric |> Decimal.to_float() |> trunc()
+    end)
+    |> Enum.map(fn {rating, votes} -> {rating, length(votes)} end)
+    |> Enum.into(%{})
+  end
+
+  defp calculate_average_score(votes) do
+    if length(votes) == 0 do
+      0.0
+    else
+      total_score = votes
+      |> Enum.map(&PollVote.vote_score/1)
+      |> Enum.sum()
+
+      total_score / length(votes)
+    end
+  end
+
+  defp count_unique_voters(poll_with_options) do
+    poll_with_options.poll_options
+    |> Enum.flat_map(& &1.votes)
+    |> Enum.map(& &1.voter_id)
+    |> Enum.uniq()
+    |> length()
+  end
+
+  # =================
+  # Poll Authorization & Lifecycle
+  # =================
+
+    @doc """
+  Checks if a user can create polls for an event.
+  """
+  def can_create_poll?(%User{} = user, %Event{} = event) do
+    # Event organizers can create polls
+    user_is_organizer?(event, user) ||
+
+    # Event participants with appropriate permissions can create polls
+    case get_event_participant_by_event_and_user(event, user) do
+      nil -> false
+      participant -> participant.role in [:organizer, :co_organizer]
+    end
+  end
+
+  @doc """
+  Transitions a poll from list_building to voting phase.
+  """
+  def transition_poll_to_voting(%Poll{} = poll) do
+    if poll.phase == "list_building" do
+      poll
+      |> Poll.phase_transition_changeset("voting")
+      |> Repo.update()
+    else
+      {:error, "Poll is not in list_building phase"}
+    end
+  end
+
+  @doc """
+  Finalizes a poll (single-argument version for LiveView component).
+  """
+  def finalize_poll(%Poll{} = poll) do
+    finalize_poll(poll, %{})
+  end
+
+  # =================
+  # High-Level Voting Functions with Business Logic
+  # =================
+
+  @doc """
+  Casts a binary vote (yes/no) with validation and real-time updates.
+  """
+  def cast_binary_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, vote_value)
+      when vote_value in ["yes", "no"] do
+
+    if poll.voting_system != "binary" do
+      {:error, "Poll does not support binary voting"}
+    else
+      cast_vote_with_transaction(poll, poll_option, user, %{vote_value: vote_value}, "binary")
+    end
+  end
+
+  @doc """
+  Casts an approval vote (selecting/deselecting an option) with validation.
+  """
+  def cast_approval_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, selected \\ true) do
+    if poll.voting_system != "approval" do
+      {:error, "Poll does not support approval voting"}
+    else
+      vote_value = if selected, do: "selected", else: nil
+
+      if selected do
+        cast_vote_with_transaction(poll, poll_option, user, %{vote_value: vote_value}, "approval")
+      else
+        # For approval voting, "deselecting" means removing the vote
+        remove_user_vote(poll_option, user)
+      end
+    end
+  end
+
+  @doc """
+  Casts multiple approval votes at once for efficiency.
+  """
+  def cast_approval_votes(%Poll{} = poll, option_ids, %User{} = user) when is_list(option_ids) do
+    if poll.voting_system != "approval" do
+      {:error, "Poll does not support approval voting"}
+    else
+      Repo.transaction(fn ->
+        # First, remove all existing approval votes for this user in this poll
+        clear_user_poll_votes(poll, user)
+
+        # Then add votes for selected options
+        poll_options = from(po in PollOption,
+                           where: po.poll_id == ^poll.id and po.id in ^option_ids,
+                           preload: [:poll])
+                      |> Repo.all()
+
+        results = for option <- poll_options do
+          case create_poll_vote(option, user, %{vote_value: "selected"}, "approval") do
+            {:ok, vote} -> vote
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end
+
+        # Broadcast update
+        broadcast_poll_update(poll, :votes_updated)
+        results
+      end)
+    end
+  end
+
+  @doc """
+  Casts a ranked vote with rank validation.
+  """
+  def cast_ranked_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, rank)
+      when is_integer(rank) and rank > 0 do
+
+    if poll.voting_system != "ranked" do
+      {:error, "Poll does not support ranked voting"}
+    else
+      Repo.transaction(fn ->
+        # Check if user already has a vote with this rank for this poll
+        existing_vote_with_rank = from(pv in PollVote,
+                                      join: po in PollOption, on: pv.poll_option_id == po.id,
+                                      where: po.poll_id == ^poll.id and
+                                             pv.voter_id == ^user.id and
+                                             pv.vote_rank == ^rank)
+                                 |> Repo.one()
+
+        # If there's an existing vote with this rank, remove it first
+        if existing_vote_with_rank do
+          Repo.delete!(existing_vote_with_rank)
+        end
+
+        # Create or update the vote for this option
+        case create_poll_vote(poll_option, user, %{vote_rank: rank}, "ranked") do
+          {:ok, vote} ->
+            broadcast_poll_update(poll, :votes_updated)
+            vote
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+    end
+  end
+
+  @doc """
+  Casts multiple ranked votes at once (full ballot).
+  """
+  def cast_ranked_votes(%Poll{} = poll, ranked_options, %User{} = user) when is_list(ranked_options) do
+    if poll.voting_system != "ranked" do
+      {:error, "Poll does not support ranked voting"}
+    else
+      Repo.transaction(fn ->
+        # Clear all existing ranked votes for this user in this poll
+        clear_user_poll_votes(poll, user)
+
+        # Validate that ranks are unique and sequential
+        ranks = Enum.map(ranked_options, fn {_option_id, rank} -> rank end)
+        if length(ranks) != length(Enum.uniq(ranks)) do
+          Repo.rollback("Duplicate ranks not allowed")
+        end
+
+        # Cast votes for each ranked option
+        results = for {option_id, rank} <- ranked_options do
+          option = Repo.get!(PollOption, option_id)
+          case create_poll_vote(option, user, %{vote_rank: rank}, "ranked") do
+            {:ok, vote} -> vote
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end
+
+        broadcast_poll_update(poll, :votes_updated)
+        results
+      end)
+    end
+  end
+
+  @doc """
+  Casts a star rating vote with validation.
+  """
+  def cast_star_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, rating)
+      when is_number(rating) and rating >= 1 and rating <= 5 do
+
+    if poll.voting_system != "star" do
+      {:error, "Poll does not support star rating"}
+    else
+      vote_numeric = if is_integer(rating), do: Decimal.new(rating), else: Decimal.from_float(rating)
+      cast_vote_with_transaction(poll, poll_option, user, %{vote_numeric: vote_numeric}, "star")
+    end
+  end
+
+
+
+  @doc """
+  Clears all votes by a user for a specific poll.
+  """
+  def clear_user_poll_votes(%Poll{} = poll, %User{} = user) do
+    query = from(pv in PollVote,
+                join: po in PollOption, on: pv.poll_option_id == po.id,
+                where: po.poll_id == ^poll.id and pv.voter_id == ^user.id)
+
+    {count, _} = Repo.delete_all(query)
+    broadcast_poll_update(poll, :votes_updated)
+    {:ok, count}
+  end
+
+  @doc """
+  Checks if a user can vote on a poll based on current phase and permissions.
+  """
+  def can_user_vote?(%Poll{} = poll, %User{} = user) do
+    # Must be in voting phase
+    poll.phase == "voting" and
+    # Must be within voting deadline (if set)
+    (is_nil(poll.voting_deadline) or DateTime.compare(DateTime.utc_now(), poll.voting_deadline) == :lt) and
+    # User must be a participant in the event
+    user_can_participate?(poll, user)
+  end
+
+  @doc """
+  Gets comprehensive voting summary for a user on a poll.
+  """
+  def get_user_voting_summary(%Poll{} = poll, %User{} = user) do
+    user_votes = list_user_poll_votes(poll, user)
+
+    case poll.voting_system do
+      "binary" ->
+        votes_by_option = Enum.group_by(user_votes, & &1.poll_option_id)
+        %{
+          voting_system: "binary",
+          votes_cast: length(user_votes),
+          votes_by_option: votes_by_option
+        }
+
+      "approval" ->
+        selected_options = Enum.map(user_votes, & &1.poll_option_id)
+        %{
+          voting_system: "approval",
+          votes_cast: length(user_votes),
+          selected_options: selected_options
+        }
+
+      "ranked" ->
+        ranked_votes = user_votes
+                      |> Enum.sort_by(& &1.vote_rank)
+                      |> Enum.map(fn vote -> {vote.poll_option_id, vote.vote_rank} end)
+        %{
+          voting_system: "ranked",
+          votes_cast: length(user_votes),
+          ranked_options: ranked_votes
+        }
+
+      "star" ->
+        ratings_by_option = user_votes
+                           |> Enum.map(fn vote ->
+                             {vote.poll_option_id, Decimal.to_float(vote.vote_numeric)}
+                           end)
+                           |> Enum.into(%{})
+        %{
+          voting_system: "star",
+          votes_cast: length(user_votes),
+          ratings_by_option: ratings_by_option
+        }
+    end
+  end
+
+  # =================
+  # Private Helper Functions for Voting
+  # =================
+
+  defp cast_vote_with_transaction(poll, poll_option, user, vote_data, voting_system) do
+    Repo.transaction(fn ->
+      # For binary and star voting, remove existing vote first (replace behavior)
+      if voting_system in ["binary", "star"] do
+        case get_user_poll_vote(poll_option, user) do
+          nil -> :ok
+          existing_vote -> Repo.delete!(existing_vote)
+        end
+      end
+
+      case create_poll_vote(poll_option, user, vote_data, voting_system) do
+        {:ok, vote} ->
+          broadcast_poll_update(poll, :votes_updated)
+          vote
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  defp user_can_participate?(poll, user) do
+    # Get the event for this poll
+    event = Repo.get!(Event, poll.event_id)
+
+    # Check if user is event organizer or participant
+    user_is_organizer?(event, user) or
+    get_event_participant_by_event_and_user(event, user) != nil
+  end
+
+  defp broadcast_poll_update(poll, event_type) do
+    Phoenix.PubSub.broadcast(
+      EventasaurusApp.PubSub,
+      "polls:#{poll.id}",
+      {event_type, poll}
+    )
+
+    # Also broadcast to event channel for real-time event updates
+    Phoenix.PubSub.broadcast(
+      EventasaurusApp.PubSub,
+      "events:#{poll.event_id}",
+      {:poll_updated, poll}
+    )
+  end
+
+  # =================
+  # Poll Analytics
+  # =================
+
+  # =================
+  # Missing Poll Functions (Used by LiveView Components)
+  # =================
+
+  @doc """
+  Updates the status of a poll (e.g., "list_building", "voting", "finalized").
+  """
+  def update_poll_status(%Poll{} = poll, new_status) do
+    poll
+    |> Poll.status_changeset(%{status: new_status})
+    |> Repo.update()
+    |> case do
+      {:ok, updated_poll} ->
+        broadcast_poll_update(updated_poll, :status_updated)
+        {:ok, updated_poll}
+      error -> error
+    end
+  end
+
+  @doc """
+  Clears all votes for a poll (used by moderation).
+  """
+  def clear_all_poll_votes(poll_id) do
+    from(v in PollVote, where: v.poll_option_id in subquery(
+      from(o in PollOption, where: o.poll_id == ^poll_id, select: o.id)
+    ))
+    |> Repo.delete_all()
+    |> case do
+      {deleted_count, _} ->
+        poll = get_poll!(poll_id)
+        broadcast_poll_update(poll, :votes_cleared)
+        {:ok, deleted_count}
+    end
+  end
+
+  @doc """
+  Removes a user's vote for a specific poll option (overload for PollOption).
+  """
+  def remove_user_vote(%PollOption{} = poll_option, %User{} = user) do
+    case get_user_poll_vote(poll_option, user) do
+      nil -> {:ok, :no_vote_to_remove}
+      vote ->
+        result = Repo.delete(vote)
+        # Get poll for broadcasting
+        poll = Repo.get!(Poll, poll_option.poll_id)
+        broadcast_poll_update(poll, :votes_updated)
+        result
+    end
+  end
+
+  # =================
+  # Event-Poll Integration & Lifecycle Hooks
+  # =================
+
+  @doc """
+  Creates a poll for an event with event-based notifications.
+
+  This is the recommended way to create polls as it includes:
+  - Event association validation
+  - Event-based PubSub broadcasting
+  - Lifecycle integration with event workflows
+  """
+  def create_event_poll(%Event{} = event, %User{} = creator, attrs \\ %{}) do
+    if not can_create_poll?(creator, event) do
+      {:error, "User does not have permission to create polls for this event"}
+    else
+      poll_attrs = Map.merge(attrs, %{
+        event_id: event.id,
+        created_by_id: creator.id
+      })
+
+      Repo.transaction(fn ->
+        case create_poll(poll_attrs) do
+          {:ok, poll} ->
+            # Trigger event-poll lifecycle integration
+            handle_poll_creation(event, poll, creator)
+
+            # Broadcast to event followers
+            broadcast_event_poll_activity(event, :poll_created, poll, creator)
+
+            poll
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+    end
+  end
+
+  @doc """
+  Updates a poll with event lifecycle integration.
+  """
+  def update_event_poll(%Poll{} = poll, attrs, %User{} = updater) do
+    event = Repo.get!(Event, poll.event_id)
+
+    if not user_can_manage_event?(updater, event) do
+      {:error, "User does not have permission to update this poll"}
+    else
+      case update_poll(poll, attrs) do
+        {:ok, updated_poll} ->
+          # Handle phase transitions
+          if Map.get(attrs, :phase) && attrs.phase != poll.phase do
+            handle_poll_phase_transition(event, updated_poll, poll.phase, attrs.phase, updater)
+          end
+
+          broadcast_event_poll_activity(event, :poll_updated, updated_poll, updater)
+          {:ok, updated_poll}
+
+        error -> error
+      end
+    end
+  end
+
+  @doc """
+  Finalizes a poll with event workflow integration.
+  """
+  def finalize_event_poll(%Poll{} = poll, option_ids, %User{} = finalizer) do
+    event = Repo.get!(Event, poll.event_id) |> Repo.preload([:polls])
+
+    if not user_can_manage_event?(finalizer, event) do
+      {:error, "User does not have permission to finalize this poll"}
+    else
+      Repo.transaction(fn ->
+        case finalize_poll(poll, option_ids) do
+          {:ok, finalized_poll} ->
+            # Handle event workflow integration based on poll type
+            handle_poll_finalization(event, finalized_poll, finalizer)
+
+            broadcast_event_poll_activity(event, :poll_finalized, finalized_poll, finalizer)
+
+            finalized_poll
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+    end
+  end
+
+  @doc """
+  Deletes a poll with event cleanup.
+  """
+  def delete_event_poll(%Poll{} = poll, %User{} = deleter) do
+    event = Repo.get!(Event, poll.event_id)
+
+    if not user_can_manage_event?(deleter, event) do
+      {:error, "User does not have permission to delete this poll"}
+    else
+      case delete_poll(poll) do
+        {:ok, deleted_poll} ->
+          broadcast_event_poll_activity(event, :poll_deleted, deleted_poll, deleter)
+          {:ok, deleted_poll}
+
+        error -> error
+      end
+    end
+  end
+
+  @doc """
+  Gets all active polls for an event with event context.
+  """
+  def list_event_active_polls(%Event{} = event) do
+    list_active_polls(event)
+    |> Repo.preload([:created_by, poll_options: [:suggested_by, :votes]])
+  end
+
+  @doc """
+  Gets poll statistics for an event dashboard.
+  """
+  def get_event_poll_stats(%Event{} = event) do
+    polls = list_polls(event)
+
+    %{
+      total_polls: length(polls),
+      active_polls: length(Enum.filter(polls, & &1.phase != "closed")),
+      polls_by_type: Enum.group_by(polls, & &1.poll_type) |> Enum.map(fn {type, polls} -> {type, length(polls)} end) |> Enum.into(%{}),
+      polls_by_phase: Enum.group_by(polls, & &1.phase) |> Enum.map(fn {phase, polls} -> {phase, length(polls)} end) |> Enum.into(%{}),
+      total_participants: count_unique_poll_participants(polls)
+    }
+  end
+
+  # =================
+  # Private Event-Poll Integration Helpers
+  # =================
+
+  defp handle_poll_creation(%Event{} = event, %Poll{} = poll, %User{} = creator) do
+    # Log poll creation activity
+    Logger.info("Poll created for event", %{
+      event_id: event.id,
+      poll_id: poll.id,
+      poll_type: poll.poll_type,
+      creator_id: creator.id
+    })
+
+    # Handle specific poll type workflows
+    case poll.poll_type do
+      "date_selection" ->
+        # If this is a date selection poll, check if event should transition to polling status
+        if event.status == :draft do
+          transition_event(event, :polling)
+        end
+
+      "venue_selection" ->
+        # Similar logic for venue selection polls
+        if event.status == :draft do
+          transition_event(event, :polling)
+        end
+
+      _ ->
+        # General poll creation - no specific event status changes needed
+        :ok
+    end
+  end
+
+  defp handle_poll_phase_transition(%Event{} = event, %Poll{} = poll, old_phase, new_phase, %User{} = user) do
+    Logger.info("Poll phase transition", %{
+      event_id: event.id,
+      poll_id: poll.id,
+      from_phase: old_phase,
+      to_phase: new_phase,
+      user_id: user.id
+    })
+
+    case {old_phase, new_phase} do
+      {"list_building", "voting"} ->
+        # Poll is now ready for voting - notify event participants
+        broadcast_event_poll_activity(event, :poll_voting_started, poll, user)
+
+      {"voting", "closed"} ->
+        # Poll voting has ended - may trigger event workflow changes
+        handle_poll_voting_ended(event, poll, user)
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp handle_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = finalizer) do
+    Logger.info("Poll finalized", %{
+      event_id: event.id,
+      poll_id: poll.id,
+      poll_type: poll.poll_type,
+      finalizer_id: finalizer.id
+    })
+
+    # Handle event workflow based on poll type and results
+    case poll.poll_type do
+      "date_selection" ->
+        handle_date_poll_finalization(event, poll, finalizer)
+
+      "venue_selection" ->
+        handle_venue_poll_finalization(event, poll, finalizer)
+
+      "threshold_interest" ->
+        handle_threshold_poll_finalization(event, poll, finalizer)
+
+      _ ->
+        # General poll finalization
+        Logger.info("General poll finalized - no specific event workflow changes")
+    end
+  end
+
+  defp handle_poll_voting_ended(%Event{} = event, %Poll{} = poll, %User{} = user) do
+    # When poll voting ends, it might affect event status
+    case poll.poll_type do
+      "date_selection" ->
+        # If date selection voting ended but not finalized, event may need organizer action
+        if event.status == :polling do
+          broadcast_event_poll_activity(event, :organizer_action_needed, poll, user)
+        end
+
+      "threshold_interest" ->
+        # Check if threshold was met to auto-transition event
+        analytics = get_poll_analytics(poll)
+        if threshold_met_from_poll?(poll, analytics) do
+          transition_event(event, :confirmed)
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp handle_date_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = _finalizer) do
+    # Get selected options from finalized poll
+    selected_options = poll.finalized_option_ids || []
+
+    if length(selected_options) == 1 do
+      # Single date selected - update event
+      option_id = List.first(selected_options)
+      option = Repo.get!(PollOption, option_id)
+
+      # Extract date from option (assuming it's stored in external_data or title)
+      case extract_date_from_option(option) do
+        {:ok, date} ->
+          pick_date(event, date)
+          Logger.info("Event date updated from poll finalization", %{
+            event_id: event.id,
+            selected_date: date
+          })
+
+        {:error, reason} ->
+          Logger.warning("Could not extract date from poll option", %{
+            poll_id: poll.id,
+            option_id: option_id,
+            reason: reason
+          })
+      end
+    end
+  end
+
+  defp handle_venue_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = _finalizer) do
+    # Similar logic for venue selection
+    selected_options = poll.finalized_option_ids || []
+
+    if length(selected_options) == 1 do
+      option_id = List.first(selected_options)
+      option = Repo.get!(PollOption, option_id)
+
+      case extract_venue_from_option(option) do
+        {:ok, venue_id} ->
+          update_event(event, %{venue_id: venue_id})
+          Logger.info("Event venue updated from poll finalization", %{
+            event_id: event.id,
+            venue_id: venue_id
+          })
+
+        {:error, reason} ->
+          Logger.warning("Could not extract venue from poll option", %{
+            poll_id: poll.id,
+            option_id: option_id,
+            reason: reason
+          })
+      end
+    end
+  end
+
+  defp handle_threshold_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = finalizer) do
+    # Check if poll results indicate enough interest to confirm event
+    analytics = get_poll_analytics(poll)
+
+    if threshold_met_from_poll?(poll, analytics) do
+      transition_event(event, :confirmed)
+      Logger.info("Event confirmed from threshold poll results", %{
+        event_id: event.id,
+        poll_id: poll.id
+      })
+    else
+      Logger.info("Event threshold not met from poll results", %{
+        event_id: event.id,
+        poll_id: poll.id
+      })
+    end
+  end
+
+  defp broadcast_event_poll_activity(%Event{} = event, activity_type, %Poll{} = poll, %User{} = user) do
+    # Broadcast to event-specific channel for event page updates
+    Phoenix.PubSub.broadcast(
+      EventasaurusApp.PubSub,
+      "events:#{event.id}",
+      {:poll_activity, activity_type, poll, user}
+    )
+
+    # Broadcast to general event participants channel
+    Phoenix.PubSub.broadcast(
+      EventasaurusApp.PubSub,
+      "event_participants:#{event.id}",
+      {:poll_activity, activity_type, poll, user}
+    )
+
+    # Broadcast to organizers channel for management updates
+    Phoenix.PubSub.broadcast(
+      EventasaurusApp.PubSub,
+      "event_organizers:#{event.id}",
+      {:poll_activity, activity_type, poll, user}
+    )
+  end
+
+  defp count_unique_poll_participants(polls) do
+    polls
+    |> Enum.flat_map(fn poll -> poll.poll_options || [] end)
+    |> Enum.flat_map(fn option -> option.votes || [] end)
+    |> Enum.map(& &1.voter_id)
+    |> Enum.uniq()
+    |> length()
+  end
+
+  defp threshold_met_from_poll?(%Poll{} = poll, analytics) do
+    # Simple heuristic: if total unique voters > 5 and approval rate > 70%
+    total_voters = Map.get(analytics, :unique_voters, 0)
+
+    case poll.voting_system do
+      "binary" ->
+        yes_percentage = Map.get(analytics, :approval_percentage, 0)
+        total_voters >= 5 and yes_percentage >= 70
+
+      "approval" ->
+        selected_percentage = Map.get(analytics, :selection_percentage, 0)
+        total_voters >= 5 and selected_percentage >= 70
+
+      _ ->
+        # For other voting systems, just check participant count
+        total_voters >= 10
+    end
+  end
+
+  defp extract_date_from_option(%PollOption{} = option) do
+    cond do
+      option.external_data && Map.has_key?(option.external_data, "date") ->
+        case DateTime.from_iso8601(option.external_data["date"]) do
+          {:ok, datetime, _} -> {:ok, datetime}
+          {:error, reason} -> {:error, reason}
+        end
+
+      # Try to parse date from title (format: "2024-12-15" or "December 15, 2024")
+      option.title ->
+        cond do
+          # Try ISO format first (2024-12-15)
+          Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, option.title) ->
+            case Date.from_iso8601(option.title) do
+              {:ok, date} -> {:ok, DateTime.new!(date, ~T[18:00:00], "UTC")}
+              {:error, reason} -> {:error, reason}
+            end
+
+          # Try to extract date parts from natural language
+          true ->
+            {:error, "Date format not supported. Use YYYY-MM-DD format"}
+        end
+
+      true ->
+        {:error, "No date information found in option"}
+    end
+  end
+
+  defp extract_venue_from_option(%PollOption{} = option) do
+    cond do
+      option.external_data && Map.has_key?(option.external_data, "venue_id") ->
+        {:ok, option.external_data["venue_id"]}
+
+      # Try to find venue by name in title
+      option.title ->
+        case Repo.get_by(EventasaurusApp.Venues.Venue, name: option.title) do
+          nil -> {:error, "Venue not found"}
+          venue -> {:ok, venue.id}
+        end
+
+      true ->
+        {:error, "No venue information found in option"}
+    end
   end
 
 end
