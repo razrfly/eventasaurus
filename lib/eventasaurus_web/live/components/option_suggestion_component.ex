@@ -288,14 +288,70 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         id={"option-list-#{@id}"}
       >
         <%= if Enum.empty?(@poll.poll_options) do %>
-          <div class="px-6 py-12 text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No options yet</h3>
-            <p class="mt-1 text-sm text-gray-500">
-              Be the first to suggest <%= option_type_text(@poll.poll_type) %>!
+          <!-- Enhanced Empty State -->
+          <div class="px-6 py-16 text-center">
+            <!-- Poll type specific icon -->
+            <div class="mx-auto w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mb-6">
+              <%= case @poll.poll_type do %>
+                <% "movie" -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2C7 1.45 7.45 1 8 1s1 .45 1 1v2h4V2c0-.55.45-1 1-1s1 .45 1 1v2h1c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h1z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  </svg>
+                <% "restaurant" -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                  </svg>
+                <% "activity" -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                  </svg>
+                <% _ -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                  </svg>
+              <% end %>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">
+              <%= get_empty_state_title(@poll.poll_type) %>
+            </h3>
+
+            <p class="text-gray-600 mb-2 max-w-md mx-auto">
+              <%= get_empty_state_description(@poll.poll_type, @poll.voting_system) %>
             </p>
+
+            <!-- Contextual guidance -->
+            <div class="text-sm text-gray-500 mb-8 max-w-lg mx-auto">
+              <%= get_empty_state_guidance(@poll.poll_type) %>
+            </div>
+
+            <!-- Large Call-to-Action Button -->
+            <%= if @can_suggest_more do %>
+              <button
+                type="button"
+                phx-click="toggle_suggestion_form"
+                phx-target={@myself}
+                class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+              >
+                <svg class="-ml-1 mr-3 h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                <%= get_empty_state_button_text(@poll.poll_type) %>
+              </button>
+
+              <!-- Secondary helpful text -->
+              <p class="mt-4 text-sm text-gray-500">
+                <%= get_empty_state_help_text(@poll.poll_type) %>
+              </p>
+            <% else %>
+              <div class="text-center p-6 bg-gray-50 rounded-lg max-w-md mx-auto">
+                <p class="text-gray-700 font-medium">You've reached your limit</p>
+                <p class="text-sm text-gray-500 mt-1">
+                  You can suggest up to <%= @max_options %> options. Ask others to add more suggestions!
+                </p>
+              </div>
+            <% end %>
           </div>
         <% else %>
           <div data-role="options-container">
@@ -971,4 +1027,53 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   defp safe_string_to_integer(_), do: {:error, :invalid_input}
+
+  # New helper functions for empty state
+  defp get_empty_state_title(poll_type) do
+    case poll_type do
+      "movie" -> "No Movies Suggested Yet"
+      "restaurant" -> "No Restaurants Suggested Yet"
+      "activity" -> "No Activities Suggested Yet"
+      _ -> "No Options Suggested Yet"
+    end
+  end
+
+  defp get_empty_state_description(poll_type, voting_system) do
+    type_text = option_type_text(poll_type)
+
+    case voting_system do
+      "binary" -> "Be the first to suggest #{type_text} for yes/no voting!"
+      "approval" -> "Be the first to suggest #{type_text} for approval voting!"
+      "ranked" -> "Be the first to suggest #{type_text} for ranked choice voting!"
+      "star" -> "Be the first to suggest #{type_text} for star rating!"
+      _ -> "Be the first to suggest #{type_text} to vote on!"
+    end
+  end
+
+  defp get_empty_state_guidance(poll_type) do
+    case poll_type do
+      "movie" -> "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
+      "restaurant" -> "Suggest restaurants that are popular or unique. Add details like cuisine, location, or special notes."
+      "activity" -> "Suggest activities that are fun or interesting. Add location, duration, or what makes it unique."
+      _ -> "Suggest options that you think are great. Add a description to help others understand your choice."
+    end
+  end
+
+  defp get_empty_state_button_text(poll_type) do
+    case poll_type do
+      "movie" -> "Suggest a Movie"
+      "restaurant" -> "Suggest a Restaurant"
+      "activity" -> "Suggest an Activity"
+      _ -> "Add an Option"
+    end
+  end
+
+  defp get_empty_state_help_text(poll_type) do
+    case poll_type do
+      "movie" -> "You can suggest up to 3 movies. Encourage others to add more suggestions!"
+      "restaurant" -> "You can suggest up to 3 restaurants. Encourage others to add more suggestions!"
+      "activity" -> "You can suggest up to 3 activities. Encourage others to add more suggestions!"
+      _ -> "You can suggest up to 3 options. Encourage others to add more suggestions!"
+    end
+  end
 end
