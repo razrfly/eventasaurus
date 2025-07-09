@@ -2199,14 +2199,13 @@ document.addEventListener("DOMContentLoaded", function() {
   initSupabaseClient();
   
   // Initialize Stagewise toolbar in development mode
-  // Temporarily disabled due to drag-and-drop conflicts
-  // if (process.env.NODE_ENV === 'development') {
-  //   import('@stagewise/toolbar').then(({ initToolbar }) => {
-  //     initToolbar({
-  //       plugins: [],
-  //     });
-  //   }).catch(err => {
-  //     console.log('Stagewise toolbar not available:', err);
-  //   });
-  // }
+  if (process.env.NODE_ENV === 'development') {
+    import('@stagewise/toolbar').then(({ initToolbar }) => {
+      initToolbar({
+        plugins: [],
+      });
+    }).catch(err => {
+      console.log('Stagewise toolbar not available:', err);
+    });
+  }
 });
