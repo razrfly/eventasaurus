@@ -1352,9 +1352,11 @@ defmodule EventasaurusWeb.EventManageLive do
     event = socket.assigns.event
 
     try do
-      # Load all polls for the event safely
+      # Load all polls for the event safely with consistent ordering
       polls = case Events.list_polls(event) do
-        polls when is_list(polls) -> polls
+        polls when is_list(polls) ->
+          # Sort by ID to ensure consistent ordering across renders
+          Enum.sort_by(polls, & &1.id)
         _ -> []
       end
 
