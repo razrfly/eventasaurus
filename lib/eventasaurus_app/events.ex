@@ -3929,7 +3929,8 @@ defmodule EventasaurusApp.Events do
       end
 
       # Return the updated poll with preloaded options
-      get_poll!(dragged_option.poll_id)
+      updated_poll = get_poll!(dragged_option.poll_id)
+      updated_poll
     end)
   rescue
     Ecto.NoResultsError ->
