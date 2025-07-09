@@ -177,34 +177,46 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <%= option_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
                 </label>
                 <div class="mt-1 relative">
-                  <input
-                    type="text"
-                    name="poll_option[title]"
-                    id="option_title"
-                    value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                    placeholder={option_title_placeholder(@poll.poll_type)}
-                    phx-debounce="300"
-                    phx-change="search_external_apis"
-                    phx-target={@myself}
-                    phx-focus="show_search_dropdown"
-                    phx-blur="hide_search_dropdown"
-                    autocomplete="off"
-                    class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
+                  <%= if should_use_api_search?(@poll.poll_type) do %>
+                    <input
+                      type="text"
+                      name="poll_option[title]"
+                      id="option_title"
+                      value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                      placeholder={option_title_placeholder(@poll.poll_type)}
+                      phx-debounce="300"
+                      phx-change="search_external_apis"
+                      phx-target={@myself}
+                      phx-focus="show_search_dropdown"
+                      phx-blur="hide_search_dropdown"
+                      autocomplete="off"
+                      class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    />
+                  <% else %>
+                    <input
+                      type="text"
+                      name="poll_option[title]"
+                      id="option_title"
+                      value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                      placeholder={option_title_placeholder(@poll.poll_type)}
+                      autocomplete="off"
+                      class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    />
+                  <% end %>
 
                   <!-- Search loading indicator -->
-                  <%= if @search_loading do %>
+                  <%= if should_use_api_search?(@poll.poll_type) && @search_loading do %>
                     <div class="absolute inset-y-0 right-0 flex items-center pr-3">
                       <svg class="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                     </div>
                   <% end %>
                 </div>
 
                 <!-- Search results dropdown -->
-                <%= if @show_search_dropdown && length(@search_results) > 0 do %>
+                <%= if should_use_api_search?(@poll.poll_type) && @show_search_dropdown && length(@search_results) > 0 do %>
                   <!-- Mobile backdrop for dropdown -->
                   <div class="search-dropdown-backdrop md:hidden" phx-click="hide_search_dropdown" phx-target={@myself}></div>
 
@@ -614,8 +626,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     # Update search query state
     socket = assign(socket, :search_query, query)
 
-    # Only search if query is long enough
-    if String.length(query) >= 2 do
+    # Only search if this poll type supports API search and query is long enough
+    if should_use_api_search?(socket.assigns.poll.poll_type) && String.length(query) >= 2 do
       # Start loading state
       socket = assign(socket, :search_loading, true)
 
@@ -977,9 +989,23 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   # Private helper functions
 
   defp perform_search(query, poll_type) do
-    # Map poll type to provider search options
-    search_options = get_search_options_for_poll_type(poll_type)
+    # Don't perform search for general polls or unsupported types
+    unless should_use_api_search?(poll_type) do
+      []
+    else
+      # Map poll type to provider search options
+      search_options = get_search_options_for_poll_type(poll_type)
 
+      # Return empty if no providers configured for this poll type
+      if Enum.empty?(search_options) do
+        []
+      else
+        perform_api_search(query, search_options)
+      end
+    end
+  end
+
+  defp perform_api_search(query, search_options) do
     case EventasaurusWeb.Services.RichDataManager.search(query, search_options) do
       {:ok, results_by_provider} ->
         # Flatten and limit results from all providers
@@ -1119,10 +1145,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   defp option_title_placeholder(poll_type) do
     case poll_type do
-      "movie" -> "e.g., The Matrix, Inception, Pulp Fiction"
-      "restaurant" -> "e.g., Joe's Pizza, The French Laundry"
-      "activity" -> "e.g., Hiking, Bowling, Museum Visit"
-      _ -> "Enter your suggestion..."
+      "movie" -> "Start typing to search movies..."
+      "restaurant" -> "Start typing to search restaurants..."
+      "activity" -> "Start typing to search activities..."
+      _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
   end
 
@@ -1197,6 +1223,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   defp safe_string_to_integer(_), do: {:error, :invalid_input}
+
+  # Helper function to determine if a poll type should use API search
+  defp should_use_api_search?(poll_type) do
+    poll_type in ["movie", "restaurant", "activity"]
+  end
 
   # New helper functions for empty state
   defp get_empty_state_title(poll_type) do
