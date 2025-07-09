@@ -33,16 +33,11 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   require Logger
 
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.Event
-  alias EventasaurusApp.Accounts.User
   alias EventasaurusWeb.Services.PollPubSubService
 
   # Import the other polling components
   alias EventasaurusWeb.PollCreationComponent
-  alias EventasaurusWeb.PollDetailsComponent
   alias EventasaurusWeb.OptionSuggestionComponent
-  alias EventasaurusWeb.VotingInterfaceComponent
-  alias EventasaurusWeb.ResultsDisplayComponent
 
   @impl true
   def mount(socket) do
@@ -1134,7 +1129,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     # Smart redirect: After poll creation, redirect to poll details view
     # This makes option addition more discoverable
     # Only redirect for new polls (not edited polls)
-    if String.contains?(message, "created") do
+    if message =~ ~r/created/i do
       {:noreply,
        socket
        |> assign(:showing_creation_modal, false)
@@ -1297,18 +1292,26 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         now = DateTime.utc_now()
         datetime_utc = case datetime do
           %DateTime{} = dt -> dt
-          %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
-          _ -> now
+          %NaiveDateTime{} = ndt ->
+            case DateTime.from_naive(ndt, "Etc/UTC") do
+              {:ok, dt} -> dt
+              {:error, _} -> now
+            end
+          _ ->
+            # Log unexpected type for debugging
+            require Logger
+            Logger.warning("Unexpected datetime type in format_relative_time: #{inspect(datetime)}")
+            now
         end
 
-        diff_seconds = DateTime.diff(now, datetime_utc, :second)
+        diff = DateTime.diff(now, datetime_utc, :second)
 
         cond do
-          diff_seconds < 60 -> "just now"
-          diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
-          diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
-          diff_seconds < 2592000 -> "#{div(diff_seconds, 86400)}d ago"
-          true -> "#{div(diff_seconds, 2592000)}mo ago"
+          diff < 60 -> "just now"
+          diff < 3600 -> "#{div(diff, 60)}m ago"
+          diff < 86400 -> "#{div(diff, 3600)}h ago"
+          diff < 2592000 -> "#{div(diff, 86400)}d ago"
+          true -> "#{div(diff, 2592000)}mo ago"
         end
     end
   end
