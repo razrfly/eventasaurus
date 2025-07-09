@@ -3728,7 +3728,7 @@ defmodule EventasaurusApp.Events do
     query = from p in Poll,
             where: p.event_id == ^event.id,
             order_by: [asc: p.inserted_at],
-            preload: [:created_by, :poll_options]
+            preload: [:created_by, poll_options: [:suggested_by, :votes]]
 
     Repo.all(query)
   end
@@ -3740,7 +3740,7 @@ defmodule EventasaurusApp.Events do
     query = from p in Poll,
             where: p.event_id == ^event.id and p.phase != "closed",
             order_by: [asc: p.inserted_at],
-            preload: [:created_by, :poll_options]
+            preload: [:created_by, poll_options: [:suggested_by, :votes]]
 
     Repo.all(query)
   end

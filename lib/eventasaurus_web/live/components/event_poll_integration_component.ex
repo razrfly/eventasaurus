@@ -30,16 +30,19 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   """
 
   use EventasaurusWeb, :live_component
-  alias EventasaurusApp.Events
+  require Logger
 
+  alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.Event
+  alias EventasaurusApp.Accounts.User
   alias EventasaurusWeb.Services.PollPubSubService
 
   # Import the other polling components
   alias EventasaurusWeb.PollCreationComponent
-  # alias EventasaurusWeb.PollDetailsComponent
-  # alias EventasaurusWeb.OptionSuggestionComponent
-  # alias EventasaurusWeb.VotingInterfaceComponent
-  # alias EventasaurusWeb.ResultsDisplayComponent
+  alias EventasaurusWeb.PollDetailsComponent
+  alias EventasaurusWeb.OptionSuggestionComponent
+  alias EventasaurusWeb.VotingInterfaceComponent
+  alias EventasaurusWeb.ResultsDisplayComponent
 
   @impl true
   def mount(socket) do
@@ -98,6 +101,15 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         Map.get(socket.assigns, :active_view, "overview")
       end
 
+      # Refresh selected_poll with updated data if it exists
+      updated_selected_poll = case socket.assigns[:selected_poll] do
+        %{id: poll_id} ->
+          # Find the poll with matching ID in the updated polls list
+          Enum.find(polls, fn poll -> poll.id == poll_id end) || socket.assigns.selected_poll
+        _ ->
+          socket.assigns[:selected_poll] || assigns[:selected_poll]
+      end
+
       {:ok,
        socket
        |> assign(assigns)
@@ -111,7 +123,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
        |> assign(:can_create_polls, can_create_polls)
        |> assign(:is_organizer, is_organizer)
        |> assign(:showing_creation_modal, showing_creation_modal)
-       |> assign(:active_view, active_view)}
+       |> assign(:active_view, active_view)
+       |> assign(:selected_poll, updated_selected_poll)}
     else
       # If we don't have required data, just assign what we have and wait for full update
       {:ok, assign(socket, assigns)}
@@ -122,8 +135,64 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   def render(assigns) do
     ~H"""
     <div class="event-poll-integration-component">
-      <!-- Match the exact guests tab structure -->
-      <div class="divide-y divide-gray-200">
+      <%= if assigns[:show_poll_details] && assigns[:selected_poll] do %>
+        <!-- Poll Details View -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+          <!-- Back Button -->
+          <div class="px-6 py-4 border-b border-gray-200">
+            <button
+              type="button"
+              class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+              phx-click="back_to_overview"
+              phx-target={@myself}
+            >
+              <svg class="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+              </svg>
+              Back to Polls
+            </button>
+          </div>
+
+          <!-- Poll Header -->
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900"><%= @selected_poll.title %></h2>
+            <%= if @selected_poll.description && @selected_poll.description != "" do %>
+              <p class="mt-1 text-sm text-gray-600"><%= @selected_poll.description %></p>
+            <% end %>
+            <div class="mt-2 flex items-center gap-3">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <%= String.capitalize(to_string(Map.get(@selected_poll, :poll_type, "poll"))) %>
+              </span>
+              <span class="text-xs text-gray-500">
+                <%= if @selected_poll.inserted_at do %>
+                  Created <%= format_relative_time(@selected_poll.inserted_at) %>
+                <% else %>
+                  Created recently
+                <% end %>
+              </span>
+            </div>
+          </div>
+
+          <!-- Poll Options Component -->
+          <div class="p-6">
+            <.live_component
+              module={OptionSuggestionComponent}
+              id={"poll-options-#{@selected_poll.id}"}
+              poll={@selected_poll}
+              user={@current_user}
+              poll_id={@selected_poll.id}
+              event={@event}
+              user_id={@current_user.id}
+              can_suggest={true}
+              is_creator={@is_organizer}
+            />
+          </div>
+        </div>
+      <% else %>
+        <!-- Poll List View -->
+        <%= if @polls && length(@polls) > 0 do %>
+          <!-- Match the exact guests tab structure -->
+          <div class="divide-y divide-gray-200">
         <%= for poll <- (@polls || []) do %>
           <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
             <div class="flex items-center justify-between">
@@ -209,6 +278,19 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                     >
                       <div class="py-1">
                         <button
+                          phx-click="view_poll_details"
+                          phx-value-poll_id={poll.id}
+                          phx-target={@myself}
+                          class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          View Details
+                        </button>
+
+                        <button
                           phx-click="edit_poll"
                           phx-value-poll_id={poll.id}
                           phx-target={@myself}
@@ -254,7 +336,31 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
             </div>
           </div>
         <% end %>
-      </div>
+          </div>
+        <% else %>
+          <!-- Empty State -->
+          <div class="px-6 py-12 text-center">
+            <div class="mx-auto w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+              <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No polls yet</h3>
+            <p class="text-sm text-gray-600 mb-6">
+              Create your first poll to gather input from event participants.
+            </p>
+            <button
+              phx-click="create_poll"
+              phx-target={@myself}
+              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Create Your First Poll
+            </button>
+          </div>
+        <% end %>
 
       <!-- Poll Creation Modal -->
       <%= if @showing_creation_modal do %>
@@ -266,6 +372,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           show={true}
           poll={@editing_poll}
         />
+      <% end %>
       <% end %>
     </div>
     """
@@ -834,14 +941,14 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   end
 
   @impl true
-  def handle_event("view_poll_details", %{"poll-id" => poll_id}, socket) do
+  def handle_event("view_poll_details", %{"poll_id" => poll_id}, socket) do
     poll_id = String.to_integer(poll_id)
-    selected_poll = Enum.find(socket.assigns.event.polls, &(&1.id == poll_id))
+    selected_poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
 
-    {:noreply,
-     socket
-     |> assign(:selected_poll, selected_poll)
-     |> assign(:active_view, "poll_details")}
+    # Send message to parent LiveView to handle poll details view
+    send(self(), {:view_poll_details, selected_poll})
+
+    {:noreply, socket |> assign(:open_poll_menu, nil)}
   end
 
   @impl true
@@ -849,10 +956,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     # Notify parent to close poll details view
     send(self(), {:close_poll_details})
 
-    {:noreply,
-     socket
-     |> assign(:selected_poll, nil)
-     |> assign(:active_view, "overview")}
+    {:noreply, socket}
   end
 
   @impl true
@@ -1013,12 +1117,26 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     {:noreply, assign(socket, :error_message, "Duplicate option detected: #{message.suggested_option.title}")}
   end
 
-  def handle_info({:poll_saved, _poll, _message}, socket) do
-    # Close modal after successful poll save/update
-    {:noreply,
-     socket
-     |> assign(:showing_creation_modal, false)
-     |> assign(:editing_poll, nil)}
+  def handle_info({:poll_saved, poll, message}, socket) do
+    # Smart redirect: After poll creation, redirect to poll details view
+    # This makes option addition more discoverable
+    # Only redirect for new polls (not edited polls)
+    if String.contains?(message, "created") do
+      {:noreply,
+       socket
+       |> assign(:showing_creation_modal, false)
+       |> assign(:editing_poll, nil)
+       |> assign(:selected_poll, poll)
+       |> assign(:active_view, "poll_details")
+       |> assign(:success_message, "Poll created successfully! Add options to get started.")}
+    else
+      # For edited polls, just close the modal without redirecting
+      {:noreply,
+       socket
+       |> assign(:showing_creation_modal, false)
+       |> assign(:editing_poll, nil)
+       |> assign(:success_message, message)}
+    end
   end
 
   # Handle messages from child components
@@ -1158,24 +1276,27 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     end
   end
 
-  defp format_relative_time(datetime) when is_nil(datetime), do: "unknown"
-
+  # Helper function to format time for display
   defp format_relative_time(datetime) do
-    now = DateTime.utc_now()
+    case datetime do
+      nil -> "recently"
+      datetime ->
+        now = DateTime.utc_now()
+        datetime_utc = case datetime do
+          %DateTime{} = dt -> dt
+          %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
+          _ -> now
+        end
 
-    # Convert NaiveDateTime to DateTime if needed
-    datetime_utc = case datetime do
-      %DateTime{} = dt -> dt
-      %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
-      _ -> now
-    end
+        diff_seconds = DateTime.diff(now, datetime_utc, :second)
 
-    case DateTime.diff(now, datetime_utc, :day) do
-      0 -> "today"
-      1 -> "yesterday"
-      days when days < 7 -> "#{days} days ago"
-      days when days < 30 -> "#{div(days, 7)} weeks ago"
-      days -> "#{div(days, 30)} months ago"
+        cond do
+          diff_seconds < 60 -> "just now"
+          diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
+          diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
+          diff_seconds < 2592000 -> "#{div(diff_seconds, 86400)}d ago"
+          true -> "#{div(diff_seconds, 2592000)}mo ago"
+        end
     end
   end
 end
