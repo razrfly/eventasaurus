@@ -289,7 +289,7 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
       id: option.id,
       title: option.title,
       description: option.description,
-      is_visible: option.status == "active",
+      is_visible: option_visible?(option),
       order_index: option.order_index,
       external_id: option.external_id,
       external_data: option.external_data,
@@ -325,7 +325,7 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
 
   defp count_hidden_options(poll) do
     (poll.poll_options || [])
-    |> Enum.count(& &1.status != "active")
+    |> Enum.count(&option_hidden?/1)
   end
 
   defp count_poll_participants(_poll) do
@@ -335,6 +335,21 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
   end
 
   ## Helper Functions
+
+  defp option_visible?(option) do
+    case option.status do
+      "active" -> true
+      _ -> false
+    end
+  end
+
+  defp option_hidden?(option) do
+    case option.status do
+      "active" -> false
+      nil -> false  # Consider nil status as not hidden
+      _ -> true
+    end
+  end
 
   defp extract_similarity_scores(duplicate_options) do
     Enum.map(duplicate_options, fn option ->

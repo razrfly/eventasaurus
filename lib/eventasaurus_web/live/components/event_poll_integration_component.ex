@@ -33,16 +33,11 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   require Logger
 
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.Event
-  alias EventasaurusApp.Accounts.User
   alias EventasaurusWeb.Services.PollPubSubService
 
   # Import the other polling components
   alias EventasaurusWeb.PollCreationComponent
-  alias EventasaurusWeb.PollDetailsComponent
   alias EventasaurusWeb.OptionSuggestionComponent
-  alias EventasaurusWeb.VotingInterfaceComponent
-  alias EventasaurusWeb.ResultsDisplayComponent
 
   @impl true
   def mount(socket) do
@@ -137,7 +132,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     <div class="event-poll-integration-component">
       <%= if assigns[:show_poll_details] && assigns[:selected_poll] do %>
         <!-- Poll Details View -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="bg-white border-t border-gray-200">
           <!-- Back Button -->
           <div class="px-6 py-4 border-b border-gray-200">
             <button
@@ -153,40 +148,53 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
             </button>
           </div>
 
-          <!-- Poll Header -->
+          <!-- Unified Poll & Suggestion Header -->
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900"><%= @selected_poll.title %></h2>
-            <%= if @selected_poll.description && @selected_poll.description != "" do %>
-              <p class="mt-1 text-sm text-gray-600"><%= @selected_poll.description %></p>
-            <% end %>
-            <div class="mt-2 flex items-center gap-3">
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                <%= String.capitalize(to_string(Map.get(@selected_poll, :poll_type, "poll"))) %>
-              </span>
-              <span class="text-xs text-gray-500">
-                <%= if @selected_poll.inserted_at do %>
-                  Created <%= format_relative_time(@selected_poll.inserted_at) %>
-                <% else %>
-                  Created recently
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h2 class="text-lg font-semibold text-gray-900"><%= @selected_poll.title %></h2>
+                <%= if @selected_poll.description && @selected_poll.description != "" do %>
+                  <p class="mt-1 text-sm text-gray-600"><%= @selected_poll.description %></p>
                 <% end %>
-              </span>
+                <div class="mt-2 flex items-center gap-3">
+                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <%= String.capitalize(to_string(Map.get(@selected_poll, :poll_type, "poll"))) %>
+                  </span>
+                  <span class="text-xs text-gray-500">
+                    <%= if @selected_poll.inserted_at do %>
+                      Created <%= format_relative_time(@selected_poll.inserted_at) %>
+                    <% else %>
+                      Created recently
+                    <% end %>
+                  </span>
+                </div>
+                <!-- Suggestion Description -->
+                <p class="mt-3 text-sm text-gray-500">
+                  Add <%= String.downcase(to_string(Map.get(@selected_poll, :poll_type, "options"))) %> for
+                  <%= case Map.get(@selected_poll, :voting_system, "binary") do %>
+                    <% "binary" -> %> yes/no voting
+                    <% "approval" -> %> approval voting
+                    <% "ranked" -> %> ranked choice voting
+                    <% "star" -> %> star rating
+                    <% _ -> %> voting
+                  <% end %>
+                </p>
+              </div>
             </div>
           </div>
 
           <!-- Poll Options Component -->
-          <div class="p-6">
-            <.live_component
-              module={OptionSuggestionComponent}
-              id={"poll-options-#{@selected_poll.id}"}
-              poll={@selected_poll}
-              user={@current_user}
-              poll_id={@selected_poll.id}
-              event={@event}
-              user_id={@current_user.id}
-              can_suggest={true}
-              is_creator={@is_organizer}
-            />
-          </div>
+          <.live_component
+            module={OptionSuggestionComponent}
+            id={"poll-options-#{@selected_poll.id}"}
+            poll={@selected_poll}
+            user={@current_user}
+            poll_id={@selected_poll.id}
+            event={@event}
+            user_id={@current_user.id}
+            can_suggest={true}
+            is_creator={@is_organizer}
+          />
         </div>
       <% else %>
         <!-- Poll List View -->
@@ -350,7 +358,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
               Create your first poll to gather input from event participants.
             </p>
             <button
-              phx-click="create_poll"
+              phx-click="show_creation_modal"
               phx-target={@myself}
               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
@@ -1121,7 +1129,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     # Smart redirect: After poll creation, redirect to poll details view
     # This makes option addition more discoverable
     # Only redirect for new polls (not edited polls)
-    if String.contains?(message, "created") do
+    if message =~ ~r/created/i do
       {:noreply,
        socket
        |> assign(:showing_creation_modal, false)
@@ -1284,18 +1292,26 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         now = DateTime.utc_now()
         datetime_utc = case datetime do
           %DateTime{} = dt -> dt
-          %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
-          _ -> now
+          %NaiveDateTime{} = ndt ->
+            case DateTime.from_naive(ndt, "Etc/UTC") do
+              {:ok, dt} -> dt
+              {:error, _} -> now
+            end
+          _ ->
+            # Log unexpected type for debugging
+            require Logger
+            Logger.warning("Unexpected datetime type in format_relative_time: #{inspect(datetime)}")
+            now
         end
 
-        diff_seconds = DateTime.diff(now, datetime_utc, :second)
+        diff = DateTime.diff(now, datetime_utc, :second)
 
         cond do
-          diff_seconds < 60 -> "just now"
-          diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
-          diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
-          diff_seconds < 2592000 -> "#{div(diff_seconds, 86400)}d ago"
-          true -> "#{div(diff_seconds, 2592000)}mo ago"
+          diff < 60 -> "just now"
+          diff < 3600 -> "#{div(diff, 60)}m ago"
+          diff < 86400 -> "#{div(diff, 3600)}h ago"
+          diff < 2592000 -> "#{div(diff, 86400)}d ago"
+          true -> "#{div(diff, 2592000)}mo ago"
         end
     end
   end

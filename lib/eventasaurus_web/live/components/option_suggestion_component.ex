@@ -50,9 +50,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     cond do
       assigns[:action] == :perform_search ->
         # Perform the search and update the socket
+        parent_pid = self()
         Task.start(fn ->
           results = perform_search(assigns.search_query, assigns.poll_type)
-          send_update(__MODULE__,
+          send_update(parent_pid, __MODULE__,
             id: socket.assigns.id,
             action: :search_complete,
             search_results: results,
@@ -81,9 +82,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         })
 
         # Calculate user's suggestion count
-        user_suggestion_count = Enum.count(assigns.poll.poll_options, fn option ->
-          option.suggested_by_id == assigns.user.id && option.status == "active"
-        end)
+        user_suggestion_count = case assigns.poll.poll_options do
+          %Ecto.Association.NotLoaded{} -> 0
+          poll_options when is_list(poll_options) ->
+            Enum.count(poll_options, fn option ->
+              option.suggested_by_id == assigns.user.id && option.status == "active"
+            end)
+          _ -> 0
+        end
 
         # Check if user can suggest more options
         max_options = assigns.poll.max_options_per_user || 3
@@ -108,7 +114,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> then(fn socket ->
            # Handle editing mode after all other assigns are set
            if Map.get(assigns, :editing_option_id) do
-             option = Enum.find(assigns.poll.poll_options, fn opt -> opt.id == assigns.editing_option_id end)
+             option = case assigns.poll.poll_options do
+               %Ecto.Association.NotLoaded{} -> nil
+               poll_options when is_list(poll_options) ->
+                 Enum.find(poll_options, fn opt -> opt.id == assigns.editing_option_id end)
+               _ -> nil
+             end
+
              if option do
                edit_changeset = PollOption.changeset(option, %{})
                socket
@@ -127,19 +139,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="bg-white shadow rounded-lg">
-      <!-- Header -->
-      <div class="px-6 py-4 border-b border-gray-200">
+    <div>
+      <!-- Add Option Button Area -->
+      <div class="px-6 py-3 bg-gray-50 border-b border-gray-200">
         <div class="flex items-center justify-between">
-          <div>
-            <h3 class="text-lg font-medium text-gray-900">
-              <%= get_phase_title(@poll.poll_type) %>
-            </h3>
-            <p class="text-sm text-gray-500">
-              <%= get_phase_description(@poll.poll_type, @poll.voting_system) %>
-            </p>
+          <div class="text-sm text-gray-500">
+            <%= @user_suggestion_count %>/<%= @max_options %> suggestions used
           </div>
-
           <%= if @can_suggest_more do %>
             <button
               type="button"
@@ -153,8 +159,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
               <%= suggest_button_text(@poll.poll_type) %>
             </button>
           <% else %>
-            <div class="text-sm text-gray-500">
-              You've reached your limit of <%= @max_options %> suggestions
+            <div class="text-sm text-gray-500 font-medium">
+              Limit reached (<%= @max_options %> suggestions)
             </div>
           <% end %>
         </div>
@@ -175,7 +181,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     type="text"
                     name="poll_option[title]"
                     id="option_title"
-                    value={@changeset.changes[:title] || ""}
+                    value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
                     placeholder={option_title_placeholder(@poll.poll_type)}
                     phx-debounce="300"
                     phx-change="search_external_apis"
@@ -279,7 +285,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   rows="2"
                   placeholder={option_description_placeholder(@poll.poll_type)}
                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                ><%= @changeset.changes[:description] || "" %></textarea>
+                ><%= Map.get(@changeset.changes, :description, Map.get(@changeset.data, :description, "")) %></textarea>
               </div>
 
               <div class="flex items-center justify-between">
@@ -331,7 +337,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         data-can-reorder={@is_creator}
         id={"option-list-#{@id}"}
       >
-        <%= if Enum.empty?(@poll.poll_options) do %>
+        <%= if safe_poll_options_empty?(@poll.poll_options) do %>
           <!-- Enhanced Empty State -->
           <div class="px-6 py-16 text-center">
             <!-- Poll type specific icon -->
@@ -439,6 +445,22 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         ><%= @edit_changeset.changes[:description] || option.description || "" %></textarea>
                       </div>
 
+                      <%= if @is_creator do %>
+                        <div class="flex items-center">
+                          <input
+                            type="checkbox"
+                            name="poll_option[status]"
+                            id={"edit_hidden_#{option.id}"}
+                            value="hidden"
+                            checked={(@edit_changeset.changes[:status] || option.status) == "hidden"}
+                            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label for={"edit_hidden_#{option.id}"} class="ml-2 block text-sm text-gray-900">
+                            Hide this option from participants
+                          </label>
+                        </div>
+                      <% end %>
+
                       <div class="flex space-x-3">
                         <button
                           type="submit"
@@ -524,17 +546,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <% end %>
 
                     <%= if @is_creator do %>
-                      <!-- Hide/Show toggle for poll creator -->
-                      <button
-                        type="button"
-                        phx-click={if option.status == "active", do: "hide_option", else: "show_option"}
-                        phx-value-option-id={option.id}
-                        phx-target={@myself}
-                        class={"#{if option.status == "active", do: "text-orange-600 hover:text-orange-900", else: "text-green-600 hover:text-green-900"} text-sm font-medium touch-target interactive-element"}
-                      >
-                        <%= if option.status == "active", do: "Hide", else: "Show" %>
-                      </button>
-
                       <!-- Remove option button -->
                       <button
                         type="button"
@@ -560,13 +571,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-500">
-            <%= length(@poll.poll_options) %> <%= option_type_text(@poll.poll_type) %> suggested
+            <%= safe_poll_options_count(@poll.poll_options) %> <%= option_type_text(@poll.poll_type) %> suggested
             <%= if @poll.list_building_deadline do %>
               • Deadline: <%= format_deadline(@poll.list_building_deadline) %>
             <% end %>
           </div>
 
-          <%= if @is_creator && length(@poll.poll_options) > 0 do %>
+                      <%= if @is_creator && safe_poll_options_count(@poll.poll_options) > 0 do %>
             <button
               type="button"
               phx-click="start_voting"
@@ -730,72 +741,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   @impl true
-  def handle_event("hide_option", %{"option-id" => option_id}, socket) do
-    case safe_string_to_integer(option_id) do
-      {:ok, option_id} ->
-        option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-        if option do
-          case Events.update_poll_option_status(option, "hidden") do
-            {:ok, option} ->
-              # Broadcast visibility change via PubSub
-              PollPubSubService.broadcast_option_visibility_changed(
-                socket.assigns.poll,
-                option,
-                :hidden,
-                socket.assigns.user
-              )
-
-              send(self(), {:option_updated, option})
-              {:noreply, socket}
-
-            {:error, _} ->
-              send(self(), {:show_error, "Failed to hide option"})
-              {:noreply, socket}
-          end
-        else
-          send(self(), {:show_error, "Option not found"})
-          {:noreply, socket}
-        end
-      {:error, _} ->
-        send(self(), {:show_error, "Invalid option ID"})
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_event("show_option", %{"option-id" => option_id}, socket) do
-    case safe_string_to_integer(option_id) do
-      {:ok, option_id} ->
-        option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-        if option do
-          case Events.update_poll_option_status(option, "active") do
-            {:ok, option} ->
-              # Broadcast visibility change via PubSub
-              PollPubSubService.broadcast_option_visibility_changed(
-                socket.assigns.poll,
-                option,
-                :shown,
-                socket.assigns.user
-              )
-
-              send(self(), {:option_updated, option})
-              {:noreply, socket}
-
-            {:error, _} ->
-              send(self(), {:show_error, "Failed to show option"})
-              {:noreply, socket}
-          end
-        else
-          send(self(), {:show_error, "Option not found"})
-          {:noreply, socket}
-        end
-      {:error, _} ->
-        send(self(), {:show_error, "Invalid option ID"})
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
   def handle_event("remove_option", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id_int} ->
@@ -828,7 +773,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("edit_option", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id_int} ->
-        option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == option_id_int end)
+        option = case socket.assigns.poll.poll_options do
+          %Ecto.Association.NotLoaded{} -> nil
+          poll_options when is_list(poll_options) ->
+            Enum.find(poll_options, fn opt -> opt.id == option_id_int end)
+          _ -> nil
+        end
+
         if option do
           edit_changeset = PollOption.changeset(option, %{})
           {:noreply,
@@ -852,9 +803,24 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def handle_event("validate_edit", %{"poll_option" => option_params}, socket) do
-    option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
-    changeset = PollOption.changeset(option, option_params)
-    {:noreply, assign(socket, :edit_changeset, changeset)}
+    # Add nil check before accessing editing_option_id
+    if socket.assigns.editing_option_id do
+      option = case socket.assigns.poll.poll_options do
+        %Ecto.Association.NotLoaded{} -> nil
+        poll_options when is_list(poll_options) ->
+          Enum.find(poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
+        _ -> nil
+      end
+
+      if option do
+        changeset = PollOption.changeset(option, option_params)
+        {:noreply, assign(socket, :edit_changeset, changeset)}
+      else
+        {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -863,8 +829,30 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       {:ok, option_id_int} ->
         case Events.get_poll_option(option_id_int) do
           %PollOption{} = option ->
-            case Events.update_poll_option(option, option_params) do
+            # Handle status field - checkbox sends "hidden" when checked, nothing when unchecked
+            updated_params = case Map.get(option_params, "status") do
+              "hidden" -> option_params
+              _ -> Map.put(option_params, "status", "active")
+            end
+
+            case Events.update_poll_option(option, updated_params) do
               {:ok, updated_option} ->
+                # Broadcast visibility change if status changed
+                if option.status != updated_option.status do
+                  status_atom = case updated_option.status do
+                    "hidden" -> :hidden
+                    "active" -> :shown
+                    _ -> :shown
+                  end
+
+                  PollPubSubService.broadcast_option_visibility_changed(
+                    socket.assigns.poll,
+                    updated_option,
+                    status_atom,
+                    socket.assigns.user
+                  )
+                end
+
                 send(self(), {:option_updated, updated_option})
                 {:noreply, assign(socket, :editing_option_id, nil)}
 
@@ -977,9 +965,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   def handle_info({:perform_external_search, query, poll_type}, socket) do
     # Perform the search in the background
+    parent_pid = self()
     Task.start(fn ->
       results = perform_search(query, poll_type)
-      send(self(), {:search_results, query, results})
+      send(parent_pid, {:search_results, query, results})
     end)
 
     {:noreply, socket}
@@ -994,9 +983,16 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case EventasaurusWeb.Services.RichDataManager.search(query, search_options) do
       {:ok, results_by_provider} ->
         # Flatten and limit results from all providers
+        # Each provider returns {:ok, results} or {:error, reason}
         results_by_provider
         |> Map.values()
-        |> List.flatten()
+        |> Enum.flat_map(fn
+          {:ok, results} when is_list(results) -> results
+          {:ok, result} -> [result]  # Handle single result
+          {:error, _} -> []
+          results when is_list(results) -> results  # Handle direct results
+          _ -> []
+        end)
         |> Enum.take(8)  # Limit to 8 results for UI performance
 
       {:error, _reason} ->
@@ -1036,9 +1032,24 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   # Template helper functions
 
   defp sort_options_by_order(poll_options) do
-    poll_options
+    safe_poll_options(poll_options)
     |> Enum.sort_by(fn option -> option.order_index || 0 end, :asc)
   end
+
+  # Helper function to safely handle poll_options that might be NotLoaded
+  defp safe_poll_options(%Ecto.Association.NotLoaded{}), do: []
+  defp safe_poll_options(poll_options) when is_list(poll_options), do: poll_options
+  defp safe_poll_options(_), do: []
+
+  # Helper function to safely get the count of poll options
+  defp safe_poll_options_count(%Ecto.Association.NotLoaded{}), do: 0
+  defp safe_poll_options_count(poll_options) when is_list(poll_options), do: length(poll_options)
+  defp safe_poll_options_count(_), do: 0
+
+  # Helper function to safely check if poll options are empty
+  defp safe_poll_options_empty?(%Ecto.Association.NotLoaded{}), do: true
+  defp safe_poll_options_empty?(poll_options) when is_list(poll_options), do: Enum.empty?(poll_options)
+  defp safe_poll_options_empty?(_), do: true
 
   defp get_result_image(result) do
     case result.images do
@@ -1087,27 +1098,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   # UI helper functions
-
-  defp get_phase_title(poll_type) do
-    case poll_type do
-      "movie" -> "Suggest Movies"
-      "restaurant" -> "Suggest Restaurants"
-      "activity" -> "Suggest Activities"
-      _ -> "Suggest Options"
-    end
-  end
-
-  defp get_phase_description(poll_type, voting_system) do
-    type_text = option_type_text(poll_type)
-
-    case voting_system do
-      "binary" -> "Add #{type_text} for yes/no voting"
-      "approval" -> "Add #{type_text} for approval voting"
-      "ranked" -> "Add #{type_text} for ranked choice voting"
-      "star" -> "Add #{type_text} for star rating"
-      _ -> "Add #{type_text} to vote on"
-    end
-  end
 
   defp suggest_button_text(poll_type) do
     case poll_type do
@@ -1160,8 +1150,16 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     # Convert NaiveDateTime to DateTime if needed
     datetime_utc = case datetime do
       %DateTime{} = dt -> dt
-      %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
-      _ -> DateTime.utc_now()  # fallback
+      %NaiveDateTime{} = ndt ->
+        case DateTime.from_naive(ndt, "Etc/UTC") do
+          {:ok, dt} -> dt
+          {:error, _} -> DateTime.utc_now()
+        end
+      _ ->
+        # Log unexpected type for debugging
+        require Logger
+        Logger.warning("Unexpected datetime type in format_relative_time: #{inspect(datetime)}")
+        DateTime.utc_now()
     end
 
     diff = DateTime.diff(now, datetime_utc, :second)
