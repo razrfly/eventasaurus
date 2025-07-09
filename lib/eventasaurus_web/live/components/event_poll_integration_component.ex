@@ -53,7 +53,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
     @impl true
   def update(assigns, socket) do
-    # Handle partial updates - if event is not in assigns, keep the existing one
+        # Handle partial updates - if event is not in assigns, keep the existing one
     event = assigns[:event] || socket.assigns[:event]
     current_user = assigns[:current_user] || socket.assigns[:current_user]
 
