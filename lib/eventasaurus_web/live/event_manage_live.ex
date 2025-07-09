@@ -892,7 +892,7 @@ defmodule EventasaurusWeb.EventManageLive do
   def handle_info({:edit_option, option_id}, socket) do
     # Edit option action triggered (from component) - trigger edit mode in component
     case safe_string_to_integer(option_id) do
-      option_id_int when is_integer(option_id_int) ->
+      {:ok, option_id_int} ->
         case Events.get_poll_option(option_id_int) do
           %PollOption{} = option ->
             # Send update to the component to enable edit mode for this option
@@ -1352,9 +1352,11 @@ defmodule EventasaurusWeb.EventManageLive do
     event = socket.assigns.event
 
     try do
-      # Load all polls for the event safely
+      # Load all polls for the event safely with consistent ordering
       polls = case Events.list_polls(event) do
-        polls when is_list(polls) -> polls
+        polls when is_list(polls) ->
+          # Sort by ID to ensure consistent ordering across renders
+          Enum.sort_by(polls, & &1.id)
         _ -> []
       end
 
@@ -1420,7 +1422,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp safe_string_to_integer(str) when is_binary(str) do
     case Integer.parse(str) do
-      {int, ""} -> int
+      {int, ""} -> {:ok, int}
       _ -> {:error, :invalid_format}
     end
   end
@@ -1452,24 +1454,8 @@ defmodule EventasaurusWeb.EventManageLive do
 
   # Handle specific messages that need custom logic
   defp handle_specific_message({:edit_option, option_id}, socket) do
-    case safe_string_to_integer(option_id) do
-      option_id_int when is_integer(option_id_int) ->
-        case Events.get_poll_option(option_id_int) do
-          %PollOption{} = option ->
-            # Send update to the component to enable edit mode for this option
-            send_update(EventasaurusWeb.OptionSuggestionComponent,
-              id: "poll-options-#{option.poll_id}",
-              editing_option_id: option.id
-            )
-            {:noreply, socket}
-
-          nil ->
-            {:noreply, put_flash(socket, :error, "Option not found")}
-        end
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Invalid option ID")}
-    end
+    # Delegate to the existing handle_info implementation to avoid duplication
+    handle_info({:edit_option, option_id}, socket)
   end
 
 end
