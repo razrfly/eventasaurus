@@ -184,8 +184,12 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     |> assign(:release_info, get_release_info(rich_data))
   end
 
-  defp get_title(rich_data) do
-    rich_data["title"] || rich_data["name"] || "Unknown Title"
+    defp get_title(rich_data) do
+    # Hero section data has title as atom key from adapter
+    rich_data[:title] ||
+    rich_data["title"] ||
+    rich_data["name"] ||
+    "Unknown Title"
   end
 
   defp has_backdrop?(rich_data) do
