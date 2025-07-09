@@ -92,8 +92,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         end
 
         # Check if user can suggest more options
-        max_options = assigns.poll.max_options_per_user || 3
-        can_suggest_more = user_suggestion_count < max_options
+        # Organizers have no limit, regular users have the configured limit
+        {max_options, can_suggest_more} =
+          if assigns.is_creator do
+            {nil, true}  # Organizers can add unlimited options
+          else
+            max_opts = assigns.poll.max_options_per_user || 3
+            {max_opts, user_suggestion_count < max_opts}
+          end
 
         {:ok,
          socket
@@ -144,7 +150,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       <div class="px-6 py-3 bg-gray-50 border-b border-gray-200">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-500">
-            <%= @user_suggestion_count %>/<%= @max_options %> suggestions used
+            <%= if @is_creator do %>
+              <%= @user_suggestion_count %> options added
+            <% else %>
+              <%= @user_suggestion_count %>/<%= @max_options %> suggestions used
+            <% end %>
           </div>
           <%= if @can_suggest_more do %>
             <button
@@ -302,7 +312,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
               <div class="flex items-center justify-between">
                 <div class="text-sm text-gray-500">
-                  <%= @user_suggestion_count %>/<%= @max_options %> suggestions used
+                  <%= if @is_creator do %>
+                    <%= @user_suggestion_count %> options added
+                  <% else %>
+                    <%= @user_suggestion_count %>/<%= @max_options %> suggestions used
+                  <% end %>
                 </div>
                 <div class="flex space-x-3">
                   <button
