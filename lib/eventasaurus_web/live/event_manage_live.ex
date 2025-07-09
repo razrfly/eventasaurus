@@ -689,8 +689,9 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_info({:poll_saved, poll, %{action: action, message: message}}, socket) do
-    # Reload polls data to include the new poll
+    # Reload polls data to include the new poll with consistent ordering
     polls = Events.list_polls(socket.assigns.event)
+    |> Enum.sort_by(& &1.id)
 
     # Update the poll integration component to close the modal
     send_update(EventasaurusWeb.EventPollIntegrationComponent,
@@ -728,13 +729,14 @@ defmodule EventasaurusWeb.EventManageLive do
     handle_info({:poll_saved, poll, %{action: action, message: message}}, socket)
   end
 
-  @impl true
+      @impl true
   def handle_info({:view_poll_details, poll}, socket) do
-    # Handle poll viewing/editing
+    # Handle poll viewing/editing - MUST set active_tab to "polls"
     {:noreply,
      socket
      |> assign(:selected_poll, poll)
-     |> assign(:show_poll_details, true)}
+     |> assign(:show_poll_details, true)
+     |> assign(:active_tab, "polls")}
   end
 
   @impl true
@@ -1389,8 +1391,9 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp load_poll_count(event) do
     try do
-      # Load polls and count them
+      # Load polls with consistent ordering and count them
       polls = Events.list_polls(event)
+      |> Enum.sort_by(& &1.id)
       length(polls)
     rescue
       _ -> 0
