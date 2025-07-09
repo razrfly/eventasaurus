@@ -50,9 +50,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     cond do
       assigns[:action] == :perform_search ->
         # Perform the search and update the socket
+        parent_pid = self()
         Task.start(fn ->
           results = perform_search(assigns.search_query, assigns.poll_type)
-          send_update(__MODULE__,
+          send_update(parent_pid, __MODULE__,
             id: socket.assigns.id,
             action: :search_complete,
             search_results: results,
@@ -169,7 +170,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     type="text"
                     name="poll_option[title]"
                     id="option_title"
-                    value={@changeset.changes[:title] || ""}
+                    value={Phoenix.HTML.Form.input_value(@form, :title)}
                     placeholder={option_title_placeholder(@poll.poll_type)}
                     phx-debounce="300"
                     phx-change="search_external_apis"
@@ -273,7 +274,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   rows="2"
                   placeholder={option_description_placeholder(@poll.poll_type)}
                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                ><%= @changeset.changes[:description] || "" %></textarea>
+                ><%= Phoenix.HTML.Form.input_value(@form, :description) %></textarea>
               </div>
 
               <div class="flex items-center justify-between">
@@ -785,9 +786,18 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def handle_event("validate_edit", %{"poll_option" => option_params}, socket) do
-    option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
-    changeset = PollOption.changeset(option, option_params)
-    {:noreply, assign(socket, :edit_changeset, changeset)}
+    # Add nil check before accessing editing_option_id
+    if socket.assigns.editing_option_id do
+      option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
+      if option do
+        changeset = PollOption.changeset(option, option_params)
+        {:noreply, assign(socket, :edit_changeset, changeset)}
+      else
+        {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -932,9 +942,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   def handle_info({:perform_external_search, query, poll_type}, socket) do
     # Perform the search in the background
+    parent_pid = self()
     Task.start(fn ->
       results = perform_search(query, poll_type)
-      send(self(), {:search_results, query, results})
+      send(parent_pid, {:search_results, query, results})
     end)
 
     {:noreply, socket}
@@ -1043,27 +1054,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # UI helper functions
 
-  defp get_phase_title(poll_type) do
-    case poll_type do
-      "movie" -> "Suggest Movies"
-      "restaurant" -> "Suggest Restaurants"
-      "activity" -> "Suggest Activities"
-      _ -> "Suggest Options"
-    end
-  end
-
-  defp get_phase_description(poll_type, voting_system) do
-    type_text = option_type_text(poll_type)
-
-    case voting_system do
-      "binary" -> "Add #{type_text} for yes/no voting"
-      "approval" -> "Add #{type_text} for approval voting"
-      "ranked" -> "Add #{type_text} for ranked choice voting"
-      "star" -> "Add #{type_text} for star rating"
-      _ -> "Add #{type_text} to vote on"
-    end
-  end
-
   defp suggest_button_text(poll_type) do
     case poll_type do
       "movie" -> "Suggest Movie"
@@ -1115,8 +1105,16 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     # Convert NaiveDateTime to DateTime if needed
     datetime_utc = case datetime do
       %DateTime{} = dt -> dt
-      %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
-      _ -> DateTime.utc_now()  # fallback
+      %NaiveDateTime{} = ndt ->
+        case DateTime.from_naive(ndt, "Etc/UTC") do
+          {:ok, dt} -> dt
+          {:error, _} -> DateTime.utc_now()
+        end
+      _ ->
+        # Log unexpected type for debugging
+        require Logger
+        Logger.warning("Unexpected datetime type in format_relative_time: #{inspect(datetime)}")
+        DateTime.utc_now()
     end
 
     diff = DateTime.diff(now, datetime_utc, :second)

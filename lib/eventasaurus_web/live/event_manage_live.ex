@@ -688,63 +688,7 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_info(:refresh_analytics, socket) do
-    event = socket.assigns.event
-    analytics_data = fetch_analytics_data(event.id)
-
-    {:noreply,
-     socket
-     |> assign(:analytics_data, analytics_data)}
-  end
-
-  @impl true
-  def handle_info({:search_users_for_organizers, query}, socket) do
-    handle_user_search(socket, query, :initial)
-  end
-
-  @impl true
-  def handle_info({:search_users_for_organizers, query, :load_more}, socket) do
-    handle_user_search(socket, query, :load_more)
-  end
-
-  @impl true
-  def handle_info(:load_historical_suggestions, socket) do
-    event = socket.assigns.event
-    organizer = socket.assigns.user
-
-    try do
-      # Get current participants' user IDs to exclude them from suggestions
-      current_participant_user_ids = socket.assigns.participants
-                                   |> Enum.map(& &1.user_id)
-
-      # Get historical participants using our guest invitation module
-      suggestions = Events.get_participant_suggestions(organizer,
-        exclude_event_ids: [event.id],
-        exclude_user_ids: current_participant_user_ids,
-        limit: 20
-      )
-
-      {:noreply,
-       socket
-       |> assign(:historical_suggestions, suggestions)
-       |> assign(:suggestions_loading, false)}
-    rescue
-      error ->
-        require Logger
-        Logger.error("Guest invitation modal crashed while loading suggestions: #{inspect(error)}")
-        Logger.error("Stacktrace: #{Exception.format_stacktrace(__STACKTRACE__)}")
-        Logger.error("Socket assigns: event=#{event.id}, user=#{organizer.id}")
-
-        {:noreply,
-         socket
-         |> assign(:historical_suggestions, [])
-         |> assign(:suggestions_loading, false)
-         |> put_flash(:error, "Failed to load suggestions")}
-    end
-  end
-
-    @impl true
-  def handle_info({:poll_saved, poll, message}, socket) do
+  def handle_info({:poll_saved, poll, %{action: action, message: message}}, socket) do
     # Reload polls data to include the new poll
     polls = Events.list_polls(socket.assigns.event)
 
@@ -757,7 +701,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
     # Smart redirect: For new poll creation, redirect to poll details view
     # For poll edits, just close the modal
-    if String.contains?(message, "created") do
+    if action == :created do
       {:noreply,
        socket
        |> assign(:polls, polls)
@@ -774,6 +718,14 @@ defmodule EventasaurusWeb.EventManageLive do
        |> assign(:show_poll_details, false)
        |> put_flash(:info, message)}
     end
+  end
+
+  # Fallback for old message format (backward compatibility)
+  @impl true
+  def handle_info({:poll_saved, poll, message}, socket) when is_binary(message) do
+    # Use pattern matching instead of String.contains for better performance and safety
+    action = if message =~ ~r/created/i, do: :created, else: :updated
+    handle_info({:poll_saved, poll, %{action: action, message: message}}, socket)
   end
 
   @impl true
@@ -966,57 +918,15 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_info({:show_error, message}, socket) do
-    # Error message from component - show error flash
-    {:noreply, put_flash(socket, :error, message)}
-  end
-
-  @impl true
   def handle_info({:search_results, _query, _results}, socket) do
     # Search results from component - just acknowledge for now
     {:noreply, socket}
   end
 
   @impl true
-  def handle_info(%{type: :option_visibility_changed} = _message, socket) do
-    # Option visibility was changed - refresh poll data
-    {:noreply,
-     socket
-     |> load_poll_data()
-     |> put_flash(:info, "Option updated successfully")}
-  end
-
-  @impl true
   def handle_info(%{type: :duplicate_detected} = _message, socket) do
     # Duplicate option detected - just acknowledge for now
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info(%{type: :poll_phase_changed} = _message, socket) do
-    # Poll phase changed - refresh poll data
-    {:noreply,
-     socket
-     |> load_poll_data()
-     |> put_flash(:info, "Poll phase updated")}
-  end
-
-  @impl true
-  def handle_info(%{type: :options_reordered} = _message, socket) do
-    # Options were reordered - refresh poll data
-    {:noreply,
-     socket
-     |> load_poll_data()
-     |> put_flash(:info, "Options reordered successfully")}
-  end
-
-  @impl true
-  def handle_info(%{type: :bulk_moderation_action} = _message, socket) do
-    # Bulk moderation performed - refresh poll data
-    {:noreply,
-     socket
-     |> load_poll_data()
-     |> put_flash(:info, "Options updated successfully")}
   end
 
   @impl true
@@ -1031,96 +941,40 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, socket}
   end
 
+
+
   @impl true
   def handle_info({:js_push, _command, _params, _id}, socket) do
     # Handle JavaScript push commands - for now just acknowledge
     {:noreply, socket}
   end
 
+  # Generic handler for poll data refresh events (catch-all)
   @impl true
-  def handle_info({:perform_external_search, _query, _poll_type}, socket) do
-    # Handle external search request - for now just acknowledge
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:hide_dropdown, _id}, socket) do
-    # Handle hide dropdown request - for now just acknowledge
-    {:noreply, socket}
-  end
-
-  defp handle_user_search(socket, query, mode) do
-    event = socket.assigns.event
-    current_user = socket.assigns.user
-
-    # Determine offset based on mode
-    offset = case mode do
-      :initial -> 0
-      :load_more -> socket.assigns.organizer_search_offset
-    end
-
-    # Use Accounts context directly for better performance
-    search_opts = [
-      limit: 21,  # Get 21 to check if there are more results
-      offset: offset,
-      exclude_user_id: current_user.id,
-      event_id: event.id,
-      requesting_user_id: current_user.id
-    ]
-
-    try do
-      users = EventasaurusApp.Accounts.search_users_for_organizers(query, search_opts)
-
-      # Check if there are more results by seeing if we got 21 results
-      has_more = length(users) > 20
-      display_users = Enum.take(users, 20)  # Only show 20
-
-      # Format users for the template (ensure consistent structure)
-      formatted_users = Enum.map(display_users, fn user ->
-        %{
-          "id" => user.id,
-          "name" => user.name,
-          "username" => user.username,
-          "email" => user.email,
-          "profile_public" => user.profile_public,
-          "avatar_url" => EventasaurusApp.Avatars.generate_user_avatar(user, size: 40)
-        }
-      end)
-
-      # Update results based on mode
-      {updated_results, new_offset, new_total} = case mode do
-        :initial ->
-          {formatted_users, 20, length(formatted_users)}
-        :load_more ->
-          existing_results = socket.assigns.organizer_search_results
-          combined_results = existing_results ++ formatted_users
-          {combined_results, offset + 20, length(combined_results)}
-      end
-
-      {:noreply,
-       socket
-       |> assign(:organizer_search_results, updated_results)
-       |> assign(:organizer_search_loading, false)
-       |> assign(:organizer_search_error, nil)
-       |> assign(:organizer_search_offset, new_offset)
-       |> assign(:organizer_search_has_more, has_more)
-       |> assign(:organizer_search_total_shown, new_total)}
-
-    rescue
-      error ->
-        require Logger
-        Logger.error("User search failed: #{inspect(error)}")
-
+  def handle_info(message, socket) when is_map(message) or is_tuple(message) do
+    case extract_event_info(message) do
+      {:poll_data_refresh, flash_message} ->
         {:noreply,
          socket
-         |> assign(:organizer_search_results, [])
-         |> assign(:organizer_search_loading, false)
-         |> assign(:organizer_search_error, "Search failed. Please try again.")
-         |> assign(:organizer_search_offset, 0)
-         |> assign(:organizer_search_has_more, false)
-         |> assign(:organizer_search_total_shown, 0)}
+         |> load_poll_data()
+         |> put_flash(:info, flash_message)}
+
+      {:poll_data_refresh_no_flash} ->
+        {:noreply, load_poll_data(socket)}
+
+      {:error_flash, error_message} ->
+        {:noreply, put_flash(socket, :error, error_message)}
+
+      :acknowledge_only ->
+        {:noreply, socket}
+
+      :unhandled ->
+        # Fallback for unhandled messages - call original handlers
+        handle_specific_message(message, socket)
     end
   end
+
+
 
   # Helper functions
 
@@ -1141,6 +995,8 @@ defmodule EventasaurusWeb.EventManageLive do
       ticket_holders: count_by_status(participants, :confirmed_with_order)
     }
   end
+
+  # Helper function to extract flash message info from event types
 
   defp count_by_source(participants, "direct_add") do
     Enum.count(participants, &(is_binary(&1.source) && String.starts_with?(&1.source, "direct_add")))
@@ -1522,5 +1378,50 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   defp safe_string_to_integer(_), do: {:error, :invalid_input}
+
+
+
+  # Helper to extract event information from messages
+  defp extract_event_info({:option_suggested, _}), do: {:poll_data_refresh, "Option added successfully"}
+  defp extract_event_info(%{type: :option_suggested}), do: {:poll_data_refresh, "Option added successfully"}
+  defp extract_event_info({:option_updated, _}), do: {:poll_data_refresh, "Option updated successfully"}
+  defp extract_event_info({:option_removed, _}), do: {:poll_data_refresh, "Option removed successfully"}
+  defp extract_event_info({:poll_phase_changed, _, message}), do: {:poll_data_refresh, message}
+  defp extract_event_info({:option_reordered, message}), do: {:poll_data_refresh, message}
+  defp extract_event_info(%{type: :option_visibility_changed}), do: {:poll_data_refresh, "Option updated successfully"}
+  defp extract_event_info(%{type: :poll_phase_changed}), do: {:poll_data_refresh, "Poll phase updated"}
+  defp extract_event_info(%{type: :options_reordered}), do: {:poll_data_refresh, "Options reordered successfully"}
+  defp extract_event_info(%{type: :bulk_moderation_action}), do: {:poll_data_refresh, "Options updated successfully"}
+  defp extract_event_info({:show_error, message}), do: {:error_flash, message}
+  defp extract_event_info({:search_results, _, _}), do: :acknowledge_only
+  defp extract_event_info(%{type: :duplicate_detected}), do: :acknowledge_only
+  defp extract_event_info(%{type: :poll_counters_updated}), do: :acknowledge_only
+  defp extract_event_info(%{type: :participant_joined}), do: :acknowledge_only
+  defp extract_event_info({:js_push, _, _, _}), do: :acknowledge_only
+  defp extract_event_info({:perform_external_search, _, _}), do: :acknowledge_only
+  defp extract_event_info({:hide_dropdown, _}), do: :acknowledge_only
+  defp extract_event_info(_), do: :unhandled
+
+  # Handle specific messages that need custom logic
+  defp handle_specific_message({:edit_option, option_id}, socket) do
+    case safe_string_to_integer(option_id) do
+      option_id_int when is_integer(option_id_int) ->
+        case Events.get_poll_option(option_id_int) do
+          %PollOption{} = option ->
+            # Send update to the component to enable edit mode for this option
+            send_update(EventasaurusWeb.OptionSuggestionComponent,
+              id: "poll-options-#{option.poll_id}",
+              editing_option_id: option.id
+            )
+            {:noreply, socket}
+
+          nil ->
+            {:noreply, put_flash(socket, :error, "Option not found")}
+        end
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Invalid option ID")}
+    end
+  end
 
 end
