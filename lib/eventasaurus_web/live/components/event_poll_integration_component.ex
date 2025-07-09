@@ -192,6 +192,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
             user_id={@current_user.id}
             can_suggest={true}
             is_creator={@is_organizer}
+            participants={@participants}
           />
         </div>
       <% else %>

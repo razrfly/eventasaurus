@@ -72,6 +72,35 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:show_search_dropdown, true)
          |> assign(:search_query, assigns.search_query)}
 
+      assigns[:action] == :movie_rich_data_loaded ->
+        # Update form with rich TMDB data
+        changeset = create_option_changeset(socket, %{
+          "title" => assigns.selected_result.title,
+          "description" => assigns.rich_data[:description] || assigns.rich_data["overview"] || assigns.selected_result.description || "",
+          "external_id" => to_string(assigns.selected_result.id),
+          "image_url" => assigns.image_url,
+          "external_data" => assigns.rich_data
+        })
+
+        {:ok,
+         socket
+         |> assign(:changeset, changeset)
+         |> assign(:loading_rich_data, false)}
+
+      assigns[:action] == :movie_rich_data_error ->
+        # Fallback to basic result data if TMDB fetch fails
+        changeset = create_option_changeset(socket, %{
+          "title" => assigns.selected_result.title,
+          "description" => assigns.selected_result.description || "",
+          "external_id" => to_string(assigns.selected_result.id),
+          "external_data" => build_external_data_from_result(assigns.selected_result)
+        })
+
+        {:ok,
+         socket
+         |> assign(:changeset, changeset)
+         |> assign(:loading_rich_data, false)}
+
       true ->
         # Normal update flow
         # Create changeset for new option
@@ -117,6 +146,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign_new(:search_query, fn -> "" end)
          |> assign_new(:show_search_dropdown, fn -> false end)
          |> assign_new(:selected_result, fn -> nil end)
+         |> assign_new(:loading_rich_data, fn -> false end)
          |> then(fn socket ->
            # Handle editing mode after all other assigns are set
            if Map.get(assigns, :editing_option_id) do
@@ -310,6 +340,17 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 ><%= Map.get(@changeset.changes, :description, Map.get(@changeset.data, :description, "")) %></textarea>
               </div>
 
+              <!-- Hidden fields for rich data (external_id, external_data, image_url) -->
+              <%= if Map.has_key?(@changeset.changes, :external_id) do %>
+                <input type="hidden" name="poll_option[external_id]" value={@changeset.changes.external_id} />
+              <% end %>
+              <%= if Map.has_key?(@changeset.changes, :image_url) do %>
+                <input type="hidden" name="poll_option[image_url]" value={@changeset.changes.image_url} />
+              <% end %>
+              <%= if Map.has_key?(@changeset.changes, :external_data) do %>
+                <input type="hidden" name="poll_option[external_data]" value={Jason.encode!(@changeset.changes.external_data)} />
+              <% end %>
+
               <div class="flex items-center justify-between">
                 <div class="text-sm text-gray-500">
                   <%= if @is_creator do %>
@@ -471,6 +512,40 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         ><%= @edit_changeset.changes[:description] || option.description || "" %></textarea>
                       </div>
 
+                      <%= if @participants do %>
+                        <div>
+                          <label for={"edit_suggested_by_#{option.id}"} class="block text-sm font-medium text-gray-700">
+                            Suggested by
+                          </label>
+                          <select
+                            name="poll_option[suggested_by_id]"
+                            id={"edit_suggested_by_#{option.id}"}
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <!-- Event Organizer/Creator (current user, since only organizers can edit) -->
+                            <option
+                              value={@user.id}
+                              selected={(@edit_changeset.changes[:suggested_by_id] || option.suggested_by_id) == @user.id}
+                            >
+                              <%= @user.name || @user.username || @user.email %> (Organizer)
+                            </option>
+
+                            <!-- Event Participants -->
+                            <%= for participant <- @participants do %>
+                              <!-- Skip if this participant is the same as the organizer to avoid duplicates -->
+                              <%= if participant.user_id != @user.id do %>
+                                <option
+                                  value={participant.user_id}
+                                  selected={(@edit_changeset.changes[:suggested_by_id] || option.suggested_by_id) == participant.user_id}
+                                >
+                                  <%= participant.user.name || participant.user.username || participant.user.email %>
+                                </option>
+                              <% end %>
+                            <% end %>
+                          </select>
+                        </div>
+                      <% end %>
+
                       <%= if @is_creator do %>
                         <div class="flex items-center">
                           <input
@@ -518,43 +593,43 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <% end %>
 
                     <div class="flex-1 min-w-0">
-                    <div class="flex items-center">
-                      <h4 class="text-sm font-medium text-gray-900 truncate">
-                        <%= option.title %>
-                      </h4>
-                      <%= if option.status == "hidden" do %>
-                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          Hidden
-                        </span>
-                      <% end %>
-                    </div>
+                      <div class="flex">
+                        <!-- Movie thumbnail -->
+                        <%= if option.image_url do %>
+                          <img
+                            src={option.image_url}
+                            alt={"#{option.title} poster"}
+                            class="w-16 h-24 object-cover rounded-md shadow-sm mr-4 flex-shrink-0"
+                            loading="lazy"
+                          />
+                        <% end %>
 
-                    <%= if option.description do %>
-                      <p class="mt-1 text-sm text-gray-500"><%= option.description %></p>
-                    <% end %>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center">
+                            <h4 class="text-sm font-medium text-gray-900 truncate">
+                              <%= option.title %>
+                            </h4>
+                            <%= if option.status == "hidden" do %>
+                              <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                Hidden
+                              </span>
+                            <% end %>
+                          </div>
 
-                    <!-- Rich data display -->
-                    <%= if option.external_data && map_size(option.external_data) > 0 do %>
-                      <div class="mt-3">
-                        <.live_component
-                          module={EventasaurusWeb.Live.Components.RichDataDisplayComponent}
-                          id={"rich-data-#{option.id}"}
-                          rich_data={option.external_data}
-                          compact={true}
-                          show_sections={[:hero]}
-                          class="border-l-4 border-indigo-200 pl-3"
-                        />
+                          <%= if option.description do %>
+                            <p class="mt-1 text-sm text-gray-500"><%= option.description %></p>
+                          <% end %>
+
+                          <div class="mt-2 flex items-center text-xs text-gray-500">
+                            <span>Suggested by <%= option.suggested_by.name || option.suggested_by.username %></span>
+                            <span class="mx-1">•</span>
+                            <span><%= format_relative_time(option.inserted_at) %></span>
+                            <span class="mx-1">•</span>
+                            <span>Order: <%= option.order_index %></span>
+                          </div>
+                        </div>
                       </div>
-                    <% end %>
-
-                    <div class="mt-2 flex items-center text-xs text-gray-500">
-                      <span>Suggested by <%= option.suggested_by.name || option.suggested_by.username %></span>
-                      <span class="mx-1">•</span>
-                      <span><%= format_relative_time(option.inserted_at) %></span>
-                      <span class="mx-1">•</span>
-                      <span>Order: <%= option.order_index %></span>
                     </div>
-                  </div>
 
                   <!-- Option Actions -->
                   <div class="ml-4 flex-shrink-0 flex items-center space-x-2 option-card-actions">
@@ -677,20 +752,81 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         {:noreply, socket}
 
       result ->
-        # Populate form with selected result
-        changeset = create_option_changeset(socket, %{
-          "title" => result.title,
-          "description" => result.description || "",
-          "external_id" => to_string(result.id),
-          "external_data" => build_external_data_from_result(result)
-        })
+        # For movie polls, get full TMDB rich data like PublicMoviePollComponent does
+        if socket.assigns.poll.poll_type == "movie" && result.type == :movie do
+          # Get rich TMDB data asynchronously
+          component_id = socket.assigns.id
+          parent_pid = self()
 
-        {:noreply,
-         socket
-         |> assign(:changeset, changeset)
-         |> assign(:selected_result, result)
-         |> assign(:search_results, [])
-         |> assign(:show_search_dropdown, false)}
+          Task.start(fn ->
+            alias EventasaurusWeb.Services.TmdbRichDataProvider
+
+            case TmdbRichDataProvider.get_cached_details(result.id, :movie) do
+              {:ok, rich_data} ->
+                # Extract poster path from rich data structure
+                poster_path = get_in(rich_data, [:media, :images, :posters, Access.at(0), :file_path]) ||
+                             get_in(rich_data, [:metadata, "poster_path"]) ||
+                             get_in(rich_data, ["metadata", "poster_path"])
+
+                image_url = if poster_path do
+                  if String.starts_with?(poster_path, "/") do
+                    "https://image.tmdb.org/t/p/w500#{poster_path}"
+                  else
+                    poster_path
+                  end
+                else
+                  nil
+                end
+
+                # Send rich data back to component using send_update
+                send_update(parent_pid, __MODULE__,
+                  id: component_id,
+                  action: :movie_rich_data_loaded,
+                  selected_result: result,
+                  rich_data: rich_data,
+                  image_url: image_url
+                )
+
+              {:error, error} ->
+                # Send error back to component
+                send_update(parent_pid, __MODULE__,
+                  id: component_id,
+                  action: :movie_rich_data_error,
+                  selected_result: result,
+                  error: error
+                )
+            end
+          end)
+
+          # Show loading state in form
+          changeset = create_option_changeset(socket, %{
+            "title" => result.title,
+            "description" => result.description || "Loading TMDB data..."
+          })
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:selected_result, result)
+           |> assign(:search_results, [])
+           |> assign(:show_search_dropdown, false)
+           |> assign(:loading_rich_data, true)}
+        else
+          # For non-movie polls, use basic result data
+          changeset = create_option_changeset(socket, %{
+            "title" => result.title,
+            "description" => result.description || "",
+            "external_id" => to_string(result.id),
+            "external_data" => build_external_data_from_result(result)
+          })
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:selected_result, result)
+           |> assign(:search_results, [])
+           |> assign(:show_search_dropdown, false)}
+        end
     end
   end
 
@@ -728,7 +864,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("submit_suggestion", %{"poll_option" => option_params}, socket) do
     socket = assign(socket, :loading, true)
 
-    case save_option(socket, option_params) do
+    # Extract rich data from changeset if it was previously loaded (for movie polls)
+    enriched_params = extract_rich_data_from_changeset(socket.assigns.changeset, option_params)
+
+    case save_option(socket, enriched_params) do
       {:ok, option} ->
         # Broadcast option suggestion via PubSub
         poll = socket.assigns.poll
@@ -756,7 +895,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          socket
          |> assign(:loading, false)
          |> assign(:suggestion_form_visible, false)
-         |> assign(:changeset, changeset)}
+         |> assign(:changeset, changeset)
+         |> assign(:selected_result, nil)
+         |> assign(:loading_rich_data, false)}
 
       {:error, changeset} ->
         {:noreply,
@@ -993,6 +1134,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
+
+
   def handle_info({:perform_external_search, query, poll_type}, socket) do
     # Perform the search in the background
     parent_pid = self()
@@ -1085,6 +1228,45 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "images" => result.images || []
     }
   end
+
+  defp extract_rich_data_from_changeset(changeset, option_params) do
+    # For movie polls, the changeset may contain rich TMDB data that was loaded
+    # but not included in the HTML form. Extract and merge it.
+    case changeset do
+      %Ecto.Changeset{changes: changes} ->
+        # Extract rich data fields from changeset if present
+        external_id = Map.get(changes, :external_id)
+        external_data = Map.get(changes, :external_data)
+        image_url = Map.get(changes, :image_url)
+
+        # Merge with form params, giving priority to rich data from changeset over form
+        option_params
+        |> maybe_put_param("external_id", external_id)
+        |> maybe_put_param("external_data", external_data)
+        |> maybe_put_param("image_url", image_url)
+        |> decode_external_data_if_needed()
+
+      _ ->
+        option_params |> decode_external_data_if_needed()
+    end
+  end
+
+  defp decode_external_data_if_needed(params) do
+    # Handle the case where external_data comes as a JSON string from the form
+    case Map.get(params, "external_data") do
+      data when is_binary(data) ->
+        case Jason.decode(data) do
+          {:ok, decoded} -> Map.put(params, "external_data", decoded)
+          {:error, _} -> params
+        end
+      _ ->
+        params
+    end
+  end
+
+  defp maybe_put_param(params, _key, nil), do: params
+  defp maybe_put_param(params, _key, ""), do: params
+  defp maybe_put_param(params, key, value), do: Map.put(params, key, value)
 
   # Template helper functions
 
