@@ -289,10 +289,11 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
       id: option.id,
       title: option.title,
       description: option.description,
-      is_visible: option.is_visible,
+      is_visible: option.status == "active",
       order_index: option.order_index,
       external_id: option.external_id,
-      rich_data: option.rich_data,
+      external_data: option.external_data,
+      metadata: option.metadata,
       created_at: option.inserted_at
     }
   end
@@ -319,12 +320,12 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
 
   defp count_visible_options(poll) do
     (poll.poll_options || [])
-    |> Enum.count(& &1.is_visible)
+    |> Enum.count(& &1.status == "active")
   end
 
   defp count_hidden_options(poll) do
     (poll.poll_options || [])
-    |> Enum.count(&(not &1.is_visible))
+    |> Enum.count(& &1.status != "active")
   end
 
   defp count_poll_participants(_poll) do
