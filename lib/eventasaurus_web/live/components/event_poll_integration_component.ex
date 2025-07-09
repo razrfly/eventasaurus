@@ -30,8 +30,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   """
 
   use EventasaurusWeb, :live_component
-  require Logger
-
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Services.PollPubSubService
 
@@ -96,13 +94,13 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         Map.get(socket.assigns, :active_view, "overview")
       end
 
-      # Refresh selected_poll with updated data if it exists
-      updated_selected_poll = case socket.assigns[:selected_poll] do
+      # Always prioritize parent's selected_poll, then refresh with updated data
+      updated_selected_poll = case assigns[:selected_poll] do
         %{id: poll_id} ->
-          # Find the poll with matching ID in the updated polls list
-          Enum.find(polls, fn poll -> poll.id == poll_id end) || socket.assigns.selected_poll
+          # Find the poll with matching ID in the updated polls list to get fresh data
+          Enum.find(polls, fn poll -> poll.id == poll_id end) || assigns[:selected_poll]
         _ ->
-          socket.assigns[:selected_poll] || assigns[:selected_poll]
+          assigns[:selected_poll]
       end
 
       {:ok,
@@ -214,7 +212,13 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                 </div>
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 mb-1">
-                    <div class="font-medium text-gray-900 truncate">
+                    <div
+                      class="font-medium text-gray-900 truncate cursor-pointer hover:text-indigo-600 transition-colors"
+                      phx-click="view_poll_details"
+                      phx-value-poll_id={poll.id}
+                      phx-target={@myself}
+                      title="Click to view poll details"
+                    >
                       <%= poll.title %>
                     </div>
                     <!-- Poll Type Badge (matching source badge) -->
@@ -948,10 +952,12 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     {:noreply, assign(socket, :showing_creation_modal, false)}
   end
 
-  @impl true
+    @impl true
   def handle_event("view_poll_details", %{"poll_id" => poll_id}, socket) do
     poll_id = String.to_integer(poll_id)
-    selected_poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+    polls = socket.assigns.polls
+
+    selected_poll = Enum.find(polls, &(&1.id == poll_id))
 
     # Send message to parent LiveView to handle poll details view
     send(self(), {:view_poll_details, selected_poll})
