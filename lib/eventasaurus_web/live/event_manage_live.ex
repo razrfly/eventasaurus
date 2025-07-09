@@ -796,6 +796,18 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
     @impl true
+  def handle_info({:show_create_poll_modal, _event}, socket) do
+    # Handle poll creation modal request from component
+    send_update(EventasaurusWeb.EventPollIntegrationComponent,
+      id: "event-poll-integration",
+      showing_creation_modal: true,
+      editing_poll: nil
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:close_poll_creation_modal}, socket) do
     # Update the poll integration component to close the modal
     send_update(EventasaurusWeb.EventPollIntegrationComponent,
@@ -947,6 +959,42 @@ defmodule EventasaurusWeb.EventManageLive do
   def handle_info({:js_push, _command, _params, _id}, socket) do
     # Handle JavaScript push commands - for now just acknowledge
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:load_historical_suggestions, socket) do
+    event = socket.assigns.event
+    organizer = socket.assigns.user
+
+    try do
+      # Get current participants' user IDs to exclude them from suggestions
+      current_participant_user_ids = socket.assigns.participants
+                                   |> Enum.map(& &1.user_id)
+
+      # Get historical participants using our guest invitation module
+      suggestions = Events.get_participant_suggestions(organizer,
+        exclude_event_ids: [event.id],
+        exclude_user_ids: current_participant_user_ids,
+        limit: 20
+      )
+
+      {:noreply,
+       socket
+       |> assign(:historical_suggestions, suggestions)
+       |> assign(:suggestions_loading, false)}
+    rescue
+      error ->
+        require Logger
+        Logger.error("Guest invitation modal crashed while loading suggestions: #{inspect(error)}")
+        Logger.error("Stacktrace: #{Exception.format_stacktrace(__STACKTRACE__)}")
+        Logger.error("Socket assigns: event=#{event.id}, user=#{organizer.id}")
+
+        {:noreply,
+         socket
+         |> assign(:historical_suggestions, [])
+         |> assign(:suggestions_loading, false)
+         |> put_flash(:error, "Failed to load suggestions")}
+    end
   end
 
   # Generic handler for poll data refresh events (catch-all)

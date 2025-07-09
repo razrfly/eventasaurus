@@ -358,7 +358,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
               Create your first poll to gather input from event participants.
             </p>
             <button
-              phx-click="create_poll"
+              phx-click="show_creation_modal"
               phx-target={@myself}
               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >

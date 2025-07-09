@@ -82,9 +82,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         })
 
         # Calculate user's suggestion count
-        user_suggestion_count = Enum.count(assigns.poll.poll_options, fn option ->
-          option.suggested_by_id == assigns.user.id && option.status == "active"
-        end)
+        user_suggestion_count = case assigns.poll.poll_options do
+          %Ecto.Association.NotLoaded{} -> 0
+          poll_options when is_list(poll_options) ->
+            Enum.count(poll_options, fn option ->
+              option.suggested_by_id == assigns.user.id && option.status == "active"
+            end)
+          _ -> 0
+        end
 
         # Check if user can suggest more options
         max_options = assigns.poll.max_options_per_user || 3
@@ -109,7 +114,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> then(fn socket ->
            # Handle editing mode after all other assigns are set
            if Map.get(assigns, :editing_option_id) do
-             option = Enum.find(assigns.poll.poll_options, fn opt -> opt.id == assigns.editing_option_id end)
+             option = case assigns.poll.poll_options do
+               %Ecto.Association.NotLoaded{} -> nil
+               poll_options when is_list(poll_options) ->
+                 Enum.find(poll_options, fn opt -> opt.id == assigns.editing_option_id end)
+               _ -> nil
+             end
+
              if option do
                edit_changeset = PollOption.changeset(option, %{})
                socket
@@ -170,7 +181,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     type="text"
                     name="poll_option[title]"
                     id="option_title"
-                    value={Phoenix.HTML.Form.input_value(@form, :title)}
+                    value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
                     placeholder={option_title_placeholder(@poll.poll_type)}
                     phx-debounce="300"
                     phx-change="search_external_apis"
@@ -274,7 +285,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   rows="2"
                   placeholder={option_description_placeholder(@poll.poll_type)}
                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                ><%= Phoenix.HTML.Form.input_value(@form, :description) %></textarea>
+                ><%= Map.get(@changeset.changes, :description, Map.get(@changeset.data, :description, "")) %></textarea>
               </div>
 
               <div class="flex items-center justify-between">
@@ -326,7 +337,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         data-can-reorder={@is_creator}
         id={"option-list-#{@id}"}
       >
-        <%= if Enum.empty?(@poll.poll_options) do %>
+        <%= if safe_poll_options_empty?(@poll.poll_options) do %>
           <!-- Enhanced Empty State -->
           <div class="px-6 py-16 text-center">
             <!-- Poll type specific icon -->
@@ -560,13 +571,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
         <div class="flex items-center justify-between">
           <div class="text-sm text-gray-500">
-            <%= length(@poll.poll_options) %> <%= option_type_text(@poll.poll_type) %> suggested
+            <%= safe_poll_options_count(@poll.poll_options) %> <%= option_type_text(@poll.poll_type) %> suggested
             <%= if @poll.list_building_deadline do %>
               • Deadline: <%= format_deadline(@poll.list_building_deadline) %>
             <% end %>
           </div>
 
-          <%= if @is_creator && length(@poll.poll_options) > 0 do %>
+                      <%= if @is_creator && safe_poll_options_count(@poll.poll_options) > 0 do %>
             <button
               type="button"
               phx-click="start_voting"
@@ -762,7 +773,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("edit_option", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id_int} ->
-        option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == option_id_int end)
+        option = case socket.assigns.poll.poll_options do
+          %Ecto.Association.NotLoaded{} -> nil
+          poll_options when is_list(poll_options) ->
+            Enum.find(poll_options, fn opt -> opt.id == option_id_int end)
+          _ -> nil
+        end
+
         if option do
           edit_changeset = PollOption.changeset(option, %{})
           {:noreply,
@@ -788,7 +805,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("validate_edit", %{"poll_option" => option_params}, socket) do
     # Add nil check before accessing editing_option_id
     if socket.assigns.editing_option_id do
-      option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
+      option = case socket.assigns.poll.poll_options do
+        %Ecto.Association.NotLoaded{} -> nil
+        poll_options when is_list(poll_options) ->
+          Enum.find(poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
+        _ -> nil
+      end
+
       if option do
         changeset = PollOption.changeset(option, option_params)
         {:noreply, assign(socket, :edit_changeset, changeset)}
@@ -960,9 +983,16 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case EventasaurusWeb.Services.RichDataManager.search(query, search_options) do
       {:ok, results_by_provider} ->
         # Flatten and limit results from all providers
+        # Each provider returns {:ok, results} or {:error, reason}
         results_by_provider
         |> Map.values()
-        |> List.flatten()
+        |> Enum.flat_map(fn
+          {:ok, results} when is_list(results) -> results
+          {:ok, result} -> [result]  # Handle single result
+          {:error, _} -> []
+          results when is_list(results) -> results  # Handle direct results
+          _ -> []
+        end)
         |> Enum.take(8)  # Limit to 8 results for UI performance
 
       {:error, _reason} ->
@@ -1002,9 +1032,24 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   # Template helper functions
 
   defp sort_options_by_order(poll_options) do
-    poll_options
+    safe_poll_options(poll_options)
     |> Enum.sort_by(fn option -> option.order_index || 0 end, :asc)
   end
+
+  # Helper function to safely handle poll_options that might be NotLoaded
+  defp safe_poll_options(%Ecto.Association.NotLoaded{}), do: []
+  defp safe_poll_options(poll_options) when is_list(poll_options), do: poll_options
+  defp safe_poll_options(_), do: []
+
+  # Helper function to safely get the count of poll options
+  defp safe_poll_options_count(%Ecto.Association.NotLoaded{}), do: 0
+  defp safe_poll_options_count(poll_options) when is_list(poll_options), do: length(poll_options)
+  defp safe_poll_options_count(_), do: 0
+
+  # Helper function to safely check if poll options are empty
+  defp safe_poll_options_empty?(%Ecto.Association.NotLoaded{}), do: true
+  defp safe_poll_options_empty?(poll_options) when is_list(poll_options), do: Enum.empty?(poll_options)
+  defp safe_poll_options_empty?(_), do: true
 
   defp get_result_image(result) do
     case result.images do
