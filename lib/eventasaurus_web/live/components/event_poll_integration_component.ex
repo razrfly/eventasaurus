@@ -101,6 +101,15 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         Map.get(socket.assigns, :active_view, "overview")
       end
 
+      # Refresh selected_poll with updated data if it exists
+      updated_selected_poll = case socket.assigns[:selected_poll] do
+        %{id: poll_id} ->
+          # Find the poll with matching ID in the updated polls list
+          Enum.find(polls, fn poll -> poll.id == poll_id end) || socket.assigns.selected_poll
+        _ ->
+          socket.assigns[:selected_poll] || assigns[:selected_poll]
+      end
+
       {:ok,
        socket
        |> assign(assigns)
@@ -114,7 +123,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
        |> assign(:can_create_polls, can_create_polls)
        |> assign(:is_organizer, is_organizer)
        |> assign(:showing_creation_modal, showing_creation_modal)
-       |> assign(:active_view, active_view)}
+       |> assign(:active_view, active_view)
+       |> assign(:selected_poll, updated_selected_poll)}
     else
       # If we don't have required data, just assign what we have and wait for full update
       {:ok, assign(socket, assigns)}
@@ -127,7 +137,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     <div class="event-poll-integration-component">
       <%= if assigns[:show_poll_details] && assigns[:selected_poll] do %>
         <!-- Poll Details View -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="bg-white border-t border-gray-200">
           <!-- Back Button -->
           <div class="px-6 py-4 border-b border-gray-200">
             <button
@@ -143,63 +153,59 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
             </button>
           </div>
 
-          <!-- Poll Header -->
+          <!-- Unified Poll & Suggestion Header -->
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900"><%= @selected_poll.title %></h2>
-            <%= if @selected_poll.description && @selected_poll.description != "" do %>
-              <p class="mt-1 text-sm text-gray-600"><%= @selected_poll.description %></p>
-            <% end %>
-            <div class="mt-2 flex items-center gap-3">
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                <%= String.capitalize(to_string(Map.get(@selected_poll, :poll_type, "poll"))) %>
-              </span>
-              <span class="text-xs text-gray-500">
-                <%= if @selected_poll.inserted_at do %>
-                  Created <%= format_relative_time(@selected_poll.inserted_at) %>
-                <% else %>
-                  Created recently
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h2 class="text-lg font-semibold text-gray-900"><%= @selected_poll.title %></h2>
+                <%= if @selected_poll.description && @selected_poll.description != "" do %>
+                  <p class="mt-1 text-sm text-gray-600"><%= @selected_poll.description %></p>
                 <% end %>
-              </span>
+                <div class="mt-2 flex items-center gap-3">
+                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <%= String.capitalize(to_string(Map.get(@selected_poll, :poll_type, "poll"))) %>
+                  </span>
+                  <span class="text-xs text-gray-500">
+                    <%= if @selected_poll.inserted_at do %>
+                      Created <%= format_relative_time(@selected_poll.inserted_at) %>
+                    <% else %>
+                      Created recently
+                    <% end %>
+                  </span>
+                </div>
+                <!-- Suggestion Description -->
+                <p class="mt-3 text-sm text-gray-500">
+                  Add <%= String.downcase(to_string(Map.get(@selected_poll, :poll_type, "options"))) %> for
+                  <%= case Map.get(@selected_poll, :voting_system, "binary") do %>
+                    <% "binary" -> %> yes/no voting
+                    <% "approval" -> %> approval voting
+                    <% "ranked" -> %> ranked choice voting
+                    <% "star" -> %> star rating
+                    <% _ -> %> voting
+                  <% end %>
+                </p>
+              </div>
             </div>
           </div>
 
           <!-- Poll Options Component -->
-          <div class="p-6">
-            <.live_component
-              module={OptionSuggestionComponent}
-              id={"poll-options-#{@selected_poll.id}"}
-              poll={@selected_poll}
-              user={@current_user}
-              poll_id={@selected_poll.id}
-              event={@event}
-              user_id={@current_user.id}
-              can_suggest={true}
-              is_creator={@is_organizer}
-            />
-          </div>
+          <.live_component
+            module={OptionSuggestionComponent}
+            id={"poll-options-#{@selected_poll.id}"}
+            poll={@selected_poll}
+            user={@current_user}
+            poll_id={@selected_poll.id}
+            event={@event}
+            user_id={@current_user.id}
+            can_suggest={true}
+            is_creator={@is_organizer}
+          />
         </div>
       <% else %>
         <!-- Poll List View -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-gray-900">Event Polls</h2>
-              <button
-                phx-click="create_poll"
-                phx-target={@myself}
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Add New Poll
-              </button>
-            </div>
-          </div>
-
-          <%= if @polls && length(@polls) > 0 do %>
-            <!-- Match the exact guests tab structure -->
-            <div class="divide-y divide-gray-200">
+        <%= if @polls && length(@polls) > 0 do %>
+          <!-- Match the exact guests tab structure -->
+          <div class="divide-y divide-gray-200">
         <%= for poll <- (@polls || []) do %>
           <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
             <div class="flex items-center justify-between">
@@ -344,31 +350,30 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           </div>
         <% end %>
           </div>
-          <% else %>
-            <!-- Empty State -->
-            <div class="px-6 py-12 text-center">
-              <div class="mx-auto w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
-                <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h3 class="text-lg font-medium text-gray-900 mb-2">No polls yet</h3>
-              <p class="text-sm text-gray-600 mb-6">
-                Create your first poll to gather input from event participants.
-              </p>
-              <button
-                phx-click="create_poll"
-                phx-target={@myself}
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Create Your First Poll
-              </button>
+        <% else %>
+          <!-- Empty State -->
+          <div class="px-6 py-12 text-center">
+            <div class="mx-auto w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+              <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </div>
-          <% end %>
-        </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No polls yet</h3>
+            <p class="text-sm text-gray-600 mb-6">
+              Create your first poll to gather input from event participants.
+            </p>
+            <button
+              phx-click="create_poll"
+              phx-target={@myself}
+              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Create Your First Poll
+            </button>
+          </div>
+        <% end %>
 
       <!-- Poll Creation Modal -->
       <%= if @showing_creation_modal do %>
