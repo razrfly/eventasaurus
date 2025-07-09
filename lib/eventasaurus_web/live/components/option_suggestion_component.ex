@@ -346,7 +346,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       <div
         class="divide-y divide-gray-200 min-h-[100px] relative"
         phx-hook="PollOptionDragDrop"
-        data-can-reorder={@is_creator}
+        data-can-reorder={if(@is_creator, do: "true", else: "false")}
         id={"option-list-#{@id}"}
       >
         <%= if safe_poll_options_empty?(@poll.poll_options) do %>
@@ -420,7 +420,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
             <%= for option <- sort_options_by_order(@poll.poll_options) do %>
               <div
                 class="px-6 py-4 transition-all duration-150 ease-out option-card mobile-optimized-animation"
-                data-draggable={if @is_creator, do: "true", else: "false"}
+                data-draggable={if(@is_creator, do: "true", else: "false")}
                 data-option-id={option.id}
               >
                 <!-- Edit Form (only shown when editing this specific option) -->
@@ -904,15 +904,12 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def handle_event("reorder_option", params, socket) do
-    %{
-      "dragged_option_id" => dragged_id,
-      "target_option_id" => target_id,
-      "direction" => direction,
-      "original_order" => _original_order
-    } = params
+    # Defensive parameter validation - this is the root cause of crashes
+    with {:ok, dragged_id} <- validate_param(params, "dragged_option_id"),
+         {:ok, target_id} <- validate_param(params, "target_option_id"),
+         {:ok, direction} <- validate_param(params, "direction"),
+         true <- socket.assigns.is_creator do
 
-    # Only allow reordering if user is creator
-    if socket.assigns.is_creator do
       case Events.reorder_poll_option(dragged_id, target_id, direction) do
         {:ok, updated_poll} ->
           # Broadcast options reordered via PubSub
@@ -927,16 +924,23 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           {:noreply, socket}
 
         {:error, reason} ->
-          # Send rollback command to JavaScript hook
-          send(self(), {:js_push, "rollback_order", %{}, socket.assigns.id})
+          # Send rollback command to JavaScript hook and show error
+          socket = push_event(socket, "rollback_order", %{})
           send(self(), {:show_error, "Failed to reorder options: #{reason}"})
           {:noreply, socket}
       end
     else
-      # Send rollback command since user can't reorder
-      send(self(), {:js_push, "rollback_order", %{}, socket.assigns.id})
-      send(self(), {:show_error, "You don't have permission to reorder options"})
-      {:noreply, socket}
+            {:error, field} ->
+        # Invalid parameters - send rollback
+        socket = push_event(socket, "rollback_order", %{})
+        send(self(), {:show_error, "Invalid parameter: #{field}"})
+        {:noreply, socket}
+
+      false ->
+        # User doesn't have permission - send rollback
+        socket = push_event(socket, "rollback_order", %{})
+        send(self(), {:show_error, "You don't have permission to reorder options"})
+        {:noreply, socket}
     end
   end
 
@@ -987,6 +991,19 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   # Private helper functions
+
+  # Defensive parameter validation to prevent crashes
+  defp validate_param(params, key) when is_map(params) do
+    case Map.get(params, key) do
+      nil -> {:error, "#{key} is missing"}
+      "" -> {:error, "#{key} is empty"}
+      value when is_binary(value) -> {:ok, value}
+      value when is_integer(value) -> {:ok, to_string(value)}
+      _other -> {:error, "#{key} has invalid type"}
+    end
+  end
+
+  defp validate_param(_params, key), do: {:error, "params is not a map for #{key}"}
 
   defp perform_search(query, poll_type) do
     # Don't perform search for general polls or unsupported types
