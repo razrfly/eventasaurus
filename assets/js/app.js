@@ -1637,11 +1637,34 @@ Hooks.TaxationTypeValidator = {
 // Poll Option Drag and Drop Hook
 Hooks.PollOptionDragDrop = {
   mounted() {
+    this.initialize();
+  },
+
+  updated() {
+    // Re-initialize after LiveView updates the DOM
+    this.initialize();
+  },
+
+  destroyed() {
+    this.cleanupEventListeners();
+  },
+
+  initialize() {
+    // Clean up any existing state first
+    this.cleanupEventListeners();
+    
+    // Reset state
     this.originalOrder = null;
     this.draggedElement = null;
     this.touchStartY = 0;
+    this.touchStartX = 0;
     this.touchElement = null;
     this.isDragging = false;
+    this.hasMoved = false;
+    this.touchTimeout = null;
+    this.touchMoveThrottle = null;
+    this.mobileDragIndicator = null;
+    
     this.canReorder = this.el.dataset.canReorder === "true";
     
     if (!this.canReorder) {
@@ -1650,10 +1673,11 @@ Hooks.PollOptionDragDrop = {
     
     this.setupDragAndDrop();
     this.setupTouchSupport();
-  },
-
-  destroyed() {
-    this.cleanupEventListeners();
+    
+    // Listen for rollback events from the server
+    this.handleEvent("rollback_order", () => {
+      this.rollbackOrder();
+    });
   },
 
   setupDragAndDrop() {
@@ -1876,8 +1900,8 @@ Hooks.PollOptionDragDrop = {
     // Optimistically update the DOM
     this.updateDOMOrder(draggedElement, dropTarget, draggedIndex < dropTargetIndex);
     
-    // Send update to server
-    this.pushEvent('reorder_option', {
+    // Send update to server - target the LiveView component using proper targeting
+    this.pushEventTo(this.el, 'reorder_option', {
       dragged_option_id: draggedId,
       target_option_id: dropTargetId,
       direction: draggedIndex < dropTargetIndex ? 'after' : 'before',
@@ -1985,8 +2009,8 @@ Hooks.PollOptionDragDrop = {
       this.mobileDragIndicator.textContent = 'Drag to reorder • Release to drop';
       this.mobileDragIndicator.style.backgroundColor = '#1f2937';
     }
-  },
-  
+    },
+    
   hideMobileDragIndicator() {
     if (this.mobileDragIndicator) {
       this.mobileDragIndicator.remove();
@@ -2008,17 +2032,27 @@ Hooks.PollOptionDragDrop = {
     // Clean up mobile indicator
     this.hideMobileDragIndicator();
     
+    // Clear drop indicators
+    this.clearDropIndicators();
+    
+    // Remove all event listeners from draggable items
     const items = this.el.querySelectorAll('[data-draggable="true"]');
     items.forEach(item => {
+      // Remove drag event listeners
       item.removeEventListener('dragstart', this.handleDragStart);
       item.removeEventListener('dragend', this.handleDragEnd);
       item.removeEventListener('dragover', this.handleDragOver);
       item.removeEventListener('drop', this.handleDrop);
       item.removeEventListener('dragenter', this.handleDragEnter);
       item.removeEventListener('dragleave', this.handleDragLeave);
+      
+      // Remove touch event listeners
       item.removeEventListener('touchstart', this.handleTouchStart);
       item.removeEventListener('touchmove', this.handleTouchMove);
       item.removeEventListener('touchend', this.handleTouchEnd);
+      
+      // Clean up visual state
+      item.classList.remove('touch-dragging', 'scale-105', 'shadow-lg', 'z-50', 'opacity-50', 'scale-95', 'invisible', 'bg-blue-50', 'border-blue-200');
     });
   }
 };
@@ -2165,13 +2199,14 @@ document.addEventListener("DOMContentLoaded", function() {
   initSupabaseClient();
   
   // Initialize Stagewise toolbar in development mode
-  if (process.env.NODE_ENV === 'development') {
-    import('@stagewise/toolbar').then(({ initToolbar }) => {
-      initToolbar({
-        plugins: [],
-      });
-    }).catch(err => {
-      console.log('Stagewise toolbar not available:', err);
-    });
-  }
+  // Temporarily disabled due to drag-and-drop conflicts
+  // if (process.env.NODE_ENV === 'development') {
+  //   import('@stagewise/toolbar').then(({ initToolbar }) => {
+  //     initToolbar({
+  //       plugins: [],
+  //     });
+  //   }).catch(err => {
+  //     console.log('Stagewise toolbar not available:', err);
+  //   });
+  // }
 });
