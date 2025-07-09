@@ -2,6 +2,7 @@ defmodule EventasaurusWeb.EventManageLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.{Events, Ticketing}
+  alias EventasaurusApp.Events.PollOption
   alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
   import EventasaurusWeb.Components.GuestInvitationModal
@@ -743,7 +744,7 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
     @impl true
-  def handle_info({:poll_saved, _poll, message}, socket) do
+  def handle_info({:poll_saved, poll, message}, socket) do
     # Reload polls data to include the new poll
     polls = Events.list_polls(socket.assigns.event)
 
@@ -754,17 +755,29 @@ defmodule EventasaurusWeb.EventManageLive do
       editing_poll: nil
     )
 
-    {:noreply,
-     socket
-     |> assign(:polls, polls)
-     |> assign(:editing_poll, nil)
-     |> assign(:selected_poll, nil)
-     |> assign(:show_poll_details, false)
-     |> put_flash(:info, message)}
+    # Smart redirect: For new poll creation, redirect to poll details view
+    # For poll edits, just close the modal
+    if String.contains?(message, "created") do
+      {:noreply,
+       socket
+       |> assign(:polls, polls)
+       |> assign(:editing_poll, nil)
+       |> assign(:selected_poll, poll)
+       |> assign(:show_poll_details, true)
+       |> put_flash(:info, "Poll created successfully! Add options to get started.")}
+    else
+      {:noreply,
+       socket
+       |> assign(:polls, polls)
+       |> assign(:editing_poll, nil)
+       |> assign(:selected_poll, nil)
+       |> assign(:show_poll_details, false)
+       |> put_flash(:info, message)}
+    end
   end
 
   @impl true
-  def handle_info({:view_poll, poll}, socket) do
+  def handle_info({:view_poll_details, poll}, socket) do
     # Handle poll viewing/editing
     {:noreply,
      socket
@@ -848,10 +861,192 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_info({:close_poll_details}, socket) do
+    # Close poll details view and go back to overview
     {:noreply,
      socket
      |> assign(:selected_poll, nil)
      |> assign(:show_poll_details, false)}
+  end
+
+  @impl true
+  def handle_info({:perform_external_search, query, poll_type}, socket) do
+    # Delegate external search to the OptionSuggestionComponent
+    # This message comes from the component, so we forward it back to the component
+    send_update(EventasaurusWeb.OptionSuggestionComponent,
+      id: "poll-options-#{socket.assigns.selected_poll.id}",
+      action: :perform_search,
+      search_query: query,
+      poll_type: poll_type
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:hide_dropdown, _id}, socket) do
+    # Handle dropdown hide events from components
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:option_suggested, _option}, socket) do
+    # Option was successfully added (from component) - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Option added successfully")}
+  end
+
+  @impl true
+  def handle_info(%{type: :option_suggested} = _message, socket) do
+    # Option was successfully added (from PubSub) - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Option added successfully")}
+  end
+
+  @impl true
+  def handle_info({:option_updated, _option}, socket) do
+    # Option was successfully updated (from component) - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Option updated successfully")}
+  end
+
+  @impl true
+  def handle_info({:option_removed, _option_id}, socket) do
+    # Option was successfully removed (from component) - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Option removed successfully")}
+  end
+
+    @impl true
+  def handle_info({:edit_option, option_id}, socket) do
+    # Edit option action triggered (from component) - trigger edit mode in component
+    case safe_string_to_integer(option_id) do
+      option_id_int when is_integer(option_id_int) ->
+        case Events.get_poll_option(option_id_int) do
+          %PollOption{} = option ->
+            # Send update to the component to enable edit mode for this option
+            send_update(EventasaurusWeb.OptionSuggestionComponent,
+              id: "poll-options-#{option.poll_id}",
+              editing_option_id: option.id
+            )
+            {:noreply, socket}
+
+          nil ->
+            {:noreply, put_flash(socket, :error, "Option not found")}
+        end
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Invalid option ID")}
+    end
+  end
+
+  @impl true
+  def handle_info({:poll_phase_changed, _poll, message}, socket) do
+    # Poll phase changed (from component) - refresh poll data and show message
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, message)}
+  end
+
+  @impl true
+  def handle_info({:option_reordered, message}, socket) do
+    # Options were reordered (from component) - refresh poll data and show message
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, message)}
+  end
+
+  @impl true
+  def handle_info({:show_error, message}, socket) do
+    # Error message from component - show error flash
+    {:noreply, put_flash(socket, :error, message)}
+  end
+
+  @impl true
+  def handle_info({:search_results, _query, _results}, socket) do
+    # Search results from component - just acknowledge for now
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(%{type: :option_visibility_changed} = _message, socket) do
+    # Option visibility was changed - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Option updated successfully")}
+  end
+
+  @impl true
+  def handle_info(%{type: :duplicate_detected} = _message, socket) do
+    # Duplicate option detected - just acknowledge for now
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(%{type: :poll_phase_changed} = _message, socket) do
+    # Poll phase changed - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Poll phase updated")}
+  end
+
+  @impl true
+  def handle_info(%{type: :options_reordered} = _message, socket) do
+    # Options were reordered - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Options reordered successfully")}
+  end
+
+  @impl true
+  def handle_info(%{type: :bulk_moderation_action} = _message, socket) do
+    # Bulk moderation performed - refresh poll data
+    {:noreply,
+     socket
+     |> load_poll_data()
+     |> put_flash(:info, "Options updated successfully")}
+  end
+
+  @impl true
+  def handle_info(%{type: :poll_counters_updated} = _message, socket) do
+    # Poll counters updated - just acknowledge for now
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(%{type: :participant_joined} = _message, socket) do
+    # New participant joined - just acknowledge for now
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:js_push, _command, _params, _id}, socket) do
+    # Handle JavaScript push commands - for now just acknowledge
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:perform_external_search, _query, _poll_type}, socket) do
+    # Handle external search request - for now just acknowledge
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:hide_dropdown, _id}, socket) do
+    # Handle hide dropdown request - for now just acknowledge
+    {:noreply, socket}
   end
 
   defp handle_user_search(socket, query, mode) do
@@ -1318,5 +1513,14 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   defp count_total_votes(_), do: 0
+
+  defp safe_string_to_integer(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {int, ""} -> int
+      _ -> {:error, :invalid_format}
+    end
+  end
+
+  defp safe_string_to_integer(_), do: {:error, :invalid_input}
 
 end

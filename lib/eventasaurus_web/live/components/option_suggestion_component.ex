@@ -46,37 +46,82 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def update(assigns, socket) do
-    # Create changeset for new option
-    changeset = PollOption.changeset(%PollOption{}, %{
-      poll_id: assigns.poll.id,
-      suggested_by_id: assigns.user.id,
-      status: "active"
-    })
+    # Handle special actions first
+    cond do
+      assigns[:action] == :perform_search ->
+        # Perform the search and update the socket
+        Task.start(fn ->
+          results = perform_search(assigns.search_query, assigns.poll_type)
+          send_update(__MODULE__,
+            id: socket.assigns.id,
+            action: :search_complete,
+            search_results: results,
+            search_query: assigns.search_query
+          )
+        end)
 
-    # Calculate user's suggestion count
-    user_suggestion_count = Enum.count(assigns.poll.poll_options, fn option ->
-      option.suggested_by_id == assigns.user.id && option.status == "active"
-    end)
+        {:ok, assign(socket, :search_loading, true)}
 
-    # Check if user can suggest more options
-    max_options = assigns.poll.max_options_per_user || 3
-    can_suggest_more = user_suggestion_count < max_options
+      assigns[:action] == :search_complete ->
+        # Update with search results
+        {:ok,
+         socket
+         |> assign(:search_results, assigns.search_results)
+         |> assign(:search_loading, false)
+         |> assign(:show_search_dropdown, true)
+         |> assign(:search_query, assigns.search_query)}
 
-    {:ok,
-     socket
-     |> assign(assigns)
-     |> assign(:changeset, changeset)
-     |> assign(:user_suggestion_count, user_suggestion_count)
-     |> assign(:can_suggest_more, can_suggest_more)
-     |> assign(:max_options, max_options)
-     |> assign_new(:loading, fn -> false end)
-     |> assign_new(:suggestion_form_visible, fn -> false end)
-     |> assign_new(:editing_option_id, fn -> nil end)
-     |> assign_new(:search_results, fn -> [] end)
-     |> assign_new(:search_loading, fn -> false end)
-     |> assign_new(:search_query, fn -> "" end)
-     |> assign_new(:show_search_dropdown, fn -> false end)
-     |> assign_new(:selected_result, fn -> nil end)}
+      true ->
+        # Normal update flow
+        # Create changeset for new option
+        changeset = PollOption.changeset(%PollOption{}, %{
+          poll_id: assigns.poll.id,
+          suggested_by_id: assigns.user.id,
+          status: "active"
+        })
+
+        # Calculate user's suggestion count
+        user_suggestion_count = Enum.count(assigns.poll.poll_options, fn option ->
+          option.suggested_by_id == assigns.user.id && option.status == "active"
+        end)
+
+        # Check if user can suggest more options
+        max_options = assigns.poll.max_options_per_user || 3
+        can_suggest_more = user_suggestion_count < max_options
+
+        {:ok,
+         socket
+         |> assign(assigns)
+         |> assign(:changeset, changeset)
+         |> assign(:user_suggestion_count, user_suggestion_count)
+         |> assign(:can_suggest_more, can_suggest_more)
+         |> assign(:max_options, max_options)
+         |> assign_new(:loading, fn -> false end)
+         |> assign_new(:suggestion_form_visible, fn -> false end)
+         |> assign_new(:editing_option_id, fn -> nil end)
+         |> assign_new(:edit_changeset, fn -> nil end)
+         |> assign_new(:search_results, fn -> [] end)
+         |> assign_new(:search_loading, fn -> false end)
+         |> assign_new(:search_query, fn -> "" end)
+         |> assign_new(:show_search_dropdown, fn -> false end)
+         |> assign_new(:selected_result, fn -> nil end)
+         |> then(fn socket ->
+           # Handle editing mode after all other assigns are set
+           if Map.get(assigns, :editing_option_id) do
+             option = Enum.find(assigns.poll.poll_options, fn opt -> opt.id == assigns.editing_option_id end)
+             if option do
+               edit_changeset = PollOption.changeset(option, %{})
+               socket
+               |> assign(:editing_option_id, assigns.editing_option_id)
+               |> assign(:edit_changeset, edit_changeset)
+             else
+               socket |> assign(:editing_option_id, nil)
+             end
+           else
+             socket
+           end
+         end)}
+    end
   end
 
   @impl true
@@ -130,7 +175,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     type="text"
                     name="poll_option[title]"
                     id="option_title"
-                    value={Phoenix.HTML.Form.input_value(@changeset, :title)}
+                    value={@changeset.changes[:title] || ""}
                     placeholder={option_title_placeholder(@poll.poll_type)}
                     phx-debounce="300"
                     phx-change="search_external_apis"
@@ -232,10 +277,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   name="poll_option[description]"
                   id="option_description"
                   rows="2"
-                  value={Phoenix.HTML.Form.input_value(@changeset, :description)}
                   placeholder={option_description_placeholder(@poll.poll_type)}
                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                ></textarea>
+                ><%= @changeset.changes[:description] || "" %></textarea>
               </div>
 
               <div class="flex items-center justify-between">
@@ -282,40 +326,150 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
       <!-- Options List -->
       <div
-        class="divide-y divide-gray-200"
+        class="divide-y divide-gray-200 min-h-[100px] relative"
         phx-hook="PollOptionDragDrop"
         data-can-reorder={@is_creator}
         id={"option-list-#{@id}"}
       >
         <%= if Enum.empty?(@poll.poll_options) do %>
-          <div class="px-6 py-12 text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No options yet</h3>
-            <p class="mt-1 text-sm text-gray-500">
-              Be the first to suggest <%= option_type_text(@poll.poll_type) %>!
+          <!-- Enhanced Empty State -->
+          <div class="px-6 py-16 text-center">
+            <!-- Poll type specific icon -->
+            <div class="mx-auto w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mb-6">
+              <%= case @poll.poll_type do %>
+                <% "movie" -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2C7 1.45 7.45 1 8 1s1 .45 1 1v2h4V2c0-.55.45-1 1-1s1 .45 1 1v2h1c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h1z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  </svg>
+                <% "restaurant" -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                  </svg>
+                <% "activity" -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                  </svg>
+                <% _ -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                  </svg>
+              <% end %>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">
+              <%= get_empty_state_title(@poll.poll_type) %>
+            </h3>
+
+            <p class="text-gray-600 mb-2 max-w-md mx-auto">
+              <%= get_empty_state_description(@poll.poll_type, @poll.voting_system) %>
             </p>
+
+            <!-- Contextual guidance -->
+            <div class="text-sm text-gray-500 mb-8 max-w-lg mx-auto">
+              <%= get_empty_state_guidance(@poll.poll_type) %>
+            </div>
+
+            <!-- Large Call-to-Action Button -->
+            <%= if @can_suggest_more do %>
+              <button
+                type="button"
+                phx-click="toggle_suggestion_form"
+                phx-target={@myself}
+                class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+              >
+                <svg class="-ml-1 mr-3 h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                <%= get_empty_state_button_text(@poll.poll_type) %>
+              </button>
+
+              <!-- Secondary helpful text -->
+              <p class="mt-4 text-sm text-gray-500">
+                <%= get_empty_state_help_text(@poll.poll_type) %>
+              </p>
+            <% else %>
+              <div class="text-center p-6 bg-gray-50 rounded-lg max-w-md mx-auto">
+                <p class="text-gray-700 font-medium">You've reached your limit</p>
+                <p class="text-sm text-gray-500 mt-1">
+                  You can suggest up to <%= @max_options %> options. Ask others to add more suggestions!
+                </p>
+              </div>
+            <% end %>
           </div>
         <% else %>
           <div data-role="options-container">
             <%= for option <- sort_options_by_order(@poll.poll_options) do %>
               <div
                 class="px-6 py-4 transition-all duration-150 ease-out option-card mobile-optimized-animation"
-                data-draggable={@is_creator}
+                data-draggable={if @is_creator, do: "true", else: "false"}
                 data-option-id={option.id}
               >
-                <div class="flex items-start justify-between">
-                  <!-- Drag handle for creators -->
-                  <%= if @is_creator do %>
-                    <div class="drag-handle mr-3 mt-1 flex-shrink-0 touch-target" title="Drag to reorder">
-                      <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
-                      </svg>
-                    </div>
-                  <% end %>
+                <!-- Edit Form (only shown when editing this specific option) -->
+                <%= if @editing_option_id == option.id && @edit_changeset do %>
+                  <.form for={@edit_changeset} phx-submit="save_edit" phx-target={@myself} phx-change="validate_edit">
+                    <div class="space-y-4">
+                      <input type="hidden" name="option_id" value={option.id} />
 
-                  <div class="flex-1 min-w-0">
+                      <div>
+                        <label for={"edit_title_#{option.id}"} class="block text-sm font-medium text-gray-700">
+                          Title <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="poll_option[title]"
+                          id={"edit_title_#{option.id}"}
+                          value={@edit_changeset.changes[:title] || option.title}
+                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        />
+                        <%= if error = @edit_changeset.errors[:title] do %>
+                          <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
+                        <% end %>
+                      </div>
+
+                      <div>
+                        <label for={"edit_description_#{option.id}"} class="block text-sm font-medium text-gray-700">
+                          Description (optional)
+                        </label>
+                        <textarea
+                          name="poll_option[description]"
+                          id={"edit_description_#{option.id}"}
+                          rows="2"
+                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        ><%= @edit_changeset.changes[:description] || option.description || "" %></textarea>
+                      </div>
+
+                      <div class="flex space-x-3">
+                        <button
+                          type="submit"
+                          class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="cancel_edit"
+                          phx-target={@myself}
+                          class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </.form>
+                <% else %>
+                  <!-- Normal Option Display -->
+                  <div class="flex items-start justify-between">
+                    <!-- Drag handle for creators -->
+                    <%= if @is_creator do %>
+                      <div class="drag-handle mr-3 mt-1 flex-shrink-0 touch-target" title="Drag to reorder">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+                        </svg>
+                      </div>
+                    <% end %>
+
+                    <div class="flex-1 min-w-0">
                     <div class="flex items-center">
                       <h4 class="text-sm font-medium text-gray-900 truncate">
                         <%= option.title %>
@@ -395,6 +549,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <% end %>
                   </div>
                 </div>
+                <% end %>
               </div>
             <% end %>
           </div>
@@ -642,23 +797,88 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def handle_event("remove_option", %{"option-id" => option_id}, socket) do
-    case Events.delete_poll_option(option_id) do
-      {:ok, _} ->
-        # For option removal, we could broadcast a bulk moderation action
-        # or handle it as a special case
-        send(self(), {:option_removed, option_id})
-        {:noreply, socket}
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id_int} ->
+        case Events.get_poll_option(option_id_int) do
+          nil ->
+            send(self(), {:show_error, "Option not found"})
+            {:noreply, socket}
+
+          poll_option ->
+            case Events.delete_poll_option(poll_option) do
+              {:ok, _} ->
+                # For option removal, we could broadcast a bulk moderation action
+                # or handle it as a special case
+                send(self(), {:option_removed, option_id})
+                {:noreply, socket}
+
+              {:error, _} ->
+                send(self(), {:show_error, "Failed to remove option"})
+                {:noreply, socket}
+            end
+        end
 
       {:error, _} ->
-        send(self(), {:show_error, "Failed to remove option"})
+        send(self(), {:show_error, "Invalid option ID"})
         {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("edit_option", %{"option-id" => option_id}, socket) do
-    send(self(), {:edit_option, option_id})
-    {:noreply, socket}
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id_int} ->
+        option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == option_id_int end)
+        if option do
+          edit_changeset = PollOption.changeset(option, %{})
+          {:noreply,
+           socket
+           |> assign(:editing_option_id, option_id_int)
+           |> assign(:edit_changeset, edit_changeset)}
+        else
+          send(self(), {:show_error, "Option not found"})
+          {:noreply, socket}
+        end
+      {:error, _reason} ->
+        send(self(), {:show_error, "Invalid option ID"})
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_edit", _params, socket) do
+    {:noreply, assign(socket, :editing_option_id, nil)}
+  end
+
+  @impl true
+  def handle_event("validate_edit", %{"poll_option" => option_params}, socket) do
+    option = Enum.find(socket.assigns.poll.poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
+    changeset = PollOption.changeset(option, option_params)
+    {:noreply, assign(socket, :edit_changeset, changeset)}
+  end
+
+  @impl true
+  def handle_event("save_edit", %{"poll_option" => option_params, "option_id" => option_id}, socket) do
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id_int} ->
+        case Events.get_poll_option(option_id_int) do
+          %PollOption{} = option ->
+            case Events.update_poll_option(option, option_params) do
+              {:ok, updated_option} ->
+                send(self(), {:option_updated, updated_option})
+                {:noreply, assign(socket, :editing_option_id, nil)}
+
+              {:error, changeset} ->
+                {:noreply, assign(socket, :edit_changeset, changeset)}
+            end
+
+          nil ->
+            {:noreply, put_flash(socket, :error, "Option not found")}
+        end
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Invalid option ID")}
+    end
   end
 
   @impl true
@@ -936,7 +1156,15 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   defp format_relative_time(datetime) do
     now = DateTime.utc_now()
-    diff = DateTime.diff(now, datetime, :second)
+
+    # Convert NaiveDateTime to DateTime if needed
+    datetime_utc = case datetime do
+      %DateTime{} = dt -> dt
+      %NaiveDateTime{} = ndt -> DateTime.from_naive!(ndt, "Etc/UTC")
+      _ -> DateTime.utc_now()  # fallback
+    end
+
+    diff = DateTime.diff(now, datetime_utc, :second)
 
     cond do
       diff < 60 -> "just now"
@@ -971,4 +1199,53 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   defp safe_string_to_integer(_), do: {:error, :invalid_input}
+
+  # New helper functions for empty state
+  defp get_empty_state_title(poll_type) do
+    case poll_type do
+      "movie" -> "No Movies Suggested Yet"
+      "restaurant" -> "No Restaurants Suggested Yet"
+      "activity" -> "No Activities Suggested Yet"
+      _ -> "No Options Suggested Yet"
+    end
+  end
+
+  defp get_empty_state_description(poll_type, voting_system) do
+    type_text = option_type_text(poll_type)
+
+    case voting_system do
+      "binary" -> "Be the first to suggest #{type_text} for yes/no voting!"
+      "approval" -> "Be the first to suggest #{type_text} for approval voting!"
+      "ranked" -> "Be the first to suggest #{type_text} for ranked choice voting!"
+      "star" -> "Be the first to suggest #{type_text} for star rating!"
+      _ -> "Be the first to suggest #{type_text} to vote on!"
+    end
+  end
+
+  defp get_empty_state_guidance(poll_type) do
+    case poll_type do
+      "movie" -> "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
+      "restaurant" -> "Suggest restaurants that are popular or unique. Add details like cuisine, location, or special notes."
+      "activity" -> "Suggest activities that are fun or interesting. Add location, duration, or what makes it unique."
+      _ -> "Suggest options that you think are great. Add a description to help others understand your choice."
+    end
+  end
+
+  defp get_empty_state_button_text(poll_type) do
+    case poll_type do
+      "movie" -> "Suggest a Movie"
+      "restaurant" -> "Suggest a Restaurant"
+      "activity" -> "Suggest an Activity"
+      _ -> "Add an Option"
+    end
+  end
+
+  defp get_empty_state_help_text(poll_type) do
+    case poll_type do
+      "movie" -> "You can suggest up to 3 movies. Encourage others to add more suggestions!"
+      "restaurant" -> "You can suggest up to 3 restaurants. Encourage others to add more suggestions!"
+      "activity" -> "You can suggest up to 3 activities. Encourage others to add more suggestions!"
+      _ -> "You can suggest up to 3 options. Encourage others to add more suggestions!"
+    end
+  end
 end
