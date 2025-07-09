@@ -433,6 +433,22 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         ><%= @edit_changeset.changes[:description] || option.description || "" %></textarea>
                       </div>
 
+                      <%= if @is_creator do %>
+                        <div class="flex items-center">
+                          <input
+                            type="checkbox"
+                            name="poll_option[status]"
+                            id={"edit_hidden_#{option.id}"}
+                            value="hidden"
+                            checked={(@edit_changeset.changes[:status] || option.status) == "hidden"}
+                            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label for={"edit_hidden_#{option.id}"} class="ml-2 block text-sm text-gray-900">
+                            Hide this option from participants
+                          </label>
+                        </div>
+                      <% end %>
+
                       <div class="flex space-x-3">
                         <button
                           type="submit"
@@ -518,17 +534,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <% end %>
 
                     <%= if @is_creator do %>
-                      <!-- Hide/Show toggle for poll creator -->
-                      <button
-                        type="button"
-                        phx-click={if option.status == "active", do: "hide_option", else: "show_option"}
-                        phx-value-option-id={option.id}
-                        phx-target={@myself}
-                        class={"#{if option.status == "active", do: "text-orange-600 hover:text-orange-900", else: "text-green-600 hover:text-green-900"} text-sm font-medium touch-target interactive-element"}
-                      >
-                        <%= if option.status == "active", do: "Hide", else: "Show" %>
-                      </button>
-
                       <!-- Remove option button -->
                       <button
                         type="button"
@@ -724,72 +729,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   @impl true
-  def handle_event("hide_option", %{"option-id" => option_id}, socket) do
-    case safe_string_to_integer(option_id) do
-      {:ok, option_id} ->
-        option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-        if option do
-          case Events.update_poll_option_status(option, "hidden") do
-            {:ok, option} ->
-              # Broadcast visibility change via PubSub
-              PollPubSubService.broadcast_option_visibility_changed(
-                socket.assigns.poll,
-                option,
-                :hidden,
-                socket.assigns.user
-              )
-
-              send(self(), {:option_updated, option})
-              {:noreply, socket}
-
-            {:error, _} ->
-              send(self(), {:show_error, "Failed to hide option"})
-              {:noreply, socket}
-          end
-        else
-          send(self(), {:show_error, "Option not found"})
-          {:noreply, socket}
-        end
-      {:error, _} ->
-        send(self(), {:show_error, "Invalid option ID"})
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_event("show_option", %{"option-id" => option_id}, socket) do
-    case safe_string_to_integer(option_id) do
-      {:ok, option_id} ->
-        option = Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
-        if option do
-          case Events.update_poll_option_status(option, "active") do
-            {:ok, option} ->
-              # Broadcast visibility change via PubSub
-              PollPubSubService.broadcast_option_visibility_changed(
-                socket.assigns.poll,
-                option,
-                :shown,
-                socket.assigns.user
-              )
-
-              send(self(), {:option_updated, option})
-              {:noreply, socket}
-
-            {:error, _} ->
-              send(self(), {:show_error, "Failed to show option"})
-              {:noreply, socket}
-          end
-        else
-          send(self(), {:show_error, "Option not found"})
-          {:noreply, socket}
-        end
-      {:error, _} ->
-        send(self(), {:show_error, "Invalid option ID"})
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
   def handle_event("remove_option", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id_int} ->
@@ -857,8 +796,30 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       {:ok, option_id_int} ->
         case Events.get_poll_option(option_id_int) do
           %PollOption{} = option ->
-            case Events.update_poll_option(option, option_params) do
+            # Handle status field - checkbox sends "hidden" when checked, nothing when unchecked
+            updated_params = case Map.get(option_params, "status") do
+              "hidden" -> option_params
+              _ -> Map.put(option_params, "status", "active")
+            end
+
+            case Events.update_poll_option(option, updated_params) do
               {:ok, updated_option} ->
+                # Broadcast visibility change if status changed
+                if option.status != updated_option.status do
+                  status_atom = case updated_option.status do
+                    "hidden" -> :hidden
+                    "active" -> :shown
+                    _ -> :shown
+                  end
+
+                  PollPubSubService.broadcast_option_visibility_changed(
+                    socket.assigns.poll,
+                    updated_option,
+                    status_atom,
+                    socket.assigns.user
+                  )
+                end
+
                 send(self(), {:option_updated, updated_option})
                 {:noreply, assign(socket, :editing_option_id, nil)}
 
