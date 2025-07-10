@@ -27,10 +27,18 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   @impl true
   def search(query, options \\ %{}) do
     page = Map.get(options, :page, 1)
+    content_type = Map.get(options, :content_type)
 
     case TmdbService.search_multi(query, page) do
       {:ok, results} ->
-        normalized_results = Enum.map(results, &normalize_search_result/1)
+        # Filter by content_type if specified
+        filtered_results = case content_type do
+          :movie -> Enum.filter(results, &(&1.type == :movie))
+          :tv -> Enum.filter(results, &(&1.type == :tv))
+          _ -> results
+        end
+
+        normalized_results = Enum.map(filtered_results, &normalize_search_result/1)
         {:ok, normalized_results}
       {:error, reason} ->
         Logger.error("TMDB search failed: #{inspect(reason)}")

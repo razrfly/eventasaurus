@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
 
   use EventasaurusWeb, :live_component
   import EventasaurusWeb.CoreComponents
-  alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
+  alias EventasaurusWeb.Utils.MovieUtils
 
   @impl true
   def update(assigns, socket) do
@@ -172,24 +172,16 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     rich_data = socket.assigns.rich_data
 
     socket
-    |> assign(:title, get_title(rich_data))
+    |> assign(:title, MovieUtils.get_title(rich_data))
     |> assign(:tagline, rich_data["tagline"])
     |> assign(:has_backdrop, has_backdrop?(rich_data))
-    |> assign(:backdrop_url, get_backdrop_url(rich_data))
+    |> assign(:backdrop_url, MovieUtils.get_backdrop_url(rich_data))
     |> assign(:has_poster, has_poster?(rich_data))
-    |> assign(:poster_url, get_poster_url(rich_data))
+    |> assign(:poster_url, MovieUtils.get_poster_url(rich_data))
     |> assign(:rating, rich_data["vote_average"])
     |> assign(:runtime, rich_data["runtime"])
-    |> assign(:genres, rich_data["genres"] || [])
+    |> assign(:genres, MovieUtils.get_genres(rich_data))
     |> assign(:release_info, get_release_info(rich_data))
-  end
-
-    defp get_title(rich_data) do
-    # Hero section data has title as atom key from adapter
-    rich_data[:title] ||
-    rich_data["title"] ||
-    rich_data["name"] ||
-    "Unknown Title"
   end
 
   defp has_backdrop?(rich_data) do
@@ -197,27 +189,9 @@ defmodule EventasaurusWeb.Live.Components.MovieHeroComponent do
     is_binary(backdrop_path) && backdrop_path != ""
   end
 
-  defp get_backdrop_url(rich_data) do
-    case rich_data["backdrop_path"] do
-      path when is_binary(path) and path != "" ->
-        RichDataDisplayComponent.tmdb_image_url(path, "w1280")
-      _ ->
-        nil
-    end
-  end
-
   defp has_poster?(rich_data) do
     poster_path = rich_data["poster_path"]
     is_binary(poster_path) && poster_path != ""
-  end
-
-  defp get_poster_url(rich_data) do
-    case rich_data["poster_path"] do
-      path when is_binary(path) and path != "" ->
-        RichDataDisplayComponent.tmdb_image_url(path, "w500")
-      _ ->
-        nil
-    end
   end
 
   defp get_release_info(rich_data) do
