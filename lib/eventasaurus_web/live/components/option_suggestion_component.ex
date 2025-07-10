@@ -29,6 +29,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.PollOption
   alias EventasaurusWeb.Services.PollPubSubService
+  alias EventasaurusWeb.Services.MovieDataService
 
   @impl true
   def mount(socket) do
@@ -1230,6 +1231,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   defp extract_rich_data_from_changeset(changeset, option_params) do
+    require Logger
+
     # For movie polls, the changeset may contain rich TMDB data that was loaded
     # but not included in the HTML form. Extract and merge it.
     case changeset do
@@ -1239,14 +1242,27 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         external_data = Map.get(changes, :external_data)
         image_url = Map.get(changes, :image_url)
 
+        Logger.debug("Extracting rich data from changeset:")
+        Logger.debug("  external_id: #{inspect(external_id)}")
+        Logger.debug("  external_data present: #{inspect(external_data != nil)}")
+        Logger.debug("  image_url: #{inspect(image_url)}")
+
         # Merge with form params, giving priority to rich data from changeset over form
-        option_params
+        enriched_params = option_params
         |> maybe_put_param("external_id", external_id)
         |> maybe_put_param("external_data", external_data)
         |> maybe_put_param("image_url", image_url)
         |> decode_external_data_if_needed()
 
+        Logger.debug("Enriched params after extraction:")
+        Logger.debug("  has external_id: #{inspect(Map.has_key?(enriched_params, "external_id"))}")
+        Logger.debug("  has external_data: #{inspect(Map.has_key?(enriched_params, "external_data"))}")
+        Logger.debug("  has image_url: #{inspect(Map.has_key?(enriched_params, "image_url"))}")
+
+        enriched_params
+
       _ ->
+        Logger.debug("No changeset or changeset without changes")
         option_params |> decode_external_data_if_needed()
     end
   end
@@ -1327,12 +1343,41 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   defp save_option(socket, option_params) do
-    option_params = Map.merge(option_params, %{
-      "poll_id" => socket.assigns.poll.id,
-      "suggested_by_id" => socket.assigns.user.id,
-      "status" => "active"
-    })
+    require Logger
 
+    # Ensure ALL movie options get consistent data structure
+    option_params = if socket.assigns.poll.poll_type == "movie" &&
+                      Map.has_key?(option_params, "external_id") &&
+                      Map.has_key?(option_params, "external_data") do
+      # For movie options with rich data, use the shared service to prepare consistent data
+      movie_id = option_params["external_id"]
+      rich_data = option_params["external_data"]
+
+      Logger.debug("Admin interface saving movie with external_id: #{movie_id}")
+      Logger.debug("Rich data keys: #{inspect(Map.keys(rich_data))}")
+
+      prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
+
+      Logger.debug("Prepared data image_url: #{inspect(prepared_data["image_url"])}")
+
+      Map.merge(prepared_data, %{
+        "poll_id" => socket.assigns.poll.id,
+        "suggested_by_id" => socket.assigns.user.id,
+        "status" => "active"
+      })
+    else
+      # For all other options, use the standard structure
+      Logger.debug("Admin interface saving non-movie option or missing external data")
+      Logger.debug("Option params keys: #{inspect(Map.keys(option_params))}")
+
+      Map.merge(option_params, %{
+        "poll_id" => socket.assigns.poll.id,
+        "suggested_by_id" => socket.assigns.user.id,
+        "status" => "active"
+      })
+    end
+
+    Logger.debug("Final option_params image_url: #{inspect(option_params["image_url"])}")
     Events.create_poll_option(option_params)
   end
 

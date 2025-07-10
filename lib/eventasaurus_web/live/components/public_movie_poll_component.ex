@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Services.RichDataManager
+  alias EventasaurusWeb.Services.MovieDataService
   alias EventasaurusWeb.Utils.MovieUtils
 
   @impl true
@@ -116,32 +117,15 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
         # Use the centralized RichDataManager to get detailed movie data (same as backend)
         case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
           {:ok, rich_movie_data} ->
-            # Extract image URL using MovieUtils
-            image_url = MovieUtils.get_image_url(rich_movie_data)
-
-            # Extract additional movie details using MovieUtils
-            year = MovieUtils.get_release_year(rich_movie_data)
-            director = MovieUtils.get_director(rich_movie_data)
-            genre = MovieUtils.get_genres(rich_movie_data)
-
-            # Create enhanced description with more details
-            enhanced_description = MovieUtils.build_enhanced_description(
-              rich_movie_data.description,
-              year,
-              director,
-              genre
+            # Use the shared MovieDataService to prepare movie data consistently
+            option_params = MovieDataService.prepare_movie_option_data(
+              movie_data.id,
+              rich_movie_data
             )
-
-            # Create poll option with enriched data (same structure as backend)
-            option_params = %{
-              title: rich_movie_data.title,
-              description: enhanced_description,
-              external_id: to_string(rich_movie_data.id),
-              external_data: rich_movie_data,
-              image_url: image_url,
-              poll_id: socket.assigns.movie_poll.id,
-              suggested_by_id: user.id
-            }
+            |> Map.merge(%{
+              "poll_id" => socket.assigns.movie_poll.id,
+              "suggested_by_id" => user.id
+            })
 
             case Events.create_poll_option(option_params) do
               {:ok, _option} ->
