@@ -1454,6 +1454,16 @@ defmodule EventasaurusWeb.PublicEventLive do
               />
             </div>
           <% end %>
+
+          <!-- Movie Poll Section -->
+          <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+            <.live_component
+              module={EventasaurusWeb.PublicMoviePollComponent}
+              id="public-movie-poll"
+              event={@event}
+              current_user={@user}
+            />
+          </div>
         </div>
 
                  <!-- Right sidebar -->
@@ -1727,18 +1737,6 @@ defmodule EventasaurusWeb.PublicEventLive do
       </div>
     </div>
 
-    <!-- Movie Poll Section -->
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <.live_component
-          module={EventasaurusWeb.PublicMoviePollComponent}
-          id="public-movie-poll"
-          event={@event}
-          current_user={@user}
-        />
-      </div>
-    </div>
-
     <%= if @show_registration_modal do %>
       <.live_component
         module={EventRegistrationComponent}
@@ -1983,9 +1981,8 @@ defmodule EventasaurusWeb.PublicEventLive do
     event = socket.assigns.event
 
     try do
-      # Load only public polls for this event with consistent ordering
+      # Load polls for this event with consistent ordering
       event_polls = Events.list_polls(event)
-      |> Enum.filter(fn poll -> poll.visibility == "public" end)
       |> Enum.sort_by(& &1.id)
 
       socket
