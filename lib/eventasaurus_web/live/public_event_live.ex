@@ -1983,8 +1983,9 @@ defmodule EventasaurusWeb.PublicEventLive do
     event = socket.assigns.event
 
     try do
-      # Load all polls for this event with consistent ordering
+      # Load only public polls for this event with consistent ordering
       event_polls = Events.list_polls(event)
+      |> Enum.filter(fn poll -> poll.visibility == "public" end)
       |> Enum.sort_by(& &1.id)
 
       socket
