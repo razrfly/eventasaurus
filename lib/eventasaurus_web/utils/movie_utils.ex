@@ -185,7 +185,7 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   ## Examples
 
       iex> MovieUtils.get_genres(%{genres: [%{name: "Action"}, %{name: "Adventure"}]})
-      "Action, Adventure"
+      ["Action", "Adventure"]
   """
   def get_genres(movie_data) when is_map(movie_data) do
     genres = movie_data[:genres] ||
@@ -203,12 +203,11 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
       end
     end)
     |> Enum.filter(&(&1))
-    |> Enum.join(", ")
   rescue
-    _ -> ""
+    _ -> []
   end
 
-  def get_genres(_), do: ""
+  def get_genres(_), do: []
 
   @doc """
   Convert all movie data to consistent atom keys.
@@ -247,7 +246,7 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
     [
       year && "#{year}",
       director && "Dir: #{director}",
-      genres && genres != "" && genres
+      is_list(genres) && length(genres) > 0 && Enum.join(genres, ", ")
     ]
     |> Enum.filter(&(&1))
     |> Enum.join(" • ")
@@ -269,8 +268,12 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
     # Add director if available
     details = if director, do: ["Directed by #{director}"] ++ details, else: details
 
-    # Add genre if available
-    details = if genre, do: ["#{genre}"] ++ details, else: details
+    # Add genre if available - handle both list and string formats
+    details = cond do
+      is_list(genre) and length(genre) > 0 -> [Enum.join(genre, ", ")] ++ details
+      is_binary(genre) and genre != "" -> ["#{genre}"] ++ details
+      true -> details
+    end
 
     # Combine base description with details
     case details do
