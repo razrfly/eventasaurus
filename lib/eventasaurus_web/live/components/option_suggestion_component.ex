@@ -348,7 +348,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 <input type="hidden" name="poll_option[image_url]" value={@changeset.changes.image_url} />
               <% end %>
               <%= if Map.has_key?(@changeset.changes, :external_data) do %>
-                <input type="hidden" name="poll_option[external_data]" value={Jason.encode!(@changeset.changes.external_data)} />
+                <input type="hidden" name="poll_option[external_data]" value={safe_json_encode(@changeset.changes.external_data)} />
               <% end %>
 
               <div class="flex items-center justify-between">
@@ -769,7 +769,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                              get_in(rich_data, ["metadata", "poster_path"])
 
                 image_url = if poster_path do
-                  if String.starts_with?(poster_path, "/") do
+                  if is_binary(poster_path) && String.starts_with?(poster_path, "/") do
                     "https://image.tmdb.org/t/p/w500#{poster_path}"
                   else
                     poster_path
@@ -1488,6 +1488,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "restaurant" -> "You can suggest up to 3 restaurants. Encourage others to add more suggestions!"
       "activity" -> "You can suggest up to 3 activities. Encourage others to add more suggestions!"
       _ -> "You can suggest up to 3 options. Encourage others to add more suggestions!"
+    end
+  end
+
+  # Helper function to safely encode JSON data
+  defp safe_json_encode(data) do
+    case Jason.encode(data) do
+      {:ok, json} -> json
+      {:error, _} -> "{}"
     end
   end
 end
