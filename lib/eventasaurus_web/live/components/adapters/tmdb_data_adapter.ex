@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
 
   @behaviour EventasaurusWeb.Live.Components.RichDataAdapterBehaviour
 
-  alias EventasaurusWeb.Live.Components.RichDataDisplayComponent
+  alias EventasaurusWeb.Utils.MovieUtils
 
   @impl true
   def adapt(raw_data) when is_map(raw_data) do
@@ -85,11 +85,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
   end
 
   defp get_title(raw_data) do
-    raw_data["title"] ||
-    raw_data["name"] ||
-    get_in(raw_data, ["metadata", "title"]) ||
-    get_in(raw_data, ["metadata", "original_title"]) ||
-    "Unknown Title"
+    MovieUtils.get_title(raw_data)
   end
 
   defp get_description(raw_data) do
@@ -104,18 +100,11 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
     end
   end
 
-    defp get_primary_image(raw_data) do
-    # Support both legacy poster_path and rich data format (string and atom keys)
-    poster_path = raw_data["poster_path"] ||
-                  get_in(raw_data, ["metadata", "poster_path"]) ||
-                  get_in(raw_data, [:metadata, "poster_path"]) ||
-                  get_in(raw_data, ["media", "images", "posters", Access.at(0), "file_path"]) ||
-                  get_in(raw_data, [:media, :images, :posters, Access.at(0), :file_path])
-
-    case poster_path do
-      path when is_binary(path) and path != "" ->
+  defp get_primary_image(raw_data) do
+    case MovieUtils.get_poster_url(raw_data) do
+      url when is_binary(url) ->
         %{
-          url: RichDataDisplayComponent.tmdb_image_url(path, "w500"),
+          url: url,
           alt: get_title(raw_data),
           type: :poster
         }
@@ -123,18 +112,11 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
     end
   end
 
-    defp get_secondary_image(raw_data) do
-    # Support both legacy backdrop_path and rich data format (string and atom keys)
-    backdrop_path = raw_data["backdrop_path"] ||
-                    get_in(raw_data, ["metadata", "backdrop_path"]) ||
-                    get_in(raw_data, [:metadata, "backdrop_path"]) ||
-                    get_in(raw_data, ["media", "images", "backdrops", Access.at(0), "file_path"]) ||
-                    get_in(raw_data, [:media, :images, :backdrops, Access.at(0), :file_path])
-
-    case backdrop_path do
-      path when is_binary(path) and path != "" ->
+  defp get_secondary_image(raw_data) do
+    case MovieUtils.get_backdrop_url(raw_data) do
+      url when is_binary(url) ->
         %{
-          url: RichDataDisplayComponent.tmdb_image_url(path, "w1280"),
+          url: url,
           alt: "#{get_title(raw_data)} backdrop",
           type: :backdrop
         }
@@ -166,22 +148,8 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
     end
   end
 
-    defp get_year(raw_data) do
-    # Support both legacy and rich data format (string and atom keys)
-    date_string = raw_data["release_date"] || raw_data["first_air_date"] ||
-                  get_in(raw_data, ["metadata", "release_date"]) ||
-                  get_in(raw_data, ["metadata", "first_air_date"]) ||
-                  get_in(raw_data, [:metadata, "release_date"]) ||
-                  get_in(raw_data, [:metadata, "first_air_date"])
-
-    case date_string do
-      date when is_binary(date) and byte_size(date) >= 4 ->
-        case String.slice(date, 0, 4) |> Integer.parse() do
-          {year, _} -> year
-          _ -> nil
-        end
-      _ -> nil
-    end
+  defp get_year(raw_data) do
+    MovieUtils.get_release_year(raw_data)
   end
 
   defp get_status(raw_data) do
@@ -199,18 +167,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
   end
 
   defp get_categories(raw_data) do
-    # Support both direct genres and metadata.genres
-    genres = raw_data["genres"] ||
-             get_in(raw_data, ["metadata", "genres"]) ||
-             []
-
-    genres
-    |> Enum.map(fn
-      %{"name" => name} when is_binary(name) -> name
-      name when is_binary(name) -> name
-      _ -> nil
-    end)
-    |> Enum.filter(& &1)
+    MovieUtils.get_genres(raw_data)
   end
 
   defp get_tags(raw_data) do
@@ -359,22 +316,26 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
   end
 
   defp build_release_info(raw_data) do
+    year = MovieUtils.get_release_year(raw_data)
+
+    # Still need to get formatted date for this adapter's specific needs
     date_string = raw_data["release_date"] ||
                   raw_data["first_air_date"] ||
                   get_in(raw_data, ["metadata", "release_date"]) ||
                   get_in(raw_data, ["metadata", "first_air_date"])
 
-    case date_string do
+    formatted = case date_string do
       date when is_binary(date) and date != "" ->
         case Date.from_iso8601(date) do
-          {:ok, date} ->
-            %{
-              year: date.year,
-              formatted: Calendar.strftime(date, "%B %d, %Y")
-            }
-          _ -> %{}
+          {:ok, date} -> Calendar.strftime(date, "%B %d, %Y")
+          _ -> nil
         end
-      _ -> %{}
+      _ -> nil
+    end
+
+    case {year, formatted} do
+      {nil, nil} -> %{}
+      {year, formatted} -> %{year: year, formatted: formatted}
     end
   end
 
