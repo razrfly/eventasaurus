@@ -662,7 +662,7 @@ defmodule EventasaurusWeb.EventComponents do
               <%= hidden_input f, :cover_image_url %>
               <%= if @external_image_data do %>
                 <% encoded_data =
-                  if is_map(@external_image_data), do: Jason.encode!(@external_image_data), else: @external_image_data || "" %>
+                  if is_map(@external_image_data), do: safe_json_encode(@external_image_data), else: @external_image_data || "" %>
                 <%= hidden_input f, :external_image_data, value: encoded_data %>
               <% end %>
             </div>
@@ -772,7 +772,7 @@ defmodule EventasaurusWeb.EventComponents do
               <!-- Hidden field for rich data -->
               <%= if @rich_external_data do %>
                 <% encoded_rich_data =
-                  if is_map(@rich_external_data), do: Jason.encode!(@rich_external_data), else: @rich_external_data || "{}" %>
+                  if is_map(@rich_external_data), do: safe_json_encode(@rich_external_data), else: @rich_external_data || "{}" %>
                 <%= hidden_input f, :rich_external_data, value: encoded_rich_data %>
               <% end %>
             </div>
@@ -1963,5 +1963,13 @@ defmodule EventasaurusWeb.EventComponents do
     end
   end
   defp format_tmdb_year(_), do: "N/A"
+
+  # Helper function to safely encode JSON data
+  defp safe_json_encode(data) do
+    case Jason.encode(data) do
+      {:ok, json} -> json
+      {:error, _} -> "{}"
+    end
+  end
 
 end
