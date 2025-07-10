@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Services.RichDataManager
+  alias EventasaurusWeb.Utils.MovieUtils
 
   @impl true
   def update(assigns, socket) do
@@ -115,13 +116,26 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
         # Use the centralized RichDataManager to get detailed movie data (same as backend)
         case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
           {:ok, rich_movie_data} ->
-            # Extract image URL using the same logic as backend
-            image_url = get_result_image(rich_movie_data)
+            # Extract image URL using MovieUtils
+            image_url = MovieUtils.get_image_url(rich_movie_data)
+
+            # Extract additional movie details using MovieUtils
+            year = MovieUtils.get_release_year(rich_movie_data)
+            director = MovieUtils.get_director(rich_movie_data)
+            genre = MovieUtils.get_genres(rich_movie_data)
+
+            # Create enhanced description with more details
+            enhanced_description = MovieUtils.build_enhanced_description(
+              rich_movie_data.description,
+              year,
+              director,
+              genre
+            )
 
             # Create poll option with enriched data (same structure as backend)
             option_params = %{
               title: rich_movie_data.title,
-              description: rich_movie_data.description,
+              description: enhanced_description,
               external_id: to_string(rich_movie_data.id),
               external_data: rich_movie_data,
               image_url: image_url,
@@ -172,11 +186,17 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
-  # Helper function to extract image URL (same as backend)
-  defp get_result_image(result) do
-    case result.images do
-      [first_image | _] -> first_image["url"] || first_image.url
-      _ -> nil
+
+
+  # Helper function to parse enhanced description into details line and main description
+  defp parse_enhanced_description(description) do
+    case String.split(description, "\n\n", parts: 2) do
+      [details_line, main_description] ->
+        {details_line, main_description}
+      [details_line] ->
+        {details_line, nil}
+      _ ->
+        {nil, description}
     end
   end
 
@@ -203,9 +223,10 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
               <%= for option <- @movie_options do %>
                 <div class="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
                   <div class="flex">
-                    <%= if option.image_url do %>
+                    <% image_url = MovieUtils.get_image_url(option) %>
+                    <%= if image_url do %>
                       <img
-                        src={option.image_url}
+                        src={image_url}
                         alt={"#{option.title} poster"}
                         class="w-16 h-24 object-cover rounded-lg mr-4 flex-shrink-0"
                         loading="lazy"
@@ -220,8 +241,16 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
                     <div class="flex-1 min-w-0">
                       <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
+
+                      <!-- Movie Details (Year, Director, Genre) -->
                       <%= if option.description do %>
-                        <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= option.description %></p>
+                        <% {details_line, main_description} = parse_enhanced_description(option.description) %>
+                        <%= if details_line do %>
+                          <p class="text-sm text-blue-600 font-medium mb-2"><%= details_line %></p>
+                        <% end %>
+                        <%= if main_description && String.length(main_description) > 0 do %>
+                          <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= main_description %></p>
+                        <% end %>
                       <% end %>
 
                       <!-- Show who suggested this movie -->
@@ -287,11 +316,13 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                            phx-value-movie={movie.id}
                            phx-target={@myself}>
 
-                        <%= if movie.images && length(movie.images) > 0 do %>
-                          <% image = List.first(movie.images) %>
-                          <%= if image && Map.has_key?(image, :url) do %>
-                            <img src={image.url} alt={movie.title} class="w-12 h-16 object-cover rounded mr-4 flex-shrink-0" />
-                          <% end %>
+                        <% image_url = MovieUtils.get_image_url(movie) %>
+                        <%= if image_url do %>
+                          <img src={image_url} alt={movie.title} class="w-12 h-16 object-cover rounded mr-4 flex-shrink-0" />
+                        <% else %>
+                          <div class="w-12 h-16 bg-gray-200 rounded mr-4 flex-shrink-0 flex items-center justify-center">
+                            <span class="text-xs text-gray-500">No Image</span>
+                          </div>
                         <% end %>
 
                         <div class="flex-1 min-w-0">
