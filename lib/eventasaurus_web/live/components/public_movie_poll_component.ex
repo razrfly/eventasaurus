@@ -53,6 +53,12 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
      |> assign(:search_results, [])}
   end
 
+  def handle_event("stop_propagation", _params, socket) do
+    # This event handler does nothing - it's just to stop event propagation
+    # from the modal content to prevent the modal from closing when clicking inside
+    {:noreply, socket}
+  end
+
   def handle_event("search_movies", %{"query" => query}, socket) do
             if String.length(query) >= 2 do
       # Search TMDB for movies using the rich data provider
@@ -110,7 +116,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                            get_in(rich_movie_data, [:images, Access.at(0), :url])
 
               image_url = if poster_path do
-                if String.starts_with?(poster_path, "/") do
+                if is_binary(poster_path) && String.starts_with?(poster_path, "/") do
                   # It's a TMDB path, construct full URL
                   "https://image.tmdb.org/t/p/w500#{poster_path}"
                 else
@@ -125,7 +131,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                 title: rich_movie_data.title,
                 description: rich_movie_data.description,
                 external_id: to_string(rich_movie_data.id),
-                external_data: rich_movie_data, # Store the complete rich data
+                external_data: safe_json_encode(rich_movie_data), # Use safe JSON encoding
                 image_url: image_url,
                 poll_id: movie_poll.id,
                 suggested_by_id: user.id
@@ -265,7 +271,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
         <!-- Add Movie Form -->
         <%= if @showing_add_form do %>
           <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" phx-click="hide_add_form" phx-target={@myself}>
-            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-1/3 shadow-lg rounded-md bg-white">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-1/3 shadow-lg rounded-md bg-white" phx-click="stop_propagation" phx-target={@myself}>
               <div class="mb-4">
                 <h3 class="text-lg font-medium text-gray-900">Add Movie Suggestion</h3>
                 <p class="text-sm text-gray-600">Search for a movie to add to the list</p>
@@ -291,11 +297,20 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                        phx-value-movie={movie.id}
                        phx-target={@myself}>
                                                               <%= if movie.images && length(movie.images) > 0 do %>
-                      <img
-                        src={List.first(movie.images).url}
-                        alt={movie.title}
-                        class="w-12 h-18 object-cover rounded mr-3"
-                      />
+                      <% image = List.first(movie.images) %>
+                      <%= if image && Map.has_key?(image, :url) do %>
+                        <img
+                          src={image.url}
+                          alt={movie.title}
+                          class="w-12 h-18 object-cover rounded mr-3"
+                        />
+                      <% else %>
+                        <div class="w-12 h-18 bg-gray-200 rounded mr-3 flex items-center justify-center">
+                          <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2m0 0V3a1 1 0 011 1v4a1 1 0 01-1-1h-2m-6 0h8m-8 0V8a1 1 0 01-1-1V3a1 1 0 011-1h2"/>
+                          </svg>
+                        </div>
+                      <% end %>
                     <% else %>
                       <div class="w-12 h-18 bg-gray-200 rounded mr-3 flex items-center justify-center">
                         <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,41 +358,11 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     """
   end
 
-  # Helper function to extract poster URL from rich data structure
-  defp get_movie_poster_url(external_data) when is_map(external_data) do
-    cond do
-      # Try media.images.posters[0].file_path (primary location in rich data)
-      get_in(external_data, [:media, :images, :posters, Access.at(0), :file_path]) ->
-        file_path = get_in(external_data, [:media, :images, :posters, Access.at(0), :file_path])
-        "https://image.tmdb.org/t/p/w500#{file_path}"
-
-      # Try metadata.poster_path (string key)
-      get_in(external_data, [:metadata, "poster_path"]) ->
-        "https://image.tmdb.org/t/p/w500#{external_data[:metadata]["poster_path"]}"
-
-      # Try images array first (atom keys - full URLs)
-      is_list(external_data[:images]) && length(external_data[:images]) > 0 ->
-        poster_image = Enum.find(external_data[:images], fn img ->
-          img[:type] == "poster" || img[:type] == :poster
-        end)
-        if poster_image, do: poster_image[:url], else: List.first(external_data[:images])[:url]
-
-      # Try string key images array (legacy)
-      is_list(external_data["images"]) && length(external_data["images"]) > 0 ->
-        poster_image = Enum.find(external_data["images"], fn img ->
-          img["type"] == "poster" || img["type"] == :poster
-        end)
-        if poster_image, do: poster_image["url"], else: List.first(external_data["images"])["url"]
-
-      # Legacy: Try direct poster_path
-      external_data["poster_path"] ->
-        "https://image.tmdb.org/t/p/w500#{external_data["poster_path"]}"
-
-      # No poster available
-      true ->
-        nil
+  # Helper function to safely encode JSON data
+  defp safe_json_encode(data) do
+    case Jason.encode(data) do
+      {:ok, json} -> json
+      {:error, _} -> "{}"
     end
   end
-
-  defp get_movie_poster_url(_), do: nil
 end
