@@ -144,7 +144,7 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
       })
 
       # External link indicators
-      assert html =~ ~s((opens in new tab))
+      assert html =~ ~s{(opens in new tab)}
       assert html =~ ~s(target="_blank")
       assert html =~ ~s(rel="noopener noreferrer")
 
