@@ -1360,7 +1360,25 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
       Logger.debug("Prepared data image_url: #{inspect(prepared_data["image_url"])}")
 
-      Map.merge(prepared_data, %{
+      # Preserve user input for title and description if they provided custom values
+      # Only fall back to generated values if user input is empty or missing
+      final_title = if option_params["title"] && String.trim(option_params["title"]) != "" do
+        option_params["title"]
+      else
+        prepared_data["title"]
+      end
+
+      final_description = if option_params["description"] && String.trim(option_params["description"]) != "" do
+        option_params["description"]
+      else
+        prepared_data["description"]
+      end
+
+      # Merge all data, preserving user input where provided
+      prepared_data
+      |> Map.merge(%{
+        "title" => final_title,
+        "description" => final_description,
         "poll_id" => socket.assigns.poll.id,
         "suggested_by_id" => socket.assigns.user.id,
         "status" => "active"

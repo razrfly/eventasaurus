@@ -100,72 +100,81 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     else
       user = socket.assigns.current_user
 
-      # Convert movie_id to integer for comparison
-      movie_id_int = case Integer.parse(movie_id) do
-        {id, _} -> id
-        :error -> movie_id
-      end
-
-      # Find the movie in search results
-      movie_data = socket.assigns.search_results
-      |> Enum.find(&(&1.id == movie_id_int))
-
-      if movie_data do
-        # Set adding_movie to true to prevent multiple requests
-        socket = assign(socket, :adding_movie, true)
-
-        # Use the centralized RichDataManager to get detailed movie data (same as backend)
-        case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
-          {:ok, rich_movie_data} ->
-            # Use the shared MovieDataService to prepare movie data consistently
-            option_params = MovieDataService.prepare_movie_option_data(
-              movie_data.id,
-              rich_movie_data
-            )
-            |> Map.merge(%{
-              "poll_id" => socket.assigns.movie_poll.id,
-              "suggested_by_id" => user.id
-            })
-
-            case Events.create_poll_option(option_params) do
-              {:ok, _option} ->
-                # Reload movie options to show the new movie immediately
-                updated_movie_options = Events.list_poll_options(socket.assigns.movie_poll)
-                |> Repo.preload(:suggested_by)
-
-                {:noreply,
-                 socket
-                 |> put_flash(:info, "Movie added successfully!")
-                 |> assign(:adding_movie, false)
-                 |> assign(:showing_add_form, false)
-                 |> assign(:search_query, "")
-                 |> assign(:search_results, [])
-                 |> assign(:movie_options, updated_movie_options)}
-
-              {:error, changeset} ->
-                require Logger
-                Logger.error("Failed to create poll option: #{inspect(changeset)}")
-                {:noreply,
-                 socket
-                 |> put_flash(:error, "Failed to add movie. Please try again.")
-                 |> assign(:adding_movie, false)}
-            end
-
-          {:error, reason} ->
-            require Logger
-            Logger.error("Failed to fetch rich movie data: #{inspect(reason)}")
-            {:noreply,
-             socket
-             |> put_flash(:error, "Failed to fetch movie details. Please try again.")
-             |> assign(:adding_movie, false)}
-        end
-      else
-        require Logger
-        Logger.error("Movie not found in search results: #{movie_id}")
+      # Check if user is authenticated
+      if is_nil(user) do
         {:noreply,
          socket
-         |> put_flash(:error, "Movie not found. Please try again.")
+         |> put_flash(:error, "You must be logged in to add movies.")
          |> assign(:adding_movie, false)}
+      else
+                # Find the movie in search results
+        # Handle both string and integer movie_id formats
+        movie_data = socket.assigns.search_results
+        |> Enum.find(fn movie ->
+          # Compare both integer and string formats to handle type mismatches
+          case Integer.parse(movie_id) do
+            {id, _} -> movie.id == id
+            :error -> to_string(movie.id) == movie_id
+          end
+        end)
+
+        if movie_data do
+          # Set adding_movie to true to prevent multiple requests
+          socket = assign(socket, :adding_movie, true)
+
+          # Use the centralized RichDataManager to get detailed movie data (same as backend)
+          case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
+            {:ok, rich_movie_data} ->
+              # Use the shared MovieDataService to prepare movie data consistently
+              option_params = MovieDataService.prepare_movie_option_data(
+                movie_data.id,
+                rich_movie_data
+              )
+              |> Map.merge(%{
+                "poll_id" => socket.assigns.movie_poll.id,
+                "suggested_by_id" => user.id
+              })
+
+              case Events.create_poll_option(option_params) do
+                {:ok, _option} ->
+                  # Reload movie options to show the new movie immediately
+                  updated_movie_options = Events.list_poll_options(socket.assigns.movie_poll)
+                  |> Repo.preload(:suggested_by)
+
+                  {:noreply,
+                   socket
+                   |> put_flash(:info, "Movie added successfully!")
+                   |> assign(:adding_movie, false)
+                   |> assign(:showing_add_form, false)
+                   |> assign(:search_query, "")
+                   |> assign(:search_results, [])
+                   |> assign(:movie_options, updated_movie_options)}
+
+                {:error, changeset} ->
+                  require Logger
+                  Logger.error("Failed to create poll option: #{inspect(changeset)}")
+                  {:noreply,
+                   socket
+                   |> put_flash(:error, "Failed to add movie. Please try again.")
+                   |> assign(:adding_movie, false)}
+              end
+
+            {:error, reason} ->
+              require Logger
+              Logger.error("Failed to fetch rich movie data: #{inspect(reason)}")
+              {:noreply,
+               socket
+               |> put_flash(:error, "Failed to fetch movie details. Please try again.")
+               |> assign(:adding_movie, false)}
+          end
+        else
+          require Logger
+          Logger.error("Movie not found in search results: #{movie_id}")
+          {:noreply,
+           socket
+           |> put_flash(:error, "Movie not found. Please try again.")
+           |> assign(:adding_movie, false)}
+        end
       end
     end
   end
@@ -174,6 +183,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   # Helper function to parse enhanced description into details line and main description
   defp parse_enhanced_description(description) do
+    description = description || ""
     case String.split(description, "\n\n", parts: 2) do
       [details_line, main_description] ->
         {details_line, main_description}
