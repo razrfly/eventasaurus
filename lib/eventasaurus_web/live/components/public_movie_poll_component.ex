@@ -46,7 +46,11 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   @impl true
   def handle_event("show_add_form", _params, socket) do
-    {:noreply, assign(socket, :showing_add_form, true)}
+    if socket.assigns.current_user do
+      {:noreply, assign(socket, :showing_add_form, true)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("hide_add_form", _params, socket) do
@@ -58,6 +62,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   end
 
   def handle_event("search_movies", %{"value" => query}, socket) do
+    if socket.assigns.current_user do
     if String.length(query) >= 2 do
       # Use the centralized RichDataManager system (same as backend)
       search_options = %{
@@ -91,6 +96,9 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
        socket
        |> assign(:search_query, query)
        |> assign(:search_results, [])}
+    end
+    else
+      {:noreply, socket}
     end
   end
 
@@ -282,99 +290,98 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
           <!-- Add Movie Button/Form -->
           <%= if @movie_poll.phase == "list_building" do %>
-            <%= if @showing_add_form do %>
-              <!-- Inline Add Movie Form -->
-              <div class="mt-4 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-                <div class="mb-4">
-                  <h4 class="text-md font-medium text-gray-900 mb-2">Add Movie Suggestion</h4>
-                  <p class="text-sm text-gray-600">Search for a movie to add to the list</p>
-                </div>
+            <%= if @current_user do %>
+              <%= if @showing_add_form do %>
+                <!-- Inline Add Movie Form -->
+                <div class="mt-4 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                  <div class="mb-4">
+                    <h4 class="text-md font-medium text-gray-900 mb-2">Add Movie Suggestion</h4>
+                    <p class="text-sm text-gray-600">Search for a movie to add to the list</p>
+                  </div>
 
-                <div class="mb-4">
-                  <input
-                    type="text"
-                    placeholder="Search for a movie..."
-                    value={@search_query}
-                    phx-keyup="search_movies"
-                    phx-target={@myself}
-                    phx-debounce="300"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+                  <div class="mb-4">
+                    <input
+                      type="text"
+                      placeholder="Search for a movie..."
+                      value={@search_query}
+                      phx-keyup="search_movies"
+                      phx-target={@myself}
+                      phx-debounce="300"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
 
-                <%= if length(@search_results) > 0 do %>
-                  <div class="space-y-3 mb-4 max-h-64 overflow-y-auto">
-                    <%= for movie <- @search_results do %>
-                      <div class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-all duration-200 bg-white"
-                           phx-click="add_movie"
-                           phx-value-movie={movie.id}
-                           phx-target={@myself}>
+                  <%= if length(@search_results) > 0 do %>
+                    <div class="space-y-3 mb-4 max-h-64 overflow-y-auto">
+                      <%= for movie <- @search_results do %>
+                        <div class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-all duration-200 bg-white"
+                             phx-click="add_movie"
+                             phx-value-movie={movie.id}
+                             phx-target={@myself}>
 
-                        <% image_url = MovieUtils.get_image_url(movie) %>
-                        <%= if image_url do %>
-                          <img src={image_url} alt={movie.title} class="w-12 h-16 object-cover rounded mr-4 flex-shrink-0" />
-                        <% else %>
-                          <div class="w-12 h-16 bg-gray-200 rounded mr-4 flex-shrink-0 flex items-center justify-center">
-                            <span class="text-xs text-gray-500">No Image</span>
+                          <% image_url = MovieUtils.get_image_url(movie) %>
+                          <%= if image_url do %>
+                            <img src={image_url} alt={movie.title} class="w-12 h-16 object-cover rounded mr-4 flex-shrink-0" />
+                          <% else %>
+                            <div class="w-12 h-16 bg-gray-200 rounded mr-4 flex-shrink-0 flex items-center justify-center">
+                              <span class="text-xs text-gray-500">No Image</span>
+                            </div>
+                          <% end %>
+
+                          <div class="flex-1 min-w-0">
+                            <h4 class="font-medium text-gray-900 truncate"><%= movie.title %></h4>
+                            <%= if movie.metadata && movie.metadata["release_date"] do %>
+                              <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
+                            <% end %>
+                            <%= if movie.description && String.length(movie.description) > 0 do %>
+                              <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
+                            <% end %>
                           </div>
-                        <% end %>
 
-                        <div class="flex-1 min-w-0">
-                          <h4 class="font-medium text-gray-900 truncate"><%= movie.title %></h4>
-                          <%= if movie.metadata && movie.metadata["release_date"] do %>
-                            <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
-                          <% end %>
-                          <%= if movie.description && String.length(movie.description) > 0 do %>
-                            <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
-                          <% end %>
-                        </div>
-
-                        <div class="ml-4 flex-shrink-0 text-blue-600 text-sm font-medium">
                           <%= if @adding_movie do %>
-                            <div class="flex items-center">
-                              <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <div class="ml-4 flex-shrink-0">
+                              <svg class="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                               </svg>
-                              Adding...
-                            </div>
-                          <% else %>
-                            <div class="flex items-center">
-                              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                              </svg>
-                              Add
                             </div>
                           <% end %>
                         </div>
-                      </div>
-                    <% end %>
-                  </div>
-                <% end %>
+                      <% end %>
+                    </div>
+                  <% end %>
 
-                <div class="flex justify-end space-x-2">
+                  <div class="flex justify-end space-x-3">
+                    <button
+                      phx-click="hide_add_form"
+                      phx-target={@myself}
+                      class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              <% else %>
+                <!-- Add Movie Button -->
+                <div class="mt-4">
                   <button
-                    phx-click="hide_add_form"
+                    phx-click="show_add_form"
                     phx-target={@myself}
-                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 border-dashed rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors"
                   >
-                    Cancel
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Movie Suggestion
                   </button>
                 </div>
-              </div>
+              <% end %>
             <% else %>
-              <!-- Add Movie Button -->
+              <!-- Show login prompt for anonymous users -->
               <div class="mt-4">
-                <button
-                  phx-click="show_add_form"
-                  phx-target={@myself}
-                  class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 border-dashed rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors"
-                >
-                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Movie Suggestion
-                </button>
+                <p class="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                  Please log in to suggest options.
+                </p>
               </div>
             <% end %>
           <% end %>
