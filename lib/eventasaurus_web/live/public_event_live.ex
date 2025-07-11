@@ -2093,7 +2093,12 @@ defmodule EventasaurusWeb.PublicEventLive do
         |> Enum.sort_by(& &1.id)
         |> Enum.map(fn poll ->
           # Filter out hidden poll options (status != "active") for public display
-          visible_options = Enum.filter(poll.poll_options || [], &(&1.status == "active"))
+          # Handle both loaded associations and NotLoaded structs
+          visible_options = case poll.poll_options do
+            %Ecto.Association.NotLoaded{} -> []
+            options when is_list(options) -> Enum.filter(options, &(&1.status == "active"))
+            _ -> []
+          end
           %{poll | poll_options: visible_options}
         end)
 
