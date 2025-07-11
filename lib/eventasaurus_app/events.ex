@@ -4017,9 +4017,13 @@ defmodule EventasaurusApp.Events do
   Creates a vote based on voting system.
   """
   def create_poll_vote(poll_option, user, vote_data, voting_system) do
+    # Get the poll_id from the poll_option
+    poll_option_with_poll = Repo.preload(poll_option, :poll)
+
     attrs = Map.merge(vote_data, %{
       poll_option_id: poll_option.id,
-      voter_id: user.id
+      voter_id: user.id,
+      poll_id: poll_option_with_poll.poll.id
     })
 
     changeset = case voting_system do
@@ -4280,7 +4284,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Casts multiple ranked votes at once (full ballot).
   """
-  def cast_ranked_votes(%Poll{} = poll, ranked_options, %User{} = user) when is_list(ranked_options) do
+    def cast_ranked_votes(%Poll{} = poll, ranked_options, %User{} = user) when is_list(ranked_options) do
     if poll.voting_system != "ranked" do
       {:error, "Poll does not support ranked voting"}
     else
@@ -4296,10 +4300,13 @@ defmodule EventasaurusApp.Events do
 
         # Cast votes for each ranked option
         results = for {option_id, rank} <- ranked_options do
-          option = Repo.get!(PollOption, option_id)
-          case create_poll_vote(option, user, %{vote_rank: rank}, "ranked") do
-            {:ok, vote} -> vote
-            {:error, changeset} -> Repo.rollback(changeset)
+          case Repo.get(PollOption, option_id) do
+            nil -> Repo.rollback("Option with ID #{option_id} not found")
+            option ->
+              case create_poll_vote(option, user, %{vote_rank: rank}, "ranked") do
+                {:ok, vote} -> vote
+                {:error, changeset} -> Repo.rollback(changeset)
+              end
           end
         end
 
