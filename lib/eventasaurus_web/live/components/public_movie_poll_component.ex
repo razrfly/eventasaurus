@@ -20,9 +20,14 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     event = assigns.event
     user = assigns.current_user
 
-    # Find the movie poll for this event
-    movie_poll = Events.list_polls(event)
-    |> Enum.find(&(&1.poll_type == "movie"))
+    # Use the specific poll passed to the component instead of searching
+    movie_poll = case Map.get(assigns, :poll) do
+      nil ->
+        # Fallback: Find the movie poll for this event if no specific poll provided
+        Events.list_polls(event)
+        |> Enum.find(&(&1.poll_type == "movie"))
+      poll -> poll
+    end
 
     if movie_poll do
       # Load movie options with suggested_by user
