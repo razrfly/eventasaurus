@@ -178,8 +178,8 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
                   <!-- Search Results - TMDB -->
                   <% tmdb = @search_results[:tmdb] || [] %>
                   <%= for item <- tmdb, (item.type != :person or (item.profile_path && item.profile_path != "")),
-                    src = (item.type == :person && item.profile_path && ("https://image.tmdb.org/t/p/w500" <> item.profile_path)) ||
-                          (item.type != :person && item.poster_path && ("https://image.tmdb.org/t/p/w500" <> item.poster_path)) ||
+                    src = (item.type == :person && item.profile_path && EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(item.profile_path, "w500")) ||
+                          (item.type != :person && item.poster_path && EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(item.poster_path, "w500")) ||
                           "/images/placeholder.png",
                     src != "/images/placeholder.png" do %>
                     <% display_name = item[:title] || item[:name] || item["title"] || item["name"] %>

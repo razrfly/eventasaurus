@@ -192,15 +192,8 @@ defmodule EventasaurusWeb.EventHTML do
     """
   end
 
-  # Helper function to generate TMDB image URLs with input validation
-  defp tmdb_image_url(path, size) when is_binary(path) do
-    # Validate that path starts with "/" and contains only safe characters
-    # TMDB image paths follow the pattern: /[alphanumeric chars and some symbols].(jpg|png|webp)
-    if String.match?(path, ~r{^/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$}i) do
-      "https://image.tmdb.org/t/p/#{size}#{path}"
-    else
-      nil
-    end
+  # Helper function to generate TMDB image URLs using centralized utility
+  defp tmdb_image_url(path, size) do
+    EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(path, size)
   end
-  defp tmdb_image_url(_, _), do: nil
 end

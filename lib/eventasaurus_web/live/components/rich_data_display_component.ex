@@ -231,20 +231,16 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
   # Public helper functions (maintaining backward compatibility)
 
   @doc """
-  Generates a TMDB image URL for the given path and size.
+  Generates a TMDB image URL for the given path and size using centralized configuration.
 
   ## Examples
 
       iex> RichDataDisplayComponent.tmdb_image_url("/abc123.jpg", "w500")
       "https://image.tmdb.org/t/p/w500/abc123.jpg"
   """
-  def tmdb_image_url(path, size \\ "w500")
-  def tmdb_image_url(nil, _size), do: nil
-  def tmdb_image_url("", _size), do: nil
-  def tmdb_image_url(path, size) when is_binary(path) and is_binary(size) do
-    "https://image.tmdb.org/t/p/#{size}#{path}"
+  def tmdb_image_url(path, size \\ "w500") do
+    EventasaurusWeb.Services.MovieConfig.build_image_url(path, size)
   end
-  def tmdb_image_url(_, _), do: nil
 
   # Private functions
 
