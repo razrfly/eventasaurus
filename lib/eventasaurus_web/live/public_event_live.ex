@@ -9,6 +9,9 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusApp.Ticketing
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
+  alias EventasaurusWeb.VotingInterfaceComponent
+  alias EventasaurusWeb.ResultsDisplayComponent
+  alias EventasaurusWeb.PublicGenericPollComponent
   alias EventasaurusWeb.ReservedSlugs
 
 
@@ -1462,15 +1465,101 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
           <% end %>
 
-          <!-- Movie Poll Section -->
-          <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
-            <.live_component
-              module={EventasaurusWeb.PublicMoviePollComponent}
-              id="public-movie-poll"
-              event={@event}
-              current_user={@user}
-            />
-          </div>
+          <!-- Event Polls Section -->
+          <%= if length(@event_polls || []) > 0 do %>
+            <div class="space-y-6">
+              <%= for poll <- @event_polls do %>
+                <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+                  <div class="flex items-center gap-3 mb-4">
+                    <div class="text-2xl">
+                      <%= case poll.poll_type do %>
+                        <% "movie" -> %> 🎬
+                        <% "restaurant" -> %> 🍽️
+                        <% "activity" -> %> 🎯
+                        <% _ -> %> 📝
+                      <% end %>
+                    </div>
+                    <div class="flex-1">
+                      <h2 class="text-xl font-semibold text-gray-900"><%= poll.title %></h2>
+                    </div>
+                    <div class={"px-3 py-1 rounded-full text-sm font-medium #{poll_phase_class(poll.phase)}"}>
+                      <%= case poll.phase do %>
+                        <% "list_building" -> %>Building Options
+                        <% "voting" -> %>Voting Open
+                        <% "closed" -> %>Voting Closed
+                        <% _ -> %>Active
+                      <% end %>
+                    </div>
+                  </div>
+
+                  <%= cond do %>
+                    <% poll.poll_type == "movie" -> %>
+                      <!-- Special handling for movie polls -->
+                      <.live_component
+                        module={EventasaurusWeb.PublicMoviePollComponent}
+                        id={"public-movie-poll-#{poll.id}"}
+                        event={@event}
+                        current_user={@user}
+                        poll={poll}
+                      />
+
+                    <% poll.phase == "list_building" -> %>
+                      <!-- List building phase: Use generic poll component for non-movie polls -->
+                      <.live_component
+                        module={PublicGenericPollComponent}
+                        id={"public-generic-poll-#{poll.id}"}
+                        event={@event}
+                        current_user={@user}
+                        poll={poll}
+                      />
+
+                    <% poll.phase == "voting" && @user -> %>
+                      <!-- Show voting interface for authenticated users -->
+                      <.live_component
+                        module={EventasaurusWeb.VotingInterfaceComponent}
+                        id={"voting-interface-#{poll.id}"}
+                        poll={poll}
+                        user={@user}
+                        user_votes={Map.get(@poll_user_votes || %{}, poll.id, [])}
+                        loading={false}
+                      />
+
+                    <% poll.phase == "voting" -> %>
+                      <!-- Show login prompt for anonymous users during voting -->
+                      <div class="text-center py-8 bg-gray-50 rounded-lg">
+                        <p class="text-gray-600 mb-4">Please log in to vote on this poll.</p>
+                        <a href="/login" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                          Sign In to Vote
+                        </a>
+                      </div>
+
+                    <% poll.phase == "closed" -> %>
+                      <!-- Show results for closed polls -->
+                      <.live_component
+                        module={EventasaurusWeb.ResultsDisplayComponent}
+                        id={"results-display-#{poll.id}"}
+                        poll={poll}
+                        show_percentages={true}
+                        show_vote_counts={true}
+                      />
+
+                    <% true -> %>
+                      <!-- Fallback for other poll phases -->
+                      <div class="text-center py-4 text-gray-500">
+                        <p>Poll details will be available soon.</p>
+                      </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          <% else %>
+            <!-- No polls available -->
+            <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm text-center">
+              <div class="text-gray-400 text-4xl mb-4">📊</div>
+              <h3 class="text-lg font-medium text-gray-900 mb-2">No Polls Yet</h3>
+              <p class="text-gray-500">Polls for this event will appear here when available.</p>
+            </div>
+          <% end %>
         </div>
 
                  <!-- Right sidebar -->
@@ -1983,26 +2072,47 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
+  # Helper function for poll phase CSS classes
+  defp poll_phase_class(phase) do
+    case phase do
+      "list_building" -> "bg-yellow-100 text-yellow-800"
+      "voting" -> "bg-green-100 text-green-800"
+      "closed" -> "bg-gray-100 text-gray-800"
+      _ -> "bg-blue-100 text-blue-800"
+    end
+  end
+
   # Load event polls for display on public event page
   defp load_event_polls(socket) do
     event = socket.assigns.event
+    user = socket.assigns[:user]
 
     try do
-      # Only load polls if the event is public to prevent exposing private event polls
-      event_polls = if event.visibility == "public" do
-        Events.list_polls(event)
+      # Load polls for all events on public pages (removed visibility check that was broken)
+      event_polls = Events.list_polls(event)
         |> Enum.sort_by(& &1.id)
+
+      # Load user votes for each poll if user is authenticated
+      poll_user_votes = if user && length(event_polls) > 0 do
+        event_polls
+        |> Enum.map(fn poll ->
+          votes = Events.list_user_poll_votes(poll, user)
+          {poll.id, votes}
+        end)
+        |> Map.new()
       else
-        []
+        %{}
       end
 
       socket
       |> assign(:event_polls, event_polls)
+      |> assign(:poll_user_votes, poll_user_votes)
     rescue
       error ->
         Logger.error("Failed to load event polls: #{inspect(error)}")
         socket
         |> assign(:event_polls, [])
+        |> assign(:poll_user_votes, %{})
     end
   end
 
