@@ -764,20 +764,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
             case TmdbRichDataProvider.get_cached_details(result.id, :movie) do
               {:ok, rich_data} ->
-                # Extract poster path from rich data structure
-                poster_path = get_in(rich_data, [:media, :images, :posters, Access.at(0), :file_path]) ||
-                             get_in(rich_data, [:metadata, "poster_path"]) ||
-                             get_in(rich_data, ["metadata", "poster_path"])
-
-                image_url = if poster_path do
-                  if is_binary(poster_path) && String.starts_with?(poster_path, "/") do
-                    "https://image.tmdb.org/t/p/w500#{poster_path}"
-                  else
-                    poster_path
-                  end
-                else
-                  nil
-                end
+                # Use MovieDataService for consistent data preparation (same as frontend)
+                prepared_data = MovieDataService.prepare_movie_option_data(result.id, rich_data)
 
                 # Send rich data back to component using send_update
                 send_update(parent_pid, __MODULE__,
@@ -785,7 +773,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   action: :movie_rich_data_loaded,
                   selected_result: result,
                   rich_data: rich_data,
-                  image_url: image_url
+                  image_url: prepared_data["image_url"]
                 )
 
               {:error, error} ->
