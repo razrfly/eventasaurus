@@ -1028,6 +1028,17 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info({:ranked_votes_submitted}, socket) do
+    # Reload poll user votes to show updated rankings
+    socket = load_event_polls(socket)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Your ranking has been saved!")
+    }
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <!-- Public Event Show Page with enhanced movie display -->
