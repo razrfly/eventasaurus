@@ -74,14 +74,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:search_query, assigns.search_query)}
 
       assigns[:action] == :movie_rich_data_loaded ->
-        # Update form with rich TMDB data
-        changeset = create_option_changeset(socket, %{
-          "title" => assigns.selected_result.title,
-          "description" => assigns.rich_data[:description] || assigns.rich_data["overview"] || assigns.selected_result.description || "",
-          "external_id" => to_string(assigns.selected_result.id),
-          "image_url" => assigns.image_url,
-          "external_data" => assigns.rich_data
-        })
+        # Update form with rich TMDB data using the same logic as PublicMoviePollComponent
+        movie_id = assigns.selected_result.id
+        rich_data = assigns.rich_data
+
+        # Use MovieDataService to prepare consistent data (same as PublicMoviePollComponent)
+        prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
+
+        changeset = create_option_changeset(socket, prepared_data)
 
         {:ok,
          socket
@@ -1345,59 +1345,63 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp save_option(socket, option_params) do
     require Logger
 
-    # Ensure ALL movie options get consistent data structure
+    # Ensure ALL movie options get consistent data structure with fallback logic
     option_params = if socket.assigns.poll.poll_type == "movie" &&
-                      Map.has_key?(option_params, "external_id") &&
-                      Map.has_key?(option_params, "external_data") do
-      # For movie options with rich data, use the shared service to prepare consistent data
-      movie_id = option_params["external_id"]
+                      Map.has_key?(option_params, "external_data") &&
+                      not is_nil(option_params["external_data"]) &&
+                      not has_enhanced_description?(option_params["description"]) do
+      # For movie options that have external_data but haven't been properly enhanced
+      # (e.g., manual entries, API errors, or rich data loading failures)
+      movie_id = option_params["external_id"] ||
+                 get_in(option_params, ["external_data", "id"]) ||
+                 get_in(option_params, ["external_data", :id])
       rich_data = option_params["external_data"]
 
-      Logger.debug("Admin interface saving movie with external_id: #{movie_id}")
-      Logger.debug("Rich data keys: #{inspect(Map.keys(rich_data))}")
+      Logger.debug("Admin interface applying MovieDataService fallback for movie_id: #{movie_id}")
 
-      prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
+      if movie_id && rich_data do
+        prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
 
-      Logger.debug("Prepared data image_url: #{inspect(prepared_data["image_url"])}")
+        # Preserve any user-provided custom title/description over generated ones
+        final_data = prepared_data
+        |> maybe_preserve_user_input("title", option_params["title"])
+        |> maybe_preserve_user_input("description", option_params["description"])
 
-      # Preserve user input for title and description if they provided custom values
-      # Only fall back to generated values if user input is empty or missing
-      final_title = if option_params["title"] && String.trim(option_params["title"]) != "" do
-        option_params["title"]
+        Logger.debug("MovieDataService fallback applied successfully")
+        final_data
       else
-        prepared_data["title"]
+        Logger.debug("MovieDataService fallback skipped - missing movie_id or rich_data")
+        option_params
       end
-
-      final_description = if option_params["description"] && String.trim(option_params["description"]) != "" do
-        option_params["description"]
-      else
-        prepared_data["description"]
-      end
-
-      # Merge all data, preserving user input where provided
-      prepared_data
-      |> Map.merge(%{
-        "title" => final_title,
-        "description" => final_description,
-        "poll_id" => socket.assigns.poll.id,
-        "suggested_by_id" => socket.assigns.user.id,
-        "status" => "active"
-      })
     else
-      # For all other options, use the standard structure
-      Logger.debug("Admin interface saving non-movie option or missing external data")
-      Logger.debug("Option params keys: #{inspect(Map.keys(option_params))}")
-
-      Map.merge(option_params, %{
-        "poll_id" => socket.assigns.poll.id,
-        "suggested_by_id" => socket.assigns.user.id,
-        "status" => "active"
-      })
+      # Non-movie options or already properly prepared movie options
+      option_params
     end
 
-    Logger.debug("Final option_params image_url: #{inspect(option_params["image_url"])}")
-    Events.create_poll_option(option_params)
+    final_option_params = Map.merge(option_params, %{
+      "poll_id" => socket.assigns.poll.id,
+      "suggested_by_id" => socket.assigns.user.id,
+      "status" => "active"
+    })
+
+    Logger.debug("Admin interface saving option with title: #{final_option_params["title"]}")
+    Logger.debug("Admin interface image_url: #{inspect(final_option_params["image_url"])}")
+    Logger.debug("Admin interface description preview: #{String.slice(final_option_params["description"] || "", 0, 100)}...")
+
+    Events.create_poll_option(final_option_params)
   end
+
+  # Helper to detect if description has been enhanced (contains director/year pattern)
+  defp has_enhanced_description?(description) when is_binary(description) do
+    String.contains?(description, " • Directed by ") || String.contains?(description, " • ")
+  end
+  defp has_enhanced_description?(_), do: false
+
+  # Helper to preserve user input over generated content
+  defp maybe_preserve_user_input(prepared_data, key, user_value) when is_binary(user_value) and user_value != "" do
+    Map.put(prepared_data, key, user_value)
+  end
+  defp maybe_preserve_user_input(prepared_data, _key, _user_value), do: prepared_data
 
   # UI helper functions
 

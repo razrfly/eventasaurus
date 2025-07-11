@@ -30,7 +30,7 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
         case get_in(poll_option.external_data, ["media", "images", "posters"]) do
           [first_poster | _] when is_map(first_poster) ->
             case first_poster["file_path"] do
-              path when is_binary(path) -> "https://image.tmdb.org/t/p/w500#{path}"
+              path when is_binary(path) -> EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(path, "w500")
               _ -> get_image_url(poll_option.external_data)
             end
           _ -> get_image_url(poll_option.external_data)
@@ -43,18 +43,36 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
 
     def get_image_url(movie_data) when is_map(movie_data) do
     cond do
+      # Try TMDB media.images.posters structure with string keys (admin interface) - PRIORITY
+      is_map(movie_data) && is_map(movie_data["media"]) && is_map(movie_data["media"]["images"]) &&
+      is_list(movie_data["media"]["images"]["posters"]) && length(movie_data["media"]["images"]["posters"]) > 0 ->
+        first_poster = List.first(movie_data["media"]["images"]["posters"])
+        if is_map(first_poster) && is_binary(first_poster["file_path"]) do
+          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(first_poster["file_path"], "w500")
+        else
+          nil
+        end
+      # Try TMDB media.images.posters structure with atom keys (admin interface)
+      is_map(movie_data) && is_map(movie_data[:media]) && is_map(movie_data[:media][:images]) &&
+      is_list(movie_data[:media][:images][:posters]) && length(movie_data[:media][:images][:posters]) > 0 ->
+        first_poster = List.first(movie_data[:media][:images][:posters])
+        if is_map(first_poster) && is_binary(first_poster[:file_path]) do
+          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(first_poster[:file_path], "w500")
+        else
+          nil
+        end
+      # Try direct string path (common)
+      is_map(movie_data) && is_binary(movie_data["poster_path"]) ->
+        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(movie_data["poster_path"], "w500")
+      # Try direct atom path
+      is_map(movie_data) && is_binary(movie_data[:poster_path]) ->
+        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(movie_data[:poster_path], "w500")
       # Try atom keys first - nested format
       is_map(movie_data) && is_map(movie_data[:poster_path]) && movie_data[:poster_path][:url] ->
         movie_data[:poster_path][:url]
       # Try string keys - nested format
       is_map(movie_data) && is_map(movie_data["poster_path"]) && movie_data["poster_path"]["url"] ->
         movie_data["poster_path"]["url"]
-      # Try direct atom path
-      is_map(movie_data) && is_binary(movie_data[:poster_path]) ->
-        "https://image.tmdb.org/t/p/w500#{movie_data[:poster_path]}"
-      # Try direct string path
-      is_map(movie_data) && is_binary(movie_data["poster_path"]) ->
-        "https://image.tmdb.org/t/p/w500#{movie_data["poster_path"]}"
       # Try images array format (from rich data)
       is_map(movie_data) && is_list(movie_data[:images]) && length(movie_data[:images]) > 0 ->
         first_image = List.first(movie_data[:images])
@@ -94,11 +112,13 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
       2023
   """
   def get_release_year(movie_data) when is_map(movie_data) do
-    release_date = movie_data[:release_date] ||
+    # Primary: Look in metadata.release_date (admin interface saves it here)
+    release_date = get_in(movie_data, ["metadata", "release_date"]) ||
                    movie_data["release_date"] ||
+                   movie_data[:release_date] ||
                    get_in(movie_data, [:metadata, :release_date]) ||
                    get_in(movie_data, [:metadata, "release_date"]) ||
-                   get_in(movie_data, ["metadata", "release_date"])
+                   get_in(movie_data, ["metadata", :release_date])
 
     case release_date do
       date_string when is_binary(date_string) ->
@@ -154,21 +174,23 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
       "Christopher Nolan"
   """
   def get_director(movie_data) when is_map(movie_data) do
-    crew = movie_data[:crew] ||
-           movie_data["crew"] ||
-           get_in(movie_data, [:metadata, :crew]) ||
+    # Primary: Look for crew in the root level (admin interface saves it here)
+    crew = movie_data["crew"] ||
+           movie_data[:crew] ||
            get_in(movie_data, ["metadata", "crew"]) ||
+           get_in(movie_data, [:metadata, :crew]) ||
+           get_in(movie_data, ["metadata", :crew]) ||
            []
 
     case crew do
       crew_list when is_list(crew_list) ->
         director = Enum.find(crew_list, fn member ->
-          (member[:job] == "Director" || member["job"] == "Director")
+          is_map(member) and (member["job"] == "Director" || member[:job] == "Director")
         end)
 
         case director do
-          %{name: name} -> name
-          %{"name" => name} -> name
+          %{"name" => name} when is_binary(name) -> name
+          %{name: name} when is_binary(name) -> name
           _ -> nil
         end
       _ -> nil
@@ -188,21 +210,27 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
       ["Action", "Adventure"]
   """
   def get_genres(movie_data) when is_map(movie_data) do
-    genres = movie_data[:genres] ||
+    # Primary: Look in metadata.genres (admin interface saves it here)
+    genres = get_in(movie_data, ["metadata", "genres"]) ||
              movie_data["genres"] ||
+             movie_data[:genres] ||
              get_in(movie_data, [:metadata, :genres]) ||
-             get_in(movie_data, ["metadata", "genres"]) ||
+             get_in(movie_data, [:metadata, "genres"]) ||
              []
 
-    genres
-    |> Enum.map(fn genre ->
-      cond do
-        is_map(genre) -> genre[:name] || genre["name"]
-        is_binary(genre) -> genre
-        true -> nil
-      end
-    end)
-    |> Enum.filter(&(&1))
+    case genres do
+      genres_list when is_list(genres_list) ->
+        genres_list
+        |> Enum.map(fn genre ->
+          cond do
+            is_map(genre) -> genre["name"] || genre[:name]
+            is_binary(genre) -> genre
+            true -> nil
+          end
+        end)
+        |> Enum.filter(&is_binary/1)
+      _ -> []
+    end
   rescue
     _ -> []
   end
