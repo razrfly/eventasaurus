@@ -262,6 +262,7 @@ defmodule EventasaurusApp.Events.Poll do
       {"list_building", "voting"} -> changeset
       {"list_building", "closed"} -> changeset
       {"voting", "closed"} -> changeset
+      {"voting", "list_building"} -> changeset  # Allow bidirectional voting ↔ building
       _ -> add_error(changeset, :phase, "invalid phase transition from #{current_phase} to #{new_phase}")
     end
   end
