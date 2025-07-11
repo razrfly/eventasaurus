@@ -2088,9 +2088,14 @@ defmodule EventasaurusWeb.PublicEventLive do
     user = socket.assigns[:user]
 
     try do
-      # Load polls for all events on public pages (removed visibility check that was broken)
+      # Load polls for all events on public pages with hidden options filtered out
       event_polls = Events.list_polls(event)
         |> Enum.sort_by(& &1.id)
+        |> Enum.map(fn poll ->
+          # Filter out hidden poll options (status != "active") for public display
+          visible_options = Enum.filter(poll.poll_options || [], &(&1.status == "active"))
+          %{poll | poll_options: visible_options}
+        end)
 
       # Load user votes for each poll if user is authenticated
       poll_user_votes = if user && length(event_polls) > 0 do
