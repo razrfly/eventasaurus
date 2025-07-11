@@ -1,7 +1,7 @@
 defmodule EventasaurusApp.Events.PollVote do
   use Ecto.Schema
   import Ecto.Changeset
-  alias EventasaurusApp.Events.PollOption
+  alias EventasaurusApp.Events.{Poll, PollOption}
   alias EventasaurusApp.Accounts.User
 
   schema "poll_votes" do
@@ -12,6 +12,7 @@ defmodule EventasaurusApp.Events.PollVote do
 
     belongs_to :poll_option, PollOption
     belongs_to :voter, User, foreign_key: :voter_id
+    belongs_to :poll, Poll, foreign_key: :poll_id
 
     timestamps()
   end
@@ -19,8 +20,8 @@ defmodule EventasaurusApp.Events.PollVote do
   @doc false
   def changeset(poll_vote, attrs) do
     poll_vote
-    |> cast(attrs, [:vote_value, :vote_numeric, :vote_rank, :voted_at, :poll_option_id, :voter_id])
-    |> validate_required([:poll_option_id, :voter_id])
+    |> cast(attrs, [:vote_value, :vote_numeric, :vote_rank, :voted_at, :poll_option_id, :voter_id, :poll_id])
+    |> validate_required([:poll_option_id, :voter_id, :poll_id])
     |> validate_vote_fields()
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
@@ -34,8 +35,8 @@ defmodule EventasaurusApp.Events.PollVote do
   """
   def binary_vote_changeset(poll_vote, attrs) do
     poll_vote
-    |> cast(attrs, [:vote_value, :poll_option_id, :voter_id])
-    |> validate_required([:vote_value, :poll_option_id, :voter_id])
+    |> cast(attrs, [:vote_value, :poll_option_id, :voter_id, :poll_id])
+    |> validate_required([:vote_value, :poll_option_id, :voter_id, :poll_id])
     |> validate_inclusion(:vote_value, ~w(yes no))
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
@@ -49,8 +50,8 @@ defmodule EventasaurusApp.Events.PollVote do
   """
   def approval_vote_changeset(poll_vote, attrs) do
     poll_vote
-    |> cast(attrs, [:vote_value, :poll_option_id, :voter_id])
-    |> validate_required([:vote_value, :poll_option_id, :voter_id])
+    |> cast(attrs, [:vote_value, :poll_option_id, :voter_id, :poll_id])
+    |> validate_required([:vote_value, :poll_option_id, :voter_id, :poll_id])
     |> validate_inclusion(:vote_value, ~w(selected))
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
@@ -64,8 +65,8 @@ defmodule EventasaurusApp.Events.PollVote do
   """
   def ranked_vote_changeset(poll_vote, attrs) do
     poll_vote
-    |> cast(attrs, [:vote_rank, :poll_option_id, :voter_id])
-    |> validate_required([:vote_rank, :poll_option_id, :voter_id])
+    |> cast(attrs, [:vote_rank, :poll_option_id, :voter_id, :poll_id])
+    |> validate_required([:vote_rank, :poll_option_id, :voter_id, :poll_id])
     |> validate_number(:vote_rank, greater_than: 0, less_than_or_equal_to: 10)
     |> put_change(:vote_value, "ranked")
     |> put_voted_at()
@@ -80,8 +81,8 @@ defmodule EventasaurusApp.Events.PollVote do
   """
   def star_vote_changeset(poll_vote, attrs) do
     poll_vote
-    |> cast(attrs, [:vote_numeric, :poll_option_id, :voter_id])
-    |> validate_required([:vote_numeric, :poll_option_id, :voter_id])
+    |> cast(attrs, [:vote_numeric, :poll_option_id, :voter_id, :poll_id])
+    |> validate_required([:vote_numeric, :poll_option_id, :voter_id, :poll_id])
     |> validate_number(:vote_numeric, greater_than: 0, less_than_or_equal_to: 5)
     |> put_change(:vote_value, "star")
     |> put_voted_at()
@@ -251,9 +252,9 @@ defmodule EventasaurusApp.Events.PollVote do
     end
   end
 
-  defp put_voted_at(changeset) do
+        defp put_voted_at(changeset) do
     case get_field(changeset, :voted_at) do
-      nil -> put_change(changeset, :voted_at, DateTime.utc_now())
+      nil -> put_change(changeset, :voted_at, DateTime.utc_now() |> DateTime.truncate(:second))
       _ -> changeset
     end
   end
