@@ -240,7 +240,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                       <%= if option.description do %>
                         <% {details_line, main_description} = parse_enhanced_description(option.description) %>
                         <%= if details_line do %>
-                          <p class="text-sm text-blue-600 font-medium mb-2"><%= details_line %></p>
+                          <p class="text-sm text-gray-600 font-medium mb-2"><%= details_line %></p>
                         <% end %>
                         <%= if main_description && String.length(main_description) > 0 do %>
                           <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= main_description %></p>
