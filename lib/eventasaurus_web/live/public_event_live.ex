@@ -1027,7 +1027,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply, socket}
   end
 
-  @impl true
+    @impl true
   def handle_info({:ranked_votes_submitted}, socket) do
     # Reload poll user votes to show updated rankings
     socket = load_event_polls(socket)
@@ -1036,6 +1036,14 @@ defmodule EventasaurusWeb.PublicEventLive do
      socket
      |> put_flash(:info, "Your ranking has been saved!")
     }
+  end
+
+  @impl true
+  def handle_info({:vote_cast, _option_id, _rating}, socket) do
+    # Reload poll user votes to show updated star ratings
+    socket = load_event_polls(socket)
+
+    {:noreply, socket}
   end
 
   @impl true
