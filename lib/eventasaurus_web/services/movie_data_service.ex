@@ -19,9 +19,17 @@ defmodule EventasaurusWeb.Services.MovieDataService do
     director = MovieUtils.get_director(rich_data)
     genre = MovieUtils.get_genres(rich_data)
 
-    # Create enhanced description using the same logic as the public interface
-    # Handle both string and atom keys
+    # Extract base description from TMDB data (usually in overview field)
+    # Handle both string and atom keys and multiple possible locations
     base_description = cond do
+      # Check overview field (most common for TMDB)
+      is_map(rich_data) and Map.has_key?(rich_data, "overview") -> rich_data["overview"]
+      is_map(rich_data) and Map.has_key?(rich_data, :overview) -> rich_data[:overview]
+      # Check metadata.overview
+      is_map(rich_data) and get_in(rich_data, ["metadata", "overview"]) -> get_in(rich_data, ["metadata", "overview"])
+      is_map(rich_data) and get_in(rich_data, [:metadata, "overview"]) -> get_in(rich_data, [:metadata, "overview"])
+      is_map(rich_data) and get_in(rich_data, [:metadata, :overview]) -> get_in(rich_data, [:metadata, :overview])
+      # Fallback to description field
       is_map(rich_data) and Map.has_key?(rich_data, "description") -> rich_data["description"]
       is_map(rich_data) and Map.has_key?(rich_data, :description) -> rich_data[:description]
       true -> ""
