@@ -148,6 +148,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign_new(:show_search_dropdown, fn -> false end)
          |> assign_new(:selected_result, fn -> nil end)
          |> assign_new(:loading_rich_data, fn -> false end)
+         |> assign_new(:show_phase_dropdown, fn -> false end)
          |> then(fn socket ->
            # Handle editing mode after all other assigns are set
            if Map.get(assigns, :editing_option_id) do
@@ -679,18 +680,77 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
             <% end %>
           </div>
 
-                      <%= if @is_creator && safe_poll_options_count(@poll.poll_options) > 0 do %>
-            <button
-              type="button"
-              phx-click="start_voting"
-              phx-target={@myself}
-              class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              <svg class="-ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Start Voting Phase
-            </button>
+                                <%= if @is_creator && safe_poll_options_count(@poll.poll_options) > 0 && @poll.phase != "closed" do %>
+            <div class="relative inline-block text-left" phx-click-away="close_phase_dropdown" phx-target={@myself}>
+              <div>
+                <button
+                  type="button"
+                  phx-click="toggle_phase_dropdown"
+                  phx-target={@myself}
+                  class="inline-flex items-center justify-center w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  id="phase-menu-button"
+                  aria-expanded={to_string(Map.get(assigns, :show_phase_dropdown, false))}
+                  aria-haspopup="true"
+                >
+                  <svg class="-ml-1 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <%= if @poll.phase == "voting" do %>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <% else %>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                    <% end %>
+                  </svg>
+                  <%= case @poll.phase do %>
+                    <% "voting" -> %>Voting Phase
+                    <% "list_building" -> %>Building Phase
+                    <% _ -> %>Poll Phase
+                  <% end %>
+                  <svg class={"-mr-1 ml-2 h-5 w-5 transition-transform #{if Map.get(assigns, :show_phase_dropdown, false), do: "rotate-180", else: ""}"} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+
+              <div
+                class={"origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 #{if Map.get(assigns, :show_phase_dropdown, false), do: "", else: "hidden"}"}
+                role="menu"
+                aria-orientation="vertical"
+                aria-labelledby="phase-menu-button"
+                tabindex="-1"
+              >
+                <div class="py-1" role="none">
+                  <%= if @poll.phase != "list_building" do %>
+                    <button
+                      type="button"
+                      phx-click="change_poll_phase"
+                      phx-value-phase="list_building"
+                      phx-target={@myself}
+                      class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                      role="menuitem"
+                    >
+                      <svg class="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                      </svg>
+                      Building Phase
+                    </button>
+                  <% end %>
+                  <%= if @poll.phase != "voting" do %>
+                    <button
+                      type="button"
+                      phx-click="change_poll_phase"
+                      phx-value-phase="voting"
+                      phx-target={@myself}
+                      class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                      role="menuitem"
+                    >
+                      <svg class="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Voting Phase
+                    </button>
+                  <% end %>
+                </div>
+              </div>
+            </div>
           <% end %>
         </div>
       </div>
@@ -1026,23 +1086,41 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   @impl true
-  def handle_event("start_voting", _params, socket) do
-    case Events.transition_poll_to_voting(socket.assigns.poll) do
+  def handle_event("toggle_phase_dropdown", _params, socket) do
+    {:noreply, assign(socket, :show_phase_dropdown, !Map.get(socket.assigns, :show_phase_dropdown, false))}
+  end
+
+  @impl true
+  def handle_event("close_phase_dropdown", _params, socket) do
+    {:noreply, assign(socket, :show_phase_dropdown, false)}
+  end
+
+  @impl true
+  def handle_event("change_poll_phase", %{"phase" => new_phase}, socket) do
+    old_phase = socket.assigns.poll.phase
+
+    case Events.transition_poll_phase(socket.assigns.poll, new_phase) do
       {:ok, poll} ->
         # Broadcast phase change via PubSub
         PollPubSubService.broadcast_poll_phase_changed(
           poll,
-          "list_building",
-          "voting",
+          old_phase,
+          new_phase,
           socket.assigns.user
         )
 
-        send(self(), {:poll_phase_changed, poll, "Voting phase started!"})
-        {:noreply, socket}
+        phase_message = case new_phase do
+          "voting" -> "Voting phase started!"
+          "list_building" -> "Switched back to building phase"
+          _ -> "Poll phase changed"
+        end
+
+        send(self(), {:poll_phase_changed, poll, phase_message})
+        {:noreply, assign(socket, :show_phase_dropdown, false)}
 
       {:error, _} ->
-        send(self(), {:show_error, "Failed to start voting phase"})
-        {:noreply, socket}
+        send(self(), {:show_error, "Failed to change poll phase"})
+        {:noreply, assign(socket, :show_phase_dropdown, false)}
     end
   end
 
