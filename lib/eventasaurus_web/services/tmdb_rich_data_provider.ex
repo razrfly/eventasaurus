@@ -369,6 +369,6 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   defp tmdb_image_url(nil), do: nil
   defp tmdb_image_url(""), do: nil
   defp tmdb_image_url(path) when is_binary(path) do
-    "https://image.tmdb.org/t/p/original#{path}"
+    EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(path, "original")
   end
 end
