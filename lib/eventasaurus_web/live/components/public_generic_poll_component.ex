@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   require Logger
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
+  alias EventasaurusWeb.TimeSelectorComponent
 
   @impl true
   def update(assigns, socket) do
@@ -55,6 +56,18 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   def handle_event("update_option_field", %{"field" => "title", "value" => value}, socket) do
     {:noreply, assign(socket, :option_title, value)}
+  end
+
+  # Handle the select element's event structure (for time selector)
+  def handle_event("update_option_field", %{"_target" => ["time_selector"], "time_selector" => value}, socket) do
+    {:noreply, assign(socket, :option_title, value)}
+  end
+
+  # Handle the case where the select element event structure is different (fallback)
+  def handle_event("update_option_field", %{"_target" => ["undefined"]}, socket) do
+    # This happens when the select element doesn't have a proper name attribute
+    # Just return the socket without changes
+    {:noreply, socket}
   end
 
   # Handle form changes (for the new input name structure)
@@ -217,7 +230,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
           <!-- Poll Options List -->
           <%= if length(@poll_options) > 0 do %>
             <div class="space-y-3">
-              <%= for option <- @poll_options do %>
+              <%= for option <- sort_options_by_time(@poll_options, @poll.poll_type) do %>
                 <div class="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
                   <div class="flex">
                     <!-- Option Image (same as manager area) -->
@@ -231,7 +244,13 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                     <% end %>
 
                     <div class="flex-1 min-w-0">
-                      <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
+                      <h4 class="font-medium text-gray-900 mb-1">
+                        <%= if @poll.poll_type == "time" do %>
+                          <%= format_time_for_display(option.title) %>
+                        <% else %>
+                          <%= option.title %>
+                        <% end %>
+                      </h4>
 
                       <%= if option.description && String.length(option.description) > 0 do %>
                         <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= option.description %></p>
@@ -287,31 +306,56 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                         <label class="block text-sm font-medium text-gray-700 mb-1">
                           <%= get_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
                         </label>
-                        <%= if @poll.poll_type == "places" do %>
+                        <%= if @poll.poll_type == "time" do %>
+                          <!-- Use a hidden input for form submission along with the time selector -->
                           <input
-                            type="text"
+                            type="hidden"
                             name="poll_option[title]"
-                            id="option_title"
                             value={@option_title}
-                            placeholder={get_title_placeholder(@poll.poll_type)}
-                            phx-debounce="300"
-                            phx-hook="PlacesSuggestionSearch"
-                            autocomplete="off"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           />
-                        <% else %>
-                          <input
-                            type="text"
-                            id={"input-#{@poll.id}"}
-                            name="poll_option[title]"
-                            placeholder={get_title_placeholder(@poll.poll_type)}
-                            value={@option_title}
-                            phx-keyup="update_option_field"
+                          <select
+                            id={"time-selector-#{@poll.id}"}
+                            name="time_selector"
+                            phx-change="update_option_field"
                             phx-value-field="title"
                             phx-target={@myself}
                             class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             required
-                          />
+                          >
+                            <option value="" disabled selected={@option_title == ""}>Select a time...</option>
+                            <%= for time_option <- time_options() do %>
+                              <option value={time_option.value} selected={@option_title == time_option.value}>
+                                <%= time_option.display %>
+                              </option>
+                            <% end %>
+                          </select>
+                        <% else %>
+                          <%= if @poll.poll_type == "places" do %>
+                            <input
+                              type="text"
+                              name="poll_option[title]"
+                              id="option_title"
+                              value={@option_title}
+                              placeholder={get_title_placeholder(@poll.poll_type)}
+                              phx-debounce="300"
+                              phx-hook="PlacesSuggestionSearch"
+                              autocomplete="off"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          <% else %>
+                            <input
+                              type="text"
+                              id={"input-#{@poll.id}"}
+                              name="poll_option[title]"
+                              placeholder={get_title_placeholder(@poll.poll_type)}
+                              value={@option_title}
+                              phx-keyup="update_option_field"
+                              phx-value-field="title"
+                              phx-target={@myself}
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              required
+                            />
+                          <% end %>
                         <% end %>
                       </div>
 
@@ -389,6 +433,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       "places" -> "📍"
       "activity" -> "🎯"
       "custom" -> "📝"
+      "time" -> "⏰"
       _ -> "📊"
     end
   end
@@ -398,6 +443,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       "places" -> "Place Suggestions"
       "activity" -> "Activity Suggestions"
       "custom" -> "Poll Options"
+      "time" -> "Time Suggestions"
       _ -> "Suggestions"
     end
   end
@@ -407,6 +453,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       "places" -> "places"
       "activity" -> "activities"
       "custom" -> "options"
+      "time" -> "times"
       _ -> "options"
     end
   end
@@ -416,6 +463,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       "places" -> "Place Suggestion"
       "activity" -> "Activity Suggestion"
       "custom" -> "Option"
+      "time" -> "Time"
       _ -> "Suggestion"
     end
   end
@@ -425,6 +473,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       "places" -> "Place Name"
       "activity" -> "Activity Name"
       "custom" -> "Option Title"
+      "time" -> "Time"
       _ -> "Title"
     end
   end
@@ -434,6 +483,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       "places" -> "Enter place name..."
       "activity" -> "Enter activity name..."
       "custom" -> "Enter your option..."
+      "time" -> "Select a time..."
       _ -> "Enter title..."
     end
   end
@@ -452,5 +502,79 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   defp extract_poll_options_coordinates(_), do: []
+
+  defp time_options() do
+    # Start at 10:00 AM (10:00) and go through 11:30 PM (23:30)
+    # 30-minute increments
+    10..23
+    |> Enum.flat_map(fn hour ->
+      [
+        %{value: format_time_value(hour, 0), display: format_time_display(hour, 0)},
+        %{value: format_time_value(hour, 30), display: format_time_display(hour, 30)}
+      ]
+    end)
+  end
+
+  defp format_time_value(hour, minute) do
+    # Store as 24-hour format string (e.g., "10:00", "14:30")
+    "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
+  end
+
+  defp format_time_display(hour, minute) do
+    # Display in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
+    {display_hour, period} = if hour == 0 do
+      {12, "AM"}
+    else
+      if hour < 12 do
+        {hour, "AM"}
+      else
+        display_hour = if hour == 12, do: 12, else: hour - 12
+        {display_hour, "PM"}
+      end
+    end
+
+    "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
+  end
+
+  defp format_time_for_display(time_value) do
+    # This function is used to display the time value in a user-friendly format.
+    # It expects a string like "HH:MM" or "HH:MM:SS" and converts it to "HH:MM AM/PM".
+    # For example, "10:00" becomes "10:00 AM", "14:30" becomes "2:30 PM".
+    # It handles the case where the time might have seconds.
+    case String.split(time_value, ":") do
+      [hour_str, minute_str] ->
+        hour = String.to_integer(hour_str)
+        minute = String.to_integer(minute_str)
+        format_time_display(hour, minute)
+      [hour_str, minute_str, _] -> # Handles "HH:MM:SS"
+        hour = String.to_integer(hour_str)
+        minute = String.to_integer(minute_str)
+        format_time_display(hour, minute)
+      _ -> # Fallback for unexpected formats
+        time_value
+    end
+  end
+
+  defp sort_options_by_time(options, poll_type) do
+    if poll_type == "time" do
+      # For time polls, sort by the time value (e.g., "10:00", "10:30", "11:00")
+      Enum.sort_by(options, fn option ->
+        case String.split(option.title, ":") do
+          [hour_str, minute_str] ->
+            hour = String.to_integer(hour_str)
+            minute = String.to_integer(minute_str)
+            hour * 60 + minute # Sort by total minutes
+          [hour_str, minute_str, _] -> # Handles "HH:MM:SS"
+            hour = String.to_integer(hour_str)
+            minute = String.to_integer(minute_str)
+            hour * 60 + minute
+          _ -> 0 # Fallback for unexpected formats
+        end
+      end)
+    else
+      # For non-time polls, sort by title (alphabetically)
+      Enum.sort_by(options, fn option -> option.title end)
+    end
+  end
 
 end
