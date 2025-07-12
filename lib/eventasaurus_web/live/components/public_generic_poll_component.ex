@@ -279,7 +279,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                      data-event-venue-lat={@event && @event.venue && @event.venue.latitude}
                      data-event-venue-lng={@event && @event.venue && @event.venue.longitude}
                      data-event-venue-name={@event && @event.venue && @event.venue.name}
-                     data-poll-options-data={Jason.encode!(extract_poll_options_coordinates(@poll.poll_options))}>
+                     data-poll-options-data={Jason.encode!(extract_poll_options_coordinates(@poll_options))}>
                   <div class="mb-4">
                     <h4 class="text-md font-medium text-gray-900 mb-2">Add <%= get_suggestion_title(@poll.poll_type) %></h4>
                     <p class="text-sm text-gray-600">Share your suggestion with the group</p>
