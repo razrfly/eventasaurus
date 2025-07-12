@@ -154,7 +154,8 @@ defmodule EventasaurusApp.Events.PollTest do
 
       {:ok, option} = Events.create_poll_option(%{
         poll_id: poll.id,
-        title: "Yes or No Option"
+        title: "Yes or No Option",
+        suggested_by_id: user.id
       })
 
       %{poll: Events.get_poll!(poll.id), option: option}
@@ -211,9 +212,9 @@ defmodule EventasaurusApp.Events.PollTest do
         created_by_id: user.id
       })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 1"})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 2"})
-      {:ok, option3} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 3"})
+      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 1", suggested_by_id: user.id})
+      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 2", suggested_by_id: user.id})
+      {:ok, option3} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 3", suggested_by_id: user.id})
 
       %{
         poll: Events.get_poll!(poll.id),
@@ -267,9 +268,9 @@ defmodule EventasaurusApp.Events.PollTest do
         created_by_id: user.id
       })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "First Choice"})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Second Choice"})
-      {:ok, option3} = Events.create_poll_option(%{poll_id: poll.id, title: "Third Choice"})
+      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "First Choice", suggested_by_id: user.id})
+      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Second Choice", suggested_by_id: user.id})
+      {:ok, option3} = Events.create_poll_option(%{poll_id: poll.id, title: "Third Choice", suggested_by_id: user.id})
 
       %{
         poll: Events.get_poll!(poll.id),
@@ -341,8 +342,8 @@ defmodule EventasaurusApp.Events.PollTest do
         created_by_id: user.id
       })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Rate Me 1"})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Rate Me 2"})
+      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Rate Me 1", suggested_by_id: user.id})
+      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Rate Me 2", suggested_by_id: user.id})
 
       %{poll: Events.get_poll!(poll.id), option1: option1, option2: option2}
     end
@@ -387,8 +388,8 @@ defmodule EventasaurusApp.Events.PollTest do
         created_by_id: user.id
       })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 1"})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 2"})
+      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 1", suggested_by_id: user.id})
+      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 2", suggested_by_id: user.id})
 
       %{poll: Events.get_poll!(poll.id), option1: option1, option2: option2}
     end
@@ -473,7 +474,8 @@ defmodule EventasaurusApp.Events.PollTest do
       {:ok, option} = Events.create_poll_option(%{
         poll_id: poll.id,
         title: "2024-12-15",
-        description: "December 15th"
+        description: "December 15th",
+        suggested_by_id: user.id
       })
 
       # Cast some votes
@@ -510,7 +512,7 @@ defmodule EventasaurusApp.Events.PollTest do
         created_by_id: user.id
       })
 
-      {:ok, option} = Events.create_poll_option(%{poll_id: poll.id, title: "Concurrent Option"})
+      {:ok, option} = Events.create_poll_option(%{poll_id: poll.id, title: "Concurrent Option", suggested_by_id: user.id})
 
       %{poll: Events.get_poll!(poll.id), option: option}
     end
@@ -562,8 +564,8 @@ defmodule EventasaurusApp.Events.PollTest do
         created_by_id: user.id
       })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option A"})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option B"})
+      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option A", suggested_by_id: user.id})
+      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option B", suggested_by_id: user.id})
 
       # Create some votes for analytics
       {:ok, _} = Events.cast_star_vote(poll, option1, user, 5)
