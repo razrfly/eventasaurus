@@ -97,13 +97,17 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         end
 
         # Check if user can suggest more options
-        # Organizers have no limit, regular users have the configured limit
+        # Must be in a phase that allows suggestions AND within user limits
+        suggestions_allowed_by_phase = suggestions_allowed_for_phase?(assigns.poll.phase)
+
         {max_options, can_suggest_more} =
           if assigns.is_creator do
-            {nil, true}  # Organizers can add unlimited options
+            # Organizers can add unlimited options but only in appropriate phases
+            {nil, suggestions_allowed_by_phase}
           else
             max_opts = assigns.poll.max_options_per_user || 3
-            {max_opts, user_suggestion_count < max_opts}
+            # Regular users need both phase permission AND to be under their limit
+            {max_opts, suggestions_allowed_by_phase && user_suggestion_count < max_opts}
           end
 
         {:ok,
@@ -113,6 +117,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:user_suggestion_count, user_suggestion_count)
          |> assign(:can_suggest_more, can_suggest_more)
          |> assign(:max_options, max_options)
+         |> assign(:suggestions_allowed_by_phase, suggestions_allowed_by_phase)
+         |> assign(:phase_suggestion_message, get_phase_suggestion_message(assigns.poll.phase))
          |> assign_new(:loading, fn -> false end)
          |> assign_new(:suggestion_form_visible, fn -> false end)
          |> assign_new(:editing_option_id, fn -> nil end)
@@ -175,7 +181,19 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
             </button>
           <% else %>
             <div class="text-sm text-gray-500 font-medium">
-              Limit reached (<%= @max_options %> suggestions)
+              <%= cond do %>
+                <% @phase_suggestion_message != nil -> %>
+                  <!-- Phase-based restriction message -->
+                  <div class="flex items-center">
+                    <svg class="w-4 h-4 mr-1 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <span class="text-amber-600"><%= @phase_suggestion_message %></span>
+                  </div>
+                <% true -> %>
+                  <!-- User limit reached message -->
+                  Limit reached (<%= @max_options %> suggestions)
+              <% end %>
             </div>
           <% end %>
         </div>
@@ -730,17 +748,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   aria-haspopup="true"
                 >
                   <svg class="-ml-1 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <%= if @poll.phase == "voting" do %>
+                    <%= if @poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     <% else %>
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
                     <% end %>
                   </svg>
-                  <%= case @poll.phase do %>
-                    <% "voting" -> %>Voting Phase
-                    <% "list_building" -> %>Building Phase
-                    <% _ -> %>Poll Phase
-                  <% end %>
+                  <%= get_phase_display_name(@poll.phase) %>
                   <svg class={"-mr-1 ml-2 h-5 w-5 transition-transform #{if Map.get(assigns, :show_phase_dropdown, false), do: "rotate-180", else: ""}"} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                   </svg>
@@ -755,35 +769,152 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 tabindex="-1"
               >
                 <div class="py-1" role="none">
-                  <%= if @poll.phase != "list_building" do %>
-                    <button
-                      type="button"
-                      phx-click="change_poll_phase"
-                      phx-value-phase="list_building"
-                      phx-target={@myself}
-                      class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
-                      role="menuitem"
-                    >
-                      <svg class="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                      </svg>
-                      Building Phase
-                    </button>
-                  <% end %>
-                  <%= if @poll.phase != "voting" do %>
-                    <button
-                      type="button"
-                      phx-click="change_poll_phase"
-                      phx-value-phase="voting"
-                      phx-target={@myself}
-                      class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
-                      role="menuitem"
-                    >
-                      <svg class="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Voting Phase
-                    </button>
+                  <!-- Phase transitions based on current phase -->
+                  <%= case @poll.phase do %>
+                    <% "list_building" -> %>
+                      <!-- From list_building, can go to either voting phase -->
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="voting_with_suggestions"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <div>Start Voting</div>
+                          <div class="text-xs text-gray-500">+ add suggestions</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="voting_only"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <div>Voting Only</div>
+                          <div class="text-xs text-gray-500">no suggestions</div>
+                        </div>
+                      </button>
+
+                    <% "voting_with_suggestions" -> %>
+                      <!-- From voting_with_suggestions, can disable suggestions or close -->
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="voting_only"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-amber-400 group-hover:text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        <div>
+                          <div>Disable Suggestions</div>
+                          <div class="text-xs text-gray-500">voting only</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="closed"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-red-400 group-hover:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <div>
+                          <div>Close Poll</div>
+                          <div class="text-xs text-gray-500">end voting</div>
+                        </div>
+                      </button>
+
+                    <% "voting_only" -> %>
+                      <!-- From voting_only, can only close -->
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="closed"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-red-400 group-hover:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <div>
+                          <div>Close Poll</div>
+                          <div class="text-xs text-gray-500">end voting</div>
+                        </div>
+                      </button>
+
+                    <% "voting" -> %>
+                      <!-- Legacy voting phase - can go back to building or disable suggestions -->
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="list_building"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                        </svg>
+                        <div>
+                          <div>Back to Building</div>
+                          <div class="text-xs text-gray-500">allow suggestions</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="voting_only"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-amber-400 group-hover:text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        <div>
+                          <div>Disable Suggestions</div>
+                          <div class="text-xs text-gray-500">voting only</div>
+                        </div>
+                      </button>
+
+                    <% _ -> %>
+                      <!-- For closed or unknown phases, show option to go back to building -->
+                      <%= if @poll.phase != "list_building" do %>
+                        <button
+                          type="button"
+                          phx-click="change_poll_phase"
+                          phx-value-phase="list_building"
+                          phx-target={@myself}
+                          class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                          role="menuitem"
+                        >
+                          <svg class="mr-2 h-4 w-4 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                          </svg>
+                          <div>
+                            <div>Reopen for Building</div>
+                            <div class="text-xs text-gray-500">allow suggestions</div>
+                          </div>
+                        </button>
+                      <% end %>
                   <% end %>
                 </div>
               </div>
@@ -1140,8 +1271,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         )
 
         phase_message = case new_phase do
-          "voting" -> "Voting phase started!"
+          "voting_with_suggestions" -> "Voting phase started! Users can vote and add suggestions."
+          "voting_only" -> "Voting phase started! Suggestions are now disabled."
+          "voting" -> "Voting phase started!"  # Legacy support
           "list_building" -> "Switched back to building phase"
+          "closed" -> "Poll has been closed"
           _ -> "Poll phase changed"
         end
 
@@ -1616,6 +1750,39 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         TimeUtils.format_time_display(hour, minute)
       {:error, _} ->
         time # Return original if parsing fails
+    end
+  end
+
+  # Helper function to check if suggestions are allowed in the current phase
+  defp suggestions_allowed_for_phase?(phase) do
+    case phase do
+      "list_building" -> true
+      "voting_with_suggestions" -> true
+      "voting" -> true  # Legacy support - treat as voting_with_suggestions
+      "voting_only" -> false
+      "closed" -> false
+      _ -> false
+    end
+  end
+
+  # Helper function to get phase-specific messaging
+  defp get_phase_suggestion_message(phase) do
+    case phase do
+      "voting_only" -> "Suggestions are disabled during voting-only phase"
+      "closed" -> "This poll is closed - no more suggestions allowed"
+      _ -> nil
+    end
+  end
+
+  # Helper function to get user-friendly phase display names
+  defp get_phase_display_name(phase) do
+    case phase do
+      "list_building" -> "Building Phase"
+      "voting_with_suggestions" -> "Voting (with suggestions)"
+      "voting_only" -> "Voting (suggestions disabled)"
+      "voting" -> "Voting Phase"  # Legacy support
+      "closed" -> "Closed"
+      _ -> "Poll Phase"
     end
   end
 end

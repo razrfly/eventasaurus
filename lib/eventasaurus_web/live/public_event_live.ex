@@ -1511,6 +1511,8 @@ defmodule EventasaurusWeb.PublicEventLive do
                       <%= case poll.phase do %>
                         <% "list_building" -> %>Building Options
                         <% "voting" -> %>Voting Open
+                        <% "voting_with_suggestions" -> %>Voting Open
+                        <% "voting_only" -> %>Voting Only
                         <% "closed" -> %>Voting Closed
                         <% _ -> %>Active
                       <% end %>
@@ -1528,7 +1530,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                         current_user={@user}
                       />
 
-                    <% poll.phase == "voting" && @user -> %>
+                    <% poll.phase in ["voting", "voting_with_suggestions", "voting_only"] && @user -> %>
                       <!-- Show voting interface for authenticated users -->
                       <.live_component
                         module={EventasaurusWeb.VotingInterfaceComponent}
@@ -1549,7 +1551,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                         poll={poll}
                       />
 
-                    <% poll.phase == "voting" -> %>
+                    <% poll.phase in ["voting", "voting_with_suggestions", "voting_only"] -> %>
                       <!-- Show login prompt for anonymous users during voting -->
                       <div class="text-center py-8 bg-gray-50 rounded-lg">
                         <p class="text-gray-600 mb-4">Please log in to vote on this poll.</p>
@@ -2102,6 +2104,8 @@ defmodule EventasaurusWeb.PublicEventLive do
     case phase do
       "list_building" -> "bg-yellow-100 text-yellow-800"
       "voting" -> "bg-green-100 text-green-800"
+      "voting_with_suggestions" -> "bg-green-100 text-green-800"
+      "voting_only" -> "bg-blue-100 text-blue-800"
       "closed" -> "bg-gray-100 text-gray-800"
       _ -> "bg-blue-100 text-blue-800"
     end

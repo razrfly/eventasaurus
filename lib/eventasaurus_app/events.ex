@@ -4172,15 +4172,54 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
-  Transitions a poll from list_building to voting phase.
+  Transitions a poll from list_building to voting phase (with suggestions allowed by default).
   """
   def transition_poll_to_voting(%Poll{} = poll) do
     if poll.phase == "list_building" do
       poll
-      |> Poll.phase_transition_changeset("voting")
+      |> Poll.phase_transition_changeset("voting_with_suggestions")
       |> Repo.update()
     else
       {:error, "Poll is not in list_building phase"}
+    end
+  end
+
+  @doc """
+  Transitions a poll from list_building to voting with suggestions allowed.
+  """
+  def transition_poll_to_voting_with_suggestions(%Poll{} = poll) do
+    if poll.phase == "list_building" do
+      poll
+      |> Poll.phase_transition_changeset("voting_with_suggestions")
+      |> Repo.update()
+    else
+      {:error, "Poll is not in list_building phase"}
+    end
+  end
+
+  @doc """
+  Transitions a poll from list_building to voting only (suggestions disabled).
+  """
+  def transition_poll_to_voting_only(%Poll{} = poll) do
+    if poll.phase == "list_building" do
+      poll
+      |> Poll.phase_transition_changeset("voting_only")
+      |> Repo.update()
+    else
+      {:error, "Poll is not in list_building phase"}
+    end
+  end
+
+  @doc """
+  Disables suggestions during voting by transitioning from voting_with_suggestions to voting_only.
+  """
+  def disable_poll_suggestions(%Poll{} = poll) do
+    if poll.phase == "voting_with_suggestions" do
+      poll
+      |> Poll.phase_transition_changeset("voting_only")
+      |> Repo.update()
+    else
+      {:error, "Poll is not in voting_with_suggestions phase"}
     end
   end
 
@@ -4362,8 +4401,8 @@ defmodule EventasaurusApp.Events do
   Checks if a user can vote on a poll based on current phase and permissions.
   """
   def can_user_vote?(%Poll{} = poll, %User{} = user) do
-    # Must be in voting phase
-    poll.phase == "voting" and
+    # Must be in any voting phase (including new phases)
+    Poll.voting?(poll) and
     # Must be within voting deadline (if set)
     (is_nil(poll.voting_deadline) or DateTime.compare(DateTime.utc_now(), poll.voting_deadline) == :lt) and
     # User must be a participant in the event
@@ -4678,12 +4717,32 @@ defmodule EventasaurusApp.Events do
     })
 
     case {old_phase, new_phase} do
-      {"list_building", "voting"} ->
-        # Poll is now ready for voting - notify event participants
+      {"list_building", "voting_with_suggestions"} ->
+        # Poll is now ready for voting with suggestions allowed - notify event participants
         broadcast_event_poll_activity(event, :poll_voting_started, poll, user)
 
-      {"voting", "closed"} ->
+      {"list_building", "voting_only"} ->
+        # Poll is now ready for voting only (no suggestions) - notify event participants
+        broadcast_event_poll_activity(event, :poll_voting_started, poll, user)
+
+      {"list_building", "voting"} ->
+        # Legacy transition - treat as voting_with_suggestions
+        broadcast_event_poll_activity(event, :poll_voting_started, poll, user)
+
+      {"voting_with_suggestions", "voting_only"} ->
+        # Organizer disabled suggestions during voting - notify participants
+        broadcast_event_poll_activity(event, :poll_suggestions_disabled, poll, user)
+
+      {"voting_with_suggestions", "closed"} ->
         # Poll voting has ended - may trigger event workflow changes
+        handle_poll_voting_ended(event, poll, user)
+
+      {"voting_only", "closed"} ->
+        # Poll voting has ended - may trigger event workflow changes
+        handle_poll_voting_ended(event, poll, user)
+
+      {"voting", "closed"} ->
+        # Legacy transition - poll voting has ended
         handle_poll_voting_ended(event, poll, user)
 
       _ ->
