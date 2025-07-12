@@ -772,7 +772,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <!-- Phase transitions based on current phase -->
                   <%= case @poll.phase do %>
                     <% "list_building" -> %>
-                      <!-- From list_building, can go to either voting phase -->
+                      <!-- From list_building, can go to either voting phase or close -->
                       <button
                         type="button"
                         phx-click="change_poll_phase"
@@ -805,9 +805,25 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           <div class="text-xs text-gray-500">no suggestions</div>
                         </div>
                       </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="closed"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-red-400 group-hover:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <div>
+                          <div>Close Poll</div>
+                          <div class="text-xs text-gray-500">skip voting</div>
+                        </div>
+                      </button>
 
                     <% "voting_with_suggestions" -> %>
-                      <!-- From voting_with_suggestions, can disable suggestions or close -->
+                      <!-- From voting_with_suggestions, can switch to voting only, close, or back to building (if no votes) -->
                       <button
                         type="button"
                         phx-click="change_poll_phase"
@@ -822,6 +838,22 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         <div>
                           <div>Disable Suggestions</div>
                           <div class="text-xs text-gray-500">voting only</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="list_building"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-blue-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                        </svg>
+                        <div>
+                          <div>Back to Building</div>
+                          <div class="text-xs text-gray-500">if no votes yet</div>
                         </div>
                       </button>
                       <button
@@ -842,7 +874,39 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       </button>
 
                     <% "voting_only" -> %>
-                      <!-- From voting_only, can only close -->
+                      <!-- From voting_only, can enable suggestions, go back to building (if no votes), or close -->
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="voting_with_suggestions"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-green-400 group-hover:text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <div>
+                          <div>Enable Suggestions</div>
+                          <div class="text-xs text-gray-500">+ add suggestions</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="list_building"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-blue-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                        </svg>
+                        <div>
+                          <div>Back to Building</div>
+                          <div class="text-xs text-gray-500">if no votes yet</div>
+                        </div>
+                      </button>
                       <button
                         type="button"
                         phx-click="change_poll_phase"
@@ -861,21 +925,21 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       </button>
 
                     <% "voting" -> %>
-                      <!-- Legacy voting phase - can go back to building or disable suggestions -->
+                      <!-- Legacy voting phase - can go back to building, upgrade to enhanced phases, or close -->
                       <button
                         type="button"
                         phx-click="change_poll_phase"
-                        phx-value-phase="list_building"
+                        phx-value-phase="voting_with_suggestions"
                         phx-target={@myself}
                         class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
                         role="menuitem"
                       >
-                        <svg class="mr-2 h-4 w-4 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                        <svg class="mr-2 h-4 w-4 text-green-400 group-hover:text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
                         <div>
-                          <div>Back to Building</div>
-                          <div class="text-xs text-gray-500">allow suggestions</div>
+                          <div>Enhanced Voting</div>
+                          <div class="text-xs text-gray-500">+ add suggestions</div>
                         </div>
                       </button>
                       <button
@@ -890,31 +954,56 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L5.636 5.636" />
                         </svg>
                         <div>
-                          <div>Disable Suggestions</div>
-                          <div class="text-xs text-gray-500">voting only</div>
+                          <div>Voting Only</div>
+                          <div class="text-xs text-gray-500">no suggestions</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="list_building"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-blue-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                        </svg>
+                        <div>
+                          <div>Back to Building</div>
+                          <div class="text-xs text-gray-500">if no votes yet</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="change_poll_phase"
+                        phx-value-phase="closed"
+                        phx-target={@myself}
+                        class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
+                        role="menuitem"
+                      >
+                        <svg class="mr-2 h-4 w-4 text-red-400 group-hover:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <div>
+                          <div>Close Poll</div>
+                          <div class="text-xs text-gray-500">end voting</div>
                         </div>
                       </button>
 
+                    <% "closed" -> %>
+                      <!-- Closed phase - no transitions allowed -->
+                      <div class="px-3 py-2 text-sm text-gray-500 text-center">
+                        <div>Poll is closed</div>
+                        <div class="text-xs">No further changes allowed</div>
+                      </div>
+
                     <% _ -> %>
-                      <!-- For closed or unknown phases, show option to go back to building -->
-                      <%= if @poll.phase != "list_building" do %>
-                        <button
-                          type="button"
-                          phx-click="change_poll_phase"
-                          phx-value-phase="list_building"
-                          phx-target={@myself}
-                          class="group flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 w-full text-left"
-                          role="menuitem"
-                        >
-                          <svg class="mr-2 h-4 w-4 text-gray-400 group-hover:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                          </svg>
-                          <div>
-                            <div>Reopen for Building</div>
-                            <div class="text-xs text-gray-500">allow suggestions</div>
-                          </div>
-                        </button>
-                      <% end %>
+                      <!-- Unknown phases -->
+                      <div class="px-3 py-2 text-sm text-gray-500 text-center">
+                        <div>Unknown phase</div>
+                        <div class="text-xs">Contact support</div>
+                      </div>
                   <% end %>
                 </div>
               </div>

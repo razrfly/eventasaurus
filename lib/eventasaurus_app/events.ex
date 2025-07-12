@@ -4184,18 +4184,7 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  @doc """
-  Transitions a poll from list_building to voting with suggestions allowed.
-  """
-  def transition_poll_to_voting_with_suggestions(%Poll{} = poll) do
-    if poll.phase == "list_building" do
-      poll
-      |> Poll.phase_transition_changeset("voting_with_suggestions")
-      |> Repo.update()
-    else
-      {:error, "Poll is not in list_building phase"}
-    end
-  end
+
 
   @doc """
   Transitions a poll from list_building to voting only (suggestions disabled).
@@ -4214,12 +4203,12 @@ defmodule EventasaurusApp.Events do
   Disables suggestions during voting by transitioning from voting_with_suggestions to voting_only.
   """
   def disable_poll_suggestions(%Poll{} = poll) do
-    if poll.phase == "voting_with_suggestions" do
+    if poll.phase in ["voting_with_suggestions", "voting"] do
       poll
       |> Poll.phase_transition_changeset("voting_only")
       |> Repo.update()
     else
-      {:error, "Poll is not in voting_with_suggestions phase"}
+      {:error, "Poll is not in a phase that allows disabling suggestions"}
     end
   end
 
