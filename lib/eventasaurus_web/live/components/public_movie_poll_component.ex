@@ -15,6 +15,8 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusWeb.Services.MovieDataService
   alias EventasaurusWeb.Utils.MovieUtils
 
+  import EventasaurusWeb.PollView, only: [poll_emoji: 1]
+
   @impl true
   def mount(socket) do
     {:ok, socket}
@@ -288,7 +290,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       <%= if @movie_poll do %>
         <div class="mb-6">
           <div class="mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">🎬 Movie Suggestions</h3>
+            <h3 class="text-lg font-semibold text-gray-900"><%= poll_emoji("movie") %> Movie Suggestions</h3>
             <p class="text-sm text-gray-600">
               <%= if @movie_poll.phase == "list_building" do %>
                 Help build the movie list! Add your suggestions below.

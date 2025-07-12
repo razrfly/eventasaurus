@@ -15,8 +15,9 @@ defmodule EventasaurusWeb.Utils.TimeUtils do
   @doc """
   Format time for display in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
   """
-  def format_time_display(hour, minute) do
+    def format_time_display(hour, minute) do
     {display_hour, period} = cond do
+      hour == 0 -> {12, "AM"}
       hour < 12 -> {hour, "AM"}
       hour == 12 -> {12, "PM"}
       true -> {hour - 12, "PM"}

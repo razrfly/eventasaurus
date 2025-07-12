@@ -28,6 +28,8 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   alias EventasaurusApp.Events
   alias Phoenix.PubSub
 
+  import EventasaurusWeb.PollView, only: [poll_emoji: 1]
+
   @impl true
   def mount(socket) do
     {:ok,
@@ -69,7 +71,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
         <div class="flex items-start justify-between">
           <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-3">
-              <span class="text-2xl"><%= get_poll_type_emoji(@poll.poll_type) %></span>
+              <span class="text-2xl"><%= poll_emoji(@poll.poll_type) %></span>
               <div>
                 <h2 class="text-xl font-semibold text-gray-900"><%= @poll.title %></h2>
                 <%= if @poll.description do %>
@@ -482,15 +484,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   # UI Helper Functions
 
-  defp get_poll_type_emoji(poll_type) do
-    case poll_type do
-      "movie" -> "🎬"
-      "places" -> "📍"
-      "time" -> "⏰"
-      "custom" -> "📝"
-      _ -> "📝"
-    end
-  end
+
 
   defp format_voting_system(voting_system) do
     case voting_system do
