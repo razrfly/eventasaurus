@@ -26,6 +26,7 @@ defmodule EventasaurusApp.Events.PollVote do
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
     |> foreign_key_constraint(:voter_id)
+    |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
          message: "You have already voted for this option")
   end
@@ -41,6 +42,7 @@ defmodule EventasaurusApp.Events.PollVote do
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
     |> foreign_key_constraint(:voter_id)
+    |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
          message: "You have already voted for this option")
   end
@@ -56,6 +58,7 @@ defmodule EventasaurusApp.Events.PollVote do
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
     |> foreign_key_constraint(:voter_id)
+    |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
          message: "You have already voted for this option")
   end
@@ -72,6 +75,7 @@ defmodule EventasaurusApp.Events.PollVote do
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
     |> foreign_key_constraint(:voter_id)
+    |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
          message: "You have already voted for this option")
   end
@@ -88,6 +92,7 @@ defmodule EventasaurusApp.Events.PollVote do
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
     |> foreign_key_constraint(:voter_id)
+    |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
          message: "You have already voted for this option")
   end
