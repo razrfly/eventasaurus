@@ -2252,6 +2252,19 @@ Hooks.PlacesSuggestionSearch = {
   destroyed() {
     this.mounted = false;
     
+    // Clean up form submission handler
+    if (this.formSubmitHandler) {
+      const form = this.el.closest('form');
+      if (form) {
+        form.removeEventListener('submit', this.formSubmitHandler);
+      }
+    }
+    
+    // Clean up recent city data to prevent memory leaks
+    if (this.recentCityData) {
+      this.recentCityData.clear();
+    }
+    
     // Remove this hook from the waiting list if it exists
     if (window.placeSuggestionHooks && Array.isArray(window.placeSuggestionHooks)) {
       const index = window.placeSuggestionHooks.indexOf(this);
@@ -2361,18 +2374,30 @@ Hooks.PlacesSuggestionSearch = {
     if (process.env.NODE_ENV !== 'production') console.log("City selected:", cityData);
   },
   
-  saveRecentCity(cityData) {
+    saveRecentCity(cityData) {
     try {
       const recentCities = this.getRecentCities();
-      
+
       // Remove if already exists (to avoid duplicates)
       const filtered = recentCities.filter(city => city.place_id !== cityData.place_id);
-      
+
       // Add to front and limit to 5 cities
       const updated = [cityData, ...filtered].slice(0, 5);
-      
-      localStorage.setItem('eventasaurus_recent_cities', JSON.stringify(updated));
-      
+
+      try {
+        localStorage.setItem('eventasaurus_recent_cities', JSON.stringify(updated));
+      } catch (e) {
+        // Handle quota exceeded error
+        if (e.name === 'QuotaExceededError') {
+          if (process.env.NODE_ENV !== 'production') console.warn("localStorage quota exceeded, clearing old data");
+          // Clear old data and retry with fewer items
+          localStorage.removeItem('eventasaurus_recent_cities');
+          localStorage.setItem('eventasaurus_recent_cities', JSON.stringify(updated.slice(0, 3)));
+        } else {
+          throw e;
+        }
+      }
+
       // Update recent cities display
       this.loadRecentCities();
     } catch (error) {
@@ -2400,14 +2425,20 @@ Hooks.PlacesSuggestionSearch = {
       return;
     }
     
-    const citiesHtml = recentCities.map(city => `
-      <button type="button" 
-              class="recent-city-btn w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
-              data-city='${JSON.stringify(city)}'>
-        <div class="font-medium">${city.name}</div>
-        <div class="text-xs text-gray-500">${city.formatted_address}</div>
-      </button>
-    `).join('');
+    const citiesHtml = recentCities.map((city, index) => {
+      // Store city data in a Map instead of HTML attributes for security
+      this.recentCityData = this.recentCityData || new Map();
+      this.recentCityData.set(index.toString(), city);
+      
+      return `
+        <button type="button" 
+                class="recent-city-btn w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                data-city-index="${index}">
+          <div class="font-medium">${this.escapeHtml(city.name)}</div>
+          <div class="text-xs text-gray-500">${this.escapeHtml(city.formatted_address)}</div>
+        </button>
+      `;
+    }).join('');
     
     this.recentCitiesContainer.innerHTML = citiesHtml;
     
@@ -2415,8 +2446,11 @@ Hooks.PlacesSuggestionSearch = {
     this.recentCitiesContainer.querySelectorAll('.recent-city-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         try {
-          const cityData = JSON.parse(e.currentTarget.dataset.city);
-          this.selectCityFromRecent(cityData);
+          const cityIndex = e.currentTarget.dataset.cityIndex;
+          const cityData = this.recentCityData && this.recentCityData.get(cityIndex);
+          if (cityData) {
+            this.selectCityFromRecent(cityData);
+          }
         } catch (error) {
           if (process.env.NODE_ENV !== 'production') console.error("Error selecting recent city:", error);
         }
@@ -2598,10 +2632,11 @@ Hooks.PlacesSuggestionSearch = {
         return;
       }
       
-      // Create the autocomplete object with expanded place types for "places" poll type
-      // Limited to 5 place types due to Google Maps API restrictions
+      // Create the autocomplete object with broader place types for "places" poll type
+      // Using 'establishment' alone to support all business types (restaurants, shops, venues, etc.)
+      // Note: 'establishment' cannot be mixed with other types per Google Maps API restrictions
       const options = {
-        types: ['restaurant', 'cafe', 'bar', 'tourist_attraction', 'amusement_park']
+        types: ['establishment']
       };
       
       this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
@@ -2622,6 +2657,15 @@ Hooks.PlacesSuggestionSearch = {
         if (!place.geometry) {
           if (process.env.NODE_ENV !== 'production') console.error("No place geometry received");
           if (process.env.NODE_ENV !== 'production') console.groupEnd();
+          // Notify user of incomplete selection
+          this.pushEvent('place_selection_error', { error: 'Invalid place selected. Please try again.' });
+          return;
+        }
+        
+        // Validate required fields
+        if (!place.name) {
+          if (process.env.NODE_ENV !== 'production') console.error("No place name received");
+          this.pushEvent('place_selection_error', { error: 'Selected place has no name. Please try again.' });
           return;
         }
         
@@ -2644,11 +2688,11 @@ Hooks.PlacesSuggestionSearch = {
           }
         }
         
-        // Get coordinates
+        // Get coordinates (rounded to 4 decimal places for privacy)
         let lat = null, lng = null;
-        if (place.geometry && place.geometry.location) {
-          lat = place.geometry.location.lat();
-          lng = place.geometry.location.lng();
+        if (place.geometry?.location) {
+          lat = Math.round(place.geometry.location.lat() * 10000) / 10000;
+          lng = Math.round(place.geometry.location.lng() * 10000) / 10000;
         }
         
         // Store place data for form submission instead of auto-submitting
@@ -2681,6 +2725,10 @@ Hooks.PlacesSuggestionSearch = {
       if (process.env.NODE_ENV !== 'production') console.log("Google Places Autocomplete for suggestions initialized");
     } catch (error) {
       if (process.env.NODE_ENV !== 'production') console.error("Error in Google Places Autocomplete initialization:", error);
+      // Notify the server that Places API is unavailable
+      this.pushEvent('places_api_unavailable', { error: error.message });
+      // Optionally fall back to manual input
+      this.inputEl.placeholder = "Enter place name manually...";
     }
   },
   
@@ -2717,16 +2765,25 @@ Hooks.PlacesSuggestionSearch = {
     if (process.env.NODE_ENV !== 'production') console.log("Google Places dropdown closed");
   },
   
+  // HTML escape helper to prevent XSS
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  },
+  
   // Setup form submission handler to include place metadata
   setupFormSubmissionHandler() {
     const form = this.el.closest('form');
     if (form) {
-      form.addEventListener('submit', (event) => {
+      this.formSubmitHandler = (event) => {
         if (this.selectedPlaceData) {
           // Add place metadata as hidden inputs before form submission
           this.addPlaceMetadataToForm(form);
         }
-      });
+      };
+      form.addEventListener('submit', this.formSubmitHandler);
     }
   },
   
