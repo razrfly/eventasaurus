@@ -34,7 +34,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
     {"custom", "General Poll", "📝", "Create a custom poll"},
     {"movie", "Movie", "🎬", "Vote on movies to watch"},
     {"places", "Places", "📍", "Pick places to visit"},
-    {"activity", "Activity", "🎯", "Select activities to do"}
+    {"activity", "Activity", "🎯", "Select activities to do"},
+    {"time", "Time/Schedule", "⏰", "Schedule meetings and events"}
   ]
 
   @voting_systems [

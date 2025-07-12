@@ -164,7 +164,7 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Get all supported poll types.
   """
-  def poll_types, do: ~w(movie places activity custom)
+  def poll_types, do: ~w(movie places activity custom time)
 
   @doc """
   Get all supported voting systems.
@@ -183,6 +183,7 @@ defmodule EventasaurusApp.Events.Poll do
   def poll_type_display("places"), do: "Places"
   def poll_type_display("activity"), do: "Activities"
   def poll_type_display("custom"), do: "Custom"
+  def poll_type_display("time"), do: "Time/Schedule"
   def poll_type_display(type), do: String.capitalize(type)
 
   @doc """

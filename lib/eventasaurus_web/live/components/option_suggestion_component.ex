@@ -31,6 +31,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   alias EventasaurusApp.Events.PollOption
   alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService, RichDataManager}
   alias EventasaurusWeb.Services.PollPubSubService
+  alias EventasaurusWeb.TimeSelectorComponent
 
   @impl true
   def mount(socket) do
@@ -232,25 +233,62 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
               <% end %>
 
               <!-- Auto-complete title input -->
-              <div class="relative">
-                <label for="option_title" class="block text-sm font-medium text-gray-700">
-                  <%= option_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
-                </label>
-                <div class="mt-1 relative">
-                  <%= if should_use_api_search?(@poll.poll_type) do %>
-                    <%= if @poll.poll_type == "movie" do %>
-                      <input
-                        type="text"
-                        name="poll_option[title]"
-                        id="option_title"
-                        value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                        placeholder={option_title_placeholder(@poll.poll_type)}
-                        phx-change="search_movies"
-                        phx-target={@myself}
-                        phx-debounce="300"
-                        autocomplete="off"
-                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
+              <%= if @poll.poll_type == "time" do %>
+                <!-- Time selector for time polls -->
+                <div class="relative">
+                  <label for="option_title" class="block text-sm font-medium text-gray-700">
+                    Time <span class="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="poll_option[title]"
+                    id="option_title"
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
+                  >
+                    <option value="" disabled selected={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, "")) == ""}>Select a time...</option>
+                    <%= for time_option <- time_options() do %>
+                      <option value={time_option.value} selected={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, "")) == time_option.value}>
+                        <%= time_option.display %>
+                      </option>
+                    <% end %>
+                  </select>
+                  <%= if @changeset.errors[:title] do %>
+                    <p class="mt-2 text-sm text-red-600"><%= translate_error(@changeset.errors[:title]) %></p>
+                  <% end %>
+                </div>
+              <% else %>
+                <div class="relative">
+                  <label for="option_title" class="block text-sm font-medium text-gray-700">
+                    <%= option_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
+                  </label>
+                  <div class="mt-1 relative">
+                    <%= if should_use_api_search?(@poll.poll_type) do %>
+                      <%= if @poll.poll_type == "movie" do %>
+                        <input
+                          type="text"
+                          name="poll_option[title]"
+                          id="option_title"
+                          value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                          placeholder={option_title_placeholder(@poll.poll_type)}
+                          phx-change="search_movies"
+                          phx-target={@myself}
+                          phx-debounce="300"
+                          autocomplete="off"
+                          class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        />
+                      <% else %>
+                        <input
+                          type="text"
+                          name="poll_option[title]"
+                          id="option_title"
+                          value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                          placeholder={option_title_placeholder(@poll.poll_type)}
+                          phx-debounce="300"
+                          phx-hook="PlacesSuggestionSearch"
+                          autocomplete="off"
+                          class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        />
+                      <% end %>
                     <% else %>
                       <input
                         type="text"
@@ -258,88 +296,78 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         id="option_title"
                         value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
                         placeholder={option_title_placeholder(@poll.poll_type)}
-                        phx-debounce="300"
-                        phx-hook="PlacesSuggestionSearch"
-                        autocomplete="off"
                         class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                       />
                     <% end %>
-                  <% else %>
-                    <input
-                      type="text"
-                      name="poll_option[title]"
-                      id="option_title"
-                      value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                      placeholder={option_title_placeholder(@poll.poll_type)}
-                      class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    />
-                  <% end %>
 
-                  <!-- Loading indicator removed - now handled by Google Places autocomplete -->
+                    <!-- Loading indicator removed - now handled by Google Places autocomplete -->
 
-                  <!-- Remove the complex dropdown logic as it's now handled by Google Places -->
+                    <!-- Remove the complex dropdown logic as it's now handled by Google Places -->
 
-                  <!-- Movie search results dropdown -->
-                  <%= if @poll.poll_type == "movie" and length(@search_results) > 0 do %>
-                    <div class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                      <%= for movie <- @search_results do %>
-                        <div class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                             phx-click="select_movie"
-                             phx-value-movie-id={movie.id}
-                             phx-target={@myself}>
-                          <% image_url = get_movie_poster_url(movie) %>
-                          <%= if image_url do %>
-                            <img src={image_url} alt={movie.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
-                          <% else %>
-                            <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
-                              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2"/>
-                              </svg>
+                    <!-- Movie search results dropdown -->
+                    <%= if @poll.poll_type == "movie" and length(@search_results) > 0 do %>
+                      <div class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        <%= for movie <- @search_results do %>
+                          <div class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                               phx-click="select_movie"
+                               phx-value-movie-id={movie.id}
+                               phx-target={@myself}>
+                            <% image_url = get_movie_poster_url(movie) %>
+                            <%= if image_url do %>
+                              <img src={image_url} alt={movie.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
+                            <% else %>
+                              <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                                </svg>
+                              </div>
+                            <% end %>
+                            <div class="flex-1 min-w-0">
+                              <h4 class="font-medium text-gray-900 truncate"><%= movie.title %></h4>
+                              <%= if movie.metadata && movie.metadata["release_date"] do %>
+                                <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
+                              <% end %>
+                              <%= if is_binary(movie.description) && String.length(movie.description) > 0 do %>
+                                <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
+                              <% end %>
                             </div>
-                          <% end %>
-                          <div class="flex-1 min-w-0">
-                            <h4 class="font-medium text-gray-900 truncate"><%= movie.title %></h4>
-                            <%= if movie.metadata && movie.metadata["release_date"] do %>
-                              <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
-                            <% end %>
-                            <%= if is_binary(movie.description) && String.length(movie.description) > 0 do %>
-                              <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
-                            <% end %>
                           </div>
-                        </div>
-                      <% end %>
-                    </div>
-                  <% end %>
+                        <% end %>
+                      </div>
+                    <% end %>
 
-                  <!-- Loading indicator for movie search -->
-                  <%= if @poll.poll_type == "movie" and @search_loading do %>
-                    <div class="absolute right-3 top-9 flex items-center">
-                      <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    </div>
-                  <% end %>
+                    <!-- Loading indicator for movie search -->
+                    <%= if @poll.poll_type == "movie" and @search_loading do %>
+                      <div class="absolute right-3 top-9 flex items-center">
+                        <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                    <% end %>
 
-                  <%= if @changeset.errors[:title] do %>
-                    <p class="mt-2 text-sm text-red-600"><%= translate_error(@changeset.errors[:title]) %></p>
-                  <% end %>
+                    <%= if @changeset.errors[:title] do %>
+                      <p class="mt-2 text-sm text-red-600"><%= translate_error(@changeset.errors[:title]) %></p>
+                    <% end %>
+                  </div>
                 </div>
-              </div>
+              <% end %>
 
               <!-- Description field -->
-              <div>
-                <label for="option_description" class="block text-sm font-medium text-gray-700">
-                  Description (optional)
-                </label>
-                <textarea
-                  name="poll_option[description]"
-                  id="option_description"
-                  rows="2"
-                  placeholder={option_description_placeholder(@poll.poll_type)}
-                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                ><%= Map.get(@changeset.changes, :description, Map.get(@changeset.data, :description, "")) %></textarea>
-              </div>
+              <%= if @poll.poll_type != "time" do %>
+                <div>
+                  <label for="option_description" class="block text-sm font-medium text-gray-700">
+                    Description (optional)
+                  </label>
+                  <textarea
+                    name="poll_option[description]"
+                    id="option_description"
+                    rows="2"
+                    placeholder={option_description_placeholder(@poll.poll_type)}
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  ><%= Map.get(@changeset.changes, :description, Map.get(@changeset.data, :description, "")) %></textarea>
+                </div>
+              <% end %>
 
               <!-- Hidden fields for rich data (external_id, external_data, image_url) -->
               <%= if Map.has_key?(@changeset.changes, :external_id) do %>
@@ -402,8 +430,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       <!-- Options List -->
       <div
         class="divide-y divide-gray-200 min-h-[100px] relative"
-        phx-hook="PollOptionDragDrop"
-        data-can-reorder={if(@is_creator, do: "true", else: "false")}
+        phx-hook={if @poll.poll_type == "time", do: "", else: "PollOptionDragDrop"}
+        data-can-reorder={if(@is_creator && @poll.poll_type != "time", do: "true", else: "false")}
         id={"option-list-#{@id}"}
       >
         <%= if safe_poll_options_empty?(@poll.poll_options) do %>
@@ -425,6 +453,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 <% "activity" -> %>
                   <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                  </svg>
+                <% "time" -> %>
+                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
                 <% _ -> %>
                   <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -475,10 +507,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           </div>
         <% else %>
           <div data-role="options-container">
-            <%= for option <- sort_options_by_order(@poll.poll_options) do %>
+            <%= for option <- sort_options_by_order(@poll.poll_options, @poll.poll_type) do %>
               <div
                 class="px-6 py-4 transition-all duration-150 ease-out option-card mobile-optimized-animation"
-                data-draggable={if(@is_creator, do: "true", else: "false")}
+                data-draggable={if(@is_creator && @poll.poll_type != "time", do: "true", else: "false")}
                 data-option-id={option.id}
               >
                 <!-- Edit Form (only shown when editing this specific option) -->
@@ -503,17 +535,19 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         <% end %>
                       </div>
 
-                      <div>
-                        <label for={"edit_description_#{option.id}"} class="block text-sm font-medium text-gray-700">
-                          Description (optional)
-                        </label>
-                        <textarea
-                          name="poll_option[description]"
-                          id={"edit_description_#{option.id}"}
-                          rows="2"
-                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        ><%= @edit_changeset.changes[:description] || option.description || "" %></textarea>
-                      </div>
+                      <%= if @poll.poll_type != "time" do %>
+                        <div>
+                          <label for={"edit_description_#{option.id}"} class="block text-sm font-medium text-gray-700">
+                            Description (optional)
+                          </label>
+                          <textarea
+                            name="poll_option[description]"
+                            id={"edit_description_#{option.id}"}
+                            rows="2"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          ><%= @edit_changeset.changes[:description] || option.description || "" %></textarea>
+                        </div>
+                      <% end %>
 
                       <%= if @participants do %>
                         <div>
@@ -587,7 +621,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <!-- Normal Option Display -->
                   <div class="flex items-start justify-between">
                     <!-- Drag handle for creators -->
-                    <%= if @is_creator do %>
+                    <%= if @is_creator && @poll.poll_type != "time" do %>
                       <div class="drag-handle mr-3 mt-1 flex-shrink-0 touch-target" title="Drag to reorder">
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                           <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
@@ -610,7 +644,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         <div class="flex-1 min-w-0">
                           <div class="flex items-center">
                             <h4 class="text-sm font-medium text-gray-900 truncate">
-                              <%= option.title %>
+                              <%= if @poll.poll_type == "time" do %>
+                                <%= format_time_for_display(option.title) %>
+                              <% else %>
+                                <%= option.title %>
+                              <% end %>
                             </h4>
                             <%= if option.status == "hidden" do %>
                               <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -627,8 +665,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                             <span>Suggested by <%= option.suggested_by.name || option.suggested_by.username %></span>
                             <span class="mx-1">•</span>
                             <span><%= format_relative_time(option.inserted_at) %></span>
-                            <span class="mx-1">•</span>
-                            <span>Order: <%= option.order_index %></span>
+                            <%= if @poll.poll_type != "time" do %>
+                              <span class="mx-1">•</span>
+                              <span>Order: <%= option.order_index %></span>
+                            <% end %>
                           </div>
                         </div>
                       </div>
@@ -1235,9 +1275,32 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # Template helper functions
 
-  defp sort_options_by_order(poll_options) do
+  defp sort_options_by_order(poll_options, poll_type) do
     safe_poll_options(poll_options)
-    |> Enum.sort_by(fn option -> option.order_index || 0 end, :asc)
+    |> Enum.sort_by(fn option ->
+      if poll_type == "time" do
+        # Sort time polls by their time value
+        parse_time_for_sort(option.title)
+      else
+        # Sort other polls by order_index
+        option.order_index || 0
+      end
+    end, :asc)
+  end
+
+  # Helper function to parse time string for sorting
+  defp parse_time_for_sort(time_str) do
+    case String.split(time_str, ":") do
+      [hour_str, minute_str] ->
+        with {hour, ""} <- Integer.parse(hour_str),
+             {minute, ""} <- Integer.parse(minute_str) do
+          # Convert to minutes since midnight for sorting
+          hour * 60 + minute
+        else
+          _ -> 0  # Default to 0 if parsing fails
+        end
+      _ -> 0  # Default to 0 if format is unexpected
+    end
   end
 
   # Helper function to safely handle poll_options that might be NotLoaded
@@ -1392,6 +1455,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "Suggest Movie"
       "places" -> "Suggest Place"
       "activity" -> "Suggest Activity"
+      "time" -> "Add Time"
       _ -> "Add Option"
     end
   end
@@ -1401,6 +1465,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "Movie Title"
       "places" -> "Place Name"
       "activity" -> "Activity Name"
+      "time" -> "Time"
       _ -> "Option Title"
     end
   end
@@ -1410,6 +1475,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "Start typing to search movies..."
       "places" -> "Start typing to search places..."
       "activity" -> "Start typing to search activities..."
+      "time" -> "Select a time..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
   end
@@ -1419,6 +1485,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "Brief plot summary or why you recommend it..."
       "places" -> "Cuisine type, location, or special notes..."
       "activity" -> "Location, duration, or what makes it fun..."
+      "time" -> "" # No description for time polls
       _ -> "Additional details or context..."
     end
   end
@@ -1428,6 +1495,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "movies"
       "places" -> "places"
       "activity" -> "activities"
+      "time" -> "times"
       _ -> "options"
     end
   end
@@ -1497,6 +1565,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "No Movies Suggested Yet"
       "places" -> "No Places Suggested Yet"
       "activity" -> "No Activities Suggested Yet"
+      "time" -> "No Times Suggested Yet"
       _ -> "No Options Suggested Yet"
     end
   end
@@ -1518,6 +1587,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
       "places" -> "Suggest places that are popular or unique. Add details like cuisine, location, or special notes."
       "activity" -> "Suggest activities that are fun or interesting. Add location, duration, or what makes it unique."
+      "time" -> "Suggest times that work for you. Times will be automatically sorted for easy comparison."
       _ -> "Suggest options that you think are great. Add a description to help others understand your choice."
     end
   end
@@ -1527,6 +1597,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "movie" -> "Suggest a Movie"
       "places" -> "Suggest a Place"
       "activity" -> "Suggest an Activity"
+      "time" -> "Add a Time"
       _ -> "Add an Option"
     end
   end
@@ -1545,6 +1616,65 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case Jason.encode(data) do
       {:ok, json} -> json
       {:error, _} -> "{}"
+    end
+  end
+
+  # Helper function to generate time options for time polls
+  defp time_options() do
+    # Start at 10:00 AM (10:00) and go through 11:30 PM (23:30)
+    # 30-minute increments
+    10..23
+    |> Enum.flat_map(fn hour ->
+      [
+        %{value: format_time_value(hour, 0), display: format_time_display(hour, 0)},
+        %{value: format_time_value(hour, 30), display: format_time_display(hour, 30)}
+      ]
+    end)
+  end
+
+  defp format_time_value(hour, minute) do
+    # Store as 24-hour format string (e.g., "10:00", "14:30")
+    "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
+  end
+
+  defp format_time_display(hour, minute) do
+    # Display in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
+    {display_hour, period} = if hour == 0 do
+      {12, "AM"}
+    else
+      if hour <= 12 do
+        {if(hour == 12, do: 12, else: hour), if(hour < 12, do: "AM", else: "PM")}
+      else
+        {hour - 12, "PM"}
+      end
+    end
+
+    "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
+  end
+
+  defp format_time_for_display(time) do
+    # Parse time string like "17:30" and convert to 12-hour format
+    case String.split(time, ":") do
+      [hour_str, minute_str] ->
+        with {hour, ""} <- Integer.parse(hour_str),
+             {minute, ""} <- Integer.parse(minute_str) do
+          # Convert to 12-hour format
+          {display_hour, period} = if hour == 0 do
+            {12, "AM"}
+          else
+            if hour < 12 do
+              {hour, "AM"}
+            else
+              display_hour = if hour == 12, do: 12, else: hour - 12
+              {display_hour, "PM"}
+            end
+          end
+
+          "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
+        else
+          _ -> time  # Return original if parsing fails
+        end
+      _ -> time  # Return original if format is unexpected
     end
   end
 end
