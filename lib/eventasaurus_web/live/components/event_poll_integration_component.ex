@@ -224,6 +224,16 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       <%= String.capitalize(to_string(Map.get(poll, :poll_type, "poll"))) %>
                     </span>
+                    <!-- Voting System Badge -->
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <%= case Map.get(poll, :voting_system, "binary") do %>
+                        <% "binary" -> %>Yes/No
+                        <% "approval" -> %>Approval
+                        <% "ranked" -> %>Ranked Choice
+                        <% "star" -> %>Star Rating
+                        <% _ -> %>Voting
+                      <% end %>
+                    </span>
                   </div>
                   <div class="text-sm text-gray-500 truncate">
                     <%= poll.description || "No description provided" %>
