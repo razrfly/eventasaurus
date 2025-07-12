@@ -32,13 +32,13 @@ defmodule EventasaurusApp.Events.PollVote do
   end
 
   @doc """
-  Creates a changeset for creating a binary vote (yes/no).
+  Creates a changeset for creating a binary vote (yes/no/maybe).
   """
   def binary_vote_changeset(poll_vote, attrs) do
     poll_vote
     |> cast(attrs, [:vote_value, :poll_option_id, :voter_id, :poll_id])
     |> validate_required([:vote_value, :poll_option_id, :voter_id, :poll_id])
-    |> validate_inclusion(:vote_value, ~w(yes no))
+    |> validate_inclusion(:vote_value, ~w(yes no maybe))
     |> put_voted_at()
     |> foreign_key_constraint(:poll_option_id)
     |> foreign_key_constraint(:voter_id)
@@ -116,6 +116,7 @@ defmodule EventasaurusApp.Events.PollVote do
   @doc """
   Check if the vote is neutral.
   """
+  def neutral?(%__MODULE__{vote_value: "maybe"}), do: true
   def neutral?(%__MODULE__{vote_value: "star", vote_numeric: rating}) when rating == 3, do: true
   def neutral?(%__MODULE__{}), do: false
 
@@ -123,6 +124,7 @@ defmodule EventasaurusApp.Events.PollVote do
   Get a numeric score for the vote (useful for tallying and sorting).
   """
   def vote_score(%__MODULE__{vote_value: "yes"}), do: 1.0
+  def vote_score(%__MODULE__{vote_value: "maybe"}), do: 0.5
   def vote_score(%__MODULE__{vote_value: "no"}), do: 0.0
   def vote_score(%__MODULE__{vote_value: "selected"}), do: 1.0
   def vote_score(%__MODULE__{vote_value: "star", vote_numeric: rating}), do: Decimal.to_float(rating)
@@ -136,6 +138,7 @@ defmodule EventasaurusApp.Events.PollVote do
   Get a human-readable string for the vote.
   """
   def vote_display(%__MODULE__{vote_value: "yes"}), do: "Yes"
+  def vote_display(%__MODULE__{vote_value: "maybe"}), do: "Maybe"
   def vote_display(%__MODULE__{vote_value: "no"}), do: "No"
   def vote_display(%__MODULE__{vote_value: "selected"}), do: "Selected"
   def vote_display(%__MODULE__{vote_value: "star", vote_numeric: rating}) do
@@ -155,7 +158,7 @@ defmodule EventasaurusApp.Events.PollVote do
   @doc """
   Get all valid vote values for binary voting.
   """
-  def binary_vote_values, do: ~w(yes no)
+  def binary_vote_values, do: ~w(yes maybe no)
 
   @doc """
   Get all valid vote values for approval voting.
@@ -168,6 +171,7 @@ defmodule EventasaurusApp.Events.PollVote do
   def binary_vote_options do
     [
       {"Yes", "yes"},
+      {"Maybe", "maybe"},
       {"No", "no"}
     ]
   end
@@ -221,8 +225,10 @@ defmodule EventasaurusApp.Events.PollVote do
   def compare(%__MODULE__{vote_value: val1}, %__MODULE__{vote_value: val2}) do
     cond do
       val1 == val2 -> :eq
-      val1 == "yes" and val2 == "no" -> :gt
-      val1 == "no" and val2 == "yes" -> :lt
+      val1 == "yes" and val2 in ["maybe", "no"] -> :gt
+      val1 == "maybe" and val2 == "no" -> :gt
+      val1 == "maybe" and val2 == "yes" -> :lt
+      val1 == "no" and val2 in ["yes", "maybe"] -> :lt
       val1 == "selected" -> :gt
       true -> :eq
     end
@@ -243,7 +249,7 @@ defmodule EventasaurusApp.Events.PollVote do
       {"ranked", _, nil} ->
         add_error(changeset, :vote_rank, "is required for ranked voting")
 
-      {value, nil, nil} when value in ~w(yes no selected) ->
+      {value, nil, nil} when value in ~w(yes maybe no selected) ->
         changeset
 
       {"star", numeric, nil} when not is_nil(numeric) ->

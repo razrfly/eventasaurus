@@ -119,7 +119,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <% end %>
           </div>
 
-          <div class="ml-4 flex space-x-3">
+          <div class="ml-4 flex space-x-2">
             <button
               type="button"
               phx-click="cast_binary_vote"
@@ -133,6 +133,21 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
               Yes
+            </button>
+
+            <button
+              type="button"
+              phx-click="cast_binary_vote"
+              phx-value-option-id={option.id}
+              phx-value-vote="maybe"
+              phx-target={@myself}
+              disabled={@loading}
+              class={binary_button_class(@vote_state[option.id], "maybe")}
+            >
+              <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Maybe
             </button>
 
             <button
@@ -708,7 +723,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   defp get_voting_instructions(voting_system) do
     case voting_system do
-      "binary" -> "Vote yes or no for each option"
+      "binary" -> "Vote yes, maybe, or no for each option"
       "approval" -> "Check all options you approve of"
       "ranked" -> "Use arrows to rank options in order of preference"
       "star" -> "Rate each option from 1 to 5 stars"
@@ -722,6 +737,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       case vote_type do
         "yes" -> base_classes <> " border-green-500 text-green-700 bg-green-50"
         "no" -> base_classes <> " border-red-500 text-red-700 bg-red-50"
+        "maybe" -> base_classes <> " border-yellow-500 text-yellow-700 bg-yellow-50"
       end
     else
       base_classes <> " border-gray-300 text-gray-700 bg-white hover:bg-gray-50"

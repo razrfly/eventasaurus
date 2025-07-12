@@ -38,10 +38,10 @@ defmodule EventasaurusWeb.PollCreationComponent do
   ]
 
   @voting_systems [
-    {"binary", "Yes/No", "Simple yes or no voting for each option"},
-    {"approval", "Approval", "Select multiple options you approve of"},
-    {"ranked", "Ranked Choice", "Rank options in order of preference"},
-    {"star", "Star Rating", "Rate options from 1 to 5 stars"}
+    {"binary", "Yes/Maybe/No", "Quick consensus on individual options - great for simple decisions where participants might be unsure"},
+    {"approval", "Approval", "Select multiple acceptable options - perfect when you want to find all viable choices"},
+    {"ranked", "Ranked Choice", "Rank options in order of preference - ideal for finding the most preferred single option"},
+    {"star", "Star Rating", "Rate options from 1 to 5 stars - best for detailed feedback and comparison"}
   ]
 
   @impl true
@@ -209,6 +209,25 @@ defmodule EventasaurusWeb.PollCreationComponent do
                     <%= if error = @changeset.errors[:voting_system] do %>
                       <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
                     <% end %>
+
+                    <!-- Voting System Guidelines -->
+                    <div class="mt-3 bg-blue-50 border border-blue-200 rounded-md p-4">
+                      <h4 class="text-sm font-medium text-blue-900 mb-2">💡 Choosing the Right Voting System</h4>
+                      <div class="space-y-2 text-xs text-blue-800">
+                        <div>
+                          <strong>Yes/Maybe/No:</strong> Best for quick decisions where people might be uncertain. The "maybe" option captures neutral feelings and helps identify lukewarm support.
+                        </div>
+                        <div>
+                          <strong>Approval:</strong> Use when you want to find all acceptable options. Great for gathering multiple venues, activities, or any scenario where several choices could work.
+                        </div>
+                        <div>
+                          <strong>Ranked Choice:</strong> Perfect for finding the single most preferred option. Ideal for choosing one movie, one restaurant, or one date from multiple possibilities.
+                        </div>
+                        <div>
+                          <strong>Star Rating:</strong> Best when you want detailed feedback and comparison. Use for rating experiences, evaluating options with nuanced opinions, or when quality assessment matters.
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <!-- Advanced Options Toggle -->
