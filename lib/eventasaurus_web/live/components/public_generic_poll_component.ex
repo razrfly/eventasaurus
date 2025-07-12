@@ -62,7 +62,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     {:noreply, assign(socket, :option_title, title)}
   end
 
-  def handle_event("add_option", %{"poll_option" => poll_option_params} = params, socket) do
+  def handle_event("add_option", %{"poll_option" => poll_option_params} = _params, socket) do
     if socket.assigns.adding_option do
       {:noreply, socket}
     else

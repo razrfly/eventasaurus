@@ -20,15 +20,10 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     {:ok, socket}
   end
 
-  # Helper function to get movie poll for an event
-  defp get_movie_poll(event) do
-    Events.list_polls(event)
-    |> Enum.find(&(&1.poll_type == "movie"))
-  end
-
   @impl true
   def update(assigns, socket) do
-    movie_poll = get_movie_poll(assigns.event)
+    # Use the provided poll or fall back to searching for a movie poll
+    movie_poll = assigns[:poll] || get_movie_poll(assigns.event)
     movie_options = if movie_poll, do: Events.list_poll_options(movie_poll), else: []
 
     # Load user votes for this poll
@@ -38,10 +33,13 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       []
     end
 
-    # Preload suggested_by for all options
+    # Preload suggested_by for all options with graceful handling of missing users
     movie_options = Enum.map(movie_options, fn option ->
       if option.suggested_by_id do
-        %{option | suggested_by: EventasaurusApp.Accounts.get_user!(option.suggested_by_id)}
+        case EventasaurusApp.Accounts.get_user(option.suggested_by_id) do
+          nil -> option # Leave suggested_by as nil if user not found
+          user -> %{option | suggested_by: user}
+        end
       else
         option
       end
@@ -64,59 +62,39 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     %{current_user: user, movie_poll: poll} = socket.assigns
 
     if user do
-      # Get the PollOption struct first
-      case Events.get_poll_option(String.to_integer(option_id)) do
-        nil ->
-          {:noreply, socket}
-
-        poll_option ->
-          case Events.cast_binary_vote(poll, poll_option, user, vote_value) do
-            {:ok, _vote} ->
-              # Reload user votes to update the UI
-              user_votes = Events.list_user_poll_votes(poll, user)
-
-              # Send update to parent component (format: {:vote_cast, option_id, vote_value})
-              send(self(), {:vote_cast, String.to_integer(option_id), vote_value})
-
-              {:noreply, assign(socket, :user_votes, user_votes)}
-
-            {:error, _changeset} ->
+      # Validate option_id is a valid integer
+      case Integer.parse(option_id) do
+        {parsed_option_id, ""} ->
+          # Get the PollOption struct first
+          case Events.get_poll_option(parsed_option_id) do
+            nil ->
               {:noreply, socket}
+
+            poll_option ->
+              case Events.cast_binary_vote(poll, poll_option, user, vote_value) do
+                {:ok, _vote} ->
+                  # Reload user votes to update the UI
+                  user_votes = Events.list_user_poll_votes(poll, user)
+
+                  # Send update to parent component (format: {:vote_cast, option_id, vote_value})
+                  send(self(), {:vote_cast, parsed_option_id, vote_value})
+
+                  {:noreply, assign(socket, :user_votes, user_votes)}
+
+                {:error, _changeset} ->
+                  {:noreply, socket}
+              end
           end
+
+        _ ->
+          # Invalid option_id format, ignore the vote
+          {:noreply, socket}
       end
     else
       {:noreply, socket}
     end
   end
 
-  # Helper function to get user's vote for a specific option
-  defp get_user_vote(option_id, user_votes) do
-    case Enum.find(user_votes, fn vote -> vote.poll_option_id == option_id end) do
-      %{vote_value: vote_value} -> vote_value
-      _ -> nil
-    end
-  end
-
-  # Helper function to generate button classes based on vote state
-  defp binary_button_class(current_vote, button_vote) do
-    base_classes = "inline-flex items-center px-3 py-1 text-xs font-medium rounded-full transition-colors"
-
-    if current_vote == button_vote do
-      case button_vote do
-        "yes" -> "#{base_classes} bg-green-100 text-green-800 border border-green-300"
-        "maybe" -> "#{base_classes} bg-yellow-100 text-yellow-800 border border-yellow-300"
-        "no" -> "#{base_classes} bg-red-100 text-red-800 border border-red-300"
-      end
-    else
-      case button_vote do
-        "yes" -> "#{base_classes} bg-white text-green-700 border border-green-300 hover:bg-green-50"
-        "maybe" -> "#{base_classes} bg-white text-yellow-700 border border-yellow-300 hover:bg-yellow-50"
-        "no" -> "#{base_classes} bg-white text-red-700 border border-red-300 hover:bg-red-50"
-      end
-    end
-  end
-
-  @impl true
   def handle_event("show_add_form", _params, socket) do
     if socket.assigns.current_user do
       {:noreply, assign(socket, :showing_add_form, true)}
@@ -248,18 +226,47 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                |> assign(:adding_movie, false)}
           end
         else
-          require Logger
-          Logger.error("Movie not found in search results: #{movie_id}")
           {:noreply,
            socket
-           |> put_flash(:error, "Movie not found. Please try again.")
+           |> put_flash(:error, "Movie not found in search results.")
            |> assign(:adding_movie, false)}
         end
       end
     end
   end
 
+  # Helper function to get movie poll for an event
+  defp get_movie_poll(event) do
+    Events.list_polls(event)
+    |> Enum.find(&(&1.poll_type == "movie"))
+  end
 
+  # Helper function to get user's vote for a specific option
+  defp get_user_vote(option_id, user_votes) do
+    case Enum.find(user_votes, fn vote -> vote.poll_option_id == option_id end) do
+      %{vote_value: vote_value} -> vote_value
+      _ -> nil
+    end
+  end
+
+  # Helper function to generate button classes based on vote state
+  defp binary_button_class(current_vote, button_vote) do
+    base_classes = "inline-flex items-center px-3 py-1 text-xs font-medium rounded-full transition-colors"
+
+    if current_vote == button_vote do
+      case button_vote do
+        "yes" -> "#{base_classes} bg-green-100 text-green-800 border border-green-300"
+        "maybe" -> "#{base_classes} bg-yellow-100 text-yellow-800 border border-yellow-300"
+        "no" -> "#{base_classes} bg-red-100 text-red-800 border border-red-300"
+      end
+    else
+      case button_vote do
+        "yes" -> "#{base_classes} bg-white text-green-700 border border-green-300 hover:bg-green-50"
+        "maybe" -> "#{base_classes} bg-white text-yellow-700 border border-yellow-300 hover:bg-yellow-50"
+        "no" -> "#{base_classes} bg-white text-red-700 border border-red-300 hover:bg-red-50"
+      end
+    end
+  end
 
   # Helper function to parse enhanced description into details line and main description
   defp parse_enhanced_description(description) do
