@@ -292,10 +292,17 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
           <div class="mb-4">
             <h3 class="text-lg font-semibold text-gray-900"><%= poll_emoji("movie") %> Movie Suggestions</h3>
             <p class="text-sm text-gray-600">
-              <%= if @movie_poll.phase == "list_building" do %>
-                Help build the movie list! Add your suggestions below.
-              <% else %>
-                Vote on your favorite movies below.
+              <%= case @movie_poll.phase do %>
+                <% "list_building" -> %>
+                  Help build the movie list! Add your suggestions below.
+                <% "voting_with_suggestions" -> %>
+                  Vote on your favorite movies and add new suggestions.
+                <% "voting" -> %>
+                  Vote on your favorite movies and add new suggestions.
+                <% "voting_only" -> %>
+                  Vote on your favorite movies below.
+                <% _ -> %>
+                  Vote on your favorite movies below.
               <% end %>
             </p>
           </div>
@@ -344,7 +351,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                       <% end %>
 
                       <!-- Voting buttons for movie polls in voting phase -->
-                      <%= if @movie_poll.phase == "voting" && @current_user do %>
+                      <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] && @current_user do %>
                         <div class="flex space-x-2 mt-3">
                           <button
                             type="button"
@@ -405,7 +412,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
           <% end %>
 
           <!-- Add Movie Button/Form -->
-          <%= if @movie_poll.phase == "list_building" do %>
+          <%= if @movie_poll.phase in ["list_building", "voting_with_suggestions", "voting"] do %>
             <%= if @current_user do %>
               <%= if @showing_add_form do %>
                 <!-- Inline Add Movie Form -->
