@@ -174,7 +174,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                     <% "approval" -> %> approval voting
                     <% "ranked" -> %> ranked choice voting
                     <% "star" -> %> star rating
-                    <% "places" -> %> star rating
                     <% _ -> %> voting
                   <% end %>
                 </p>
@@ -232,7 +231,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                         <% "approval" -> %>Approval
                         <% "ranked" -> %>Ranked Choice
                         <% "star" -> %>Star Rating
-                        <% "places" -> %>Star Rating
                         <% _ -> %>Voting
                       <% end %>
                     </span>
