@@ -13,6 +13,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Utils.TimeUtils
 
+  import EventasaurusWeb.PollView, only: [poll_emoji: 1]
+
   @impl true
   def update(assigns, socket) do
     event = assigns.event
@@ -216,7 +218,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
         <div class="mb-6">
           <div class="mb-4">
             <h3 class="text-lg font-semibold text-gray-900">
-              <%= get_poll_emoji(@poll.poll_type) %> <%= get_poll_title(@poll.poll_type) %>
+              <%= poll_emoji(@poll.poll_type) %> <%= get_poll_title(@poll.poll_type) %>
             </h3>
             <p class="text-sm text-gray-600">
               <%= if @poll.phase == "list_building" do %>
@@ -428,14 +430,6 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   # Helper functions for poll type customization
-  defp get_poll_emoji(poll_type) do
-    case poll_type do
-      "places" -> "📍"
-          "time" -> "⏰"
-    "custom" -> "📝"
-      _ -> "📊"
-    end
-  end
 
   defp get_poll_title(poll_type) do
     case poll_type do
