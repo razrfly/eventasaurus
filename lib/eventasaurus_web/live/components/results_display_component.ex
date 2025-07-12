@@ -385,17 +385,21 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
       votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
 
       yes_count = Enum.count(votes, &(&1.vote_value == "yes"))
+      maybe_count = Enum.count(votes, &(&1.vote_value == "maybe"))
       no_count = Enum.count(votes, &(&1.vote_value == "no"))
-      total_votes = yes_count + no_count
+      total_votes = yes_count + maybe_count + no_count
 
       yes_percentage = if total_votes > 0, do: (yes_count / total_votes) * 100, else: 0
+      maybe_percentage = if total_votes > 0, do: (maybe_count / total_votes) * 100, else: 0
       no_percentage = if total_votes > 0, do: (no_count / total_votes) * 100, else: 0
 
       stats = %{
         yes_count: yes_count,
+        maybe_count: maybe_count,
         no_count: no_count,
         total_votes: total_votes,
         yes_percentage: yes_percentage,
+        maybe_percentage: maybe_percentage,
         no_percentage: no_percentage
       }
 
@@ -510,7 +514,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
 
   defp get_results_summary(voting_system, analytics) do
     case voting_system do
-      "binary" -> "Yes/No voting results"
+      "binary" -> "Yes/Maybe/No voting results"
       "approval" -> "#{map_size(analytics)} options • Approval voting"
       "ranked" -> "#{map_size(analytics)} options • Ranked by points"
       "star" -> "#{map_size(analytics)} options • Average ratings"
