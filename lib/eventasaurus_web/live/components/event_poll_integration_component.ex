@@ -1315,6 +1315,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     case phase do
       "list_building" -> {"Building", "bg-blue-100 text-blue-800"}
       "voting" -> {"Voting", "bg-green-100 text-green-800"}
+      "voting_with_suggestions" -> {"Voting + Suggestions", "bg-green-100 text-green-800"}
+      "voting_only" -> {"Voting Only", "bg-amber-100 text-amber-800"}
       "closed" -> {"Closed", "bg-gray-100 text-gray-800"}
       _ -> {"Unknown", "bg-gray-100 text-gray-800"}
     end
