@@ -302,7 +302,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                             <%= if movie.metadata && movie.metadata["release_date"] do %>
                               <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
                             <% end %>
-                            <%= if movie.description && String.length(movie.description) > 0 do %>
+                            <%= if is_binary(movie.description) && String.length(movie.description) > 0 do %>
                               <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
                             <% end %>
                           </div>
@@ -321,7 +321,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     </div>
                   <% end %>
 
-                  <% if @changeset.errors[:title] do %>
+                  <%= if @changeset.errors[:title] do %>
                     <p class="mt-2 text-sm text-red-600"><%= translate_error(@changeset.errors[:title]) %></p>
                   <% end %>
                 </div>
@@ -1255,31 +1255,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp safe_poll_options_empty?(poll_options) when is_list(poll_options), do: Enum.empty?(poll_options)
   defp safe_poll_options_empty?(_), do: true
 
-  defp get_result_image(result) do
-    case result.images do
-      [first_image | _] -> first_image["url"] || first_image.url
-      _ -> nil
-    end
-  end
 
-  defp extract_year(date_string) when is_binary(date_string) do
-    case String.split(date_string, "-") do
-      [year | _] -> year
-      _ -> ""
-    end
-  end
-  defp extract_year(_), do: ""
-
-  defp format_rating(rating) when is_number(rating) do
-    Float.round(rating, 1)
-  end
-  defp format_rating(rating) when is_binary(rating) do
-    case Float.parse(rating) do
-      {float_val, _} -> Float.round(float_val, 1)
-      _ -> rating
-    end
-  end
-  defp format_rating(rating), do: rating
 
   defp create_option_changeset(socket, option_params) do
     option_params = Map.merge(option_params, %{
