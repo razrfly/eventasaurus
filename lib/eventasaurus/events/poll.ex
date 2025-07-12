@@ -10,6 +10,7 @@ defmodule EventasaurusApp.Events.Poll do
     field :poll_type, :string
     field :voting_system, :string
     field :phase, :string, default: "list_building"
+    field :status, :string, virtual: true  # Virtual field for backward compatibility
     field :list_building_deadline, :utc_datetime
     field :voting_deadline, :utc_datetime
     field :finalized_date, :date
@@ -25,7 +26,30 @@ defmodule EventasaurusApp.Events.Poll do
   end
 
   @doc false
+  def __after_load__(poll) do
+    # Map phase to status for backward compatibility
+    status = case poll.phase do
+      "list_building" -> "list_building"
+      "voting_with_suggestions" -> "voting"
+      "voting_only" -> "voting"
+      "voting" -> "voting"  # Legacy support
+      "closed" -> "finalized"
+      phase -> phase
+    end
+    %{poll | status: status}
+  end
+
+  @doc false
   def changeset(poll, attrs) do
+    # Map status to phase for backward compatibility
+    attrs = case Map.get(attrs, :status) || Map.get(attrs, "status") do
+      nil -> attrs
+      "list_building" -> Map.put(attrs, :phase, "list_building")
+      "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")  # Default to suggestions allowed
+      "finalized" -> Map.put(attrs, :phase, "closed")
+      status -> Map.put(attrs, :phase, status)
+    end
+
     poll
     |> cast(attrs, [
       :title, :description, :poll_type, :voting_system, :phase,
@@ -34,11 +58,12 @@ defmodule EventasaurusApp.Events.Poll do
       :event_id, :created_by_id
     ])
     |> validate_required([:title, :poll_type, :voting_system, :event_id, :created_by_id])
-    |> validate_inclusion(:phase, ~w(list_building voting closed))
+    |> validate_inclusion(:phase, phases())
     |> validate_inclusion(:voting_system, ~w(binary approval ranked star))
     |> validate_poll_type()
     |> validate_deadlines()
     |> validate_finalized_date()
+    |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:created_by_id)
     |> unique_constraint([:event_id, :poll_type],
@@ -50,6 +75,15 @@ defmodule EventasaurusApp.Events.Poll do
   Creates a changeset for creating a new poll.
   """
   def creation_changeset(poll, attrs) do
+    # Map status to phase for backward compatibility
+    attrs = case Map.get(attrs, :status) || Map.get(attrs, "status") do
+      nil -> attrs
+      "list_building" -> Map.put(attrs, :phase, "list_building")
+      "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")  # Default to suggestions allowed
+      "finalized" -> Map.put(attrs, :phase, "closed")
+      status -> Map.put(attrs, :phase, status)
+    end
+
     poll
     |> cast(attrs, [
       :title, :description, :poll_type, :voting_system,
@@ -71,12 +105,18 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Creates a changeset for transitioning poll phase.
   """
-  def phase_transition_changeset(poll, new_phase) when new_phase in ~w(list_building voting closed) do
+  def phase_transition_changeset(poll, new_phase) when new_phase in ["list_building", "voting_with_suggestions", "voting_only", "closed"] do
     poll
     |> cast(%{phase: new_phase}, [:phase])
     |> validate_required([:phase])
-    |> validate_inclusion(:phase, ~w(list_building voting closed))
+    |> validate_inclusion(:phase, phases())
     |> validate_phase_transition(poll.phase, new_phase)
+    |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
+  end
+
+  # Legacy support for old "voting" phase
+  def phase_transition_changeset(poll, "voting") do
+    phase_transition_changeset(poll, "voting_with_suggestions")
   end
 
   @doc """
@@ -94,6 +134,7 @@ defmodule EventasaurusApp.Events.Poll do
     |> validate_required([:finalized_option_ids, :finalized_date])
     |> validate_finalized_date()
     |> validate_finalized_options()
+    |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
   end
 
   @doc """
@@ -104,7 +145,7 @@ defmodule EventasaurusApp.Events.Poll do
     attrs = case Map.get(attrs, :status) do
       nil -> attrs
       "list_building" -> Map.put(attrs, :phase, "list_building")
-      "voting" -> Map.put(attrs, :phase, "voting")
+      "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")  # Default to suggestions allowed
       "finalized" -> Map.put(attrs, :phase, "closed")
       status -> Map.put(attrs, :phase, status)
     end
@@ -112,7 +153,8 @@ defmodule EventasaurusApp.Events.Poll do
     changeset = poll
     |> cast(attrs, [:phase])
     |> validate_required([:phase])
-    |> validate_inclusion(:phase, ~w(list_building voting closed))
+    |> validate_inclusion(:phase, phases())
+    |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
 
     new_phase = get_field(changeset, :phase)
     validate_phase_transition(changeset, poll.phase, new_phase)
@@ -125,10 +167,33 @@ defmodule EventasaurusApp.Events.Poll do
   def list_building?(%__MODULE__{}), do: false
 
   @doc """
-  Check if the poll is in voting phase.
+  Check if the poll is in any voting phase.
   """
-  def voting?(%__MODULE__{phase: "voting"}), do: true
+  def voting?(%__MODULE__{phase: "voting_with_suggestions"}), do: true
+  def voting?(%__MODULE__{phase: "voting_only"}), do: true
+  def voting?(%__MODULE__{phase: "voting"}), do: true  # Legacy support
   def voting?(%__MODULE__{}), do: false
+
+  @doc """
+  Check if the poll is in voting phase with suggestions allowed.
+  """
+  def voting_with_suggestions?(%__MODULE__{phase: "voting_with_suggestions"}), do: true
+  def voting_with_suggestions?(%__MODULE__{phase: "voting"}), do: true  # Legacy support - assume suggestions allowed
+  def voting_with_suggestions?(%__MODULE__{}), do: false
+
+  @doc """
+  Check if the poll is in voting-only phase (no suggestions).
+  """
+  def voting_only?(%__MODULE__{phase: "voting_only"}), do: true
+  def voting_only?(%__MODULE__{}), do: false
+
+  @doc """
+  Check if suggestions are allowed in the current phase.
+  """
+  def suggestions_allowed?(%__MODULE__{phase: "list_building"}), do: true
+  def suggestions_allowed?(%__MODULE__{phase: "voting_with_suggestions"}), do: true
+  def suggestions_allowed?(%__MODULE__{phase: "voting"}), do: true  # Legacy support
+  def suggestions_allowed?(%__MODULE__{}), do: false
 
   @doc """
   Check if the poll is closed/finalized.
@@ -152,7 +217,21 @@ defmodule EventasaurusApp.Events.Poll do
     end
   end
 
-  def active_for_phase?(%__MODULE__{phase: "voting"} = poll) do
+  def active_for_phase?(%__MODULE__{phase: "voting_with_suggestions"} = poll) do
+    case poll.voting_deadline do
+      nil -> true
+      deadline -> DateTime.compare(DateTime.utc_now(), deadline) == :lt
+    end
+  end
+
+  def active_for_phase?(%__MODULE__{phase: "voting_only"} = poll) do
+    case poll.voting_deadline do
+      nil -> true
+      deadline -> DateTime.compare(DateTime.utc_now(), deadline) == :lt
+    end
+  end
+
+  def active_for_phase?(%__MODULE__{phase: "voting"} = poll) do  # Legacy support
     case poll.voting_deadline do
       nil -> true
       deadline -> DateTime.compare(DateTime.utc_now(), deadline) == :lt
@@ -164,7 +243,7 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Get all supported poll types.
   """
-  def poll_types, do: ~w(movie places custom time)
+  def poll_types, do: ~w(movie places custom time general venue)
 
   @doc """
   Get all supported voting systems.
@@ -174,7 +253,7 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Get all valid phases.
   """
-  def phases, do: ~w(list_building voting closed)
+  def phases, do: ~w(list_building voting_with_suggestions voting_only closed)
 
   @doc """
   Get display name for poll type.
@@ -183,6 +262,8 @@ defmodule EventasaurusApp.Events.Poll do
   def poll_type_display("places"), do: "Places"
   def poll_type_display("custom"), do: "Custom"
   def poll_type_display("time"), do: "Time/Schedule"
+  def poll_type_display("general"), do: "General"  # Test type
+  def poll_type_display("venue"), do: "Venue"  # Test type
   def poll_type_display(type), do: String.capitalize(type)
 
   @doc """
@@ -192,6 +273,15 @@ defmodule EventasaurusApp.Events.Poll do
   def voting_system_display("approval"), do: "Approval Voting (Select Multiple)"
   def voting_system_display("ranked"), do: "Ranked Choice Voting"
   def voting_system_display("star"), do: "Star Rating (1-5)"
+
+  @doc """
+  Get display name for poll phase.
+  """
+  def phase_display("list_building"), do: "Building Phase - Suggest and vote on options"
+  def phase_display("voting_with_suggestions"), do: "Voting Phase - Vote and suggest more options"
+  def phase_display("voting_only"), do: "Voting Phase - Vote on existing options"
+  def phase_display("closed"), do: "Results - Poll closed"
+  def phase_display("voting"), do: "Voting Phase"  # Legacy support
 
   defp validate_poll_type(changeset) do
     poll_type = get_field(changeset, :poll_type)
@@ -259,10 +349,32 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_phase_transition(changeset, current_phase, new_phase) do
     case {current_phase, new_phase} do
-      {"list_building", "voting"} -> changeset
+      # From list_building phase
+      {"list_building", "voting_with_suggestions"} -> changeset
+      {"list_building", "voting_only"} -> changeset
       {"list_building", "closed"} -> changeset
+      {"list_building", "voting"} -> changeset  # Legacy support
+
+      # From voting_with_suggestions phase
+      {"voting_with_suggestions", "voting_only"} -> changeset
+      {"voting_with_suggestions", "closed"} -> changeset
+      {"voting_with_suggestions", "list_building"} -> changeset  # Allow back to building
+
+      # From voting_only phase
+      {"voting_only", "closed"} -> changeset
+      {"voting_only", "list_building"} -> changeset  # Allow back to building
+      # Note: Cannot go from voting_only back to voting_with_suggestions (one-way restriction)
+
+      # Legacy voting phase transitions
       {"voting", "closed"} -> changeset
-      {"voting", "list_building"} -> changeset  # Allow bidirectional voting ↔ building
+      {"voting", "list_building"} -> changeset
+      {"voting", "voting_with_suggestions"} -> changeset
+      {"voting", "voting_only"} -> changeset
+
+      # From closed phase - generally no transitions allowed except back to building for reopening
+      {"closed", "list_building"} -> changeset
+
+      # Invalid transitions
       _ -> add_error(changeset, :phase, "invalid phase transition from #{current_phase} to #{new_phase}")
     end
   end
