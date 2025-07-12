@@ -1502,7 +1502,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                     <div class="text-2xl">
                       <%= case poll.poll_type do %>
                         <% "movie" -> %> 🎬
-                        <% "restaurant" -> %> 🍽️
+                        <% "places" -> %> 📍
                         <% "activity" -> %> 🎯
                         <% _ -> %> 📝
                       <% end %>

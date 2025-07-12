@@ -295,7 +295,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   # Helper functions for poll type customization
   defp get_poll_emoji(poll_type) do
     case poll_type do
-      "restaurant" -> "🍽️"
+      "places" -> "📍"
       "activity" -> "🎯"
       "custom" -> "📝"
       _ -> "📊"
@@ -304,7 +304,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_poll_title(poll_type) do
     case poll_type do
-      "restaurant" -> "Restaurant Suggestions"
+      "places" -> "Place Suggestions"
       "activity" -> "Activity Suggestions"
       "custom" -> "Poll Options"
       _ -> "Suggestions"
@@ -313,7 +313,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_poll_type_text(poll_type) do
     case poll_type do
-      "restaurant" -> "restaurants"
+      "places" -> "places"
       "activity" -> "activities"
       "custom" -> "options"
       _ -> "options"
@@ -322,7 +322,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_suggestion_title(poll_type) do
     case poll_type do
-      "restaurant" -> "Restaurant Suggestion"
+      "places" -> "Place Suggestion"
       "activity" -> "Activity Suggestion"
       "custom" -> "Option"
       _ -> "Suggestion"
@@ -331,7 +331,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_title_label(poll_type) do
     case poll_type do
-      "restaurant" -> "Restaurant Name"
+      "places" -> "Place Name"
       "activity" -> "Activity Name"
       "custom" -> "Option Title"
       _ -> "Title"
@@ -340,7 +340,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_title_placeholder(poll_type) do
     case poll_type do
-      "restaurant" -> "Enter restaurant name..."
+      "places" -> "Enter place name..."
       "activity" -> "Enter activity name..."
       "custom" -> "Enter your option..."
       _ -> "Enter title..."
@@ -349,7 +349,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   defp get_description_placeholder(poll_type) do
     case poll_type do
-      "restaurant" -> "Cuisine type, location, special notes..."
+      "places" -> "Cuisine type, location, special notes..."
       "activity" -> "Location, duration, what makes it fun..."
       "custom" -> "Additional details or context..."
       _ -> "Additional details..."
