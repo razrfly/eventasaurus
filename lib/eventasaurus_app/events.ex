@@ -4020,21 +4020,28 @@ defmodule EventasaurusApp.Events do
     # Get the poll_id from the poll_option
     poll_option_with_poll = Repo.preload(poll_option, :poll)
 
-    attrs = Map.merge(vote_data, %{
-      poll_option_id: poll_option.id,
-      voter_id: user.id,
-      poll_id: poll_option_with_poll.poll.id
-    })
+    # Handle the case where the poll association is nil
+    case poll_option_with_poll.poll do
+      nil ->
+        {:error, "Poll not found for this option"}
 
-    changeset = case voting_system do
-      "binary" -> PollVote.binary_vote_changeset(%PollVote{}, attrs)
-      "approval" -> PollVote.approval_vote_changeset(%PollVote{}, attrs)
-      "ranked" -> PollVote.ranked_vote_changeset(%PollVote{}, attrs)
-      "star" -> PollVote.star_vote_changeset(%PollVote{}, attrs)
-      _ -> PollVote.changeset(%PollVote{}, attrs)
+      poll ->
+        attrs = Map.merge(vote_data, %{
+          poll_option_id: poll_option.id,
+          voter_id: user.id,
+          poll_id: poll.id
+        })
+
+        changeset = case voting_system do
+          "binary" -> PollVote.binary_vote_changeset(%PollVote{}, attrs)
+          "approval" -> PollVote.approval_vote_changeset(%PollVote{}, attrs)
+          "ranked" -> PollVote.ranked_vote_changeset(%PollVote{}, attrs)
+          "star" -> PollVote.star_vote_changeset(%PollVote{}, attrs)
+          _ -> PollVote.changeset(%PollVote{}, attrs)
+        end
+
+        Repo.insert(changeset)
     end
-
-    Repo.insert(changeset)
   end
 
   @doc """
