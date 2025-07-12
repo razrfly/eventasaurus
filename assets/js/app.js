@@ -2789,40 +2789,37 @@ Hooks.PlacesSuggestionSearch = {
   
   // Add place metadata as hidden form inputs
   addPlaceMetadataToForm(form) {
-    // Remove any existing metadata inputs to avoid duplicates
-    const existingInputs = form.querySelectorAll('input[name*="metadata"]');
+    // Remove any existing place-related inputs to avoid duplicates
+    const existingInputs = form.querySelectorAll('input[name*="external_data"], input[name*="external_id"], input[name*="metadata"]');
     existingInputs.forEach(input => input.remove());
     
-    // Add place metadata as hidden inputs
-    const metadata = this.selectedPlaceData;
-    if (metadata) {
-      const metadataFields = [
-        'address', 'city', 'state', 'country', 'latitude', 'longitude',
-        'place_id', 'rating', 'price_level', 'phone', 'website'
-      ];
+    // Add place data using the consistent external API pattern (same as movies)
+    const placeData = this.selectedPlaceData;
+    if (placeData) {
+      // Create external_id following the "places:place_id" pattern
+      const externalIdInput = document.createElement('input');
+      externalIdInput.type = 'hidden';
+      externalIdInput.name = 'poll_option[external_id]';
+      externalIdInput.value = `places:${placeData.place_id}`;
+      form.appendChild(externalIdInput);
       
-      metadataFields.forEach(field => {
-        if (metadata[field] !== null && metadata[field] !== undefined) {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = `poll_option[metadata][${field}]`;
-          input.value = metadata[field];
-          form.appendChild(input);
-        }
-      });
+      // Create external_data with complete Google Places data
+      const externalDataInput = document.createElement('input');
+      externalDataInput.type = 'hidden';
+      externalDataInput.name = 'poll_option[external_data]';
+      externalDataInput.value = JSON.stringify(placeData);
+      form.appendChild(externalDataInput);
       
-      // Handle photos array separately
-      if (metadata.photos && metadata.photos.length > 0) {
-        metadata.photos.forEach((photo, index) => {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = `poll_option[metadata][photos][${index}]`;
-          input.value = photo;
-          form.appendChild(input);
-        });
+      // Create image_url if we have photos
+      if (placeData.photos && placeData.photos.length > 0) {
+        const imageUrlInput = document.createElement('input');
+        imageUrlInput.type = 'hidden';
+        imageUrlInput.name = 'poll_option[image_url]';
+        imageUrlInput.value = placeData.photos[0]; // First photo URL
+        form.appendChild(imageUrlInput);
       }
       
-      if (process.env.NODE_ENV !== 'production') console.log("Added place metadata to form submission");
+      if (process.env.NODE_ENV !== 'production') console.log("Added place data using external_id/external_data pattern");
     }
   }
 };
