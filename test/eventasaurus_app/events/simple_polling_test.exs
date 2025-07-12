@@ -76,7 +76,7 @@ defmodule EventasaurusApp.Events.SimplePollingTest do
         created_by_id: user.id,
         title: "Pick activities",
         voting_system: "approval",
-        poll_type: "activity"
+        poll_type: "time"
       })
 
       # Add options
