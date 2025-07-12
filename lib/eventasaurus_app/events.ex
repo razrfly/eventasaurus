@@ -4023,7 +4023,10 @@ defmodule EventasaurusApp.Events do
     # Handle the case where the poll association is nil
     case poll_option_with_poll.poll do
       nil ->
-        {:error, "Poll not found for this option"}
+        # Return a proper changeset error instead of string
+        changeset = PollVote.changeset(%PollVote{}, %{})
+        |> Ecto.Changeset.add_error(:poll_id, "Poll not found for this option")
+        {:error, changeset}
 
       poll ->
         attrs = Map.merge(vote_data, %{
