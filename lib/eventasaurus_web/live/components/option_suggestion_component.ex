@@ -4,7 +4,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   Allows users to suggest new options, view existing suggestions, and provides moderation
   controls for poll creators. Supports both text-based options and API-enriched content
-  for different poll types (movies, books, restaurants, etc.).
+  for different poll types (movies, books, places, etc.).
 
   ## Attributes:
   - poll: Poll struct with preloaded options (required)
@@ -37,42 +37,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      socket
      |> assign(:loading, false)
      |> assign(:suggestion_form_visible, false)
-     |> assign(:editing_option_id, nil)
-     |> assign(:search_results, [])
-     |> assign(:search_loading, false)
-     |> assign(:search_query, "")
-     |> assign(:show_search_dropdown, false)
-     |> assign(:selected_result, nil)}
+     |> assign(:editing_option_id, nil)}
   end
 
   @impl true
   def update(assigns, socket) do
     # Handle special actions first
     cond do
-      assigns[:action] == :perform_search ->
-        # Perform the search and update the socket
-        parent_pid = self()
-        Task.start(fn ->
-          results = perform_search(assigns.search_query, assigns.poll_type)
-          send_update(parent_pid, __MODULE__,
-            id: socket.assigns.id,
-            action: :search_complete,
-            search_results: results,
-            search_query: assigns.search_query
-          )
-        end)
-
-        {:ok, assign(socket, :search_loading, true)}
-
-      assigns[:action] == :search_complete ->
-        # Update with search results
-        {:ok,
-         socket
-         |> assign(:search_results, assigns.search_results)
-         |> assign(:search_loading, false)
-         |> assign(:show_search_dropdown, true)
-         |> assign(:search_query, assigns.search_query)}
-
       assigns[:action] == :movie_rich_data_loaded ->
         # Update form with rich TMDB data using the same logic as PublicMoviePollComponent
         movie_id = assigns.selected_result.id
@@ -93,8 +64,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         changeset = create_option_changeset(socket, %{
           "title" => assigns.selected_result.title,
           "description" => assigns.selected_result.description || "",
-          "external_id" => to_string(assigns.selected_result.id),
-          "external_data" => build_external_data_from_result(assigns.selected_result)
+          "external_id" => to_string(assigns.selected_result.id)
         })
 
         {:ok,
@@ -142,11 +112,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign_new(:suggestion_form_visible, fn -> false end)
          |> assign_new(:editing_option_id, fn -> nil end)
          |> assign_new(:edit_changeset, fn -> nil end)
-         |> assign_new(:search_results, fn -> [] end)
-         |> assign_new(:search_loading, fn -> false end)
-         |> assign_new(:search_query, fn -> "" end)
-         |> assign_new(:show_search_dropdown, fn -> false end)
-         |> assign_new(:selected_result, fn -> nil end)
          |> assign_new(:loading_rich_data, fn -> false end)
          |> assign_new(:show_phase_dropdown, fn -> false end)
          |> then(fn socket ->
@@ -227,10 +192,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
                       placeholder={option_title_placeholder(@poll.poll_type)}
                       phx-debounce="300"
-                      phx-change="search_external_apis"
-                      phx-target={@myself}
-                      phx-focus="show_search_dropdown"
-                      phx-blur="hide_search_dropdown"
+                      phx-hook="PlacesSuggestionSearch"
                       autocomplete="off"
                       class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     />
@@ -241,94 +203,21 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       id="option_title"
                       value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
                       placeholder={option_title_placeholder(@poll.poll_type)}
-                      autocomplete="off"
                       class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     />
                   <% end %>
 
-                  <!-- Search loading indicator -->
-                  <%= if should_use_api_search?(@poll.poll_type) && @search_loading do %>
-                    <div class="absolute inset-y-0 right-0 flex items-center pr-3">
-                      <svg class="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    </div>
+                  <!-- Loading indicator removed - now handled by Google Places autocomplete -->
+
+                  <!-- Remove the complex dropdown logic as it's now handled by Google Places -->
+
+                  <% if @changeset.errors[:title] do %>
+                    <p class="mt-2 text-sm text-red-600"><%= translate_error(@changeset.errors[:title]) %></p>
                   <% end %>
                 </div>
-
-                <!-- Search results dropdown -->
-                <%= if should_use_api_search?(@poll.poll_type) && @show_search_dropdown && length(@search_results) > 0 do %>
-                  <!-- Mobile backdrop for dropdown -->
-                  <div class="search-dropdown-backdrop md:hidden" phx-click="hide_search_dropdown" phx-target={@myself}></div>
-
-                  <div class="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm search-dropdown mobile-scroll-container">
-                                          <%= for result <- @search_results do %>
-                        <div
-                          phx-click="select_search_result"
-                          phx-value-result-id={result.id}
-                          phx-target={@myself}
-                          class="group cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-indigo-50 search-result-item interactive-element touch-active"
-                        >
-                        <div class="flex items-center">
-                          <!-- Image thumbnail if available -->
-                          <%= if get_result_image(result) do %>
-                            <img class="flex-shrink-0 h-10 w-10 rounded object-cover" src={get_result_image(result)} alt="" />
-                            <div class="ml-3 flex-1 min-w-0">
-                              <div class="flex items-center">
-                                <span class="font-medium text-gray-900 truncate"><%= result.title %></span>
-                                <%= if result.metadata && result.metadata["release_date"] do %>
-                                  <span class="ml-1 text-gray-500 text-sm">(<%= extract_year(result.metadata["release_date"]) %>)</span>
-                                <% end %>
-                                <%= if result.metadata && result.metadata["rating"] do %>
-                                  <span class="ml-2 text-yellow-500 text-sm">⭐ <%= format_rating(result.metadata["rating"]) %></span>
-                                <% end %>
-                              </div>
-                              <%= if result.description && result.description != "" do %>
-                                <p class="text-gray-500 text-sm truncate"><%= String.slice(result.description, 0, 100) %><%= if String.length(result.description) > 100, do: "..." %></p>
-                              <% end %>
-                            </div>
-                          <% else %>
-                            <div class="flex-1 min-w-0">
-                              <div class="flex items-center">
-                                <span class="font-medium text-gray-900 truncate"><%= result.title %></span>
-                                <%= if result.metadata && result.metadata["release_date"] do %>
-                                  <span class="ml-1 text-gray-500 text-sm">(<%= extract_year(result.metadata["release_date"]) %>)</span>
-                                <% end %>
-                                <%= if result.metadata && result.metadata["rating"] do %>
-                                  <span class="ml-2 text-yellow-500 text-sm">⭐ <%= format_rating(result.metadata["rating"]) %></span>
-                                <% end %>
-                              </div>
-                              <%= if result.description && result.description != "" do %>
-                                <p class="text-gray-500 text-sm truncate"><%= String.slice(result.description, 0, 100) %><%= if String.length(result.description) > 100, do: "..." %></p>
-                              <% end %>
-                            </div>
-                          <% end %>
-                        </div>
-                      </div>
-                    <% end %>
-
-                    <!-- Manual entry option -->
-                    <div
-                      phx-click="select_manual_entry"
-                      phx-target={@myself}
-                      class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-50 border-t border-gray-200"
-                    >
-                      <div class="flex items-center">
-                        <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        <span class="text-gray-700">Enter manually: "<%= @search_query %>"</span>
-                      </div>
-                    </div>
-                  </div>
-                <% end %>
-
-                <%= if error = @changeset.errors[:title] do %>
-                  <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
-                <% end %>
               </div>
 
+              <!-- Description field -->
               <div>
                 <label for="option_description" class="block text-sm font-medium text-gray-700">
                   Description (optional)
@@ -353,6 +242,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 <input type="hidden" name="poll_option[external_data]" value={safe_json_encode(@changeset.changes.external_data)} />
               <% end %>
 
+              <!-- Button area -->
               <div class="flex items-center justify-between">
                 <div class="text-sm text-gray-500">
                   <%= if @is_creator do %>
@@ -417,9 +307,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2C7 1.45 7.45 1 8 1s1 .45 1 1v2h4V2c0-.55.45-1 1-1s1 .45 1 1v2h1c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h1z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                   </svg>
-                <% "restaurant" -> %>
+                <% "places" -> %>
                   <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                   </svg>
                 <% "activity" -> %>
                   <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -762,131 +653,43 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("toggle_suggestion_form", _params, socket) do
     {:noreply,
      socket
-     |> assign(:suggestion_form_visible, !socket.assigns.suggestion_form_visible)
-     |> assign(:search_results, [])
-     |> assign(:search_query, "")
-     |> assign(:show_search_dropdown, false)
-     |> assign(:selected_result, nil)}
+     |> assign(:suggestion_form_visible, !socket.assigns.suggestion_form_visible)}
   end
 
   @impl true
-  def handle_event("search_external_apis", %{"poll_option" => %{"title" => query}}, socket) do
-    query = String.trim(query)
+  def handle_event("place_selected", place_data, socket) do
+    # Extract place data from the JavaScript hook
+    title = Map.get(place_data, "title", "")
+    address = Map.get(place_data, "address", "")
 
-    # Update search query state
-    socket = assign(socket, :search_query, query)
-
-    # Only search if this poll type supports API search and query is long enough
-    if should_use_api_search?(socket.assigns.poll.poll_type) && String.length(query) >= 2 do
-      # Start loading state
-      socket = assign(socket, :search_loading, true)
-
-      # Perform async search
-      send(self(), {:perform_external_search, query, socket.assigns.poll.poll_type})
-
-      {:noreply, socket}
+    # Create a more comprehensive description with address
+    description = if address != "" && address != title do
+      "#{address}"
     else
-      {:noreply,
-       socket
-       |> assign(:search_results, [])
-       |> assign(:search_loading, false)
-       |> assign(:show_search_dropdown, false)}
+      ""
     end
-  end
 
-  @impl true
-  def handle_event("show_search_dropdown", _params, socket) do
-    {:noreply, assign(socket, :show_search_dropdown, true)}
-  end
+    # Update the changeset with the selected place data
+    changeset = create_option_changeset(socket, %{
+      "title" => title,
+      "description" => description,
+      "metadata" => %{
+        "address" => address,
+        "city" => Map.get(place_data, "city", ""),
+        "state" => Map.get(place_data, "state", ""),
+        "country" => Map.get(place_data, "country", ""),
+        "latitude" => Map.get(place_data, "latitude"),
+        "longitude" => Map.get(place_data, "longitude"),
+        "place_id" => Map.get(place_data, "place_id", ""),
+        "rating" => Map.get(place_data, "rating"),
+        "price_level" => Map.get(place_data, "price_level"),
+        "phone" => Map.get(place_data, "phone", ""),
+        "website" => Map.get(place_data, "website", ""),
+        "photos" => Map.get(place_data, "photos", [])
+      }
+    })
 
-  @impl true
-  def handle_event("hide_search_dropdown", _params, socket) do
-    # Delay hiding to allow for clicks on dropdown items
-    Process.send_after(self(), {:hide_dropdown, socket.assigns.id}, 150)
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("select_search_result", %{"result-id" => result_id}, socket) do
-    case find_result_by_id(socket.assigns.search_results, result_id) do
-      nil ->
-        {:noreply, socket}
-
-      result ->
-        # For movie polls, get full TMDB rich data like PublicMoviePollComponent does
-        if socket.assigns.poll.poll_type == "movie" && result.type == :movie do
-          # Get rich TMDB data asynchronously
-          component_id = socket.assigns.id
-          parent_pid = self()
-
-          Task.start(fn ->
-            alias EventasaurusWeb.Services.TmdbRichDataProvider
-
-            case TmdbRichDataProvider.get_cached_details(result.id, :movie) do
-              {:ok, rich_data} ->
-                # Use MovieDataService for consistent data preparation (same as frontend)
-                prepared_data = MovieDataService.prepare_movie_option_data(result.id, rich_data)
-
-                # Send rich data back to component using send_update
-                send_update(parent_pid, __MODULE__,
-                  id: component_id,
-                  action: :movie_rich_data_loaded,
-                  selected_result: result,
-                  rich_data: rich_data,
-                  image_url: prepared_data["image_url"]
-                )
-
-              {:error, error} ->
-                # Send error back to component
-                send_update(parent_pid, __MODULE__,
-                  id: component_id,
-                  action: :movie_rich_data_error,
-                  selected_result: result,
-                  error: error
-                )
-            end
-          end)
-
-          # Show loading state in form
-          changeset = create_option_changeset(socket, %{
-            "title" => result.title,
-            "description" => result.description || "Loading TMDB data..."
-          })
-
-          {:noreply,
-           socket
-           |> assign(:changeset, changeset)
-           |> assign(:selected_result, result)
-           |> assign(:search_results, [])
-           |> assign(:show_search_dropdown, false)
-           |> assign(:loading_rich_data, true)}
-        else
-          # For non-movie polls, use basic result data
-          changeset = create_option_changeset(socket, %{
-            "title" => result.title,
-            "description" => result.description || "",
-            "external_id" => to_string(result.id),
-            "external_data" => build_external_data_from_result(result)
-          })
-
-          {:noreply,
-           socket
-           |> assign(:changeset, changeset)
-           |> assign(:selected_result, result)
-           |> assign(:search_results, [])
-           |> assign(:show_search_dropdown, false)}
-        end
-    end
-  end
-
-  @impl true
-  def handle_event("select_manual_entry", _params, socket) do
-    # Keep current form state but hide dropdown
-    {:noreply,
-     socket
-     |> assign(:search_results, [])
-     |> assign(:show_search_dropdown, false)
-     |> assign(:selected_result, nil)}
+    {:noreply, assign(socket, :changeset, changeset)}
   end
 
   @impl true
@@ -945,7 +748,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:loading, false)
          |> assign(:suggestion_form_visible, false)
          |> assign(:changeset, changeset)
-         |> assign(:selected_result, nil)
          |> assign(:loading_rich_data, false)}
 
       {:error, changeset} ->
@@ -1166,53 +968,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
-  # Handle async search results
-  def handle_info({:search_results, query, results}, socket) do
-    # Only update if this is for the current query
-    if query == socket.assigns.search_query do
-      {:noreply,
-       socket
-       |> assign(:search_results, results)
-       |> assign(:search_loading, false)
-       |> assign(:show_search_dropdown, length(results) > 0)}
-    else
-      {:noreply, socket}
-    end
-  end
 
-  def handle_info({:search_error, query, _error}, socket) do
-    # Only update if this is for the current query
-    if query == socket.assigns.search_query do
-      {:noreply,
-       socket
-       |> assign(:search_results, [])
-       |> assign(:search_loading, false)
-       |> assign(:show_search_dropdown, false)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_info({:hide_dropdown, component_id}, socket) do
-    if component_id == socket.assigns.id do
-      {:noreply, assign(socket, :show_search_dropdown, false)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-
-
-  def handle_info({:perform_external_search, query, poll_type}, socket) do
-    # Perform the search in the background
-    parent_pid = self()
-    Task.start(fn ->
-      results = perform_search(query, poll_type)
-      send(parent_pid, {:search_results, query, results})
-    end)
-
-    {:noreply, socket}
-  end
 
   # Private helper functions
 
@@ -1229,72 +985,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   defp validate_param(_params, key), do: {:error, "params is not a map for #{key}"}
 
-  defp perform_search(query, poll_type) do
-    # Don't perform search for general polls or unsupported types
-    unless should_use_api_search?(poll_type) do
-      []
-    else
-      # Map poll type to provider search options
-      search_options = get_search_options_for_poll_type(poll_type)
 
-      # Return empty if no providers configured for this poll type
-      if Enum.empty?(search_options) do
-        []
-      else
-        perform_api_search(query, search_options)
-      end
-    end
-  end
-
-  defp perform_api_search(query, search_options) do
-    case EventasaurusWeb.Services.RichDataManager.search(query, search_options) do
-      {:ok, results_by_provider} ->
-        # Flatten and limit results from all providers
-        # Each provider returns {:ok, results} or {:error, reason}
-        results_by_provider
-        |> Map.values()
-        |> Enum.flat_map(fn
-          {:ok, results} when is_list(results) -> results
-          {:ok, result} -> [result]  # Handle single result
-          {:error, _} -> []
-          results when is_list(results) -> results  # Handle direct results
-          _ -> []
-        end)
-        |> Enum.take(8)  # Limit to 8 results for UI performance
-
-      {:error, _reason} ->
-        []
-    end
-  rescue
-    _ -> []
-  end
-
-  defp get_search_options_for_poll_type(poll_type) do
-    case poll_type do
-      "movie" -> %{providers: [:tmdb], types: [:movie]}
-      "restaurant" -> %{providers: [:google_places], types: [:restaurant]}
-      "activity" -> %{providers: [:google_places], types: [:activity, :venue]}
-      _ -> %{}
-    end
-  end
-
-  defp find_result_by_id(results, target_id) do
-    Enum.find(results, fn result ->
-      to_string(result.id) == to_string(target_id)
-    end)
-  end
-
-  defp build_external_data_from_result(result) do
-    # Convert search result to external_data format for the poll option
-    %{
-      "type" => to_string(result.type),
-      "external_id" => to_string(result.id),
-      "title" => result.title,
-      "description" => result.description,
-      "metadata" => result.metadata || %{},
-      "images" => result.images || []
-    }
-  end
 
   defp extract_rich_data_from_changeset(changeset, option_params) do
     require Logger
@@ -1474,7 +1165,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp suggest_button_text(poll_type) do
     case poll_type do
       "movie" -> "Suggest Movie"
-      "restaurant" -> "Suggest Restaurant"
+      "places" -> "Suggest Place"
       "activity" -> "Suggest Activity"
       _ -> "Add Option"
     end
@@ -1483,7 +1174,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_title_label(poll_type) do
     case poll_type do
       "movie" -> "Movie Title"
-      "restaurant" -> "Restaurant Name"
+      "places" -> "Place Name"
       "activity" -> "Activity Name"
       _ -> "Option Title"
     end
@@ -1492,7 +1183,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_title_placeholder(poll_type) do
     case poll_type do
       "movie" -> "Start typing to search movies..."
-      "restaurant" -> "Start typing to search restaurants..."
+      "places" -> "Start typing to search places..."
       "activity" -> "Start typing to search activities..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
@@ -1501,7 +1192,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_description_placeholder(poll_type) do
     case poll_type do
       "movie" -> "Brief plot summary or why you recommend it..."
-      "restaurant" -> "Cuisine type, location, or special notes..."
+      "places" -> "Cuisine type, location, or special notes..."
       "activity" -> "Location, duration, or what makes it fun..."
       _ -> "Additional details or context..."
     end
@@ -1510,7 +1201,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_type_text(poll_type) do
     case poll_type do
       "movie" -> "movies"
-      "restaurant" -> "restaurants"
+      "places" -> "places"
       "activity" -> "activities"
       _ -> "options"
     end
@@ -1572,14 +1263,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # Helper function to determine if a poll type should use API search
   defp should_use_api_search?(poll_type) do
-    poll_type in ["movie", "restaurant", "activity"]
+    poll_type in ["movie", "places", "activity"]
   end
 
   # New helper functions for empty state
   defp get_empty_state_title(poll_type) do
     case poll_type do
       "movie" -> "No Movies Suggested Yet"
-      "restaurant" -> "No Restaurants Suggested Yet"
+      "places" -> "No Places Suggested Yet"
       "activity" -> "No Activities Suggested Yet"
       _ -> "No Options Suggested Yet"
     end
@@ -1600,7 +1291,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp get_empty_state_guidance(poll_type) do
     case poll_type do
       "movie" -> "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
-      "restaurant" -> "Suggest restaurants that are popular or unique. Add details like cuisine, location, or special notes."
+      "places" -> "Suggest places that are popular or unique. Add details like cuisine, location, or special notes."
       "activity" -> "Suggest activities that are fun or interesting. Add location, duration, or what makes it unique."
       _ -> "Suggest options that you think are great. Add a description to help others understand your choice."
     end
@@ -1609,7 +1300,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp get_empty_state_button_text(poll_type) do
     case poll_type do
       "movie" -> "Suggest a Movie"
-      "restaurant" -> "Suggest a Restaurant"
+      "places" -> "Suggest a Place"
       "activity" -> "Suggest an Activity"
       _ -> "Add an Option"
     end
@@ -1618,7 +1309,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp get_empty_state_help_text(poll_type) do
     case poll_type do
       "movie" -> "You can suggest up to 3 movies. Encourage others to add more suggestions!"
-      "restaurant" -> "You can suggest up to 3 restaurants. Encourage others to add more suggestions!"
+      "places" -> "You can suggest up to 3 places. Encourage others to add more suggestions!"
       "activity" -> "You can suggest up to 3 activities. Encourage others to add more suggestions!"
       _ -> "You can suggest up to 3 options. Encourage others to add more suggestions!"
     end

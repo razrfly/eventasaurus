@@ -174,6 +174,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                     <% "approval" -> %> approval voting
                     <% "ranked" -> %> ranked choice voting
                     <% "star" -> %> star rating
+                    <% "places" -> %> star rating
                     <% _ -> %> voting
                   <% end %>
                 </p>
@@ -231,6 +232,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                         <% "approval" -> %>Approval
                         <% "ranked" -> %>Ranked Choice
                         <% "star" -> %>Star Rating
+                        <% "places" -> %>Star Rating
                         <% _ -> %>Voting
                       <% end %>
                     </span>
@@ -823,7 +825,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   #       <div class="ml-4 flex-1">
   #         <h4 class="text-lg font-medium text-indigo-900">Create Collaborative Polls</h4>
   #         <p class="text-sm text-indigo-700 mt-1">
-  #           Engage your event participants with interactive polls. Choose from movies, restaurants, activities,
+  #           Engage your event participants with interactive polls. Choose from movies, places, activities,
   #           and more with different voting systems like approval voting, ranked choice, and star ratings.
   #         </p>
   #         <div class="mt-4">
@@ -1190,10 +1192,11 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         </svg>
         """)
 
-      "restaurant" ->
+      "places" ->
         Phoenix.HTML.raw("""
         <svg class="h-5 w-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
         </svg>
         """)
 
