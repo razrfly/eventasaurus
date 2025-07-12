@@ -244,17 +244,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                         </p>
                       <% end %>
 
-                      <%= if @poll.phase == "voting" do %>
-                        <!-- Voting buttons will go here -->
-                        <div class="flex items-center space-x-2 mt-2">
-                          <button class="px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200">
-                            👍 Yes
-                          </button>
-                          <button class="px-3 py-1 text-xs bg-red-100 text-red-800 rounded-full hover:bg-red-200">
-                            👎 No
-                          </button>
-                        </div>
-                      <% end %>
+                      <!-- Voting buttons removed - handled by VotingInterfaceComponent in public_event_live.ex -->
                     </div>
                   </div>
                 </div>
