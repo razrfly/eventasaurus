@@ -29,12 +29,13 @@ defmodule EventasaurusWeb.PollCreationComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Poll
+  import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
   @poll_types [
-    {"custom", "General Poll", "📝", "Create a custom poll"},
-    {"movie", "Movie", "🎬", "Vote on movies to watch"},
-    {"places", "Places", "📍", "Pick places to visit"},
-    {"time", "Time/Schedule", "⏰", "Schedule meetings and events"}
+    {"custom", "General Poll", "Create a custom poll"},
+    {"movie", "Movie", "Vote on movies to watch"},
+    {"places", "Places", "Pick places to visit"},
+    {"time", "Time/Schedule", "Schedule events"}
   ]
 
   @voting_systems [
@@ -51,7 +52,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(:loading, false)
      |> assign(:show, false)
      |> assign(:poll, nil)
-     |> assign(:show_advanced_options, false)}
+     |> assign(:show_advanced_options, false)
+     |> assign(:show_voting_guidelines, false)}
   end
 
   @impl true
@@ -81,7 +83,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(:poll_types, @poll_types)
      |> assign(:voting_systems, @voting_systems)
      |> assign_new(:loading, fn -> false end)
-     |> assign_new(:show, fn -> false end)}
+     |> assign_new(:show, fn -> false end)
+     |> assign_new(:show_voting_guidelines, fn -> false end)}
   end
 
   @impl true
@@ -151,7 +154,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                       Poll Type <span class="text-red-500">*</span>
                     </label>
                     <div class="grid grid-cols-2 gap-3">
-                      <%= for {value, label, emoji, description} <- @poll_types do %>
+                      <%= for {value, label, description} <- @poll_types do %>
                         <label class="relative">
                           <input
                             type="radio"
@@ -162,7 +165,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                           />
                           <div class="p-3 border-2 border-gray-200 rounded-lg cursor-pointer transition-all peer-checked:border-indigo-500 peer-checked:bg-indigo-50 hover:border-gray-300">
                             <div class="flex items-center">
-                              <span class="text-lg mr-2"><%= emoji %></span>
+                              <span class="text-lg mr-2"><%= poll_emoji(value) %></span>
                               <div>
                                 <div class="text-sm font-medium text-gray-900"><%= label %></div>
                                 <div class="text-xs text-gray-500"><%= description %></div>
@@ -196,7 +199,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                             selected={Phoenix.HTML.Form.input_value(f, :voting_system) == value}
                             title={description}
                           >
-                            <%= label %> - <%= description %>
+                            <%= label %>
                           </option>
                         <% end %>
                       </select>
@@ -210,23 +213,41 @@ defmodule EventasaurusWeb.PollCreationComponent do
                       <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
                     <% end %>
 
-                    <!-- Voting System Guidelines -->
-                    <div class="mt-3 bg-blue-50 border border-blue-200 rounded-md p-4">
-                      <h4 class="text-sm font-medium text-blue-900 mb-2">💡 Choosing the Right Voting System</h4>
-                      <div class="space-y-2 text-xs text-blue-800">
-                        <div>
-                          <strong>Yes/Maybe/No:</strong> Best for quick decisions where people might be uncertain. The "maybe" option captures neutral feelings and helps identify lukewarm support.
+                    <!-- Voting System Guidelines Toggle -->
+                    <div class="mt-3">
+                      <button
+                        type="button"
+                        phx-click="toggle_voting_guidelines"
+                        phx-target={@myself}
+                        class="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        <svg class={[
+                          "w-4 h-4 mr-1 transition-transform",
+                          if(@show_voting_guidelines, do: "rotate-90", else: "rotate-0")
+                        ]} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                        💡 Choosing the Right Voting System
+                      </button>
+
+                      <%= if @show_voting_guidelines do %>
+                        <div class="mt-2 bg-blue-50 border border-blue-200 rounded-md p-4">
+                          <div class="space-y-2 text-xs text-blue-800">
+                            <div>
+                              <strong>Yes/Maybe/No:</strong> Best for quick decisions where people might be uncertain. The "maybe" option captures neutral feelings and helps identify lukewarm support.
+                            </div>
+                            <div>
+                              <strong>Approval:</strong> Use when you want to find all acceptable options. Great for gathering multiple venues, activities, or any scenario where several choices could work.
+                            </div>
+                            <div>
+                              <strong>Ranked Choice:</strong> Perfect for finding the single most preferred option. Ideal for choosing one movie, one restaurant, or one date from multiple possibilities.
+                            </div>
+                            <div>
+                              <strong>Star Rating:</strong> Best when you want detailed feedback and comparison. Use for rating experiences, evaluating options with nuanced opinions, or when quality assessment matters.
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <strong>Approval:</strong> Use when you want to find all acceptable options. Great for gathering multiple venues, activities, or any scenario where several choices could work.
-                        </div>
-                        <div>
-                          <strong>Ranked Choice:</strong> Perfect for finding the single most preferred option. Ideal for choosing one movie, one restaurant, or one date from multiple possibilities.
-                        </div>
-                        <div>
-                          <strong>Star Rating:</strong> Best when you want detailed feedback and comparison. Use for rating experiences, evaluating options with nuanced opinions, or when quality assessment matters.
-                        </div>
-                      </div>
+                      <% end %>
                     </div>
                   </div>
 
@@ -373,6 +394,11 @@ defmodule EventasaurusWeb.PollCreationComponent do
   @impl true
   def handle_event("toggle_advanced_options", _params, socket) do
     {:noreply, assign(socket, :show_advanced_options, !socket.assigns.show_advanced_options)}
+  end
+
+  @impl true
+  def handle_event("toggle_voting_guidelines", _params, socket) do
+    {:noreply, assign(socket, :show_voting_guidelines, !socket.assigns.show_voting_guidelines)}
   end
 
   @impl true
