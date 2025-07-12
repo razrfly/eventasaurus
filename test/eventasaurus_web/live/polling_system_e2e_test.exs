@@ -19,7 +19,7 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
     title: "Pick your favorite activities",
     description: "Select all activities you'd enjoy",
     voting_system: "approval",
-    poll_type: "activity"
+          poll_type: "time"
   }
 
   @ranked_poll_attrs %{

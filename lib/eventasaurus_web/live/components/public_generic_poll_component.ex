@@ -11,7 +11,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   require Logger
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
-  alias EventasaurusWeb.TimeSelectorComponent
+  alias EventasaurusWeb.Utils.TimeUtils
 
   @impl true
   def update(assigns, socket) do
@@ -431,9 +431,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_poll_emoji(poll_type) do
     case poll_type do
       "places" -> "📍"
-      "activity" -> "🎯"
-      "custom" -> "📝"
-      "time" -> "⏰"
+          "time" -> "⏰"
+    "custom" -> "📝"
       _ -> "📊"
     end
   end
@@ -441,9 +440,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_poll_title(poll_type) do
     case poll_type do
       "places" -> "Place Suggestions"
-      "activity" -> "Activity Suggestions"
-      "custom" -> "Poll Options"
-      "time" -> "Time Suggestions"
+          "time" -> "Time Suggestions"
+    "custom" -> "Poll Options"
       _ -> "Suggestions"
     end
   end
@@ -451,9 +449,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_poll_type_text(poll_type) do
     case poll_type do
       "places" -> "places"
-      "activity" -> "activities"
-      "custom" -> "options"
-      "time" -> "times"
+          "time" -> "times"
+    "custom" -> "options"
       _ -> "options"
     end
   end
@@ -461,9 +458,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_suggestion_title(poll_type) do
     case poll_type do
       "places" -> "Place Suggestion"
-      "activity" -> "Activity Suggestion"
-      "custom" -> "Option"
-      "time" -> "Time"
+          "time" -> "Time"
+    "custom" -> "Option"
       _ -> "Suggestion"
     end
   end
@@ -471,9 +467,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_title_label(poll_type) do
     case poll_type do
       "places" -> "Place Name"
-      "activity" -> "Activity Name"
-      "custom" -> "Option Title"
-      "time" -> "Time"
+          "time" -> "Time"
+    "custom" -> "Option Title"
       _ -> "Title"
     end
   end
@@ -481,9 +476,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_title_placeholder(poll_type) do
     case poll_type do
       "places" -> "Enter place name..."
-      "activity" -> "Enter activity name..."
-      "custom" -> "Enter your option..."
-      "time" -> "Select a time..."
+          "time" -> "Select a time..."
+    "custom" -> "Enter your option..."
       _ -> "Enter title..."
     end
   end
@@ -509,49 +503,23 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     10..23
     |> Enum.flat_map(fn hour ->
       [
-        %{value: format_time_value(hour, 0), display: format_time_display(hour, 0)},
-        %{value: format_time_value(hour, 30), display: format_time_display(hour, 30)}
+        %{value: TimeUtils.format_time_value(hour, 0), display: TimeUtils.format_time_display(hour, 0)},
+        %{value: TimeUtils.format_time_value(hour, 30), display: TimeUtils.format_time_display(hour, 30)}
       ]
     end)
   end
 
-  defp format_time_value(hour, minute) do
-    # Store as 24-hour format string (e.g., "10:00", "14:30")
-    "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
-  end
 
-  defp format_time_display(hour, minute) do
-    # Display in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
-    {display_hour, period} = if hour == 0 do
-      {12, "AM"}
-    else
-      if hour < 12 do
-        {hour, "AM"}
-      else
-        display_hour = if hour == 12, do: 12, else: hour - 12
-        {display_hour, "PM"}
-      end
-    end
-
-    "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
-  end
 
   defp format_time_for_display(time_value) do
     # This function is used to display the time value in a user-friendly format.
     # It expects a string like "HH:MM" or "HH:MM:SS" and converts it to "HH:MM AM/PM".
     # For example, "10:00" becomes "10:00 AM", "14:30" becomes "2:30 PM".
-    # It handles the case where the time might have seconds.
-    case String.split(time_value, ":") do
-      [hour_str, minute_str] ->
-        hour = String.to_integer(hour_str)
-        minute = String.to_integer(minute_str)
-        format_time_display(hour, minute)
-      [hour_str, minute_str, _] -> # Handles "HH:MM:SS"
-        hour = String.to_integer(hour_str)
-        minute = String.to_integer(minute_str)
-        format_time_display(hour, minute)
-      _ -> # Fallback for unexpected formats
-        time_value
+    case TimeUtils.parse_time_string(time_value) do
+      {:ok, {hour, minute}} ->
+        TimeUtils.format_time_display(hour, minute)
+      {:error, _} ->
+        time_value # Return original if parsing fails
     end
   end
 
@@ -559,17 +527,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     if poll_type == "time" do
       # For time polls, sort by the time value (e.g., "10:00", "10:30", "11:00")
       Enum.sort_by(options, fn option ->
-        case String.split(option.title, ":") do
-          [hour_str, minute_str] ->
-            hour = String.to_integer(hour_str)
-            minute = String.to_integer(minute_str)
-            hour * 60 + minute # Sort by total minutes
-          [hour_str, minute_str, _] -> # Handles "HH:MM:SS"
-            hour = String.to_integer(hour_str)
-            minute = String.to_integer(minute_str)
-            hour * 60 + minute
-          _ -> 0 # Fallback for unexpected formats
-        end
+        TimeUtils.parse_time_for_sort(option.title)
       end)
     else
       # For non-time polls, sort by title (alphabetically)
