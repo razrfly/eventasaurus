@@ -1045,6 +1045,17 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info({:all_votes_cleared}, socket) do
+    # Reload poll user votes to show cleared state
+    socket = load_event_polls(socket)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "All votes cleared successfully!")
+    }
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <!-- Public Event Show Page with enhanced movie display -->
