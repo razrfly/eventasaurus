@@ -4107,9 +4107,10 @@ defmodule EventasaurusApp.Events do
 
   # Helper functions for vote counting
   defp count_binary_votes(votes) do
-    Enum.reduce(votes, %{yes: 0, no: 0}, fn vote, acc ->
+    Enum.reduce(votes, %{yes: 0, maybe: 0, no: 0}, fn vote, acc ->
       case vote.vote_value do
         "yes" -> %{acc | yes: acc.yes + 1}
+        "maybe" -> %{acc | maybe: acc.maybe + 1}
         "no" -> %{acc | no: acc.no + 1}
         _ -> acc
       end
@@ -4195,10 +4196,10 @@ defmodule EventasaurusApp.Events do
   # =================
 
   @doc """
-  Casts a binary vote (yes/no) with validation and real-time updates.
+  Casts a binary vote (yes/no/maybe) with validation and real-time updates.
   """
   def cast_binary_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, vote_value)
-      when vote_value in ["yes", "no"] do
+      when vote_value in ["yes", "maybe", "no"] do
 
     if poll.voting_system != "binary" do
       {:error, "Poll does not support binary voting"}
