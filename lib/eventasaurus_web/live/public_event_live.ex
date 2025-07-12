@@ -1542,36 +1542,40 @@ defmodule EventasaurusWeb.PublicEventLive do
                         loading={false}
                       />
 
-                    <% poll.phase == "list_building" && @user -> %>
-                      <!-- Show option suggestion component for authenticated users -->
+                    <% poll.phase == "list_building" -> %>
+                      <!-- List building phase: Use generic poll component for non-movie polls -->
                       <.live_component
-                        module={EventasaurusWeb.OptionSuggestionComponent}
-                        id={"option-suggestion-#{poll.id}"}
-                        poll={poll}
-                        user={@user}
-                        is_creator={@user.id == poll.created_by_id || Events.user_is_organizer?(@event, @user)}
-                        loading={false}
-                      />
-
-                    <% poll.phase == "voting" || poll.phase == "finalized" -> %>
-                      <!-- Show generic poll component for voting/finalized phase -->
-                      <.live_component
-                        module={EventasaurusWeb.PublicGenericPollComponent}
-                        id={"generic-poll-#{poll.id}"}
-                        poll={poll}
+                        module={PublicGenericPollComponent}
+                        id={"public-generic-poll-#{poll.id}"}
                         event={@event}
                         current_user={@user}
+                        poll={poll}
+                      />
+
+                    <% poll.phase == "voting" -> %>
+                      <!-- Show login prompt for anonymous users during voting -->
+                      <div class="text-center py-8 bg-gray-50 rounded-lg">
+                        <p class="text-gray-600 mb-4">Please log in to vote on this poll.</p>
+                        <a href="/login" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                          Sign In to Vote
+                        </a>
+                      </div>
+
+                    <% poll.phase == "closed" -> %>
+                      <!-- Show results for closed polls -->
+                      <.live_component
+                        module={EventasaurusWeb.ResultsDisplayComponent}
+                        id={"results-display-#{poll.id}"}
+                        poll={poll}
+                        show_percentages={true}
+                        show_vote_counts={true}
                       />
 
                     <% true -> %>
-                      <!-- Default poll display -->
-                      <.live_component
-                        module={EventasaurusWeb.PublicGenericPollComponent}
-                        id={"generic-poll-#{poll.id}"}
-                        poll={poll}
-                        event={@event}
-                        current_user={@user}
-                      />
+                      <!-- Fallback for other poll phases -->
+                      <div class="text-center py-4 text-gray-500">
+                        <p>Poll details will be available soon.</p>
+                      </div>
                   <% end %>
                 </div>
               <% end %>

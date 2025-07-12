@@ -116,7 +116,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
     """
   end
 
-  # Binary Voting Results (Yes/No)
+  # Binary Voting Results (Yes/No/Maybe)
   defp render_binary_results(assigns) do
     ~H"""
     <%= for {option, stats} <- @vote_analytics do %>
@@ -138,7 +138,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
           </div>
         </div>
 
-        <!-- Yes/No Bars -->
+        <!-- Yes/Maybe/No Bars -->
         <div class="space-y-2">
           <div class="flex items-center">
             <div class="w-12 text-xs text-gray-600">Yes</div>
@@ -152,6 +152,21 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
             </div>
             <div class="w-12 text-xs text-gray-900 text-right">
               <%= stats.yes_count %> (<%= round(stats.yes_percentage) %>%)
+            </div>
+          </div>
+
+          <div class="flex items-center">
+            <div class="w-12 text-xs text-gray-600">Maybe</div>
+            <div class="flex-1 mx-3">
+              <div class="bg-gray-200 rounded-full h-2">
+                <div
+                  class="bg-yellow-500 h-2 rounded-full"
+                  style={"width: #{stats.maybe_percentage}%"}
+                ></div>
+              </div>
+            </div>
+            <div class="w-12 text-xs text-gray-900 text-right">
+              <%= stats.maybe_count %> (<%= round(stats.maybe_percentage) %>%)
             </div>
           </div>
 
