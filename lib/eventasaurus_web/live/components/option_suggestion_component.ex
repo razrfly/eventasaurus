@@ -26,10 +26,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   """
 
   use EventasaurusWeb, :live_component
+  require Logger
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.PollOption
+  alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService}
   alias EventasaurusWeb.Services.PollPubSubService
-  alias EventasaurusWeb.Services.MovieDataService
 
   @impl true
   def mount(socket) do
@@ -1119,8 +1120,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       Map.has_key?(option_params, "external_data") &&
                       not is_nil(option_params["external_data"]) &&
                       not has_enhanced_description?(option_params["description"]) do
-      # For movie options that have external_data but haven't been properly enhanced
-      # (e.g., manual entries, API errors, or rich data loading failures)
+
+      # Apply MovieDataService for movie options
       movie_id = option_params["external_id"] ||
                  get_in(option_params, ["external_data", "id"]) ||
                  get_in(option_params, ["external_data", :id])
@@ -1143,8 +1144,41 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         option_params
       end
     else
-      # Non-movie options or already properly prepared movie options
-      option_params
+      # Handle places options with PlacesDataService
+      if socket.assigns.poll.poll_type == "places" &&
+         Map.has_key?(option_params, "external_data") &&
+         not is_nil(option_params["external_data"]) do
+
+        Logger.debug("Processing places option with PlacesDataService")
+
+        # Parse external_data if it's a JSON string
+        external_data = case option_params["external_data"] do
+          data when is_binary(data) ->
+            case Jason.decode(data) do
+              {:ok, decoded} -> decoded
+              {:error, _} -> option_params["external_data"]
+            end
+          data -> data
+        end
+
+        if external_data && is_map(external_data) do
+          prepared_data = PlacesDataService.prepare_place_option_data(external_data)
+
+          # Preserve any user-provided custom title/description over generated ones
+          final_data = prepared_data
+          |> maybe_preserve_user_input("title", option_params["title"])
+          |> maybe_preserve_user_input("description", option_params["description"])
+
+          Logger.debug("PlacesDataService applied successfully for place: #{final_data["title"]}")
+          final_data
+        else
+          Logger.debug("PlacesDataService skipped - invalid external_data")
+          option_params
+        end
+      else
+        # Non-movie/places options or already properly prepared options
+        option_params
+      end
     end
 
     final_option_params = Map.merge(option_params, %{
@@ -1155,6 +1189,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
     Logger.debug("Admin interface saving option with title: #{final_option_params["title"]}")
     Logger.debug("Admin interface image_url: #{inspect(final_option_params["image_url"])}")
+    Logger.debug("Admin interface external_id: #{inspect(final_option_params["external_id"])}")
     Logger.debug("Admin interface description preview: #{String.slice(final_option_params["description"] || "", 0, 100)}...")
 
     Events.create_poll_option(final_option_params)
