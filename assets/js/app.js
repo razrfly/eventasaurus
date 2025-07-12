@@ -1102,6 +1102,21 @@ Hooks.VenueSearchWithFiltering = {
             // Clear the list after initialization
             window.venueSearchHooks = [];
           }
+          
+          // Also initialize PlacesSuggestionSearch hooks
+          if (window.placeSuggestionHooks && Array.isArray(window.placeSuggestionHooks)) {
+            window.placeSuggestionHooks.forEach(hook => {
+              if (hook.mounted) {
+                try {
+                  setTimeout(() => hook.initPlacesAutocomplete(), 100);
+                } catch (error) {
+                  if (process.env.NODE_ENV !== 'production') console.error("Error initializing places autocomplete for hook:", error);
+                }
+              }
+            });
+            // Clear the list after initialization
+            window.placeSuggestionHooks = [];
+          }
         };
       }
     }
@@ -2209,3 +2224,160 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 });
+
+// Google Places Autocomplete Hook for Poll Option Suggestions
+Hooks.PlacesSuggestionSearch = {
+  mounted() {
+    if (process.env.NODE_ENV !== 'production') console.log("PlacesSuggestionSearch hook mounted on element:", this.el.id);
+    this.inputEl = this.el;
+    this.mounted = true;
+    this.autocomplete = null;
+    
+    // Initialize Google Places immediately
+    this.initGooglePlaces();
+  },
+  
+  destroyed() {
+    this.mounted = false;
+    
+    // Remove this hook from the waiting list if it exists
+    if (window.placeSuggestionHooks && Array.isArray(window.placeSuggestionHooks)) {
+      const index = window.placeSuggestionHooks.indexOf(this);
+      if (index > -1) {
+        window.placeSuggestionHooks.splice(index, 1);
+      }
+    }
+    
+    if (process.env.NODE_ENV !== 'production') console.log("PlacesSuggestionSearch hook destroyed");
+  },
+  
+  initGooglePlaces() {
+    if (!this.mounted) return;
+    
+    // Check if Google Maps API is loaded and ready
+    if (window.google && google.maps && google.maps.places) {
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps loaded, initializing places autocomplete");
+      setTimeout(() => this.initPlacesAutocomplete(), 100);
+    } else {
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps not yet loaded, will initialize when ready");
+      // Add this hook to the list of hooks waiting for Google Maps to load
+      if (!window.placeSuggestionHooks) {
+        window.placeSuggestionHooks = [];
+      }
+      
+      // Ensure this hook isn't already in the list to prevent duplicates
+      if (!window.placeSuggestionHooks.includes(this)) {
+        window.placeSuggestionHooks.push(this);
+      }
+      
+      // Set up the global callback for when Google Maps loads (only once)
+      if (!window.initGooglePlacesForSuggestions) {
+        window.initGooglePlacesForSuggestions = () => {
+          if (window.placeSuggestionHooks && Array.isArray(window.placeSuggestionHooks)) {
+            window.placeSuggestionHooks.forEach(hook => {
+              if (hook.mounted) {
+                try {
+                  setTimeout(() => hook.initPlacesAutocomplete(), 100);
+                } catch (error) {
+                  if (process.env.NODE_ENV !== 'production') console.error("Error initializing places autocomplete for hook:", error);
+                }
+              }
+            });
+            // Clear the list after initialization
+            window.placeSuggestionHooks = [];
+          }
+        };
+      }
+    }
+  },
+  
+  // Google Places Autocomplete initialization for place suggestions
+  initPlacesAutocomplete() {
+    if (!this.mounted) return;
+    
+    try {
+      if (process.env.NODE_ENV !== 'production') console.log("Initializing Google Places Autocomplete for suggestions");
+      
+      // Prevent creating multiple instances
+      if (this.autocomplete) {
+        if (process.env.NODE_ENV !== 'production') console.log("Places autocomplete already initialized");
+        return;
+      }
+      
+      // Create the autocomplete object with the top 4 most relevant place types for dining/places
+      const options = {
+        types: ['restaurant', 'cafe', 'bar', 'meal_takeaway']
+      };
+      
+      this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+      
+      // When a place is selected from Google Places
+      this.autocomplete.addListener('place_changed', () => {
+        if (!this.mounted) return;
+        
+        if (process.env.NODE_ENV !== 'production') console.group("Google Places selection process for suggestions");
+        const place = this.autocomplete.getPlace();
+        if (process.env.NODE_ENV !== 'production') console.log("Place selected:", place);
+        
+        if (!place.geometry) {
+          if (process.env.NODE_ENV !== 'production') console.error("No place geometry received");
+          if (process.env.NODE_ENV !== 'production') console.groupEnd();
+          return;
+        }
+        
+        // Get place details
+        const placeName = place.name || '';
+        const placeAddress = place.formatted_address || '';
+        let city = '', state = '', country = '';
+        
+        // Get address components
+        if (place.address_components) {
+          if (process.env.NODE_ENV !== 'production') console.log("Processing address components:", place.address_components);
+          for (const component of place.address_components) {
+            if (component.types.includes('locality')) {
+              city = component.long_name;
+            } else if (component.types.includes('administrative_area_level_1')) {
+              state = component.long_name;
+            } else if (component.types.includes('country')) {
+              country = component.long_name;
+            }
+          }
+        }
+        
+        // Get coordinates
+        let lat = null, lng = null;
+        if (place.geometry && place.geometry.location) {
+          lat = place.geometry.location.lat();
+          lng = place.geometry.location.lng();
+        }
+        
+        // Prepare place data for LiveView
+        const placeData = {
+          title: placeName,
+          address: placeAddress,
+          city: city,
+          state: state,
+          country: country,
+          latitude: lat,
+          longitude: lng,
+          place_id: place.place_id || '',
+          rating: place.rating || null,
+          price_level: place.price_level || null,
+          phone: place.formatted_phone_number || '',
+          website: place.website || '',
+          photos: place.photos ? place.photos.slice(0, 3).map(photo => photo.getUrl({maxWidth: 400})) : []
+        };
+        
+        // Send to LiveView
+        if (process.env.NODE_ENV !== 'production') console.log("Pushing place data to LiveView:", placeData);
+        this.pushEvent('place_selected', placeData);
+        
+        if (process.env.NODE_ENV !== 'production') console.groupEnd();
+      });
+      
+      if (process.env.NODE_ENV !== 'production') console.log("Google Places Autocomplete for suggestions initialized");
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') console.error("Error in Google Places Autocomplete initialization:", error);
+    }
+  }
+};

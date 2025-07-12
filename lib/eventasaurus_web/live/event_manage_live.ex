@@ -688,6 +688,67 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
+  def handle_event("place_selected", place_data, socket) do
+    # Extract place data from the JavaScript hook
+    title = Map.get(place_data, "title", "")
+    address = Map.get(place_data, "address", "")
+
+    # Create a more comprehensive description with address
+    description = if address != "" && address != title do
+      "#{address}"
+    else
+      ""
+    end
+
+    # Find the current poll being worked on - we'll need to determine this from the context
+    # For now, let's assume we're working with the "places" poll type
+    places_poll = socket.assigns.polls
+                  |> Enum.find(fn poll -> poll.poll_type == "places" end)
+
+    if places_poll do
+      # Create poll option with place data
+      option_params = %{
+        poll_id: places_poll.id,
+        suggested_by_id: socket.assigns.user.id,
+        status: "active",
+        title: title,
+        description: description,
+        metadata: %{
+          address: address,
+          city: Map.get(place_data, "city", ""),
+          state: Map.get(place_data, "state", ""),
+          country: Map.get(place_data, "country", ""),
+          latitude: Map.get(place_data, "latitude"),
+          longitude: Map.get(place_data, "longitude"),
+          place_id: Map.get(place_data, "place_id", ""),
+          rating: Map.get(place_data, "rating"),
+          price_level: Map.get(place_data, "price_level"),
+          phone: Map.get(place_data, "phone", ""),
+          website: Map.get(place_data, "website", ""),
+          photos: Map.get(place_data, "photos", [])
+        }
+      }
+
+      case Events.create_poll_option(option_params) do
+        {:ok, _option} ->
+          {:noreply,
+           socket
+           |> load_poll_data()
+           |> put_flash(:info, "Place suggestion added successfully!")}
+
+        {:error, _changeset} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to add place suggestion")}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "No places poll found")}
+    end
+  end
+
+  @impl true
   def handle_info({:poll_saved, poll, %{action: action, message: message}}, socket) do
     # Reload polls data to include the new poll with consistent ordering
     polls = Events.list_polls(socket.assigns.event)
@@ -834,33 +895,12 @@ defmodule EventasaurusWeb.EventManageLive do
      |> assign(:show_poll_details, false)}
   end
 
-  @impl true
-  def handle_info({:perform_external_search, query, poll_type}, socket) do
-    # Delegate external search to the OptionSuggestionComponent
-    # This message comes from the component, so we forward it back to the component
-    send_update(EventasaurusWeb.OptionSuggestionComponent,
-      id: "poll-options-#{socket.assigns.selected_poll.id}",
-      action: :perform_search,
-      search_query: query,
-      poll_type: poll_type
-    )
 
-    {:noreply, socket}
-  end
 
   @impl true
   def handle_info({:hide_dropdown, _id}, socket) do
     # Handle dropdown hide events from components
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:option_suggested, _option}, socket) do
-    # Option was successfully added (from component) - refresh poll data
-    {:noreply,
-     socket
-     |> load_poll_data()
-     |> put_flash(:info, "Option added successfully")}
   end
 
   @impl true
