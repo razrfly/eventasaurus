@@ -486,7 +486,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
     case poll_type do
       "movie" -> "🎬"
       "places" -> "📍"
-      "activity" -> "🎯"
+      "time" -> "⏰"
       "custom" -> "📝"
       _ -> "📝"
     end
@@ -506,7 +506,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
     case poll_type do
       "movie" -> "Movie"
       "places" -> "Places"
-      "activity" -> "Activity"
+      "time" -> "Time"
       "custom" -> "Custom"
       _ -> String.capitalize(poll_type)
     end

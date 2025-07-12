@@ -31,7 +31,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   alias EventasaurusApp.Events.PollOption
   alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService, RichDataManager}
   alias EventasaurusWeb.Services.PollPubSubService
-  alias EventasaurusWeb.TimeSelectorComponent
+  alias EventasaurusWeb.Utils.TimeUtils
 
   @impl true
   def mount(socket) do
@@ -449,10 +449,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                  </svg>
-                <% "activity" -> %>
-                  <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
                   </svg>
                 <% "time" -> %>
                   <svg class="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1280,7 +1276,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     |> Enum.sort_by(fn option ->
       if poll_type == "time" do
         # Sort time polls by their time value
-        parse_time_for_sort(option.title)
+        TimeUtils.parse_time_for_sort(option.title)
       else
         # Sort other polls by order_index
         option.order_index || 0
@@ -1288,20 +1284,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end, :asc)
   end
 
-  # Helper function to parse time string for sorting
-  defp parse_time_for_sort(time_str) do
-    case String.split(time_str, ":") do
-      [hour_str, minute_str] ->
-        with {hour, ""} <- Integer.parse(hour_str),
-             {minute, ""} <- Integer.parse(minute_str) do
-          # Convert to minutes since midnight for sorting
-          hour * 60 + minute
-        else
-          _ -> 0  # Default to 0 if parsing fails
-        end
-      _ -> 0  # Default to 0 if format is unexpected
-    end
-  end
+
 
   # Helper function to safely handle poll_options that might be NotLoaded
   defp safe_poll_options(%Ecto.Association.NotLoaded{}), do: []
@@ -1454,8 +1437,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Suggest Movie"
       "places" -> "Suggest Place"
-      "activity" -> "Suggest Activity"
-      "time" -> "Add Time"
+          "time" -> "Add Time"
       _ -> "Add Option"
     end
   end
@@ -1464,8 +1446,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Movie Title"
       "places" -> "Place Name"
-      "activity" -> "Activity Name"
-      "time" -> "Time"
+          "time" -> "Time"
       _ -> "Option Title"
     end
   end
@@ -1474,8 +1455,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Start typing to search movies..."
       "places" -> "Start typing to search places..."
-      "activity" -> "Start typing to search activities..."
-      "time" -> "Select a time..."
+          "time" -> "Select a time..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
   end
@@ -1484,8 +1464,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Brief plot summary or why you recommend it..."
       "places" -> "Cuisine type, location, or special notes..."
-      "activity" -> "Location, duration, or what makes it fun..."
-      "time" -> "" # No description for time polls
+          "time" -> "" # No description for time polls
       _ -> "Additional details or context..."
     end
   end
@@ -1494,8 +1473,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "movies"
       "places" -> "places"
-      "activity" -> "activities"
-      "time" -> "times"
+          "time" -> "times"
       _ -> "options"
     end
   end
@@ -1556,7 +1534,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # Helper function to determine if a poll type should use API search
   defp should_use_api_search?(poll_type) do
-    poll_type in ["movie", "places", "activity"]
+    poll_type in ["movie", "places", "time"]
   end
 
   # New helper functions for empty state
@@ -1564,8 +1542,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "No Movies Suggested Yet"
       "places" -> "No Places Suggested Yet"
-      "activity" -> "No Activities Suggested Yet"
-      "time" -> "No Times Suggested Yet"
+          "time" -> "No Times Suggested Yet"
       _ -> "No Options Suggested Yet"
     end
   end
@@ -1586,8 +1563,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
       "places" -> "Suggest places that are popular or unique. Add details like cuisine, location, or special notes."
-      "activity" -> "Suggest activities that are fun or interesting. Add location, duration, or what makes it unique."
-      "time" -> "Suggest times that work for you. Times will be automatically sorted for easy comparison."
+          "time" -> "Suggest times that work for you. Times will be automatically sorted for easy comparison."
       _ -> "Suggest options that you think are great. Add a description to help others understand your choice."
     end
   end
@@ -1596,8 +1572,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Suggest a Movie"
       "places" -> "Suggest a Place"
-      "activity" -> "Suggest an Activity"
-      "time" -> "Add a Time"
+          "time" -> "Add a Time"
       _ -> "Add an Option"
     end
   end
@@ -1606,7 +1581,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "You can suggest up to 3 movies. Encourage others to add more suggestions!"
       "places" -> "You can suggest up to 3 places. Encourage others to add more suggestions!"
-      "activity" -> "You can suggest up to 3 activities. Encourage others to add more suggestions!"
+      "time" -> "You can suggest up to 3 times. Encourage others to add more suggestions!"
       _ -> "You can suggest up to 3 options. Encourage others to add more suggestions!"
     end
   end
@@ -1626,55 +1601,21 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     10..23
     |> Enum.flat_map(fn hour ->
       [
-        %{value: format_time_value(hour, 0), display: format_time_display(hour, 0)},
-        %{value: format_time_value(hour, 30), display: format_time_display(hour, 30)}
+        %{value: TimeUtils.format_time_value(hour, 0), display: TimeUtils.format_time_display(hour, 0)},
+        %{value: TimeUtils.format_time_value(hour, 30), display: TimeUtils.format_time_display(hour, 30)}
       ]
     end)
   end
 
-  defp format_time_value(hour, minute) do
-    # Store as 24-hour format string (e.g., "10:00", "14:30")
-    "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
-  end
 
-  defp format_time_display(hour, minute) do
-    # Display in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
-    {display_hour, period} = if hour == 0 do
-      {12, "AM"}
-    else
-      if hour <= 12 do
-        {if(hour == 12, do: 12, else: hour), if(hour < 12, do: "AM", else: "PM")}
-      else
-        {hour - 12, "PM"}
-      end
-    end
-
-    "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
-  end
 
   defp format_time_for_display(time) do
     # Parse time string like "17:30" and convert to 12-hour format
-    case String.split(time, ":") do
-      [hour_str, minute_str] ->
-        with {hour, ""} <- Integer.parse(hour_str),
-             {minute, ""} <- Integer.parse(minute_str) do
-          # Convert to 12-hour format
-          {display_hour, period} = if hour == 0 do
-            {12, "AM"}
-          else
-            if hour < 12 do
-              {hour, "AM"}
-            else
-              display_hour = if hour == 12, do: 12, else: hour - 12
-              {display_hour, "PM"}
-            end
-          end
-
-          "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
-        else
-          _ -> time  # Return original if parsing fails
-        end
-      _ -> time  # Return original if format is unexpected
+    case TimeUtils.parse_time_string(time) do
+      {:ok, {hour, minute}} ->
+        TimeUtils.format_time_display(hour, minute)
+      {:error, _} ->
+        time # Return original if parsing fails
     end
   end
 end
