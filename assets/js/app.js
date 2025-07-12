@@ -2715,8 +2715,8 @@ Hooks.PlacesSuggestionSearch = {
         // Populate form fields instead of auto-submitting
         this.populateFormFields(placeName, placeAddress);
         
-        // Close the Google Places dropdown after selection
-        this.closePlacesDropdown();
+        // Close the Google Places dropdown after selection (keep the selected text)
+        this.closePlacesDropdown(true);
         
         if (process.env.NODE_ENV !== 'production') console.log("Form fields populated with place data:", this.selectedPlaceData);
         if (process.env.NODE_ENV !== 'production') console.groupEnd();
@@ -2734,35 +2734,51 @@ Hooks.PlacesSuggestionSearch = {
   
   // Populate form fields with selected place data
   populateFormFields(placeName, placeAddress) {
-    // Find form fields in the modal
+    // Temporarily disable autocomplete to prevent retriggering
+    const wasAutocompleteEnabled = this.autocomplete;
+    if (this.autocomplete) {
+      this.autocomplete.setOptions({ types: [] }); // Temporarily disable autocomplete
+    }
+    
+    // Update the input field that has the PlacesSuggestionSearch hook
+    if (this.inputEl) {
+      this.inputEl.value = placeName;
+      // Only dispatch change event to update LiveView, not input event which triggers autocomplete
+      this.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    
+    // Also find the form field by name as backup
     const titleInput = document.querySelector('input[name="poll_option[title]"]');
-    const descriptionInput = document.querySelector('textarea[name="poll_option[description]"]');
-    
-    if (titleInput) {
+    if (titleInput && titleInput !== this.inputEl) {
       titleInput.value = placeName;
-      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
     
-    if (descriptionInput && placeAddress && placeAddress !== placeName) {
-      descriptionInput.value = placeAddress;
-      descriptionInput.dispatchEvent(new Event('input', { bubbles: true }));
+    // Re-enable autocomplete after a short delay
+    if (wasAutocompleteEnabled) {
+      setTimeout(() => {
+        if (this.autocomplete && this.mounted) {
+          this.autocomplete.setOptions({ types: ['establishment'] });
+        }
+      }, 100);
     }
     
-    if (process.env.NODE_ENV !== 'production') console.log("Form fields populated:", { title: placeName, description: placeAddress });
+    if (process.env.NODE_ENV !== 'production') console.log("Form fields populated:", { title: placeName, address: placeAddress });
   },
   
   // Close the Google Places dropdown after selection
-  closePlacesDropdown() {
+  closePlacesDropdown(keepText = false) {
     if (this.inputEl) {
-      // Clear the input field to close the dropdown
-      this.inputEl.value = '';
+      if (!keepText) {
+        // Clear the input field to close the dropdown
+        this.inputEl.value = '';
+        // Only trigger input event when clearing text to ensure proper cleanup
+        this.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+      }
       this.inputEl.blur();
-      
-      // Also trigger input event to ensure proper cleanup
-      this.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
     
-    if (process.env.NODE_ENV !== 'production') console.log("Google Places dropdown closed");
+    if (process.env.NODE_ENV !== 'production') console.log("Google Places dropdown closed", keepText ? "(keeping text)" : "(clearing text)");
   },
   
   // HTML escape helper to prevent XSS
@@ -2823,3 +2839,4 @@ Hooks.PlacesSuggestionSearch = {
     }
   }
 };
+
