@@ -5,7 +5,8 @@ defmodule EventasaurusWeb.TimeSelectorComponent do
   """
 
   use Phoenix.Component
-  import Phoenix.HTML.Form
+
+  alias EventasaurusWeb.Utils.TimeUtils
 
   attr :field, Phoenix.HTML.FormField, required: true
   attr :label, :string, default: "Time"
@@ -52,30 +53,11 @@ defmodule EventasaurusWeb.TimeSelectorComponent do
     10..23
     |> Enum.flat_map(fn hour ->
       [
-        %{value: format_time_value(hour, 0), display: format_time_display(hour, 0)},
-        %{value: format_time_value(hour, 30), display: format_time_display(hour, 30)}
+        %{value: TimeUtils.format_time_value(hour, 0), display: TimeUtils.format_time_display(hour, 0)},
+        %{value: TimeUtils.format_time_value(hour, 30), display: TimeUtils.format_time_display(hour, 30)}
       ]
     end)
   end
 
-  defp format_time_value(hour, minute) do
-    # Store as 24-hour format string (e.g., "10:00", "14:30")
-    "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
-  end
 
-  defp format_time_display(hour, minute) do
-    # Display in 12-hour format with AM/PM (e.g., "10:00 AM", "2:30 PM")
-    {display_hour, period} = if hour == 0 do
-      {12, "AM"}
-    else
-      if hour < 12 do
-        {hour, "AM"}
-      else
-        display_hour = if hour == 12, do: 12, else: hour - 12
-        {display_hour, "PM"}
-      end
-    end
-
-    "#{display_hour}:#{String.pad_leading(to_string(minute), 2, "0")} #{period}"
-  end
 end
