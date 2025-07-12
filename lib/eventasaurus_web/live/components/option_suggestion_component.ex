@@ -178,6 +178,52 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 form-container-mobile suggestion-form">
           <.form for={@changeset} phx-submit="submit_suggestion" phx-target={@myself} phx-change="validate_suggestion">
             <div class="space-y-4">
+
+              <!-- City Selector (only for places poll type) -->
+              <%= if @poll.poll_type == "places" do %>
+                <div class="relative">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Search Location (optional)
+                    <span class="text-xs text-gray-500 ml-2">Choose a city to find nearby places</span>
+                  </label>
+
+                  <div class="relative">
+                    <input
+                      type="text"
+                      class="city-selector-input block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm pr-10"
+                      placeholder="Search for a city..."
+                      autocomplete="off"
+                    />
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                      <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      </svg>
+                    </div>
+
+                    <!-- City Dropdown -->
+                    <div class="city-selector-dropdown hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                      <!-- Recent Cities -->
+                      <div class="px-3 py-2 bg-gray-50 border-b">
+                        <div class="text-xs font-medium text-gray-500 mb-2">RECENT CITIES</div>
+                        <div class="recent-cities-container">
+                          <!-- Recent cities will be populated by JavaScript -->
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Location Context Display -->
+                  <div class="city-display hidden mt-2 text-sm text-indigo-600 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span>Searching near your location</span>
+                  </div>
+                </div>
+              <% end %>
+
               <!-- Auto-complete title input -->
               <div class="relative">
                 <label for="option_title" class="block text-sm font-medium text-gray-700">
@@ -656,41 +702,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:suggestion_form_visible, !socket.assigns.suggestion_form_visible)}
   end
 
-  @impl true
-  def handle_event("place_selected", place_data, socket) do
-    # Extract place data from the JavaScript hook
-    title = Map.get(place_data, "title", "")
-    address = Map.get(place_data, "address", "")
 
-    # Create a more comprehensive description with address
-    description = if address != "" && address != title do
-      "#{address}"
-    else
-      ""
-    end
-
-    # Update the changeset with the selected place data
-    changeset = create_option_changeset(socket, %{
-      "title" => title,
-      "description" => description,
-      "metadata" => %{
-        "address" => address,
-        "city" => Map.get(place_data, "city", ""),
-        "state" => Map.get(place_data, "state", ""),
-        "country" => Map.get(place_data, "country", ""),
-        "latitude" => Map.get(place_data, "latitude"),
-        "longitude" => Map.get(place_data, "longitude"),
-        "place_id" => Map.get(place_data, "place_id", ""),
-        "rating" => Map.get(place_data, "rating"),
-        "price_level" => Map.get(place_data, "price_level"),
-        "phone" => Map.get(place_data, "phone", ""),
-        "website" => Map.get(place_data, "website", ""),
-        "photos" => Map.get(place_data, "photos", [])
-      }
-    })
-
-    {:noreply, assign(socket, :changeset, changeset)}
-  end
 
   @impl true
   def handle_event("cancel_suggestion", _params, socket) do
