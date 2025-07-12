@@ -2770,10 +2770,24 @@ Hooks.PlacesSuggestionSearch = {
   closePlacesDropdown(keepText = false) {
     if (this.inputEl) {
       if (!keepText) {
+        // Temporarily disable autocomplete before clearing to prevent retriggering
+        if (this.autocomplete) {
+          this.autocomplete.setOptions({ types: [] });
+        }
+        
         // Clear the input field to close the dropdown
         this.inputEl.value = '';
-        // Only trigger input event when clearing text to ensure proper cleanup
-        this.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        // Use change event to avoid retriggering autocomplete
+        this.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // Re-enable autocomplete after a short delay
+        if (this.autocomplete) {
+          setTimeout(() => {
+            if (this.autocomplete && this.mounted) {
+              this.autocomplete.setOptions({ types: ['establishment'] });
+            }
+          }, 100);
+        }
       }
       this.inputEl.blur();
     }
