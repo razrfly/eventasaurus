@@ -16,36 +16,103 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusWeb.Utils.MovieUtils
 
   @impl true
-  def update(assigns, socket) do
-    event = assigns.event
-    user = assigns.current_user
+  def mount(socket) do
+    {:ok, socket}
+  end
 
-    # Use the specific poll passed to the component instead of searching
-    movie_poll = case Map.get(assigns, :poll) do
-      nil ->
-        # Fallback: Find the movie poll for this event if no specific poll provided
-        Events.list_polls(event)
-        |> Enum.find(&(&1.poll_type == "movie"))
-      poll -> poll
+  # Helper function to get movie poll for an event
+  defp get_movie_poll(event) do
+    Events.list_polls(event)
+    |> Enum.find(&(&1.poll_type == "movie"))
+  end
+
+  @impl true
+  def update(assigns, socket) do
+    movie_poll = get_movie_poll(assigns.event)
+    movie_options = if movie_poll, do: Events.list_poll_options(movie_poll), else: []
+
+    # Load user votes for this poll
+    user_votes = if assigns.current_user && movie_poll do
+      Events.list_user_poll_votes(movie_poll, assigns.current_user)
+    else
+      []
     end
 
-    if movie_poll do
-      # Load movie options with suggested_by user
-      movie_options = Events.list_poll_options(movie_poll)
-      |> Repo.preload(:suggested_by)
+    # Preload suggested_by for all options
+    movie_options = Enum.map(movie_options, fn option ->
+      if option.suggested_by_id do
+        %{option | suggested_by: EventasaurusApp.Accounts.get_user!(option.suggested_by_id)}
+      else
+        option
+      end
+    end)
 
-      {:ok,
-       socket
-       |> assign(:event, event)
-       |> assign(:current_user, user)
-       |> assign(:movie_poll, movie_poll)
-       |> assign(:movie_options, movie_options)
-       |> assign(:showing_add_form, false)
-       |> assign(:search_query, "")
-       |> assign(:search_results, [])
-       |> assign(:adding_movie, false)}
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(:movie_poll, movie_poll)
+     |> assign(:movie_options, movie_options)
+     |> assign(:user_votes, user_votes)
+     |> assign(:showing_add_form, false)
+     |> assign(:search_query, "")
+     |> assign(:search_results, [])
+     |> assign(:adding_movie, false)}
+  end
+
+  @impl true
+  def handle_event("cast_binary_vote", %{"option-id" => option_id, "vote" => vote_value}, socket) do
+    %{current_user: user, movie_poll: poll} = socket.assigns
+
+    if user do
+      # Get the PollOption struct first
+      case Events.get_poll_option(String.to_integer(option_id)) do
+        nil ->
+          {:noreply, socket}
+
+        poll_option ->
+          case Events.cast_binary_vote(poll, poll_option, user, vote_value) do
+            {:ok, _vote} ->
+              # Reload user votes to update the UI
+              user_votes = Events.list_user_poll_votes(poll, user)
+
+              # Send update to parent component (format: {:vote_cast, option_id, vote_value})
+              send(self(), {:vote_cast, String.to_integer(option_id), vote_value})
+
+              {:noreply, assign(socket, :user_votes, user_votes)}
+
+            {:error, _changeset} ->
+              {:noreply, socket}
+          end
+      end
     else
-      {:ok, assign(socket, :movie_poll, nil)}
+      {:noreply, socket}
+    end
+  end
+
+  # Helper function to get user's vote for a specific option
+  defp get_user_vote(option_id, user_votes) do
+    case Enum.find(user_votes, fn vote -> vote.poll_option_id == option_id end) do
+      %{vote_value: vote_value} -> vote_value
+      _ -> nil
+    end
+  end
+
+  # Helper function to generate button classes based on vote state
+  defp binary_button_class(current_vote, button_vote) do
+    base_classes = "inline-flex items-center px-3 py-1 text-xs font-medium rounded-full transition-colors"
+
+    if current_vote == button_vote do
+      case button_vote do
+        "yes" -> "#{base_classes} bg-green-100 text-green-800 border border-green-300"
+        "maybe" -> "#{base_classes} bg-yellow-100 text-yellow-800 border border-yellow-300"
+        "no" -> "#{base_classes} bg-red-100 text-red-800 border border-red-300"
+      end
+    else
+      case button_vote do
+        "yes" -> "#{base_classes} bg-white text-green-700 border border-green-300 hover:bg-green-50"
+        "maybe" -> "#{base_classes} bg-white text-yellow-700 border border-yellow-300 hover:bg-yellow-50"
+        "no" -> "#{base_classes} bg-white text-red-700 border border-red-300 hover:bg-red-50"
+      end
     end
   end
 
@@ -267,14 +334,49 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                         </p>
                       <% end %>
 
-                      <%= if @movie_poll.phase == "voting" do %>
-                        <!-- Voting buttons will go here -->
-                        <div class="flex items-center space-x-2 mt-2">
-                          <button class="px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200">
-                            👍 Yes
+                      <!-- Voting buttons for movie polls in voting phase -->
+                      <%= if @movie_poll.phase == "voting" && @current_user do %>
+                        <div class="flex space-x-2 mt-3">
+                          <button
+                            type="button"
+                            phx-click="cast_binary_vote"
+                            phx-value-option-id={option.id}
+                            phx-value-vote="yes"
+                            phx-target={@myself}
+                            class={binary_button_class(get_user_vote(option.id, @user_votes), "yes")}
+                          >
+                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Yes
                           </button>
-                          <button class="px-3 py-1 text-xs bg-red-100 text-red-800 rounded-full hover:bg-red-200">
-                            👎 No
+
+                          <button
+                            type="button"
+                            phx-click="cast_binary_vote"
+                            phx-value-option-id={option.id}
+                            phx-value-vote="maybe"
+                            phx-target={@myself}
+                            class={binary_button_class(get_user_vote(option.id, @user_votes), "maybe")}
+                          >
+                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Maybe
+                          </button>
+
+                          <button
+                            type="button"
+                            phx-click="cast_binary_vote"
+                            phx-value-option-id={option.id}
+                            phx-value-vote="no"
+                            phx-target={@myself}
+                            class={binary_button_class(get_user_vote(option.id, @user_votes), "no")}
+                          >
+                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            No
                           </button>
                         </div>
                       <% end %>
