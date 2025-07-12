@@ -29,7 +29,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   require Logger
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.PollOption
-  alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService}
+  alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService, RichDataManager}
   alias EventasaurusWeb.Services.PollPubSubService
 
   @impl true
@@ -38,7 +38,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      socket
      |> assign(:loading, false)
      |> assign(:suggestion_form_visible, false)
-     |> assign(:editing_option_id, nil)}
+     |> assign(:editing_option_id, nil)
+     |> assign(:search_query, "")
+     |> assign(:search_results, [])
+     |> assign(:search_loading, false)}
   end
 
   @impl true
@@ -115,6 +118,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign_new(:edit_changeset, fn -> nil end)
          |> assign_new(:loading_rich_data, fn -> false end)
          |> assign_new(:show_phase_dropdown, fn -> false end)
+         |> assign_new(:search_query, fn -> "" end)
+         |> assign_new(:search_results, fn -> [] end)
+         |> assign_new(:search_loading, fn -> false end)
          |> then(fn socket ->
            # Handle editing mode after all other assigns are set
            if Map.get(assigns, :editing_option_id) do
@@ -232,17 +238,32 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 </label>
                 <div class="mt-1 relative">
                   <%= if should_use_api_search?(@poll.poll_type) do %>
-                    <input
-                      type="text"
-                      name="poll_option[title]"
-                      id="option_title"
-                      value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                      placeholder={option_title_placeholder(@poll.poll_type)}
-                      phx-debounce="300"
-                      phx-hook="PlacesSuggestionSearch"
-                      autocomplete="off"
-                      class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    />
+                    <%= if @poll.poll_type == "movie" do %>
+                      <input
+                        type="text"
+                        name="poll_option[title]"
+                        id="option_title"
+                        value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                        placeholder={option_title_placeholder(@poll.poll_type)}
+                        phx-change="search_movies"
+                        phx-target={@myself}
+                        phx-debounce="300"
+                        autocomplete="off"
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      />
+                    <% else %>
+                      <input
+                        type="text"
+                        name="poll_option[title]"
+                        id="option_title"
+                        value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                        placeholder={option_title_placeholder(@poll.poll_type)}
+                        phx-debounce="300"
+                        phx-hook="PlacesSuggestionSearch"
+                        autocomplete="off"
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      />
+                    <% end %>
                   <% else %>
                     <input
                       type="text"
@@ -257,6 +278,48 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <!-- Loading indicator removed - now handled by Google Places autocomplete -->
 
                   <!-- Remove the complex dropdown logic as it's now handled by Google Places -->
+
+                  <!-- Movie search results dropdown -->
+                  <%= if @poll.poll_type == "movie" and length(@search_results) > 0 do %>
+                    <div class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      <%= for movie <- @search_results do %>
+                        <div class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                             phx-click="select_movie"
+                             phx-value-movie-id={movie.id}
+                             phx-target={@myself}>
+                          <% image_url = get_movie_poster_url(movie) %>
+                          <%= if image_url do %>
+                            <img src={image_url} alt={movie.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
+                          <% else %>
+                            <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
+                              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                              </svg>
+                            </div>
+                          <% end %>
+                          <div class="flex-1 min-w-0">
+                            <h4 class="font-medium text-gray-900 truncate"><%= movie.title %></h4>
+                            <%= if movie.metadata && movie.metadata["release_date"] do %>
+                              <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
+                            <% end %>
+                            <%= if movie.description && String.length(movie.description) > 0 do %>
+                              <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
+                            <% end %>
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+
+                  <!-- Loading indicator for movie search -->
+                  <%= if @poll.poll_type == "movie" and @search_loading do %>
+                    <div class="absolute right-3 top-9 flex items-center">
+                      <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    </div>
+                  <% end %>
 
                   <% if @changeset.errors[:title] do %>
                     <p class="mt-2 text-sm text-red-600"><%= translate_error(@changeset.errors[:title]) %></p>
@@ -700,7 +763,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("toggle_suggestion_form", _params, socket) do
     {:noreply,
      socket
-     |> assign(:suggestion_form_visible, !socket.assigns.suggestion_form_visible)}
+     |> assign(:suggestion_form_visible, !socket.assigns.suggestion_form_visible)
+     |> assign(:search_query, "")
+     |> assign(:search_results, [])}
   end
 
 
@@ -716,7 +781,121 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     {:noreply,
      socket
      |> assign(:suggestion_form_visible, false)
-     |> assign(:changeset, changeset)}
+     |> assign(:changeset, changeset)
+     |> assign(:search_query, "")
+     |> assign(:search_results, [])}
+  end
+
+  @impl true
+  def handle_event("search_movies", %{"poll_option" => %{"title" => query}} = _params, socket) do
+    # Only search if this is a movie poll
+    if socket.assigns.poll.poll_type == "movie" do
+      if String.length(String.trim(query)) >= 2 do
+        # Set loading state
+        socket = assign(socket, :search_loading, true)
+
+        # Use the centralized RichDataManager system (same as PublicMoviePollComponent)
+        search_options = %{
+          providers: [:tmdb],
+          limit: 5,
+          content_type: :movie
+        }
+
+        case RichDataManager.search(query, search_options) do
+          {:ok, results_by_provider} ->
+            # Extract movie results from TMDB provider
+            movie_results = case Map.get(results_by_provider, :tmdb) do
+              {:ok, results} when is_list(results) -> results
+              {:ok, result} -> [result]
+              _ -> []
+            end
+
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, movie_results)
+             |> assign(:search_loading, false)}
+
+          {:error, _} ->
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, [])
+             |> assign(:search_loading, false)}
+        end
+      else
+        {:noreply,
+         socket
+         |> assign(:search_query, query)
+         |> assign(:search_results, [])
+         |> assign(:search_loading, false)}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Fallback handler for search_movies in case parameters don't match expected format
+  @impl true
+  def handle_event("search_movies", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("select_movie", %{"movie-id" => movie_id}, socket) do
+    # Find the selected movie in search results
+    movie_data = socket.assigns.search_results
+    |> Enum.find(fn movie ->
+      # Handle both string and integer movie_id formats
+      case Integer.parse(movie_id) do
+        {id, _} -> movie.id == id
+        :error -> to_string(movie.id) == movie_id
+      end
+    end)
+
+    if movie_data do
+      # Set loading state for rich data
+      socket = assign(socket, :loading_rich_data, true)
+
+      # Use the centralized RichDataManager to get detailed movie data
+      case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
+        {:ok, rich_movie_data} ->
+          # Use the shared MovieDataService to prepare movie data consistently
+          prepared_data = MovieDataService.prepare_movie_option_data(
+            movie_data.id,
+            rich_movie_data
+          )
+
+          # Create changeset with the rich data
+          changeset = create_option_changeset(socket, prepared_data)
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:loading_rich_data, false)
+           |> assign(:search_results, [])
+           |> assign(:search_query, "")}
+
+        {:error, _reason} ->
+          # Fallback to basic movie data if rich data fetch fails
+          fallback_data = %{
+            "title" => movie_data.title,
+            "description" => movie_data.description || "",
+            "external_id" => to_string(movie_data.id)
+          }
+
+          changeset = create_option_changeset(socket, fallback_data)
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:loading_rich_data, false)
+           |> assign(:search_results, [])
+           |> assign(:search_query, "")}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -1206,6 +1385,29 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     Map.put(prepared_data, key, user_value)
   end
   defp maybe_preserve_user_input(prepared_data, _key, _user_value), do: prepared_data
+
+  # Helper function to extract poster URL from movie data
+  defp get_movie_poster_url(movie) do
+    cond do
+      # Check if movie has image_url field (fallback/legacy)
+      Map.has_key?(movie, :image_url) && movie.image_url ->
+        movie.image_url
+
+      # Check if movie has images array (new structure)
+      Map.has_key?(movie, :images) && is_list(movie.images) ->
+        poster_image = Enum.find(movie.images, fn image ->
+          Map.get(image, :type) == :poster
+        end)
+        if poster_image, do: Map.get(poster_image, :url), else: nil
+
+      # Check metadata for poster_path (legacy TMDB structure)
+      movie.metadata && movie.metadata["poster_path"] ->
+        "https://image.tmdb.org/t/p/w92#{movie.metadata["poster_path"]}"
+
+      true ->
+        nil
+    end
+  end
 
   # UI helper functions
 
