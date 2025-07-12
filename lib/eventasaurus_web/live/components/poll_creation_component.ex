@@ -33,7 +33,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
   @poll_types [
     {"custom", "General Poll", "📝", "Create a custom poll"},
     {"movie", "Movie", "🎬", "Vote on movies to watch"},
-    {"restaurant", "Restaurant", "🍽️", "Pick places to eat"},
+    {"places", "Places", "📍", "Pick places to visit"},
     {"activity", "Activity", "🎯", "Select activities to do"}
   ]
 

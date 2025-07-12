@@ -485,7 +485,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   defp get_poll_type_emoji(poll_type) do
     case poll_type do
       "movie" -> "🎬"
-      "restaurant" -> "🍽️"
+      "places" -> "📍"
       "activity" -> "🎯"
       "custom" -> "📝"
       _ -> "📝"
@@ -505,7 +505,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   defp format_poll_type(poll_type) do
     case poll_type do
       "movie" -> "Movie"
-      "restaurant" -> "Restaurant"
+      "places" -> "Places"
       "activity" -> "Activity"
       "custom" -> "Custom"
       _ -> String.capitalize(poll_type)
