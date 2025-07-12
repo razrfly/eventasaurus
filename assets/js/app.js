@@ -2232,9 +2232,21 @@ Hooks.PlacesSuggestionSearch = {
     this.inputEl = this.el;
     this.mounted = true;
     this.autocomplete = null;
+    this.currentLocation = null;
+    this.selectedCity = null;
+    this.selectedPlaceData = null;
     
     // Initialize Google Places immediately
     this.initGooglePlaces();
+    
+    // Attempt to get user location for search biasing (privacy-first approach)
+    this.initGeolocation();
+    
+    // Initialize city selector functionality
+    this.initCitySelector();
+    
+    // Listen for form submissions to include place metadata
+    this.setupFormSubmissionHandler();
   },
   
   destroyed() {
@@ -2249,6 +2261,288 @@ Hooks.PlacesSuggestionSearch = {
     }
     
     if (process.env.NODE_ENV !== 'production') console.log("PlacesSuggestionSearch hook destroyed");
+  },
+  
+  initCitySelector() {
+    if (!this.mounted) return;
+    
+    // Set up city selector dropdown if it exists
+    this.cityDropdown = document.querySelector('.city-selector-dropdown');
+    this.cityInput = document.querySelector('.city-selector-input');
+    this.recentCitiesContainer = document.querySelector('.recent-cities-container');
+    
+    if (this.cityInput) {
+      // Set up city autocomplete
+      this.setupCityAutocomplete();
+      
+      // Load and display recent cities
+      this.loadRecentCities();
+      
+      // Set up event handlers
+      this.cityInput.addEventListener('focus', () => this.showCityDropdown());
+      this.cityInput.addEventListener('blur', (e) => {
+        // Delay hiding to allow for clicks on dropdown items
+        setTimeout(() => this.hideCityDropdown(), 150);
+      });
+    }
+  },
+  
+  setupCityAutocomplete() {
+    if (!this.cityInput) return;
+    
+    // Wait for Google Maps to be loaded
+    if (window.google && google.maps && google.maps.places) {
+      this.initCityAutocomplete();
+    } else {
+      // Wait for Google Maps to load
+      const checkGoogleMaps = setInterval(() => {
+        if (window.google && google.maps && google.maps.places) {
+          clearInterval(checkGoogleMaps);
+          this.initCityAutocomplete();
+        }
+      }, 100);
+    }
+  },
+  
+  initCityAutocomplete() {
+    if (!this.cityInput || this.cityAutocomplete) return;
+    
+    try {
+      // Create autocomplete specifically for cities
+      this.cityAutocomplete = new google.maps.places.Autocomplete(this.cityInput, {
+        types: ['(cities)'], // Restrict to cities only
+        fields: ['name', 'formatted_address', 'geometry', 'place_id']
+      });
+      
+      // Handle city selection
+      this.cityAutocomplete.addListener('place_changed', () => {
+        const place = this.cityAutocomplete.getPlace();
+        if (place && place.geometry) {
+          this.selectCity(place);
+        }
+      });
+      
+      if (process.env.NODE_ENV !== 'production') console.log("City autocomplete initialized");
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') console.error("Error initializing city autocomplete:", error);
+    }
+  },
+  
+  selectCity(place) {
+    if (!place || !place.geometry) return;
+    
+    const cityData = {
+      name: place.name,
+      formatted_address: place.formatted_address,
+      place_id: place.place_id,
+      lat: place.geometry.location.lat(),
+      lng: place.geometry.location.lng()
+    };
+    
+    // Update selected city and location bias
+    this.selectedCity = cityData;
+    this.currentLocation = {
+      lat: cityData.lat,
+      lng: cityData.lng
+    };
+    
+    // Apply new location bias to places search
+    if (this.autocomplete) {
+      this.applyLocationBias();
+    }
+    
+    // Save to recent cities
+    this.saveRecentCity(cityData);
+    
+    // Update UI
+    this.updateCityDisplay();
+    this.hideCityDropdown();
+    
+    if (process.env.NODE_ENV !== 'production') console.log("City selected:", cityData);
+  },
+  
+  saveRecentCity(cityData) {
+    try {
+      const recentCities = this.getRecentCities();
+      
+      // Remove if already exists (to avoid duplicates)
+      const filtered = recentCities.filter(city => city.place_id !== cityData.place_id);
+      
+      // Add to front and limit to 5 cities
+      const updated = [cityData, ...filtered].slice(0, 5);
+      
+      localStorage.setItem('eventasaurus_recent_cities', JSON.stringify(updated));
+      
+      // Update recent cities display
+      this.loadRecentCities();
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') console.error("Error saving recent city:", error);
+    }
+  },
+  
+  getRecentCities() {
+    try {
+      const stored = localStorage.getItem('eventasaurus_recent_cities');
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') console.error("Error loading recent cities:", error);
+      return [];
+    }
+  },
+  
+  loadRecentCities() {
+    if (!this.recentCitiesContainer) return;
+    
+    const recentCities = this.getRecentCities();
+    
+    if (recentCities.length === 0) {
+      this.recentCitiesContainer.innerHTML = '<div class="text-sm text-gray-500 p-2">No recent cities</div>';
+      return;
+    }
+    
+    const citiesHtml = recentCities.map(city => `
+      <button type="button" 
+              class="recent-city-btn w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+              data-city='${JSON.stringify(city)}'>
+        <div class="font-medium">${city.name}</div>
+        <div class="text-xs text-gray-500">${city.formatted_address}</div>
+      </button>
+    `).join('');
+    
+    this.recentCitiesContainer.innerHTML = citiesHtml;
+    
+    // Add click handlers for recent cities
+    this.recentCitiesContainer.querySelectorAll('.recent-city-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        try {
+          const cityData = JSON.parse(e.currentTarget.dataset.city);
+          this.selectCityFromRecent(cityData);
+        } catch (error) {
+          if (process.env.NODE_ENV !== 'production') console.error("Error selecting recent city:", error);
+        }
+      });
+    });
+  },
+  
+  selectCityFromRecent(cityData) {
+    // Update selected city and location bias
+    this.selectedCity = cityData;
+    this.currentLocation = {
+      lat: cityData.lat,
+      lng: cityData.lng
+    };
+    
+    // Apply location bias
+    if (this.autocomplete) {
+      this.applyLocationBias();
+    }
+    
+    // Update city input value
+    if (this.cityInput) {
+      this.cityInput.value = cityData.name;
+    }
+    
+    // Save as recent (moves to front)
+    this.saveRecentCity(cityData);
+    
+    // Update UI
+    this.updateCityDisplay();
+    this.hideCityDropdown();
+    
+    if (process.env.NODE_ENV !== 'production') console.log("Recent city selected:", cityData);
+  },
+  
+  updateCityDisplay() {
+    // Update any city display elements
+    const cityDisplay = document.querySelector('.city-display');
+    if (cityDisplay && this.selectedCity) {
+      cityDisplay.textContent = `Searching near ${this.selectedCity.name}`;
+      cityDisplay.classList.remove('hidden');
+    }
+  },
+  
+  showCityDropdown() {
+    if (this.cityDropdown) {
+      this.cityDropdown.classList.remove('hidden');
+      this.loadRecentCities(); // Refresh recent cities
+    }
+  },
+  
+  hideCityDropdown() {
+    if (this.cityDropdown) {
+      this.cityDropdown.classList.add('hidden');
+    }
+  },
+  
+  initGeolocation() {
+    if (!this.mounted) return;
+    
+    // Check if geolocation is available (following timezone detection pattern)
+    if (navigator.geolocation) {
+      if (process.env.NODE_ENV !== 'production') console.log("Attempting to get user location for place search biasing");
+      
+      // Use getCurrentPosition with no permission prompts (privacy-first)
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (!this.mounted) return;
+          
+          // Only use geolocation if no city is manually selected
+          if (!this.selectedCity) {
+            this.currentLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+            
+            if (process.env.NODE_ENV !== 'production') console.log("Location detected for place search biasing:", this.currentLocation);
+            
+            // Re-initialize autocomplete with location bias if already created
+            if (this.autocomplete) {
+              this.applyLocationBias();
+            }
+          }
+        },
+        (error) => {
+          if (!this.mounted) return;
+          
+          // Graceful fallback - no location bias (following timezone pattern)
+          if (process.env.NODE_ENV !== 'production') console.log("Geolocation not available, using global search:", error.message);
+          this.currentLocation = null;
+        },
+        {
+          // Privacy-first settings - no prompts, quick timeout
+          enableHighAccuracy: false,
+          timeout: 5000,
+          maximumAge: 600000 // 10 minutes cache
+        }
+      );
+    } else {
+      if (process.env.NODE_ENV !== 'production') console.log("Geolocation not supported, using global search");
+      this.currentLocation = null;
+    }
+  },
+  
+  applyLocationBias() {
+    if (!this.autocomplete || !this.currentLocation) return;
+    
+    try {
+      // Create location bias using current location (either geolocation or selected city)
+      const center = new google.maps.LatLng(this.currentLocation.lat, this.currentLocation.lng);
+      const radius = 50000; // 50km radius for local bias
+      
+      // Create circular bias area
+      const circle = new google.maps.Circle({
+        center: center,
+        radius: radius
+      });
+      
+      // Apply location bias to autocomplete
+      this.autocomplete.setBounds(circle.getBounds());
+      
+      const source = this.selectedCity ? `selected city (${this.selectedCity.name})` : 'detected location';
+      if (process.env.NODE_ENV !== 'production') console.log(`Applied location bias from ${source}:`, this.currentLocation);
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') console.error("Error applying location bias:", error);
+    }
   },
   
   initGooglePlaces() {
@@ -2304,12 +2598,18 @@ Hooks.PlacesSuggestionSearch = {
         return;
       }
       
-      // Create the autocomplete object with the top 4 most relevant place types for dining/places
+      // Create the autocomplete object with expanded place types for "places" poll type
+      // Limited to 5 place types due to Google Maps API restrictions
       const options = {
-        types: ['restaurant', 'cafe', 'bar', 'meal_takeaway']
+        types: ['restaurant', 'cafe', 'bar', 'tourist_attraction', 'amusement_park']
       };
       
       this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+      
+      // Apply location bias if available
+      if (this.currentLocation) {
+        this.applyLocationBias();
+      }
       
       // When a place is selected from Google Places
       this.autocomplete.addListener('place_changed', () => {
@@ -2351,8 +2651,8 @@ Hooks.PlacesSuggestionSearch = {
           lng = place.geometry.location.lng();
         }
         
-        // Prepare place data for LiveView
-        const placeData = {
+        // Store place data for form submission instead of auto-submitting
+        this.selectedPlaceData = {
           title: placeName,
           address: placeAddress,
           city: city,
@@ -2368,16 +2668,104 @@ Hooks.PlacesSuggestionSearch = {
           photos: place.photos ? place.photos.slice(0, 3).map(photo => photo.getUrl({maxWidth: 400})) : []
         };
         
-        // Send to LiveView
-        if (process.env.NODE_ENV !== 'production') console.log("Pushing place data to LiveView:", placeData);
-        this.pushEvent('place_selected', placeData);
+        // Populate form fields instead of auto-submitting
+        this.populateFormFields(placeName, placeAddress);
         
+        // Close the Google Places dropdown after selection
+        this.closePlacesDropdown();
+        
+        if (process.env.NODE_ENV !== 'production') console.log("Form fields populated with place data:", this.selectedPlaceData);
         if (process.env.NODE_ENV !== 'production') console.groupEnd();
       });
       
       if (process.env.NODE_ENV !== 'production') console.log("Google Places Autocomplete for suggestions initialized");
     } catch (error) {
       if (process.env.NODE_ENV !== 'production') console.error("Error in Google Places Autocomplete initialization:", error);
+    }
+  },
+  
+  // Populate form fields with selected place data
+  populateFormFields(placeName, placeAddress) {
+    // Find form fields in the modal
+    const titleInput = document.querySelector('input[name="poll_option[title]"]');
+    const descriptionInput = document.querySelector('textarea[name="poll_option[description]"]');
+    
+    if (titleInput) {
+      titleInput.value = placeName;
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    
+    if (descriptionInput && placeAddress && placeAddress !== placeName) {
+      descriptionInput.value = placeAddress;
+      descriptionInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    
+    if (process.env.NODE_ENV !== 'production') console.log("Form fields populated:", { title: placeName, description: placeAddress });
+  },
+  
+  // Close the Google Places dropdown after selection
+  closePlacesDropdown() {
+    if (this.inputEl) {
+      // Clear the input field to close the dropdown
+      this.inputEl.value = '';
+      this.inputEl.blur();
+      
+      // Also trigger input event to ensure proper cleanup
+      this.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    
+    if (process.env.NODE_ENV !== 'production') console.log("Google Places dropdown closed");
+  },
+  
+  // Setup form submission handler to include place metadata
+  setupFormSubmissionHandler() {
+    const form = this.el.closest('form');
+    if (form) {
+      form.addEventListener('submit', (event) => {
+        if (this.selectedPlaceData) {
+          // Add place metadata as hidden inputs before form submission
+          this.addPlaceMetadataToForm(form);
+        }
+      });
+    }
+  },
+  
+  // Add place metadata as hidden form inputs
+  addPlaceMetadataToForm(form) {
+    // Remove any existing metadata inputs to avoid duplicates
+    const existingInputs = form.querySelectorAll('input[name*="metadata"]');
+    existingInputs.forEach(input => input.remove());
+    
+    // Add place metadata as hidden inputs
+    const metadata = this.selectedPlaceData;
+    if (metadata) {
+      const metadataFields = [
+        'address', 'city', 'state', 'country', 'latitude', 'longitude',
+        'place_id', 'rating', 'price_level', 'phone', 'website'
+      ];
+      
+      metadataFields.forEach(field => {
+        if (metadata[field] !== null && metadata[field] !== undefined) {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = `poll_option[metadata][${field}]`;
+          input.value = metadata[field];
+          form.appendChild(input);
+        }
+      });
+      
+      // Handle photos array separately
+      if (metadata.photos && metadata.photos.length > 0) {
+        metadata.photos.forEach((photo, index) => {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = `poll_option[metadata][photos][${index}]`;
+          input.value = photo;
+          form.appendChild(input);
+        });
+      }
+      
+      if (process.env.NODE_ENV !== 'production') console.log("Added place metadata to form submission");
     }
   }
 };
