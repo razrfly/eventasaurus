@@ -9,8 +9,6 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusApp.Ticketing
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
-  alias EventasaurusWeb.VotingInterfaceComponent
-  alias EventasaurusWeb.ResultsDisplayComponent
   alias EventasaurusWeb.PublicGenericPollComponent
   alias EventasaurusWeb.ReservedSlugs
 
