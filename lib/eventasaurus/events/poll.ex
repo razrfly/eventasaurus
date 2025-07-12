@@ -25,10 +25,12 @@ defmodule EventasaurusApp.Events.Poll do
     timestamps()
   end
 
-  @doc false
-  def __after_load__(poll) do
-    # Map phase to status for backward compatibility
-    status = case poll.phase do
+  @doc """
+  Returns the status representation of the poll for backward compatibility.
+  Maps the new phase system back to the legacy status values.
+  """
+  def status(%__MODULE__{phase: phase}) do
+    case phase do
       "list_building" -> "list_building"
       "voting_with_suggestions" -> "voting"
       "voting_only" -> "voting"
@@ -36,19 +38,23 @@ defmodule EventasaurusApp.Events.Poll do
       "closed" -> "finalized"
       phase -> phase
     end
-    %{poll | status: status}
   end
 
-  @doc false
-  def changeset(poll, attrs) do
-    # Map status to phase for backward compatibility
-    attrs = case Map.get(attrs, :status) || Map.get(attrs, "status") do
+  # Private helper for status-to-phase mapping
+  defp map_status_to_phase(attrs) do
+    case Map.get(attrs, :status) || Map.get(attrs, "status") do
       nil -> attrs
       "list_building" -> Map.put(attrs, :phase, "list_building")
       "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")  # Default to suggestions allowed
       "finalized" -> Map.put(attrs, :phase, "closed")
       status -> Map.put(attrs, :phase, status)
     end
+  end
+
+  @doc false
+  def changeset(poll, attrs) do
+    # Map status to phase for backward compatibility
+    attrs = map_status_to_phase(attrs)
 
     poll
     |> cast(attrs, [
@@ -76,13 +82,7 @@ defmodule EventasaurusApp.Events.Poll do
   """
   def creation_changeset(poll, attrs) do
     # Map status to phase for backward compatibility
-    attrs = case Map.get(attrs, :status) || Map.get(attrs, "status") do
-      nil -> attrs
-      "list_building" -> Map.put(attrs, :phase, "list_building")
-      "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")  # Default to suggestions allowed
-      "finalized" -> Map.put(attrs, :phase, "closed")
-      status -> Map.put(attrs, :phase, status)
-    end
+    attrs = map_status_to_phase(attrs)
 
     poll
     |> cast(attrs, [
@@ -142,13 +142,7 @@ defmodule EventasaurusApp.Events.Poll do
   """
   def status_changeset(poll, attrs) do
     # Map status to phase for backward compatibility
-    attrs = case Map.get(attrs, :status) do
-      nil -> attrs
-      "list_building" -> Map.put(attrs, :phase, "list_building")
-      "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")  # Default to suggestions allowed
-      "finalized" -> Map.put(attrs, :phase, "closed")
-      status -> Map.put(attrs, :phase, status)
-    end
+    attrs = map_status_to_phase(attrs)
 
     changeset = poll
     |> cast(attrs, [:phase])
@@ -349,6 +343,9 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_phase_transition(changeset, current_phase, new_phase) do
     case {current_phase, new_phase} do
+      # Same phase (no change)
+      {same, same} -> changeset
+
       # From list_building phase
       {"list_building", "voting_with_suggestions"} -> changeset
       {"list_building", "voting_only"} -> changeset
@@ -358,24 +355,45 @@ defmodule EventasaurusApp.Events.Poll do
       # From voting_with_suggestions phase
       {"voting_with_suggestions", "voting_only"} -> changeset
       {"voting_with_suggestions", "closed"} -> changeset
-      {"voting_with_suggestions", "list_building"} -> changeset  # Allow back to building
+      {"voting_with_suggestions", "list_building"} -> validate_no_votes_for_building_transition(changeset)
 
       # From voting_only phase
+      {"voting_only", "voting_with_suggestions"} -> changeset  # NEW: Allow bidirectional voting transitions
       {"voting_only", "closed"} -> changeset
-      {"voting_only", "list_building"} -> changeset  # Allow back to building
-      # Note: Cannot go from voting_only back to voting_with_suggestions (one-way restriction)
+      {"voting_only", "list_building"} -> validate_no_votes_for_building_transition(changeset)
 
       # Legacy voting phase transitions
       {"voting", "closed"} -> changeset
-      {"voting", "list_building"} -> changeset
+      {"voting", "list_building"} -> validate_no_votes_for_building_transition(changeset)
       {"voting", "voting_with_suggestions"} -> changeset
       {"voting", "voting_only"} -> changeset
 
-      # From closed phase - generally no transitions allowed except back to building for reopening
-      {"closed", "list_building"} -> changeset
+      # From closed phase - no transitions allowed (final state)
+      {"closed", _} -> add_error(changeset, :phase, "cannot transition from closed phase")
 
       # Invalid transitions
       _ -> add_error(changeset, :phase, "invalid phase transition from #{current_phase} to #{new_phase}")
+    end
+  end
+
+  defp validate_no_votes_for_building_transition(changeset) do
+    poll = changeset.data
+
+    # Check if poll has any votes by loading them
+    # We'll need to import Ecto.Query and alias the PollVote module
+    import Ecto.Query
+    alias EventasaurusApp.Events.PollVote
+    alias EventasaurusApp.Repo
+
+    vote_count = from(v in PollVote,
+                     join: o in assoc(v, :poll_option),
+                     where: o.poll_id == ^poll.id)
+                 |> Repo.aggregate(:count, :id)
+
+    if vote_count > 0 do
+      add_error(changeset, :phase, "cannot return to building phase when votes exist")
+    else
+      changeset
     end
   end
 end
