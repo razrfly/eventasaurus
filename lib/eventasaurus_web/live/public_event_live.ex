@@ -1,5 +1,7 @@
 defmodule EventasaurusWeb.PublicEventLive do
-    use EventasaurusWeb, :live_view
+  use EventasaurusWeb, :live_view
+
+  import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
   require Logger
 
@@ -1500,12 +1502,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                 <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
                   <div class="flex items-center gap-3 mb-4">
                     <div class="text-2xl">
-                      <%= case poll.poll_type do %>
-                        <% "movie" -> %> 🎬
-                        <% "places" -> %> 📍
-                        <% "time" -> %> ⏰
-                        <% _ -> %> 📝
-                      <% end %>
+                      <%= poll_emoji(poll.poll_type) %>
                     </div>
                     <div class="flex-1">
                       <h2 class="text-xl font-semibold text-gray-900"><%= poll.title %></h2>
