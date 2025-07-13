@@ -7,6 +7,9 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     initial_data = %{"name" => "", "email" => ""}
     form = to_form(initial_data)
 
+    # Determine poll type and options based on assigns
+    {poll_type, poll_options} = determine_poll_context(assigns)
+
     {:ok,
      socket
      |> assign(assigns)
@@ -14,6 +17,8 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
      |> assign(:form_data, initial_data)
      |> assign(:loading, false)
      |> assign(:errors, [])
+     |> assign(:poll_type, poll_type)
+     |> assign(:poll_options, poll_options)
     }
   end
 
@@ -42,13 +47,21 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     # Check if this is a "save all votes" submission or single vote
     temp_votes = Map.get(socket.assigns, :temp_votes, %{})
 
-    if map_size(temp_votes) > 0 do
+    if has_temp_votes?(temp_votes) do
       # This is a "save all votes" submission
       case validate_voter_params(final_data) do
         errors when map_size(errors) == 0 ->
           # Valid input, save all votes
           socket = assign(socket, :loading, true)
-          send(self(), {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes, socket.assigns.date_options})
+
+          # Send appropriate message based on poll type
+          case socket.assigns.poll_type do
+            :date_poll ->
+              send(self(), {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes, socket.assigns.poll_options})
+            :generic_poll ->
+              send(self(), {:save_all_poll_votes_for_user, socket.assigns.poll.id, name, email, temp_votes, socket.assigns.poll_options})
+          end
+
           {:noreply, socket}
 
         errors ->
@@ -57,40 +70,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
       end
     else
       # This is a single vote submission (legacy flow)
-      # Validate inputs
-      case validate_voter_params(final_data) do
-        errors when map_size(errors) == 0 ->
-          # Valid input, proceed with voting
-          socket = assign(socket, :loading, true)
-
-          # Get the pending vote from socket assigns
-          pending_vote = socket.assigns.pending_vote
-          option = Enum.find(socket.assigns.date_options, &(&1.id == pending_vote.option_id))
-
-          if option do
-            case Events.register_voter_and_cast_vote(socket.assigns.event.id, name, email, option, pending_vote.vote_type) do
-              {:ok, :new_voter, _participant, _vote} ->
-                send(self(), {:vote_success, :new_voter, name, email})
-                {:noreply, assign(socket, :loading, false)}
-
-              {:ok, :existing_user_voted, _participant, _vote} ->
-                send(self(), {:vote_success, :existing_user_voted, name, email})
-                {:noreply, assign(socket, :loading, false)}
-
-              {:error, reason} ->
-                send(self(), {:vote_error, reason})
-                {:noreply, assign(socket, :loading, false)}
-            end
-          else
-            send(self(), {:vote_error, :option_not_found})
-            {:noreply, assign(socket, :loading, false)}
-          end
-
-        errors ->
-          # Invalid input, show errors
-          form = to_form(final_data, errors: errors)
-          {:noreply, assign(socket, :form, form)}
-      end
+      handle_single_vote_submission(socket, final_data, name, email)
     end
   end
 
@@ -104,6 +84,103 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     # When someone clicks inside the modal, this stops the event from
     # bubbling up to the overlay's close handler
     {:noreply, socket}
+  end
+
+  # Private helper functions
+
+  defp determine_poll_context(assigns) do
+    cond do
+      # Date polling context (backward compatibility)
+      Map.has_key?(assigns, :date_options) ->
+        {:date_poll, assigns.date_options}
+
+      # Generic polling context
+      Map.has_key?(assigns, :poll) and Map.has_key?(assigns, :poll_options) ->
+        {:generic_poll, assigns.poll_options}
+
+      # Fallback - try to infer from available data
+      true ->
+        {:date_poll, Map.get(assigns, :date_options, [])}
+    end
+  end
+
+  defp has_temp_votes?(temp_votes) when is_map(temp_votes) do
+    case temp_votes do
+      # Handle legacy format (simple map)
+      votes when map_size(votes) > 0 ->
+        not Map.has_key?(votes, :poll_type)
+
+      # Handle new format with poll_type
+      %{poll_type: _type, votes: votes} when map_size(votes) > 0 ->
+        true
+
+      _ ->
+        false
+    end
+  end
+
+  defp handle_single_vote_submission(socket, final_data, name, email) do
+    # Validate inputs
+    case validate_voter_params(final_data) do
+      errors when map_size(errors) == 0 ->
+        # Valid input, proceed with voting
+        socket = assign(socket, :loading, true)
+
+        # Get the pending vote from socket assigns
+        pending_vote = socket.assigns.pending_vote
+        option = Enum.find(socket.assigns.poll_options, &(&1.id == pending_vote.option_id))
+
+        if option do
+          case socket.assigns.poll_type do
+            :date_poll ->
+              handle_date_poll_single_vote(socket, name, email, option, pending_vote)
+            :generic_poll ->
+              handle_generic_poll_single_vote(socket, name, email, option, pending_vote)
+          end
+        else
+          send(self(), {:vote_error, :option_not_found})
+          {:noreply, assign(socket, :loading, false)}
+        end
+
+      errors ->
+        # Invalid input, show errors
+        form = to_form(final_data, errors: errors)
+        {:noreply, assign(socket, :form, form)}
+    end
+  end
+
+  defp handle_date_poll_single_vote(socket, name, email, option, pending_vote) do
+    case Events.register_voter_and_cast_vote(socket.assigns.event.id, name, email, option, pending_vote.vote_type) do
+      {:ok, :new_voter, _participant, _vote} ->
+        send(self(), {:vote_success, :new_voter, name, email})
+        {:noreply, assign(socket, :loading, false)}
+
+      {:ok, :existing_user_voted, _participant, _vote} ->
+        send(self(), {:vote_success, :existing_user_voted, name, email})
+        {:noreply, assign(socket, :loading, false)}
+
+      {:error, reason} ->
+        send(self(), {:vote_error, reason})
+        {:noreply, assign(socket, :loading, false)}
+    end
+  end
+
+  defp handle_generic_poll_single_vote(socket, name, email, option, pending_vote) do
+    # For generic polls, we'll need to implement the equivalent service
+    # This would call Events.register_voter_and_cast_poll_vote or similar
+    case Events.register_voter_and_cast_poll_vote(socket.assigns.poll.id, name, email, option, pending_vote.vote_value) do
+      {:ok, :new_voter, _participant, _vote} ->
+        send(self(), {:vote_success, :new_voter, name, email})
+        {:noreply, assign(socket, :loading, false)}
+
+      {:ok, :existing_user_voted, _participant, _vote} ->
+        send(self(), {:vote_success, :existing_user_voted, name, email})
+        {:noreply, assign(socket, :loading, false)}
+
+      {:error, reason} ->
+        send(self(), {:vote_error, reason})
+        {:noreply, assign(socket, :loading, false)}
+    end
   end
 
   defp validate_voter_params(%{"name" => name, "email" => email}) do
@@ -147,29 +224,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
           <!-- Vote Summary -->
           <div class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
             <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Your votes:</h4>
-            <%= for {option_id, vote_type} <- @temp_votes do %>
-              <% option = Enum.find(@date_options, &(&1.id == option_id)) %>
-              <%= if option do %>
-                <div class="flex justify-between items-center text-sm py-1">
-                  <span class="text-gray-700 dark:text-gray-300">
-                    <%= Calendar.strftime(option.date, "%b %d") %>
-                  </span>
-                  <span class={"font-medium " <>
-                    case vote_type do
-                      :yes -> "text-green-600 dark:text-green-400"
-                      :if_need_be -> "text-yellow-600 dark:text-yellow-400"
-                      :no -> "text-red-600 dark:text-red-400"
-                    end
-                  }>
-                    <%= case vote_type do
-                      :yes -> "👍 Yes"
-                      :if_need_be -> "🤷 If needed"
-                      :no -> "👎 No"
-                    end %>
-                  </span>
-                </div>
-              <% end %>
-            <% end %>
+            <%= render_vote_summary(assigns) %>
           </div>
 
           <p class="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
@@ -242,4 +297,192 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     </div>
     """
   end
+
+  # Vote summary rendering functions
+
+  defp render_vote_summary(assigns) do
+    case assigns.poll_type do
+      :date_poll ->
+        render_date_poll_summary(assigns)
+      :generic_poll ->
+        render_generic_poll_summary(assigns)
+    end
+  end
+
+  defp render_date_poll_summary(assigns) do
+    ~H"""
+    <%= for {option_id, vote_type} <- @temp_votes do %>
+      <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
+      <%= if option do %>
+        <div class="flex justify-between items-center text-sm py-1">
+          <span class="text-gray-700 dark:text-gray-300">
+            <%= Calendar.strftime(option.date, "%b %d") %>
+          </span>
+          <span class={"font-medium " <> get_date_vote_color(vote_type)}>
+            <%= get_date_vote_display(vote_type) %>
+          </span>
+        </div>
+      <% end %>
+    <% end %>
+    """
+  end
+
+  defp render_generic_poll_summary(assigns) do
+    ~H"""
+    <%= case @temp_votes do %>
+      <% votes when is_map(votes) and not is_map_key(votes, :poll_type) -> %>
+        <!-- Legacy format - simple map -->
+        <%= for {option_id, vote_value} <- votes do %>
+          <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
+          <%= if option do %>
+            <div class="flex justify-between items-center text-sm py-1">
+              <span class="text-gray-700 dark:text-gray-300">
+                <%= option.title %>
+              </span>
+              <span class="font-medium text-blue-600 dark:text-blue-400">
+                <%= format_vote_value(vote_value) %>
+              </span>
+            </div>
+          <% end %>
+        <% end %>
+
+      <% %{poll_type: poll_type, votes: votes} -> %>
+        <!-- New format with poll_type -->
+        <%= render_typed_vote_summary(assigns, poll_type, votes) %>
+
+      <% _ -> %>
+        <div class="text-sm text-gray-500 dark:text-gray-400">No votes to display</div>
+    <% end %>
+    """
+  end
+
+  defp render_typed_vote_summary(assigns, poll_type, votes) do
+    case poll_type do
+      :binary ->
+        render_binary_vote_summary(assigns, votes)
+      :approval ->
+        render_approval_vote_summary(assigns, votes)
+      :ranked ->
+        render_ranked_vote_summary(assigns, votes)
+      :star ->
+        render_star_vote_summary(assigns, votes)
+    end
+  end
+
+  defp render_binary_vote_summary(assigns, votes) do
+    ~H"""
+    <%= for {option_id, vote_value} <- votes do %>
+      <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
+      <%= if option do %>
+        <div class="flex justify-between items-center text-sm py-1">
+          <span class="text-gray-700 dark:text-gray-300">
+            <%= option.title %>
+          </span>
+          <span class={"font-medium " <> get_binary_vote_color(vote_value)}>
+            <%= get_binary_vote_display(vote_value) %>
+          </span>
+        </div>
+      <% end %>
+    <% end %>
+    """
+  end
+
+  defp render_approval_vote_summary(assigns, votes) do
+    ~H"""
+    <%= for {option_id, _vote_value} <- votes do %>
+      <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
+      <%= if option do %>
+        <div class="flex justify-between items-center text-sm py-1">
+          <span class="text-gray-700 dark:text-gray-300">
+            <%= option.title %>
+          </span>
+          <span class="font-medium text-green-600 dark:text-green-400">
+            ✓ Selected
+          </span>
+        </div>
+      <% end %>
+    <% end %>
+    """
+  end
+
+  defp render_ranked_vote_summary(assigns, votes) do
+    ~H"""
+    <%= for vote <- votes |> Enum.sort_by(fn
+          %{rank: rank} -> rank
+          {_id, rank} -> rank
+        end) do %>
+      <% {option_id, rank} = case vote do
+          %{option_id: oid, rank: r} -> {oid, r}
+          {oid, r} -> {oid, r}
+         end %>
+      <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
+      <%= if option do %>
+        <div class="flex justify-between items-center text-sm py-1">
+          <span class="text-gray-700 dark:text-gray-300">
+            <%= option.title %>
+          </span>
+          <span class="font-medium text-blue-600 dark:text-blue-400">
+            #<%= rank %>
+          </span>
+        </div>
+      <% end %>
+    <% end %>
+    """
+  end
+
+  defp render_star_vote_summary(assigns, votes) do
+    ~H"""
+    <%= for {option_id, stars} <- votes do %>
+      <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
+      <%= if option do %>
+        <div class="flex justify-between items-center text-sm py-1">
+          <span class="text-gray-700 dark:text-gray-300">
+            <%= option.title %>
+          </span>
+          <span class="font-medium text-yellow-600 dark:text-yellow-400">
+            <%= String.duplicate("⭐", stars) %>
+          </span>
+        </div>
+      <% end %>
+    <% end %>
+    """
+  end
+
+  # Helper functions for vote display
+
+  defp get_date_vote_color(vote_type) do
+    case vote_type do
+      :yes -> "text-green-600 dark:text-green-400"
+      :if_need_be -> "text-yellow-600 dark:text-yellow-400"
+      :no -> "text-red-600 dark:text-red-400"
+    end
+  end
+
+  defp get_date_vote_display(vote_type) do
+    case vote_type do
+      :yes -> "👍 Yes"
+      :if_need_be -> "🤷 If needed"
+      :no -> "👎 No"
+    end
+  end
+
+  defp get_binary_vote_color(vote_value) do
+    case vote_value do
+      "yes" -> "text-green-600 dark:text-green-400"
+      "no" -> "text-red-600 dark:text-red-400"
+      "maybe" -> "text-yellow-600 dark:text-yellow-400"
+    end
+  end
+
+  defp get_binary_vote_display(vote_value) do
+    case vote_value do
+      "yes" -> "👍 Yes"
+      "no" -> "👎 No"
+      "maybe" -> "🤷 Maybe"
+    end
+  end
+
+  defp format_vote_value(vote_value) when is_binary(vote_value), do: vote_value
+  defp format_vote_value(vote_value) when is_atom(vote_value), do: Atom.to_string(vote_value)
+  defp format_vote_value(vote_value), do: inspect(vote_value)
 end

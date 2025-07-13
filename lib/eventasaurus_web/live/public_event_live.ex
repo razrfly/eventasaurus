@@ -149,7 +149,11 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:user_votes, user_votes)
            |> assign(:pending_vote, nil)
            |> assign(:show_vote_modal, false)
-           |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users
+           |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users (legacy date polling)
+           |> assign(:poll_temp_votes, %{})  # Map of poll_id => temp_votes for generic polls
+           |> assign(:show_generic_vote_modal, false)  # Show generic poll vote modal
+           |> assign(:modal_poll, nil)  # Current poll for modal
+           |> assign(:modal_temp_votes, %{})  # Temp votes for modal
            |> assign(:show_interest_modal, false)
            |> assign(:tickets, tickets)
            |> assign(:selected_tickets, %{})  # Map of ticket_id => quantity
@@ -615,6 +619,15 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
+  def handle_event("close_generic_vote_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_generic_vote_modal, false)
+     |> assign(:modal_poll, nil)
+     |> assign(:modal_temp_votes, %{})
+    }
+  end
+
   def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
@@ -929,6 +942,60 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info({:save_all_poll_votes_for_user, poll_id, name, email, temp_votes, _poll_options}, socket) do
+    # Handle bulk anonymous poll votes submission
+    case Events.register_voter_and_cast_poll_votes(poll_id, name, email, temp_votes) do
+      {:ok, result_type, _participant, _votes} ->
+        # Get the user from the database to update socket assigns
+        user = Accounts.get_user_by_email(email)
+
+        # Reload event polls to show updated state
+        socket = load_event_polls(socket)
+
+        # Update user in socket for authenticated state
+        socket = assign(socket, :user, user)
+
+        message = case result_type do
+          :new_voter ->
+            "All votes saved successfully! You're now registered for #{socket.assigns.event.title}. Please check your email for a magic link to create your account."
+          :existing_user_voted ->
+            "All votes saved successfully! You're registered for #{socket.assigns.event.title}."
+        end
+
+        {:noreply,
+         socket
+         |> assign(:show_generic_vote_modal, false)
+         |> assign(:modal_poll, nil)
+         |> assign(:modal_temp_votes, %{})
+         |> assign(:poll_temp_votes, %{})
+         |> put_flash(:info, message)
+        }
+
+      {:error, reason} ->
+        error_message = case reason do
+          :email_confirmation_required ->
+            "Please check your email and confirm your account before voting."
+          :event_not_found ->
+            "Event not found."
+          :invalid_vote_value ->
+            "Invalid vote detected. Please try again."
+          :option_not_found ->
+            "One or more poll options not found."
+          _ ->
+            "Unable to save votes. Please try again."
+        end
+
+        {:noreply,
+         socket
+         |> put_flash(:error, error_message)
+         |> assign(:show_generic_vote_modal, false)
+         |> assign(:modal_poll, nil)
+         |> assign(:modal_temp_votes, %{})
+        }
+    end
+  end
+
+  @impl true
   def handle_info({:save_all_votes_for_user, event_id, name, email, temp_votes, date_options}, socket) do
     # Convert temp_votes map to the format expected by bulk operations
     votes_data = for {option_id, vote_type} <- temp_votes do
@@ -1055,6 +1122,36 @@ defmodule EventasaurusWeb.PublicEventLive do
      socket
      |> put_flash(:info, "All votes cleared successfully!")
     }
+  end
+
+  @impl true
+  def handle_info({:temp_votes_updated, poll_id, temp_votes}, socket) do
+    # Update temp votes for a specific poll
+    updated_poll_temp_votes = Map.put(socket.assigns.poll_temp_votes, poll_id, temp_votes)
+
+    {:noreply, assign(socket, :poll_temp_votes, updated_poll_temp_votes)}
+  end
+
+  @impl true
+  def handle_info({:show_anonymous_voter_modal, poll_id, temp_votes}, socket) do
+    # Show the anonymous voter modal for saving votes
+    # First, find the poll to get its info
+    poll = Enum.find(socket.assigns.event_polls || [], &(&1.id == poll_id))
+
+    if poll && map_size(temp_votes) > 0 do
+      # Update the temp votes and show the modal
+      updated_poll_temp_votes = Map.put(socket.assigns.poll_temp_votes, poll_id, temp_votes)
+
+      {:noreply,
+       socket
+       |> assign(:poll_temp_votes, updated_poll_temp_votes)
+       |> assign(:show_generic_vote_modal, true)
+       |> assign(:modal_poll, poll)
+       |> assign(:modal_temp_votes, temp_votes)
+      }
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -1528,10 +1625,11 @@ defmodule EventasaurusWeb.PublicEventLive do
                         poll={poll}
                         event={@event}
                         current_user={@user}
+                        temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
                       />
 
-                    <% poll.phase in ["voting", "voting_with_suggestions", "voting_only"] && @user -> %>
-                      <!-- Show voting interface for authenticated users -->
+                    <% poll.phase in ["voting", "voting_with_suggestions", "voting_only"] -> %>
+                      <!-- Show voting interface for all users (authenticated and anonymous) -->
                       <.live_component
                         module={EventasaurusWeb.VotingInterfaceComponent}
                         id={"voting-interface-#{poll.id}"}
@@ -1539,6 +1637,8 @@ defmodule EventasaurusWeb.PublicEventLive do
                         user={@user}
                         user_votes={Map.get(@poll_user_votes || %{}, poll.id, [])}
                         loading={false}
+                        temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
+                        anonymous_mode={is_nil(@user)}
                       />
 
                     <% poll.phase == "list_building" -> %>
@@ -1550,15 +1650,6 @@ defmodule EventasaurusWeb.PublicEventLive do
                         current_user={@user}
                         poll={poll}
                       />
-
-                    <% poll.phase in ["voting", "voting_with_suggestions", "voting_only"] -> %>
-                      <!-- Show login prompt for anonymous users during voting -->
-                      <div class="text-center py-8 bg-gray-50 rounded-lg">
-                        <p class="text-gray-600 mb-4">Please log in to vote on this poll.</p>
-                        <a href="/login" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors">
-                          Sign In to Vote
-                        </a>
-                      </div>
 
                     <% poll.phase == "closed" -> %>
                       <!-- Show results for closed polls -->
@@ -1876,6 +1967,17 @@ defmodule EventasaurusWeb.PublicEventLive do
         event={@event}
         temp_votes={@temp_votes}
         date_options={@date_options}
+      />
+    <% end %>
+
+    <%= if @show_generic_vote_modal and @modal_poll && map_size(@modal_temp_votes) > 0 do %>
+      <.live_component
+        module={AnonymousVoterComponent}
+        id="generic-vote-modal"
+        event={@event}
+        poll={@modal_poll}
+        poll_options={@modal_poll.poll_options}
+        temp_votes={@modal_temp_votes}
       />
     <% end %>
 
