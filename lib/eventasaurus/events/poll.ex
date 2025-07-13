@@ -1,8 +1,10 @@
 defmodule EventasaurusApp.Events.Poll do
   use Ecto.Schema
   import Ecto.Changeset
-  alias EventasaurusApp.Events.{Event, PollOption}
+  import Ecto.Query, only: [from: 2]
+  alias EventasaurusApp.Events.{Event, PollOption, PollVote}
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusApp.Repo
 
   schema "polls" do
     field :title, :string
@@ -23,6 +25,13 @@ defmodule EventasaurusApp.Events.Poll do
     has_many :poll_options, PollOption
 
     timestamps()
+  end
+
+  @doc """
+  Callback to populate virtual fields after loading from database.
+  """
+  def __after_load__(poll) do
+    %{poll | status: status(poll)}
   end
 
   @doc """
@@ -378,12 +387,6 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_no_votes_for_building_transition(changeset) do
     poll = changeset.data
-
-    # Check if poll has any votes by loading them
-    # We'll need to import Ecto.Query and alias the PollVote module
-    import Ecto.Query
-    alias EventasaurusApp.Events.PollVote
-    alias EventasaurusApp.Repo
 
     vote_count = from(v in PollVote,
                      join: o in assoc(v, :poll_option),
