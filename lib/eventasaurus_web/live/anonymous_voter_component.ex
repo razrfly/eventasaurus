@@ -106,13 +106,13 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
   defp has_temp_votes?(temp_votes) when is_map(temp_votes) do
     case temp_votes do
-      # Handle legacy format (simple map)
-      votes when map_size(votes) > 0 ->
-        not Map.has_key?(votes, :poll_type)
+      # Handle new format with poll_type (check this first!)
+      %{poll_type: _type, votes: votes} when is_map(votes) ->
+        map_size(votes) > 0
 
-      # Handle new format with poll_type
-      %{poll_type: _type, votes: votes} when map_size(votes) > 0 ->
-        true
+      # Handle legacy format (simple map)
+      votes when is_map(votes) ->
+        map_size(votes) > 0
 
       _ ->
         false
@@ -370,8 +370,9 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
   end
 
   defp render_binary_vote_summary(assigns, votes) do
+    assigns = assign(assigns, :votes, votes)
     ~H"""
-    <%= for {option_id, vote_value} <- votes do %>
+    <%= for {option_id, vote_value} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
       <%= if option do %>
         <div class="flex justify-between items-center text-sm py-1">
@@ -388,8 +389,9 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
   end
 
   defp render_approval_vote_summary(assigns, votes) do
+    assigns = assign(assigns, :votes, votes)
     ~H"""
-    <%= for {option_id, _vote_value} <- votes do %>
+    <%= for {option_id, _vote_value} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
       <%= if option do %>
         <div class="flex justify-between items-center text-sm py-1">
@@ -406,8 +408,9 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
   end
 
   defp render_ranked_vote_summary(assigns, votes) do
+    assigns = assign(assigns, :votes, votes)
     ~H"""
-    <%= for vote <- votes |> Enum.sort_by(fn
+    <%= for vote <- @votes |> Enum.sort_by(fn
           %{rank: rank} -> rank
           {_id, rank} -> rank
         end) do %>
@@ -431,8 +434,9 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
   end
 
   defp render_star_vote_summary(assigns, votes) do
+    assigns = assign(assigns, :votes, votes)
     ~H"""
-    <%= for {option_id, stars} <- votes do %>
+    <%= for {option_id, stars} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
       <%= if option do %>
         <div class="flex justify-between items-center text-sm py-1">
