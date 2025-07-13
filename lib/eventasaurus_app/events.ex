@@ -2005,6 +2005,418 @@ defmodule EventasaurusApp.Events do
     end
   end
 
+  @doc """
+  Registers a voter and casts a single poll vote for anonymous users.
+
+  This function handles single poll votes for anonymous users, creating a user account
+  if needed and casting the vote. This is used for simple single-option voting scenarios.
+
+  ## Parameters
+  - poll_id: The ID of the poll
+  - name: The user's name
+  - email: The user's email address
+  - poll_option: The poll option being voted on
+  - vote_value: The vote value (varies by voting system)
+
+  ## Returns
+  - {:ok, :new_voter, participant, vote} - If a new user was created
+  - {:ok, :existing_user_voted, participant, vote} - If an existing user voted
+  - {:error, reason} - If the operation failed
+  """
+  def register_voter_and_cast_poll_vote(poll_id, name, email, poll_option, vote_value) do
+    alias EventasaurusApp.Auth.SupabaseSync
+    alias EventasaurusApp.Accounts
+    require Logger
+
+    Logger.info("Starting voter registration and single poll vote casting", %{
+      poll_id: poll_id,
+      email: email,
+      name: name,
+      option_id: poll_option.id,
+      vote_value: vote_value
+    })
+
+    Repo.transaction(fn ->
+      # Get the poll and related event
+      poll = Repo.get!(Poll, poll_id)
+      event = Repo.get!(Event, poll.event_id)
+
+      # Check if user exists in our local database first
+      existing_user = Accounts.get_user_by_email(email)
+
+      user = case existing_user do
+        nil ->
+          # User doesn't exist locally, check Supabase and create if needed
+          Logger.info("User not found locally, attempting Supabase user creation/lookup")
+          case create_or_find_supabase_user(email, name) do
+            {:ok, supabase_user} ->
+              Logger.info("Successfully created/found user in Supabase")
+              # Sync with local database
+              case SupabaseSync.sync_user(supabase_user) do
+                {:ok, user} ->
+                  Logger.info("Successfully synced user to local database", %{user_id: user.id})
+                  user
+                {:error, reason} ->
+                  Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+                  Repo.rollback(reason)
+              end
+            {:error, :user_confirmation_required} ->
+              Logger.info("User created via OTP but email confirmation required for voting")
+              Repo.rollback(:email_confirmation_required)
+            {:error, reason} ->
+              Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
+              Repo.rollback(reason)
+          end
+
+        user ->
+          # User exists locally
+          Logger.debug("Using existing local user", %{user_id: user.id})
+          user
+      end
+
+      # Check if user is registered for the event, register if not
+      participant = case get_event_participant_by_event_and_user(event, user) do
+        nil ->
+          Logger.debug("User not registered for event, creating participant record", %{
+            user_id: user.id,
+            event_id: event.id
+          })
+
+          participant_attrs = %{
+            event_id: event.id,
+            user_id: user.id,
+            role: :invitee,
+            status: :pending,
+            source: "poll_voting_registration",
+            metadata: %{
+              registration_date: DateTime.utc_now(),
+              registered_name: name,
+              registered_via_poll_voting: true
+            }
+          }
+
+          case create_event_participant(participant_attrs) do
+            {:ok, participant} ->
+              Logger.info("Successfully created event participant for poll voter", %{
+                participant_id: participant.id,
+                user_id: user.id,
+                event_id: event.id
+              })
+              participant
+            {:error, reason} ->
+              Logger.error("Failed to create event participant for poll voter", %{reason: inspect(reason)})
+              Repo.rollback(reason)
+          end
+
+        participant ->
+          Logger.debug("User already registered for event", %{user_id: user.id, event_id: event.id})
+          participant
+      end
+
+      # Cast the vote based on the poll's voting system
+      vote_data = case poll.voting_system do
+        "binary" when vote_value in ["yes", "maybe", "no"] ->
+          %{vote_value: vote_value}
+        "approval" when vote_value == "selected" ->
+          %{vote_value: vote_value}
+        "star" when is_number(vote_value) and vote_value >= 1 and vote_value <= 5 ->
+          %{vote_numeric: vote_value}
+        "ranked" when is_number(vote_value) and vote_value >= 1 ->
+          %{vote_rank: vote_value}
+        _ ->
+          Logger.error("Invalid vote value for voting system", %{
+            voting_system: poll.voting_system,
+            vote_value: vote_value
+          })
+          Repo.rollback(:invalid_vote_value)
+      end
+
+      case create_poll_vote(poll_option, user, vote_data, poll.voting_system) do
+        {:ok, vote} ->
+          Logger.info("Successfully cast poll vote", %{
+            user_id: user.id,
+            poll_id: poll.id,
+            option_id: poll_option.id,
+            vote_value: vote_value
+          })
+
+          result_type = if existing_user, do: :existing_user_voted, else: :new_voter
+          {result_type, participant, vote}
+
+        {:error, reason} ->
+          Logger.error("Failed to cast poll vote", %{reason: inspect(reason)})
+          Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, {result_type, participant, vote}} ->
+        Logger.info("Poll voter registration and vote transaction completed successfully", %{
+          result_type: result_type,
+          participant_id: participant.id,
+          vote_id: vote.id
+        })
+        {:ok, result_type, participant, vote}
+
+      {:error, reason} ->
+        Logger.warning("Poll voter registration and vote transaction failed", %{reason: inspect(reason)})
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Registers a voter and casts multiple poll votes for anonymous users.
+
+  This function handles bulk poll votes for anonymous users, creating a user account
+  if needed and casting multiple votes in a single transaction. This is used when
+  anonymous users have multiple temporary votes stored.
+
+  ## Parameters
+  - poll_id: The ID of the poll
+  - name: The user's name
+  - email: The user's email address
+  - temp_votes: The temporary votes in the format from the frontend
+
+  ## Returns
+  - {:ok, :new_voter, participant, votes} - If a new user was created
+  - {:ok, :existing_user_voted, participant, votes} - If an existing user voted
+  - {:error, reason} - If the operation failed
+  """
+  def register_voter_and_cast_poll_votes(poll_id, name, email, temp_votes) do
+    alias EventasaurusApp.Auth.SupabaseSync
+    alias EventasaurusApp.Accounts
+    require Logger
+
+    Logger.info("Starting voter registration and bulk poll vote casting", %{
+      poll_id: poll_id,
+      email: email,
+      name: name,
+      temp_votes: temp_votes
+    })
+
+    Repo.transaction(fn ->
+      # Get the poll and related event
+      poll = Repo.get!(Poll, poll_id)
+      event = Repo.get!(Event, poll.event_id)
+
+      # Check if user exists in our local database first
+      existing_user = Accounts.get_user_by_email(email)
+
+      user = case existing_user do
+        nil ->
+          # User doesn't exist locally, check Supabase and create if needed
+          Logger.info("User not found locally, attempting Supabase user creation/lookup")
+          case create_or_find_supabase_user(email, name) do
+            {:ok, supabase_user} ->
+              Logger.info("Successfully created/found user in Supabase")
+              # Sync with local database
+              case SupabaseSync.sync_user(supabase_user) do
+                {:ok, user} ->
+                  Logger.info("Successfully synced user to local database", %{user_id: user.id})
+                  user
+                {:error, reason} ->
+                  Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
+                  Repo.rollback(reason)
+              end
+            {:error, :user_confirmation_required} ->
+              Logger.info("User created via OTP but email confirmation required for voting")
+              Repo.rollback(:email_confirmation_required)
+            {:error, reason} ->
+              Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
+              Repo.rollback(reason)
+          end
+
+        user ->
+          # User exists locally
+          Logger.debug("Using existing local user", %{user_id: user.id})
+          user
+      end
+
+      # Check if user is registered for the event, register if not
+      participant = case get_event_participant_by_event_and_user(event, user) do
+        nil ->
+          Logger.debug("User not registered for event, creating participant record", %{
+            user_id: user.id,
+            event_id: event.id
+          })
+
+          participant_attrs = %{
+            event_id: event.id,
+            user_id: user.id,
+            role: :invitee,
+            status: :pending,
+            source: "poll_voting_registration",
+            metadata: %{
+              registration_date: DateTime.utc_now(),
+              registered_name: name,
+              registered_via_poll_voting: true
+            }
+          }
+
+          case create_event_participant(participant_attrs) do
+            {:ok, participant} ->
+              Logger.info("Successfully created event participant for poll voter", %{
+                participant_id: participant.id,
+                user_id: user.id,
+                event_id: event.id
+              })
+              participant
+            {:error, reason} ->
+              Logger.error("Failed to create event participant for poll voter", %{reason: inspect(reason)})
+              Repo.rollback(reason)
+          end
+
+        participant ->
+          Logger.debug("User already registered for event", %{user_id: user.id, event_id: event.id})
+          participant
+      end
+
+      # Convert temp_votes to database format and cast votes
+      votes = case cast_temp_votes_for_poll(poll, user, temp_votes) do
+        {:ok, votes} ->
+          Logger.info("Successfully cast bulk poll votes", %{
+            user_id: user.id,
+            poll_id: poll.id,
+            vote_count: length(votes)
+          })
+          votes
+
+        {:error, reason} ->
+          Logger.error("Failed to cast bulk poll votes", %{reason: inspect(reason)})
+          Repo.rollback(reason)
+      end
+
+      result_type = if existing_user, do: :existing_user_voted, else: :new_voter
+      {result_type, participant, votes}
+    end)
+    |> case do
+      {:ok, {result_type, participant, votes}} ->
+        Logger.info("Poll voter registration and bulk vote transaction completed successfully", %{
+          result_type: result_type,
+          participant_id: participant.id,
+          vote_count: length(votes)
+        })
+        {:ok, result_type, participant, votes}
+
+      {:error, reason} ->
+        Logger.warning("Poll voter registration and bulk vote transaction failed", %{reason: inspect(reason)})
+        {:error, reason}
+    end
+  end
+
+  # Helper function to cast temp votes for a poll
+  defp cast_temp_votes_for_poll(poll, user, temp_votes) do
+    # Handle different temp vote formats based on voting system
+    case poll.voting_system do
+      "binary" ->
+        cast_binary_temp_votes(poll, user, temp_votes)
+      "approval" ->
+        cast_approval_temp_votes(poll, user, temp_votes)
+      "ranked" ->
+        cast_ranked_temp_votes(poll, user, temp_votes)
+      "star" ->
+        cast_star_temp_votes(poll, user, temp_votes)
+      _ ->
+        {:error, :unsupported_voting_system}
+    end
+  end
+
+  defp cast_binary_temp_votes(poll, user, temp_votes) do
+    # temp_votes format: %{option_id => vote_value}
+    # where vote_value is "yes", "maybe", or "no"
+    poll_options = Repo.all(from po in PollOption, where: po.poll_id == ^poll.id)
+
+    results = for {option_id, vote_value} <- temp_votes do
+      case Enum.find(poll_options, &(&1.id == option_id)) do
+        nil ->
+          {:error, :option_not_found}
+        poll_option ->
+          create_poll_vote(poll_option, user, %{vote_value: vote_value}, "binary")
+      end
+    end
+
+    case Enum.find(results, &(match?({:error, _}, &1))) do
+      nil ->
+        {:ok, Enum.map(results, fn {:ok, vote} -> vote end)}
+      error ->
+        error
+    end
+  end
+
+  defp cast_approval_temp_votes(poll, user, temp_votes) do
+    # temp_votes format: %{option_id => "selected"}
+    # Only selected options are in the map
+    poll_options = Repo.all(from po in PollOption, where: po.poll_id == ^poll.id)
+
+    results = for {option_id, _} <- temp_votes do
+      case Enum.find(poll_options, &(&1.id == option_id)) do
+        nil ->
+          {:error, :option_not_found}
+        poll_option ->
+          create_poll_vote(poll_option, user, %{vote_value: "selected"}, "approval")
+      end
+    end
+
+    case Enum.find(results, &(match?({:error, _}, &1))) do
+      nil ->
+        {:ok, Enum.map(results, fn {:ok, vote} -> vote end)}
+      error ->
+        error
+    end
+  end
+
+  defp cast_ranked_temp_votes(poll, user, temp_votes) do
+    # temp_votes format: %{poll_type: :ranked, votes: [%{option_id: id, rank: rank}, ...]}
+    # or %{poll_type: :ranked, votes: %{option_id => rank}}
+    poll_options = Repo.all(from po in PollOption, where: po.poll_id == ^poll.id)
+
+    votes_data = case temp_votes do
+      %{poll_type: :ranked, votes: votes} when is_list(votes) ->
+        votes
+      %{poll_type: :ranked, votes: votes} when is_map(votes) ->
+        for {option_id, rank} <- votes, do: %{option_id: option_id, rank: rank}
+      _ ->
+        []
+    end
+
+    results = for %{option_id: option_id, rank: rank} <- votes_data do
+      case Enum.find(poll_options, &(&1.id == option_id)) do
+        nil ->
+          {:error, :option_not_found}
+        poll_option ->
+          create_poll_vote(poll_option, user, %{vote_rank: rank}, "ranked")
+      end
+    end
+
+    case Enum.find(results, &(match?({:error, _}, &1))) do
+      nil ->
+        {:ok, Enum.map(results, fn {:ok, vote} -> vote end)}
+      error ->
+        error
+    end
+  end
+
+  defp cast_star_temp_votes(poll, user, temp_votes) do
+    # temp_votes format: %{option_id => rating}
+    # where rating is 1-5
+    poll_options = Repo.all(from po in PollOption, where: po.poll_id == ^poll.id)
+
+    results = for {option_id, rating} <- temp_votes do
+      case Enum.find(poll_options, &(&1.id == option_id)) do
+        nil ->
+          {:error, :option_not_found}
+        poll_option ->
+          create_poll_vote(poll_option, user, %{vote_numeric: rating}, "star")
+      end
+    end
+
+    case Enum.find(results, &(match?({:error, _}, &1))) do
+      nil ->
+        {:ok, Enum.map(results, fn {:ok, vote} -> vote end)}
+      error ->
+        error
+    end
+  end
+
   ## Action-Driven Setup Functions
 
   @doc """
