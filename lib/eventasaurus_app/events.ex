@@ -4202,15 +4202,20 @@ defmodule EventasaurusApp.Events do
   @doc """
   Disables suggestions during voting by transitioning from voting_with_suggestions to voting_only.
   """
-  def disable_poll_suggestions(%Poll{} = poll) do
-    if poll.phase in ["voting_with_suggestions", "voting"] do
-      poll
-      |> Poll.phase_transition_changeset("voting_only")
-      |> Repo.update()
-    else
-      {:error, "Poll is not in a phase that allows disabling suggestions"}
-    end
+  def disable_poll_suggestions(%Poll{phase: "voting_with_suggestions"} = poll) do
+    poll
+    |> Poll.phase_transition_changeset("voting_only")
+    |> Repo.update()
   end
+
+  def disable_poll_suggestions(%Poll{phase: "voting"} = poll) do  # Legacy support
+    poll
+    |> Poll.phase_transition_changeset("voting_only")
+    |> Repo.update()
+  end
+
+  def disable_poll_suggestions(%Poll{}), do:
+    {:error, "Poll is not in a phase that allows disabling suggestions"}
 
   @doc """
   Finalizes a poll (single-argument version for LiveView component).
