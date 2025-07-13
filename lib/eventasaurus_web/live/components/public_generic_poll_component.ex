@@ -434,8 +434,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_poll_title(poll_type) do
     case poll_type do
       "places" -> "Place Suggestions"
-          "time" -> "Time Suggestions"
-    "custom" -> "Poll Options"
+      "time" -> "Time Suggestions"
+      "date_selection" -> "Date Selection"
+      "custom" -> "Poll Options"
       _ -> "Suggestions"
     end
   end
@@ -443,8 +444,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_poll_type_text(poll_type) do
     case poll_type do
       "places" -> "places"
-          "time" -> "times"
-    "custom" -> "options"
+      "time" -> "times"
+      "date_selection" -> "dates"
+      "custom" -> "options"
       _ -> "options"
     end
   end
@@ -452,8 +454,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_suggestion_title(poll_type) do
     case poll_type do
       "places" -> "Place Suggestion"
-          "time" -> "Time"
-    "custom" -> "Option"
+      "time" -> "Time"
+      "date_selection" -> "Date"
+      "custom" -> "Option"
       _ -> "Suggestion"
     end
   end
@@ -461,8 +464,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_title_label(poll_type) do
     case poll_type do
       "places" -> "Place Name"
-          "time" -> "Time"
-    "custom" -> "Option Title"
+      "time" -> "Time"
+      "date_selection" -> "Date"
+      "custom" -> "Option Title"
       _ -> "Title"
     end
   end
@@ -470,8 +474,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   defp get_title_placeholder(poll_type) do
     case poll_type do
       "places" -> "Enter place name..."
-          "time" -> "Select a time..."
-    "custom" -> "Enter your option..."
+      "time" -> "Select a time..."
+      "date_selection" -> "Select a date..."
+      "custom" -> "Enter your option..."
       _ -> "Enter title..."
     end
   end
