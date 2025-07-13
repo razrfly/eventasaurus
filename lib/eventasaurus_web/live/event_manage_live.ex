@@ -980,7 +980,7 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-  # Generic handler for poll data refresh events (catch-all)
+    # Generic handler for poll data refresh events (catch-all)
   @impl true
   def handle_info(message, socket) when is_map(message) or is_tuple(message) do
     case extract_event_info(message) do
@@ -1440,6 +1440,12 @@ defmodule EventasaurusWeb.EventManageLive do
   defp handle_specific_message({:edit_option, option_id}, socket) do
     # Delegate to the existing handle_info implementation to avoid duplication
     handle_info({:edit_option, option_id}, socket)
+  end
+
+  defp handle_specific_message({:selected_dates_changed, _dates}, socket) do
+    # Calendar date changes in suggestion forms - just acknowledge
+    # The OptionSuggestionComponent handles the dates internally
+    {:noreply, socket}
   end
 
 end

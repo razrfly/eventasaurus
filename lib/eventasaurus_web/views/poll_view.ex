@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.PollView do
     "movie" => "🎬",
     "places" => "📍",
     "time" => "⏰",
+    "date_selection" => "📅",
     "custom" => "📝"
   }
 

@@ -42,7 +42,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:editing_option_id, nil)
      |> assign(:search_query, "")
      |> assign(:search_results, [])
-     |> assign(:search_loading, false)}
+     |> assign(:search_loading, false)
+     |> assign(:selected_dates, [])}
   end
 
   @impl true
@@ -76,6 +77,15 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          socket
          |> assign(:changeset, changeset)
          |> assign(:loading_rich_data, false)}
+
+      assigns[:calendar_event] ->
+        # Handle calendar events sent from EventManageLive
+        {event_name, dates} = assigns.calendar_event
+
+        # Process the calendar event (similar to handle_info)
+        socket = assign(socket, :selected_dates, dates)
+
+        {:ok, socket}
 
       true ->
         # Normal update flow
@@ -275,10 +285,53 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <% end %>
                 </div>
               <% else %>
-                <div class="relative">
-                  <label for="option_title" class="block text-sm font-medium text-gray-700">
-                    <%= option_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
-                  </label>
+                <%= if @poll.poll_type == "date_selection" do %>
+                  <!-- Calendar interface for date selection polls -->
+                  <div class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-3">
+                        📅 Select a Date <span class="text-red-500">*</span>
+                      </label>
+                      <p class="text-sm text-gray-600 mb-4">
+                        Choose a date for people to vote on. You can add multiple dates by creating separate suggestions.
+                      </p>
+                    </div>
+
+                    <!-- Calendar Component -->
+                    <div class="border border-gray-200 rounded-lg bg-white p-4">
+                      <.live_component
+                        module={EventasaurusWeb.CalendarComponent}
+                        id={"date-suggestion-calendar-#{@id}"}
+                        selected_dates={@selected_dates || []}
+                        year={Date.utc_today().year}
+                        month={Date.utc_today().month}
+                        compact={false}
+                        allow_multiple={true}
+                        min_date={Date.utc_today()}
+                        on_date_select="calendar_date_selected"
+                        target={@myself}
+                      />
+                    </div>
+
+                    <!-- Calendar component above handles date selection and display -->
+
+
+
+                    <!-- Hidden field to store the selected date as the option title -->
+                    <%= if length(@selected_dates || []) > 0 do %>
+                      <input
+                        type="hidden"
+                        name="poll_option[title]"
+                        value={format_date_for_option_title(List.first(@selected_dates))}
+                      />
+                    <% end %>
+                  </div>
+                <% else %>
+                  <!-- Regular option input for other poll types -->
+                  <div class="relative">
+                    <label for="option_title" class="block text-sm font-medium text-gray-700">
+                      <%= option_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
+                    </label>
                   <div class="mt-1 relative">
                     <%= if should_use_api_search?(@poll.poll_type) do %>
                       <%= if @poll.poll_type == "movie" do %>
@@ -369,6 +422,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <% end %>
                   </div>
                 </div>
+                <% end %>
               <% end %>
 
               <!-- Description field -->
@@ -1021,7 +1075,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      socket
      |> assign(:suggestion_form_visible, !socket.assigns.suggestion_form_visible)
      |> assign(:search_query, "")
-     |> assign(:search_results, [])}
+     |> assign(:search_results, [])
+     |> assign(:selected_dates, [])}
   end
 
 
@@ -1039,7 +1094,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:suggestion_form_visible, false)
      |> assign(:changeset, changeset)
      |> assign(:search_query, "")
-     |> assign(:search_results, [])}
+     |> assign(:search_results, [])
+     |> assign(:selected_dates, [])}
   end
 
   @impl true
@@ -1164,27 +1220,81 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("submit_suggestion", %{"poll_option" => option_params}, socket) do
     socket = assign(socket, :loading, true)
 
-    # Extract rich data from changeset if it was previously loaded (for movie polls)
-    enriched_params = extract_rich_data_from_changeset(socket.assigns.changeset, option_params)
+    # DEBUG: Log submission details
+    IO.puts("\n=== SUBMIT_SUGGESTION DEBUG ===")
+    IO.puts("Poll type: #{socket.assigns.poll.poll_type}")
+    IO.puts("Selected dates: #{inspect(socket.assigns.selected_dates)}")
+    IO.puts("Selected dates length: #{length(socket.assigns.selected_dates || [])}")
+    IO.puts("Option params: #{inspect(option_params)}")
+    IO.puts("================================\n")
 
-    case save_option(socket, enriched_params) do
-      {:ok, option} ->
-        # Broadcast option suggestion via PubSub
+    # Special handling for date_selection polls
+    if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
+      # Create multiple poll options, one for each selected date
+      results = socket.assigns.selected_dates
+      |> Enum.map(fn selected_date ->
+        # Create metadata structure for date_selection polls
+        date_metadata = %{
+          "date" => Date.to_iso8601(selected_date),
+          "display_date" => format_date_for_display(selected_date),
+          "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        }
+
+        # Create params for this specific date
+        date_params = Map.merge(option_params, %{
+          "title" => format_date_for_option_title(selected_date),
+          "description" => option_params["description"] || "",
+          "metadata" => date_metadata  # Pass as map, not JSON string!
+        })
+
+        result = save_option(socket, date_params)
+        IO.puts("\n=== DATE SAVE RESULT DEBUG ===")
+        IO.puts("Date: #{selected_date}")
+        IO.puts("Result: #{inspect(result)}")
+        IO.puts("================================\n")
+        result
+      end)
+
+      # Debug the results
+      IO.puts("\n=== ALL RESULTS DEBUG ===")
+      IO.puts("All results: #{inspect(results)}")
+      IO.puts("================================\n")
+
+      # Check if all saves were successful
+      successful_options = results
+        |> Enum.filter(fn result ->
+          case result do
+            {:ok, _} -> true
+            _ -> false
+          end
+        end)
+        |> Enum.map(fn {:ok, option} -> option end)
+
+      failed_count = length(results) - length(successful_options)
+
+      IO.puts("\n=== SUCCESS CHECK DEBUG ===")
+      IO.puts("Total dates: #{length(socket.assigns.selected_dates)}")
+      IO.puts("Successful saves: #{length(successful_options)}")
+      IO.puts("Failed saves: #{failed_count}")
+      IO.puts("================================\n")
+
+      if length(successful_options) == length(socket.assigns.selected_dates) do
+        # All dates saved successfully
         poll = socket.assigns.poll
         user = socket.assigns.user
 
-        # Check for duplicates if the service is available
-        duplicate_options = check_for_duplicates(poll, option)
+        # Broadcast for each successful option
+        Enum.each(successful_options, fn option ->
+          duplicate_options = check_for_duplicates(poll, option)
+          if length(duplicate_options) > 0 do
+            PollPubSubService.broadcast_duplicate_detected(poll, option, duplicate_options, user)
+          else
+            PollPubSubService.broadcast_option_suggested(poll, option, user)
+          end
+          send(self(), {:option_suggested, option})
+        end)
 
-        if length(duplicate_options) > 0 do
-          PollPubSubService.broadcast_duplicate_detected(poll, option, duplicate_options, user)
-        else
-          PollPubSubService.broadcast_option_suggested(poll, option, user)
-        end
-
-        send(self(), {:option_suggested, option})
-
-        # Reset form
+        # Reset form after successful submission
         changeset = PollOption.changeset(%PollOption{}, %{
           poll_id: socket.assigns.poll.id,
           suggested_by_id: socket.assigns.user.id,
@@ -1195,14 +1305,78 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          socket
          |> assign(:loading, false)
          |> assign(:suggestion_form_visible, false)
+         |> assign(:selected_dates, [])  # Clear selected dates after successful submission
          |> assign(:changeset, changeset)
          |> assign(:loading_rich_data, false)}
+      else
+        # Handle errors - show which dates failed
+        failed_results = results
+          |> Enum.with_index()
+          |> Enum.filter(fn {result, _} ->
+            case result do
+              {:ok, _} -> false
+              _ -> true
+            end
+          end)
+          |> Enum.map(fn {{:error, changeset}, index} ->
+            date = Enum.at(socket.assigns.selected_dates, index)
+            {date, changeset}
+          end)
 
-      {:error, changeset} ->
+        IO.puts("\n=== FAILED SAVES DEBUG ===")
+        Enum.each(failed_results, fn {date, changeset} ->
+          IO.puts("Failed to save date: #{date}")
+          IO.puts("Errors: #{inspect(changeset.errors)}")
+        end)
+        IO.puts("================================\n")
+
         {:noreply,
          socket
          |> assign(:loading, false)
-         |> assign(:changeset, changeset)}
+         |> put_flash(:error, "Failed to save #{failed_count} date(s). Please try again.")}
+      end
+    else
+      # Non-date polls - use original single option logic
+      enriched_params = extract_rich_data_from_changeset(socket.assigns.changeset, option_params)
+
+      case save_option(socket, enriched_params) do
+        {:ok, option} ->
+          # Broadcast option suggestion via PubSub
+          poll = socket.assigns.poll
+          user = socket.assigns.user
+
+          # Check for duplicates if the service is available
+          duplicate_options = check_for_duplicates(poll, option)
+
+          if length(duplicate_options) > 0 do
+            PollPubSubService.broadcast_duplicate_detected(poll, option, duplicate_options, user)
+          else
+            PollPubSubService.broadcast_option_suggested(poll, option, user)
+          end
+
+          send(self(), {:option_suggested, option})
+
+          # Reset form
+          changeset = PollOption.changeset(%PollOption{}, %{
+            poll_id: socket.assigns.poll.id,
+            suggested_by_id: socket.assigns.user.id,
+            status: "active"
+          })
+
+          {:noreply,
+           socket
+           |> assign(:loading, false)
+           |> assign(:suggestion_form_visible, false)
+           |> assign(:selected_dates, [])  # Clear selected dates after successful submission
+           |> assign(:changeset, changeset)
+           |> assign(:loading_rich_data, false)}
+
+        {:error, changeset} ->
+          {:noreply,
+           socket
+           |> assign(:loading, false)
+           |> assign(:changeset, changeset)}
+      end
     end
   end
 
@@ -1419,9 +1593,88 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
+  # Calendar functionality event handlers for date_selection polls
+  @impl true
+  def handle_event("calendar_date_selected", %{"date" => date_string}, socket) do
+    case Date.from_iso8601(date_string) do
+      {:ok, date} ->
+        # For suggestion form, we only allow one date at a time
+        {:noreply, assign(socket, :selected_dates, [date])}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+    # Handle calendar events sent from CalendarComponent
+  def handle_info({:calendar_event, "calendar_date_selected", %{dates: dates}}, socket) do
+    {:noreply, assign(socket, :selected_dates, dates)}
+  end
+
+    @impl true
+  def handle_event("toggle_date", %{"date" => date_string}, socket) do
+    case Date.from_iso8601(date_string) do
+      {:ok, date} ->
+        current_dates = socket.assigns.selected_dates || []
+
+        updated_dates = if date in current_dates do
+          # Remove date if already selected
+          List.delete(current_dates, date)
+        else
+          # Add date if not selected (for suggestion form, limit to one date)
+          [date]
+        end
+
+        # DEBUG: Log date selection
+        IO.puts("\n=== TOGGLE_DATE DEBUG ===")
+        IO.puts("Date string: #{date_string}")
+        IO.puts("Parsed date: #{inspect(date)}")
+        IO.puts("Current dates: #{inspect(current_dates)}")
+        IO.puts("Updated dates: #{inspect(updated_dates)}")
+        IO.puts("========================\n")
+
+        {:noreply, assign(socket, :selected_dates, updated_dates)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
 
 
   # Private helper functions
+
+  # Create changeset for option validation - handles date_selection polls specially
+  defp create_option_changeset(socket, option_params) do
+    base_changeset = PollOption.changeset(%PollOption{}, %{
+      poll_id: socket.assigns.poll.id,
+      suggested_by_id: socket.assigns.user.id,
+      status: "active"
+    })
+
+    # For date_selection polls, enhance params with selected date info
+    enhanced_params = if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
+      selected_date = List.first(socket.assigns.selected_dates)
+
+      # Create metadata structure for date_selection polls
+      date_metadata = %{
+        "date" => Date.to_iso8601(selected_date),
+        "display_date" => format_date_for_display(selected_date),
+        "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+      }
+
+      # Override the option params with date-specific data
+      Map.merge(option_params, %{
+        "title" => format_date_for_option_title(selected_date),
+        "description" => option_params["description"] || "",
+        "metadata" => Jason.encode!(date_metadata)
+      })
+    else
+      option_params
+    end
+
+    PollOption.changeset(base_changeset.data, enhanced_params)
+  end
 
   # Defensive parameter validation to prevent crashes
   defp validate_param(params, key) when is_map(params) do
@@ -1525,16 +1778,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp safe_poll_options_empty?(_), do: true
 
 
-
-  defp create_option_changeset(socket, option_params) do
-    option_params = Map.merge(option_params, %{
-      "poll_id" => socket.assigns.poll.id,
-      "suggested_by_id" => socket.assigns.user.id,
-      "status" => "active"
-    })
-
-    PollOption.changeset(%PollOption{}, option_params)
-  end
 
   defp save_option(socket, option_params) do
     require Logger
@@ -1696,7 +1939,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "movies"
       "places" -> "places"
-          "time" -> "times"
+      "time" -> "times"
+      "date_selection" -> "dates"
       _ -> "options"
     end
   end
@@ -1786,7 +2030,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
       "places" -> "Suggest places that are popular or unique. Add details like cuisine, location, or special notes."
-          "time" -> "Suggest times that work for you. Times will be automatically sorted for easy comparison."
+      "time" -> "Suggest times that work for you. Times will be automatically sorted for easy comparison."
+      "date_selection" -> "Suggest possible dates for the event. Each date will be voted on separately with yes/maybe/no preferences."
       _ -> "Suggest options that you think are great. Add a description to help others understand your choice."
     end
   end
@@ -1795,7 +2040,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Suggest a Movie"
       "places" -> "Suggest a Place"
-          "time" -> "Add a Time"
+      "time" -> "Add a Time"
+      "date_selection" -> "Add a Date"
       _ -> "Add an Option"
     end
   end
@@ -1872,6 +2118,45 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "voting" -> "Voting Phase"  # Legacy support
       "closed" -> "Closed"
       _ -> "Poll Phase"
+    end
+  end
+
+  # Date formatting helper functions for date_selection polls
+  defp format_date_for_display(date) do
+    case date do
+      %Date{} = d ->
+        d
+        |> Date.to_string()
+        |> then(fn date_str ->
+          case Date.from_iso8601(date_str) do
+            {:ok, parsed_date} ->
+              month_name = case parsed_date.month do
+                1 -> "January"
+                2 -> "February"
+                3 -> "March"
+                4 -> "April"
+                5 -> "May"
+                6 -> "June"
+                7 -> "July"
+                8 -> "August"
+                9 -> "September"
+                10 -> "October"
+                11 -> "November"
+                12 -> "December"
+              end
+              "#{month_name} #{parsed_date.day}, #{parsed_date.year}"
+            _ -> date_str
+          end
+        end)
+      _ -> "Invalid date"
+    end
+  end
+
+  defp format_date_for_option_title(date) do
+    # Format as a human-readable title for the poll option
+    case date do
+      %Date{} = d -> format_date_for_display(d)
+      _ -> "Invalid date"
     end
   end
 end

@@ -341,12 +341,21 @@ defmodule EventasaurusWeb.CalendarComponent do
   # Private helper function to toggle a date in the socket
   defp toggle_date_in_socket(socket, date) do
     selected_dates = socket.assigns.selected_dates
+    allow_multiple = Map.get(socket.assigns, :allow_multiple, true)
 
     updated_dates =
       if date in selected_dates do
+        # Remove the date if already selected
         List.delete(selected_dates, date)
       else
-        [date | selected_dates] |> Enum.sort()
+        # Add the date - behavior depends on allow_multiple setting
+        if allow_multiple do
+          # Multiple selection: add to existing list
+          [date | selected_dates] |> Enum.sort()
+        else
+          # Single selection: replace the list with just this date
+          [date]
+        end
       end
 
     socket =
@@ -357,8 +366,15 @@ defmodule EventasaurusWeb.CalendarComponent do
         component_id: socket.assigns.id || "calendar"
       })
 
-    # Send the updated dates to the parent LiveView
-    send(self(), {:selected_dates_changed, updated_dates})
+    # Send event to the specified target component or parent LiveView
+    event_name = Map.get(socket.assigns, :on_date_select, "selected_dates_changed")
+    if Map.has_key?(socket.assigns, :target) do
+      # Send event to target component using send_update
+      send_update(socket.assigns.target, %{calendar_event: {event_name, updated_dates}})
+    else
+      # Fallback: send to parent LiveView
+      send(self(), {:calendar_event, event_name, %{dates: updated_dates}})
+    end
 
     {:noreply, socket}
   end

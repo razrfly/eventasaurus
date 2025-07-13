@@ -4387,6 +4387,248 @@ defmodule EventasaurusApp.Events do
   end
 
   # =================
+  # Date Selection Poll Options
+  # =================
+
+  @doc """
+  Creates a date-based poll option for date_selection polls.
+
+  ## Parameters
+  - poll: The poll to add the date option to (must be poll_type: "date_selection")
+  - user: The user suggesting the date
+  - date: Date as string (ISO 8601), Date struct, or DateTime struct
+  - opts: Optional parameters with keys:
+    - :title - Custom title for the date option (defaults to formatted date)
+    - :description - Optional description for the date option
+
+  ## Returns
+  - {:ok, poll_option} on success
+  - {:error, changeset} on failure
+
+  ## Examples
+      iex> create_date_poll_option(poll, user, "2024-12-25")
+      {:ok, %PollOption{}}
+
+      iex> create_date_poll_option(poll, user, ~D[2024-12-25], title: "Christmas Day")
+      {:ok, %PollOption{}}
+  """
+  def create_date_poll_option(%Poll{poll_type: "date_selection"} = poll, %User{} = user, date, opts \\ []) do
+    with {:ok, parsed_date} <- parse_date_input(date),
+         {:ok, formatted_date} <- format_date_for_storage(parsed_date) do
+
+      # Build the metadata with date information
+      metadata = %{
+        "date" => formatted_date,
+        "date_display" => format_date_for_display(parsed_date),
+        "date_type" => "single_date",
+        "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+      }
+
+      # Use custom title or generate from date
+      title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
+      description = Keyword.get(opts, :description)
+
+      attrs = %{
+        "poll_id" => poll.id,
+        "suggested_by_id" => user.id,
+        "title" => title,
+        "description" => description,
+        "metadata" => metadata,
+        "status" => "active"
+      }
+
+      create_poll_option(attrs)
+    else
+      {:error, reason} ->
+        changeset = PollOption.changeset(%PollOption{}, %{})
+        |> Ecto.Changeset.add_error(:metadata, "Invalid date: #{reason}")
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Creates multiple date-based poll options from a date range.
+
+  ## Parameters
+  - poll: The poll to add date options to (must be poll_type: "date_selection")
+  - user: The user suggesting the dates
+  - start_date: Start date (string, Date, or DateTime)
+  - end_date: End date (string, Date, or DateTime)
+  - opts: Optional parameters (same as create_date_poll_option/4)
+
+  ## Returns
+  - {:ok, [poll_options]} on success for all dates
+  - {:error, reason} on failure
+  """
+  def create_date_range_poll_options(%Poll{poll_type: "date_selection"} = poll, %User{} = user, start_date, end_date, opts \\ []) do
+    with {:ok, parsed_start} <- parse_date_input(start_date),
+         {:ok, parsed_end} <- parse_date_input(end_date),
+         :ok <- validate_date_range(parsed_start, parsed_end) do
+
+      date_range = Date.range(parsed_start, parsed_end)
+
+      Repo.transaction(fn ->
+        Enum.map(date_range, fn date ->
+          case create_date_poll_option(poll, user, date, opts) do
+            {:ok, option} -> option
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end)
+      end)
+    end
+  end
+
+  @doc """
+  Creates multiple date-based poll options from a list of dates.
+
+  ## Parameters
+  - poll: The poll to add date options to (must be poll_type: "date_selection")
+  - user: The user suggesting the dates
+  - dates: List of dates (strings, Date structs, or DateTime structs)
+  - opts: Optional parameters (same as create_date_poll_option/4)
+
+  ## Returns
+  - {:ok, [poll_options]} on success for all dates
+  - {:error, reason} on failure
+  """
+  def create_date_list_poll_options(%Poll{poll_type: "date_selection"} = poll, %User{} = user, dates, opts \\ []) when is_list(dates) do
+    Repo.transaction(fn ->
+      Enum.map(dates, fn date ->
+        case create_date_poll_option(poll, user, date, opts) do
+          {:ok, option} -> option
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+    end)
+  end
+
+  @doc """
+  Gets all date options for a date_selection poll, sorted by date.
+
+  ## Returns
+  List of poll options with parsed dates in chronological order.
+  """
+  def list_date_poll_options(%Poll{poll_type: "date_selection"} = poll) do
+    poll
+    |> list_poll_options()
+    |> Enum.filter(&has_date_metadata?/1)
+    |> sort_date_options_by_date()
+  end
+
+  @doc """
+  Updates a date poll option with a new date.
+
+  ## Parameters
+  - poll_option: The poll option to update
+  - new_date: New date (string, Date, or DateTime)
+  - opts: Optional parameters for title/description updates
+  """
+  def update_date_poll_option(%PollOption{} = poll_option, new_date, opts \\ []) do
+    with {:ok, parsed_date} <- parse_date_input(new_date),
+         {:ok, formatted_date} <- format_date_for_storage(parsed_date) do
+
+      # Update metadata while preserving other fields
+      existing_metadata = poll_option.metadata || %{}
+      updated_metadata = Map.merge(existing_metadata, %{
+        "date" => formatted_date,
+        "date_display" => format_date_for_display(parsed_date),
+        "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+      })
+
+      # Update title if provided, otherwise use new date display
+      attrs = %{
+        "metadata" => updated_metadata,
+        "title" => Keyword.get(opts, :title, format_date_for_display(parsed_date))
+      }
+
+      # Add description if provided
+      if description = Keyword.get(opts, :description) do
+        attrs = Map.put(attrs, "description", description)
+      end
+
+      update_poll_option(poll_option, attrs)
+    end
+  end
+
+  @doc """
+  Extracts the date from a date poll option's metadata.
+
+  ## Returns
+  - {:ok, %Date{}} on success
+  - {:error, reason} if no valid date found
+  """
+  def get_date_from_poll_option(%PollOption{metadata: nil}), do: {:error, "No metadata found"}
+  def get_date_from_poll_option(%PollOption{metadata: metadata}) do
+    case Map.get(metadata, "date") do
+      nil -> {:error, "No date found in metadata"}
+      date_string when is_binary(date_string) ->
+        case Date.from_iso8601(date_string) do
+          {:ok, date} -> {:ok, date}
+          {:error, _} -> {:error, "Invalid date format in metadata"}
+        end
+      _ -> {:error, "Date metadata is not a string"}
+    end
+  end
+
+  # Private helper functions for date poll options
+
+  defp parse_date_input(date) when is_binary(date) do
+    case Date.from_iso8601(date) do
+      {:ok, parsed_date} -> {:ok, parsed_date}
+      {:error, _} -> {:error, "Invalid date format. Use YYYY-MM-DD format."}
+    end
+  end
+
+  defp parse_date_input(%Date{} = date), do: {:ok, date}
+
+  defp parse_date_input(%DateTime{} = datetime) do
+    {:ok, DateTime.to_date(datetime)}
+  end
+
+  defp parse_date_input(_), do: {:error, "Invalid date input type"}
+
+  defp format_date_for_storage(%Date{} = date) do
+    {:ok, Date.to_iso8601(date)}
+  end
+
+  defp format_date_for_display(%Date{} = date) do
+    # Format as "Monday, December 25, 2024"
+    date
+    |> Date.to_string()
+    |> (fn date_string ->
+      case Date.from_iso8601(date_string) do
+        {:ok, parsed_date} ->
+          parsed_date
+          |> Calendar.strftime("%A, %B %d, %Y")
+        {:error, _} ->
+          date_string
+      end
+    end).()
+  end
+
+  defp validate_date_range(%Date{} = start_date, %Date{} = end_date) do
+    case Date.compare(start_date, end_date) do
+      :gt -> {:error, "Start date must be before or equal to end date"}
+      _ -> :ok
+    end
+  end
+
+  defp has_date_metadata?(%PollOption{metadata: nil}), do: false
+  defp has_date_metadata?(%PollOption{metadata: metadata}) do
+    Map.has_key?(metadata, "date") && is_binary(Map.get(metadata, "date"))
+  end
+
+  defp sort_date_options_by_date(options) do
+    options
+    |> Enum.sort_by(fn option ->
+      case get_date_from_poll_option(option) do
+        {:ok, date} -> date
+        {:error, _} -> ~D[9999-12-31]  # Put invalid dates at the end
+      end
+    end, Date)
+  end
+
+  # =================
   # Poll Votes
   # =================
 
@@ -5202,32 +5444,257 @@ defmodule EventasaurusApp.Events do
     end
   end
 
+  @doc """
+  Finalizes a date_selection poll with winning date determination and event integration.
+
+  ## Parameters
+  - poll: The date_selection poll to finalize
+  - finalizer: The user performing the finalization
+  - opts: Optional parameters:
+    - :finalization_strategy - :highest_votes (default), :most_yes_votes, :manual
+    - :selected_option_ids - For manual selection, specific option IDs to finalize
+    - :preserve_time - Whether to preserve existing event time (default: true)
+
+  ## Returns
+  - {:ok, {updated_poll, updated_event}} on success
+  - {:error, reason} on failure
+  """
+  def finalize_date_selection_poll(%Poll{poll_type: "date_selection"} = poll, %User{} = finalizer, opts \\ []) do
+    strategy = Keyword.get(opts, :finalization_strategy, :highest_votes)
+    preserve_time = Keyword.get(opts, :preserve_time, true)
+
+    Repo.transaction(fn ->
+      # Determine winning date(s) based on strategy
+      case determine_winning_date_options(poll, strategy, opts) do
+        {:ok, winning_option_ids} when length(winning_option_ids) > 0 ->
+          # Finalize the poll with winning options
+          case finalize_poll(poll, winning_option_ids) do
+            {:ok, finalized_poll} ->
+              # Update the associated event if single date selected
+              event = Repo.get!(Event, poll.event_id)
+
+              case update_event_from_date_poll(event, winning_option_ids, preserve_time) do
+                {:ok, updated_event} ->
+                  # Trigger event-poll lifecycle integration
+                  handle_date_poll_finalization(updated_event, finalized_poll, finalizer)
+
+                  Logger.info("Date selection poll finalized successfully", %{
+                    poll_id: finalized_poll.id,
+                    event_id: updated_event.id,
+                    winning_options: winning_option_ids,
+                    finalizer_id: finalizer.id
+                  })
+
+                  {finalized_poll, updated_event}
+
+                {:error, reason} ->
+                  Logger.warning("Failed to update event from date poll", %{
+                    poll_id: poll.id,
+                    event_id: event.id,
+                    reason: reason
+                  })
+                  Repo.rollback(reason)
+              end
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+
+        {:ok, []} ->
+          Repo.rollback("No winning date options found")
+
+        {:error, reason} ->
+          Repo.rollback(reason)
+      end
+    end)
+  end
+
+  @doc """
+  Determines winning date options based on voting results and strategy.
+  """
+  def determine_winning_date_options(%Poll{poll_type: "date_selection"} = poll, strategy, opts \\ []) do
+    case strategy do
+      :manual ->
+        # Manual selection - use provided option IDs
+        selected_ids = Keyword.get(opts, :selected_option_ids, [])
+        if length(selected_ids) > 0 do
+          {:ok, selected_ids}
+        else
+          {:error, "No option IDs provided for manual selection"}
+        end
+
+      :highest_votes ->
+        determine_highest_voted_date_options(poll)
+
+      :most_yes_votes ->
+        determine_most_yes_voted_date_options(poll)
+
+      _ ->
+        {:error, "Unknown finalization strategy: #{strategy}"}
+    end
+  end
+
+  @doc """
+  Updates an event's date based on finalized date poll results.
+  """
+  def update_event_from_date_poll(%Event{} = event, winning_option_ids, preserve_time \\ true) do
+    if length(winning_option_ids) == 1 do
+      # Single date selected - update event date
+      option_id = List.first(winning_option_ids)
+      option = Repo.get!(PollOption, option_id)
+
+      case extract_date_from_option(option) do
+        {:ok, selected_date} ->
+          # Convert date to datetime, preserving existing time if requested
+          new_datetime = if preserve_time && event.start_at do
+            DateTime.new!(selected_date, DateTime.to_time(event.start_at), event.timezone || "UTC")
+          else
+            # Default to 6 PM if no existing time
+            DateTime.new!(selected_date, ~T[18:00:00], event.timezone || "UTC")
+          end
+
+          # Update event with new date and confirmed status
+          attrs = %{
+            start_at: new_datetime,
+            status: :confirmed,
+            polling_deadline: nil  # Clear polling deadline
+          }
+
+          # Preserve existing end time if it exists
+          attrs = if event.ends_at do
+            # Calculate duration and apply to new date
+            duration = DateTime.diff(event.ends_at, event.start_at, :second)
+            new_ends_at = DateTime.add(new_datetime, duration, :second)
+            Map.put(attrs, :ends_at, new_ends_at)
+          else
+            attrs
+          end
+
+          changeset = Event.changeset_with_inferred_status(event, attrs)
+          Repo.update(changeset)
+
+        {:error, reason} ->
+          {:error, "Could not extract date from winning option: #{reason}"}
+      end
+    else
+      # Multiple dates selected - cannot update event date automatically
+      Logger.info("Multiple dates selected, event date not updated automatically", %{
+        event_id: event.id,
+        selected_options: winning_option_ids
+      })
+      {:ok, event}
+    end
+  end
+
   defp handle_date_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = _finalizer) do
     # Get selected options from finalized poll
     selected_options = poll.finalized_option_ids || []
 
-    if length(selected_options) == 1 do
-      # Single date selected - update event
-      option_id = List.first(selected_options)
-      option = Repo.get!(PollOption, option_id)
+    case length(selected_options) do
+      1 ->
+        # Single date selected - event should already be updated by update_event_from_date_poll
+        option_id = List.first(selected_options)
+        option = Repo.get!(PollOption, option_id)
 
-      # Extract date from option (assuming it's stored in external_data or title)
-      case extract_date_from_option(option) do
-        {:ok, date} ->
-          pick_date(event, date)
-          Logger.info("Event date updated from poll finalization", %{
-            event_id: event.id,
-            selected_date: date
-          })
+        case extract_date_from_option(option) do
+          {:ok, date} ->
+            Logger.info("Event date updated from poll finalization", %{
+              event_id: event.id,
+              selected_date: Date.to_string(date),
+              poll_id: poll.id
+            })
 
-        {:error, reason} ->
-          Logger.warning("Could not extract date from poll option", %{
-            poll_id: poll.id,
-            option_id: option_id,
-            reason: reason
-          })
-      end
+            # Transition event to confirmed if not already
+            if event.status != :confirmed do
+              transition_event(event, :confirmed)
+            end
+
+          {:error, reason} ->
+            Logger.warning("Could not extract date from finalized poll option", %{
+              poll_id: poll.id,
+              option_id: option_id,
+              reason: reason
+            })
+        end
+
+      count when count > 1 ->
+        Logger.info("Multiple dates selected in poll finalization", %{
+          event_id: event.id,
+          poll_id: poll.id,
+          selected_count: count,
+          message: "Event organizer needs to manually select final date"
+        })
+
+      0 ->
+        Logger.warning("No dates selected in poll finalization", %{
+          event_id: event.id,
+          poll_id: poll.id
+        })
     end
+  end
+
+  defp determine_highest_voted_date_options(%Poll{} = poll) do
+    # Get all poll options with their vote counts
+    options_with_votes = poll
+    |> list_poll_options()
+    |> Enum.map(fn option ->
+      vote_count = length(option.votes || [])
+      {option.id, vote_count}
+    end)
+    |> Enum.sort_by(fn {_id, count} -> count end, :desc)
+
+    case options_with_votes do
+      [] ->
+        {:error, "No options found for poll"}
+
+      [{top_option_id, top_count} | rest] ->
+        if top_count > 0 do
+          # Find all options with the highest vote count (handles ties)
+          winning_options = Enum.take_while([{top_option_id, top_count} | rest], fn {_id, count} ->
+            count == top_count
+          end)
+
+          winning_ids = Enum.map(winning_options, fn {id, _count} -> id end)
+          {:ok, winning_ids}
+        else
+          {:error, "No votes cast for any option"}
+        end
+    end
+  end
+
+  defp determine_most_yes_voted_date_options(%Poll{voting_system: "binary"} = poll) do
+    # For binary voting system, count "yes" votes specifically
+    options_with_yes_votes = poll
+    |> list_poll_options()
+    |> Enum.map(fn option ->
+      yes_count = option.votes
+      |> Enum.count(fn vote -> vote.vote_value == "yes" end)
+      {option.id, yes_count}
+    end)
+    |> Enum.sort_by(fn {_id, count} -> count end, :desc)
+
+    case options_with_yes_votes do
+      [] ->
+        {:error, "No options found for poll"}
+
+      [{top_option_id, top_count} | rest] ->
+        if top_count > 0 do
+          # Find all options with the highest "yes" vote count
+          winning_options = Enum.take_while([{top_option_id, top_count} | rest], fn {_id, count} ->
+            count == top_count
+          end)
+
+          winning_ids = Enum.map(winning_options, fn {id, _count} -> id end)
+          {:ok, winning_ids}
+        else
+          {:error, "No 'yes' votes cast for any option"}
+        end
+    end
+  end
+
+  defp determine_most_yes_voted_date_options(%Poll{} = poll) do
+    # For non-binary voting systems, fall back to highest votes
+    determine_highest_voted_date_options(poll)
   end
 
   defp handle_venue_poll_finalization(%Event{} = event, %Poll{} = poll, %User{} = _finalizer) do
@@ -5327,29 +5794,29 @@ defmodule EventasaurusApp.Events do
 
   defp extract_date_from_option(%PollOption{} = option) do
     cond do
-      option.external_data && Map.has_key?(option.external_data, "date") ->
-        case DateTime.from_iso8601(option.external_data["date"]) do
-          {:ok, datetime, _} -> {:ok, datetime}
-          {:error, reason} -> {:error, reason}
+      # First, try our new metadata structure (date_selection polls)
+      option.metadata && Map.has_key?(option.metadata, "date") ->
+        case Date.from_iso8601(option.metadata["date"]) do
+          {:ok, date} -> {:ok, date}
+          {:error, reason} -> {:error, "Invalid date in metadata: #{reason}"}
         end
 
-      # Try to parse date from title (format: "2024-12-15" or "December 15, 2024")
-      option.title ->
-        cond do
-          # Try ISO format first (2024-12-15)
-          Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, option.title) ->
-            case Date.from_iso8601(option.title) do
-              {:ok, date} -> {:ok, DateTime.new!(date, ~T[18:00:00], "UTC")}
-              {:error, reason} -> {:error, reason}
-            end
+      # Legacy support: external_data with date (old system)
+      option.external_data && Map.has_key?(option.external_data, "date") ->
+        case DateTime.from_iso8601(option.external_data["date"]) do
+          {:ok, datetime, _} -> {:ok, DateTime.to_date(datetime)}
+          {:error, reason} -> {:error, "Invalid datetime in external_data: #{reason}"}
+        end
 
-          # Try to extract date parts from natural language
-          true ->
-            {:error, "Date format not supported. Use YYYY-MM-DD format"}
+      # Legacy support: try to parse date from title (format: "2024-12-15")
+      option.title && Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, option.title) ->
+        case Date.from_iso8601(option.title) do
+          {:ok, date} -> {:ok, date}
+          {:error, reason} -> {:error, "Invalid date format in title: #{reason}"}
         end
 
       true ->
-        {:error, "No date information found in option"}
+        {:error, "No valid date information found in option"}
     end
   end
 
