@@ -748,18 +748,13 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       # Clear authenticated user votes
       socket = assign(socket, :loading, true)
 
-      case clear_all_user_votes(socket) do
-        {:ok, _} ->
-          send(self(), {:votes_cleared})
-          {:noreply,
-           socket
-           |> assign(:loading, false)
-           |> assign(:vote_state, %{})
-           |> assign(:ranked_options, [])}
-        {:error, _} ->
-          send(self(), {:show_error, "Failed to clear votes"})
-          {:noreply, assign(socket, :loading, false)}
-      end
+      {:ok, _} = clear_all_user_votes(socket)
+      send(self(), {:votes_cleared})
+      {:noreply,
+       socket
+       |> assign(:loading, false)
+       |> assign(:vote_state, %{})
+       |> assign(:ranked_options, [])}
     end
   end
 
@@ -1180,17 +1175,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     case voting_system do
       "ranked" -> map_size(vote_state) > 0
       _ -> map_size(vote_state) > 0
-    end
-  end
-
-  defp format_deadline(deadline) do
-    case deadline do
-      %DateTime{} = dt ->
-        dt
-        |> DateTime.to_date()
-        |> Date.to_string()
-
-      _ -> "Not set"
     end
   end
 
