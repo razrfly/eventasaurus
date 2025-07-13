@@ -109,7 +109,7 @@ defmodule EventasaurusWeb.Services.StripeCurrencyService do
               # Return what we have so far to avoid infinite recursion
               {:ok, %{data: all_specs}}
             _ ->
-              last_id = List.last(specs).id
+              last_id = (List.last(specs)).id
               fetch_all_country_specs(all_specs, last_id)
           end
         else
