@@ -5,13 +5,18 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   Provides specialized interfaces for binary, approval, ranked choice, and star rating
   voting systems. Handles user vote state, submission, and real-time updates.
 
+  Supports both authenticated and anonymous voting patterns.
+
   ## Attributes:
   - poll: Poll struct with preloaded options and votes (required)
-  - user: User struct (required)
+  - user: User struct (nil for anonymous users)
   - user_votes: List of user's existing votes for this poll
   - loading: Whether a vote operation is in progress
+  - temp_votes: Map of temporary votes for anonymous users
+  - anonymous_mode: Boolean to enable anonymous voting flow
 
   ## Usage:
+      # Authenticated user
       <.live_component
         module={EventasaurusWeb.VotingInterfaceComponent}
         id="voting-interface"
@@ -19,6 +24,18 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         user={@user}
         user_votes={@user_votes}
         loading={@loading}
+      />
+
+      # Anonymous user
+      <.live_component
+        module={EventasaurusWeb.VotingInterfaceComponent}
+        id="voting-interface"
+        poll={@poll}
+        user={nil}
+        user_votes={[]}
+        loading={@loading}
+        temp_votes={@temp_votes}
+        anonymous_mode={true}
       />
   """
 
@@ -32,17 +49,32 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
      socket
      |> assign(:loading, false)
      |> assign(:vote_state, %{})
-     |> assign(:ranked_options, [])}
+     |> assign(:ranked_options, [])
+     |> assign(:temp_votes, %{})
+     |> assign(:anonymous_mode, false)}
   end
 
   @impl true
   def update(assigns, socket) do
-    # Initialize vote state based on existing user votes
-    vote_state = initialize_vote_state(assigns.poll, assigns.user_votes)
+    # Determine if we're in anonymous mode
+    anonymous_mode = assigns[:anonymous_mode] || is_nil(assigns[:user])
+    temp_votes = assigns[:temp_votes] || %{}
+
+    # Initialize vote state based on user votes or temp votes
+    vote_state = if anonymous_mode do
+      initialize_anonymous_vote_state(assigns.poll, temp_votes)
+    else
+      initialize_vote_state(assigns.poll, assigns.user_votes)
+    end
 
     # For ranked voting, initialize ordered options
     ranked_options = case assigns.poll.voting_system do
-      "ranked" -> initialize_ranked_options(assigns.poll.poll_options, assigns.user_votes)
+      "ranked" ->
+        if anonymous_mode do
+          initialize_anonymous_ranked_options(assigns.poll.poll_options, temp_votes)
+        else
+          initialize_ranked_options(assigns.poll.poll_options, assigns.user_votes)
+        end
       _ -> []
     end
 
@@ -51,6 +83,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
      |> assign(assigns)
      |> assign(:vote_state, vote_state)
      |> assign(:ranked_options, ranked_options)
+     |> assign(:temp_votes, temp_votes)
+     |> assign(:anonymous_mode, anonymous_mode)
      |> assign_new(:loading, fn -> false end)}
   end
 
@@ -68,6 +102,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <p class="text-sm text-gray-500">
               <%= get_voting_instructions(@poll.voting_system) %>
             </p>
+            <%= if @anonymous_mode and has_temp_votes?(@temp_votes, @poll.voting_system) do %>
+              <div class="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                Temporary votes stored
+              </div>
+            <% end %>
           </div>
 
           <%= if has_votes?(@vote_state, @poll.voting_system) do %>
@@ -102,11 +144,35 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
         <%= render_vote_summary(assigns) %>
       </div>
+
+      <!-- Anonymous Voting Call-to-Action -->
+      <%= if @anonymous_mode and has_temp_votes?(@temp_votes, @poll.voting_system) do %>
+        <div class="px-6 py-4 bg-blue-50 border-t border-blue-200">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <svg class="h-5 w-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p class="text-sm text-blue-800">
+                Your votes are temporarily stored. Save them to participate!
+              </p>
+            </div>
+            <button
+              type="button"
+              phx-click="show_save_votes_modal"
+              phx-target={@myself}
+              class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Save My Votes
+            </button>
+          </div>
+        </div>
+      <% end %>
     </div>
     """
   end
 
-  # Binary Voting (Yes/No)
+  # Binary Voting (Yes/No/Maybe)
   defp render_binary_voting(assigns) do
     ~H"""
     <%= for option <- @poll.poll_options do %>
@@ -127,7 +193,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               phx-value-vote="yes"
               phx-target={@myself}
               disabled={@loading}
-              class={binary_button_class(@vote_state[option.id], "yes")}
+              class={binary_button_class(@vote_state[option.id], "yes", @anonymous_mode)}
             >
               <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -142,7 +208,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               phx-value-vote="maybe"
               phx-target={@myself}
               disabled={@loading}
-              class={binary_button_class(@vote_state[option.id], "maybe")}
+              class={binary_button_class(@vote_state[option.id], "maybe", @anonymous_mode)}
             >
               <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -157,7 +223,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               phx-value-vote="no"
               phx-target={@myself}
               disabled={@loading}
-              class={binary_button_class(@vote_state[option.id], "no")}
+              class={binary_button_class(@vote_state[option.id], "no", @anonymous_mode)}
             >
               <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -184,7 +250,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             phx-target={@myself}
             checked={@vote_state[option.id] == "approved"}
             disabled={@loading}
-            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+            class={approval_checkbox_class(@vote_state[option.id], @anonymous_mode)}
           />
           <div class="ml-3 flex-1 min-w-0">
             <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
@@ -192,6 +258,13 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
             <% end %>
           </div>
+          <%= if @anonymous_mode and @vote_state[option.id] == "approved" do %>
+            <div class="ml-2 text-blue-500">
+              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          <% end %>
         </label>
       </div>
     <% end %>
@@ -204,7 +277,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     <div class="px-6 py-4">
       <div class="space-y-4">
         <!-- Instructions -->
-        <div class="bg-blue-50 border border-blue-200 rounded-md p-4">
+        <div class={"border rounded-md p-4 " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-blue-50 border-blue-200")}>
           <div class="flex">
             <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
@@ -212,6 +285,9 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <div class="ml-3">
               <p class="text-sm text-blue-800">
                 Use the up/down arrows to rank options in order of preference (1st choice at top). Unranked options won't receive votes.
+                <%= if @anonymous_mode do %>
+                  <span class="font-medium">Rankings are temporarily stored.</span>
+                <% end %>
               </p>
             </div>
           </div>
@@ -220,8 +296,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         <!-- Ranked Options -->
         <div class="space-y-2">
           <%= for {option, index} <- Enum.with_index(@ranked_options) do %>
-            <div class="flex items-center p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
-              <div class="flex items-center justify-center w-8 h-8 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full mr-3">
+            <div class={"flex items-center p-3 border rounded-lg shadow-sm " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-white border-gray-200")}>
+              <div class={"flex items-center justify-center w-8 h-8 text-sm font-medium rounded-full mr-3 " <> if(@anonymous_mode, do: "bg-blue-200 text-blue-800", else: "bg-indigo-100 text-indigo-800")}>
                 <%= index + 1 %>
               </div>
               <div class="flex-1 min-w-0">
@@ -268,7 +344,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                   title="Remove from ranking"
                 >
                   <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
@@ -278,20 +354,23 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
         <!-- Unranked Options -->
         <%= if length(@ranked_options) < length(@poll.poll_options) do %>
-          <div class="border-t border-gray-200 pt-4">
-            <h5 class="text-sm font-medium text-gray-700 mb-2">Unranked Options</h5>
+          <div class="border-t pt-4">
+            <h4 class="text-sm font-medium text-gray-900 mb-3">Available Options</h4>
             <div class="space-y-2">
               <%= for option <- get_unranked_options(@poll.poll_options, @ranked_options) do %>
                 <div class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <div class="flex-1 min-w-0">
-                    <h4 class="text-sm font-medium text-gray-600"><%= option.title %></h4>
+                    <h5 class="text-sm font-medium text-gray-900"><%= option.title %></h5>
+                    <%= if option.description do %>
+                      <p class="text-xs text-gray-500 mt-1"><%= option.description %></p>
+                    <% end %>
                   </div>
                   <button
                     type="button"
                     phx-click="add_to_ranking"
                     phx-value-option-id={option.id}
                     phx-target={@myself}
-                    class="ml-3 text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                    class="ml-3 text-indigo-600 hover:text-indigo-900 text-sm font-medium"
                   >
                     Add to Ranking
                   </button>
@@ -300,46 +379,25 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
           </div>
         <% end %>
-
-        <!-- Submit Ranking Button -->
-        <div class="pt-4">
-          <button
-            type="button"
-            phx-click="submit_ranked_votes"
-            phx-target={@myself}
-            disabled={@loading || Enum.empty?(@ranked_options)}
-            class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <%= if @loading do %>
-              <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Submitting Ranking...
-            <% else %>
-              Submit Ranking (<%= length(@ranked_options) %> ranked)
-            <% end %>
-          </button>
-        </div>
       </div>
     </div>
     """
   end
 
-  # Star Rating (1-5 stars)
+  # Star Rating Voting
   defp render_star_voting(assigns) do
     ~H"""
     <%= for option <- @poll.poll_options do %>
       <div class="px-6 py-4">
-        <div class="flex items-start justify-between">
-          <div class="flex-1 min-w-0 mr-4">
+        <div class="flex items-center justify-between">
+          <div class="flex-1 min-w-0">
             <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
             <% end %>
           </div>
 
-          <div class="flex items-center space-x-1">
+          <div class="ml-4 flex items-center space-x-1">
             <%= for star <- 1..5 do %>
               <button
                 type="button"
@@ -348,27 +406,33 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 phx-value-rating={star}
                 phx-target={@myself}
                 disabled={@loading}
-                class={star_class(@vote_state[option.id], star)}
+                class={star_class(@vote_state[option.id], star, @anonymous_mode)}
               >
-                <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
               </button>
             <% end %>
-
             <%= if @vote_state[option.id] do %>
-              <span class="ml-2 text-sm text-gray-600">
-                (<%= @vote_state[option.id] %>/5)
-              </span>
               <button
                 type="button"
                 phx-click="clear_star_vote"
                 phx-value-option-id={option.id}
                 phx-target={@myself}
-                class="ml-2 text-xs text-red-600 hover:text-red-900"
+                class="ml-2 text-gray-400 hover:text-gray-600"
+                title="Clear rating"
               >
-                Clear
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
+            <% end %>
+            <%= if @anonymous_mode and @vote_state[option.id] do %>
+              <div class="ml-2 text-blue-500">
+                <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+              </div>
             <% end %>
           </div>
         </div>
@@ -379,80 +443,118 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   # Vote Summary
   defp render_vote_summary(assigns) do
-    ~H"""
-    <div class="flex items-center justify-between">
-      <div class="text-sm text-gray-500">
-        <%= get_vote_summary_text(@vote_state, @poll.voting_system) %>
-      </div>
+    case assigns.poll.voting_system do
+      "binary" -> render_binary_summary(assigns)
+      "approval" -> render_approval_summary(assigns)
+      "ranked" -> render_ranked_summary(assigns)
+      "star" -> render_star_summary(assigns)
+    end
+  end
 
-      <%= if @poll.voting_deadline do %>
-        <div class="text-sm text-gray-500">
-          Voting ends: <%= format_deadline(@poll.voting_deadline) %>
-        </div>
+  defp render_binary_summary(assigns) do
+    ~H"""
+    <div class="text-sm">
+      <span class="font-medium text-gray-900">Your votes:</span>
+      <%= if map_size(@vote_state) > 0 do %>
+        <span class="ml-2 text-gray-600">
+          <%= for {option_id, vote} <- @vote_state do %>
+            <% option = find_poll_option(assigns, option_id) %>
+            <%= if option do %>
+              <span class={"inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 #{vote_badge_class(vote)}"}>
+                <%= option.title %>: <%= String.capitalize(vote) %>
+              </span>
+            <% end %>
+          <% end %>
+        </span>
+      <% else %>
+        <span class="ml-2 text-gray-500">No votes cast yet</span>
       <% end %>
     </div>
     """
+  end
+
+  defp render_approval_summary(assigns) do
+    ~H"""
+    <div class="text-sm">
+      <span class="font-medium text-gray-900">Selected options:</span>
+      <%= if map_size(@vote_state) > 0 do %>
+        <span class="ml-2 text-gray-600">
+          <%= for {option_id, _} <- @vote_state do %>
+            <% option = find_poll_option(assigns, option_id) %>
+            <%= if option do %>
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mr-2">
+                <%= option.title %>
+              </span>
+            <% end %>
+          <% end %>
+        </span>
+      <% else %>
+        <span class="ml-2 text-gray-500">No selections made</span>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp render_ranked_summary(assigns) do
+    ~H"""
+    <div class="text-sm">
+      <span class="font-medium text-gray-900">Your ranking:</span>
+      <%= if length(@ranked_options) > 0 do %>
+        <span class="ml-2 text-gray-600">
+          <%= for {option, index} <- Enum.with_index(@ranked_options) do %>
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 mr-2">
+              #<%= index + 1 %>: <%= option.title %>
+            </span>
+          <% end %>
+        </span>
+      <% else %>
+        <span class="ml-2 text-gray-500">No ranking set</span>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp render_star_summary(assigns) do
+    ~H"""
+    <div class="text-sm">
+      <span class="font-medium text-gray-900">Your ratings:</span>
+      <%= if map_size(@vote_state) > 0 do %>
+        <span class="ml-2 text-gray-600">
+          <%= for {option_id, rating} <- @vote_state do %>
+            <% option = find_poll_option(assigns, option_id) %>
+            <%= if option do %>
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mr-2">
+                <%= option.title %>: <%= rating %> <%= if rating == 1, do: "star", else: "stars" %>
+              </span>
+            <% end %>
+          <% end %>
+        </span>
+      <% else %>
+        <span class="ml-2 text-gray-500">No ratings given</span>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp vote_badge_class(vote) do
+    case vote do
+      "yes" -> "bg-green-100 text-green-800"
+      "no" -> "bg-red-100 text-red-800"
+      "maybe" -> "bg-yellow-100 text-yellow-800"
+      _ -> "bg-gray-100 text-gray-800"
+    end
   end
 
   # Event Handlers
 
   @impl true
   def handle_event("cast_binary_vote", %{"option-id" => option_id, "vote" => vote}, socket) do
-    socket = assign(socket, :loading, true)
-
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
-        case submit_binary_vote(socket, option_id, vote) do
-          {:ok, _vote} ->
-            new_vote_state = Map.put(socket.assigns.vote_state, option_id, vote)
-            send(self(), {:vote_cast, option_id, vote})
-
-            {:noreply,
-             socket
-             |> assign(:loading, false)
-             |> assign(:vote_state, new_vote_state)}
-
-          {:error, _} ->
-            send(self(), {:show_error, "Failed to cast vote"})
-            {:noreply, assign(socket, :loading, false)}
-        end
-      {:error, _} ->
-        send(self(), {:show_error, "Invalid option ID"})
-        {:noreply, assign(socket, :loading, false)}
-    end
-  end
-
-  @impl true
-  def handle_event("toggle_approval_vote", %{"option-id" => option_id}, socket) do
-    case safe_string_to_integer(option_id) do
-      {:ok, option_id} ->
-        current_vote = socket.assigns.vote_state[option_id]
-        new_vote = if current_vote == "approved", do: nil, else: "approved"
-
-        socket = assign(socket, :loading, true)
-
-        case submit_approval_vote(socket, option_id, new_vote) do
-          {:ok, _} ->
-            new_vote_state = if new_vote do
-              Map.put(socket.assigns.vote_state, option_id, new_vote)
-            else
-              Map.delete(socket.assigns.vote_state, option_id)
-            end
-
-            send(self(), {:vote_cast, option_id, new_vote})
-
-            {:noreply,
-             socket
-             |> assign(:loading, false)
-             |> assign(:vote_state, new_vote_state)}
-
-          {:error, :option_not_found} ->
-            send(self(), {:show_error, "Option not found"})
-            {:noreply, assign(socket, :loading, false)}
-
-          {:error, _} ->
-            send(self(), {:show_error, "Failed to update vote"})
-            {:noreply, assign(socket, :loading, false)}
+        if socket.assigns.anonymous_mode do
+          handle_anonymous_binary_vote(socket, option_id, vote)
+        else
+          handle_authenticated_binary_vote(socket, option_id, vote)
         end
       {:error, _} ->
         send(self(), {:show_error, "Invalid option ID"})
@@ -461,33 +563,41 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   @impl true
-  def handle_event("cast_star_vote", %{"option-id" => option_id, "rating" => rating}, socket) do
-    socket = assign(socket, :loading, true)
+  def handle_event("toggle_approval_vote", params, socket) do
+    # Extract option-id from params, handling any additional parameters like "value"
+    case Map.get(params, "option-id") do
+      nil ->
+        send(self(), {:show_error, "No option ID provided"})
+        {:noreply, socket}
 
+      option_id ->
+        case safe_string_to_integer(option_id) do
+          {:ok, option_id} ->
+            if socket.assigns.anonymous_mode do
+              handle_anonymous_approval_vote(socket, option_id)
+            else
+              handle_authenticated_approval_vote(socket, option_id)
+            end
+          {:error, _} ->
+            send(self(), {:show_error, "Invalid option ID"})
+            {:noreply, socket}
+        end
+    end
+  end
+
+  @impl true
+  def handle_event("cast_star_vote", %{"option-id" => option_id, "rating" => rating}, socket) do
     with {:ok, option_id} <- safe_string_to_integer(option_id),
          {:ok, rating} <- safe_string_to_integer(rating) do
-      case submit_star_vote(socket, option_id, rating) do
-        {:ok, _vote} ->
-          new_vote_state = Map.put(socket.assigns.vote_state, option_id, rating)
-          send(self(), {:vote_cast, option_id, rating})
-
-          {:noreply,
-           socket
-           |> assign(:loading, false)
-           |> assign(:vote_state, new_vote_state)}
-
-        {:error, :option_not_found} ->
-          send(self(), {:show_error, "Option not found"})
-          {:noreply, assign(socket, :loading, false)}
-
-        {:error, _} ->
-          send(self(), {:show_error, "Failed to cast vote"})
-          {:noreply, assign(socket, :loading, false)}
+      if socket.assigns.anonymous_mode do
+        handle_anonymous_star_vote(socket, option_id, rating)
+      else
+        handle_authenticated_star_vote(socket, option_id, rating)
       end
     else
       {:error, _} ->
         send(self(), {:show_error, "Invalid option ID or rating"})
-        {:noreply, assign(socket, :loading, false)}
+        {:noreply, socket}
     end
   end
 
@@ -495,16 +605,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   def handle_event("clear_star_vote", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
-        case clear_vote(socket, option_id) do
-          {:ok, _} ->
-            new_vote_state = Map.delete(socket.assigns.vote_state, option_id)
-            send(self(), {:vote_cleared, option_id})
-
-            {:noreply, assign(socket, :vote_state, new_vote_state)}
-
-          {:error, _} ->
-            send(self(), {:show_error, "Failed to clear vote"})
-            {:noreply, socket}
+        if socket.assigns.anonymous_mode do
+          handle_anonymous_clear_star_vote(socket, option_id)
+        else
+          handle_authenticated_clear_star_vote(socket, option_id)
         end
       {:error, _} ->
         send(self(), {:show_error, "Invalid option ID"})
@@ -513,50 +617,32 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   @impl true
-  def handle_event("add_to_ranking", %{"option-id" => option_id}, socket) do
-    case safe_string_to_integer(option_id) do
-      {:ok, option_id} ->
-        case find_poll_option(socket, option_id) do
-          nil -> {:noreply, socket}
-          option ->
-            new_ranked_options = socket.assigns.ranked_options ++ [option]
-            {:noreply, assign(socket, :ranked_options, new_ranked_options)}
-        end
-      {:error, _} ->
-        {:noreply, socket}
-    end
+  def handle_event("show_save_votes_modal", _params, socket) do
+    send(self(), {:show_anonymous_voter_modal, socket.assigns.poll.id, socket.assigns.temp_votes})
+    {:noreply, socket}
   end
 
-  @impl true
-  def handle_event("submit_ranked_votes", _params, socket) do
-    socket = assign(socket, :loading, true)
-
-    case submit_ranked_votes(socket) do
-      {:ok, _} ->
-        send(self(), {:ranked_votes_submitted})
-        {:noreply, assign(socket, :loading, false)}
-
-      {:error, _} ->
-        send(self(), {:show_error, "Failed to submit ranking"})
-        {:noreply, assign(socket, :loading, false)}
-    end
-  end
-
+  # Additional event handlers for ranked voting...
   @impl true
   def handle_event("move_option_up", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
-        ranked_options = socket.assigns.ranked_options
+        new_ranked_options = move_option_up(socket.assigns.ranked_options, option_id)
 
-        case Enum.find_index(ranked_options, &(&1.id == option_id)) do
-          nil -> {:noreply, socket}
-          0 -> {:noreply, socket}  # Already at top
-          index ->
-            new_ranked_options = ranked_options
-            |> List.delete_at(index)
-            |> List.insert_at(index - 1, Enum.at(ranked_options, index))
+        if socket.assigns.anonymous_mode do
+          # Update temp votes for anonymous users
+          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+          send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
 
-            {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+          {:noreply,
+           socket
+           |> assign(:ranked_options, new_ranked_options)
+           |> assign(:temp_votes, temp_votes)
+           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+        else
+          # Submit for authenticated users
+          submit_ranked_votes(socket, new_ranked_options)
+          {:noreply, assign(socket, :ranked_options, new_ranked_options)}
         end
       {:error, _} ->
         {:noreply, socket}
@@ -567,17 +653,53 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   def handle_event("move_option_down", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
-        ranked_options = socket.assigns.ranked_options
+        new_ranked_options = move_option_down(socket.assigns.ranked_options, option_id)
 
-        case Enum.find_index(ranked_options, &(&1.id == option_id)) do
-          nil -> {:noreply, socket}
-          index when index == length(ranked_options) - 1 -> {:noreply, socket}  # Already at bottom
-          index ->
-            new_ranked_options = ranked_options
-            |> List.delete_at(index)
-            |> List.insert_at(index + 1, Enum.at(ranked_options, index))
+        if socket.assigns.anonymous_mode do
+          # Update temp votes for anonymous users
+          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+          send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
 
+          {:noreply,
+           socket
+           |> assign(:ranked_options, new_ranked_options)
+           |> assign(:temp_votes, temp_votes)
+           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+        else
+          # Submit for authenticated users
+          submit_ranked_votes(socket, new_ranked_options)
+          {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+        end
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("add_to_ranking", %{"option-id" => option_id}, socket) do
+    case safe_string_to_integer(option_id) do
+      {:ok, option_id} ->
+        option = find_poll_option(socket, option_id)
+        if option do
+          new_ranked_options = socket.assigns.ranked_options ++ [option]
+
+          if socket.assigns.anonymous_mode do
+            # Update temp votes for anonymous users
+            temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+            send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
+
+            {:noreply,
+             socket
+             |> assign(:ranked_options, new_ranked_options)
+             |> assign(:temp_votes, temp_votes)
+             |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+          else
+            # Submit for authenticated users
+            submit_ranked_votes(socket, new_ranked_options)
             {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+          end
+        else
+          {:noreply, socket}
         end
       {:error, _} ->
         {:noreply, socket}
@@ -589,7 +711,22 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
         new_ranked_options = Enum.reject(socket.assigns.ranked_options, &(&1.id == option_id))
-        {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+
+        if socket.assigns.anonymous_mode do
+          # Update temp votes for anonymous users
+          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+          send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
+
+          {:noreply,
+           socket
+           |> assign(:ranked_options, new_ranked_options)
+           |> assign(:temp_votes, temp_votes)
+           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+        else
+          # Submit for authenticated users
+          submit_ranked_votes(socket, new_ranked_options)
+          {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+        end
       {:error, _} ->
         {:noreply, socket}
     end
@@ -597,56 +734,290 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def handle_event("clear_all_votes", _params, socket) do
-    {:ok, _} = clear_all_user_votes(socket)
+    if socket.assigns.anonymous_mode do
+      # Clear temp votes for anonymous users
+      empty_temp_votes = %{}
+      send(self(), {:temp_votes_updated, socket.assigns.poll.id, empty_temp_votes})
 
-    empty_state = case socket.assigns.poll.voting_system do
-      "ranked" -> %{}
-      _ -> %{}
+      {:noreply,
+       socket
+       |> assign(:temp_votes, empty_temp_votes)
+       |> assign(:vote_state, %{})
+       |> assign(:ranked_options, [])}
+    else
+      # Clear authenticated user votes
+      socket = assign(socket, :loading, true)
+
+      case clear_all_user_votes(socket) do
+        {:ok, _} ->
+          send(self(), {:votes_cleared})
+          {:noreply,
+           socket
+           |> assign(:loading, false)
+           |> assign(:vote_state, %{})
+           |> assign(:ranked_options, [])}
+        {:error, _} ->
+          send(self(), {:show_error, "Failed to clear votes"})
+          {:noreply, assign(socket, :loading, false)}
+      end
     end
-
-    send(self(), {:all_votes_cleared})
-    {:noreply, assign(socket, :vote_state, empty_state)}
   end
 
-  # Private helper functions
+  # Anonymous vote handlers
 
+  defp handle_anonymous_binary_vote(socket, option_id, vote) do
+    new_vote_state = Map.put(socket.assigns.vote_state, option_id, vote)
+    new_temp_votes = Map.put(socket.assigns.temp_votes, option_id, vote)
+
+    send(self(), {:temp_votes_updated, socket.assigns.poll.id, new_temp_votes})
+
+    {:noreply,
+     socket
+     |> assign(:vote_state, new_vote_state)
+     |> assign(:temp_votes, new_temp_votes)}
+  end
+
+  defp handle_anonymous_approval_vote(socket, option_id) do
+    current_vote = socket.assigns.vote_state[option_id]
+    new_vote = if current_vote == "approved", do: nil, else: "approved"
+
+    new_vote_state = if new_vote do
+      Map.put(socket.assigns.vote_state, option_id, new_vote)
+    else
+      Map.delete(socket.assigns.vote_state, option_id)
+    end
+
+    new_temp_votes = if new_vote do
+      Map.put(socket.assigns.temp_votes, option_id, "selected")
+    else
+      Map.delete(socket.assigns.temp_votes, option_id)
+    end
+
+    send(self(), {:temp_votes_updated, socket.assigns.poll.id, new_temp_votes})
+
+    {:noreply,
+     socket
+     |> assign(:vote_state, new_vote_state)
+     |> assign(:temp_votes, new_temp_votes)}
+  end
+
+  defp handle_anonymous_star_vote(socket, option_id, rating) do
+    new_vote_state = Map.put(socket.assigns.vote_state, option_id, rating)
+    new_temp_votes = Map.put(socket.assigns.temp_votes, option_id, rating)
+
+    send(self(), {:temp_votes_updated, socket.assigns.poll.id, new_temp_votes})
+
+    {:noreply,
+     socket
+     |> assign(:vote_state, new_vote_state)
+     |> assign(:temp_votes, new_temp_votes)}
+  end
+
+  defp handle_anonymous_clear_star_vote(socket, option_id) do
+    new_vote_state = Map.delete(socket.assigns.vote_state, option_id)
+    new_temp_votes = Map.delete(socket.assigns.temp_votes, option_id)
+
+    send(self(), {:temp_votes_updated, socket.assigns.poll.id, new_temp_votes})
+
+    {:noreply,
+     socket
+     |> assign(:vote_state, new_vote_state)
+     |> assign(:temp_votes, new_temp_votes)}
+  end
+
+  # Authenticated vote handlers
+
+  defp handle_authenticated_binary_vote(socket, option_id, vote_value) do
+    socket = assign(socket, :loading, true)
+
+    case submit_binary_vote(socket, option_id, vote_value) do
+      {:ok, _vote} ->
+        new_vote_state = Map.put(socket.assigns.vote_state, option_id, vote_value)
+        send(self(), {:vote_cast, option_id, vote_value})
+
+        {:noreply,
+         socket
+         |> assign(:loading, false)
+         |> assign(:vote_state, new_vote_state)}
+
+      {:error, _} ->
+        send(self(), {:show_error, "Failed to cast vote"})
+        {:noreply, assign(socket, :loading, false)}
+    end
+  end
+
+  defp handle_authenticated_approval_vote(socket, option_id) do
+    current_vote = socket.assigns.vote_state[option_id]
+    new_vote = if current_vote == "approved", do: nil, else: "approved"
+
+    socket = assign(socket, :loading, true)
+
+    case submit_approval_vote(socket, option_id, new_vote) do
+      {:ok, _} ->
+        new_vote_state = if new_vote do
+          Map.put(socket.assigns.vote_state, option_id, new_vote)
+        else
+          Map.delete(socket.assigns.vote_state, option_id)
+        end
+
+        send(self(), {:vote_cast, option_id, new_vote})
+
+        {:noreply,
+         socket
+         |> assign(:loading, false)
+         |> assign(:vote_state, new_vote_state)}
+
+      {:error, :option_not_found} ->
+        send(self(), {:show_error, "Option not found"})
+        {:noreply, assign(socket, :loading, false)}
+
+      {:error, _} ->
+        send(self(), {:show_error, "Failed to update vote"})
+        {:noreply, assign(socket, :loading, false)}
+    end
+  end
+
+  defp handle_authenticated_star_vote(socket, option_id, rating) do
+    socket = assign(socket, :loading, true)
+
+    case submit_star_vote(socket, option_id, rating) do
+      {:ok, _vote} ->
+        new_vote_state = Map.put(socket.assigns.vote_state, option_id, rating)
+        send(self(), {:vote_cast, option_id, rating})
+
+        {:noreply,
+         socket
+         |> assign(:loading, false)
+         |> assign(:vote_state, new_vote_state)}
+
+      {:error, :option_not_found} ->
+        send(self(), {:show_error, "Option not found"})
+        {:noreply, assign(socket, :loading, false)}
+
+      {:error, _} ->
+        send(self(), {:show_error, "Failed to cast vote"})
+        {:noreply, assign(socket, :loading, false)}
+    end
+  end
+
+  defp handle_authenticated_clear_star_vote(socket, option_id) do
+    case clear_vote(socket, option_id) do
+      {:ok, _} ->
+        new_vote_state = Map.delete(socket.assigns.vote_state, option_id)
+        send(self(), {:vote_cleared, option_id})
+
+        {:noreply, assign(socket, :vote_state, new_vote_state)}
+
+      {:error, _} ->
+        send(self(), {:show_error, "Failed to clear vote"})
+        {:noreply, socket}
+    end
+  end
+
+  # Helper functions
+
+  defp initialize_anonymous_vote_state(poll, temp_votes) do
+    case poll.voting_system do
+      "binary" -> temp_votes
+      "approval" ->
+        for {option_id, _} <- temp_votes, into: %{} do
+          {option_id, "approved"}
+        end
+      "star" -> temp_votes
+      "ranked" ->
+        case temp_votes do
+          %{poll_type: :ranked, votes: votes} when is_list(votes) ->
+            for %{option_id: option_id, rank: rank} <- votes, into: %{} do
+              {option_id, rank}
+            end
+          %{poll_type: :ranked, votes: votes} when is_map(votes) ->
+            votes
+          _ -> %{}
+        end
+    end
+  end
+
+  defp initialize_anonymous_ranked_options(poll_options, temp_votes) do
+    case temp_votes do
+      %{poll_type: :ranked, votes: votes} when is_list(votes) ->
+        # Sort by rank and find corresponding options
+        votes
+        |> Enum.sort_by(& &1.rank)
+        |> Enum.map(fn %{option_id: option_id} ->
+          Enum.find(poll_options, &(&1.id == option_id))
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      %{poll_type: :ranked, votes: votes} when is_map(votes) ->
+        # Convert map format to list and sort by rank
+        votes
+        |> Enum.sort_by(fn {_option_id, rank} -> rank end)
+        |> Enum.map(fn {option_id, _rank} ->
+          Enum.find(poll_options, &(&1.id == option_id))
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      _ -> []
+    end
+  end
+
+  defp has_temp_votes?(temp_votes, _voting_system) do
+    case temp_votes do
+      %{poll_type: :ranked, votes: votes} when is_list(votes) ->
+        length(votes) > 0
+      %{poll_type: :ranked, votes: votes} when is_map(votes) ->
+        map_size(votes) > 0
+      votes when is_map(votes) ->
+        map_size(votes) > 0
+      _ -> false
+    end
+  end
+
+  defp update_temp_votes_for_ranked(temp_votes, ranked_options, voting_system) do
+    case voting_system do
+      "ranked" ->
+        ranked_votes = ranked_options
+        |> Enum.with_index(1)
+        |> Enum.map(fn {option, rank} ->
+          %{option_id: option.id, rank: rank}
+        end)
+
+        %{
+          poll_type: :ranked,
+          votes: ranked_votes
+        }
+      _ -> temp_votes
+    end
+  end
+
+  # Existing helper functions...
   defp initialize_vote_state(poll, user_votes) do
     case poll.voting_system do
       "binary" ->
         user_votes
-        |> Enum.reduce(%{}, fn vote, acc ->
-          Map.put(acc, vote.poll_option_id, vote.vote_value)
-        end)
+        |> Enum.map(fn vote -> {vote.poll_option_id, vote.vote_value} end)
+        |> Map.new()
 
       "approval" ->
         user_votes
-        |> Enum.reduce(%{}, fn vote, acc ->
-          Map.put(acc, vote.poll_option_id, "approved")
-        end)
+        |> Enum.map(fn vote -> {vote.poll_option_id, "approved"} end)
+        |> Map.new()
 
       "star" ->
         user_votes
-        |> Enum.reduce(%{}, fn vote, acc ->
-          rating = case vote.vote_numeric do
-            %Decimal{} = decimal -> Decimal.to_integer(decimal)
-            nil -> 0
-            other when is_integer(other) -> other
-            _ -> 0
-          end
-          Map.put(acc, vote.poll_option_id, rating)
-        end)
+        |> Enum.map(fn vote -> {vote.poll_option_id, vote.vote_numeric} end)
+        |> Map.new()
 
       "ranked" ->
-        # For ranked voting, we manage state differently
-        %{}
+        user_votes
+        |> Enum.map(fn vote -> {vote.poll_option_id, vote.vote_rank} end)
+        |> Map.new()
     end
   end
 
   defp initialize_ranked_options(poll_options, user_votes) do
-    # Create a lookup map for better performance
-    options_map = Map.new(poll_options, &{&1.id, &1})
+    options_map = poll_options |> Enum.map(&{&1.id, &1}) |> Map.new()
 
-    # Sort user votes by rank and return corresponding options
     user_votes
     |> Enum.sort_by(& &1.vote_rank)
     |> Enum.map(fn vote ->
@@ -681,13 +1052,13 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
   end
 
-  defp submit_ranked_votes(socket) do
+  defp submit_ranked_votes(socket, ranked_options) do
     # Prepare ranked options with their ranks
-    ranked_options = socket.assigns.ranked_options
+    ranked_options_with_ranks = ranked_options
     |> Enum.with_index(1)
     |> Enum.map(fn {option, rank} -> {option.id, rank} end)
 
-    Events.cast_ranked_votes(socket.assigns.poll, ranked_options, socket.assigns.user)
+    Events.cast_ranked_votes(socket.assigns.poll, ranked_options_with_ranks, socket.assigns.user)
   end
 
   defp clear_vote(socket, option_id) do
@@ -697,8 +1068,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
   end
 
-  defp find_poll_option(socket, option_id) do
-    Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id))
+  defp find_poll_option(socket_or_assigns, option_id) do
+    poll_options = case socket_or_assigns do
+      %Phoenix.LiveView.Socket{assigns: %{poll: %{poll_options: options}}} -> options
+      %{poll: %{poll_options: options}} -> options
+      _ -> []
+    end
+
+    Enum.find(poll_options, &(&1.id == option_id))
   end
 
   defp clear_all_user_votes(socket) do
@@ -708,6 +1085,30 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp get_unranked_options(all_options, ranked_options) do
     ranked_ids = Enum.map(ranked_options, & &1.id)
     Enum.reject(all_options, &(&1.id in ranked_ids))
+  end
+
+  defp move_option_up(ranked_options, option_id) do
+    case Enum.find_index(ranked_options, &(&1.id == option_id)) do
+      0 -> ranked_options  # Already at top
+      nil -> ranked_options  # Option not found
+      index ->
+        ranked_options
+        |> List.pop_at(index)
+        |> elem(1)
+        |> List.insert_at(index - 1, Enum.at(ranked_options, index))
+    end
+  end
+
+  defp move_option_down(ranked_options, option_id) do
+    case Enum.find_index(ranked_options, &(&1.id == option_id)) do
+      nil -> ranked_options  # Option not found
+      index when index == length(ranked_options) - 1 -> ranked_options  # Already at bottom
+      index ->
+        ranked_options
+        |> List.pop_at(index)
+        |> elem(1)
+        |> List.insert_at(index + 1, Enum.at(ranked_options, index))
+    end
   end
 
   # UI Helper Functions
@@ -730,53 +1131,55 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
   end
 
-  defp binary_button_class(current_vote, vote_type) do
+  defp binary_button_class(current_vote, vote_type, anonymous_mode) do
     base_classes = "inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
 
     if current_vote == vote_type do
-      case vote_type do
-        "yes" -> base_classes <> " border-green-500 text-green-700 bg-green-50"
-        "no" -> base_classes <> " border-red-500 text-red-700 bg-red-50"
-        "maybe" -> base_classes <> " border-yellow-500 text-yellow-700 bg-yellow-50"
+      active_classes = case vote_type do
+        "yes" -> " border-green-500 text-green-700 bg-green-50"
+        "no" -> " border-red-500 text-red-700 bg-red-50"
+        "maybe" -> " border-yellow-500 text-yellow-700 bg-yellow-50"
+      end
+
+      # Add subtle indicator for anonymous mode
+      if anonymous_mode do
+        base_classes <> active_classes <> " ring-2 ring-blue-200"
+      else
+        base_classes <> active_classes
       end
     else
       base_classes <> " border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
     end
   end
 
-  defp star_class(current_rating, star_position) do
-    base_classes = "text-gray-300 hover:text-yellow-400 focus:outline-none"
+  defp approval_checkbox_class(current_vote, anonymous_mode) do
+    base_classes = "h-4 w-4 border-gray-300 rounded focus:ring-indigo-500"
+
+    if anonymous_mode and current_vote == "approved" do
+      base_classes <> " text-blue-600 focus:ring-blue-500"
+    else
+      base_classes <> " text-indigo-600 focus:ring-indigo-500"
+    end
+  end
+
+  defp star_class(current_rating, star_position, anonymous_mode) do
+    base_classes = "focus:outline-none"
 
     if current_rating && current_rating >= star_position do
-      "text-yellow-400 " <> base_classes
+      if anonymous_mode do
+        base_classes <> " text-blue-400 hover:text-blue-500"
+      else
+        base_classes <> " text-yellow-400 hover:text-yellow-500"
+      end
     else
-      base_classes
+      base_classes <> " text-gray-300 hover:text-yellow-400"
     end
   end
 
   defp has_votes?(vote_state, voting_system) do
     case voting_system do
-      "ranked" -> false  # Managed separately
-      _ -> !Enum.empty?(vote_state)
-    end
-  end
-
-  defp get_vote_summary_text(vote_state, voting_system) do
-    case voting_system do
-      "binary" ->
-        vote_count = Enum.count(vote_state)
-        if vote_count == 0, do: "No votes cast", else: "#{vote_count} votes cast"
-
-      "approval" ->
-        approved_count = Enum.count(vote_state)
-        if approved_count == 0, do: "No options selected", else: "#{approved_count} options approved"
-
-      "star" ->
-        rated_count = Enum.count(vote_state)
-        if rated_count == 0, do: "No ratings given", else: "#{rated_count} options rated"
-
-      "ranked" ->
-        "Add options to ranking and use arrows to reorder"
+      "ranked" -> map_size(vote_state) > 0
+      _ -> map_size(vote_state) > 0
     end
   end
 
@@ -791,12 +1194,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
   end
 
-  defp safe_string_to_integer(str) when is_binary(str) do
-    case Integer.parse(str) do
+  defp safe_string_to_integer(string) do
+    case Integer.parse(string) do
       {int, ""} -> {:ok, int}
       _ -> {:error, :invalid_integer}
     end
   end
-
-  defp safe_string_to_integer(_), do: {:error, :invalid_input}
 end

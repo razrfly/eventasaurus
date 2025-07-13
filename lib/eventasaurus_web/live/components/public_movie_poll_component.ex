@@ -4,6 +4,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   Shows existing movie options and allows users to add their own suggestions
   during the list_building phase, or vote during the voting phase.
+  Supports both authenticated and anonymous voting.
   """
 
   use EventasaurusWeb, :live_component
@@ -47,12 +48,16 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       end
     end)
 
+    # Get temp votes for this poll (for anonymous users)
+    temp_votes = assigns[:temp_votes] || %{}
+
     {:ok,
      socket
      |> assign(assigns)
      |> assign(:movie_poll, movie_poll)
      |> assign(:movie_options, movie_options)
      |> assign(:user_votes, user_votes)
+     |> assign(:temp_votes, temp_votes)
      |> assign(:showing_add_form, false)
      |> assign(:search_query, "")
      |> assign(:search_results, [])
@@ -64,6 +69,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     %{current_user: user, movie_poll: poll} = socket.assigns
 
     if user do
+      # Authenticated user - handle normal vote
       # Validate option_id is a valid integer
       case Integer.parse(option_id) do
         {parsed_option_id, ""} ->
@@ -93,8 +99,41 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
           {:noreply, socket}
       end
     else
-      {:noreply, socket}
+      # Anonymous user - handle temp vote
+      case Integer.parse(option_id) do
+        {parsed_option_id, ""} ->
+          # Update temp votes for this option
+          updated_temp_votes = Map.put(socket.assigns.temp_votes, parsed_option_id, vote_value)
+
+          # Send update to parent LiveView
+          send(self(), {:temp_votes_updated, poll.id, updated_temp_votes})
+
+          {:noreply, assign(socket, :temp_votes, updated_temp_votes)}
+
+        _ ->
+          {:noreply, socket}
+      end
     end
+  end
+
+  def handle_event("clear_temp_votes", _params, socket) do
+    %{movie_poll: poll} = socket.assigns
+
+    # Clear temp votes
+    send(self(), {:temp_votes_updated, poll.id, %{}})
+
+    {:noreply, assign(socket, :temp_votes, %{})}
+  end
+
+  def handle_event("save_votes", _params, socket) do
+    %{movie_poll: poll, temp_votes: temp_votes} = socket.assigns
+
+    if map_size(temp_votes) > 0 do
+      # Send save request to parent LiveView
+      send(self(), {:show_anonymous_voter_modal, poll.id, temp_votes})
+    end
+
+    {:noreply, socket}
   end
 
   def handle_event("show_add_form", _params, socket) do
@@ -351,20 +390,23 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                       <% end %>
 
                       <!-- Voting buttons for movie polls in voting phase -->
-                      <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] && @current_user do %>
+                      <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
                         <div class="flex space-x-2 mt-3">
+                          <% current_vote = if @current_user, do: get_user_vote(option.id, @user_votes), else: Map.get(@temp_votes, option.id) %>
+                          <% temp_vote_badge = if !@current_user && Map.get(@temp_votes, option.id), do: "📝", else: "" %>
+
                           <button
                             type="button"
                             phx-click="cast_binary_vote"
                             phx-value-option-id={option.id}
                             phx-value-vote="yes"
                             phx-target={@myself}
-                            class={binary_button_class(get_user_vote(option.id, @user_votes), "yes")}
+                            class={binary_button_class(current_vote, "yes")}
                           >
                             <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                             </svg>
-                            Yes
+                            Yes <%= if current_vote == "yes" && !@current_user, do: temp_vote_badge %>
                           </button>
 
                           <button
@@ -373,12 +415,12 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                             phx-value-option-id={option.id}
                             phx-value-vote="maybe"
                             phx-target={@myself}
-                            class={binary_button_class(get_user_vote(option.id, @user_votes), "maybe")}
+                            class={binary_button_class(current_vote, "maybe")}
                           >
                             <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            Maybe
+                            Maybe <%= if current_vote == "maybe" && !@current_user, do: temp_vote_badge %>
                           </button>
 
                           <button
@@ -387,12 +429,12 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                             phx-value-option-id={option.id}
                             phx-value-vote="no"
                             phx-target={@myself}
-                            class={binary_button_class(get_user_vote(option.id, @user_votes), "no")}
+                            class={binary_button_class(current_vote, "no")}
                           >
                             <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                             </svg>
-                            No
+                            No <%= if current_vote == "no" && !@current_user, do: temp_vote_badge %>
                           </button>
                         </div>
                       <% end %>
@@ -408,6 +450,45 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
               </svg>
               <p class="font-medium">No movies suggested yet</p>
               <p class="text-sm">Be the first to add a movie suggestion!</p>
+            </div>
+          <% end %>
+
+          <!-- Anonymous Voting Status and Save Button -->
+          <%= if !@current_user && @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] && map_size(@temp_votes) > 0 do %>
+            <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div class="flex items-start">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div class="ml-3 flex-1">
+                  <p class="text-sm text-blue-700">
+                    Your votes are temporarily stored. Save them to participate!
+                  </p>
+                </div>
+              </div>
+              <div class="mt-4 flex space-x-3">
+                <button
+                  type="button"
+                  phx-click="save_votes"
+                  phx-target={@myself}
+                  class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  Save My Votes
+                </button>
+                <button
+                  type="button"
+                  phx-click="clear_temp_votes"
+                  phx-target={@myself}
+                  class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Clear All Votes
+                </button>
+              </div>
             </div>
           <% end %>
 
