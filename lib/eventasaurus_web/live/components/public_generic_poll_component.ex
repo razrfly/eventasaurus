@@ -414,7 +414,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
               <!-- Show login prompt for anonymous users -->
               <div class="mt-4">
                 <p class="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
-                  Please log in to suggest options.
+                  Please <.link href="/login" class="text-blue-600 hover:underline">log in</.link> to suggest options.
                 </p>
               </div>
             <% end %>
