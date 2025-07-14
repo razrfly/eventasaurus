@@ -54,9 +54,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(:show, false)
      |> assign(:poll, nil)
      |> assign(:show_advanced_options, false)
-     |> assign(:show_voting_guidelines, false)
-     |> assign(:showing_calendar, false)
-     |> assign(:selected_dates, [])}
+     |> assign(:show_voting_guidelines, false)}
   end
 
   @impl true
@@ -87,9 +85,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(:voting_systems, @voting_systems)
      |> assign_new(:loading, fn -> false end)
      |> assign_new(:show, fn -> false end)
-     |> assign_new(:show_voting_guidelines, fn -> false end)
-     |> assign_new(:showing_calendar, fn -> false end)
-     |> assign_new(:selected_dates, fn -> [] end)}
+     |> assign_new(:show_voting_guidelines, fn -> false end)}
   end
 
   @impl true
@@ -356,108 +352,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                 </div>
               </div>
 
-              <!-- Date Selection Interface (conditional) -->
-              <%= if Phoenix.HTML.Form.input_value(f, :poll_type) == "date_selection" do %>
-                <div class="border-t pt-6">
-                  <h4 class="text-sm font-medium text-gray-900 mb-4">
-                    📅 Select Available Dates
-                  </h4>
-                  <p class="text-sm text-gray-600 mb-4">
-                    Choose the dates that people can vote on. You can select multiple dates and add more later.
-                  </p>
 
-                  <!-- Calendar Component Integration -->
-                  <div class="bg-gray-50 rounded-lg p-4" id="date-selection-preview">
-                    <div class="flex items-center justify-between mb-3">
-                      <span class="text-sm font-medium text-gray-700">Available Dates</span>
-                      <button
-                        type="button"
-                        phx-click="toggle_calendar"
-                        phx-target={@myself}
-                        class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-                      >
-                        <%= if @showing_calendar, do: "Hide Calendar", else: "Show Calendar" %>
-                      </button>
-                    </div>
-
-                    <!-- Selected Dates Preview -->
-                    <%= if length(@selected_dates) > 0 do %>
-                      <div class="flex flex-wrap gap-2 mb-3">
-                        <%= for date <- @selected_dates do %>
-                          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                            <%= format_date_for_display(date) %>
-                            <button
-                              type="button"
-                              phx-click="remove_date"
-                              phx-value-date={Date.to_iso8601(date)}
-                              phx-target={@myself}
-                              class="ml-2 text-indigo-600 hover:text-indigo-800"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        <% end %>
-                      </div>
-                    <% else %>
-                      <p class="text-sm text-gray-500 mb-3">
-                        No dates selected yet. Click "Show Calendar" to select dates.
-                      </p>
-                    <% end %>
-
-                    <!-- Calendar Interface -->
-                    <%= if @showing_calendar do %>
-                      <div class="border border-gray-200 rounded-lg bg-white p-4">
-                        <.live_component
-                          module={EventasaurusWeb.CalendarComponent}
-                          id="poll-creation-calendar"
-                          selected_dates={@selected_dates}
-                          year={Date.utc_today().year}
-                          month={Date.utc_today().month}
-                          compact={true}
-                          allow_multiple={true}
-                          min_date={Date.utc_today()}
-                          on_date_select="calendar_date_selected"
-                          target={@myself}
-                        />
-                      </div>
-                    <% end %>
-
-                    <!-- Quick Date Options -->
-                    <div class="mt-3 pt-3 border-t border-gray-200">
-                      <span class="text-xs font-medium text-gray-700 mb-2 block">Quick Add:</span>
-                      <div class="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          phx-click="add_quick_date"
-                          phx-value-type="tomorrow"
-                          phx-target={@myself}
-                          class="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          Tomorrow
-                        </button>
-                        <button
-                          type="button"
-                          phx-click="add_quick_date"
-                          phx-value-type="next_weekend"
-                          phx-target={@myself}
-                          class="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          Next Weekend
-                        </button>
-                        <button
-                          type="button"
-                          phx-click="add_quick_date"
-                          phx-value-type="next_week"
-                          phx-target={@myself}
-                          class="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          Next Week
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
 
               <!-- Form Actions -->
               <div class="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0 sm:justify-end">
@@ -515,66 +410,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
     {:noreply, assign(socket, :changeset, changeset)}
   end
 
-  # Calendar functionality event handlers
-  @impl true
-  def handle_event("toggle_calendar", _params, socket) do
-    {:noreply, assign(socket, :showing_calendar, !socket.assigns.showing_calendar)}
-  end
 
-  @impl true
-  def handle_event("calendar_date_selected", %{"date" => date_string}, socket) do
-    case Date.from_iso8601(date_string) do
-      {:ok, date} ->
-        updated_dates = if date in socket.assigns.selected_dates do
-          List.delete(socket.assigns.selected_dates, date)
-        else
-          [date | socket.assigns.selected_dates] |> Enum.sort()
-        end
-        {:noreply, assign(socket, :selected_dates, updated_dates)}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_event("remove_date", %{"date" => date_string}, socket) do
-    case Date.from_iso8601(date_string) do
-      {:ok, date} ->
-        updated_dates = List.delete(socket.assigns.selected_dates, date)
-        {:noreply, assign(socket, :selected_dates, updated_dates)}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_event("add_quick_date", %{"type" => type}, socket) do
-    today = Date.utc_today()
-
-    new_date = case type do
-      "tomorrow" -> Date.add(today, 1)
-      "next_weekend" ->
-        # Find next Saturday
-        days_until_saturday = case Date.day_of_week(today) do
-          6 -> 7 # Saturday, get next Saturday
-          7 -> 6 # Sunday, get next Saturday
-          day_of_week -> 6 - day_of_week # Other days
-        end
-        Date.add(today, days_until_saturday)
-      "next_week" -> Date.add(today, 7)
-      _ -> today
-    end
-
-    updated_dates = if new_date in socket.assigns.selected_dates do
-      socket.assigns.selected_dates
-    else
-      [new_date | socket.assigns.selected_dates] |> Enum.sort()
-    end
-
-    {:noreply, assign(socket, :selected_dates, updated_dates)}
-  end
 
   @impl true
   def handle_event("submit_poll", %{"poll" => poll_params}, socket) do
@@ -582,11 +418,6 @@ defmodule EventasaurusWeb.PollCreationComponent do
 
     case save_poll(socket, poll_params) do
       {:ok, poll} ->
-        # If this is a date_selection poll, create the date options
-        if poll_params["poll_type"] == "date_selection" and length(socket.assigns.selected_dates) > 0 do
-          create_date_options_for_poll(poll, socket.assigns.selected_dates)
-        end
-
         message = if socket.assigns.is_editing, do: "Poll updated successfully!", else: "Poll created successfully!"
         send(self(), {:poll_saved, poll, message})
         {:noreply, socket}
@@ -646,57 +477,5 @@ defmodule EventasaurusWeb.PollCreationComponent do
     end
   end
 
-  defp create_date_options_for_poll(poll, selected_dates) do
-    # Create poll options for each selected date using our new date poll functions
-    # Get the user who created the poll
-    user = EventasaurusApp.Accounts.get_user!(poll.created_by_id)
 
-    Enum.each(selected_dates, fn date ->
-      Events.create_date_poll_option(poll, user, date, %{
-        "source" => "poll_creation_calendar",
-        "created_at" => DateTime.utc_now()
-      })
-    end)
-  end
-
-  defp format_date_for_display(date) do
-    case date do
-      %Date{} ->
-        # Format as "Mon, Jan 15, 2024"
-        day_name = day_of_week_name(Date.day_of_week(date))
-        month_name = month_name(date.month)
-        "#{day_name}, #{month_name} #{date.day}, #{date.year}"
-      _ ->
-        to_string(date)
-    end
-  end
-
-  defp day_of_week_name(day) do
-    case day do
-      1 -> "Mon"
-      2 -> "Tue"
-      3 -> "Wed"
-      4 -> "Thu"
-      5 -> "Fri"
-      6 -> "Sat"
-      7 -> "Sun"
-    end
-  end
-
-  defp month_name(month) do
-    case month do
-      1 -> "Jan"
-      2 -> "Feb"
-      3 -> "Mar"
-      4 -> "Apr"
-      5 -> "May"
-      6 -> "Jun"
-      7 -> "Jul"
-      8 -> "Aug"
-      9 -> "Sep"
-      10 -> "Oct"
-      11 -> "Nov"
-      12 -> "Dec"
-    end
-  end
 end
