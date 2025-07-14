@@ -1220,13 +1220,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("submit_suggestion", %{"poll_option" => option_params}, socket) do
     socket = assign(socket, :loading, true)
 
-    # DEBUG: Log submission details
-    IO.puts("\n=== SUBMIT_SUGGESTION DEBUG ===")
-    IO.puts("Poll type: #{socket.assigns.poll.poll_type}")
-    IO.puts("Selected dates: #{inspect(socket.assigns.selected_dates)}")
-    IO.puts("Selected dates length: #{length(socket.assigns.selected_dates || [])}")
-    IO.puts("Option params: #{inspect(option_params)}")
-    IO.puts("================================\n")
+    # Log submission for debugging if needed
+    require Logger
+    Logger.debug("Submitting suggestion for poll type: #{socket.assigns.poll.poll_type}, selected dates count: #{length(socket.assigns.selected_dates || [])}")
 
     # Special handling for date_selection polls
     if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
@@ -1248,17 +1244,12 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         })
 
         result = save_option(socket, date_params)
-        IO.puts("\n=== DATE SAVE RESULT DEBUG ===")
-        IO.puts("Date: #{selected_date}")
-        IO.puts("Result: #{inspect(result)}")
-        IO.puts("================================\n")
+        Logger.debug("Date save result: #{selected_date} -> #{inspect(result)}")
         result
       end)
 
-      # Debug the results
-      IO.puts("\n=== ALL RESULTS DEBUG ===")
-      IO.puts("All results: #{inspect(results)}")
-      IO.puts("================================\n")
+      # Log the batch save results
+      Logger.debug("Batch date save results: #{inspect(results)}")
 
       # Check if all saves were successful
       successful_options = results
@@ -1272,11 +1263,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
       failed_count = length(results) - length(successful_options)
 
-      IO.puts("\n=== SUCCESS CHECK DEBUG ===")
-      IO.puts("Total dates: #{length(socket.assigns.selected_dates)}")
-      IO.puts("Successful saves: #{length(successful_options)}")
-      IO.puts("Failed saves: #{failed_count}")
-      IO.puts("================================\n")
+      Logger.debug("Date saves completed: #{length(successful_options)}/#{length(socket.assigns.selected_dates)} successful, #{failed_count} failed")
 
       if length(successful_options) == length(socket.assigns.selected_dates) do
         # All dates saved successfully
@@ -1323,12 +1310,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
             {date, changeset}
           end)
 
-        IO.puts("\n=== FAILED SAVES DEBUG ===")
-        Enum.each(failed_results, fn {date, changeset} ->
-          IO.puts("Failed to save date: #{date}")
-          IO.puts("Errors: #{inspect(changeset.errors)}")
-        end)
-        IO.puts("================================\n")
+        Logger.error("Failed to save dates: #{inspect(failed_results |> Enum.map(fn {date, changeset} -> {date, changeset.errors} end))}")
 
         {:noreply,
          socket
@@ -1625,13 +1607,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           [date]
         end
 
-        # DEBUG: Log date selection
-        IO.puts("\n=== TOGGLE_DATE DEBUG ===")
-        IO.puts("Date string: #{date_string}")
-        IO.puts("Parsed date: #{inspect(date)}")
-        IO.puts("Current dates: #{inspect(current_dates)}")
-        IO.puts("Updated dates: #{inspect(updated_dates)}")
-        IO.puts("========================\n")
+        # Log date toggle for debugging
+        Logger.debug("Date toggled: #{date_string} -> #{inspect(updated_dates)}")
 
         {:noreply, assign(socket, :selected_dates, updated_dates)}
 
@@ -1667,7 +1644,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       Map.merge(option_params, %{
         "title" => format_date_for_option_title(selected_date),
         "description" => option_params["description"] || "",
-        "metadata" => Jason.encode!(date_metadata)
+        "metadata" => date_metadata  # Pass as map, not JSON string!
       })
     else
       option_params

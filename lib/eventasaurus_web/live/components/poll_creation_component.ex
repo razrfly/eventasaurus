@@ -648,8 +648,11 @@ defmodule EventasaurusWeb.PollCreationComponent do
 
   defp create_date_options_for_poll(poll, selected_dates) do
     # Create poll options for each selected date using our new date poll functions
+    # Get the user who created the poll
+    user = EventasaurusApp.Accounts.get_user!(poll.created_by_id)
+
     Enum.each(selected_dates, fn date ->
-      Events.create_date_poll_option(poll, date, poll.created_by_id, %{
+      Events.create_date_poll_option(poll, user, date, %{
         "source" => "poll_creation_calendar",
         "created_at" => DateTime.utc_now()
       })
