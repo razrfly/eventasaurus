@@ -385,15 +385,56 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   end
 
   @doc """
-  Validate that a poll option contains valid date metadata.
+  Comprehensive validation function for date metadata in poll options.
+
+  This replaces the previous basic validation with thorough checks
+  using the new DateMetadata embedded schema.
   """
-  def validate_date_option(%PollOption{metadata: metadata} = option) when is_map(metadata) do
-    with {:ok, _date} <- extract_date_from_option(option) do
-      {:ok, option}
-    else
+  def validate_date_metadata(%PollOption{} = option) do
+    case option.metadata do
+      nil ->
+        {:error, "No metadata found in poll option"}
+      metadata when is_map(metadata) ->
+        # Use our comprehensive DateMetadata validation
+        alias EventasaurusApp.Events.DateMetadata
+
+        case DateMetadata.validate_metadata_structure(metadata) do
+          :ok ->
+            changeset = DateMetadata.changeset(%DateMetadata{}, metadata)
+            if changeset.valid? do
+              {:ok, option}
+            else
+              errors = Enum.map(changeset.errors, fn {field, {message, _opts}} ->
+                "#{field}: #{message}"
+              end)
+              {:error, "Invalid date metadata - #{Enum.join(errors, ", ")}"}
+            end
+          {:error, reason} ->
+            {:error, "Metadata structure validation failed: #{reason}"}
+        end
+      _ ->
+        {:error, "Metadata must be a valid map"}
+    end
+  end
+
+  @doc """
+  Enhanced validation function that checks both basic option validity
+  and date metadata integrity for date_selection polls.
+  """
+  def validate_date_option(%PollOption{} = option) do
+    # Use our comprehensive validation that checks both structure and content
+    case validate_date_metadata(option) do
+      {:ok, validated_option} ->
+        # Additional legacy compatibility check
+        case extract_date_from_option(validated_option) do
+          {:ok, _date} -> {:ok, validated_option}
+          {:error, reason} ->
+            Logger.warning("Date extraction failed for option #{option.id}: #{reason}")
+            {:error, "Invalid date metadata in option"}
+        end
       {:error, reason} ->
-        Logger.warning("Invalid date option #{option.id}: #{reason}")
-        {:error, "Invalid date metadata in option"}
+        Logger.warning("Date metadata validation failed for option #{option.id}: #{reason}")
+        {:error, reason}
     end
   end
 
