@@ -6249,73 +6249,80 @@ defmodule EventasaurusApp.Events do
     all_day = Keyword.get(opts, :all_day, not time_enabled)
     timezone = Keyword.get(opts, :timezone, "UTC")
 
-    # Validate time slots if time is enabled
-    if time_enabled and length(time_slots) > 0 do
-      case validate_time_slots(time_slots) do
-        :ok -> :ok
-        {:error, reasons} ->
+    # Validate time slots if time is enabled - return early on error
+    with :ok <- validate_time_slots_if_enabled(time_enabled, time_slots) do
+      # Build enhanced metadata with time support
+      enhanced_opts = opts
+      |> Keyword.put(:time_enabled, time_enabled)
+      |> Keyword.put(:time_slots, time_slots)
+      |> Keyword.put(:all_day, all_day)
+
+      # Ensure time slots have proper timezone and display
+      enhanced_time_slots = if time_enabled and length(time_slots) > 0 do
+        Enum.map(time_slots, fn slot ->
+          slot
+          |> Map.put_new("timezone", timezone)
+          |> Map.put_new("display", generate_time_range_display(slot["start_time"], slot["end_time"]))
+        end)
+      else
+        []
+      end
+
+      final_opts = Keyword.put(enhanced_opts, :time_slots, enhanced_time_slots)
+
+      try do
+        metadata = DateMetadata.build_date_metadata(date, final_opts)
+
+        # Parse date for title generation
+        parsed_date = case date do
+          %Date{} = d -> d
+          date_string -> Date.from_iso8601!(date_string)
+        end
+
+        # Generate enhanced title including time information
+        title = if time_enabled and length(enhanced_time_slots) > 0 do
+          time_display = enhanced_time_slots
+          |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
+          |> Enum.join(", ")
+
+          base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
+          "#{base_title} - #{time_display}"
+        else
+          Keyword.get(opts, :title, format_date_for_display(parsed_date))
+        end
+
+        description = Keyword.get(opts, :description)
+
+        attrs = %{
+          "poll_id" => poll.id,
+          "suggested_by_id" => user.id,
+          "title" => title,
+          "description" => description,
+          "metadata" => metadata,
+          "status" => "active"
+        }
+
+        create_poll_option(attrs, poll_type: "date_selection")
+      rescue
+        e in ArgumentError ->
           changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
-          |> Ecto.Changeset.add_error(:metadata, "Invalid time slots: #{Enum.join(reasons, ", ")}")
+          |> Ecto.Changeset.add_error(:metadata, "Invalid date or time: #{e.message}")
           {:error, changeset}
       end
-    end
-
-    # Build enhanced metadata with time support
-    enhanced_opts = opts
-    |> Keyword.put(:time_enabled, time_enabled)
-    |> Keyword.put(:time_slots, time_slots)
-    |> Keyword.put(:all_day, all_day)
-
-    # Ensure time slots have proper timezone and display
-    enhanced_time_slots = if time_enabled and length(time_slots) > 0 do
-      Enum.map(time_slots, fn slot ->
-        slot
-        |> Map.put_new("timezone", timezone)
-        |> Map.put_new("display", generate_time_range_display(slot["start_time"], slot["end_time"]))
-      end)
     else
-      []
+      {:error, changeset} -> {:error, changeset}
     end
+  end
 
-    final_opts = Keyword.put(enhanced_opts, :time_slots, enhanced_time_slots)
-
-    try do
-      metadata = DateMetadata.build_date_metadata(date, final_opts)
-
-      # Parse date for title generation
-      parsed_date = case date do
-        %Date{} = d -> d
-        date_string -> Date.from_iso8601!(date_string)
-      end
-
-      # Generate enhanced title including time information
-      title = if time_enabled and length(enhanced_time_slots) > 0 do
-        time_display = enhanced_time_slots
-        |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
-        |> Enum.join(", ")
-
-        base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
-        "#{base_title} - #{time_display}"
-      else
-        Keyword.get(opts, :title, format_date_for_display(parsed_date))
-      end
-
-      description = Keyword.get(opts, :description)
-
-      attrs = %{
-        "poll_id" => poll.id,
-        "suggested_by_id" => user.id,
-        "title" => title,
-        "description" => description,
-        "metadata" => metadata,
-        "status" => "active"
-      }
-
-      create_poll_option(attrs, poll_type: "date_selection")
-    rescue
-      e in ArgumentError ->
+  # Helper function for conditional time slot validation
+  defp validate_time_slots_if_enabled(false, _), do: :ok
+  defp validate_time_slots_if_enabled(true, []), do: :ok
+  defp validate_time_slots_if_enabled(true, time_slots) do
+    case validate_time_slots(time_slots) do
+      :ok -> :ok
+      {:error, reasons} ->
         changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
-        |> Ecto.Changeset.add_error(:metadata, "Invalid date or time: #{e.message}")
+        |> Ecto.Changeset.add_error(:metadata, "Invalid time slots: #{Enum.join(reasons, ", ")}")
         {:error, changeset}
     end
   end
