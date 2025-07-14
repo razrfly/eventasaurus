@@ -1512,9 +1512,10 @@ defmodule EventasaurusApp.Events do
       vote ->
         case Repo.delete(vote) do
           {:ok, deleted_vote} ->
-            # Broadcast poll update
+            # Broadcast poll updates
             poll = Repo.get!(Poll, poll_option.poll_id)
             broadcast_poll_update(poll, :votes_updated)
+            broadcast_poll_stats_update(poll)
             {:ok, deleted_vote}
           error ->
             error
@@ -5058,8 +5059,9 @@ defmodule EventasaurusApp.Events do
           end
         end
 
-        # Broadcast update
+        # Broadcast updates
         broadcast_poll_update(poll, :votes_updated)
+        broadcast_poll_stats_update(poll)
         results
       end)
     end
@@ -5092,6 +5094,7 @@ defmodule EventasaurusApp.Events do
         case create_poll_vote(poll_option, user, %{vote_rank: rank}, "ranked") do
           {:ok, vote} ->
             broadcast_poll_update(poll, :votes_updated)
+            broadcast_poll_stats_update(poll)
             vote
           {:error, changeset} ->
             Repo.rollback(changeset)
@@ -5130,6 +5133,7 @@ defmodule EventasaurusApp.Events do
         end
 
         broadcast_poll_update(poll, :votes_updated)
+        broadcast_poll_stats_update(poll)
         results
       end)
     end
@@ -5161,6 +5165,7 @@ defmodule EventasaurusApp.Events do
 
     {count, _} = Repo.delete_all(query)
     broadcast_poll_update(poll, :votes_updated)
+    broadcast_poll_stats_update(poll)
     {:ok, count}
   end
 
@@ -5242,6 +5247,8 @@ defmodule EventasaurusApp.Events do
       case create_poll_vote(poll_option, user, vote_data, voting_system) do
         {:ok, vote} ->
           broadcast_poll_update(poll, :votes_updated)
+          # Broadcast enhanced statistics update
+          broadcast_poll_stats_update(poll)
           vote
         {:error, changeset} ->
           Repo.rollback(changeset)
@@ -6410,4 +6417,304 @@ defmodule EventasaurusApp.Events do
     end
   end
 
+  # =================
+  # Enhanced Poll Analytics (All Poll Types)
+  # =================
+
+  @doc """
+  Gets enhanced vote statistics for a poll option similar to legacy get_date_option_vote_tally().
+  Returns detailed breakdown with percentages and scores appropriate for the poll's voting system.
+  """
+  def get_poll_option_vote_tally(%PollOption{} = poll_option) do
+    poll = Repo.preload(poll_option, :poll).poll
+    votes = list_poll_votes(poll_option)
+
+    case poll.voting_system do
+      "binary" -> get_binary_option_tally(votes)
+      "approval" -> get_approval_option_tally(votes)
+      "star" -> get_star_option_tally(votes)
+      "ranked" -> get_ranked_option_tally(votes)
+      _ -> get_generic_option_tally(votes)
+    end
+  end
+
+  @doc """
+  Gets enhanced vote tallies for all options in a poll.
+  Similar to legacy get_poll_vote_tallies() but with rich statistics for all poll types.
+  """
+  def get_enhanced_poll_vote_tallies(%Poll{} = poll) do
+    poll_with_options = Repo.preload(poll, [poll_options: :votes])
+
+    options_with_tallies = poll_with_options.poll_options
+    |> Enum.map(fn option ->
+      %{
+        option: option,
+        tally: get_poll_option_vote_tally(option)
+      }
+    end)
+
+    # Sort by score (highest first) for all poll types
+    sorted_options = case poll.voting_system do
+      "ranked" ->
+        # For ranked voting, sort by average rank (lower is better)
+        Enum.sort_by(options_with_tallies, & &1.tally.average_rank, :asc)
+      _ ->
+        # For other types, sort by score (higher is better)
+        Enum.sort_by(options_with_tallies, & &1.tally.score, :desc)
+    end
+
+    %{
+      poll_id: poll.id,
+      poll_title: poll.title,
+      voting_system: poll.voting_system,
+      total_unique_voters: count_unique_voters(poll_with_options),
+      options_with_tallies: sorted_options
+    }
+  end
+
+  # Helper functions for different voting system tallies
+
+  defp get_binary_option_tally(votes) do
+    tally = Enum.reduce(votes, %{yes: 0, maybe: 0, no: 0, total: 0}, fn vote, acc ->
+      vote_type = case vote.vote_value do
+        "yes" -> :yes
+        "maybe" -> :maybe
+        "no" -> :no
+        _ -> :unknown
+      end
+
+      if vote_type != :unknown do
+        acc
+        |> Map.update!(vote_type, &(&1 + 1))
+        |> Map.update!(:total, &(&1 + 1))
+      else
+        acc
+      end
+    end)
+
+    # Calculate weighted score (yes: 1.0, maybe: 0.5, no: 0.0) - same as legacy
+    score = tally.yes * 1.0 + tally.maybe * 0.5
+    max_possible_score = if tally.total > 0, do: tally.total * 1.0, else: 1.0
+    percentage = if tally.total > 0, do: (score / max_possible_score) * 100, else: 0.0
+
+    # Calculate individual percentages
+    yes_percentage = if tally.total > 0, do: (tally.yes / tally.total) * 100, else: 0.0
+    maybe_percentage = if tally.total > 0, do: (tally.maybe / tally.total) * 100, else: 0.0
+    no_percentage = if tally.total > 0, do: (tally.no / tally.total) * 100, else: 0.0
+
+    Map.merge(tally, %{
+      score: score,
+      percentage: Float.round(percentage, 1),
+      yes_percentage: Float.round(yes_percentage, 1),
+      maybe_percentage: Float.round(maybe_percentage, 1),
+      no_percentage: Float.round(no_percentage, 1),
+      vote_distribution: [
+        %{type: "yes", count: tally.yes, percentage: yes_percentage},
+        %{type: "maybe", count: tally.maybe, percentage: maybe_percentage},
+        %{type: "no", count: tally.no, percentage: no_percentage}
+      ]
+    })
+  end
+
+  defp get_approval_option_tally(votes) do
+    total = length(votes)
+    selected = total  # In approval voting, all votes are "selected"
+
+    # Score is simply the number of selections
+    score = selected
+    # Percentage is how many people selected this option (calculated later relative to total poll voters)
+
+    %{
+      selected: selected,
+      total: total,
+      score: score,
+      percentage: 100.0,  # Will be recalculated relative to total poll voters
+      vote_distribution: [
+        %{type: "selected", count: selected, percentage: 100.0}
+      ]
+    }
+  end
+
+  defp get_star_option_tally(votes) do
+    total = length(votes)
+
+    if total == 0 do
+      %{
+        total: 0,
+        score: 0.0,
+        percentage: 0.0,
+        average_rating: 0.0,
+        rating_distribution: [],
+        vote_distribution: []
+      }
+    else
+      # Group votes by rating
+      rating_counts = Enum.reduce(votes, %{}, fn vote, acc ->
+        rating = vote.vote_numeric |> Decimal.to_float() |> round()
+        Map.update(acc, rating, 1, &(&1 + 1))
+      end)
+
+      # Calculate average rating
+      total_rating_sum = Enum.reduce(votes, 0, fn vote, sum ->
+        rating = vote.vote_numeric |> Decimal.to_float()
+        sum + rating
+      end)
+      average_rating = total_rating_sum / total
+
+      # Calculate score (0-100 based on average rating out of 5)
+      score = (average_rating / 5.0) * 100
+      percentage = score
+
+      # Build rating distribution
+      rating_distribution = for rating <- 1..5 do
+        count = Map.get(rating_counts, rating, 0)
+        rating_percentage = if total > 0, do: (count / total) * 100, else: 0.0
+        %{rating: rating, count: count, percentage: Float.round(rating_percentage, 1)}
+      end
+
+      vote_distribution = Enum.map(rating_distribution, fn %{rating: rating, count: count, percentage: perc} ->
+        %{type: "#{rating}_star", count: count, percentage: perc}
+      end)
+
+      %{
+        total: total,
+        score: Float.round(score, 1),
+        percentage: Float.round(percentage, 1),
+        average_rating: Float.round(average_rating, 2),
+        rating_distribution: rating_distribution,
+        vote_distribution: vote_distribution
+      }
+    end
+  end
+
+  defp get_ranked_option_tally(votes) do
+    total = length(votes)
+
+    if total == 0 do
+      %{
+        total: 0,
+        score: 0.0,
+        percentage: 0.0,
+        average_rank: 999.0,  # High number for unranked
+        rank_distribution: [],
+        vote_distribution: []
+      }
+    else
+      # Group votes by rank
+      rank_counts = Enum.reduce(votes, %{}, fn vote, acc ->
+        rank = vote.vote_rank
+        Map.update(acc, rank, 1, &(&1 + 1))
+      end)
+
+      # Calculate average rank (lower is better)
+      total_rank_sum = Enum.reduce(votes, 0, fn vote, sum ->
+        sum + vote.vote_rank
+      end)
+      average_rank = total_rank_sum / total
+
+      # Calculate score (inverse of average rank - higher rank = lower score)
+      # Score is 100 / average_rank, so rank 1 = 100 points, rank 2 = 50 points, etc.
+      score = if average_rank > 0, do: (100.0 / average_rank), else: 0.0
+      percentage = min(score, 100.0)  # Cap at 100%
+
+      # Build rank distribution
+      max_rank = Map.keys(rank_counts) |> Enum.max(fn -> 1 end)
+      rank_distribution = for rank <- 1..max_rank do
+        count = Map.get(rank_counts, rank, 0)
+        rank_percentage = if total > 0, do: (count / total) * 100, else: 0.0
+        %{rank: rank, count: count, percentage: Float.round(rank_percentage, 1)}
+      end
+
+      vote_distribution = Enum.map(rank_distribution, fn %{rank: rank, count: count, percentage: perc} ->
+        %{type: "rank_#{rank}", count: count, percentage: perc}
+      end)
+
+      %{
+        total: total,
+        score: Float.round(score, 1),
+        percentage: Float.round(percentage, 1),
+        average_rank: Float.round(average_rank, 2),
+        rank_distribution: rank_distribution,
+        vote_distribution: vote_distribution
+      }
+    end
+  end
+
+  defp get_generic_option_tally(votes) do
+    total = length(votes)
+
+    %{
+      total: total,
+      score: total,
+      percentage: if(total > 0, do: 100.0, else: 0.0),
+      vote_distribution: [
+        %{type: "vote", count: total, percentage: if(total > 0, do: 100.0, else: 0.0)}
+      ]
+    }
+  end
+
+  @doc """
+  Gets real-time voting statistics for display on public pages.
+  Similar to legacy system but works for all poll types.
+  """
+  def get_poll_voting_stats(%Poll{} = poll) do
+    enhanced_tallies = get_enhanced_poll_vote_tallies(poll)
+    total_voters = enhanced_tallies.total_unique_voters
+
+    # Calculate relative percentages for approval voting
+    options_with_stats = Enum.map(enhanced_tallies.options_with_tallies, fn %{option: option, tally: tally} ->
+      relative_tally = case poll.voting_system do
+        "approval" ->
+          # For approval voting, calculate percentage relative to total poll voters
+          selection_percentage = if total_voters > 0, do: (tally.selected / total_voters) * 100, else: 0.0
+          Map.merge(tally, %{
+            percentage: Float.round(selection_percentage, 1),
+            vote_distribution: [
+              %{type: "selected", count: tally.selected, percentage: Float.round(selection_percentage, 1)}
+            ]
+          })
+        _ ->
+          tally
+      end
+
+      %{
+        option_id: option.id,
+        option_title: option.title,
+        option_description: option.description,
+        tally: relative_tally
+      }
+    end)
+
+    %{
+      poll_id: poll.id,
+      poll_title: poll.title,
+      voting_system: poll.voting_system,
+      phase: poll.phase,
+      total_unique_voters: total_voters,
+      options: options_with_stats
+    }
+  end
+
+  @doc """
+  Broadcasts poll statistics update to all connected clients.
+  Used for real-time updates when votes are cast.
+  """
+  def broadcast_poll_stats_update(%Poll{} = poll) do
+    stats = get_poll_voting_stats(poll)
+
+    Phoenix.PubSub.broadcast(
+      Eventasaurus.PubSub,
+      "polls:#{poll.id}:stats",
+      {:poll_stats_updated, stats}
+    )
+
+    # Also broadcast to event channel
+    Phoenix.PubSub.broadcast(
+      Eventasaurus.PubSub,
+      "events:#{poll.event_id}:polls",
+      {:poll_stats_updated, poll.id, stats}
+    )
+
+    stats
+  end
 end

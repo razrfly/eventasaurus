@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.PublicGenericPollComponent
+  alias EventasaurusWeb.PollVotingStatsComponent
 
   alias EventasaurusWeb.ReservedSlugs
 
@@ -167,10 +168,12 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:meta_image, social_image_url)
            |> assign(:meta_url, event_url)
            |> assign(:structured_data, generate_structured_data(event, event_url))
-           # Load event polls for display
-           |> load_event_polls()
-           # Track event page view
-           |> push_event("track_event", %{
+                     # Load event polls for display
+          |> load_event_polls()
+          # Subscribe to poll statistics updates for real-time voting stats
+          |> subscribe_to_poll_stats()
+          # Track event page view
+          |> push_event("track_event", %{
                event: "event_page_viewed",
                properties: %{
                  event_id: event.id,
@@ -1134,6 +1137,18 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info({:poll_stats_updated, stats}, socket) do
+    # Update poll statistics in real-time
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
+    # Update specific poll statistics in real-time
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:show_anonymous_voter_modal, poll_id, temp_votes}, socket) do
     # Show the anonymous voter modal for saving votes
     # First, find the poll to get its info
@@ -1353,9 +1368,9 @@ defmodule EventasaurusWeb.PublicEventLive do
                         <% end %>
                       </div>
 
-                      <!-- Vote tally visualization -->
+                      <!-- Enhanced Vote tally visualization -->
                       <div class="mb-3">
-                        <div class="flex h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="flex h-3 bg-gray-100 rounded-full overflow-hidden">
                           <%= if vote_tally.total > 0 do %>
                             <div class="bg-green-500" style={"width: #{(vote_tally.yes / vote_tally.total) * 100}%"}></div>
                             <div class="bg-yellow-400" style={"width: #{(vote_tally.if_need_be / vote_tally.total) * 100}%"}></div>
@@ -1363,9 +1378,12 @@ defmodule EventasaurusWeb.PublicEventLive do
                           <% end %>
                         </div>
                         <div class="flex justify-between text-xs text-gray-500 mt-1">
-                          <span>Yes: <%= vote_tally.yes %></span>
-                          <span>If needed: <%= vote_tally.if_need_be %></span>
-                          <span>No: <%= vote_tally.no %></span>
+                          <span>Yes: <%= vote_tally.yes %> (<%= Float.round((vote_tally.yes / max(vote_tally.total, 1)) * 100, 1) %>%)</span>
+                          <span>If needed: <%= vote_tally.if_need_be %> (<%= Float.round((vote_tally.if_need_be / max(vote_tally.total, 1)) * 100, 1) %>%)</span>
+                          <span>No: <%= vote_tally.no %> (<%= Float.round((vote_tally.no / max(vote_tally.total, 1)) * 100, 1) %>%)</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1 text-center">
+                          Overall Score: <%= vote_tally.percentage %>% positive
                         </div>
                       </div>
 
@@ -1662,12 +1680,25 @@ defmodule EventasaurusWeb.PublicEventLive do
                         show_vote_counts={true}
                       />
 
-                    <% true -> %>
-                      <!-- Fallback for other poll phases -->
-                      <div class="text-center py-4 text-gray-500">
-                        <p>Poll details will be available soon.</p>
-                      </div>
-                  <% end %>
+                                      <% true -> %>
+                    <!-- Fallback for other poll phases -->
+                    <div class="text-center py-4 text-gray-500">
+                      <p>Poll details will be available soon.</p>
+                    </div>
+                <% end %>
+
+                <!-- Voting Statistics (show for all polls in voting phases) -->
+                <%= if poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
+                  <div class="mt-6 border-t border-gray-100 pt-4">
+                    <h3 class="text-sm font-medium text-gray-900 mb-3">Voting Results</h3>
+                    <.live_component
+                      module={EventasaurusWeb.PollVotingStatsComponent}
+                      id={"poll-voting-stats-#{poll.id}"}
+                      poll={poll}
+                      compact_mode={false}
+                    />
+                  </div>
+                <% end %>
                 </div>
               <% end %>
             </div>
@@ -2212,6 +2243,21 @@ defmodule EventasaurusWeb.PublicEventLive do
       "closed" -> "bg-gray-100 text-gray-800"
       _ -> "bg-blue-100 text-blue-800"
     end
+  end
+
+  # Subscribe to poll statistics updates for real-time voting updates
+  defp subscribe_to_poll_stats(socket) do
+    if socket.assigns[:event_polls] && length(socket.assigns.event_polls) > 0 do
+      # Subscribe to each poll's statistics updates
+      Enum.each(socket.assigns.event_polls, fn poll ->
+        Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
+      end)
+
+      # Also subscribe to the event's general poll updates
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "events:#{socket.assigns.event.id}:polls")
+    end
+
+    socket
   end
 
   # Load event polls for display on public event page
