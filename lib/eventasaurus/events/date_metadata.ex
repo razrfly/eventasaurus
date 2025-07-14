@@ -86,14 +86,7 @@ defmodule EventasaurusApp.Events.DateMetadata do
   Validates time slot embedded schema.
   """
   def time_slot_changeset(time_slot, attrs) do
-    # Handle case where Ecto passes an empty map for new embedded structs
-    time_slot_struct = case time_slot do
-      %{__struct__: _} -> time_slot  # Already a struct
-      %{} -> %{__struct__: __MODULE__.TimeSlot, start_time: nil, end_time: nil, timezone: "UTC", display: nil}  # Empty map, create struct
-      _ -> time_slot  # Other cases
-    end
-
-    time_slot_struct
+    time_slot
     |> cast(attrs, [:start_time, :end_time, :timezone, :display])
     |> validate_required([:start_time, :end_time])
     |> validate_time_format(:start_time)
@@ -287,7 +280,11 @@ defmodule EventasaurusApp.Events.DateMetadata do
       [_, hour_str, minute_str] ->
         hour = String.to_integer(hour_str)
         minute = String.to_integer(minute_str)
-        {:ok, hour * 60 + minute}
+        if hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 do
+          {:ok, hour * 60 + minute}
+        else
+          {:error, "invalid time range"}
+        end
       _ ->
         {:error, "invalid time format"}
     end
@@ -314,7 +311,7 @@ defmodule EventasaurusApp.Events.DateMetadata do
           end
         end
 
-        minute_str = if minute == 0, do: ":#{String.pad_leading("#{minute}", 2, "0")}", else: ":#{String.pad_leading("#{minute}", 2, "0")}"
+        minute_str = ":#{String.pad_leading("#{minute}", 2, "0")}"
         "#{display_hour}#{minute_str} #{period}"
       _ ->
         time_string
@@ -460,9 +457,8 @@ defmodule EventasaurusApp.Events.DateMetadata do
     time_slots
     |> Enum.with_index()
     |> Enum.reduce(changeset, fn {slot, index}, acc ->
-      # Create a proper TimeSlot struct for validation
-      time_slot_struct = %{__struct__: __MODULE__.TimeSlot, start_time: nil, end_time: nil, timezone: "UTC", display: nil}
-      slot_changeset = time_slot_changeset(time_slot_struct, slot)
+      # Use proper embedded schema validation
+      slot_changeset = time_slot_changeset(%__MODULE__.TimeSlot{}, slot)
 
       if slot_changeset.valid? do
         acc
