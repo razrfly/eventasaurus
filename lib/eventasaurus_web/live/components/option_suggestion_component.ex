@@ -43,7 +43,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:search_query, "")
      |> assign(:search_results, [])
      |> assign(:search_loading, false)
-     |> assign(:selected_dates, [])}
+     |> assign(:selected_dates, [])
+     # NEW: Time selection state
+     |> assign(:time_enabled, false)
+     |> assign(:selected_date_for_time, nil)
+     |> assign(:date_time_slots, %{})}
   end
 
   @impl true
@@ -86,6 +90,17 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         socket = assign(socket, :selected_dates, dates)
 
         {:ok, socket}
+
+      assigns[:event] == "save_date_time_slots" ->
+        # Handle time slot updates from TimeSlotPickerComponent
+        date = assigns.date
+        time_slots = assigns.time_slots
+
+        # Update the date_time_slots in the socket
+        current_slots = socket.assigns[:date_time_slots] || %{}
+        updated_slots = Map.put(current_slots, date, time_slots)
+
+        {:ok, assign(socket, :date_time_slots, updated_slots)}
 
       true ->
         # Normal update flow
@@ -313,9 +328,106 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       />
                     </div>
 
-                    <!-- Calendar component above handles date selection and display -->
+                    <!-- NEW: Time Selection Toggle -->
+                    <div class="mt-4 space-y-4">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                          <div class="flex items-center">
+                            <input
+                              id="time-enabled-toggle"
+                              type="checkbox"
+                              phx-click="toggle_time_selection"
+                              phx-target={@myself}
+                              checked={@time_enabled}
+                              class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                            <label for="time-enabled-toggle" class="ml-2 flex items-center cursor-pointer">
+                              <span class="text-lg mr-2">⏰</span>
+                              <span class="text-sm font-medium text-gray-700">Specify times</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
 
+                      <p class="text-sm text-gray-600">
+                        Optionally add specific time slots to your date suggestions
+                      </p>
 
+                      <!-- Time Configuration Interface -->
+                      <%= if @time_enabled and @selected_date_for_time do %>
+                        <div class="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                          <div class="flex items-center justify-between mb-3">
+                            <h5 class="text-sm font-medium text-gray-900">
+                              Configure times for <%= @selected_date_for_time %>
+                            </h5>
+                            <button
+                              type="button"
+                              phx-click="cancel_time_config"
+                              phx-target={@myself}
+                              class="text-gray-400 hover:text-gray-600"
+                            >
+                              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                              </svg>
+                            </button>
+                          </div>
+
+                          <!-- Time Slot Picker Component -->
+                          <.live_component
+                            module={EventasaurusWeb.TimeSlotPickerComponent}
+                            id={"time-picker-#{@selected_date_for_time}"}
+                            date={@selected_date_for_time}
+                            existing_slots={@date_time_slots[@selected_date_for_time] || []}
+                            on_save="save_date_time_slots"
+                            target={@myself}
+                          />
+                        </div>
+                      <% end %>
+
+                      <!-- Date Options with Time Display -->
+                      <%= if length(@selected_dates || []) > 0 do %>
+                        <div class="space-y-2">
+                          <%= for date <- (@selected_dates || []) do %>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div class="flex items-center space-x-3">
+                                <div class="flex-shrink-0">
+                                  <div class="w-2 h-2 bg-indigo-600 rounded-full"></div>
+                                </div>
+                                <div>
+                                  <span class="text-sm font-medium text-gray-900">
+                                    <%= format_date_for_display(date) %>
+                                  </span>
+                                  <%= if @time_enabled && Map.has_key?(@date_time_slots, Date.to_iso8601(date)) do %>
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                      <%= for time_slot <- Map.get(@date_time_slots, Date.to_iso8601(date), []) do %>
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                          <%= TimeUtils.format_time_12hour(time_slot["start_time"]) %> - <%= TimeUtils.format_time_12hour(time_slot["end_time"]) %>
+                                        </span>
+                                      <% end %>
+                                    </div>
+                                  <% end %>
+                                </div>
+                              </div>
+                              <%= if @time_enabled do %>
+                                <button
+                                  type="button"
+                                  phx-click="configure_date_time"
+                                  phx-value-date={Date.to_iso8601(date)}
+                                  phx-target={@myself}
+                                  class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                                >
+                                  <%= if Map.has_key?(@date_time_slots, Date.to_iso8601(date)) do %>
+                                    Edit times
+                                  <% else %>
+                                    Add times
+                                  <% end %>
+                                </button>
+                              <% end %>
+                            </div>
+                          <% end %>
+                        </div>
+                      <% end %>
+                    </div>
 
                     <!-- Hidden field to store the selected date as the option title -->
                     <%= if length(@selected_dates || []) > 0 do %>
@@ -1076,7 +1188,36 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:suggestion_form_visible, !socket.assigns.suggestion_form_visible)
      |> assign(:search_query, "")
      |> assign(:search_results, [])
-     |> assign(:selected_dates, [])}
+     |> assign(:selected_dates, [])
+     # Clear time selection state when toggling form
+     |> assign(:time_enabled, false)
+     |> assign(:selected_date_for_time, nil)
+     |> assign(:date_time_slots, %{})}
+  end
+
+  # NEW: Time selection event handlers
+  @impl true
+  def handle_event("toggle_time_selection", _params, socket) do
+    {:noreply, assign(socket, :time_enabled, !socket.assigns.time_enabled)}
+  end
+
+  @impl true
+  def handle_event("configure_date_time", %{"date" => date_string}, socket) do
+    {:noreply, assign(socket, :selected_date_for_time, date_string)}
+  end
+
+  @impl true
+  def handle_event("save_date_time_slots", %{"date" => date_string, "time_slots" => time_slots}, socket) do
+    updated_slots = Map.put(socket.assigns.date_time_slots, date_string, time_slots)
+    {:noreply,
+     socket
+     |> assign(:date_time_slots, updated_slots)
+     |> assign(:selected_date_for_time, nil)}
+  end
+
+  @impl true
+  def handle_event("cancel_time_config", _params, socket) do
+    {:noreply, assign(socket, :selected_date_for_time, nil)}
   end
 
 
@@ -1095,7 +1236,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:changeset, changeset)
      |> assign(:search_query, "")
      |> assign(:search_results, [])
-     |> assign(:selected_dates, [])}
+     |> assign(:selected_dates, [])
+     # Clear time selection state when cancelling
+     |> assign(:time_enabled, false)
+     |> assign(:selected_date_for_time, nil)
+     |> assign(:date_time_slots, %{})}
   end
 
   @impl true
@@ -1230,10 +1375,37 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       results = socket.assigns.selected_dates
       |> Enum.map(fn selected_date ->
         # Create metadata structure for date_selection polls using proper builder
-        date_metadata = EventasaurusApp.Events.DateMetadata.build_date_metadata(
+        date_metadata_base = EventasaurusApp.Events.DateMetadata.build_date_metadata(
           selected_date,
           [display_date: format_date_for_display(selected_date)]
         )
+
+        # Add time slot information if time is enabled
+        date_metadata = if socket.assigns.time_enabled do
+          date_iso = Date.to_iso8601(selected_date)
+          time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
+
+          # Only set time_enabled true if there are actually time slots
+          if length(time_slots) > 0 do
+            Map.merge(date_metadata_base, %{
+              "time_enabled" => true,
+              "time_slots" => time_slots,
+              "all_day" => false
+            })
+          else
+            Map.merge(date_metadata_base, %{
+              "time_enabled" => false,
+              "all_day" => true,
+              "time_slots" => []
+            })
+          end
+        else
+          Map.merge(date_metadata_base, %{
+            "time_enabled" => false,
+            "all_day" => true,
+            "time_slots" => []
+          })
+        end
 
         # Create params for this specific date
         date_params = Map.merge(option_params, %{
@@ -1292,6 +1464,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:loading, false)
          |> assign(:suggestion_form_visible, false)
          |> assign(:selected_dates, [])  # Clear selected dates after successful submission
+         # Clear time selection state after successful submission
+         |> assign(:time_enabled, false)
+         |> assign(:selected_date_for_time, nil)
+         |> assign(:date_time_slots, %{})
          |> assign(:changeset, changeset)
          |> assign(:loading_rich_data, false)}
       else
@@ -1349,6 +1525,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
            |> assign(:loading, false)
            |> assign(:suggestion_form_visible, false)
            |> assign(:selected_dates, [])  # Clear selected dates after successful submission
+           # Clear time selection state after successful submission
+           |> assign(:time_enabled, false)
+           |> assign(:selected_date_for_time, nil)
+           |> assign(:date_time_slots, %{})
            |> assign(:changeset, changeset)
            |> assign(:loading_rich_data, false)}
 
@@ -1635,11 +1815,38 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       selected_date = List.first(socket.assigns.selected_dates)
 
       # Create metadata structure for date_selection polls
-      date_metadata = %{
+      date_metadata_base = %{
         "date" => Date.to_iso8601(selected_date),
         "display_date" => format_date_for_display(selected_date),
         "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
       }
+
+      # Add time slot information if time is enabled
+      date_metadata = if socket.assigns.time_enabled do
+        date_iso = Date.to_iso8601(selected_date)
+        time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
+
+        # Only set time_enabled true if there are actually time slots
+        if length(time_slots) > 0 do
+          Map.merge(date_metadata_base, %{
+            "time_enabled" => true,
+            "time_slots" => time_slots,
+            "all_day" => false
+          })
+        else
+          Map.merge(date_metadata_base, %{
+            "time_enabled" => false,
+            "all_day" => true,
+            "time_slots" => []
+          })
+        end
+      else
+        Map.merge(date_metadata_base, %{
+          "time_enabled" => false,
+          "all_day" => true,
+          "time_slots" => []
+        })
+      end
 
       # Override the option params with date-specific data
       Map.merge(option_params, %{

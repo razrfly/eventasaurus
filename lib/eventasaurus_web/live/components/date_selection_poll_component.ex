@@ -38,6 +38,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   alias EventasaurusWeb.Adapters.DatePollAdapter
   alias EventasaurusWeb.CalendarComponent
   alias EventasaurusWeb.Components.VotingInterfaceComponent
+  alias EventasaurusWeb.Utils.TimeUtils
   alias Phoenix.PubSub
 
   require Logger
@@ -58,7 +59,11 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
      |> assign(:user_votes, [])
      |> assign(:legacy_poll_data, nil)
      |> assign(:vote_summaries, %{})
-     |> assign(:phase_display, "list_building")}
+     |> assign(:phase_display, "list_building")
+     # NEW: Time selection state
+     |> assign(:time_enabled, false)
+     |> assign(:selected_date_for_time, nil)
+     |> assign(:date_time_slots, %{})}
   end
 
   @impl true
@@ -118,8 +123,29 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     {:noreply, assign(socket, :showing_calendar, !socket.assigns.showing_calendar)}
   end
 
+  # NEW: Time selection event handlers
+  def handle_event("toggle_time_selection", _params, socket) do
+    {:noreply, assign(socket, :time_enabled, !socket.assigns.time_enabled)}
+  end
+
+  def handle_event("configure_date_time", %{"date" => date_string}, socket) do
+    {:noreply, assign(socket, :selected_date_for_time, date_string)}
+  end
+
+  def handle_event("save_date_time_slots", %{"date" => date_string, "time_slots" => time_slots}, socket) do
+    updated_slots = Map.put(socket.assigns.date_time_slots, date_string, time_slots)
+    {:noreply,
+     socket
+     |> assign(:date_time_slots, updated_slots)
+     |> assign(:selected_date_for_time, nil)}
+  end
+
+  def handle_event("cancel_time_config", _params, socket) do
+    {:noreply, assign(socket, :selected_date_for_time, nil)}
+  end
+
   def handle_event("suggest_date", %{"date" => date_string}, socket) do
-    %{poll: poll, current_user: user} = socket.assigns
+    %{poll: poll, current_user: user, time_enabled: time_enabled, date_time_slots: date_time_slots} = socket.assigns
 
     # Only allow date suggestions during list_building phase
     if poll.phase != "list_building" do
@@ -134,8 +160,8 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
               existing_option = Enum.find(socket.assigns.poll_options, fn option ->
                 case DatePollAdapter.validate_date_option(option) do
                   {:ok, _} ->
-                                         # Use adapter's date extraction function
-                     case DatePollAdapter.extract_date_from_option(option) do
+                    # Use adapter's date extraction function
+                    case DatePollAdapter.extract_date_from_option(option) do
                       {:ok, existing_date} -> Date.compare(existing_date, date) == :eq
                       _ -> false
                     end
@@ -148,8 +174,11 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                 formatted_date = DatePollAdapter.safe_format_date_for_display(date)
                 {:noreply, put_flash(socket, :info, "Date #{formatted_date} is already an option")}
               else
-                # Create new date option using our generic system
-                case Events.create_date_poll_option(poll, user, date, %{}) do
+                # Create enhanced metadata with time support
+                metadata = create_date_metadata_with_time(date, time_enabled, date_time_slots[sanitized_date_string])
+
+                # Create new date option using our generic system with enhanced metadata
+                case Events.create_date_poll_option(poll, user, date, metadata) do
                   {:ok, _option} ->
                     # Send real-time update
                     send(self(), {:poll_option_added, poll.id})
@@ -158,7 +187,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                     {:noreply,
                      socket
                      |> put_flash(:success, "Added #{formatted_date} to the poll")
-                     |> assign(:loading, false)}
+                     |> assign(:loading, false)
+                     # Clear time slots for this date after creating option
+                     |> assign(:date_time_slots, Map.delete(date_time_slots, sanitized_date_string))}
 
                   {:error, reason} ->
                     Logger.error("Failed to create date option: #{inspect(reason)}")
@@ -327,6 +358,62 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                   </div>
                 <% end %>
 
+                <!-- NEW: Time Selection Toggle -->
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                      <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                      <div>
+                        <h4 class="text-sm font-medium text-gray-900">Specify times</h4>
+                        <p class="text-xs text-gray-600">Include start and end times for each option</p>
+                      </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        phx-click="toggle_time_selection"
+                        phx-target={@myself}
+                        checked={@time_enabled}
+                        class="sr-only peer"
+                      />
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+
+                  <!-- Time Configuration Interface (when enabled) -->
+                  <%= if @time_enabled and @selected_date_for_time do %>
+                    <div class="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                      <div class="flex items-center justify-between mb-3">
+                        <h5 class="text-sm font-medium text-gray-900">
+                          Configure times for <%= @selected_date_for_time %>
+                        </h5>
+                        <button
+                          type="button"
+                          phx-click="cancel_time_config"
+                          phx-target={@myself}
+                          class="text-gray-400 hover:text-gray-600"
+                        >
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                          </svg>
+                        </button>
+                      </div>
+
+                      <!-- Time Slot Picker Component -->
+                      <.live_component
+                        module={EventasaurusWeb.TimeSlotPickerComponent}
+                        id={"time-picker-#{@selected_date_for_time}"}
+                        date={@selected_date_for_time}
+                        existing_slots={@date_time_slots[@selected_date_for_time] || []}
+                        on_save="save_date_time_slots"
+                        target={@myself}
+                      />
+                    </div>
+                  <% end %>
+                </div>
+
                 <!-- Current Date Options -->
                 <%= if length(@poll_options) > 0 do %>
                   <div>
@@ -338,16 +425,56 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div class="flex items-center space-x-3">
                             <span class="text-lg">📅</span>
-                            <div>
-                              <p class="font-medium text-gray-900"><%= option.title %></p>
+                            <div class="flex-1">
+                              <div class="flex items-center space-x-2 mb-1">
+                                <p class="font-medium text-gray-900"><%= option.title %></p>
+                                <%= if @time_enabled and has_time_slots?(option) do %>
+                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    Times
+                                  </span>
+                                <% end %>
+                              </div>
+
+                              <!-- Time Slots Display -->
+                              <%= if @time_enabled and has_time_slots?(option) do %>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                  <%= for time_slot <- get_time_slots_from_option(option) do %>
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-sm bg-white border border-gray-200 text-gray-700">
+                                      <%= format_time_slot_display(time_slot) %>
+                                    </span>
+                                  <% end %>
+                                </div>
+                              <% end %>
+
                               <%= if option.suggested_by do %>
-                                <p class="text-sm text-gray-500">
+                                <p class="text-sm text-gray-500 mt-1">
                                   Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
                                 </p>
                               <% end %>
                             </div>
                           </div>
-                        </div>
+
+                          <!-- Time Configuration Button -->
+                          <%= if @time_enabled do %>
+                            <div class="flex items-center space-x-2">
+                              <button
+                                type="button"
+                                phx-click="configure_date_time"
+                                phx-value-date={extract_date_string_from_option(option)}
+                                phx-target={@myself}
+                                class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                              >
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <%= if has_time_slots?(option), do: "Edit", else: "Add" %> Times
+                              </button>
+                            </div>
+                          <% end %>
+                                                </div>
                       <% end %>
                     </div>
                   </div>
@@ -637,9 +764,14 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       :lt -> "Expired"
       _ ->
         # Format for mobile: shorter format
-        datetime
-        |> DateTime.shift_zone!(Application.get_env(:eventasaurus, :timezone, "UTC"))
-        |> Calendar.strftime("%-m/%-d %I:%M %p")
+        timezone = Application.get_env(:eventasaurus, :timezone, "UTC")
+        case DateTime.shift_zone(datetime, timezone) do
+          {:ok, shifted_datetime} ->
+            Calendar.strftime(shifted_datetime, "%-m/%-d %I:%M %p")
+          {:error, _} ->
+            # Fallback to UTC if timezone shift fails
+            Calendar.strftime(datetime, "%-m/%-d %I:%M %p")
+        end
     end
   end
 
@@ -651,4 +783,64 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   end
 
   defp format_deadline(_), do: "Invalid"
+
+  defp create_date_metadata_with_time(date, time_enabled, time_slots) do
+    base_metadata = %{
+      "date" => Date.to_iso8601(date),
+      "display_date" => DatePollAdapter.safe_format_date_for_display(date),
+      "date_type" => "single_date",
+      "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+    }
+
+    if time_enabled and time_slots && length(time_slots) > 0 do
+      base_metadata
+      |> Map.put("time_enabled", true)
+      |> Map.put("all_day", false)
+      |> Map.put("time_slots", time_slots)
+      |> Map.put("timezone", "UTC") # Default timezone
+    else
+      base_metadata
+      |> Map.put("time_enabled", false)
+      |> Map.put("all_day", true)
+    end
+  end
+
+  defp has_time_slots?(option) do
+    case option.metadata do
+      %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) and length(time_slots) > 0 ->
+        true
+      _ ->
+        false
+    end
+  end
+
+  defp get_time_slots_from_option(option) do
+    case option.metadata do
+      %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) ->
+        time_slots
+      _ ->
+        []
+    end
+  end
+
+  defp format_time_slot_display(slot) when is_map(slot) do
+    case {slot["start_time"], slot["end_time"]} do
+      {start_time, end_time} when is_binary(start_time) and is_binary(end_time) ->
+        # Convert 24-hour format to 12-hour format for display
+        start_display = TimeUtils.format_time_12hour(start_time)
+        end_display = TimeUtils.format_time_12hour(end_time)
+        "#{start_display} - #{end_display}"
+      _ ->
+        "Invalid time slot"
+    end
+  end
+
+  defp format_time_slot_display(_), do: "Invalid time slot"
+
+  defp extract_date_string_from_option(option) do
+    case DatePollAdapter.extract_date_from_option(option) do
+      {:ok, date} -> Date.to_iso8601(date)
+      _ -> nil
+    end
+  end
 end

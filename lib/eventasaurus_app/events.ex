@@ -5958,4 +5958,449 @@ defmodule EventasaurusApp.Events do
     end
   end
 
+  # =================
+  # Time Extraction and Formatting Functions (NEW)
+  # =================
+
+  @doc """
+  Extracts time slots from a poll option's metadata.
+
+  Returns a list of time slot maps with start_time, end_time, timezone, and display fields.
+
+  ## Returns
+  - {:ok, [time_slots]} if time slots exist
+  - {:ok, []} if poll option is all-day or has no time slots
+  - {:error, reason} if metadata is invalid
+
+  ## Examples
+      iex> extract_time_slots_from_option(option)
+      {:ok, [%{"start_time" => "09:00", "end_time" => "12:00", "timezone" => "UTC", "display" => "9:00 AM - 12:00 PM"}]}
+
+      iex> extract_time_slots_from_option(all_day_option)
+      {:ok, []}
+  """
+  def extract_time_slots_from_option(%PollOption{metadata: nil}), do: {:error, "No metadata found"}
+  def extract_time_slots_from_option(%PollOption{metadata: metadata}) do
+    case {Map.get(metadata, "time_enabled"), Map.get(metadata, "time_slots")} do
+      {true, time_slots} when is_list(time_slots) and length(time_slots) > 0 ->
+        {:ok, time_slots}
+      {true, _} ->
+        {:error, "Time enabled but no valid time slots found"}
+      {false, _} ->
+        {:ok, []}  # All-day event
+      {nil, _} ->
+        {:ok, []}  # Legacy date-only format (backward compatibility)
+      _ ->
+        {:error, "Invalid time metadata structure"}
+    end
+  end
+
+  @doc """
+  Formats datetime information for display, handling both date-only and date+time options.
+
+  ## Returns
+  A formatted string suitable for user display
+
+  ## Examples
+      iex> format_datetime_for_display(date_only_option)
+      "Monday, December 25, 2024 (All day)"
+
+      iex> format_datetime_for_display(date_time_option)
+      "Monday, December 25, 2024 - 9:00 AM - 12:00 PM, 2:00 PM - 5:00 PM"
+  """
+  def format_datetime_for_display(%PollOption{metadata: metadata}) do
+    date_display = Map.get(metadata, "display_date", "Unknown Date")
+
+    case extract_time_slots_from_option(%PollOption{metadata: metadata}) do
+      {:ok, []} ->
+        "#{date_display} (All day)"
+      {:ok, time_slots} ->
+        time_displays = Enum.map(time_slots, &Map.get(&1, "display", "Unknown Time"))
+        "#{date_display} - #{Enum.join(time_displays, ", ")}"
+      {:error, _} ->
+        "#{date_display} (Time information unavailable)"
+    end
+  end
+
+  @doc """
+  Validates time slots for internal consistency and format correctness.
+
+  ## Parameters
+  - time_slots: List of time slot maps
+
+  ## Returns
+  - :ok if all time slots are valid
+  - {:error, reasons} if validation fails
+
+  ## Examples
+      iex> validate_time_slots([%{"start_time" => "09:00", "end_time" => "12:00"}])
+      :ok
+
+      iex> validate_time_slots([%{"start_time" => "14:00", "end_time" => "12:00"}])
+      {:error, ["slot 1 end_time must be after start_time"]}
+  """
+  def validate_time_slots(time_slots) when is_list(time_slots) do
+    alias EventasaurusApp.Events.DateMetadata
+
+    case DateMetadata.validate_time_slots(time_slots) do
+      %Ecto.Changeset{valid?: true} -> :ok
+      %Ecto.Changeset{errors: errors} ->
+        error_messages = Enum.map(errors, fn {_field, {message, _opts}} -> message end)
+        {:error, error_messages}
+    end
+  end
+
+  def validate_time_slots(_), do: {:error, ["time_slots must be a list"]}
+
+  @doc """
+  Converts time in HH:MM format to total minutes since midnight.
+
+  ## Examples
+      iex> time_to_minutes("09:30")
+      {:ok, 570}
+
+      iex> time_to_minutes("25:00")
+      {:error, "Invalid time format"}
+  """
+  def time_to_minutes(time_string) when is_binary(time_string) do
+    case Regex.run(~r/^(\d{1,2}):(\d{2})$/, time_string) do
+      [_, hour_str, minute_str] ->
+        hour = String.to_integer(hour_str)
+        minute = String.to_integer(minute_str)
+
+        if hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 do
+          {:ok, hour * 60 + minute}
+        else
+          {:error, "Invalid time format"}
+        end
+      _ ->
+        {:error, "Invalid time format"}
+    end
+  end
+
+  def time_to_minutes(_), do: {:error, "Time must be a string"}
+
+  @doc """
+  Converts minutes since midnight to HH:MM format.
+
+  ## Examples
+      iex> minutes_to_time(570)
+      {:ok, "09:30"}
+
+      iex> minutes_to_time(1500)
+      {:error, "Invalid minutes value"}
+  """
+  def minutes_to_time(minutes) when is_integer(minutes) and minutes >= 0 and minutes < 1440 do
+    hour = div(minutes, 60)
+    minute = rem(minutes, 60)
+    {:ok, "#{String.pad_leading("#{hour}", 2, "0")}:#{String.pad_leading("#{minute}", 2, "0")}"}
+  end
+
+  def minutes_to_time(_), do: {:error, "Invalid minutes value"}
+
+  @doc """
+  Formats time in 24-hour format to 12-hour format with AM/PM.
+
+  ## Examples
+      iex> format_time_12hour("14:30")
+      "2:30 PM"
+
+      iex> format_time_12hour("09:00")
+      "9:00 AM"
+  """
+  def format_time_12hour(time_string) when is_binary(time_string) do
+    case time_to_minutes(time_string) do
+      {:ok, minutes} ->
+        hour = div(minutes, 60)
+        minute = rem(minutes, 60)
+
+        {display_hour, period} = if hour == 0 do
+          {12, "AM"}
+        else
+          if hour < 12 do
+            {hour, "AM"}
+          else
+            display_hour = if hour == 12, do: 12, else: hour - 12
+            {display_hour, "PM"}
+          end
+        end
+
+        minute_str = if minute == 0, do: ":00", else: ":#{String.pad_leading("#{minute}", 2, "0")}"
+        "#{display_hour}#{minute_str} #{period}"
+      {:error, _} ->
+        time_string  # Return original if parsing fails
+    end
+  end
+
+  def format_time_12hour(_), do: "Invalid Time"
+
+  @doc """
+  Generates a display string for a time range.
+
+  ## Examples
+      iex> generate_time_range_display("09:00", "17:00")
+      "9:00 AM - 5:00 PM"
+
+      iex> generate_time_range_display("14:30", "16:45")
+      "2:30 PM - 4:45 PM"
+  """
+  def generate_time_range_display(start_time, end_time) do
+    "#{format_time_12hour(start_time)} - #{format_time_12hour(end_time)}"
+  end
+
+  @doc """
+  Checks if two time slots overlap.
+
+  ## Examples
+      iex> time_slots_overlap?("09:00", "12:00", "11:00", "14:00")
+      true
+
+      iex> time_slots_overlap?("09:00", "12:00", "13:00", "15:00")
+      false
+  """
+  def time_slots_overlap?(start1, end1, start2, end2) do
+    with {:ok, start1_min} <- time_to_minutes(start1),
+         {:ok, end1_min} <- time_to_minutes(end1),
+         {:ok, start2_min} <- time_to_minutes(start2),
+         {:ok, end2_min} <- time_to_minutes(end2) do
+      # Two time slots overlap if one starts before the other ends
+      start1_min < end2_min and start2_min < end1_min
+    else
+      _ -> false  # If any time parsing fails, assume no overlap
+    end
+  end
+
+  @doc """
+  Merges overlapping time slots in a list, returning a list of non-overlapping slots.
+
+  ## Examples
+      iex> merge_overlapping_time_slots([
+      ...>   %{"start_time" => "09:00", "end_time" => "12:00"},
+      ...>   %{"start_time" => "11:00", "end_time" => "14:00"}
+      ...> ])
+      [%{"start_time" => "09:00", "end_time" => "14:00", "display" => "9:00 AM - 2:00 PM"}]
+  """
+  def merge_overlapping_time_slots(time_slots) when is_list(time_slots) do
+    # Sort by start time
+    sorted_slots = Enum.sort_by(time_slots, fn slot ->
+      case time_to_minutes(slot["start_time"]) do
+        {:ok, minutes} -> minutes
+        _ -> 9999  # Put invalid times at the end
+      end
+    end)
+
+    # Merge overlapping slots
+    merged = Enum.reduce(sorted_slots, [], fn slot, acc ->
+      case acc do
+        [] ->
+          [slot]
+        [last_slot | rest] ->
+          if time_slots_overlap?(last_slot["start_time"], last_slot["end_time"],
+                                 slot["start_time"], slot["end_time"]) do
+            # Merge the slots
+            merged_slot = %{
+              "start_time" => last_slot["start_time"],
+              "end_time" => latest_end_time(last_slot["end_time"], slot["end_time"]),
+              "timezone" => last_slot["timezone"] || slot["timezone"] || "UTC"
+            }
+            merged_slot = Map.put(merged_slot, "display",
+              generate_time_range_display(merged_slot["start_time"], merged_slot["end_time"]))
+
+            [merged_slot | rest]
+          else
+            [slot | acc]
+          end
+      end
+    end)
+
+    Enum.reverse(merged)
+  end
+
+  def merge_overlapping_time_slots(_), do: []
+
+  @doc """
+  Creates date+time poll option with time slot support.
+
+  ## Parameters
+  - poll: The poll to add the option to (must be poll_type: "date_selection")
+  - user: The user suggesting the option
+  - date: Date as string, Date struct, or DateTime struct
+  - opts: Options including:
+    - :time_enabled - boolean to enable time slots (default: false)
+    - :time_slots - list of time slot maps
+    - :all_day - boolean for all-day events (default: true unless time_enabled)
+    - :timezone - timezone for time slots (default: "UTC")
+    - :title - custom title
+    - :description - description
+
+  ## Examples
+      iex> create_date_time_poll_option(poll, user, "2024-12-25",
+      ...>   time_enabled: true,
+      ...>   time_slots: [%{"start_time" => "09:00", "end_time" => "12:00"}]
+      ...> )
+      {:ok, %PollOption{}}
+  """
+  def create_date_time_poll_option(%Poll{poll_type: "date_selection"} = poll, %User{} = user, date, opts \\ []) do
+    alias EventasaurusApp.Events.DateMetadata
+
+    # Extract time options
+    time_enabled = Keyword.get(opts, :time_enabled, false)
+    time_slots = Keyword.get(opts, :time_slots, [])
+    all_day = Keyword.get(opts, :all_day, not time_enabled)
+    timezone = Keyword.get(opts, :timezone, "UTC")
+
+    # Validate time slots if time is enabled
+    if time_enabled and length(time_slots) > 0 do
+      case validate_time_slots(time_slots) do
+        :ok -> :ok
+        {:error, reasons} ->
+          changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
+          |> Ecto.Changeset.add_error(:metadata, "Invalid time slots: #{Enum.join(reasons, ", ")}")
+          {:error, changeset}
+      end
+    end
+
+    # Build enhanced metadata with time support
+    enhanced_opts = opts
+    |> Keyword.put(:time_enabled, time_enabled)
+    |> Keyword.put(:time_slots, time_slots)
+    |> Keyword.put(:all_day, all_day)
+
+    # Ensure time slots have proper timezone and display
+    enhanced_time_slots = if time_enabled and length(time_slots) > 0 do
+      Enum.map(time_slots, fn slot ->
+        slot
+        |> Map.put_new("timezone", timezone)
+        |> Map.put_new("display", generate_time_range_display(slot["start_time"], slot["end_time"]))
+      end)
+    else
+      []
+    end
+
+    final_opts = Keyword.put(enhanced_opts, :time_slots, enhanced_time_slots)
+
+    try do
+      metadata = DateMetadata.build_date_metadata(date, final_opts)
+
+      # Parse date for title generation
+      parsed_date = case date do
+        %Date{} = d -> d
+        date_string -> Date.from_iso8601!(date_string)
+      end
+
+      # Generate enhanced title including time information
+      title = if time_enabled and length(enhanced_time_slots) > 0 do
+        time_display = enhanced_time_slots
+        |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
+        |> Enum.join(", ")
+
+        base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
+        "#{base_title} - #{time_display}"
+      else
+        Keyword.get(opts, :title, format_date_for_display(parsed_date))
+      end
+
+      description = Keyword.get(opts, :description)
+
+      attrs = %{
+        "poll_id" => poll.id,
+        "suggested_by_id" => user.id,
+        "title" => title,
+        "description" => description,
+        "metadata" => metadata,
+        "status" => "active"
+      }
+
+      create_poll_option(attrs, poll_type: "date_selection")
+    rescue
+      e in ArgumentError ->
+        changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
+        |> Ecto.Changeset.add_error(:metadata, "Invalid date or time: #{e.message}")
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Updates a date poll option with new time information.
+
+  ## Parameters
+  - poll_option: The poll option to update
+  - opts: Update options including time_enabled, time_slots, etc.
+
+  ## Examples
+      iex> update_date_time_poll_option(option, time_enabled: true, time_slots: [...])
+      {:ok, %PollOption{}}
+  """
+  def update_date_time_poll_option(%PollOption{} = poll_option, opts \\ []) do
+    alias EventasaurusApp.Events.DateMetadata
+
+    # Get current metadata
+    current_metadata = poll_option.metadata || %{}
+    current_date = Map.get(current_metadata, "date")
+
+    if current_date do
+      # Parse current date
+      {:ok, parsed_date} = Date.from_iso8601(current_date)
+
+      # Merge current metadata with new options
+      preserved_opts = [
+        created_at: Map.get(current_metadata, "created_at"),
+        updated_at: DateTime.utc_now() |> DateTime.to_iso8601()
+      ]
+
+      final_opts = Keyword.merge(preserved_opts, opts)
+
+      try do
+        new_metadata = DateMetadata.build_date_metadata(parsed_date, final_opts)
+
+        # Update title if time information changed
+        time_enabled = Keyword.get(opts, :time_enabled, Map.get(current_metadata, "time_enabled", false))
+        time_slots = Keyword.get(opts, :time_slots, Map.get(current_metadata, "time_slots", []))
+
+        new_title = if time_enabled and length(time_slots) > 0 do
+          time_display = time_slots
+          |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
+          |> Enum.join(", ")
+
+          base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
+          "#{base_title} - #{time_display}"
+        else
+          Keyword.get(opts, :title, poll_option.title)
+        end
+
+        attrs = %{
+          "metadata" => new_metadata,
+          "title" => new_title
+        }
+
+        # Add description if provided
+        attrs = if description = Keyword.get(opts, :description) do
+          Map.put(attrs, "description", description)
+        else
+          attrs
+        end
+
+        update_poll_option(poll_option, attrs, poll_type: "date_selection")
+      rescue
+        e in ArgumentError ->
+          changeset = PollOption.changeset(poll_option, %{}, poll_type: "date_selection")
+          |> Ecto.Changeset.add_error(:metadata, "Invalid time information: #{e.message}")
+          {:error, changeset}
+      end
+    else
+      {:error, "Cannot update time information: no date found in metadata"}
+    end
+  end
+
+  # Private helper functions for time operations
+
+  defp latest_end_time(end_time1, end_time2) do
+    case {time_to_minutes(end_time1), time_to_minutes(end_time2)} do
+      {{:ok, minutes1}, {:ok, minutes2}} ->
+        if minutes1 > minutes2, do: end_time1, else: end_time2
+      _ ->
+        end_time1  # Fallback to first time if parsing fails
+    end
+  end
+
 end
