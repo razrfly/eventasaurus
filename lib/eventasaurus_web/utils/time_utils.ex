@@ -55,4 +55,17 @@ defmodule EventasaurusWeb.Utils.TimeUtils do
         0
     end
   end
+
+  @doc """
+  Format time string (HH:MM) to 12-hour format with AM/PM
+  Returns formatted string like "2:30 PM" or original string if parsing fails
+  """
+  def format_time_12hour(time_str) when is_binary(time_str) do
+    case parse_time_string(time_str) do
+      {:ok, {hour, minute}} -> format_time_display(hour, minute)
+      {:error, _} -> time_str
+    end
+  end
+
+  def format_time_12hour(_), do: ""
 end

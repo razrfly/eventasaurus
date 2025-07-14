@@ -619,4 +619,207 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   defp phase_to_display("voting_only"), do: "Voting Only"
   defp phase_to_display("closed"), do: "Closed"
   defp phase_to_display(phase), do: phase |> String.replace("_", " ") |> String.capitalize()
+
+  # =================
+  # Time Extraction and Formatting Functions (SIMPLIFIED - NO BACKWARDS COMPATIBILITY)
+  # =================
+
+  @doc """
+  Extracts time slots from a poll option's metadata.
+  Since we're in development, we expect all date options to use the new schema.
+
+  Returns empty list for all-day events.
+  """
+  def extract_time_slots(%PollOption{metadata: metadata}) when is_map(metadata) do
+    case metadata do
+      %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) ->
+        time_slots
+
+      %{"all_day" => true} ->
+        []
+
+      _ ->
+        []
+    end
+  end
+
+  def extract_time_slots(_), do: []
+
+  @doc """
+  Checks if a poll option has time slots enabled.
+  """
+  def has_time_slots?(%PollOption{metadata: metadata}) when is_map(metadata) do
+    Map.get(metadata, "time_enabled", false) == true and
+    not Map.get(metadata, "all_day", false)
+  end
+
+  def has_time_slots?(_), do: false
+
+  @doc """
+  Checks if a poll option is configured as all-day.
+  """
+  def is_all_day?(%PollOption{metadata: metadata}) when is_map(metadata) do
+    Map.get(metadata, "all_day", false) == true
+  end
+
+  def is_all_day?(_), do: false
+
+  @doc """
+  Formats time slots for display in the UI.
+  """
+  def format_time_slots_display(time_slots) when is_list(time_slots) do
+    time_slots
+    |> Enum.map(&format_single_time_slot/1)
+    |> Enum.join(", ")
+  end
+
+  def format_time_slots_display(_), do: ""
+
+  @doc """
+  Formats a single time slot for display.
+  """
+  def format_single_time_slot(%{"start_time" => start_time, "end_time" => end_time}) do
+    start_formatted = format_time_for_display(start_time)
+    end_formatted = format_time_for_display(end_time)
+    "#{start_formatted} - #{end_formatted}"
+  end
+
+  def format_single_time_slot(%{"start_time" => start_time}) do
+    format_time_for_display(start_time)
+  end
+
+  def format_single_time_slot(_), do: ""
+
+  @doc """
+  Formats a time string (HH:MM) for user-friendly display (12-hour format).
+  """
+  def format_time_for_display(time_string) when is_binary(time_string) do
+    case String.split(time_string, ":") do
+      [hour_str, minute_str] ->
+        with {hour, ""} <- Integer.parse(hour_str),
+             {minute, ""} <- Integer.parse(minute_str),
+             true <- hour >= 0 and hour <= 23,
+             true <- minute >= 0 and minute <= 59 do
+          format_12_hour_time(hour, minute)
+        else
+          _ -> time_string  # Fallback to original string if parsing fails
+        end
+
+      _ -> time_string
+    end
+  end
+
+  def format_time_for_display(time) when is_integer(time) do
+    hour = div(time, 60)
+    minute = rem(time, 60)
+    format_12_hour_time(hour, minute)
+  end
+
+  def format_time_for_display(_), do: ""
+
+  @doc """
+  Converts 24-hour time to 12-hour format with AM/PM.
+  """
+  def format_12_hour_time(hour, minute) when hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 do
+    {display_hour, period} = case hour do
+      0 -> {12, "AM"}
+      h when h < 12 -> {h, "AM"}
+      12 -> {12, "PM"}
+      h -> {h - 12, "PM"}
+    end
+
+    minute_str = minute |> Integer.to_string() |> String.pad_leading(2, "0")
+    "#{display_hour}:#{minute_str} #{period}"
+  end
+
+  def format_12_hour_time(_, _), do: ""
+
+  @doc """
+  Gets the timezone from poll option metadata.
+  """
+  def get_timezone(%PollOption{metadata: metadata}) when is_map(metadata) do
+    Map.get(metadata, "timezone", "UTC")
+  end
+
+  def get_timezone(_), do: "UTC"
+
+  @doc """
+  Creates a comprehensive display string for a date option including time information.
+  """
+  def format_date_with_time_display(%PollOption{} = option) do
+    base_display = Map.get(option.metadata || %{}, "display_date", option.title)
+
+    cond do
+      is_all_day?(option) ->
+        "#{base_display} (All Day)"
+
+      has_time_slots?(option) ->
+        time_slots = extract_time_slots(option)
+        case time_slots do
+          [] -> base_display
+          slots -> "#{base_display} • #{format_time_slots_display(slots)}"
+        end
+
+      true ->
+        base_display
+    end
+  end
+
+  @doc """
+  Validates that time slots don't overlap within a single option.
+  """
+  def validate_no_time_overlaps(time_slots) when is_list(time_slots) do
+    time_slots
+    |> Enum.map(&parse_time_slot_to_minutes/1)
+    |> Enum.filter(& &1 != nil)
+    |> check_overlaps()
+  end
+
+  def validate_no_time_overlaps(_), do: true
+
+  # Helper function to parse time slot to minutes for overlap checking
+  defp parse_time_slot_to_minutes(%{"start_time" => start_time, "end_time" => end_time}) do
+    with start_minutes when is_integer(start_minutes) <- time_to_minutes(start_time),
+         end_minutes when is_integer(end_minutes) <- time_to_minutes(end_time) do
+      {start_minutes, end_minutes}
+    else
+      _ -> nil
+    end
+  end
+
+  defp parse_time_slot_to_minutes(_), do: nil
+
+  # Helper function to check for overlaps
+  defp check_overlaps(time_ranges) do
+    time_ranges
+    |> Enum.sort()
+    |> Enum.reduce_while({true, nil}, fn {start, end_time}, {_acc, last_end} ->
+      if last_end && start < last_end do
+        {:halt, {false, nil}}
+      else
+        {:cont, {true, end_time}}
+      end
+    end)
+    |> elem(0)
+  end
+
+  # Helper function to convert time string to minutes since midnight
+  defp time_to_minutes(time_string) when is_binary(time_string) do
+    case String.split(time_string, ":") do
+      [hour_str, minute_str] ->
+        with {hour, ""} <- Integer.parse(hour_str),
+             {minute, ""} <- Integer.parse(minute_str),
+             true <- hour >= 0 and hour <= 23,
+             true <- minute >= 0 and minute <= 59 do
+          hour * 60 + minute
+        else
+          _ -> nil
+        end
+
+      _ -> nil
+    end
+  end
+
+  defp time_to_minutes(_), do: nil
+
 end

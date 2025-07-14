@@ -41,6 +41,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
+  alias EventasaurusWeb.Utils.TimeUtils
 
 
   @impl true
@@ -179,9 +180,31 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       <div class="px-6 py-4">
         <div class="flex items-center justify-between">
           <div class="flex-1 min-w-0">
-            <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+            <div class="flex items-center space-x-2">
+              <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+              <%= if has_time_slots?(option) do %>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                  <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  Times
+                </span>
+              <% end %>
+            </div>
+
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+            <% end %>
+
+            <!-- Time Slots Display -->
+            <%= if has_time_slots?(option) do %>
+              <div class="mt-2 flex flex-wrap gap-1">
+                <%= for time_slot <- get_time_slots_from_option(option) do %>
+                  <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-white border border-gray-200 text-gray-700">
+                    <%= format_time_slot_display(time_slot) %>
+                  </span>
+                <% end %>
+              </div>
             <% end %>
           </div>
 
@@ -253,18 +276,33 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             class={approval_checkbox_class(@vote_state[option.id], @anonymous_mode)}
           />
           <div class="ml-3 flex-1 min-w-0">
-            <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+            <div class="flex items-center space-x-2">
+              <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+              <%= if has_time_slots?(option) do %>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                  <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  Times
+                </span>
+              <% end %>
+            </div>
+
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
             <% end %>
+
+            <!-- Time Slots Display -->
+            <%= if has_time_slots?(option) do %>
+              <div class="mt-2 flex flex-wrap gap-1">
+                <%= for time_slot <- get_time_slots_from_option(option) do %>
+                  <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-white border border-gray-200 text-gray-700">
+                    <%= format_time_slot_display(time_slot) %>
+                  </span>
+                <% end %>
+              </div>
+            <% end %>
           </div>
-          <%= if @anonymous_mode and @vote_state[option.id] == "approved" do %>
-            <div class="ml-2 text-blue-500">
-              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-              </svg>
-            </div>
-          <% end %>
         </label>
       </div>
     <% end %>
@@ -1184,4 +1222,36 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       _ -> {:error, :invalid_integer}
     end
   end
+
+  defp has_time_slots?(option) do
+    case option.metadata do
+      %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) and length(time_slots) > 0 ->
+        true
+      _ ->
+        false
+    end
+  end
+
+  defp get_time_slots_from_option(option) do
+    case option.metadata do
+      %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) ->
+        time_slots
+      _ ->
+        []
+    end
+  end
+
+  defp format_time_slot_display(slot) when is_map(slot) do
+    case {slot["start_time"], slot["end_time"]} do
+      {start_time, end_time} when is_binary(start_time) and is_binary(end_time) ->
+        # Convert 24-hour format to 12-hour format for display
+        start_display = TimeUtils.format_time_12hour(start_time)
+        end_display = TimeUtils.format_time_12hour(end_time)
+        "#{start_display} - #{end_display}"
+      _ ->
+        "Invalid time slot"
+    end
+  end
+
+  defp format_time_slot_display(_), do: "Invalid time slot"
 end
