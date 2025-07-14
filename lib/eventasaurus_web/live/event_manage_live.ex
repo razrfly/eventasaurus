@@ -1448,4 +1448,10 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, socket}
   end
 
+  defp handle_specific_message({:save_date_time_slots, %{date: _date, time_slots: _time_slots}}, socket) do
+    # Time slot changes from TimeSlotPickerComponent - just acknowledge
+    # The component handles the time slots internally
+    {:noreply, socket}
+  end
+
 end
