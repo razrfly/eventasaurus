@@ -175,7 +175,10 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                 {:noreply, put_flash(socket, :info, "Date #{formatted_date} is already an option")}
               else
                 # Create enhanced metadata with time support
-                metadata = create_date_metadata_with_time(date, time_enabled, date_time_slots[sanitized_date_string])
+                # Use consistent ISO8601 format for time slot lookup
+                date_iso = Date.to_iso8601(date)
+                app_timezone = Application.get_env(:eventasaurus, :timezone, "UTC")
+                metadata = create_date_metadata_with_time(date, time_enabled, date_time_slots[date_iso], app_timezone)
 
                 # Create new date option using our generic system with enhanced metadata
                 case Events.create_date_poll_option(poll, user, date, metadata) do
@@ -189,7 +192,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                      |> put_flash(:success, "Added #{formatted_date} to the poll")
                      |> assign(:loading, false)
                      # Clear time slots for this date after creating option
-                     |> assign(:date_time_slots, Map.delete(date_time_slots, sanitized_date_string))}
+                     |> assign(:date_time_slots, Map.delete(date_time_slots, date_iso))}
 
                   {:error, reason} ->
                     Logger.error("Failed to create date option: #{inspect(reason)}")
@@ -784,7 +787,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   defp format_deadline(_), do: "Invalid"
 
-  defp create_date_metadata_with_time(date, time_enabled, time_slots) do
+  defp create_date_metadata_with_time(date, time_enabled, time_slots, timezone) do
     base_metadata = %{
       "date" => Date.to_iso8601(date),
       "display_date" => DatePollAdapter.safe_format_date_for_display(date),
@@ -797,11 +800,12 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       |> Map.put("time_enabled", true)
       |> Map.put("all_day", false)
       |> Map.put("time_slots", time_slots)
-      |> Map.put("timezone", "UTC") # Default timezone
+      |> Map.put("timezone", timezone)
     else
       base_metadata
       |> Map.put("time_enabled", false)
       |> Map.put("all_day", true)
+      |> Map.put("timezone", timezone)
     end
   end
 
