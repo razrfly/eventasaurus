@@ -80,7 +80,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
       assigns[:calendar_event] ->
         # Handle calendar events sent from EventManageLive
-        {event_name, dates} = assigns.calendar_event
+        {_event_name, dates} = assigns.calendar_event
 
         # Process the calendar event (similar to handle_info)
         socket = assign(socket, :selected_dates, dates)
@@ -1229,12 +1229,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       # Create multiple poll options, one for each selected date
       results = socket.assigns.selected_dates
       |> Enum.map(fn selected_date ->
-        # Create metadata structure for date_selection polls
-        date_metadata = %{
-          "date" => Date.to_iso8601(selected_date),
-          "display_date" => format_date_for_display(selected_date),
-          "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-        }
+        # Create metadata structure for date_selection polls using proper builder
+        date_metadata = EventasaurusApp.Events.DateMetadata.build_date_metadata(
+          selected_date,
+          [display_date: format_date_for_display(selected_date)]
+        )
 
         # Create params for this specific date
         date_params = Map.merge(option_params, %{
@@ -1588,12 +1587,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
-    # Handle calendar events sent from CalendarComponent
-  def handle_info({:calendar_event, "calendar_date_selected", %{dates: dates}}, socket) do
-    {:noreply, assign(socket, :selected_dates, dates)}
-  end
-
-    @impl true
+  @impl true
   def handle_event("toggle_date", %{"date" => date_string}, socket) do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
@@ -1616,6 +1610,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         {:noreply, socket}
     end
   end
+
+    # Handle calendar events sent from CalendarComponent
+  def handle_info({:calendar_event, "calendar_date_selected", %{dates: dates}}, socket) do
+    {:noreply, assign(socket, :selected_dates, dates)}
+  end
+
+
 
 
 
@@ -1836,7 +1837,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     Logger.debug("Admin interface external_id: #{inspect(final_option_params["external_id"])}")
     Logger.debug("Admin interface description preview: #{String.slice(final_option_params["description"] || "", 0, 100)}...")
 
-    Events.create_poll_option(final_option_params)
+    Events.create_poll_option(final_option_params, [poll_type: socket.assigns.poll.poll_type])
   end
 
   # Helper to detect if description has been enhanced (contains director/year pattern)
