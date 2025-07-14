@@ -431,25 +431,25 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                   <%= if length(@poll_options) > 0 do %>
                     <div class="space-y-3">
                       <%= for option <- @poll_options do %>
-                        <% summary = Map.get(@vote_summaries, option.id, %{yes: 0, maybe: 0, no: 0, total: 0}) %>
+                        <% summary = Map.get(@vote_summaries, option.id, %{vote_counts: %{yes: 0, maybe: 0, no: 0}, total_votes: 0}) %>
                         <div class="p-3 border border-gray-200 rounded-lg">
                           <div class="flex items-center justify-between mb-2">
                             <span class="font-medium text-gray-900"><%= option.title %></span>
-                            <span class="text-sm text-gray-500"><%= summary.total %> vote<%= if summary.total != 1, do: "s" %></span>
+                                                          <span class="text-sm text-gray-500"><%= summary.total_votes %> vote<%= if summary.total_votes != 1, do: "s" %></span>
                           </div>
-                          <%= if summary.total > 0 do %>
+                          <%= if summary.total_votes > 0 do %>
                             <div class="flex items-center space-x-4 text-sm">
                               <div class="flex items-center">
                                 <span class="w-3 h-3 bg-green-500 rounded-full mr-1"></span>
-                                <span class="text-gray-600">Yes: <%= summary.yes %></span>
+                                <span class="text-gray-600">Yes: <%= summary.vote_counts.yes %></span>
                               </div>
                               <div class="flex items-center">
                                 <span class="w-3 h-3 bg-yellow-500 rounded-full mr-1"></span>
-                                <span class="text-gray-600">Maybe: <%= summary.maybe %></span>
+                                <span class="text-gray-600">Maybe: <%= summary.vote_counts.maybe %></span>
                               </div>
                               <div class="flex items-center">
                                 <span class="w-3 h-3 bg-red-500 rounded-full mr-1"></span>
-                                <span class="text-gray-600">No: <%= summary.no %></span>
+                                <span class="text-gray-600">No: <%= summary.vote_counts.no %></span>
                               </div>
                             </div>
                           <% else %>
@@ -580,9 +580,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       end
 
       vote_counts = %{
-        yes: Enum.count(votes, fn vote -> DatePollAdapter.safe_vote_display(vote) == "Yes" end),
-        maybe: Enum.count(votes, fn vote -> DatePollAdapter.safe_vote_display(vote) == "Maybe" end),
-        no: Enum.count(votes, fn vote -> DatePollAdapter.safe_vote_display(vote) == "No" end)
+        yes: Enum.count(votes, fn vote -> vote.vote_value == "yes" end),
+        maybe: Enum.count(votes, fn vote -> vote.vote_value == "maybe" end),
+        no: Enum.count(votes, fn vote -> vote.vote_value == "no" end)
       }
 
       total_votes = vote_counts.yes + vote_counts.maybe + vote_counts.no
