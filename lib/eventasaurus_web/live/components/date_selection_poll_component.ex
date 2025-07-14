@@ -95,7 +95,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       vote_summaries = calculate_vote_summaries(poll_options, user_votes)
 
       # Determine phase display string
-      phase_display = format_phase_for_display(poll.phase)
+      phase_display = DatePollAdapter.safe_status_display(poll)
 
       {:ok,
        socket
@@ -125,38 +125,53 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     if poll.phase != "list_building" do
       {:noreply, put_flash(socket, :error, "Cannot add dates during #{socket.assigns.phase_display} phase")}
     else
-      case Date.from_iso8601(date_string) do
-        {:ok, date} ->
-          # Check if this date is already an option
-          existing_option = Enum.find(socket.assigns.poll_options, fn option ->
-            case Events.get_date_from_poll_option(option) do
-              {:ok, existing_date} -> Date.compare(existing_date, date) == :eq
-              _ -> false
-            end
-          end)
+      # Use adapter's date sanitization
+      case DatePollAdapter.sanitize_date_input(date_string) do
+        {:ok, sanitized_date_string} ->
+          case Date.from_iso8601(sanitized_date_string) do
+            {:ok, date} ->
+              # Check if this date is already an option
+              existing_option = Enum.find(socket.assigns.poll_options, fn option ->
+                case DatePollAdapter.validate_date_option(option) do
+                  {:ok, _} ->
+                                         # Use adapter's date extraction function
+                     case DatePollAdapter.extract_date_from_option(option) do
+                      {:ok, existing_date} -> Date.compare(existing_date, date) == :eq
+                      _ -> false
+                    end
+                  _ -> false
+                end
+              end)
 
-          if existing_option do
-            {:noreply, put_flash(socket, :info, "Date #{Calendar.strftime(date, "%B %d, %Y")} is already an option")}
-          else
-            # Create new date option using our generic system
-            case Events.create_date_poll_option(poll, user, date, %{}) do
-              {:ok, _option} ->
-                # Send real-time update
-                send(self(), {:poll_option_added, poll.id})
+              if existing_option do
+                # Use adapter's safe display formatting
+                formatted_date = DatePollAdapter.safe_format_date_for_display(date)
+                {:noreply, put_flash(socket, :info, "Date #{formatted_date} is already an option")}
+              else
+                # Create new date option using our generic system
+                case Events.create_date_poll_option(poll, user, date, %{}) do
+                  {:ok, _option} ->
+                    # Send real-time update
+                    send(self(), {:poll_option_added, poll.id})
 
-                {:noreply,
-                 socket
-                 |> put_flash(:success, "Added #{Calendar.strftime(date, "%B %d, %Y")} to the poll")
-                 |> assign(:loading, false)}
+                    formatted_date = DatePollAdapter.safe_format_date_for_display(date)
+                    {:noreply,
+                     socket
+                     |> put_flash(:success, "Added #{formatted_date} to the poll")
+                     |> assign(:loading, false)}
 
-              {:error, reason} ->
-                Logger.error("Failed to create date option: #{inspect(reason)}")
-                {:noreply, put_flash(socket, :error, "Failed to add date option")}
-            end
+                  {:error, reason} ->
+                    Logger.error("Failed to create date option: #{inspect(reason)}")
+                    {:noreply, put_flash(socket, :error, "Failed to add date option")}
+                end
+              end
+
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, "Invalid date format")}
           end
 
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Invalid date format")}
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Invalid date input: #{reason}")}
       end
     end
   end
@@ -525,7 +540,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
     selected_dates = extract_dates_from_options(poll_options)
     vote_summaries = calculate_vote_summaries(poll_options, user_votes)
-    phase_display = format_phase_for_display(updated_poll.phase)
+    phase_display = DatePollAdapter.safe_status_display(updated_poll)
 
     {:noreply,
      socket
@@ -542,7 +557,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   defp extract_dates_from_options(poll_options) do
     poll_options
     |> Enum.map(fn option ->
-      case Events.get_date_from_poll_option(option) do
+      case DatePollAdapter.extract_date_from_option(option) do
         {:ok, date} -> date
         _ -> nil
       end
@@ -558,26 +573,30 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       # Load votes for this option - use the existing votes from preloaded data
       votes = option.votes || []
 
+      # Use adapter to safely display option title and validate option
+      option_display = case DatePollAdapter.validate_date_option(option) do
+        {:ok, _} -> DatePollAdapter.safe_option_title(option)
+        {:error, _} -> option.title || "Invalid Option"
+      end
+
+      vote_counts = %{
+        yes: Enum.count(votes, fn vote -> DatePollAdapter.safe_vote_display(vote) == "Yes" end),
+        maybe: Enum.count(votes, fn vote -> DatePollAdapter.safe_vote_display(vote) == "Maybe" end),
+        no: Enum.count(votes, fn vote -> DatePollAdapter.safe_vote_display(vote) == "No" end)
+      }
+
+      total_votes = vote_counts.yes + vote_counts.maybe + vote_counts.no
+
       summary = %{
-        yes: Enum.count(votes, &(&1.vote_value == "yes")),
-        maybe: Enum.count(votes, &(&1.vote_value == "maybe")),
-        no: Enum.count(votes, &(&1.vote_value == "no")),
-        total: length(votes)
+        option_id: option.id,
+        option_title: option_display,
+        vote_counts: vote_counts,
+        total_votes: total_votes,
+        winner_score: vote_counts.yes * 2 + vote_counts.maybe * 1 # Weighted scoring
       }
 
       {option.id, summary}
     end)
-  end
-
-  defp format_phase_for_display(phase) do
-    case phase do
-      "list_building" -> "Collecting dates"
-      "voting" -> "Voting open"
-      "voting_with_suggestions" -> "Voting + suggestions"
-      "voting_only" -> "Voting only"
-      "closed" -> "Closed"
-      _ -> String.replace(phase, "_", " ") |> String.capitalize()
-    end
   end
 
   defp phase_badge_class(phase) do
