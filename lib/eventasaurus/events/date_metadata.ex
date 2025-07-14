@@ -86,7 +86,14 @@ defmodule EventasaurusApp.Events.DateMetadata do
   Validates time slot embedded schema.
   """
   def time_slot_changeset(time_slot, attrs) do
-    time_slot
+    # Handle case where Ecto passes an empty map for new embedded structs
+    time_slot_struct = case time_slot do
+      %__MODULE__.TimeSlot{} -> time_slot  # Already a proper struct
+      %{} -> %__MODULE__.TimeSlot{}  # Empty map, create proper struct
+      _ -> time_slot  # Other cases (shouldn't happen but be defensive)
+    end
+
+    time_slot_struct
     |> cast(attrs, [:start_time, :end_time, :timezone, :display])
     |> validate_required([:start_time, :end_time])
     |> validate_time_format(:start_time)
