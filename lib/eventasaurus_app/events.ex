@@ -4268,18 +4268,18 @@ defmodule EventasaurusApp.Events do
   @doc """
   Creates a poll option.
   """
-  def create_poll_option(attrs \\ %{}) do
+  def create_poll_option(attrs \\ %{}, opts \\ []) do
     %PollOption{}
-    |> PollOption.creation_changeset(attrs)
+    |> PollOption.creation_changeset(attrs, opts)
     |> Repo.insert()
   end
 
   @doc """
   Updates a poll option.
   """
-  def update_poll_option(%PollOption{} = poll_option, attrs) do
+  def update_poll_option(%PollOption{} = poll_option, attrs, opts \\ []) do
     poll_option
-    |> PollOption.changeset(attrs)
+    |> PollOption.changeset(attrs, opts)
     |> Repo.update()
   end
 
@@ -4416,31 +4416,32 @@ defmodule EventasaurusApp.Events do
     alias EventasaurusApp.Events.DateMetadata
 
     # Use the new DateMetadata.build_date_metadata function for proper structure
-    case DateMetadata.build_date_metadata(date, opts) do
-      metadata when is_map(metadata) ->
-        # Use custom title or generate from date
-        parsed_date = case date do
-          %Date{} = d -> d
-          date_string -> Date.from_iso8601!(date_string)
-        end
+    try do
+      metadata = DateMetadata.build_date_metadata(date, opts)
 
-        title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
-        description = Keyword.get(opts, :description)
+      # Use custom title or generate from date
+      parsed_date = case date do
+        %Date{} = d -> d
+        date_string -> Date.from_iso8601!(date_string)
+      end
 
-        attrs = %{
-          "poll_id" => poll.id,
-          "suggested_by_id" => user.id,
-          "title" => title,
-          "description" => description,
-          "metadata" => metadata,
-          "status" => "active"
-        }
+      title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
+      description = Keyword.get(opts, :description)
 
-        # The PollOption changeset will now validate the metadata structure
-        create_poll_option(attrs)
+      attrs = %{
+        "poll_id" => poll.id,
+        "suggested_by_id" => user.id,
+        "title" => title,
+        "description" => description,
+        "metadata" => metadata,
+        "status" => "active"
+      }
+
+      # The PollOption changeset will now validate the metadata structure
+      create_poll_option(attrs, poll_type: "date_selection")
     rescue
       e in ArgumentError ->
-        changeset = PollOption.changeset(%PollOption{}, %{})
+        changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
         |> Ecto.Changeset.add_error(:metadata, "Invalid date: #{e.message}")
         {:error, changeset}
     end
@@ -4532,10 +4533,16 @@ defmodule EventasaurusApp.Events do
         created_at: get_in(poll_option.metadata, ["created_at"]) || DateTime.utc_now() |> DateTime.to_iso8601()
       ] ++ opts)
 
-      # Parse date for title generation
-      parsed_date = case new_date do
-        %Date{} = d -> d
-        date_string -> Date.from_iso8601!(date_string)
+      # Extract parsed date from metadata instead of redundantly parsing
+      parsed_date = case new_metadata do
+        %{"date" => date_string} when is_binary(date_string) ->
+          Date.from_iso8601!(date_string)
+        _ ->
+          # Fallback: parse the original input if metadata doesn't contain expected format
+          case new_date do
+            %Date{} = d -> d
+            date_string -> Date.from_iso8601!(date_string)
+          end
       end
 
       # Update title if provided, otherwise use new date display
@@ -4545,15 +4552,17 @@ defmodule EventasaurusApp.Events do
       }
 
       # Add description if provided
-      if description = Keyword.get(opts, :description) do
-        attrs = Map.put(attrs, "description", description)
+      attrs = if description = Keyword.get(opts, :description) do
+        Map.put(attrs, "description", description)
+      else
+        attrs
       end
 
       # The PollOption changeset will validate the new metadata structure
-      update_poll_option(poll_option, attrs)
+      update_poll_option(poll_option, attrs, poll_type: "date_selection")
     rescue
       e in ArgumentError ->
-        changeset = PollOption.changeset(poll_option, %{})
+        changeset = PollOption.changeset(poll_option, %{}, poll_type: "date_selection")
         |> Ecto.Changeset.add_error(:metadata, "Invalid date: #{e.message}")
         {:error, changeset}
     end
@@ -4600,9 +4609,7 @@ defmodule EventasaurusApp.Events do
 
   defp parse_date_input(_), do: {:error, "Invalid date input type"}
 
-  defp format_date_for_storage(%Date{} = date) do
-    {:ok, Date.to_iso8601(date)}
-  end
+
 
   defp format_date_for_display(%Date{} = date) do
     # Format as "Monday, December 25, 2024"
@@ -4647,7 +4654,7 @@ defmodule EventasaurusApp.Events do
 
     results = Enum.map(options, fn option ->
       case EventasaurusWeb.Adapters.DatePollAdapter.validate_date_metadata(option) do
-        {:ok, _} -> {:valid, option}
+        {:ok, _} -> {:valid, option, nil}
         {:error, reason} -> {:invalid, option, reason}
       end
     end)
@@ -4693,7 +4700,7 @@ defmodule EventasaurusApp.Events do
           updated_at: get_in(option.metadata, ["updated_at"]) || option.updated_at |> DateTime.to_iso8601()
         ])
 
-        update_poll_option(option, %{"metadata" => valid_metadata})
+        update_poll_option(option, %{"metadata" => valid_metadata}, poll_type: "date_selection")
 
       {:error, reason} ->
         {:error, "Cannot fix metadata: #{reason}"}
@@ -5580,7 +5587,7 @@ defmodule EventasaurusApp.Events do
     Repo.transaction(fn ->
       # Determine winning date(s) based on strategy
       case determine_winning_date_options(poll, strategy, opts) do
-        {:ok, winning_option_ids} when length(winning_option_ids) > 0 ->
+        {:ok, [_ | _] = winning_option_ids} ->
           # Finalize the poll with winning options
           case finalize_poll(poll, winning_option_ids) do
             {:ok, finalized_poll} ->
