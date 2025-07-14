@@ -1097,5 +1097,26 @@ body[class*="theme-"] .theme-card:hover {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
+
+  /* Date Selection Poll Component Responsiveness */
+  .date-selection-poll-component .calendar-container {
+    @apply w-full overflow-hidden;
+  }
+
+  .date-selection-poll-component .vote-buttons {
+    @apply flex flex-col space-y-2;
+  }
+
+  .date-selection-poll-component .vote-summary {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .date-selection-poll-component .anonymous-vote-actions {
+    @apply flex flex-col space-y-2;
+  }
+
+  .date-selection-poll-component .anonymous-vote-actions button {
+    @apply w-full justify-center;
+  }
 }
 

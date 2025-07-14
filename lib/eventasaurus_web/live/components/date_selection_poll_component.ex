@@ -241,69 +241,89 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
         </div>
       <% else %>
         <!-- Poll Header -->
-        <div class="px-6 py-4 border-b border-gray-200">
-          <div class="flex items-center justify-between">
+        <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
             <div class="flex items-center space-x-3">
               <div class="flex-shrink-0">
                 <span class="text-2xl"><%= poll_emoji(@poll.poll_type) %></span>
               </div>
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900"><%= @poll.title %></h3>
+              <div class="min-w-0 flex-1">
+                <h3 class="text-lg font-semibold text-gray-900 truncate"><%= @poll.title %></h3>
                 <%= if @poll.description && @poll.description != "" do %>
-                  <p class="text-sm text-gray-600 mt-1"><%= @poll.description %></p>
+                  <p class="text-sm text-gray-600 mt-1 line-clamp-2 sm:line-clamp-none"><%= @poll.description %></p>
                 <% end %>
               </div>
             </div>
 
             <!-- Phase Badge -->
-            <div class="flex items-center space-x-2">
-              <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{phase_badge_class(@poll.phase)}"}>
-                <%= @phase_display %>
-              </span>
+            <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+              <div class="flex items-center justify-between sm:justify-start">
+                <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{phase_badge_class(@poll.phase)}"}>
+                  <%= @phase_display %>
+                </span>
 
-              <!-- Calendar Toggle for mobile -->
-              <button
-                type="button"
-                phx-click="toggle_calendar"
-                phx-target={@myself}
-                class="sm:hidden p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Toggle calendar view"
-              >
-                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
-              </button>
+                <!-- Calendar Toggle for mobile -->
+                <button
+                  type="button"
+                  phx-click="toggle_calendar"
+                  phx-target={@myself}
+                  class="sm:hidden ml-2 p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Toggle calendar view"
+                >
+                  <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"/>
+                  </svg>
+                </button>
+              </div>
+
+              <%= if @poll.deadline do %>
+                <span class="text-xs text-gray-500 sm:text-left">
+                  Deadline: <%= format_deadline(@poll.deadline) %>
+                </span>
+              <% end %>
             </div>
           </div>
         </div>
 
         <!-- Main Content -->
-        <div class={"#{if @compact_view, do: "p-4", else: "p-6"}"}>
+        <div class={"#{if @compact_view, do: "p-3 sm:p-4", else: "p-4 sm:p-6"}"}>
           <%= cond do %>
             <% @poll.phase == "list_building" -> %>
               <!-- Date Suggestion Phase -->
-              <div class="space-y-6">
+              <div class="space-y-4 sm:space-y-6">
                 <%= if @showing_calendar or not Application.get_env(:eventasaurus, :mobile_optimized, false) do %>
                   <!-- Calendar for Date Selection -->
-                  <div>
-                    <h4 class="text-sm font-medium text-gray-900 mb-3">
-                      Select dates to add to the poll
-                    </h4>
+                  <div class="overflow-hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
+                      <h4 class="text-sm font-medium text-gray-900">
+                        Select dates to add to the poll
+                      </h4>
+                      <button
+                        type="button"
+                        phx-click="toggle_calendar"
+                        phx-target={@myself}
+                        class="sm:hidden text-sm text-blue-600 hover:text-blue-700 font-medium mt-1"
+                      >
+                        Hide Calendar
+                      </button>
+                    </div>
                     <p class="text-sm text-gray-600 mb-4">
                       Click on calendar dates to suggest them for the event. Others can then vote on your suggestions.
                     </p>
 
-                    <%= if @legacy_poll_data do %>
-                      <.live_component
-                        module={CalendarComponent}
-                        id={"calendar-#{@poll.id}"}
-                        selected_dates={@selected_dates}
-                      />
-                    <% else %>
-                      <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                        <p class="text-sm text-yellow-700">Calendar temporarily unavailable. Please try refreshing the page.</p>
-                      </div>
-                    <% end %>
+                    <div class="calendar-container bg-white rounded-lg border border-gray-200 overflow-hidden">
+                      <%= if @legacy_poll_data do %>
+                        <.live_component
+                          module={CalendarComponent}
+                          id={"calendar-#{@poll.id}"}
+                          selected_dates={@selected_dates}
+                        />
+                      <% else %>
+                        <div class="p-3 sm:p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                          <p class="text-sm text-yellow-700">Calendar temporarily unavailable. Please try refreshing the page.</p>
+                        </div>
+                      <% end %>
+                    </div>
                   </div>
                 <% end %>
 
@@ -344,7 +364,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
             <% @poll.phase in ["voting", "voting_with_suggestions", "voting_only"] -> %>
               <!-- Voting Phase -->
-              <div class="space-y-6">
+              <div class="space-y-4 sm:space-y-6">
                 <!-- Date Options with Voting Interface -->
                 <%= if length(@poll_options) > 0 do %>
                   <div>
@@ -376,12 +396,12 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
                 <!-- Anonymous Vote Summary -->
                 <%= if @anonymous_mode and map_size(@temp_votes) > 0 do %>
-                  <div class="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                  <div class="p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-md">
                     <h4 class="text-sm font-medium text-blue-900 mb-2">Your temporary votes</h4>
                     <p class="text-sm text-blue-700 mb-3">
                       Your votes are saved temporarily. To make them count, please provide your details.
                     </p>
-                    <div class="flex space-x-2">
+                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                       <button
                         type="button"
                         phx-click="save_anonymous_votes"
@@ -412,11 +432,11 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
             <% @poll.phase == "closed" -> %>
               <!-- Results Phase -->
-              <div class="space-y-6">
+              <div class="space-y-4 sm:space-y-6">
                 <div>
                   <h4 class="text-sm font-medium text-gray-900 mb-3">Final Results</h4>
                   <%= if @poll.finalized_option_ids and length(@poll.finalized_option_ids) > 0 do %>
-                    <div class="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
+                    <div class="p-3 sm:p-4 bg-green-50 border border-green-200 rounded-md mb-4">
                       <h5 class="text-sm font-medium text-green-900 mb-2">Selected Date(s)</h5>
                       <%= for option_id <- @poll.finalized_option_ids do %>
                         <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
@@ -433,12 +453,12 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                       <%= for option <- @poll_options do %>
                         <% summary = Map.get(@vote_summaries, option.id, %{vote_counts: %{yes: 0, maybe: 0, no: 0}, total_votes: 0}) %>
                         <div class="p-3 border border-gray-200 rounded-lg">
-                          <div class="flex items-center justify-between mb-2">
-                            <span class="font-medium text-gray-900"><%= option.title %></span>
-                                                          <span class="text-sm text-gray-500"><%= summary.total_votes %> vote<%= if summary.total_votes != 1, do: "s" %></span>
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 space-y-1 sm:space-y-0">
+                            <span class="font-medium text-gray-900 truncate"><%= option.title %></span>
+                            <span class="text-sm text-gray-500"><%= summary.total_votes %> vote<%= if summary.total_votes != 1, do: "s" %></span>
                           </div>
                           <%= if summary.total_votes > 0 do %>
-                            <div class="flex items-center space-x-4 text-sm">
+                            <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
                               <div class="flex items-center">
                                 <span class="w-3 h-3 bg-green-500 rounded-full mr-1"></span>
                                 <span class="text-gray-600">Yes: <%= summary.vote_counts.yes %></span>
@@ -609,4 +629,26 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       _ -> "bg-gray-100 text-gray-800"
     end
   end
+
+  defp format_deadline(deadline) when is_nil(deadline), do: "None"
+
+  defp format_deadline(%DateTime{} = datetime) do
+    case DateTime.compare(datetime, DateTime.utc_now()) do
+      :lt -> "Expired"
+      _ ->
+        # Format for mobile: shorter format
+        datetime
+        |> DateTime.shift_zone!(Application.get_env(:eventasaurus, :timezone, "UTC"))
+        |> Calendar.strftime("%-m/%-d %I:%M %p")
+    end
+  end
+
+  defp format_deadline(deadline) when is_binary(deadline) do
+    case DateTime.from_iso8601(deadline) do
+      {:ok, datetime, _} -> format_deadline(datetime)
+      _ -> "Invalid"
+    end
+  end
+
+  defp format_deadline(_), do: "Invalid"
 end

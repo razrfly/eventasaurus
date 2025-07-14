@@ -22,7 +22,9 @@ defmodule EventasaurusApp.Events.PollOption do
   end
 
   @doc false
-  def changeset(poll_option, attrs) do
+  def changeset(poll_option, attrs, opts \\ []) do
+    poll_type = Keyword.get(opts, :poll_type)
+
     poll_option
     |> cast(attrs, [
       :title, :description, :external_id, :external_data, :image_url,
@@ -34,7 +36,7 @@ defmodule EventasaurusApp.Events.PollOption do
     |> validate_inclusion(:status, ~w(active hidden removed))
     |> validate_number(:order_index, greater_than_or_equal_to: 0)
     |> validate_external_data()
-    |> validate_metadata_for_poll_type()
+    |> validate_metadata_for_poll_type(poll_type)
     |> foreign_key_constraint(:poll_id)
     |> foreign_key_constraint(:suggested_by_id)
     |> unique_constraint([:poll_id, :suggested_by_id, :title],
@@ -45,7 +47,9 @@ defmodule EventasaurusApp.Events.PollOption do
   @doc """
   Creates a changeset for creating a new poll option.
   """
-  def creation_changeset(poll_option, attrs) do
+  def creation_changeset(poll_option, attrs, opts \\ []) do
+    poll_type = Keyword.get(opts, :poll_type)
+
     poll_option
     |> cast(attrs, [
       :title, :description, :external_id, :external_data, :image_url,
@@ -56,7 +60,7 @@ defmodule EventasaurusApp.Events.PollOption do
     |> validate_length(:description, max: 1000)
     |> validate_number(:order_index, greater_than_or_equal_to: 0)
     |> validate_external_data()
-    |> validate_metadata_for_poll_type()
+    |> validate_metadata_for_poll_type(poll_type)
     |> put_change(:status, "active")
     |> foreign_key_constraint(:poll_id)
     |> foreign_key_constraint(:suggested_by_id)
@@ -211,36 +215,22 @@ defmodule EventasaurusApp.Events.PollOption do
     end
   end
 
-  defp validate_metadata_for_poll_type(changeset) do
-    poll_id = get_field(changeset, :poll_id)
+  defp validate_metadata_for_poll_type(changeset, poll_type) do
     metadata = get_field(changeset, :metadata)
 
-    case {poll_id, metadata} do
-      {nil, _} -> changeset  # Poll ID validation will be handled by foreign key constraint
+    case {poll_type, metadata} do
+      {nil, _} -> changeset  # No poll type provided, skip validation
       {_, nil} -> changeset  # Metadata is optional for most poll types
-      {poll_id, metadata} when is_map(metadata) ->
-        validate_metadata_by_poll_type(changeset, poll_id, metadata)
+      {"date_selection", metadata} when is_map(metadata) ->
+        validate_date_metadata(changeset, metadata)
+      {_, metadata} when is_map(metadata) ->
+        changeset  # No specific validation for other poll types
       {_, _} ->
         add_error(changeset, :metadata, "must be a valid map")
     end
   end
 
-  defp validate_metadata_by_poll_type(changeset, poll_id, metadata) do
-    # We need to fetch the poll to check its type
-    # In a real application, this might be passed as context to avoid the DB call
-    case EventasaurusApp.Repo.get(Poll, poll_id) do
-      %Poll{poll_type: "date_selection"} ->
-        validate_date_metadata(changeset, metadata)
-      %Poll{} ->
-        changeset  # No specific validation for other poll types
-      nil ->
-        # Poll doesn't exist - let foreign key constraint handle this
-        changeset
-    end
-  rescue
-    # Handle any database errors gracefully
-    _ -> changeset
-  end
+
 
   defp validate_date_metadata(changeset, metadata) do
     # First validate the raw structure
