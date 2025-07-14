@@ -4421,7 +4421,8 @@ defmodule EventasaurusApp.Events do
         "date" => formatted_date,
         "date_display" => format_date_for_display(parsed_date),
         "date_type" => "single_date",
-        "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        "created_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+        "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
       }
 
       # Use custom title or generate from date
@@ -4585,6 +4586,10 @@ defmodule EventasaurusApp.Events do
     {:ok, DateTime.to_date(datetime)}
   end
 
+  defp parse_date_input(%NaiveDateTime{} = naive_datetime) do
+    {:ok, NaiveDateTime.to_date(naive_datetime)}
+  end
+
   defp parse_date_input(_), do: {:error, "Invalid date input type"}
 
   defp format_date_for_storage(%Date{} = date) do
@@ -4593,17 +4598,7 @@ defmodule EventasaurusApp.Events do
 
   defp format_date_for_display(%Date{} = date) do
     # Format as "Monday, December 25, 2024"
-    date
-    |> Date.to_string()
-    |> (fn date_string ->
-      case Date.from_iso8601(date_string) do
-        {:ok, parsed_date} ->
-          parsed_date
-          |> Calendar.strftime("%A, %B %d, %Y")
-        {:error, _} ->
-          date_string
-      end
-    end).()
+    Calendar.strftime(date, "%A, %B %d, %Y")
   end
 
   defp validate_date_range(%Date{} = start_date, %Date{} = end_date) do

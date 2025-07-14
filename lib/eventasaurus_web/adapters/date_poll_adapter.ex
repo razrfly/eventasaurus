@@ -217,7 +217,13 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
 
   # Private helper functions
 
-  defp extract_date_from_option(%PollOption{metadata: metadata}) when is_map(metadata) do
+  @doc """
+  Extracts a date from a poll option's metadata.
+
+  This function is used by components to extract date information
+  from generic poll options for display and processing.
+  """
+  def extract_date_from_option(%PollOption{metadata: metadata}) when is_map(metadata) do
     case Map.get(metadata, "date") do
       date_string when is_binary(date_string) ->
         case Date.from_iso8601(date_string) do
@@ -230,7 +236,7 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
     end
   end
 
-  defp extract_date_from_option(_), do: {:error, "Invalid option structure"}
+  def extract_date_from_option(_), do: {:error, "Invalid option structure"}
 
   defp map_vote_value_to_legacy("yes"), do: {:ok, :yes}
   defp map_vote_value_to_legacy("maybe"), do: {:ok, :if_need_be}
@@ -323,25 +329,23 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   """
   def get_poll_with_events_context(poll_id) do
     try do
-      case Events.get_poll!(poll_id) do
-        nil -> {:error, "Poll not found"}
-        poll ->
-          if poll.poll_type == "date_selection" do
-            # Load options and votes using Events context
-            options = Events.list_poll_options(poll_id)
+      poll = Events.get_poll!(poll_id)
 
-            # Preload votes for each option
-            options_with_votes = Enum.map(options, fn option ->
-              votes = Events.list_votes_for_poll(poll_id)
-              |> Enum.filter(&(&1.poll_option_id == option.id))
-              %{option | votes: votes}
-            end)
+      if poll.poll_type == "date_selection" do
+        # Load options and votes using Events context
+        options = Events.list_poll_options(poll)
 
-            poll_with_data = %{poll | poll_options: options_with_votes}
-            {:ok, poll_with_data}
-          else
-            {:error, "Poll is not a date_selection type"}
-          end
+        # Preload votes for each option
+        options_with_votes = Enum.map(options, fn option ->
+          votes = Events.list_votes_for_poll(poll_id)
+          |> Enum.filter(&(&1.poll_option_id == option.id))
+          %{option | votes: votes}
+        end)
+
+        poll_with_data = %{poll | poll_options: options_with_votes}
+        {:ok, poll_with_data}
+      else
+        {:error, "Poll is not a date_selection type"}
       end
     rescue
       e ->
