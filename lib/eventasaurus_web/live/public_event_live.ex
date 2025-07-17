@@ -1595,7 +1595,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
           <!-- Event Polls Section -->
           <%= if length(@event_polls || []) > 0 do %>
-            <div class="space-y-6">
+            <div class="space-y-6 mt-12">
               <%= for poll <- @event_polls do %>
                 <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
                   <div class="flex items-center gap-3 mb-4">
