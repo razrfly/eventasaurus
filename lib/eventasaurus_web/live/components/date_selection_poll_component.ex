@@ -79,6 +79,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       if connected?(socket) do
         PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}")
         PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{poll.id}")
+        PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
       end
 
       # Load poll options and votes
@@ -102,6 +103,13 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       # Determine phase display string
       phase_display = DatePollAdapter.safe_status_display(poll)
 
+      # Load poll statistics for embedded display
+      poll_stats = try do
+        Events.get_poll_voting_stats(poll)
+      rescue
+        _ -> %{options: []}
+      end
+
       {:ok,
        socket
        |> assign(assigns)
@@ -111,6 +119,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
        |> assign(:legacy_poll_data, legacy_poll_data)
        |> assign(:vote_summaries, vote_summaries)
        |> assign(:phase_display, phase_display)
+       |> assign(:poll_stats, poll_stats)
        |> assign_new(:temp_votes, fn -> %{} end)
        |> assign_new(:show_results, fn -> false end)
        |> assign_new(:anonymous_mode, fn -> is_nil(current_user) end)
@@ -265,6 +274,18 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     end
   end
 
+  def handle_info({:poll_stats_updated, stats}, socket) do
+    {:noreply, assign(socket, :poll_stats, stats)}
+  end
+
+  def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
+    if poll_id == socket.assigns.poll.id do
+      {:noreply, assign(socket, :poll_stats, stats)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -285,6 +306,11 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                 <h3 class="text-lg font-semibold text-gray-900 truncate"><%= @poll.title %></h3>
                 <%= if @poll.description && @poll.description != "" do %>
                   <p class="text-sm text-gray-600 mt-1 line-clamp-2 sm:line-clamp-none"><%= @poll.description %></p>
+                <% end %>
+                <%= if @poll.phase in ["voting", "voting_with_suggestions", "voting_only"] and @poll_stats.total_unique_voters > 0 do %>
+                  <div class="text-sm text-gray-600 mt-1">
+                    <%= if @poll_stats.total_unique_voters == 1, do: "1 voter", else: "#{@poll_stats.total_unique_voters} voters" %>
+                  </div>
                 <% end %>
               </div>
             </div>
