@@ -7,6 +7,11 @@ defmodule Eventasaurus.Application do
 
   @impl true
   def start(_type, _args) do
+    # Add Sentry logger handler for capturing crash reports
+    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
+      config: %{metadata: [:file, :line]}
+    })
+
     # Load environment variables from .env file if in dev/test environment
     env = Application.get_env(:eventasaurus, :environment, :prod)
     if env in [:dev, :test] do
