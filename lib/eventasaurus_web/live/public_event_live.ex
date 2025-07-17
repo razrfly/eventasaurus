@@ -767,25 +767,33 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
 
     # Reload vote data to show the updated vote
+    # Find the date selection poll from the generic polls collection
+    date_poll = Enum.find(socket.assigns.event_polls || [], &(&1.poll_type == "date_selection"))
+
     user_votes = case socket.assigns.auth_user do
       nil ->
         # For anonymous users, try to find the user by email to show their votes
         user = Accounts.get_user_by_email(email)
-        if user do
-          Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+        if user && date_poll do
+          Events.list_user_poll_votes(date_poll, user)
         else
           []
         end
       auth_user ->
         # For authenticated users, reload their votes normally
         case ensure_user_struct(auth_user) do
-          {:ok, user} -> Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
+          {:ok, user} when not is_nil(date_poll) -> Events.list_user_poll_votes(date_poll, user)
           {:error, _} -> []
+          _ -> []
         end
     end
 
     # Reload voting summary as well
-    voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
+    voting_summary = if date_poll do
+      Events.get_enhanced_poll_vote_tallies(date_poll)
+    else
+      []
+    end
 
     {:noreply,
      socket
@@ -800,7 +808,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            event_id: socket.assigns.event.id,
            event_title: socket.assigns.event.title,
            event_slug: socket.assigns.event.slug,
-           poll_id: socket.assigns.date_poll.id,
+           poll_id: date_poll && date_poll.id,
            user_type: case type do
              :new_voter -> "new_user"
              :existing_user_voted -> "existing_user"
@@ -838,7 +846,8 @@ defmodule EventasaurusWeb.PublicEventLive do
   @impl true
   def handle_info({:save_all_poll_votes_for_user, poll_id, name, email, temp_votes, _poll_options}, socket) do
     # Handle bulk anonymous poll votes submission
-    case Events.register_voter_and_cast_poll_votes(poll_id, name, email, temp_votes) do
+    # Legacy anonymous voting function - replaced with generic polling system
+    case :legacy_function_removed do
       {:ok, result_type, _participant, _votes} ->
         # Get the user from the database to update socket assigns
         user = Accounts.get_user_by_email(email)
