@@ -1104,15 +1104,15 @@ body[class*="theme-"] .theme-card:hover {
   }
 
   .date-selection-poll-component .vote-buttons {
-    @apply flex flex-col space-y-2;
+    @apply flex-col space-y-2;
   }
 
   .date-selection-poll-component .vote-summary {
-    @apply flex flex-wrap gap-2;
+    @apply flex-wrap gap-2;
   }
 
   .date-selection-poll-component .anonymous-vote-actions {
-    @apply flex flex-col space-y-2;
+    @apply flex-col space-y-2;
   }
 
   .date-selection-poll-component .anonymous-vote-actions button {
@@ -1173,7 +1173,7 @@ body[class*="theme-"] .theme-card:hover {
   }
   
   .event-page-grid .main-content .option-card .flex.gap-2 {
-    @apply flex flex-col gap-2 mt-3;
+    @apply flex-col mt-3;
   }
   
   .event-page-grid .main-content .option-card .flex.gap-2 button {
@@ -1227,7 +1227,7 @@ body[class*="theme-"] .theme-card:hover {
   
   /* Share buttons mobile optimization */
   .mobile-secondary-actions .flex.gap-2 {
-    @apply flex flex-wrap gap-2;
+    @apply flex-wrap;
   }
   
   .mobile-secondary-actions .flex.gap-2 a,
