@@ -177,8 +177,18 @@ defmodule EventasaurusWeb.Auth.AuthController do
       {:error, reason} ->
         require Logger
         Logger.error("Password reset request failed for email: #{inspect(reason)}")
+        
+        error_message = case reason do
+          %{status: 429} ->
+            "Too many password reset requests have been sent recently. Please wait a few minutes before trying again."
+          %{message: msg} when is_binary(msg) ->
+            msg
+          _ ->
+            "There was an error processing your request. Please try again."
+        end
+        
         conn
-        |> put_flash(:error, "There was an error processing your request. Please try again.")
+        |> put_flash(:error, error_message)
         |> redirect(to: ~p"/auth/forgot-password")
     end
   end
