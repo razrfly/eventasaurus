@@ -20,6 +20,13 @@ config :swoosh, local: false
 # Do not print debug messages in production
 config :logger, level: :info
 
+# Configure Sentry for error tracking
+config :sentry,
+  dsn: System.get_env("SENTRY_DSN"),
+  environment_name: Mix.env(),
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()]
+
 # Database and Supabase configuration moved to config/runtime.exs
 # This ensures environment variables are available at runtime
 

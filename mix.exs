@@ -98,6 +98,9 @@ defmodule Eventasaurus.MixProject do
       # Rate limiting for API endpoints
       {:hammer, "~> 7.0"},
 
+      # Error tracking and performance monitoring
+      {:sentry, "~> 10.2.0"},
+      {:hackney, "~> 1.8"}
     ]
   end
 

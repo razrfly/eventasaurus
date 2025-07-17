@@ -4,7 +4,8 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
   Handles different categories of images stored in priv/static/images/events/
   """
 
-  @base_url "/images/events"
+  use EventasaurusWeb, :verified_routes
+
   @supported_extensions [".jpg", ".jpeg", ".png", ".gif", ".webp"]
 
   # Get the correct priv directory path for both dev and production
@@ -69,7 +70,7 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
             |> Enum.filter(&is_image_file?/1)
             |> Enum.map(fn filename ->
               %{
-                url: "#{@base_url}/#{sanitized_category}/#{filename}",
+                url: ~p"/images/events/#{sanitized_category}/#{filename}",
                 filename: filename,
                 category: sanitized_category,
                 title: humanize_filename(filename)
