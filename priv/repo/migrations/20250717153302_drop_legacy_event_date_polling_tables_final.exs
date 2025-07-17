@@ -5,8 +5,15 @@ defmodule EventasaurusApp.Repo.Migrations.DropLegacyEventDatePollingTablesFinal 
     # Drop tables in reverse dependency order to avoid foreign key constraint issues
     
     # 1. Drop event_date_votes table first (depends on event_date_options)
-    # Remove the constraint first if it exists
-    execute "ALTER TABLE event_date_votes DROP CONSTRAINT IF EXISTS valid_vote_type"
+    # Remove the constraint first if table exists
+    execute """
+    DO $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'event_date_votes') THEN
+            ALTER TABLE event_date_votes DROP CONSTRAINT IF EXISTS valid_vote_type;
+        END IF;
+    END $$;
+    """
     drop_if_exists table(:event_date_votes)
 
     # 2. Drop event_date_options table (depends on event_date_polls)
