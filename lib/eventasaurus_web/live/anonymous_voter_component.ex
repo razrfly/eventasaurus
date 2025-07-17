@@ -1,7 +1,6 @@
 defmodule EventasaurusWeb.AnonymousVoterComponent do
   use EventasaurusWeb, :live_component
 
-  alias EventasaurusApp.Events
 
   def update(assigns, socket) do
     initial_data = %{"name" => "", "email" => ""}
@@ -154,12 +153,12 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     end
   end
 
-  defp handle_date_poll_single_vote(socket, name, email, option, pending_vote) do
+  defp handle_date_poll_single_vote(socket, _name, _email, _option, _pending_vote) do
     # Legacy date poll anonymous voting - replaced with generic polling system
     {:noreply, assign(socket, :error, "Legacy date poll voting is no longer supported. Please use the generic polling system.")}
   end
 
-  defp handle_generic_poll_single_vote(socket, name, email, option, pending_vote) do
+  defp handle_generic_poll_single_vote(socket, _name, _email, _option, _pending_vote) do
     # Legacy anonymous voting function - replaced with generic polling system
     {:noreply, assign(socket, :error, "Legacy anonymous voting is no longer supported. Please use the generic polling system.")}
   end
