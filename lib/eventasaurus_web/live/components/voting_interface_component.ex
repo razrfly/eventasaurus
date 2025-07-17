@@ -42,6 +42,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Utils.TimeUtils
+  alias EventasaurusWeb.Helpers.PollStatsHelper
+  alias EventasaurusWeb.EmbeddedProgressBarComponent
 
 
   @impl true
@@ -79,6 +81,18 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       _ -> []
     end
 
+    # Load poll statistics for embedded display
+    poll_stats = try do
+      Events.get_poll_voting_stats(assigns.poll)
+    rescue
+      _ -> %{options: []}
+    end
+
+    # Subscribe to poll statistics updates for real-time updates
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{assigns.poll.id}:stats")
+    end
+
     {:ok,
      socket
      |> assign(assigns)
@@ -86,6 +100,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
      |> assign(:ranked_options, ranked_options)
      |> assign(:temp_votes, temp_votes)
      |> assign(:anonymous_mode, anonymous_mode)
+     |> assign(:poll_stats, poll_stats)
      |> assign_new(:loading, fn -> false end)}
   end
 
@@ -97,9 +112,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       <div class="px-6 py-4 border-b border-gray-200">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-medium text-gray-900">
-              <%= get_voting_title(@poll.voting_system) %>
-            </h3>
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-medium text-gray-900">
+                <%= get_voting_title(@poll.voting_system) %>
+              </h3>
+              <%= if @poll_stats.total_unique_voters > 0 do %>
+                <div class="text-sm text-gray-600 ml-4">
+                  <%= if @poll_stats.total_unique_voters == 1, do: "1 voter", else: "#{@poll_stats.total_unique_voters} voters" %>
+                </div>
+              <% end %>
+            </div>
             <p class="text-sm text-gray-500">
               <%= get_voting_instructions(@poll.voting_system) %>
             </p>
@@ -206,6 +228,21 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <% end %>
               </div>
             <% end %>
+
+            <!-- Embedded Progress Bar -->
+            <div class="mt-2">
+              <.live_component
+                module={EmbeddedProgressBarComponent}
+                id={"progress-#{option.id}"}
+                poll_stats={@poll_stats}
+                option_id={option.id}
+                voting_system={@poll.voting_system}
+                compact={true}
+                show_labels={false}
+                show_counts={true}
+                anonymous_mode={@anonymous_mode}
+              />
+            </div>
           </div>
 
           <div class="ml-4 flex space-x-2">
@@ -302,6 +339,21 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <% end %>
               </div>
             <% end %>
+
+            <!-- Embedded Progress Bar -->
+            <div class="mt-2">
+              <.live_component
+                module={EmbeddedProgressBarComponent}
+                id={"progress-#{option.id}"}
+                poll_stats={@poll_stats}
+                option_id={option.id}
+                voting_system={@poll.voting_system}
+                compact={true}
+                show_labels={false}
+                show_counts={true}
+                anonymous_mode={@anonymous_mode}
+              />
+            </div>
           </div>
         </label>
       </div>
@@ -343,6 +395,21 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <%= if option.description do %>
                   <p class="text-xs text-gray-500 mt-1"><%= option.description %></p>
                 <% end %>
+
+                <!-- Embedded Progress Bar -->
+                <div class="mt-1">
+                  <.live_component
+                    module={EmbeddedProgressBarComponent}
+                    id={"progress-#{option.id}"}
+                    poll_stats={@poll_stats}
+                    option_id={option.id}
+                    voting_system={@poll.voting_system}
+                    compact={true}
+                    show_labels={false}
+                    show_counts={true}
+                    anonymous_mode={@anonymous_mode}
+                  />
+                </div>
               </div>
               <div class="ml-3 flex items-center space-x-2">
                 <%= if index > 0 do %>
@@ -402,6 +469,21 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     <%= if option.description do %>
                       <p class="text-xs text-gray-500 mt-1"><%= option.description %></p>
                     <% end %>
+
+                    <!-- Embedded Progress Bar -->
+                    <div class="mt-1">
+                      <.live_component
+                        module={EmbeddedProgressBarComponent}
+                        id={"progress-#{option.id}"}
+                        poll_stats={@poll_stats}
+                        option_id={option.id}
+                        voting_system={@poll.voting_system}
+                        compact={true}
+                        show_labels={false}
+                        show_counts={true}
+                        anonymous_mode={@anonymous_mode}
+                      />
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -433,6 +515,21 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
             <% end %>
+
+            <!-- Embedded Progress Bar -->
+            <div class="mt-2">
+              <.live_component
+                module={EmbeddedProgressBarComponent}
+                id={"progress-#{option.id}"}
+                poll_stats={@poll_stats}
+                option_id={option.id}
+                voting_system={@poll.voting_system}
+                compact={true}
+                show_labels={false}
+                show_counts={true}
+                anonymous_mode={@anonymous_mode}
+              />
+            </div>
           </div>
 
           <div class="ml-4 flex items-center space-x-1">
@@ -793,6 +890,20 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
        |> assign(:loading, false)
        |> assign(:vote_state, %{})
        |> assign(:ranked_options, [])}
+    end
+  end
+
+  @impl true
+  def handle_info({:poll_stats_updated, stats}, socket) do
+    {:noreply, assign(socket, :poll_stats, stats)}
+  end
+
+  @impl true
+  def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
+    if socket.assigns.poll.id == poll_id do
+      {:noreply, assign(socket, :poll_stats, stats)}
+    else
+      {:noreply, socket}
     end
   end
 
