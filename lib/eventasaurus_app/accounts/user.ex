@@ -27,7 +27,7 @@ defmodule EventasaurusApp.Accounts.User do
     many_to_many :events, EventasaurusApp.Events.Event,
       join_through: EventasaurusApp.Events.EventUser
 
-    has_many :event_date_votes, EventasaurusApp.Events.EventDateVote
+    has_many :poll_votes, EventasaurusApp.Events.PollVote, foreign_key: :voter_id
     has_many :orders, EventasaurusApp.Events.Order
 
     timestamps()
