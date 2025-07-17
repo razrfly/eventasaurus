@@ -36,6 +36,9 @@ cover/
 # Environment variables
 .env
 
+# MCP configuration with API keys
+.mcp.json
+
 # Editor directories and files
 .idea
 .vscode

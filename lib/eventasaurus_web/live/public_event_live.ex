@@ -12,7 +12,6 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.PublicGenericPollComponent
-  alias EventasaurusWeb.PollVotingStatsComponent
 
   alias EventasaurusWeb.ReservedSlugs
 
@@ -1137,15 +1136,16 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
-  def handle_info({:poll_stats_updated, stats}, socket) do
-    # Update poll statistics in real-time
-    {:noreply, socket}
+  def handle_info({:poll_stats_updated, _stats}, socket) do
+    # Trigger component re-render by updating a timestamp
+    {:noreply, assign(socket, :poll_stats_updated_at, DateTime.utc_now())}
   end
 
   @impl true
-  def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
-    # Update specific poll statistics in real-time
-    {:noreply, socket}
+  def handle_info({:poll_stats_updated, poll_id, _stats}, socket) do
+    # Trigger component re-render for specific poll
+    poll_updates = Map.put(socket.assigns[:poll_updates] || %{}, poll_id, DateTime.utc_now())
+    {:noreply, assign(socket, :poll_updates, poll_updates)}
   end
 
   @impl true

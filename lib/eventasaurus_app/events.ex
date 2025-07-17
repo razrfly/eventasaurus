@@ -1513,9 +1513,11 @@ defmodule EventasaurusApp.Events do
         case Repo.delete(vote) do
           {:ok, deleted_vote} ->
             # Broadcast poll updates
-            poll = Repo.get!(Poll, poll_option.poll_id)
-            broadcast_poll_update(poll, :votes_updated)
-            broadcast_poll_stats_update(poll)
+            poll = Repo.get(Poll, poll_option.poll_id)
+            if poll do
+              broadcast_poll_update(poll, :votes_updated)
+              broadcast_poll_stats_update(poll)
+            end
             {:ok, deleted_vote}
           error ->
             error
@@ -6618,7 +6620,7 @@ defmodule EventasaurusApp.Events do
       percentage = min(score, 100.0)  # Cap at 100%
 
       # Build rank distribution
-      max_rank = Map.keys(rank_counts) |> Enum.max(fn -> 1 end)
+      max_rank = Map.keys(rank_counts) |> Enum.max()
       rank_distribution = for rank <- 1..max_rank do
         count = Map.get(rank_counts, rank, 0)
         rank_percentage = if total > 0, do: (count / total) * 100, else: 0.0
