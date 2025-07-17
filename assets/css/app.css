@@ -1104,19 +1104,145 @@ body[class*="theme-"] .theme-card:hover {
   }
 
   .date-selection-poll-component .vote-buttons {
-    @apply flex flex-col space-y-2;
+    @apply flex-col space-y-2;
   }
 
   .date-selection-poll-component .vote-summary {
-    @apply flex flex-wrap gap-2;
+    @apply flex-wrap gap-2;
   }
 
   .date-selection-poll-component .anonymous-vote-actions {
-    @apply flex flex-col space-y-2;
+    @apply flex-col space-y-2;
   }
 
   .date-selection-poll-component .anonymous-vote-actions button {
     @apply w-full justify-center;
+  }
+
+  /* ============================================================================
+     PUBLIC EVENT PAGE MOBILE OPTIMIZATIONS
+     ============================================================================ */
+  
+  /* Container and layout optimizations */
+  .event-page-grid {
+    @apply gap-4;
+  }
+  
+  .main-content {
+    @apply space-y-6;
+  }
+  
+  .sidebar-content {
+    @apply space-y-4;
+  }
+  
+  /* Event header optimizations */
+  .event-page-grid .main-content h1 {
+    @apply text-2xl leading-tight mb-4;
+  }
+  
+  /* Event detail cards mobile optimization */
+  .event-page-grid .main-content .flex.items-start.gap-3 {
+    @apply mb-4;
+  }
+  
+  .event-page-grid .main-content .flex-shrink-0.w-8.h-8 {
+    @apply w-10 h-10 min-w-10;
+  }
+  
+  /* Movie suggestion cards mobile optimization */
+  .event-page-grid .main-content .option-card {
+    @apply p-4 mb-4 border border-gray-200 rounded-lg bg-white shadow-sm;
+  }
+  
+  .event-page-grid .main-content .option-card img {
+    @apply w-full max-w-20 h-auto rounded-md;
+  }
+  
+  .event-page-grid .main-content .option-card h4 {
+    @apply text-lg font-semibold mb-2 line-clamp-2;
+  }
+  
+  .event-page-grid .main-content .option-card p {
+    @apply text-sm text-gray-600 mb-2 line-clamp-3;
+  }
+  
+  /* Voting buttons mobile optimization */
+  .event-page-grid .main-content .option-card button {
+    @apply min-h-11 px-4 py-2 text-sm font-medium rounded-md;
+  }
+  
+  .event-page-grid .main-content .option-card .flex.gap-2 {
+    @apply flex-col mt-3;
+  }
+  
+  .event-page-grid .main-content .option-card .flex.gap-2 button {
+    @apply w-full justify-center;
+  }
+  
+  /* Sidebar mobile optimization */
+  .sidebar-content > div {
+    @apply p-4 border border-gray-200 rounded-lg bg-white shadow-sm;
+  }
+  
+  .sidebar-content button {
+    @apply min-h-12 px-4 py-3 text-base font-medium rounded-lg transition-colors duration-200;
+  }
+  
+  .sidebar-content .bg-blue-600 {
+    @apply bg-blue-600 hover:bg-blue-700 active:bg-blue-800;
+  }
+  
+  .sidebar-content .bg-gray-100 {
+    @apply bg-gray-100 hover:bg-gray-200 active:bg-gray-300;
+  }
+  
+  /* Host section mobile optimization */
+  .event-page-grid .main-content .flex.items-center.gap-3 img {
+    @apply w-12 h-12 rounded-full;
+  }
+  
+  /* Attendee avatars mobile optimization */
+  .event-page-grid .main-content .flex.gap-2 img {
+    @apply w-10 h-10 rounded-full;
+  }
+  
+  /* Typography improvements */
+  .event-page-grid .main-content h2 {
+    @apply text-xl font-semibold mb-3;
+  }
+  
+  .event-page-grid .main-content h3 {
+    @apply text-lg font-medium mb-2;
+  }
+  
+  .event-page-grid .main-content p {
+    @apply text-base leading-relaxed;
+  }
+  
+  /* Cover image mobile optimization */
+  .event-page-grid .main-content img[alt*="Cover"] {
+    @apply w-full h-auto rounded-lg mb-4;
+  }
+  
+  /* Share buttons mobile optimization */
+  .mobile-secondary-actions .flex.gap-2 {
+    @apply flex-wrap;
+  }
+  
+  .mobile-secondary-actions .flex.gap-2 a,
+  .mobile-secondary-actions .flex.gap-2 button {
+    @apply min-h-11 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center gap-2;
+  }
+  
+  /* Calendar links mobile optimization */
+  .mobile-secondary-actions .flex.flex-col.space-y-2 a {
+    @apply min-h-11 px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-md flex items-center gap-2;
+  }
+  
+  /* Footer mobile optimization */
+  .event-page-grid + footer {
+    @apply mt-8 pt-8 border-t border-gray-200;
   }
 }
 

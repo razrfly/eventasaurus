@@ -844,55 +844,87 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
-  def handle_info({:save_all_poll_votes_for_user, poll_id, name, email, temp_votes, _poll_options}, socket) do
+  def handle_info({:save_all_poll_votes_for_user, poll_id, _name, email, temp_votes, _poll_options}, socket) do
     # Handle bulk anonymous poll votes submission
-    # Legacy anonymous voting function - replaced with generic polling system
-    case :legacy_function_removed do
-      {:ok, result_type, _participant, _votes} ->
-        # Get the user from the database to update socket assigns
-        user = Accounts.get_user_by_email(email)
-
-        # Reload event polls to show updated state
-        socket = load_event_polls(socket)
-
-        # Update user in socket for authenticated state
-        socket = assign(socket, :user, user)
-
-        message = case result_type do
-          :new_voter ->
-            "All votes saved successfully! You're now registered for #{socket.assigns.event.title}. Please check your email for a magic link to create your account."
-          :existing_user_voted ->
-            "All votes saved successfully! You're registered for #{socket.assigns.event.title}."
+    alias EventasaurusApp.{Events, Accounts}
+    
+    case Accounts.find_or_create_guest_user(email) do
+      {:ok, user} ->
+        # Get the poll to determine voting system
+        poll = Events.get_poll!(poll_id)
+        
+        # Cast votes based on the voting system
+        vote_results = for {option_id, vote_value} <- temp_votes do
+          case Events.get_poll_option(option_id) do
+            nil ->
+              {:error, :option_not_found}
+            poll_option ->
+              case poll.voting_system do
+                "binary" ->
+                  Events.cast_binary_vote(poll, poll_option, user, vote_value)
+                "approval" when vote_value == "selected" ->
+                  Events.cast_approval_vote(poll, poll_option, user, true)
+                "star" ->
+                  Events.cast_star_vote(poll, poll_option, user, vote_value)
+                "ranked" ->
+                  Events.cast_ranked_vote(poll, poll_option, user, vote_value)
+                _ ->
+                  {:error, :unsupported_voting_system}
+              end
+          end
         end
+        
+        # Check if all votes were successful
+        case Enum.find(vote_results, &match?({:error, _}, &1)) do
+          nil ->
+            # All votes successful
+            user = Accounts.get_user_by_email(email)
+            socket = load_event_polls(socket)
+            socket = assign(socket, :user, user)
+            
+            result_type = if user.inserted_at == user.updated_at, do: :new_voter, else: :existing_user_voted
+            
+            message = case result_type do
+              :new_voter ->
+                "All votes saved successfully! You're now registered for #{socket.assigns.event.title}. Please check your email for a magic link to create your account."
+              :existing_user_voted ->
+                "All votes saved successfully! You're registered for #{socket.assigns.event.title}."
+            end
 
+            {:noreply,
+             socket
+             |> assign(:show_generic_vote_modal, false)
+             |> assign(:modal_poll, nil)
+             |> assign(:modal_temp_votes, %{})
+             |> assign(:poll_temp_votes, %{})
+             |> assign(:registration_status, :registered)
+             |> assign(:just_registered, result_type == :new_voter)
+             |> put_flash(:info, message)
+            }
+          
+          {:error, reason} ->
+            error_message = case reason do
+              :option_not_found ->
+                "One or more poll options not found."
+              :unsupported_voting_system ->
+                "Unsupported voting system."
+              _ ->
+                "Unable to save votes. Please try again."
+            end
+
+            {:noreply,
+             socket
+             |> put_flash(:error, error_message)
+             |> assign(:show_generic_vote_modal, false)
+             |> assign(:modal_poll, nil)
+             |> assign(:modal_temp_votes, %{})
+            }
+        end
+        
+      {:error, _changeset} ->
         {:noreply,
          socket
-         |> assign(:show_generic_vote_modal, false)
-         |> assign(:modal_poll, nil)
-         |> assign(:modal_temp_votes, %{})
-         |> assign(:poll_temp_votes, %{})
-         |> assign(:registration_status, :registered)
-         |> assign(:just_registered, result_type == :new_voter)
-         |> put_flash(:info, message)
-        }
-
-      {:error, reason} ->
-        error_message = case reason do
-          :email_confirmation_required ->
-            "Please check your email and confirm your account before voting."
-          :event_not_found ->
-            "Event not found."
-          :invalid_vote_value ->
-            "Invalid vote detected. Please try again."
-          :option_not_found ->
-            "One or more poll options not found."
-          _ ->
-            "Unable to save votes. Please try again."
-        end
-
-        {:noreply,
-         socket
-         |> put_flash(:error, error_message)
+         |> put_flash(:error, "Unable to create user account. Please try again.")
          |> assign(:show_generic_vote_modal, false)
          |> assign(:modal_poll, nil)
          |> assign(:modal_temp_votes, %{})

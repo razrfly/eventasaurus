@@ -88,6 +88,12 @@ defmodule EventasaurusWeb.Router do
     plug :assign_user_struct
   end
 
+  # Health check pipeline with rate limiting to prevent abuse
+  pipeline :health_check do
+    plug :accepts, ["json"]
+    plug EventasaurusWeb.Plugs.RateLimitPlug, limit: 10, window: 60_000  # 10 requests per minute
+  end
+
   # Pipeline for redirect if authenticated (but allows password recovery)
   pipeline :redirect_if_authenticated_except_recovery do
     plug :redirect_if_user_is_authenticated_except_recovery
@@ -349,5 +355,19 @@ defmodule EventasaurusWeb.Router do
       get "/test-error", SentryTestController, :test_error
       get "/test-message", SentryTestController, :test_message
     end
+  end
+
+  # Production Sentry health check (always available)
+  scope "/api/health", EventasaurusWeb do
+    pipe_through :api
+
+    get "/sentry", SentryTestController, :health_check
+  end
+
+  # Secure production Sentry test endpoint
+  scope "/api/admin", EventasaurusWeb do
+    pipe_through [:secure_api, :api_authenticated]
+
+    post "/sentry-test", SentryTestController, :test_production_error
   end
 end
