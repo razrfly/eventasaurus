@@ -2,19 +2,15 @@ defmodule Eventasaurus.Repo.Migrations.AddDateMetadataConstraints do
   use Ecto.Migration
 
   def up do
-    # Add check constraint to ensure date_selection polls have proper metadata structure
+    # Add check constraint to ensure poll options with date metadata have proper structure
+    # Note: Simplified to avoid subquery limitation - applies to all poll options with date metadata
     execute """
     ALTER TABLE poll_options
-    ADD CONSTRAINT valid_date_metadata_for_date_selection
+    ADD CONSTRAINT valid_date_metadata_structure
     CHECK (
-      CASE WHEN EXISTS (
-        SELECT 1 FROM polls
-        WHERE polls.id = poll_options.poll_id
-        AND polls.poll_type = 'date_selection'
-      )
+      CASE WHEN metadata ? 'date'
       THEN (
         metadata IS NOT NULL
-        AND metadata ? 'date'
         AND metadata ? 'display_date'
         AND metadata ? 'date_type'
         AND (metadata->>'date') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
@@ -43,6 +39,6 @@ defmodule Eventasaurus.Repo.Migrations.AddDateMetadataConstraints do
     drop index(:poll_options, ["(metadata->>'date')", :poll_id], name: :poll_options_date_metadata_idx)
 
     # Remove constraint
-    execute "ALTER TABLE poll_options DROP CONSTRAINT IF EXISTS valid_date_metadata_for_date_selection"
+    execute "ALTER TABLE poll_options DROP CONSTRAINT IF EXISTS valid_date_metadata_structure"
   end
 end
