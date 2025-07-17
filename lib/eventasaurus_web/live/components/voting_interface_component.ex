@@ -1309,6 +1309,17 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp star_class(current_rating, star_position, anonymous_mode) do
     base_classes = "focus:outline-none"
 
+    # Ensure current_rating is an integer for proper comparison
+    current_rating = case current_rating do
+      rating when is_integer(rating) -> rating
+      rating when is_binary(rating) -> 
+        case Integer.parse(rating) do
+          {int, ""} -> int
+          _ -> nil
+        end
+      _ -> nil
+    end
+
     if current_rating && current_rating >= star_position do
       if anonymous_mode do
         base_classes <> " text-blue-400 hover:text-blue-500"
