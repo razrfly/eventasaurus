@@ -141,18 +141,6 @@ defmodule EventasaurusWeb.EventLive.New do
     {:noreply, socket}
   end
 
-    @impl true
-  def handle_info({:selected_dates_changed, dates}, socket) do
-    # Convert dates to ISO8601 strings for form data
-    date_strings = Enum.map(dates, &Date.to_iso8601/1)
-    _dates_string = Enum.join(date_strings, ",")
-
-    # Update form_data with the new selected dates
-    # Legacy selected_poll_dates handling removed - no changes needed
-
-    {:noreply, socket}
-  end
-
   @impl true
   def handle_info({:rich_data_search, query, provider}, socket) do
     # Convert provider string to atom safely
@@ -663,13 +651,6 @@ defmodule EventasaurusWeb.EventLive.New do
      assign(socket, :form_data, form_data)
      |> assign(:changeset, changeset)
      |> assign(:show_all_timezones, false)}
-  end
-
-  @impl true
-  def handle_event("calendar_dates_changed", %{"dates" => _dates, "component_id" => _id}, socket) do
-    # Legacy calendar_dates_changed handler removed - using generic polling system
-
-    {:noreply, socket}
   end
 
   @impl true

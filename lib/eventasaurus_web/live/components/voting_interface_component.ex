@@ -1186,7 +1186,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         if vote_value do
           Events.cast_approval_vote(socket.assigns.poll, option, socket.assigns.user, true)
         else
-          Events.remove_user_vote(option, socket.assigns.user)
+          case Events.get_user_poll_vote(option, socket.assigns.user) do
+            nil -> {:ok, nil}
+            existing_vote -> Events.delete_poll_vote(existing_vote)
+          end
         end
     end
   end
@@ -1210,7 +1213,11 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp clear_vote(socket, option_id) do
     case find_poll_option(socket, option_id) do
       nil -> {:ok, nil}
-      option -> Events.remove_user_vote(option, socket.assigns.user)
+      option -> 
+        case Events.get_user_poll_vote(option, socket.assigns.user) do
+          nil -> {:ok, nil}
+          existing_vote -> Events.delete_poll_vote(existing_vote)
+        end
     end
   end
 
