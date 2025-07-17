@@ -359,7 +359,7 @@ defmodule EventasaurusWeb.Router do
 
   # Production Sentry health check (always available)
   scope "/api/health", EventasaurusWeb do
-    pipe_through :health_check
+    pipe_through :api
 
     get "/sentry", SentryTestController, :health_check
   end
