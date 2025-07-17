@@ -99,8 +99,11 @@ defmodule Eventasaurus.MixProject do
       {:hammer, "~> 7.0"},
 
       # Error tracking and performance monitoring
-      {:sentry, "~> 10.2.0"},
-      {:hackney, "~> 1.8"}
+      {:sentry, git: "https://github.com/getsentry/sentry-elixir.git", branch: "master"},
+      {:hackney, "~> 1.8"},
+      
+      # Override nimble_ownership version for Sentry compatibility
+      {:nimble_ownership, "~> 1.0", override: true}
     ]
   end
 
@@ -119,7 +122,8 @@ defmodule Eventasaurus.MixProject do
       "assets.deploy": [
         "tailwind eventasaurus --minify",
         "esbuild eventasaurus --minify",
-        "phx.digest"
+        "phx.digest",
+        "sentry.package_source_code"
       ],
       "erd.gen.png": [
         "ecto.gen.erd",
