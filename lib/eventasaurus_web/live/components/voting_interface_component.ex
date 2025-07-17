@@ -1151,7 +1151,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
       "star" ->
         user_votes
-        |> Enum.map(fn vote -> {vote.poll_option_id, Decimal.to_integer(vote.vote_numeric)} end)
+        |> Enum.map(fn vote -> {vote.poll_option_id, safe_to_integer(vote.vote_numeric)} end)
         |> Map.new()
 
       "ranked" ->
@@ -1312,16 +1312,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     base_classes = "focus:outline-none"
 
     # Ensure current_rating is an integer for proper comparison
-    current_rating = case current_rating do
-      rating when is_integer(rating) -> rating
-      rating when is_binary(rating) -> 
-        case Integer.parse(rating) do
-          {int, ""} -> int
-          _ -> nil
-        end
-      %Decimal{} = rating -> Decimal.to_integer(rating)
-      _ -> nil
-    end
+    current_rating = safe_to_integer(current_rating)
 
     if current_rating && current_rating >= star_position do
       if anonymous_mode do
@@ -1379,4 +1370,27 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   defp format_time_slot_display(_), do: "Invalid time slot"
+
+  defp safe_to_integer(value) do
+    case value do
+      rating when is_integer(rating) ->
+        rating
+
+      rating when is_binary(rating) ->
+        case Integer.parse(rating) do
+          {int, ""} -> int
+          _ -> nil
+        end
+
+      %Decimal{} = rating ->
+        try do
+          Decimal.to_integer(rating)
+        rescue
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
 end

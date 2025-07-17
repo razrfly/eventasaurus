@@ -867,6 +867,21 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info(:close_generic_vote_modal, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_generic_vote_modal, false)
+     |> assign(:modal_poll, nil)
+     |> assign(:modal_temp_votes, %{})
+    }
+  end
+
+  @impl true
+  def handle_info(:close_registration_modal, socket) do
+    {:noreply, assign(socket, :show_registration_modal, false)}
+  end
+
+  @impl true
   def handle_info({:vote_success, type, _name, email}, socket) do
     message = case type do
       :new_voter ->
