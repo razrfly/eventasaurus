@@ -160,16 +160,8 @@
                   </div>
                   <div>
                     <h3 class="font-semibold text-gray-900 mb-1">When</h3>
-                    <%= if @event.status == :polling do %>
-                      <div class="inline-flex items-center px-3 py-1 text-sm font-medium bg-yellow-100 text-yellow-800 rounded-full mb-2">
-                        📊 Date Polling Active
-                      </div>
-                      <p class="text-gray-700">
-                        Attendees are voting on the best date for this event
-                      </p>
-                    <% else %>
-                      <p class="text-gray-700"><%= format_event_datetime(@event) %></p>
-                    <% end %>
+                    <!-- Legacy date polling status removed - now using generic polling system -->
+                    <p class="text-gray-700"><%= format_event_datetime(@event) %></p>
                   </div>
                 </div>
 
@@ -960,21 +952,7 @@
                 </div>
               </div>
               
-              <!-- Skeleton Card 3 (conditional) -->
-              <%= if @event.status == :polling do %>
-                <div class="bg-gray-100 rounded-lg p-4 border border-gray-200">
-                  <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                      <div class="h-6 w-6 bg-gray-300 rounded"></div>
-                    </div>
-                    <div class="ml-4 flex-1">
-                      <div class="h-4 bg-gray-300 rounded w-16 mb-2"></div>
-                      <div class="h-8 bg-gray-300 rounded w-10"></div>
-                      <div class="h-3 bg-gray-300 rounded w-24 mt-1"></div>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
+              <!-- Legacy polling skeleton card removed - now using generic polling system -->
               
               <!-- Skeleton Card 4 (conditional) -->
               <%= if @event.is_ticketed do %>
@@ -1045,23 +1023,7 @@
                 </div>
               </div>
 
-              <!-- Date Poll Engagement Card -->
-              <%= if @event.status == :polling do %>
-                <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                  <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                      <svg class="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    </div>
-                    <div class="ml-4">
-                      <div class="text-sm font-medium text-purple-900">Date Votes</div>
-                      <div class="text-2xl font-bold text-purple-600"><%= @analytics_data.votes_cast %></div>
-                      <div class="text-xs text-purple-700">Poll engagement</div>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
+              <!-- Legacy date poll engagement card removed - now using generic polling system -->
 
               <!-- Ticket Conversion Card (for ticketed events) -->
               <%= if @event.is_ticketed do %>
