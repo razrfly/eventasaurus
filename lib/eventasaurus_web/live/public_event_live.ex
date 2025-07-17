@@ -986,6 +986,8 @@ defmodule EventasaurusWeb.PublicEventLive do
          |> assign(:modal_poll, nil)
          |> assign(:modal_temp_votes, %{})
          |> assign(:poll_temp_votes, %{})
+         |> assign(:registration_status, :registered)
+         |> assign(:just_registered, result_type == :new_voter)
          |> put_flash(:info, message)
         }
 
