@@ -42,7 +42,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Utils.TimeUtils
-  alias EventasaurusWeb.Helpers.PollStatsHelper
   alias EventasaurusWeb.EmbeddedProgressBarComponent
 
 
@@ -85,7 +84,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     poll_stats = try do
       Events.get_poll_voting_stats(assigns.poll)
     rescue
-      _ -> %{options: []}
+      error in [ArgumentError, RuntimeError] ->
+        require Logger
+        Logger.error("Failed to load poll stats: #{inspect(error)}")
+        %{options: [], total_unique_voters: 0}
     end
 
     # Subscribe to poll statistics updates for real-time updates
@@ -116,9 +118,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <h3 class="text-lg font-medium text-gray-900">
                 <%= get_voting_title(@poll.voting_system) %>
               </h3>
-              <%= if @poll_stats.total_unique_voters > 0 do %>
+              <%= if Map.get(@poll_stats, :total_unique_voters, 0) > 0 do %>
                 <div class="text-sm text-gray-600 ml-4">
-                  <%= if @poll_stats.total_unique_voters == 1, do: "1 voter", else: "#{@poll_stats.total_unique_voters} voters" %>
+                  <% voter_count = Map.get(@poll_stats, :total_unique_voters, 0) %>
+                  <%= if voter_count == 1, do: "1 voter", else: "#{voter_count} voters" %>
                 </div>
               <% end %>
             </div>
@@ -893,12 +896,10 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
   end
 
-  @impl true
   def handle_info({:poll_stats_updated, stats}, socket) do
     {:noreply, assign(socket, :poll_stats, stats)}
   end
 
-  @impl true
   def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
     if socket.assigns.poll.id == poll_id do
       {:noreply, assign(socket, :poll_stats, stats)}

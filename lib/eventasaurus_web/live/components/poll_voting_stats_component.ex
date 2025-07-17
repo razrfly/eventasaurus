@@ -9,7 +9,7 @@ defmodule EventasaurusWeb.PollVotingStatsComponent do
   end
 
   @impl true
-  def update(%{poll: poll} = assigns, socket) do
+  def update(%{poll: poll} = _assigns, socket) do
     # Get the voting statistics
     voting_stats = Events.get_poll_voting_stats(poll)
 
@@ -50,19 +50,19 @@ defmodule EventasaurusWeb.PollVotingStatsComponent do
 
                 <%= if @show_vote_counts or @show_percentages do %>
                   <div class="flex-shrink-0 ml-3 text-right">
-                    <%= render_stats_summary(assigns, option) %>
+                    <%= render_stats_summary(assign(assigns, :option, option)) %>
                   </div>
                 <% end %>
               </div>
 
               <!-- Progress Bars -->
               <%= if @show_progress_bars do %>
-                <%= render_progress_bars(assigns, option) %>
+                <%= render_progress_bars(assign(assigns, :option, option)) %>
               <% end %>
 
               <!-- Detailed Breakdown (non-compact mode) -->
               <%= unless @compact_mode do %>
-                <%= render_detailed_breakdown(assigns, option) %>
+                <%= render_detailed_breakdown(assign(assigns, :option, option)) %>
               <% end %>
             </div>
           <% end %>
@@ -77,63 +77,63 @@ defmodule EventasaurusWeb.PollVotingStatsComponent do
     """
   end
 
-  defp render_stats_summary(assigns, option) do
+  defp render_stats_summary(assigns) do
     ~H"""
     <div class="text-sm">
       <%= case @voting_stats.voting_system do %>
         <% "binary" -> %>
-          <div class="font-semibold text-gray-900"><%= option.tally.percentage %>%</div>
-          <div class="text-xs text-gray-500"><%= option.tally.total %> votes</div>
+          <div class="font-semibold text-gray-900"><%= @option.tally.percentage %>%</div>
+          <div class="text-xs text-gray-500"><%= @option.tally.total %> votes</div>
         <% "approval" -> %>
-          <div class="font-semibold text-gray-900"><%= option.tally.percentage %>%</div>
-          <div class="text-xs text-gray-500"><%= option.tally.selected %> selected</div>
+          <div class="font-semibold text-gray-900"><%= @option.tally.percentage %>%</div>
+          <div class="text-xs text-gray-500"><%= @option.tally.selected %> selected</div>
         <% "star" -> %>
-          <div class="font-semibold text-gray-900">★ <%= option.tally.average_rating %></div>
-          <div class="text-xs text-gray-500"><%= option.tally.total %> ratings</div>
+          <div class="font-semibold text-gray-900">★ <%= @option.tally.average_rating %></div>
+          <div class="text-xs text-gray-500"><%= @option.tally.total %> ratings</div>
         <% "ranked" -> %>
-          <div class="font-semibold text-gray-900">#<%= option.tally.average_rank %></div>
-          <div class="text-xs text-gray-500"><%= option.tally.total %> ranks</div>
+          <div class="font-semibold text-gray-900">#<%= @option.tally.average_rank %></div>
+          <div class="text-xs text-gray-500"><%= @option.tally.total %> ranks</div>
         <% _ -> %>
-          <div class="font-semibold text-gray-900"><%= option.tally.total %></div>
+          <div class="font-semibold text-gray-900"><%= @option.tally.total %></div>
           <div class="text-xs text-gray-500">votes</div>
       <% end %>
     </div>
     """
   end
 
-  defp render_progress_bars(assigns, option) do
+  defp render_progress_bars(assigns) do
     ~H"""
     <div class="progress-bars mb-2">
       <%= case @voting_stats.voting_system do %>
         <% "binary" -> %>
           <!-- Binary voting: yes/maybe/no bars -->
           <div class="flex h-3 bg-gray-100 rounded-full overflow-hidden">
-            <%= if option.tally.total > 0 do %>
-              <div class="bg-green-500" style={"width: #{option.tally.yes_percentage}%"}></div>
-              <div class="bg-yellow-400" style={"width: #{option.tally.maybe_percentage}%"}></div>
-              <div class="bg-red-400" style={"width: #{option.tally.no_percentage}%"}></div>
+            <%= if @option.tally.total > 0 do %>
+              <div class="bg-green-500" style={"width: #{@option.tally.yes_percentage}%"}></div>
+              <div class="bg-yellow-400" style={"width: #{@option.tally.maybe_percentage}%"}></div>
+              <div class="bg-red-400" style={"width: #{@option.tally.no_percentage}%"}></div>
             <% end %>
           </div>
           <div class="flex justify-between text-xs text-gray-500 mt-1">
-            <span>Yes: <%= option.tally.yes %></span>
-            <span>Maybe: <%= option.tally.maybe %></span>
-            <span>No: <%= option.tally.no %></span>
+            <span>Yes: <%= @option.tally.yes %></span>
+            <span>Maybe: <%= @option.tally.maybe %></span>
+            <span>No: <%= @option.tally.no %></span>
           </div>
 
         <% "approval" -> %>
           <!-- Approval voting: single bar -->
           <div class="flex h-3 bg-gray-100 rounded-full overflow-hidden">
-            <div class="bg-blue-500" style={"width: #{option.tally.percentage}%"}></div>
+            <div class="bg-blue-500" style={"width: #{@option.tally.percentage}%"}></div>
           </div>
           <div class="flex justify-between text-xs text-gray-500 mt-1">
-            <span>Selected by <%= option.tally.percentage %>% of voters</span>
-            <span><%= option.tally.selected %> selections</span>
+            <span>Selected by <%= @option.tally.percentage %>% of voters</span>
+            <span><%= @option.tally.selected %> selections</span>
           </div>
 
         <% "star" -> %>
           <!-- Star rating: distribution bars -->
           <div class="space-y-1">
-            <%= for %{rating: rating, count: count, percentage: perc} <- option.tally.rating_distribution do %>
+            <%= for %{rating: rating, count: count, percentage: perc} <- @option.tally.rating_distribution do %>
               <div class="flex items-center text-xs">
                 <span class="w-8 text-gray-600"><%= rating %>★</span>
                 <div class="flex-1 mx-2 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -147,7 +147,7 @@ defmodule EventasaurusWeb.PollVotingStatsComponent do
         <% "ranked" -> %>
           <!-- Ranked voting: rank distribution -->
           <div class="space-y-1">
-            <%= for %{rank: rank, count: count, percentage: perc} <- option.tally.rank_distribution do %>
+            <%= for %{rank: rank, count: count, percentage: perc} <- @option.tally.rank_distribution do %>
               <div class="flex items-center text-xs">
                 <span class="w-8 text-gray-600">#<%= rank %></span>
                 <div class="flex-1 mx-2 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -161,41 +161,39 @@ defmodule EventasaurusWeb.PollVotingStatsComponent do
         <% _ -> %>
           <!-- Generic: simple bar -->
           <div class="flex h-3 bg-gray-100 rounded-full overflow-hidden">
-            <div class="bg-blue-500" style={"width: #{min(option.tally.percentage, 100)}%"}></div>
+            <div class="bg-blue-500" style={"width: #{min(@option.tally.percentage, 100)}%"}></div>
           </div>
           <div class="text-xs text-gray-500 mt-1">
-            <%= option.tally.total %> votes
+            <%= @option.tally.total %> votes
           </div>
       <% end %>
     </div>
     """
   end
 
-  defp render_detailed_breakdown(assigns, option) do
+  defp render_detailed_breakdown(assigns) do
     ~H"""
-    <%= unless @compact_mode do %>
-      <div class="detailed-breakdown text-xs text-gray-500 mt-2 space-y-1">
-        <%= case @voting_stats.voting_system do %>
-          <% "binary" -> %>
-            <div class="flex justify-between">
-              <span>Positive Score:</span>
-              <span><%= option.tally.score %>/<%= option.tally.total %></span>
-            </div>
-          <% "star" -> %>
-            <div class="flex justify-between">
-              <span>Average Rating:</span>
-              <span><%= option.tally.average_rating %>/5.0</span>
-            </div>
-          <% "ranked" -> %>
-            <div class="flex justify-between">
-              <span>Average Rank:</span>
-              <span><%= option.tally.average_rank %></span>
-            </div>
-          <% _ -> %>
-            <!-- No additional details for other types -->
-        <% end %>
-      </div>
-    <% end %>
+    <div class="detailed-breakdown text-xs text-gray-500 mt-2 space-y-1">
+      <%= case @voting_stats.voting_system do %>
+        <% "binary" -> %>
+          <div class="flex justify-between">
+            <span>Positive Score:</span>
+            <span><%= @option.tally.score %>/<%= @option.tally.total %></span>
+          </div>
+        <% "star" -> %>
+          <div class="flex justify-between">
+            <span>Average Rating:</span>
+            <span><%= @option.tally.average_rating %>/5.0</span>
+          </div>
+        <% "ranked" -> %>
+          <div class="flex justify-between">
+            <span>Average Rank:</span>
+            <span><%= @option.tally.average_rank %></span>
+          </div>
+        <% _ -> %>
+          <!-- No additional details for other types -->
+      <% end %>
+    </div>
     """
   end
 

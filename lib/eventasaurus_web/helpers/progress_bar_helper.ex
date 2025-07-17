@@ -7,6 +7,8 @@ defmodule EventasaurusWeb.Helpers.ProgressBarHelper do
   """
 
   import Phoenix.HTML
+  
+  alias EventasaurusWeb.Helpers.VoteCountHelper, as: VC
 
   @doc """
   Renders a horizontal progress bar for binary voting (Yes/Maybe/No).
@@ -218,9 +220,9 @@ defmodule EventasaurusWeb.Helpers.ProgressBarHelper do
   defp render_binary_labels(breakdown, total_votes) do
     ~s"""
     <div class="flex justify-between text-xs text-gray-500 mb-1">
-      <span>#{calculate_vote_count(breakdown.yes_percentage, total_votes)} Yes</span>
-      <span>#{calculate_vote_count(breakdown.maybe_percentage, total_votes)} Maybe</span>
-      <span>#{calculate_vote_count(breakdown.no_percentage, total_votes)} No</span>
+      <span>#{VC.calculate_vote_count(breakdown.yes_percentage, total_votes)} Yes</span>
+      <span>#{VC.calculate_vote_count(breakdown.maybe_percentage, total_votes)} Maybe</span>
+      <span>#{VC.calculate_vote_count(breakdown.no_percentage, total_votes)} No</span>
     </div>
     """
   end
@@ -263,9 +265,6 @@ defmodule EventasaurusWeb.Helpers.ProgressBarHelper do
     end
   end
 
-  defp calculate_vote_count(percentage, total_votes) do
-    round(percentage * total_votes / 100)
-  end
 
   defp get_rank_quality_percentage(average_rank) when is_number(average_rank) do
     # Convert rank to percentage where rank 1 = 100%, rank 5 = 20%
