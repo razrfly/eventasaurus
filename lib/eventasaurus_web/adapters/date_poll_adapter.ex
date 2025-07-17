@@ -51,13 +51,6 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   defp get_day_name(7), do: "Sunday"
 
   @doc """
-  Helper function to get all data for a date_selection poll in legacy format.
-
-  This is the main function UI components should use to get a complete legacy-format
-  data structure from a generic date_selection poll.
-  """
-
-  @doc """
   Get a generic poll with all related data preloaded.
   """
   def get_generic_poll_with_options_and_votes(poll_id) do
@@ -87,10 +80,6 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   def get_poll_with_data(poll_id) do
     get_generic_poll_with_options_and_votes(poll_id)
   end
-
-  @doc """
-  Get a poll using the Events context functions.
-  """
 
   @doc """
   Extracts all votes from a poll's options.
@@ -177,15 +166,6 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   end
 
   def validate_date_option(_), do: {:error, "Invalid option structure"}
-
-  @doc """
-  Batch convert multiple polls from generic to legacy format.
-  """
-
-  @doc """
-  Performance-optimized version for large datasets.
-  Processes polls in batches to avoid memory issues.
-  """
 
   # Phoenix.HTML Safety Functions
 
