@@ -340,4 +340,14 @@ defmodule EventasaurusWeb.Router do
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end
+
+  # Sentry test routes (development only)
+  if Mix.env() == :dev do
+    scope "/dev/sentry", EventasaurusWeb do
+      pipe_through :api
+
+      get "/test-error", SentryTestController, :test_error
+      get "/test-message", SentryTestController, :test_message
+    end
+  end
 end
