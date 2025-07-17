@@ -14,7 +14,8 @@ fi
 echo "Test 1: Production mode with Sentry DSN"
 export MIX_ENV=prod
 echo "Using SENTRY_DSN: ${SENTRY_DSN}"
-export SECRET_KEY_BASE=$(mix phx.gen.secret)
+SECRET_KEY_BASE=$(mix phx.gen.secret)
+export SECRET_KEY_BASE
 export PHX_HOST="localhost"
 export SUPABASE_URL="https://dummy.supabase.co"
 export SUPABASE_API_KEY="dummy_key"

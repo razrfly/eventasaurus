@@ -168,7 +168,7 @@ After deploying to production:
 - **Production endpoint** is protected by:
   - Authentication required
   - Special header required (`x-sentry-test: production-test`)
-  - Rate limiting (60 requests/minute)
+  - Rate limiting (10 requests/minute)
   - Audit logging of all attempts
 
 - **All test attempts are logged** with:

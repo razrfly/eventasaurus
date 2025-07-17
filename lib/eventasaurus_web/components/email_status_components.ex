@@ -297,8 +297,6 @@ defmodule EventasaurusWeb.EmailStatusComponents do
     """
   end
 
-
-
   # Private helper functions
 
   defp format_email_tooltip(email_status) do
@@ -309,30 +307,37 @@ defmodule EventasaurusWeb.EmailStatusComponents do
         else
           "Email sent"
         end
+
       "delivered" ->
         if email_status.last_sent_at do
           "Email delivered #{time_ago(email_status.last_sent_at)}"
         else
           "Email delivered"
         end
+
       "failed" ->
         if email_status.last_error do
           "Email failed: #{email_status.last_error}"
         else
           "Email failed"
         end
+
       "bounced" ->
         if email_status.last_sent_at do
           "Email bounced #{time_ago(email_status.last_sent_at)}"
         else
           "Email bounced"
         end
+
       "not_sent" ->
         "Email not sent"
+
       "sending" ->
         "Sending email..."
+
       "retrying" ->
         "Retrying email (attempt #{email_status.attempts || 1})"
+
       _ ->
         "Unknown email status"
     end
@@ -353,8 +358,8 @@ defmodule EventasaurusWeb.EmailStatusComponents do
       diff < 60 -> "just now"
       diff < 3600 -> "#{div(diff, 60)}m ago"
       diff < 86400 -> "#{div(diff, 3600)}h ago"
-      diff < 2592000 -> "#{div(diff, 86400)}d ago"
-      true -> "#{div(diff, 2592000)}mo ago"
+      diff < 2_592_000 -> "#{div(diff, 86400)}d ago"
+      true -> "#{div(diff, 2_592_000)}mo ago"
     end
   end
 
@@ -383,5 +388,4 @@ defmodule EventasaurusWeb.EmailStatusComponents do
       0
     end
   end
-
 end

@@ -8,7 +8,7 @@ defmodule EventasaurusWeb.Services.PlacesDataServiceTest do
         "place_id" => "ChIJGVtI4by3t4kRr51d_Qm_x58",
         "name" => "Central Park",
         "rating" => 4.6,
-        "user_ratings_total" => 123456,
+        "user_ratings_total" => 123_456,
         "types" => ["park", "tourist_attraction", "establishment", "point_of_interest"],
         "vicinity" => "New York, NY, USA",
         "formatted_address" => "New York, NY, USA",
@@ -78,7 +78,10 @@ defmodule EventasaurusWeb.Services.PlacesDataServiceTest do
       result = PlacesDataService.prepare_place_option_data(place_data)
 
       assert result["external_id"] == "places:ChIJGVtI4by3t4kRr51d_Qm_x58"
-      assert result["image_url"] == "https://maps.googleapis.com/maps/api/place/js/PhotoService.GetPhoto?token=12345"
+
+      assert result["image_url"] ==
+               "https://maps.googleapis.com/maps/api/place/js/PhotoService.GetPhoto?token=12345"
+
       assert Map.has_key?(result, "external_data")
     end
 
@@ -116,7 +119,8 @@ defmodule EventasaurusWeb.Services.PlacesDataServiceTest do
       assert "Cafe" in categories
       refute "establishment" in categories
       refute "point_of_interest" in categories
-      assert length(categories) <= 3  # Limited to 3
+      # Limited to 3
+      assert length(categories) <= 3
     end
   end
 
@@ -152,7 +156,8 @@ defmodule EventasaurusWeb.Services.PlacesDataServiceTest do
       assert result["external_id"] == "places:"
       assert result["external_data"] == place_data
       assert result["image_url"] == nil
-      assert result["description"] == "Somewhere"  # Vicinity is included in description
+      # Vicinity is included in description
+      assert result["description"] == "Somewhere"
     end
 
     test "handles empty photos array" do

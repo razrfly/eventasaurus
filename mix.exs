@@ -88,7 +88,7 @@ defmodule Eventasaurus.MixProject do
       # Email service for guest invitations
       {:resend, "~> 0.4"},
 
-            # Enhanced polling system dependencies
+      # Enhanced polling system dependencies
       # Caching for API responses and poll results
       {:cachex, "~> 4.1"},
 
@@ -101,7 +101,7 @@ defmodule Eventasaurus.MixProject do
       # Error tracking and performance monitoring
       {:sentry, git: "https://github.com/getsentry/sentry-elixir.git", branch: "master"},
       {:hackney, "~> 1.8"},
-      
+
       # Override nimble_ownership version for Sentry compatibility
       {:nimble_ownership, "~> 1.0", override: true}
     ]

@@ -103,8 +103,6 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
      })}
   end
 
-
-
   # Private function components
 
   defp cast_card(assigns) do
@@ -143,8 +141,6 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
     """
   end
 
-
-
   # Private functions
 
   defp assign_computed_data(socket) do
@@ -159,7 +155,8 @@ defmodule EventasaurusWeb.Live.Components.PublicCastCarouselComponent do
     # Show top billed cast, limit to reasonable number for display
     cast
     |> Enum.filter(&has_name?/1)
-    |> Enum.take(20) # Limit to 20 cast members for performance
+    # Limit to 20 cast members for performance
+    |> Enum.take(20)
   end
 
   defp has_name?(cast_member) do

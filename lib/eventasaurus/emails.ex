@@ -10,6 +10,7 @@ defmodule Eventasaurus.Emails do
 
   # HTML escaping helper to prevent XSS attacks
   defp html_escape(nil), do: ""
+
   defp html_escape(text) when is_binary(text) do
     text
     |> String.replace("&", "&amp;")
@@ -18,12 +19,14 @@ defmodule Eventasaurus.Emails do
     |> String.replace("\"", "&quot;")
     |> String.replace("'", "&#39;")
   end
+
   defp html_escape(text), do: html_escape(to_string(text))
 
   # Email validation helper to prevent injection attacks
   defp valid_email?(email) when is_binary(email) do
     email =~ ~r/^[^\s]+@[^\s]+\.[^\s]+$/
   end
+
   defp valid_email?(_), do: false
 
   @doc """
@@ -296,6 +299,7 @@ defmodule Eventasaurus.Emails do
     </div>
     """
   end
+
   defp render_personal_message(_), do: ""
 
   defp render_personal_message_text(message) when is_binary(message) and message != "" do
@@ -304,6 +308,7 @@ defmodule Eventasaurus.Emails do
 
     """
   end
+
   defp render_personal_message_text(_), do: ""
 
   defp render_event_description(event) do
@@ -326,12 +331,16 @@ defmodule Eventasaurus.Emails do
     case get_venue_info(event) do
       {name, address} when is_binary(name) ->
         venue_html = "<p><strong>📍 Location:</strong> #{html_escape(name)}</p>"
-        address_html = if address && address != "" do
-          "<p style=\"margin-left: 20px; color: #666;\">#{html_escape(address)}</p>"
-        else
-          ""
-        end
+
+        address_html =
+          if address && address != "" do
+            "<p style=\"margin-left: 20px; color: #666;\">#{html_escape(address)}</p>"
+          else
+            ""
+          end
+
         venue_html <> address_html
+
       _ ->
         ""
     end
@@ -341,12 +350,16 @@ defmodule Eventasaurus.Emails do
     case get_venue_info(event) do
       {name, address} when is_binary(name) ->
         venue_text = "📍 Location: #{name}\n"
-        address_text = if address && address != "" do
-          "   Address: #{address}\n"
-        else
-          ""
-        end
+
+        address_text =
+          if address && address != "" do
+            "   Address: #{address}\n"
+          else
+            ""
+          end
+
         venue_text <> address_text
+
       _ ->
         ""
     end
@@ -416,6 +429,7 @@ defmodule Eventasaurus.Emails do
 
   defp get_default_base_url do
     env = Application.get_env(:eventasaurus, :environment) || :prod
+
     case env do
       :test -> "http://localhost:4002"
       :dev -> "http://localhost:4000"

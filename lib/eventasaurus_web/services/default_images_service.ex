@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
       :prod ->
         # For releases, static files are in the release directory
         Path.join([Application.app_dir(:eventasaurus, "priv"), "static", "images", "events"])
+
       _ ->
         # For development, use the standard priv path
         Path.join(["priv", "static", "images", "events"])
@@ -26,6 +27,7 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
 
   def get_categories do
     path = base_path()
+
     unless File.exists?(path) do
       require Logger
       Logger.warning("Default images base path does not exist: #{path}")
@@ -35,11 +37,13 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
         {:ok, directories} ->
           directories
           |> Enum.filter(&File.dir?(Path.join(path, &1)))
-          |> Enum.map(&%{
-            name: &1,
-            display_name: humanize_category(&1),
-            path: &1
-          })
+          |> Enum.map(
+            &%{
+              name: &1,
+              display_name: humanize_category(&1),
+              path: &1
+            }
+          )
           |> Enum.sort_by(& &1.display_name)
 
         {:error, reason} ->
@@ -86,8 +90,6 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
       end
     end
   end
-
-
 
   def get_random_image do
     # Get all categories and their images

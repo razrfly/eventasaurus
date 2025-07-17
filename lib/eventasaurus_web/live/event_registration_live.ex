@@ -16,8 +16,7 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
      |> assign(:form_data, initial_data)
      |> assign(:loading, false)
      |> assign(:intended_status, intended_status)
-     |> assign(:modal_texts, modal_texts)
-    }
+     |> assign(:modal_texts, modal_texts)}
   end
 
   def handle_event("validate", %{"registration" => params}, socket) do
@@ -37,8 +36,7 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
     {:noreply,
      socket
      |> assign(:form, form)
-     |> assign(:form_data, merged_data)
-    }
+     |> assign(:form_data, merged_data)}
   end
 
   def handle_event("submit", %{"registration" => params}, socket) do
@@ -55,11 +53,21 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
 
         case Events.register_user_for_event(socket.assigns.event.id, name, email) do
           {:ok, :new_registration, _participant} ->
-            send(self(), {:registration_success, :new_registration, name, email, socket.assigns.intended_status})
+            send(
+              self(),
+              {:registration_success, :new_registration, name, email,
+               socket.assigns.intended_status}
+            )
+
             {:noreply, assign(socket, :loading, false)}
 
           {:ok, :existing_user_registered, _participant} ->
-            send(self(), {:registration_success, :existing_user_registered, name, email, socket.assigns.intended_status})
+            send(
+              self(),
+              {:registration_success, :existing_user_registered, name, email,
+               socket.assigns.intended_status}
+            )
+
             {:noreply, assign(socket, :loading, false)}
 
           {:error, :already_registered} ->
@@ -93,22 +101,24 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
   defp validate_registration_params(%{"name" => name, "email" => email}) do
     errors = %{}
 
-    errors = if name == nil or String.trim(name) == "" do
-      Map.put(errors, :name, "Name is required")
-    else
-      errors
-    end
-
-    errors = if email == nil or String.trim(email) == "" do
-      Map.put(errors, :email, "Email is required")
-    else
-      # Basic email validation
-      if String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/) do
-        errors
+    errors =
+      if name == nil or String.trim(name) == "" do
+        Map.put(errors, :name, "Name is required")
       else
-        Map.put(errors, :email, "Please enter a valid email address")
+        errors
       end
-    end
+
+    errors =
+      if email == nil or String.trim(email) == "" do
+        Map.put(errors, :email, "Email is required")
+      else
+        # Basic email validation
+        if String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/) do
+          errors
+        else
+          Map.put(errors, :email, "Please enter a valid email address")
+        end
+      end
 
     errors
   end
@@ -121,6 +131,7 @@ defmodule EventasaurusWeb.EventRegistrationComponent do
           description: "We'll create an account for you so you can manage your interest.",
           button: "Register Interest"
         }
+
       _ ->
         %{
           title: "Register for Event",

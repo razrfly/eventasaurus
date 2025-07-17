@@ -12,9 +12,10 @@ defmodule EventasaurusWeb.SettingsLiveTest do
       email: "test@example.com",
       name: "Test User"
     }
+
     {:ok, user} = Accounts.create_user(user_attrs)
 
-            # Mock authentication by setting up the session
+    # Mock authentication by setting up the session
     conn = log_in_user(conn, user)
 
     %{conn: conn, user: user}
@@ -30,7 +31,7 @@ defmodule EventasaurusWeb.SettingsLiveTest do
     assert html =~ "Social Media"
   end
 
-    test "SettingsLive handles form validation", %{conn: conn, user: _user} do
+  test "SettingsLive handles form validation", %{conn: conn, user: _user} do
     {:ok, view, _html} = live(conn, ~p"/settings")
 
     # Test form validation

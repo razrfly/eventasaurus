@@ -18,7 +18,7 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
       iex> MovieUtils.get_image_url(%{"poster_path" => "/abc123.jpg"})
       "https://image.tmdb.org/t/p/w500/abc123.jpg"
   """
-    def get_image_url(%{__struct__: EventasaurusApp.Events.PollOption} = poll_option) do
+  def get_image_url(%{__struct__: EventasaurusApp.Events.PollOption} = poll_option) do
     # Handle PollOption structs specifically
     cond do
       # First, try the direct image_url field
@@ -30,10 +30,18 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
         case get_in(poll_option.external_data, ["media", "images", "posters"]) do
           [first_poster | _] when is_map(first_poster) ->
             case first_poster["file_path"] do
-              path when is_binary(path) -> EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(path, "w500")
-              _ -> get_image_url(poll_option.external_data)
+              path when is_binary(path) ->
+                EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+                  path,
+                  "w500"
+                )
+
+              _ ->
+                get_image_url(poll_option.external_data)
             end
-          _ -> get_image_url(poll_option.external_data)
+
+          _ ->
+            get_image_url(poll_option.external_data)
         end
 
       true ->
@@ -41,58 +49,85 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
     end
   end
 
-    def get_image_url(movie_data) when is_map(movie_data) do
+  def get_image_url(movie_data) when is_map(movie_data) do
     cond do
       # Try TMDB media.images.posters structure with string keys (admin interface) - PRIORITY
       is_map(movie_data) && is_map(movie_data["media"]) && is_map(movie_data["media"]["images"]) &&
-      is_list(movie_data["media"]["images"]["posters"]) && length(movie_data["media"]["images"]["posters"]) > 0 ->
+        is_list(movie_data["media"]["images"]["posters"]) &&
+          length(movie_data["media"]["images"]["posters"]) > 0 ->
         first_poster = List.first(movie_data["media"]["images"]["posters"])
+
         if is_map(first_poster) && is_binary(first_poster["file_path"]) do
-          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(first_poster["file_path"], "w500")
+          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+            first_poster["file_path"],
+            "w500"
+          )
         else
           nil
         end
+
       # Try TMDB media.images.posters structure with atom keys (admin interface)
       is_map(movie_data) && is_map(movie_data[:media]) && is_map(movie_data[:media][:images]) &&
-      is_list(movie_data[:media][:images][:posters]) && length(movie_data[:media][:images][:posters]) > 0 ->
+        is_list(movie_data[:media][:images][:posters]) &&
+          length(movie_data[:media][:images][:posters]) > 0 ->
         first_poster = List.first(movie_data[:media][:images][:posters])
+
         if is_map(first_poster) && is_binary(first_poster[:file_path]) do
-          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(first_poster[:file_path], "w500")
+          EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+            first_poster[:file_path],
+            "w500"
+          )
         else
           nil
         end
+
       # Try direct string path (common)
       is_map(movie_data) && is_binary(movie_data["poster_path"]) ->
-        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(movie_data["poster_path"], "w500")
+        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+          movie_data["poster_path"],
+          "w500"
+        )
+
       # Try direct atom path
       is_map(movie_data) && is_binary(movie_data[:poster_path]) ->
-        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(movie_data[:poster_path], "w500")
+        EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(
+          movie_data[:poster_path],
+          "w500"
+        )
+
       # Try atom keys first - nested format
       is_map(movie_data) && is_map(movie_data[:poster_path]) && movie_data[:poster_path][:url] ->
         movie_data[:poster_path][:url]
+
       # Try string keys - nested format
       is_map(movie_data) && is_map(movie_data["poster_path"]) && movie_data["poster_path"]["url"] ->
         movie_data["poster_path"]["url"]
+
       # Try images array format (from rich data)
       is_map(movie_data) && is_list(movie_data[:images]) && length(movie_data[:images]) > 0 ->
         first_image = List.first(movie_data[:images])
+
         cond do
           is_map(first_image) && first_image[:url] -> first_image[:url]
           is_map(first_image) && first_image["url"] -> first_image["url"]
           is_map(first_image) && Map.get(first_image, :url) -> Map.get(first_image, :url)
           true -> nil
         end
+
       # Try string key images array format
       is_map(movie_data) && is_list(movie_data["images"]) && length(movie_data["images"]) > 0 ->
         first_image = List.first(movie_data["images"])
+
         cond do
           is_map(first_image) && first_image[:url] -> first_image[:url]
           is_map(first_image) && first_image["url"] -> first_image["url"]
           is_map(first_image) && Map.get(first_image, :url) -> Map.get(first_image, :url)
           true -> nil
         end
+
       # Fallback to nil if no image found
-      true -> nil
+      true ->
+        nil
     end
   rescue
     _ -> nil
@@ -113,12 +148,13 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   """
   def get_release_year(movie_data) when is_map(movie_data) do
     # Primary: Look in metadata.release_date (admin interface saves it here)
-    release_date = get_in(movie_data, ["metadata", "release_date"]) ||
-                   movie_data["release_date"] ||
-                   movie_data[:release_date] ||
-                   get_in(movie_data, [:metadata, :release_date]) ||
-                   get_in(movie_data, [:metadata, "release_date"]) ||
-                   get_in(movie_data, ["metadata", :release_date])
+    release_date =
+      get_in(movie_data, ["metadata", "release_date"]) ||
+        movie_data["release_date"] ||
+        movie_data[:release_date] ||
+        get_in(movie_data, [:metadata, :release_date]) ||
+        get_in(movie_data, [:metadata, "release_date"]) ||
+        get_in(movie_data, ["metadata", :release_date])
 
     case release_date do
       date_string when is_binary(date_string) ->
@@ -128,9 +164,13 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
               {year, _} -> year
               _ -> nil
             end
-          _ -> nil
+
+          _ ->
+            nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   rescue
     _ -> nil
@@ -151,14 +191,14 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   """
   def get_title(movie_data) when is_map(movie_data) do
     movie_data[:title] ||
-    movie_data["title"] ||
-    movie_data[:name] ||
-    movie_data["name"] ||
-    get_in(movie_data, [:metadata, :title]) ||
-    get_in(movie_data, ["metadata", "title"]) ||
-    get_in(movie_data, [:metadata, "original_title"]) ||
-    get_in(movie_data, ["metadata", "original_title"]) ||
-    "Unknown Title"
+      movie_data["title"] ||
+      movie_data[:name] ||
+      movie_data["name"] ||
+      get_in(movie_data, [:metadata, :title]) ||
+      get_in(movie_data, ["metadata", "title"]) ||
+      get_in(movie_data, [:metadata, "original_title"]) ||
+      get_in(movie_data, ["metadata", "original_title"]) ||
+      "Unknown Title"
   rescue
     _ -> "Unknown Title"
   end
@@ -175,25 +215,29 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   """
   def get_director(movie_data) when is_map(movie_data) do
     # Primary: Look for crew in the root level (admin interface saves it here)
-    crew = movie_data["crew"] ||
-           movie_data[:crew] ||
-           get_in(movie_data, ["metadata", "crew"]) ||
-           get_in(movie_data, [:metadata, :crew]) ||
-           get_in(movie_data, ["metadata", :crew]) ||
-           []
+    crew =
+      movie_data["crew"] ||
+        movie_data[:crew] ||
+        get_in(movie_data, ["metadata", "crew"]) ||
+        get_in(movie_data, [:metadata, :crew]) ||
+        get_in(movie_data, ["metadata", :crew]) ||
+        []
 
     case crew do
       crew_list when is_list(crew_list) ->
-        director = Enum.find(crew_list, fn member ->
-          is_map(member) and (member["job"] == "Director" || member[:job] == "Director")
-        end)
+        director =
+          Enum.find(crew_list, fn member ->
+            is_map(member) and (member["job"] == "Director" || member[:job] == "Director")
+          end)
 
         case director do
           %{"name" => name} when is_binary(name) -> name
           %{name: name} when is_binary(name) -> name
           _ -> nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   rescue
     _ -> nil
@@ -211,12 +255,13 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   """
   def get_genres(movie_data) when is_map(movie_data) do
     # Primary: Look in metadata.genres (admin interface saves it here)
-    genres = get_in(movie_data, ["metadata", "genres"]) ||
-             movie_data["genres"] ||
-             movie_data[:genres] ||
-             get_in(movie_data, [:metadata, :genres]) ||
-             get_in(movie_data, [:metadata, "genres"]) ||
-             []
+    genres =
+      get_in(movie_data, ["metadata", "genres"]) ||
+        movie_data["genres"] ||
+        movie_data[:genres] ||
+        get_in(movie_data, [:metadata, :genres]) ||
+        get_in(movie_data, [:metadata, "genres"]) ||
+        []
 
     case genres do
       genres_list when is_list(genres_list) ->
@@ -229,7 +274,9 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
           end
         end)
         |> Enum.filter(&is_binary/1)
-      _ -> []
+
+      _ ->
+        []
     end
   rescue
     _ -> []
@@ -276,7 +323,7 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
       director && "Dir: #{director}",
       is_list(genres) && length(genres) > 0 && Enum.join(genres, ", ")
     ]
-    |> Enum.filter(&(&1))
+    |> Enum.filter(& &1)
     |> Enum.join(" • ")
   rescue
     _ -> ""
@@ -297,17 +344,21 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
     details = if director, do: ["Directed by #{director}"] ++ details, else: details
 
     # Add genre if available - handle both list and string formats
-    details = cond do
-      is_list(genre) and length(genre) > 0 -> [Enum.join(genre, ", ")] ++ details
-      is_binary(genre) and genre != "" -> ["#{genre}"] ++ details
-      true -> details
-    end
+    details =
+      cond do
+        is_list(genre) and length(genre) > 0 -> [Enum.join(genre, ", ")] ++ details
+        is_binary(genre) and genre != "" -> ["#{genre}"] ++ details
+        true -> details
+      end
 
     # Combine base description with details
     case details do
-      [] -> base_description
+      [] ->
+        base_description
+
       _ ->
         details_line = Enum.join(details, " • ")
+
         case base_description do
           desc when is_binary(desc) and desc != "" -> "#{details_line}\n\n#{desc}"
           _ -> details_line
@@ -323,15 +374,18 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   def get_poster_url(movie_data, size \\ "w500")
 
   def get_poster_url(movie_data, size) when is_map(movie_data) do
-    poster_path = movie_data[:poster_path] ||
-                  movie_data["poster_path"] ||
-                  get_in(movie_data, [:metadata, :poster_path]) ||
-                  get_in(movie_data, ["metadata", "poster_path"])
+    poster_path =
+      movie_data[:poster_path] ||
+        movie_data["poster_path"] ||
+        get_in(movie_data, [:metadata, :poster_path]) ||
+        get_in(movie_data, ["metadata", "poster_path"])
 
     case poster_path do
       path when is_binary(path) and path != "" ->
         RichDataDisplayComponent.tmdb_image_url(path, size)
-      _ -> nil
+
+      _ ->
+        nil
     end
   rescue
     _ -> nil
@@ -345,15 +399,18 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
   def get_backdrop_url(movie_data, size \\ "w1280")
 
   def get_backdrop_url(movie_data, size) when is_map(movie_data) do
-    backdrop_path = movie_data[:backdrop_path] ||
-                    movie_data["backdrop_path"] ||
-                    get_in(movie_data, [:metadata, :backdrop_path]) ||
-                    get_in(movie_data, ["metadata", "backdrop_path"])
+    backdrop_path =
+      movie_data[:backdrop_path] ||
+        movie_data["backdrop_path"] ||
+        get_in(movie_data, [:metadata, :backdrop_path]) ||
+        get_in(movie_data, ["metadata", "backdrop_path"])
 
     case backdrop_path do
       path when is_binary(path) and path != "" ->
         RichDataDisplayComponent.tmdb_image_url(path, size)
-      _ -> nil
+
+      _ ->
+        nil
     end
   rescue
     _ -> nil

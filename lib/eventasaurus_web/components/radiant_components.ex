@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.RadiantComponents do
     """
   end
 
-    @doc """
+  @doc """
   Main heading component with Radiant styling
   """
   attr :class, :string, default: ""
@@ -28,12 +28,13 @@ defmodule EventasaurusWeb.RadiantComponents do
   attr :dark, :boolean, default: false
   slot :inner_block, required: true
 
-    def heading(assigns) do
-    assigns = assign(assigns, :classes, [
-      "text-4xl font-medium tracking-tighter text-pretty text-gray-950 sm:text-6xl",
-      assigns.dark && "text-white",
-      assigns.class
-    ])
+  def heading(assigns) do
+    assigns =
+      assign(assigns, :classes, [
+        "text-4xl font-medium tracking-tighter text-pretty text-gray-950 sm:text-6xl",
+        assigns.dark && "text-white",
+        assigns.class
+      ])
 
     case assigns.as do
       "h1" -> ~H"<h1 class={@classes}><%= render_slot(@inner_block) %></h1>"
@@ -46,7 +47,7 @@ defmodule EventasaurusWeb.RadiantComponents do
     end
   end
 
-    @doc """
+  @doc """
   Subheading component with Radiant styling
   """
   attr :class, :string, default: ""
@@ -54,12 +55,13 @@ defmodule EventasaurusWeb.RadiantComponents do
   attr :dark, :boolean, default: false
   slot :inner_block, required: true
 
-    def subheading(assigns) do
-    assigns = assign(assigns, :classes, [
-      "font-mono text-xs/5 font-semibold tracking-widest uppercase",
-      assigns.dark && "text-gray-400" || "text-gray-500",
-      assigns.class
-    ])
+  def subheading(assigns) do
+    assigns =
+      assign(assigns, :classes, [
+        "font-mono text-xs/5 font-semibold tracking-widest uppercase",
+        (assigns.dark && "text-gray-400") || "text-gray-500",
+        assigns.class
+      ])
 
     case assigns.as do
       "h1" -> ~H"<h1 class={@classes}><%= render_slot(@inner_block) %></h1>"
@@ -84,11 +86,18 @@ defmodule EventasaurusWeb.RadiantComponents do
 
   def radiant_button(assigns) do
     variant_classes = %{
-      "primary" => "inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 shadow-md text-base font-medium whitespace-nowrap text-white hover:bg-gray-800",
-      "secondary" => "relative inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-white/15 shadow-md ring-1 ring-gray-200 text-base font-medium whitespace-nowrap text-gray-950 hover:bg-white/20"
+      "primary" =>
+        "inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 shadow-md text-base font-medium whitespace-nowrap text-white hover:bg-gray-800",
+      "secondary" =>
+        "relative inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-white/15 shadow-md ring-1 ring-gray-200 text-base font-medium whitespace-nowrap text-gray-950 hover:bg-white/20"
     }
 
-    assigns = assign(assigns, :variant_class, variant_classes[assigns.variant] || variant_classes["primary"])
+    assigns =
+      assign(
+        assigns,
+        :variant_class,
+        variant_classes[assigns.variant] || variant_classes["primary"]
+      )
 
     ~H"""
     <%= if @href do %>
@@ -230,7 +239,12 @@ defmodule EventasaurusWeb.RadiantComponents do
       "professional" => "bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100"
     }
 
-    assigns = assign(assigns, :gradient_class, theme_gradients[assigns.theme] || theme_gradients["default"])
+    assigns =
+      assign(
+        assigns,
+        :gradient_class,
+        theme_gradients[assigns.theme] || theme_gradients["default"]
+      )
 
     ~H"""
     <div class={[
@@ -301,5 +315,4 @@ defmodule EventasaurusWeb.RadiantComponents do
     </div>
     """
   end
-
 end

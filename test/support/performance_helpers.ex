@@ -14,12 +14,13 @@ defmodule EventasaurusWeb.PerformanceHelpers do
   This avoids recreating the same data structures in multiple tests.
   """
   def create_test_event_with_venue(attrs \\ %{}) do
-    venue = insert(:venue,
-      name: "Performance Test Venue",
-      address: "123 Fast Lane",
-      city: "Test City",
-      state: "CA"
-    )
+    venue =
+      insert(:venue,
+        name: "Performance Test Venue",
+        address: "123 Fast Lane",
+        city: "Test City",
+        state: "CA"
+      )
 
     default_attrs = %{
       title: "Performance Test Event",
@@ -59,21 +60,24 @@ defmodule EventasaurusWeb.PerformanceHelpers do
   Batch create multiple test entities for tests that need datasets.
   """
   def create_test_dataset do
-    venues = for i <- 1..3 do
-      insert(:venue, name: "Venue #{i}", city: "City #{i}")
-    end
+    venues =
+      for i <- 1..3 do
+        insert(:venue, name: "Venue #{i}", city: "City #{i}")
+      end
 
-    events = for {venue, i} <- Enum.with_index(venues, 1) do
-      insert(:event,
-        title: "Event #{i}",
-        venue: venue,
-        visibility: "public"
-      )
-    end
+    events =
+      for {venue, i} <- Enum.with_index(venues, 1) do
+        insert(:event,
+          title: "Event #{i}",
+          venue: venue,
+          visibility: "public"
+        )
+      end
 
-    users = for i <- 1..5 do
-      insert(:user, name: "User #{i}", email: "user#{i}@test.com")
-    end
+    users =
+      for i <- 1..5 do
+        insert(:user, name: "User #{i}", email: "user#{i}@test.com")
+      end
 
     %{venues: venues, events: events, users: users}
   end
@@ -111,7 +115,11 @@ defmodule EventasaurusWeb.PerformanceHelpers do
     IO.puts("\n=== Test Suite Performance Stats ===")
     IO.puts("CPU Cores: #{System.schedulers_online()}")
     IO.puts("Max Concurrent Cases: #{ExUnit.configuration()[:max_cases]}")
-    IO.puts("Database Pool Size: #{Application.get_env(:eventasaurus, EventasaurusApp.Repo)[:pool_size]}")
+
+    IO.puts(
+      "Database Pool Size: #{Application.get_env(:eventasaurus, EventasaurusApp.Repo)[:pool_size]}"
+    )
+
     IO.puts("Capture Log: #{ExUnit.configuration()[:capture_log]}")
     IO.puts("=====================================\n")
   end

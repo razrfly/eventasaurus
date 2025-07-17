@@ -167,13 +167,15 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
     participants = socket.assigns.participants || []
 
     # Group participants by status
-    groups = participants
-    |> Enum.filter(&(&1.user && &1.user.name)) # Only include participants with valid user data
-    |> Enum.group_by(&(&1.status))
-    |> Enum.map(fn {status, participants} ->
-      {status, %{participants: participants, count: length(participants)}}
-    end)
-    |> Enum.sort_by(fn {status, _group} -> status_priority(status) end)
+    groups =
+      participants
+      # Only include participants with valid user data
+      |> Enum.filter(&(&1.user && &1.user.name))
+      |> Enum.group_by(& &1.status)
+      |> Enum.map(fn {status, participants} ->
+        {status, %{participants: participants, count: length(participants)}}
+      end)
+      |> Enum.sort_by(fn {status, _group} -> status_priority(status) end)
 
     layout_classes = get_layout_classes(socket.assigns.layout)
     content_classes = get_content_classes(socket.assigns.layout)

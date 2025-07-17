@@ -19,7 +19,7 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
     title: "Pick your favorite activities",
     description: "Select all activities you'd enjoy",
     voting_system: "approval",
-          poll_type: "time"
+    poll_type: "time"
   }
 
   @ranked_poll_attrs %{
@@ -46,27 +46,30 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
     test "binary poll complete workflow", %{user: user, event: event} do
       # 1. Create binary poll
-      poll_attrs = Map.merge(@binary_poll_attrs, %{
-        event_id: event.id,
-        created_by_id: user.id
-      })
+      poll_attrs =
+        Map.merge(@binary_poll_attrs, %{
+          event_id: event.id,
+          created_by_id: user.id
+        })
 
       {:ok, poll} = Events.create_poll(poll_attrs)
       assert poll.voting_system == "binary"
       assert poll.phase == "list_building"
 
       # 2. Add poll options
-      {:ok, option1} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Yes - Pizza sounds great!",
-        suggested_by_id: user.id
-      })
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Yes - Pizza sounds great!",
+          suggested_by_id: user.id
+        })
 
-      {:ok, option2} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "No - Let's try something else",
-        suggested_by_id: user.id
-      })
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "No - Let's try something else",
+          suggested_by_id: user.id
+        })
 
       # 3. Transition to voting phase
       {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
@@ -93,22 +96,26 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
     test "approval voting complete workflow", %{user: user, event: event} do
       # Create approval poll
-      poll_attrs = Map.merge(@approval_poll_attrs, %{
-        event_id: event.id,
-        created_by_id: user.id
-      })
+      poll_attrs =
+        Map.merge(@approval_poll_attrs, %{
+          event_id: event.id,
+          created_by_id: user.id
+        })
 
       {:ok, poll} = Events.create_poll(poll_attrs)
 
       # Add multiple options
-      options = for title <- ["Hiking", "Mini Golf", "Bowling", "Escape Room"] do
-        {:ok, option} = Events.create_poll_option(%{
-          poll_id: poll.id,
-          title: title,
-          suggested_by_id: user.id
-        })
-        option
-      end
+      options =
+        for title <- ["Hiking", "Mini Golf", "Bowling", "Escape Room"] do
+          {:ok, option} =
+            Events.create_poll_option(%{
+              poll_id: poll.id,
+              title: title,
+              suggested_by_id: user.id
+            })
+
+          option
+        end
 
       # Transition to voting
       {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
@@ -136,23 +143,28 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
     test "ranked choice voting complete workflow", %{user: user, event: event} do
       # Create ranked poll
-      poll_attrs = Map.merge(@ranked_poll_attrs, %{
-        event_id: event.id,
-        created_by_id: user.id
-      })
+      poll_attrs =
+        Map.merge(@ranked_poll_attrs, %{
+          event_id: event.id,
+          created_by_id: user.id
+        })
 
       {:ok, poll} = Events.create_poll(poll_attrs)
 
       # Add movie options
       movie_titles = ["The Matrix", "Inception", "Interstellar", "Blade Runner"]
-      options = for title <- movie_titles do
-        {:ok, option} = Events.create_poll_option(%{
-          poll_id: poll.id,
-          title: title,
-          suggested_by_id: user.id
-        })
-        option
-      end
+
+      options =
+        for title <- movie_titles do
+          {:ok, option} =
+            Events.create_poll_option(%{
+              poll_id: poll.id,
+              title: title,
+              suggested_by_id: user.id
+            })
+
+          option
+        end
 
       {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
 
@@ -166,7 +178,9 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
       end)
 
       # User 2 ranking: Inception(1), Matrix(2), Blade Runner(3), Interstellar(4)
-      rankings = [2, 1, 4, 3]  # Different preference order
+      # Different preference order
+      rankings = [2, 1, 4, 3]
+
       Enum.zip(options, rankings)
       |> Enum.each(fn {option, rank} ->
         Events.cast_ranked_vote(option, user2, rank)
@@ -185,23 +199,28 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
     test "star rating complete workflow", %{user: user, event: event} do
       # Create star rating poll
-      poll_attrs = Map.merge(@star_poll_attrs, %{
-        event_id: event.id,
-        created_by_id: user.id
-      })
+      poll_attrs =
+        Map.merge(@star_poll_attrs, %{
+          event_id: event.id,
+          created_by_id: user.id
+        })
 
       {:ok, poll} = Events.create_poll(poll_attrs)
 
       # Add restaurant options
       restaurants = ["Tony's Italian", "Sushi Palace", "BBQ Junction", "Vegan Delights"]
-      options = for name <- restaurants do
-        {:ok, option} = Events.create_poll_option(%{
-          poll_id: poll.id,
-          title: name,
-          suggested_by_id: user.id
-        })
-        option
-      end
+
+      options =
+        for name <- restaurants do
+          {:ok, option} =
+            Events.create_poll_option(%{
+              poll_id: poll.id,
+              title: name,
+              suggested_by_id: user.id
+            })
+
+          option
+        end
 
       {:ok, voting_poll} = Events.transition_poll_phase(poll, "voting")
 
@@ -210,6 +229,7 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
       # User 1 ratings: 5, 4, 3, 2
       ratings1 = [5, 4, 3, 2]
+
       Enum.zip(options, ratings1)
       |> Enum.each(fn {option, rating} ->
         Events.cast_star_vote(option, user, rating)
@@ -217,6 +237,7 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
       # User 2 ratings: 4, 5, 4, 3
       ratings2 = [4, 5, 4, 3]
+
       Enum.zip(options, ratings2)
       |> Enum.each(fn {option, rating} ->
         Events.cast_star_vote(option, user2, rating)
@@ -238,22 +259,27 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
     test "poll moderation features", %{user: user, event: event} do
       # Create poll with multiple options
-      {:ok, poll} = Events.create_poll(Map.merge(@approval_poll_attrs, %{
-        event_id: event.id,
-        created_by_id: user.id
-      }))
+      {:ok, poll} =
+        Events.create_poll(
+          Map.merge(@approval_poll_attrs, %{
+            event_id: event.id,
+            created_by_id: user.id
+          })
+        )
 
-      {:ok, option1} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Good option",
-        suggested_by_id: user.id
-      })
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Good option",
+          suggested_by_id: user.id
+        })
 
-      {:ok, option2} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Inappropriate option",
-        suggested_by_id: user.id
-      })
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Inappropriate option",
+          suggested_by_id: user.id
+        })
 
       # Test vote clearing
       user2 = user_fixture()
@@ -282,11 +308,12 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
       assert poll.created_by_id == user.id
 
       # Add options and finalize through event workflow
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Event Pizza Option",
-        suggested_by_id: user.id
-      })
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Event Pizza Option",
+          suggested_by_id: user.id
+        })
 
       {:ok, final_poll} = Events.finalize_event_poll(poll, [option.id], user)
       assert final_poll.phase == "closed"
@@ -294,21 +321,28 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
     test "poll analytics and statistics", %{user: user, event: event} do
       # Create multiple polls for comprehensive stats
-      {:ok, binary_poll} = Events.create_poll(Map.merge(@binary_poll_attrs, %{
-        event_id: event.id,
-        created_by_id: user.id
-      }))
+      {:ok, binary_poll} =
+        Events.create_poll(
+          Map.merge(@binary_poll_attrs, %{
+            event_id: event.id,
+            created_by_id: user.id
+          })
+        )
 
-      {:ok, approval_poll} = Events.create_poll(Map.merge(@approval_poll_attrs, %{
-        event_id: event.id,
-        created_by_id: user.id
-      }))
+      {:ok, approval_poll} =
+        Events.create_poll(
+          Map.merge(@approval_poll_attrs, %{
+            event_id: event.id,
+            created_by_id: user.id
+          })
+        )
 
       # Test event poll statistics
       stats = Events.get_event_poll_stats(event)
 
       assert stats.total_polls == 2
-      assert stats.active_polls == 2  # Both in list_building phase
+      # Both in list_building phase
+      assert stats.active_polls == 2
       assert stats.polls_by_type["general"] == 1
       assert stats.polls_by_type["activity"] == 1
       assert stats.polls_by_phase["list_building"] == 2
@@ -329,11 +363,12 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
       }
 
       # Test vote broadcasting
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Test option",
-        suggested_by_id: user.id
-      })
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Test option",
+          suggested_by_id: user.id
+        })
 
       {:ok, _voting_poll} = Events.transition_poll_phase(poll, "voting")
       {:ok, _vote} = Events.cast_binary_vote(option, user, "yes")

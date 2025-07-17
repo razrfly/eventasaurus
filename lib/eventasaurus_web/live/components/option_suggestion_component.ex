@@ -71,11 +71,12 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
       assigns[:action] == :movie_rich_data_error ->
         # Fallback to basic result data if TMDB fetch fails
-        changeset = create_option_changeset(socket, %{
-          "title" => assigns.selected_result.title,
-          "description" => assigns.selected_result.description || "",
-          "external_id" => to_string(assigns.selected_result.id)
-        })
+        changeset =
+          create_option_changeset(socket, %{
+            "title" => assigns.selected_result.title,
+            "description" => assigns.selected_result.description || "",
+            "external_id" => to_string(assigns.selected_result.id)
+          })
 
         {:ok,
          socket
@@ -105,21 +106,27 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       true ->
         # Normal update flow
         # Create changeset for new option
-        changeset = PollOption.changeset(%PollOption{}, %{
-          poll_id: assigns.poll.id,
-          suggested_by_id: assigns.user.id,
-          status: "active"
-        })
+        changeset =
+          PollOption.changeset(%PollOption{}, %{
+            poll_id: assigns.poll.id,
+            suggested_by_id: assigns.user.id,
+            status: "active"
+          })
 
         # Calculate user's suggestion count
-        user_suggestion_count = case assigns.poll.poll_options do
-          %Ecto.Association.NotLoaded{} -> 0
-          poll_options when is_list(poll_options) ->
-            Enum.count(poll_options, fn option ->
-              option.suggested_by_id == assigns.user.id && option.status == "active"
-            end)
-          _ -> 0
-        end
+        user_suggestion_count =
+          case assigns.poll.poll_options do
+            %Ecto.Association.NotLoaded{} ->
+              0
+
+            poll_options when is_list(poll_options) ->
+              Enum.count(poll_options, fn option ->
+                option.suggested_by_id == assigns.user.id && option.status == "active"
+              end)
+
+            _ ->
+              0
+          end
 
         # Check if user can suggest more options
         # Must be in a phase that allows suggestions AND within user limits
@@ -156,15 +163,21 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> then(fn socket ->
            # Handle editing mode after all other assigns are set
            if Map.get(assigns, :editing_option_id) do
-             option = case assigns.poll.poll_options do
-               %Ecto.Association.NotLoaded{} -> nil
-               poll_options when is_list(poll_options) ->
-                 Enum.find(poll_options, fn opt -> opt.id == assigns.editing_option_id end)
-               _ -> nil
-             end
+             option =
+               case assigns.poll.poll_options do
+                 %Ecto.Association.NotLoaded{} ->
+                   nil
+
+                 poll_options when is_list(poll_options) ->
+                   Enum.find(poll_options, fn opt -> opt.id == assigns.editing_option_id end)
+
+                 _ ->
+                   nil
+               end
 
              if option do
                edit_changeset = PollOption.changeset(option, %{})
+
                socket
                |> assign(:editing_option_id, assigns.editing_option_id)
                |> assign(:edit_changeset, edit_changeset)
@@ -1207,8 +1220,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   @impl true
-  def handle_event("save_date_time_slots", %{"date" => date_string, "time_slots" => time_slots}, socket) do
+  def handle_event(
+        "save_date_time_slots",
+        %{"date" => date_string, "time_slots" => time_slots},
+        socket
+      ) do
     updated_slots = Map.put(socket.assigns.date_time_slots, date_string, time_slots)
+
     {:noreply,
      socket
      |> assign(:date_time_slots, updated_slots)
@@ -1220,15 +1238,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     {:noreply, assign(socket, :selected_date_for_time, nil)}
   end
 
-
-
   @impl true
   def handle_event("cancel_suggestion", _params, socket) do
-    changeset = PollOption.changeset(%PollOption{}, %{
-      poll_id: socket.assigns.poll.id,
-      suggested_by_id: socket.assigns.user.id,
-      status: "active"
-    })
+    changeset =
+      PollOption.changeset(%PollOption{}, %{
+        poll_id: socket.assigns.poll.id,
+        suggested_by_id: socket.assigns.user.id,
+        status: "active"
+      })
 
     {:noreply,
      socket
@@ -1261,11 +1278,12 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         case RichDataManager.search(query, search_options) do
           {:ok, results_by_provider} ->
             # Extract movie results from TMDB provider
-            movie_results = case Map.get(results_by_provider, :tmdb) do
-              {:ok, results} when is_list(results) -> results
-              {:ok, result} -> [result]
-              _ -> []
-            end
+            movie_results =
+              case Map.get(results_by_provider, :tmdb) do
+                {:ok, results} when is_list(results) -> results
+                {:ok, result} -> [result]
+                _ -> []
+              end
 
             {:noreply,
              socket
@@ -1301,14 +1319,15 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   @impl true
   def handle_event("select_movie", %{"movie-id" => movie_id}, socket) do
     # Find the selected movie in search results
-    movie_data = socket.assigns.search_results
-    |> Enum.find(fn movie ->
-      # Handle both string and integer movie_id formats
-      case Integer.parse(movie_id) do
-        {id, _} -> movie.id == id
-        :error -> to_string(movie.id) == movie_id
-      end
-    end)
+    movie_data =
+      socket.assigns.search_results
+      |> Enum.find(fn movie ->
+        # Handle both string and integer movie_id formats
+        case Integer.parse(movie_id) do
+          {id, _} -> movie.id == id
+          :error -> to_string(movie.id) == movie_id
+        end
+      end)
 
     if movie_data do
       # Set loading state for rich data
@@ -1318,10 +1337,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
         {:ok, rich_movie_data} ->
           # Use the shared MovieDataService to prepare movie data consistently
-          prepared_data = MovieDataService.prepare_movie_option_data(
-            movie_data.id,
-            rich_movie_data
-          )
+          prepared_data =
+            MovieDataService.prepare_movie_option_data(
+              movie_data.id,
+              rich_movie_data
+            )
 
           # Create changeset with the rich data
           changeset = create_option_changeset(socket, prepared_data)
@@ -1367,63 +1387,73 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
     # Log submission for debugging if needed
     require Logger
-    Logger.debug("Submitting suggestion for poll type: #{socket.assigns.poll.poll_type}, selected dates count: #{length(socket.assigns.selected_dates || [])}")
+
+    Logger.debug(
+      "Submitting suggestion for poll type: #{socket.assigns.poll.poll_type}, selected dates count: #{length(socket.assigns.selected_dates || [])}"
+    )
 
     # Special handling for date_selection polls
-    if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
+    if socket.assigns.poll.poll_type == "date_selection" &&
+         length(socket.assigns.selected_dates) > 0 do
       # Create multiple poll options, one for each selected date
-      results = socket.assigns.selected_dates
-      |> Enum.map(fn selected_date ->
-        # Create metadata structure for date_selection polls using proper builder
-        date_metadata_base = EventasaurusApp.Events.DateMetadata.build_date_metadata(
-          selected_date,
-          [display_date: format_date_for_display(selected_date)]
-        )
+      results =
+        socket.assigns.selected_dates
+        |> Enum.map(fn selected_date ->
+          # Create metadata structure for date_selection polls using proper builder
+          date_metadata_base =
+            EventasaurusApp.Events.DateMetadata.build_date_metadata(
+              selected_date,
+              display_date: format_date_for_display(selected_date)
+            )
 
-        # Add time slot information if time is enabled
-        date_metadata = if socket.assigns.time_enabled do
-          date_iso = Date.to_iso8601(selected_date)
-          time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
+          # Add time slot information if time is enabled
+          date_metadata =
+            if socket.assigns.time_enabled do
+              date_iso = Date.to_iso8601(selected_date)
+              time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
 
-          # Only set time_enabled true if there are actually time slots
-          if length(time_slots) > 0 do
-            Map.merge(date_metadata_base, %{
-              "time_enabled" => true,
-              "time_slots" => time_slots,
-              "all_day" => false
+              # Only set time_enabled true if there are actually time slots
+              if length(time_slots) > 0 do
+                Map.merge(date_metadata_base, %{
+                  "time_enabled" => true,
+                  "time_slots" => time_slots,
+                  "all_day" => false
+                })
+              else
+                Map.merge(date_metadata_base, %{
+                  "time_enabled" => false,
+                  "all_day" => true,
+                  "time_slots" => []
+                })
+              end
+            else
+              Map.merge(date_metadata_base, %{
+                "time_enabled" => false,
+                "all_day" => true,
+                "time_slots" => []
+              })
+            end
+
+          # Create params for this specific date
+          date_params =
+            Map.merge(option_params, %{
+              "title" => format_date_for_option_title(selected_date),
+              "description" => option_params["description"] || "",
+              # Pass as map, not JSON string!
+              "metadata" => date_metadata
             })
-          else
-            Map.merge(date_metadata_base, %{
-              "time_enabled" => false,
-              "all_day" => true,
-              "time_slots" => []
-            })
-          end
-        else
-          Map.merge(date_metadata_base, %{
-            "time_enabled" => false,
-            "all_day" => true,
-            "time_slots" => []
-          })
-        end
 
-        # Create params for this specific date
-        date_params = Map.merge(option_params, %{
-          "title" => format_date_for_option_title(selected_date),
-          "description" => option_params["description"] || "",
-          "metadata" => date_metadata  # Pass as map, not JSON string!
-        })
-
-        result = save_option(socket, date_params)
-        Logger.debug("Date save result: #{selected_date} -> #{inspect(result)}")
-        result
-      end)
+          result = save_option(socket, date_params)
+          Logger.debug("Date save result: #{selected_date} -> #{inspect(result)}")
+          result
+        end)
 
       # Log the batch save results
       Logger.debug("Batch date save results: #{inspect(results)}")
 
       # Check if all saves were successful
-      successful_options = results
+      successful_options =
+        results
         |> Enum.filter(fn result ->
           case result do
             {:ok, _} -> true
@@ -1434,7 +1464,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
       failed_count = length(results) - length(successful_options)
 
-      Logger.debug("Date saves completed: #{length(successful_options)}/#{length(socket.assigns.selected_dates)} successful, #{failed_count} failed")
+      Logger.debug(
+        "Date saves completed: #{length(successful_options)}/#{length(socket.assigns.selected_dates)} successful, #{failed_count} failed"
+      )
 
       if length(successful_options) == length(socket.assigns.selected_dates) do
         # All dates saved successfully
@@ -1444,26 +1476,30 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         # Broadcast for each successful option
         Enum.each(successful_options, fn option ->
           duplicate_options = check_for_duplicates(poll, option)
+
           if length(duplicate_options) > 0 do
             PollPubSubService.broadcast_duplicate_detected(poll, option, duplicate_options, user)
           else
             PollPubSubService.broadcast_option_suggested(poll, option, user)
           end
+
           send(self(), {:option_suggested, option})
         end)
 
         # Reset form after successful submission
-        changeset = PollOption.changeset(%PollOption{}, %{
-          poll_id: socket.assigns.poll.id,
-          suggested_by_id: socket.assigns.user.id,
-          status: "active"
-        })
+        changeset =
+          PollOption.changeset(%PollOption{}, %{
+            poll_id: socket.assigns.poll.id,
+            suggested_by_id: socket.assigns.user.id,
+            status: "active"
+          })
 
         {:noreply,
          socket
          |> assign(:loading, false)
          |> assign(:suggestion_form_visible, false)
-         |> assign(:selected_dates, [])  # Clear selected dates after successful submission
+         # Clear selected dates after successful submission
+         |> assign(:selected_dates, [])
          # Clear time selection state after successful submission
          |> assign(:time_enabled, false)
          |> assign(:selected_date_for_time, nil)
@@ -1472,7 +1508,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:loading_rich_data, false)}
       else
         # Handle errors - show which dates failed
-        failed_results = results
+        failed_results =
+          results
           |> Enum.with_index()
           |> Enum.filter(fn {result, _} ->
             case result do
@@ -1485,7 +1522,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
             {date, changeset}
           end)
 
-        Logger.error("Failed to save dates: #{inspect(failed_results |> Enum.map(fn {date, changeset} -> {date, changeset.errors} end))}")
+        Logger.error(
+          "Failed to save dates: #{inspect(failed_results |> Enum.map(fn {date, changeset} -> {date, changeset.errors} end))}"
+        )
 
         {:noreply,
          socket
@@ -1514,17 +1553,19 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           send(self(), {:option_suggested, option})
 
           # Reset form
-          changeset = PollOption.changeset(%PollOption{}, %{
-            poll_id: socket.assigns.poll.id,
-            suggested_by_id: socket.assigns.user.id,
-            status: "active"
-          })
+          changeset =
+            PollOption.changeset(%PollOption{}, %{
+              poll_id: socket.assigns.poll.id,
+              suggested_by_id: socket.assigns.user.id,
+              status: "active"
+            })
 
           {:noreply,
            socket
            |> assign(:loading, false)
            |> assign(:suggestion_form_visible, false)
-           |> assign(:selected_dates, [])  # Clear selected dates after successful submission
+           # Clear selected dates after successful submission
+           |> assign(:selected_dates, [])
            # Clear time selection state after successful submission
            |> assign(:time_enabled, false)
            |> assign(:selected_date_for_time, nil)
@@ -1574,15 +1615,21 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("edit_option", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id_int} ->
-        option = case socket.assigns.poll.poll_options do
-          %Ecto.Association.NotLoaded{} -> nil
-          poll_options when is_list(poll_options) ->
-            Enum.find(poll_options, fn opt -> opt.id == option_id_int end)
-          _ -> nil
-        end
+        option =
+          case socket.assigns.poll.poll_options do
+            %Ecto.Association.NotLoaded{} ->
+              nil
+
+            poll_options when is_list(poll_options) ->
+              Enum.find(poll_options, fn opt -> opt.id == option_id_int end)
+
+            _ ->
+              nil
+          end
 
         if option do
           edit_changeset = PollOption.changeset(option, %{})
+
           {:noreply,
            socket
            |> assign(:editing_option_id, option_id_int)
@@ -1591,6 +1638,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           send(self(), {:show_error, "Option not found"})
           {:noreply, socket}
         end
+
       {:error, _reason} ->
         send(self(), {:show_error, "Invalid option ID"})
         {:noreply, socket}
@@ -1606,12 +1654,17 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   def handle_event("validate_edit", %{"poll_option" => option_params}, socket) do
     # Add nil check before accessing editing_option_id
     if socket.assigns.editing_option_id do
-      option = case socket.assigns.poll.poll_options do
-        %Ecto.Association.NotLoaded{} -> nil
-        poll_options when is_list(poll_options) ->
-          Enum.find(poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
-        _ -> nil
-      end
+      option =
+        case socket.assigns.poll.poll_options do
+          %Ecto.Association.NotLoaded{} ->
+            nil
+
+          poll_options when is_list(poll_options) ->
+            Enum.find(poll_options, fn opt -> opt.id == socket.assigns.editing_option_id end)
+
+          _ ->
+            nil
+        end
 
       if option do
         changeset = PollOption.changeset(option, option_params)
@@ -1625,26 +1678,32 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   @impl true
-  def handle_event("save_edit", %{"poll_option" => option_params, "option_id" => option_id}, socket) do
+  def handle_event(
+        "save_edit",
+        %{"poll_option" => option_params, "option_id" => option_id},
+        socket
+      ) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id_int} ->
         case Events.get_poll_option(option_id_int) do
           %PollOption{} = option ->
             # Handle status field - checkbox sends "hidden" when checked, nothing when unchecked
-            updated_params = case Map.get(option_params, "status") do
-              "hidden" -> option_params
-              _ -> Map.put(option_params, "status", "active")
-            end
+            updated_params =
+              case Map.get(option_params, "status") do
+                "hidden" -> option_params
+                _ -> Map.put(option_params, "status", "active")
+              end
 
             case Events.update_poll_option(option, updated_params) do
               {:ok, updated_option} ->
                 # Broadcast visibility change if status changed
                 if option.status != updated_option.status do
-                  status_atom = case updated_option.status do
-                    "hidden" -> :hidden
-                    "active" -> :shown
-                    _ -> :shown
-                  end
+                  status_atom =
+                    case updated_option.status do
+                      "hidden" -> :hidden
+                      "active" -> :shown
+                      _ -> :shown
+                    end
 
                   PollPubSubService.broadcast_option_visibility_changed(
                     socket.assigns.poll,
@@ -1672,7 +1731,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def handle_event("toggle_phase_dropdown", _params, socket) do
-    {:noreply, assign(socket, :show_phase_dropdown, !Map.get(socket.assigns, :show_phase_dropdown, false))}
+    {:noreply,
+     assign(socket, :show_phase_dropdown, !Map.get(socket.assigns, :show_phase_dropdown, false))}
   end
 
   @impl true
@@ -1694,14 +1754,27 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           socket.assigns.user
         )
 
-        phase_message = case new_phase do
-          "voting_with_suggestions" -> "Voting phase started! Users can vote and add suggestions."
-          "voting_only" -> "Voting phase started! Suggestions are now disabled."
-          "voting" -> "Voting phase started!"  # Legacy support
-          "list_building" -> "Switched back to building phase"
-          "closed" -> "Poll has been closed"
-          _ -> "Poll phase changed"
-        end
+        phase_message =
+          case new_phase do
+            "voting_with_suggestions" ->
+              "Voting phase started! Users can vote and add suggestions."
+
+            "voting_only" ->
+              "Voting phase started! Suggestions are now disabled."
+
+            # Legacy support
+            "voting" ->
+              "Voting phase started!"
+
+            "list_building" ->
+              "Switched back to building phase"
+
+            "closed" ->
+              "Poll has been closed"
+
+            _ ->
+              "Poll phase changed"
+          end
 
         send(self(), {:poll_phase_changed, poll, phase_message})
         {:noreply, assign(socket, :show_phase_dropdown, false)}
@@ -1719,7 +1792,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          {:ok, target_id} <- validate_param(params, "target_option_id"),
          {:ok, direction} <- validate_param(params, "direction"),
          true <- socket.assigns.is_creator do
-
       case Events.reorder_poll_option(dragged_id, target_id, direction) do
         {:ok, updated_poll} ->
           # Broadcast options reordered via PubSub
@@ -1740,7 +1812,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           {:noreply, socket}
       end
     else
-            {:error, field} ->
+      {:error, field} ->
         # Invalid parameters - send rollback
         socket = push_event(socket, "rollback_order", %{})
         send(self(), {:show_error, "Invalid parameter: #{field}"})
@@ -1773,13 +1845,14 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       {:ok, date} ->
         current_dates = socket.assigns.selected_dates || []
 
-        updated_dates = if date in current_dates do
-          # Remove date if already selected
-          List.delete(current_dates, date)
-        else
-          # Add date if not selected (for suggestion form, limit to one date)
-          [date]
-        end
+        updated_dates =
+          if date in current_dates do
+            # Remove date if already selected
+            List.delete(current_dates, date)
+          else
+            # Add date if not selected (for suggestion form, limit to one date)
+            [date]
+          end
 
         # Log date toggle for debugging
         Logger.debug("Date toggled: #{date_string} -> #{inspect(updated_dates)}")
@@ -1791,72 +1864,73 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
-    # Handle calendar events sent from CalendarComponent
+  # Handle calendar events sent from CalendarComponent
   def handle_info({:calendar_event, "calendar_date_selected", %{dates: dates}}, socket) do
     {:noreply, assign(socket, :selected_dates, dates)}
   end
-
-
-
-
 
   # Private helper functions
 
   # Create changeset for option validation - handles date_selection polls specially
   defp create_option_changeset(socket, option_params) do
-    base_changeset = PollOption.changeset(%PollOption{}, %{
-      poll_id: socket.assigns.poll.id,
-      suggested_by_id: socket.assigns.user.id,
-      status: "active"
-    })
+    base_changeset =
+      PollOption.changeset(%PollOption{}, %{
+        poll_id: socket.assigns.poll.id,
+        suggested_by_id: socket.assigns.user.id,
+        status: "active"
+      })
 
     # For date_selection polls, enhance params with selected date info
-    enhanced_params = if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
-      selected_date = List.first(socket.assigns.selected_dates)
+    enhanced_params =
+      if socket.assigns.poll.poll_type == "date_selection" &&
+           length(socket.assigns.selected_dates) > 0 do
+        selected_date = List.first(socket.assigns.selected_dates)
 
-      # Create metadata structure for date_selection polls
-      date_metadata_base = %{
-        "date" => Date.to_iso8601(selected_date),
-        "display_date" => format_date_for_display(selected_date),
-        "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-      }
+        # Create metadata structure for date_selection polls
+        date_metadata_base = %{
+          "date" => Date.to_iso8601(selected_date),
+          "display_date" => format_date_for_display(selected_date),
+          "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        }
 
-      # Add time slot information if time is enabled
-      date_metadata = if socket.assigns.time_enabled do
-        date_iso = Date.to_iso8601(selected_date)
-        time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
+        # Add time slot information if time is enabled
+        date_metadata =
+          if socket.assigns.time_enabled do
+            date_iso = Date.to_iso8601(selected_date)
+            time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
 
-        # Only set time_enabled true if there are actually time slots
-        if length(time_slots) > 0 do
-          Map.merge(date_metadata_base, %{
-            "time_enabled" => true,
-            "time_slots" => time_slots,
-            "all_day" => false
-          })
-        else
-          Map.merge(date_metadata_base, %{
-            "time_enabled" => false,
-            "all_day" => true,
-            "time_slots" => []
-          })
-        end
-      else
-        Map.merge(date_metadata_base, %{
-          "time_enabled" => false,
-          "all_day" => true,
-          "time_slots" => []
+            # Only set time_enabled true if there are actually time slots
+            if length(time_slots) > 0 do
+              Map.merge(date_metadata_base, %{
+                "time_enabled" => true,
+                "time_slots" => time_slots,
+                "all_day" => false
+              })
+            else
+              Map.merge(date_metadata_base, %{
+                "time_enabled" => false,
+                "all_day" => true,
+                "time_slots" => []
+              })
+            end
+          else
+            Map.merge(date_metadata_base, %{
+              "time_enabled" => false,
+              "all_day" => true,
+              "time_slots" => []
+            })
+          end
+
+        # Override the option params with date-specific data
+        Map.merge(option_params, %{
+          "title" => format_date_for_option_title(selected_date),
+          "description" => option_params["description"] || "",
+          # Pass as map, not JSON string!
+          "metadata" => date_metadata
         })
+      else
+        option_params
       end
-
-      # Override the option params with date-specific data
-      Map.merge(option_params, %{
-        "title" => format_date_for_option_title(selected_date),
-        "description" => option_params["description"] || "",
-        "metadata" => date_metadata  # Pass as map, not JSON string!
-      })
-    else
-      option_params
-    end
 
     PollOption.changeset(base_changeset.data, enhanced_params)
   end
@@ -1873,8 +1947,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   defp validate_param(_params, key), do: {:error, "params is not a map for #{key}"}
-
-
 
   defp extract_rich_data_from_changeset(changeset, option_params) do
     require Logger
@@ -1894,15 +1966,23 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         Logger.debug("  image_url: #{inspect(image_url)}")
 
         # Merge with form params, giving priority to rich data from changeset over form
-        enriched_params = option_params
-        |> maybe_put_param("external_id", external_id)
-        |> maybe_put_param("external_data", external_data)
-        |> maybe_put_param("image_url", image_url)
-        |> decode_external_data_if_needed()
+        enriched_params =
+          option_params
+          |> maybe_put_param("external_id", external_id)
+          |> maybe_put_param("external_data", external_data)
+          |> maybe_put_param("image_url", image_url)
+          |> decode_external_data_if_needed()
 
         Logger.debug("Enriched params after extraction:")
-        Logger.debug("  has external_id: #{inspect(Map.has_key?(enriched_params, "external_id"))}")
-        Logger.debug("  has external_data: #{inspect(Map.has_key?(enriched_params, "external_data"))}")
+
+        Logger.debug(
+          "  has external_id: #{inspect(Map.has_key?(enriched_params, "external_id"))}"
+        )
+
+        Logger.debug(
+          "  has external_data: #{inspect(Map.has_key?(enriched_params, "external_data"))}"
+        )
+
         Logger.debug("  has image_url: #{inspect(Map.has_key?(enriched_params, "image_url"))}")
 
         enriched_params
@@ -1921,6 +2001,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           {:ok, decoded} -> Map.put(params, "external_data", decoded)
           {:error, _} -> params
         end
+
       _ ->
         params
     end
@@ -1934,18 +2015,19 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   defp sort_options_by_order(poll_options, poll_type) do
     safe_poll_options(poll_options)
-    |> Enum.sort_by(fn option ->
-      if poll_type == "time" do
-        # Sort time polls by their time value
-        TimeUtils.parse_time_for_sort(option.title)
-      else
-        # Sort other polls by order_index
-        option.order_index || 0
-      end
-    end, :asc)
+    |> Enum.sort_by(
+      fn option ->
+        if poll_type == "time" do
+          # Sort time polls by their time value
+          TimeUtils.parse_time_for_sort(option.title)
+        else
+          # Sort other polls by order_index
+          option.order_index || 0
+        end
+      end,
+      :asc
+    )
   end
-
-
 
   # Helper function to safely handle poll_options that might be NotLoaded
   defp safe_poll_options(%Ecto.Association.NotLoaded{}), do: []
@@ -1959,104 +2041,123 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # Helper function to safely check if poll options are empty
   defp safe_poll_options_empty?(%Ecto.Association.NotLoaded{}), do: true
-  defp safe_poll_options_empty?(poll_options) when is_list(poll_options), do: Enum.empty?(poll_options)
+
+  defp safe_poll_options_empty?(poll_options) when is_list(poll_options),
+    do: Enum.empty?(poll_options)
+
   defp safe_poll_options_empty?(_), do: true
-
-
 
   defp save_option(socket, option_params) do
     require Logger
 
     # Ensure ALL movie options get consistent data structure with fallback logic
-    option_params = if socket.assigns.poll.poll_type == "movie" &&
-                      Map.has_key?(option_params, "external_data") &&
-                      not is_nil(option_params["external_data"]) &&
-                      not has_enhanced_description?(option_params["description"]) do
+    option_params =
+      if socket.assigns.poll.poll_type == "movie" &&
+           Map.has_key?(option_params, "external_data") &&
+           not is_nil(option_params["external_data"]) &&
+           not has_enhanced_description?(option_params["description"]) do
+        # Apply MovieDataService for movie options
+        movie_id =
+          option_params["external_id"] ||
+            get_in(option_params, ["external_data", "id"]) ||
+            get_in(option_params, ["external_data", :id])
 
-      # Apply MovieDataService for movie options
-      movie_id = option_params["external_id"] ||
-                 get_in(option_params, ["external_data", "id"]) ||
-                 get_in(option_params, ["external_data", :id])
-      rich_data = option_params["external_data"]
+        rich_data = option_params["external_data"]
 
-      Logger.debug("Admin interface applying MovieDataService fallback for movie_id: #{movie_id}")
+        Logger.debug(
+          "Admin interface applying MovieDataService fallback for movie_id: #{movie_id}"
+        )
 
-      if movie_id && rich_data do
-        prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
-
-        # Preserve any user-provided custom title/description over generated ones
-        final_data = prepared_data
-        |> maybe_preserve_user_input("title", option_params["title"])
-        |> maybe_preserve_user_input("description", option_params["description"])
-
-        Logger.debug("MovieDataService fallback applied successfully")
-        final_data
-      else
-        Logger.debug("MovieDataService fallback skipped - missing movie_id or rich_data")
-        option_params
-      end
-    else
-      # Handle places options with PlacesDataService
-      if socket.assigns.poll.poll_type == "places" &&
-         Map.has_key?(option_params, "external_data") &&
-         not is_nil(option_params["external_data"]) do
-
-        Logger.debug("Processing places option with PlacesDataService")
-
-        # Parse external_data if it's a JSON string
-        external_data = case option_params["external_data"] do
-          data when is_binary(data) ->
-            case Jason.decode(data) do
-              {:ok, decoded} -> decoded
-              {:error, _} -> option_params["external_data"]
-            end
-          data -> data
-        end
-
-        if external_data && is_map(external_data) do
-          prepared_data = PlacesDataService.prepare_place_option_data(external_data)
+        if movie_id && rich_data do
+          prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
 
           # Preserve any user-provided custom title/description over generated ones
-          final_data = prepared_data
-          |> maybe_preserve_user_input("title", option_params["title"])
-          |> maybe_preserve_user_input("description", option_params["description"])
+          final_data =
+            prepared_data
+            |> maybe_preserve_user_input("title", option_params["title"])
+            |> maybe_preserve_user_input("description", option_params["description"])
 
-          Logger.debug("PlacesDataService applied successfully for place: #{final_data["title"]}")
+          Logger.debug("MovieDataService fallback applied successfully")
           final_data
         else
-          Logger.debug("PlacesDataService skipped - invalid external_data")
+          Logger.debug("MovieDataService fallback skipped - missing movie_id or rich_data")
           option_params
         end
       else
-        # Non-movie/places options or already properly prepared options
-        option_params
-      end
-    end
+        # Handle places options with PlacesDataService
+        if socket.assigns.poll.poll_type == "places" &&
+             Map.has_key?(option_params, "external_data") &&
+             not is_nil(option_params["external_data"]) do
+          Logger.debug("Processing places option with PlacesDataService")
 
-    final_option_params = Map.merge(option_params, %{
-      "poll_id" => socket.assigns.poll.id,
-      "suggested_by_id" => socket.assigns.user.id,
-      "status" => "active"
-    })
+          # Parse external_data if it's a JSON string
+          external_data =
+            case option_params["external_data"] do
+              data when is_binary(data) ->
+                case Jason.decode(data) do
+                  {:ok, decoded} -> decoded
+                  {:error, _} -> option_params["external_data"]
+                end
+
+              data ->
+                data
+            end
+
+          if external_data && is_map(external_data) do
+            prepared_data = PlacesDataService.prepare_place_option_data(external_data)
+
+            # Preserve any user-provided custom title/description over generated ones
+            final_data =
+              prepared_data
+              |> maybe_preserve_user_input("title", option_params["title"])
+              |> maybe_preserve_user_input("description", option_params["description"])
+
+            Logger.debug(
+              "PlacesDataService applied successfully for place: #{final_data["title"]}"
+            )
+
+            final_data
+          else
+            Logger.debug("PlacesDataService skipped - invalid external_data")
+            option_params
+          end
+        else
+          # Non-movie/places options or already properly prepared options
+          option_params
+        end
+      end
+
+    final_option_params =
+      Map.merge(option_params, %{
+        "poll_id" => socket.assigns.poll.id,
+        "suggested_by_id" => socket.assigns.user.id,
+        "status" => "active"
+      })
 
     Logger.debug("Admin interface saving option with title: #{final_option_params["title"]}")
     Logger.debug("Admin interface image_url: #{inspect(final_option_params["image_url"])}")
     Logger.debug("Admin interface external_id: #{inspect(final_option_params["external_id"])}")
-    Logger.debug("Admin interface description preview: #{String.slice(final_option_params["description"] || "", 0, 100)}...")
 
-    Events.create_poll_option(final_option_params, [poll_type: socket.assigns.poll.poll_type])
+    Logger.debug(
+      "Admin interface description preview: #{String.slice(final_option_params["description"] || "", 0, 100)}..."
+    )
+
+    Events.create_poll_option(final_option_params, poll_type: socket.assigns.poll.poll_type)
   end
 
   # Helper to detect if description has been enhanced (contains director/year pattern)
   defp has_enhanced_description?(description) when is_binary(description) do
     String.contains?(description, " • Directed by ") || String.contains?(description, " • ")
   end
+
   defp has_enhanced_description?(_), do: false
 
   # Helper to preserve user input over generated content
-  defp maybe_preserve_user_input(prepared_data, key, user_value) when is_binary(user_value) and user_value != "" do
+  defp maybe_preserve_user_input(prepared_data, key, user_value)
+       when is_binary(user_value) and user_value != "" do
     Map.put(prepared_data, key, user_value)
   end
+
   defp maybe_preserve_user_input(prepared_data, _key, _user_value), do: prepared_data
 
   # Helper function to extract poster URL from movie data
@@ -2068,9 +2169,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
       # Check if movie has images array (new structure)
       Map.has_key?(movie, :images) && is_list(movie.images) ->
-        poster_image = Enum.find(movie.images, fn image ->
-          Map.get(image, :type) == :poster
-        end)
+        poster_image =
+          Enum.find(movie.images, fn image ->
+            Map.get(image, :type) == :poster
+          end)
+
         if poster_image, do: Map.get(poster_image, :url), else: nil
 
       # Check metadata for poster_path (legacy TMDB structure)
@@ -2088,7 +2191,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Suggest Movie"
       "places" -> "Suggest Place"
-          "time" -> "Add Time"
+      "time" -> "Add Time"
       _ -> "Add Option"
     end
   end
@@ -2097,7 +2200,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Movie Title"
       "places" -> "Place Name"
-          "time" -> "Time"
+      "time" -> "Time"
       _ -> "Option Title"
     end
   end
@@ -2106,7 +2209,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Start typing to search movies..."
       "places" -> "Start typing to search places..."
-          "time" -> "Select a time..."
+      "time" -> "Select a time..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
   end
@@ -2115,7 +2218,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "Brief plot summary or why you recommend it..."
       "places" -> "Cuisine type, location, or special notes..."
-          "time" -> "" # No description for time polls
+      # No description for time polls
+      "time" -> ""
       _ -> "Additional details or context..."
     end
   end
@@ -2134,19 +2238,23 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     now = DateTime.utc_now()
 
     # Convert NaiveDateTime to DateTime if needed
-    datetime_utc = case datetime do
-      %DateTime{} = dt -> dt
-      %NaiveDateTime{} = ndt ->
-        case DateTime.from_naive(ndt, "Etc/UTC") do
-          {:ok, dt} -> dt
-          {:error, _} -> DateTime.utc_now()
-        end
-      _ ->
-        # Log unexpected type for debugging
-        require Logger
-        Logger.warning("Unexpected datetime type in format_relative_time: #{inspect(datetime)}")
-        DateTime.utc_now()
-    end
+    datetime_utc =
+      case datetime do
+        %DateTime{} = dt ->
+          dt
+
+        %NaiveDateTime{} = ndt ->
+          case DateTime.from_naive(ndt, "Etc/UTC") do
+            {:ok, dt} -> dt
+            {:error, _} -> DateTime.utc_now()
+          end
+
+        _ ->
+          # Log unexpected type for debugging
+          require Logger
+          Logger.warning("Unexpected datetime type in format_relative_time: #{inspect(datetime)}")
+          DateTime.utc_now()
+      end
 
     diff = DateTime.diff(now, datetime_utc, :second)
 
@@ -2165,7 +2273,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         |> DateTime.to_date()
         |> Date.to_string()
 
-      _ -> "Not set"
+      _ ->
+        "Not set"
     end
   end
 
@@ -2194,7 +2303,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case poll_type do
       "movie" -> "No Movies Suggested Yet"
       "places" -> "No Places Suggested Yet"
-          "time" -> "No Times Suggested Yet"
+      "time" -> "No Times Suggested Yet"
       _ -> "No Options Suggested Yet"
     end
   end
@@ -2213,11 +2322,20 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   defp get_empty_state_guidance(poll_type) do
     case poll_type do
-      "movie" -> "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
-      "places" -> "Suggest places that are popular or unique. Add details like cuisine, location, or special notes."
-      "time" -> "Suggest times that work for you. Times will be automatically sorted for easy comparison."
-      "date_selection" -> "Suggest possible dates for the event. Each date will be voted on separately with yes/maybe/no preferences."
-      _ -> "Suggest options that you think are great. Add a description to help others understand your choice."
+      "movie" ->
+        "Suggest movies that you love or think others would enjoy. Add a brief description for others to understand your choice."
+
+      "places" ->
+        "Suggest places that are popular or unique. Add details like cuisine, location, or special notes."
+
+      "time" ->
+        "Suggest times that work for you. Times will be automatically sorted for easy comparison."
+
+      "date_selection" ->
+        "Suggest possible dates for the event. Each date will be voted on separately with yes/maybe/no preferences."
+
+      _ ->
+        "Suggest options that you think are great. Add a description to help others understand your choice."
     end
   end
 
@@ -2255,21 +2373,27 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     10..23
     |> Enum.flat_map(fn hour ->
       [
-        %{value: TimeUtils.format_time_value(hour, 0), display: TimeUtils.format_time_display(hour, 0)},
-        %{value: TimeUtils.format_time_value(hour, 30), display: TimeUtils.format_time_display(hour, 30)}
+        %{
+          value: TimeUtils.format_time_value(hour, 0),
+          display: TimeUtils.format_time_display(hour, 0)
+        },
+        %{
+          value: TimeUtils.format_time_value(hour, 30),
+          display: TimeUtils.format_time_display(hour, 30)
+        }
       ]
     end)
   end
-
-
 
   defp format_time_for_display(time) do
     # Parse time string like "17:30" and convert to 12-hour format
     case TimeUtils.parse_time_string(time) do
       {:ok, {hour, minute}} ->
         TimeUtils.format_time_display(hour, minute)
+
       {:error, _} ->
-        time # Return original if parsing fails
+        # Return original if parsing fails
+        time
     end
   end
 
@@ -2278,7 +2402,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case phase do
       "list_building" -> true
       "voting_with_suggestions" -> true
-      "voting" -> true  # Legacy support - treat as voting_with_suggestions
+      # Legacy support - treat as voting_with_suggestions
+      "voting" -> true
       "voting_only" -> false
       "closed" -> false
       _ -> false
@@ -2300,7 +2425,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       "list_building" -> "Building Phase"
       "voting_with_suggestions" -> "Voting (with suggestions)"
       "voting_only" -> "Voting (suggestions disabled)"
-      "voting" -> "Voting Phase"  # Legacy support
+      # Legacy support
+      "voting" -> "Voting Phase"
       "closed" -> "Closed"
       _ -> "Poll Phase"
     end
@@ -2315,25 +2441,31 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         |> then(fn date_str ->
           case Date.from_iso8601(date_str) do
             {:ok, parsed_date} ->
-              month_name = case parsed_date.month do
-                1 -> "January"
-                2 -> "February"
-                3 -> "March"
-                4 -> "April"
-                5 -> "May"
-                6 -> "June"
-                7 -> "July"
-                8 -> "August"
-                9 -> "September"
-                10 -> "October"
-                11 -> "November"
-                12 -> "December"
-              end
+              month_name =
+                case parsed_date.month do
+                  1 -> "January"
+                  2 -> "February"
+                  3 -> "March"
+                  4 -> "April"
+                  5 -> "May"
+                  6 -> "June"
+                  7 -> "July"
+                  8 -> "August"
+                  9 -> "September"
+                  10 -> "October"
+                  11 -> "November"
+                  12 -> "December"
+                end
+
               "#{month_name} #{parsed_date.day}, #{parsed_date.year}"
-            _ -> date_str
+
+            _ ->
+              date_str
           end
         end)
-      _ -> "Invalid date"
+
+      _ ->
+        "Invalid date"
     end
   end
 

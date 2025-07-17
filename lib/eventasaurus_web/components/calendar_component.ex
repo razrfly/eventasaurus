@@ -27,10 +27,11 @@ defmodule EventasaurusWeb.CalendarComponent do
   @impl true
   def update(assigns, socket) do
     # Always use selected_dates from parent if provided, otherwise keep internal state
-    selected_dates = case Map.get(assigns, :selected_dates) do
-      nil -> Map.get(socket.assigns, :selected_dates, [])
-      dates -> dates
-    end
+    selected_dates =
+      case Map.get(assigns, :selected_dates) do
+        nil -> Map.get(socket.assigns, :selected_dates, [])
+        dates -> dates
+      end
 
     socket =
       socket
@@ -40,7 +41,7 @@ defmodule EventasaurusWeb.CalendarComponent do
     {:ok, socket}
   end
 
-    @impl true
+  @impl true
   def handle_event("toggle_date", %{"date" => date_string}, socket) do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
@@ -72,6 +73,7 @@ defmodule EventasaurusWeb.CalendarComponent do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
         {:noreply, assign(socket, :hover_date, date)}
+
       {:error, _} ->
         {:noreply, socket}
     end
@@ -252,30 +254,32 @@ defmodule EventasaurusWeb.CalendarComponent do
     is_hovered = assigns.date == assigns.hover_date
 
     # Determine styling classes
-    base_classes = "relative w-full h-8 sm:h-10 flex items-center justify-center text-xs sm:text-sm rounded-md transition-all duration-150 cursor-pointer touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+    base_classes =
+      "relative w-full h-8 sm:h-10 flex items-center justify-center text-xs sm:text-sm rounded-md transition-all duration-150 cursor-pointer touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
 
-    day_classes = cond do
-      is_past and is_current_month ->
-        "#{base_classes} text-gray-300 cursor-not-allowed"
+    day_classes =
+      cond do
+        is_past and is_current_month ->
+          "#{base_classes} text-gray-300 cursor-not-allowed"
 
-      !is_current_month ->
-        "#{base_classes} text-gray-300 cursor-not-allowed"
+        !is_current_month ->
+          "#{base_classes} text-gray-300 cursor-not-allowed"
 
-      is_selected ->
-        "#{base_classes} bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:bg-blue-700"
+        is_selected ->
+          "#{base_classes} bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:bg-blue-700"
 
-      is_today and is_current_month ->
-        "#{base_classes} bg-blue-50 text-blue-600 font-semibold border border-blue-200 hover:bg-blue-100 focus:bg-blue-100"
+        is_today and is_current_month ->
+          "#{base_classes} bg-blue-50 text-blue-600 font-semibold border border-blue-200 hover:bg-blue-100 focus:bg-blue-100"
 
-      is_hovered and is_current_month and !is_past ->
-        "#{base_classes} bg-gray-100 text-gray-900 font-medium"
+        is_hovered and is_current_month and !is_past ->
+          "#{base_classes} bg-gray-100 text-gray-900 font-medium"
 
-      is_current_month ->
-        "#{base_classes} text-gray-700 hover:bg-gray-100 hover:text-gray-900 focus:bg-gray-100"
+        is_current_month ->
+          "#{base_classes} text-gray-700 hover:bg-gray-100 hover:text-gray-900 focus:bg-gray-100"
 
-      true ->
-        "#{base_classes} text-gray-300 cursor-not-allowed"
-    end
+        true ->
+          "#{base_classes} text-gray-300 cursor-not-allowed"
+      end
 
     assigns =
       assigns
@@ -322,14 +326,16 @@ defmodule EventasaurusWeb.CalendarComponent do
     # Find the first Sunday of the calendar view
     start_date =
       case Date.day_of_week(first_day, :sunday) do
-        1 -> first_day  # Already Sunday
+        # Already Sunday
+        1 -> first_day
         day_of_week -> Date.add(first_day, -(day_of_week - 1))
       end
 
     # Find the last Saturday of the calendar view
     end_date =
       case Date.day_of_week(last_day, :sunday) do
-        7 -> last_day  # Already Saturday
+        # Already Saturday
+        7 -> last_day
         day_of_week -> Date.add(last_day, 7 - day_of_week)
       end
 
@@ -368,6 +374,7 @@ defmodule EventasaurusWeb.CalendarComponent do
 
     # Send event to the specified target component or parent LiveView
     event_name = Map.get(socket.assigns, :on_date_select, "selected_dates_changed")
+
     if Map.has_key?(socket.assigns, :target) do
       # Send event to target component using send_update
       send_update(socket.assigns.target, %{calendar_event: {event_name, updated_dates}})

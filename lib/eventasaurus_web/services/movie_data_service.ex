@@ -4,7 +4,7 @@ defmodule EventasaurusWeb.Services.MovieDataService do
   Ensures admin and public interfaces save identical data structures.
   """
 
-    alias EventasaurusWeb.Utils.MovieUtils
+  alias EventasaurusWeb.Utils.MovieUtils
 
   @doc """
   Prepares movie option data in a consistent format for both admin and public interfaces.
@@ -21,33 +21,51 @@ defmodule EventasaurusWeb.Services.MovieDataService do
 
     # Extract base description from TMDB data (usually in overview field)
     # Handle both string and atom keys and multiple possible locations
-    base_description = cond do
-      # Check overview field (most common for TMDB)
-      is_map(rich_data) and Map.has_key?(rich_data, "overview") -> rich_data["overview"]
-      is_map(rich_data) and Map.has_key?(rich_data, :overview) -> rich_data[:overview]
-      # Check metadata.overview
-      is_map(rich_data) and get_in(rich_data, ["metadata", "overview"]) -> get_in(rich_data, ["metadata", "overview"])
-      is_map(rich_data) and get_in(rich_data, [:metadata, "overview"]) -> get_in(rich_data, [:metadata, "overview"])
-      is_map(rich_data) and get_in(rich_data, [:metadata, :overview]) -> get_in(rich_data, [:metadata, :overview])
-      # Fallback to description field
-      is_map(rich_data) and Map.has_key?(rich_data, "description") -> rich_data["description"]
-      is_map(rich_data) and Map.has_key?(rich_data, :description) -> rich_data[:description]
-      true -> ""
-    end
+    base_description =
+      cond do
+        # Check overview field (most common for TMDB)
+        is_map(rich_data) and Map.has_key?(rich_data, "overview") ->
+          rich_data["overview"]
 
-    enhanced_description = MovieUtils.build_enhanced_description(
-      base_description,
-      year,
-      director,
-      genre
-    )
+        is_map(rich_data) and Map.has_key?(rich_data, :overview) ->
+          rich_data[:overview]
+
+        # Check metadata.overview
+        is_map(rich_data) and get_in(rich_data, ["metadata", "overview"]) ->
+          get_in(rich_data, ["metadata", "overview"])
+
+        is_map(rich_data) and get_in(rich_data, [:metadata, "overview"]) ->
+          get_in(rich_data, [:metadata, "overview"])
+
+        is_map(rich_data) and get_in(rich_data, [:metadata, :overview]) ->
+          get_in(rich_data, [:metadata, :overview])
+
+        # Fallback to description field
+        is_map(rich_data) and Map.has_key?(rich_data, "description") ->
+          rich_data["description"]
+
+        is_map(rich_data) and Map.has_key?(rich_data, :description) ->
+          rich_data[:description]
+
+        true ->
+          ""
+      end
+
+    enhanced_description =
+      MovieUtils.build_enhanced_description(
+        base_description,
+        year,
+        director,
+        genre
+      )
 
     # Handle both string and atom keys for title
-    title = cond do
-      is_map(rich_data) and Map.has_key?(rich_data, "title") -> rich_data["title"]
-      is_map(rich_data) and Map.has_key?(rich_data, :title) -> rich_data[:title]
-      true -> ""
-    end
+    title =
+      cond do
+        is_map(rich_data) and Map.has_key?(rich_data, "title") -> rich_data["title"]
+        is_map(rich_data) and Map.has_key?(rich_data, :title) -> rich_data[:title]
+        true -> ""
+      end
 
     %{
       "title" => title,
@@ -57,6 +75,4 @@ defmodule EventasaurusWeb.Services.MovieDataService do
       "image_url" => image_url
     }
   end
-
-
 end

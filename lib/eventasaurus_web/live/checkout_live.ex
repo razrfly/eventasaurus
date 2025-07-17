@@ -81,6 +81,7 @@ defmodule EventasaurusWeb.CheckoutLive do
       case validate_guest_form(guest_form) do
         {:ok, guest_info} ->
           proceed_with_guest_checkout(socket, guest_info, order_items, total_amount)
+
         {:error, errors} ->
           {:noreply,
            socket
@@ -112,7 +113,11 @@ defmodule EventasaurusWeb.CheckoutLive do
   end
 
   @impl true
-  def handle_event("update_quantity", %{"ticket_id" => ticket_id, "quantity" => quantity_str}, socket) do
+  def handle_event(
+        "update_quantity",
+        %{"ticket_id" => ticket_id, "quantity" => quantity_str},
+        socket
+      ) do
     ticket_id = String.to_integer(ticket_id)
     quantity = String.to_integer(quantity_str)
 
@@ -132,14 +137,12 @@ defmodule EventasaurusWeb.CheckoutLive do
       quantity > available ->
         {:noreply,
          socket
-         |> put_flash(:error, "Only #{available} tickets available for #{ticket.title}")
-        }
+         |> put_flash(:error, "Only #{available} tickets available for #{ticket.title}")}
 
       quantity > 10 ->
         {:noreply,
          socket
-         |> put_flash(:error, "Maximum 10 tickets per order")
-        }
+         |> put_flash(:error, "Maximum 10 tickets per order")}
 
       true ->
         # Update quantity
@@ -170,7 +173,7 @@ defmodule EventasaurusWeb.CheckoutLive do
   end
 
   @impl true
-      def handle_event("update_guest_form", %{"guest_form" => guest_form_params}, socket) do
+  def handle_event("update_guest_form", %{"guest_form" => guest_form_params}, socket) do
     # Merge the new form parameters with existing form data
     updated_form = Map.merge(socket.assigns.guest_form, guest_form_params)
 
@@ -207,6 +210,7 @@ defmodule EventasaurusWeb.CheckoutLive do
       case {Integer.parse(ticket_id_str), parse_quantity(quantity_value)} do
         {{ticket_id, ""}, quantity} when is_integer(quantity) and quantity > 0 ->
           Map.put(acc, ticket_id, quantity)
+
         _ ->
           acc
       end
@@ -214,12 +218,14 @@ defmodule EventasaurusWeb.CheckoutLive do
   end
 
   defp parse_quantity(value) when is_integer(value) and value > 0, do: value
+
   defp parse_quantity(value) when is_binary(value) do
     case Integer.parse(value) do
       {quantity, ""} when quantity > 0 -> quantity
       _ -> nil
     end
   end
+
   defp parse_quantity(_), do: nil
 
   defp validate_selected_tickets(tickets, selected_tickets) do
@@ -256,11 +262,16 @@ defmodule EventasaurusWeb.CheckoutLive do
       end)
 
     case validated_tickets do
-      {:error, message} -> {:error, message}
-      validated_map when map_size(validated_map) == 0 -> {:error, "No valid tickets selected"}
+      {:error, message} ->
+        {:error, message}
+
+      validated_map when map_size(validated_map) == 0 ->
+        {:error, "No valid tickets selected"}
+
       validated_map ->
         # Check total quantity across all tickets
         total_quantity = validated_map |> Map.values() |> Enum.sum()
+
         if total_quantity > 10 do
           {:error, "cannot exceed 10 tickets per order"}
         else
@@ -276,6 +287,7 @@ defmodule EventasaurusWeb.CheckoutLive do
     end)
     |> Enum.map(fn ticket ->
       quantity = Map.get(selected_tickets, ticket.id, 0)
+
       %{
         ticket: ticket,
         quantity: quantity,
@@ -298,7 +310,8 @@ defmodule EventasaurusWeb.CheckoutLive do
         %{
           is_taxable: true,
           display_mode: :estimate,
-          estimated_tax_amount: 0, # Stripe calculates this dynamically
+          # Stripe calculates this dynamically
+          estimated_tax_amount: 0,
           tax_note: "Tax will be calculated based on your location at checkout"
         }
 
@@ -349,16 +362,18 @@ defmodule EventasaurusWeb.CheckoutLive do
   defp handle_free_ticket_checkout(socket, user, order_items) do
     try do
       # Create orders for each ticket type
-      results = Enum.map(order_items, fn item ->
-        Logger.info("Creating order for free ticket",
-          user_id: user.id,
-          ticket_id: item.ticket.id,
-          quantity: item.quantity
-        )
-        result = Ticketing.create_order(user, item.ticket, %{quantity: item.quantity})
-        Logger.info("Order creation result", result: inspect(result))
-        result
-      end)
+      results =
+        Enum.map(order_items, fn item ->
+          Logger.info("Creating order for free ticket",
+            user_id: user.id,
+            ticket_id: item.ticket.id,
+            quantity: item.quantity
+          )
+
+          result = Ticketing.create_order(user, item.ticket, %{quantity: item.quantity})
+          Logger.info("Order creation result", result: inspect(result))
+          result
+        end)
 
       # Check if all orders were created successfully
       case Enum.find(results, fn result -> match?({:error, _}, result) end) do
@@ -367,12 +382,13 @@ defmodule EventasaurusWeb.CheckoutLive do
           orders = Enum.map(results, fn {:ok, order} -> order end)
 
           # Confirm all orders (free tickets)
-          confirmation_results = Enum.map(orders, fn order ->
-            case Ticketing.confirm_order(order, "free_ticket") do
-              {:ok, confirmed_order} -> {:ok, confirmed_order}
-              {:error, reason} -> {:error, {order.id, reason}}
-            end
-          end)
+          confirmation_results =
+            Enum.map(orders, fn order ->
+              case Ticketing.confirm_order(order, "free_ticket") do
+                {:ok, confirmed_order} -> {:ok, confirmed_order}
+                {:error, reason} -> {:error, {order.id, reason}}
+              end
+            end)
 
           # Check if all confirmations were successful
           case Enum.find(confirmation_results, fn result -> match?({:error, _}, result) end) do
@@ -449,9 +465,10 @@ defmodule EventasaurusWeb.CheckoutLive do
         _total_amount = calculate_total_amount(multiple_items)
 
         # Create a combined order description
-        _description = multiple_items
-        |> Enum.map(fn item -> "#{item.quantity}x #{item.ticket.title}" end)
-        |> Enum.join(", ")
+        _description =
+          multiple_items
+          |> Enum.map(fn item -> "#{item.quantity}x #{item.ticket.title}" end)
+          |> Enum.join(", ")
 
         # Use the first ticket's event for organization context
         _first_ticket = hd(multiple_items).ticket
@@ -463,7 +480,9 @@ defmodule EventasaurusWeb.CheckoutLive do
 
   defp create_stripe_checkout_session(socket, user, order_item) do
     try do
-      case Ticketing.create_checkout_session(user, order_item.ticket, %{quantity: order_item.quantity}) do
+      case Ticketing.create_checkout_session(user, order_item.ticket, %{
+             quantity: order_item.quantity
+           }) do
         {:ok, %{checkout_url: checkout_url, session_id: session_id}} ->
           Logger.info("Stripe hosted checkout session created",
             user_id: user.id,
@@ -481,7 +500,10 @@ defmodule EventasaurusWeb.CheckoutLive do
            socket
            |> assign(:processing, false)
            |> preserve_auth_state()
-           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+           |> put_flash(
+             :error,
+             "The event organizer has not set up payment processing. Please contact them directly."
+           )}
 
         {:error, :ticket_unavailable} ->
           {:noreply,
@@ -501,7 +523,10 @@ defmodule EventasaurusWeb.CheckoutLive do
            socket
            |> assign(:processing, false)
            |> preserve_auth_state()
-           |> put_flash(:error, "Payment processing is temporarily unavailable. Please try again.")}
+           |> put_flash(
+             :error,
+             "Payment processing is temporarily unavailable. Please try again."
+           )}
 
         {:error, reason} ->
           Logger.error("Order creation failed",
@@ -559,7 +584,10 @@ defmodule EventasaurusWeb.CheckoutLive do
            socket
            |> assign(:processing, false)
            |> preserve_auth_state()
-           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+           |> put_flash(
+             :error,
+             "The event organizer has not set up payment processing. Please contact them directly."
+           )}
 
         {:error, :ticket_unavailable} ->
           {:noreply,
@@ -653,7 +681,11 @@ defmodule EventasaurusWeb.CheckoutLive do
 
         [_first_item | _rest] ->
           # Create/find user first using Events.register_user_for_event pattern
-          case Events.register_user_for_event(socket.assigns.event.id, guest_info.name, guest_info.email) do
+          case Events.register_user_for_event(
+                 socket.assigns.event.id,
+                 guest_info.name,
+                 guest_info.email
+               ) do
             {:ok, :new_registration, _participant} ->
               # User was created and registered, now process tickets
               process_guest_free_tickets(socket, guest_info.email, order_items)
@@ -745,11 +777,11 @@ defmodule EventasaurusWeb.CheckoutLive do
   defp create_guest_stripe_checkout_session(socket, guest_info, order_item) do
     try do
       case Ticketing.create_guest_checkout_session(
-        order_item.ticket,
-        guest_info.name,
-        guest_info.email,
-        %{quantity: order_item.quantity}
-      ) do
+             order_item.ticket,
+             guest_info.name,
+             guest_info.email,
+             %{quantity: order_item.quantity}
+           ) do
         {:ok, %{order: order, checkout_url: checkout_url, session_id: session_id, user: _user}} ->
           Logger.info("Guest Stripe checkout session created",
             order_id: order.id,
@@ -767,7 +799,10 @@ defmodule EventasaurusWeb.CheckoutLive do
           {:noreply,
            socket
            |> assign(:processing, false)
-           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+           |> put_flash(
+             :error,
+             "The event organizer has not set up payment processing. Please contact them directly."
+           )}
 
         {:error, :ticket_unavailable} ->
           {:noreply,
@@ -785,7 +820,10 @@ defmodule EventasaurusWeb.CheckoutLive do
           {:noreply,
            socket
            |> assign(:processing, false)
-           |> put_flash(:error, "Payment processing is temporarily unavailable. Please try again.")}
+           |> put_flash(
+             :error,
+             "Payment processing is temporarily unavailable. Please try again."
+           )}
 
         {:error, reason} ->
           Logger.error("Guest order creation failed",
@@ -816,7 +854,11 @@ defmodule EventasaurusWeb.CheckoutLive do
 
   defp create_guest_multi_ticket_checkout_session(socket, guest_info, order_items) do
     try do
-      case Ticketing.create_guest_multi_ticket_checkout_session(guest_info.name, guest_info.email, order_items) do
+      case Ticketing.create_guest_multi_ticket_checkout_session(
+             guest_info.name,
+             guest_info.email,
+             order_items
+           ) do
         {:ok, %{orders: orders, checkout_url: checkout_url, session_id: session_id, user: _user}} ->
           Logger.info("Guest multi-ticket Stripe checkout session created",
             orders_count: length(orders),
@@ -834,7 +876,10 @@ defmodule EventasaurusWeb.CheckoutLive do
           {:noreply,
            socket
            |> assign(:processing, false)
-           |> put_flash(:error, "The event organizer has not set up payment processing. Please contact them directly.")}
+           |> put_flash(
+             :error,
+             "The event organizer has not set up payment processing. Please contact them directly."
+           )}
 
         {:error, :ticket_unavailable} ->
           {:noreply,
@@ -851,7 +896,10 @@ defmodule EventasaurusWeb.CheckoutLive do
           {:noreply,
            socket
            |> assign(:processing, false)
-           |> put_flash(:error, "Payment processing is temporarily unavailable. Please try again.")}
+           |> put_flash(
+             :error,
+             "Payment processing is temporarily unavailable. Please try again."
+           )}
 
         {:error, reason} ->
           Logger.error("Guest multi-ticket order creation failed",

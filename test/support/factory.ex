@@ -146,7 +146,11 @@ defmodule EventasaurusApp.Factory do
   def event_date_poll_factory do
     %EventasaurusApp.Events.EventDatePoll{
       voting_deadline: DateTime.utc_now() |> DateTime.add(7, :day),
-      event: build(:event, %{status: :polling, polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day)}),
+      event:
+        build(:event, %{
+          status: :polling,
+          polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day)
+        }),
       created_by: build(:user)
     }
   end

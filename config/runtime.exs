@@ -32,13 +32,15 @@ case System.get_env("SENTRY_DSN") do
   nil ->
     # Explicitly disable Sentry when SENTRY_DSN is not set
     config :sentry, dsn: nil
+
   dsn ->
     # Configure Sentry with robust file path handling
-    root_path = case File.cwd() do
-      {:ok, cwd} -> cwd
-      _ -> "."
-    end
-    
+    root_path =
+      case File.cwd() do
+        {:ok, cwd} -> cwd
+        _ -> "."
+      end
+
     config :sentry,
       dsn: dsn,
       environment_name: config_env(),
@@ -129,11 +131,15 @@ if config_env() == :prod do
   # Configure the database for production
   # Note: Supabase typically requires verify_none in containerized environments
   # Set SSL_VERIFY_PEER=true to enable certificate verification (may cause connection issues with Supabase)
-  ssl_verify = if System.get_env("SSL_VERIFY_PEER") == "true", do: :verify_peer, else: :verify_none
+  ssl_verify =
+    if System.get_env("SSL_VERIFY_PEER") == "true", do: :verify_peer, else: :verify_none
 
   if ssl_verify == :verify_none do
     require Logger
-    Logger.warning("Database SSL verification disabled for Supabase compatibility. Set SSL_VERIFY_PEER=true to enable certificate verification.")
+
+    Logger.warning(
+      "Database SSL verification disabled for Supabase compatibility. Set SSL_VERIFY_PEER=true to enable certificate verification."
+    )
   end
 
   config :eventasaurus, EventasaurusApp.Repo,
@@ -177,5 +183,4 @@ if config_env() == :prod do
 
   # Stripe configuration is now handled globally above (lines 25-27)
   # Sentry configuration is now handled globally above (lines 29-47)
-
 end

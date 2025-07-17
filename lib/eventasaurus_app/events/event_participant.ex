@@ -4,18 +4,22 @@ defmodule EventasaurusApp.Events.EventParticipant do
   import Ecto.Query
 
   schema "event_participants" do
-    field :role, Ecto.Enum, values: [:invitee, :poll_voter, :ticket_holder]
-    field :status, Ecto.Enum, values: [:pending, :accepted, :declined, :cancelled, :confirmed_with_order, :interested]
-    field :source, :string
-    field :metadata, :map
+    field(:role, Ecto.Enum, values: [:invitee, :poll_voter, :ticket_holder])
+
+    field(:status, Ecto.Enum,
+      values: [:pending, :accepted, :declined, :cancelled, :confirmed_with_order, :interested]
+    )
+
+    field(:source, :string)
+    field(:metadata, :map)
 
     # Guest invitation fields
-    field :invited_at, :utc_datetime
-    field :invitation_message, :string
+    field(:invited_at, :utc_datetime)
+    field(:invitation_message, :string)
 
-    belongs_to :event, EventasaurusApp.Events.Event
-    belongs_to :user, EventasaurusApp.Accounts.User
-    belongs_to :invited_by_user, EventasaurusApp.Accounts.User
+    belongs_to(:event, EventasaurusApp.Events.Event)
+    belongs_to(:user, EventasaurusApp.Accounts.User)
+    belongs_to(:invited_by_user, EventasaurusApp.Accounts.User)
 
     timestamps()
   end
@@ -23,8 +27,17 @@ defmodule EventasaurusApp.Events.EventParticipant do
   @doc false
   def changeset(event_participant, attrs) do
     event_participant
-    |> cast(attrs, [:role, :status, :source, :metadata, :event_id, :user_id,
-                    :invited_by_user_id, :invited_at, :invitation_message])
+    |> cast(attrs, [
+      :role,
+      :status,
+      :source,
+      :metadata,
+      :event_id,
+      :user_id,
+      :invited_by_user_id,
+      :invited_at,
+      :invitation_message
+    ])
     |> validate_required([:role, :status, :event_id, :user_id])
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:user_id)
@@ -49,6 +62,7 @@ defmodule EventasaurusApp.Events.EventParticipant do
       delivery_id: Map.get(metadata, "email_delivery_id")
     }
   end
+
   def get_email_status(_), do: %{status: "not_sent", attempts: 0}
 
   @doc """
@@ -68,11 +82,12 @@ defmodule EventasaurusApp.Events.EventParticipant do
     email_metadata = Map.merge(email_metadata, attrs)
 
     # If status is "sent", update the sent timestamp
-    email_metadata = if status == "sent" do
-      Map.put(email_metadata, "email_last_sent_at", timestamp)
-    else
-      email_metadata
-    end
+    email_metadata =
+      if status == "sent" do
+        Map.put(email_metadata, "email_last_sent_at", timestamp)
+      else
+        email_metadata
+      end
 
     updated_metadata = Map.merge(current_metadata, email_metadata)
 
@@ -117,7 +132,7 @@ defmodule EventasaurusApp.Events.EventParticipant do
     email_status = get_email_status(participant)
 
     email_status.status in ["failed", "bounced"] and
-    email_status.attempts < max_attempts
+      email_status.attempts < max_attempts
   end
 
   @doc """
@@ -127,7 +142,8 @@ defmodule EventasaurusApp.Events.EventParticipant do
     from(ep in __MODULE__,
       where: ep.event_id == ^event_id,
       where: fragment("(?->>'email_status') IN ('failed', 'bounced')", ep.metadata),
-      where: fragment("COALESCE((?->>'email_attempts')::integer, 0) < ?", ep.metadata, ^max_attempts),
+      where:
+        fragment("COALESCE((?->>'email_attempts')::integer, 0) < ?", ep.metadata, ^max_attempts),
       preload: [:user, :invited_by_user]
     )
   end
@@ -165,16 +181,23 @@ defmodule EventasaurusApp.Events.EventParticipant do
 
     if event_id && user_id do
       # Check if user is already an event_user (organizer/admin) for this event
-      query = from eu in EventasaurusApp.Events.EventUser,
-              where: eu.event_id == ^event_id and eu.user_id == ^user_id
+      query =
+        from(eu in EventasaurusApp.Events.EventUser,
+          where: eu.event_id == ^event_id and eu.user_id == ^user_id
+        )
 
       case EventasaurusApp.Repo.one(query) do
         nil ->
           # User is not an event_user, validation passes
           changeset
+
         _event_user ->
           # User is already an event_user, add error
-          add_error(changeset, :user_id, "cannot be a participant because they are already an organizer/admin for this event")
+          add_error(
+            changeset,
+            :user_id,
+            "cannot be a participant because they are already an organizer/admin for this event"
+          )
       end
     else
       changeset

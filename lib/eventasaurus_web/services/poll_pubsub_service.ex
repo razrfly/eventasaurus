@@ -102,7 +102,8 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
   @doc """
   Broadcasts when an option's visibility is changed by a moderator.
   """
-  def broadcast_option_visibility_changed(poll, option, action, user) when action in [:hidden, :shown] do
+  def broadcast_option_visibility_changed(poll, option, action, user)
+      when action in [:hidden, :shown] do
     message = %{
       type: :option_visibility_changed,
       poll_id: poll.id,
@@ -320,7 +321,7 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
 
   defp count_visible_options(poll) do
     (poll.poll_options || [])
-    |> Enum.count(& &1.status == "active")
+    |> Enum.count(&(&1.status == "active"))
   end
 
   defp count_hidden_options(poll) do
@@ -346,7 +347,8 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
   defp option_hidden?(option) do
     case option.status do
       "active" -> false
-      nil -> false  # Consider nil status as not hidden
+      # Consider nil status as not hidden
+      nil -> false
       _ -> true
     end
   end

@@ -30,6 +30,7 @@ defmodule EventasaurusWeb.Plugs.RawBodyPlug do
     case read_body(conn) do
       {:ok, body, conn} ->
         full_body = acc <> body
+
         conn
         |> assign(:raw_body, full_body)
         |> put_req_header("content-length", to_string(byte_size(full_body)))

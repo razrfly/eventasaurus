@@ -46,7 +46,7 @@ Expected Response:
 ```bash
 # Requires authentication and special header
 curl -X POST https://your-domain.com/api/admin/sentry-test \
-  -H "Authorization: Bearer YOUR_AUTH_TOKEN" \
+  -H "Authorization: Bearer <your-auth-token>" \
   -H "X-Sentry-Test: production-test" \
   -H "Content-Type: application/json"
 ```

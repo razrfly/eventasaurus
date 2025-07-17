@@ -79,15 +79,18 @@ config :hammer,
   backend: {
     Hammer.Backend.ETS,
     [
-      expiry_ms: 60_000 * 60 * 4,  # 4 hours
-      cleanup_interval_ms: 60_000 * 10  # 10 minutes
+      # 4 hours
+      expiry_ms: 60_000 * 60 * 4,
+      # 10 minutes
+      cleanup_interval_ms: 60_000 * 10
     ]
   }
 
 # Avatar configuration
 config :eventasaurus, :avatars,
   provider: :dicebear,
-  style: "dylan",  # Can be changed to: adventurer, avataaars, bottts, croodles, fun-emoji, etc.
+  # Can be changed to: adventurer, avataaars, bottts, croodles, fun-emoji, etc.
+  style: "dylan",
   base_url: "https://api.dicebear.com/9.x",
   format: "svg",
   default_options: %{

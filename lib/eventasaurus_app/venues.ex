@@ -75,5 +75,6 @@ defmodule EventasaurusApp.Venues do
   def find_venue_by_address(address) when is_binary(address) do
     Repo.get_by(Venue, address: address)
   end
+
   def find_venue_by_address(_), do: nil
 end

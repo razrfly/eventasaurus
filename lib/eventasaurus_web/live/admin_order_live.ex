@@ -89,40 +89,56 @@ defmodule EventasaurusWeb.AdminOrderLive do
   # Helper functions
 
   defp filter_orders_by_status(orders, "all"), do: orders
+
   defp filter_orders_by_status(orders, status) do
     Enum.filter(orders, &(&1.status == status))
   end
 
   defp filter_orders_by_date(orders, "all"), do: orders
+
   defp filter_orders_by_date(orders, "today") do
     today = Date.utc_today()
+
     Enum.filter(orders, fn order ->
       case order.inserted_at do
-        nil -> false  # Exclude orders with nil timestamps
+        # Exclude orders with nil timestamps
+        nil ->
+          false
+
         timestamp ->
           order_date = extract_date(timestamp)
           Date.compare(order_date, today) == :eq
       end
     end)
   end
+
   defp filter_orders_by_date(orders, "week") do
     week_ago = Date.add(Date.utc_today(), -7)
+
     Enum.filter(orders, fn order ->
       case order.inserted_at do
-        nil -> false  # Exclude orders with nil timestamps
+        # Exclude orders with nil timestamps
+        nil ->
+          false
+
         timestamp ->
           order_date = extract_date(timestamp)
           Date.compare(order_date, week_ago) != :lt
       end
     end)
   end
+
   defp filter_orders_by_date(orders, "month") do
     today = Date.utc_today()
     days_in_month = Calendar.ISO.days_in_month(today.year, today.month)
     month_ago = Date.add(today, -days_in_month)
+
     Enum.filter(orders, fn order ->
       case order.inserted_at do
-        nil -> false  # Exclude orders with nil timestamps
+        # Exclude orders with nil timestamps
+        nil ->
+          false
+
         timestamp ->
           order_date = extract_date(timestamp)
           Date.compare(order_date, month_ago) != :lt
@@ -139,10 +155,12 @@ defmodule EventasaurusWeb.AdminOrderLive do
   end
 
   defp format_order_date(nil), do: "N/A"
+
   defp format_order_date(%NaiveDateTime{} = naive_datetime) do
     naive_datetime
     |> Calendar.strftime("%m/%d/%Y at %I:%M %p")
   end
+
   defp format_order_date(%DateTime{} = datetime) do
     datetime
     |> DateTime.shift_zone!("Etc/UTC")

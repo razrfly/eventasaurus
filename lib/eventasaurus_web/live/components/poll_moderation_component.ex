@@ -325,16 +325,23 @@ defmodule EventasaurusWeb.PollModerationComponent do
 
   # Render Poll Status Indicator
   defp render_poll_status_indicator(status) do
-    {icon, text, classes} = case status do
-      "list_building" ->
-        {"M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4", "Building List", "bg-blue-100 text-blue-800"}
-      "voting" ->
-        {"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", "Voting Active", "bg-green-100 text-green-800"}
-      "closed" ->
-        {"M5 13l4 4L19 7", "Completed", "bg-gray-100 text-gray-800"}
-      _ ->
-        {"M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", "Unknown", "bg-red-100 text-red-800"}
-    end
+    {icon, text, classes} =
+      case status do
+        "list_building" ->
+          {"M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4",
+           "Building List", "bg-blue-100 text-blue-800"}
+
+        "voting" ->
+          {"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", "Voting Active",
+           "bg-green-100 text-green-800"}
+
+        "closed" ->
+          {"M5 13l4 4L19 7", "Completed", "bg-gray-100 text-gray-800"}
+
+        _ ->
+          {"M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", "Unknown",
+           "bg-red-100 text-red-800"}
+      end
 
     assigns = %{icon: icon, text: text, classes: classes}
 
@@ -516,11 +523,12 @@ defmodule EventasaurusWeb.PollModerationComponent do
   def handle_event("toggle_option_selection", %{"option-id" => option_id}, socket) do
     option_id = String.to_integer(option_id)
 
-    selected_options = if option_id in socket.assigns.selected_options do
-      List.delete(socket.assigns.selected_options, option_id)
-    else
-      [option_id | socket.assigns.selected_options]
-    end
+    selected_options =
+      if option_id in socket.assigns.selected_options do
+        List.delete(socket.assigns.selected_options, option_id)
+      else
+        [option_id | socket.assigns.selected_options]
+      end
 
     {:noreply, assign(socket, :selected_options, selected_options)}
   end
@@ -535,11 +543,17 @@ defmodule EventasaurusWeb.PollModerationComponent do
     selected_count = length(socket.assigns.selected_options)
 
     if selected_count > 0 do
-      message = case action do
-        "hide" -> "Are you sure you want to hide #{selected_count} option(s)?"
-        "show" -> "Are you sure you want to show #{selected_count} option(s)?"
-        "delete" -> "Are you sure you want to delete #{selected_count} option(s)? This cannot be undone."
-      end
+      message =
+        case action do
+          "hide" ->
+            "Are you sure you want to hide #{selected_count} option(s)?"
+
+          "show" ->
+            "Are you sure you want to show #{selected_count} option(s)?"
+
+          "delete" ->
+            "Are you sure you want to delete #{selected_count} option(s)? This cannot be undone."
+        end
 
       {:noreply,
        socket
@@ -605,7 +619,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
     {:noreply,
      socket
      |> assign(:showing_confirmation, true)
-     |> assign(:confirmation_message, "Are you sure you want to delete this option? This action cannot be undone and will remove all associated votes.")
+     |> assign(
+       :confirmation_message,
+       "Are you sure you want to delete this option? This action cannot be undone and will remove all associated votes."
+     )
      |> assign(:confirmation_action, "delete_single_option")
      |> assign(:target_option_id, String.to_integer(option_id))}
   end
@@ -628,7 +645,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
     {:noreply,
      socket
      |> assign(:showing_confirmation, true)
-     |> assign(:confirmation_message, "Are you sure you want to finalize this poll? This will close voting and no further changes can be made.")
+     |> assign(
+       :confirmation_message,
+       "Are you sure you want to finalize this poll? This will close voting and no further changes can be made."
+     )
      |> assign(:confirmation_action, "finalize_poll_confirmed")}
   end
 
@@ -637,7 +657,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
     {:noreply,
      socket
      |> assign(:showing_confirmation, true)
-     |> assign(:confirmation_message, "Are you sure you want to reopen list building? This will allow users to add more options.")
+     |> assign(
+       :confirmation_message,
+       "Are you sure you want to reopen list building? This will allow users to add more options."
+     )
      |> assign(:confirmation_action, "reopen_list_building_confirmed")}
   end
 
@@ -646,7 +669,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
     {:noreply,
      socket
      |> assign(:showing_confirmation, true)
-     |> assign(:confirmation_message, "Are you sure you want to reopen voting? This will allow users to vote again.")
+     |> assign(
+       :confirmation_message,
+       "Are you sure you want to reopen voting? This will allow users to vote again."
+     )
      |> assign(:confirmation_action, "reopen_voting_confirmed")}
   end
 
@@ -655,7 +681,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
     {:noreply,
      socket
      |> assign(:showing_confirmation, true)
-     |> assign(:confirmation_message, "Are you sure you want to reset all votes? This will permanently delete all voting data and cannot be undone.")
+     |> assign(
+       :confirmation_message,
+       "Are you sure you want to reset all votes? This will permanently delete all voting data and cannot be undone."
+     )
      |> assign(:confirmation_action, "reset_votes_confirmed")}
   end
 
@@ -664,7 +693,10 @@ defmodule EventasaurusWeb.PollModerationComponent do
     {:noreply,
      socket
      |> assign(:showing_confirmation, true)
-     |> assign(:confirmation_message, "Are you sure you want to delete this poll? This action cannot be undone and will remove all associated data.")
+     |> assign(
+       :confirmation_message,
+       "Are you sure you want to delete this poll? This action cannot be undone and will remove all associated data."
+     )
      |> assign(:confirmation_action, "delete_poll_confirmed")}
   end
 
@@ -723,21 +755,27 @@ defmodule EventasaurusWeb.PollModerationComponent do
 
   defp calculate_moderation_stats(poll) do
     total_options = length(poll.poll_options || [])
-    hidden_options = poll.poll_options
-    |> Enum.count(&(&1.status != "active"))
 
-    user_suggestions = poll.poll_options
-    |> Enum.count(&(&1.suggested_by_id != poll.created_by_id))
+    hidden_options =
+      poll.poll_options
+      |> Enum.count(&(&1.status != "active"))
+
+    user_suggestions =
+      poll.poll_options
+      |> Enum.count(&(&1.suggested_by_id != poll.created_by_id))
 
     # Calculate total votes by going through poll options
-    total_votes = poll.poll_options
-    |> Enum.reduce(0, fn option, acc ->
-      votes = case option do
-        %{votes: votes} when is_list(votes) -> length(votes)
-        _ -> 0
-      end
-      acc + votes
-    end)
+    total_votes =
+      poll.poll_options
+      |> Enum.reduce(0, fn option, acc ->
+        votes =
+          case option do
+            %{votes: votes} when is_list(votes) -> length(votes)
+            _ -> 0
+          end
+
+        acc + votes
+      end)
 
     %{
       total_options: total_options,
@@ -770,7 +808,9 @@ defmodule EventasaurusWeb.PollModerationComponent do
           diff < 1440 -> "#{div(diff, 60)}h ago"
           true -> "#{div(diff, 1440)}d ago"
         end
-      _ -> "unknown"
+
+      _ ->
+        "unknown"
     end
   end
 
@@ -780,7 +820,9 @@ defmodule EventasaurusWeb.PollModerationComponent do
         dt
         |> DateTime.to_date()
         |> Date.to_string()
-      _ -> "Not set"
+
+      _ ->
+        "Not set"
     end
   end
 
@@ -797,7 +839,8 @@ defmodule EventasaurusWeb.PollModerationComponent do
     Enum.each(socket.assigns.selected_options, fn option_id ->
       case Events.get_poll_option(option_id) do
         {:ok, poll_option} -> Events.update_poll_option_status(poll_option, false)
-        {:error, _} -> :ok  # Skip if option not found
+        # Skip if option not found
+        {:error, _} -> :ok
       end
     end)
 
@@ -809,7 +852,8 @@ defmodule EventasaurusWeb.PollModerationComponent do
     Enum.each(socket.assigns.selected_options, fn option_id ->
       case Events.get_poll_option(option_id) do
         {:ok, poll_option} -> Events.update_poll_option_status(poll_option, true)
-        {:error, _} -> :ok  # Skip if option not found
+        # Skip if option not found
+        {:error, _} -> :ok
       end
     end)
 

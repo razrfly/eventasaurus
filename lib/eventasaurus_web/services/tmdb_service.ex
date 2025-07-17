@@ -10,10 +10,13 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
   @base_url "https://api.themoviedb.org/3"
   @cache_table :tmdb_cache
-  @cache_ttl :timer.hours(6) # Cache for 6 hours
+  # Cache for 6 hours
+  @cache_ttl :timer.hours(6)
   @rate_limit_table :tmdb_rate_limit
-  @rate_limit_window :timer.seconds(1) # 1 second window
-  @rate_limit_max_requests 40 # Max 40 requests per second (TMDB limit is 50)
+  # 1 second window
+  @rate_limit_window :timer.seconds(1)
+  # Max 40 requests per second (TMDB limit is 50)
+  @rate_limit_max_requests 40
 
   # ============================================================================
   # Client API
@@ -44,6 +47,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
     else
       {:error, :rate_limited} ->
         {:error, "Rate limit exceeded, please try again later"}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -60,6 +64,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
     else
       {:error, :rate_limited} ->
         {:error, "Rate limit exceeded, please try again later"}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -72,29 +77,38 @@ defmodule EventasaurusWeb.Services.TmdbService do
       {:ok, []}
     else
       api_key = System.get_env("TMDB_API_KEY")
+
       if is_nil(api_key) or api_key == "" do
         {:error, "TMDB_API_KEY is not set in environment"}
       else
-        url = "#{@base_url}/search/multi?api_key=#{api_key}&query=#{URI.encode(query)}&page=#{page}"
+        url =
+          "#{@base_url}/search/multi?api_key=#{api_key}&query=#{URI.encode(query)}&page=#{page}"
+
         headers = [
           {"Accept", "application/json"}
         ]
+
         require Logger
         Logger.debug("TMDB search URL: #{url}")
+
         case HTTPoison.get(url, headers) do
           {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
             Logger.debug("TMDB response: #{code}")
+
             case code do
               200 ->
                 case Jason.decode(body) do
                   {:ok, %{"results" => results}} ->
                     {:ok, Enum.map(results, &format_result/1)}
+
                   {:error, _} ->
                     {:error, "Failed to decode TMDb response"}
                 end
+
               _ ->
                 {:error, "TMDb error: #{code} - #{body}"}
             end
+
           {:error, reason} ->
             Logger.error("TMDB HTTP error: #{inspect(reason)}")
             {:error, reason}
@@ -113,6 +127,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       release_date: item["release_date"]
     }
   end
+
   defp format_result(%{"media_type" => "tv"} = item) do
     %{
       type: :tv,
@@ -123,6 +138,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       first_air_date: item["first_air_date"]
     }
   end
+
   defp format_result(%{"media_type" => "person"} = item) do
     %{
       type: :person,
@@ -132,6 +148,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       known_for: item["known_for"]
     }
   end
+
   defp format_result(%{"media_type" => "collection"} = item) do
     %{
       type: :collection,
@@ -142,6 +159,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       backdrop_path: item["backdrop_path"]
     }
   end
+
   # Fallback for unknown media types - ensure we always have a type field
   defp format_result(item) do
     Map.put(item, :type, :unknown)
@@ -161,12 +179,15 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
   @impl true
   def handle_call({:get_cached_movie_details, movie_id}, _from, state) do
-    result = case get_from_cache(movie_id) do
-      {:ok, cached_data} ->
-        {:ok, cached_data}
-      {:error, :not_found} ->
-        fetch_and_cache_movie_details(movie_id)
-    end
+    result =
+      case get_from_cache(movie_id) do
+        {:ok, cached_data} ->
+          {:ok, cached_data}
+
+        {:error, :not_found} ->
+          fetch_and_cache_movie_details(movie_id)
+      end
+
     {:reply, result, state}
   end
 
@@ -202,6 +223,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
   defp get_from_cache(movie_id) do
     cache_key = "movie_#{movie_id}"
+
     case :ets.lookup(@cache_table, cache_key) do
       [{^cache_key, data, timestamp}] ->
         if cache_valid?(timestamp) do
@@ -210,6 +232,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
           :ets.delete(@cache_table, cache_key)
           {:error, :not_found}
         end
+
       [] ->
         {:error, :not_found}
     end
@@ -223,7 +246,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
   defp cache_valid?(timestamp) do
     current_time = System.monotonic_time(:millisecond)
-    (current_time - timestamp) < @cache_ttl
+    current_time - timestamp < @cache_ttl
   end
 
   defp fetch_and_cache_movie_details(movie_id) do
@@ -231,6 +254,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       {:ok, movie_data} ->
         put_in_cache(movie_id, movie_data)
         {:ok, movie_data}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -239,7 +263,9 @@ defmodule EventasaurusWeb.Services.TmdbService do
   defp fetch_movie_details(movie_id, api_key) do
     # Fetch movie details with cast, crew, and images in parallel
     append_to_response = "credits,images,videos,external_ids"
-    url = "#{@base_url}/movie/#{movie_id}?api_key=#{api_key}&append_to_response=#{append_to_response}&include_image_language=en,null"
+
+    url =
+      "#{@base_url}/movie/#{movie_id}?api_key=#{api_key}&append_to_response=#{append_to_response}&include_image_language=en,null"
 
     headers = [{"Accept", "application/json"}]
 
@@ -250,6 +276,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
         case Jason.decode(body) do
           {:ok, movie_data} ->
             {:ok, format_detailed_movie_data(movie_data)}
+
           {:error, decode_error} ->
             Logger.error("Failed to decode TMDB movie response: #{inspect(decode_error)}")
             {:error, "Failed to decode movie data"}
@@ -271,7 +298,9 @@ defmodule EventasaurusWeb.Services.TmdbService do
   defp fetch_tv_details(tv_id, api_key) do
     # Fetch TV show details with cast, crew, and images
     append_to_response = "credits,images,videos,external_ids"
-    url = "#{@base_url}/tv/#{tv_id}?api_key=#{api_key}&append_to_response=#{append_to_response}&include_image_language=en,null"
+
+    url =
+      "#{@base_url}/tv/#{tv_id}?api_key=#{api_key}&append_to_response=#{append_to_response}&include_image_language=en,null"
 
     headers = [{"Accept", "application/json"}]
 
@@ -282,6 +311,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
         case Jason.decode(body) do
           {:ok, tv_data} ->
             {:ok, format_detailed_tv_data(tv_data)}
+
           {:error, decode_error} ->
             Logger.error("Failed to decode TMDB TV response: #{inspect(decode_error)}")
             {:error, "Failed to decode TV data"}
@@ -310,7 +340,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       overview: movie_data["overview"],
       release_date: movie_data["release_date"],
       runtime: movie_data["runtime"],
-      genres: Enum.map(movie_data["genres"] || [], &(&1["name"])),
+      genres: Enum.map(movie_data["genres"] || [], & &1["name"]),
       poster_path: movie_data["poster_path"],
       backdrop_path: movie_data["backdrop_path"],
       vote_average: movie_data["vote_average"],
@@ -327,7 +357,13 @@ defmodule EventasaurusWeb.Services.TmdbService do
       crew: format_crew(movie_data["credits"]["crew"]),
       images: format_images(movie_data["images"]),
       videos: format_videos(movie_data["videos"]),
-      external_links: format_external_links(movie_data["external_ids"], movie_data["homepage"], movie_data["id"], "movie"),
+      external_links:
+        format_external_links(
+          movie_data["external_ids"],
+          movie_data["homepage"],
+          movie_data["id"],
+          "movie"
+        ),
       popularity: movie_data["popularity"],
       adult: movie_data["adult"]
     }
@@ -345,7 +381,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       number_of_seasons: tv_data["number_of_seasons"],
       number_of_episodes: tv_data["number_of_episodes"],
       episode_run_time: tv_data["episode_run_time"],
-      genres: Enum.map(tv_data["genres"] || [], &(&1["name"])),
+      genres: Enum.map(tv_data["genres"] || [], & &1["name"]),
       poster_path: tv_data["poster_path"],
       backdrop_path: tv_data["backdrop_path"],
       vote_average: tv_data["vote_average"],
@@ -357,7 +393,8 @@ defmodule EventasaurusWeb.Services.TmdbService do
       crew: format_crew(tv_data["credits"]["crew"]),
       images: format_images(tv_data["images"]),
       videos: format_videos(tv_data["videos"]),
-      external_links: format_external_links(tv_data["external_ids"], tv_data["homepage"], tv_data["id"], "tv"),
+      external_links:
+        format_external_links(tv_data["external_ids"], tv_data["homepage"], tv_data["id"], "tv"),
       popularity: tv_data["popularity"]
     }
   end
@@ -365,19 +402,24 @@ defmodule EventasaurusWeb.Services.TmdbService do
   # Helper functions for formatting rich data
   defp extract_director(%{"crew" => crew}) when is_list(crew) do
     case Enum.find(crew, &(&1["job"] == "Director")) do
-      nil -> nil
-      director -> %{
-        name: director["name"],
-        profile_path: director["profile_path"],
-        tmdb_id: director["id"]
-      }
+      nil ->
+        nil
+
+      director ->
+        %{
+          name: director["name"],
+          profile_path: director["profile_path"],
+          tmdb_id: director["id"]
+        }
     end
   end
+
   defp extract_director(_), do: nil
 
   defp format_cast(cast) when is_list(cast) do
     cast
-    |> Enum.take(10) # Limit to top 10 cast members
+    # Limit to top 10 cast members
+    |> Enum.take(10)
     |> Enum.map(fn member ->
       %{
         name: member["name"],
@@ -388,6 +430,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       }
     end)
   end
+
   defp format_cast(_), do: []
 
   defp format_crew(crew) when is_list(crew) do
@@ -406,6 +449,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       }
     end)
   end
+
   defp format_crew(_), do: []
 
   defp format_production_companies(companies) when is_list(companies) do
@@ -418,16 +462,19 @@ defmodule EventasaurusWeb.Services.TmdbService do
       }
     end)
   end
+
   defp format_production_companies(_), do: []
 
   defp format_production_countries(countries) when is_list(countries) do
-    Enum.map(countries, &(&1["name"]))
+    Enum.map(countries, & &1["name"])
   end
+
   defp format_production_countries(_), do: []
 
   defp format_spoken_languages(languages) when is_list(languages) do
-    Enum.map(languages, &(&1["english_name"]))
+    Enum.map(languages, & &1["english_name"])
   end
+
   defp format_spoken_languages(_), do: []
 
   defp format_networks(networks) when is_list(networks) do
@@ -440,6 +487,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       }
     end)
   end
+
   defp format_networks(_), do: []
 
   defp format_images(%{"backdrops" => backdrops, "posters" => posters}) do
@@ -448,11 +496,13 @@ defmodule EventasaurusWeb.Services.TmdbService do
       posters: format_image_list(posters)
     }
   end
+
   defp format_images(_), do: %{backdrops: [], posters: []}
 
   defp format_image_list(images) when is_list(images) do
     images
-    |> Enum.take(5) # Limit to 5 images per type
+    # Limit to 5 images per type
+    |> Enum.take(5)
     |> Enum.map(fn image ->
       %{
         file_path: image["file_path"],
@@ -463,12 +513,14 @@ defmodule EventasaurusWeb.Services.TmdbService do
       }
     end)
   end
+
   defp format_image_list(_), do: []
 
   defp format_videos(%{"results" => videos}) when is_list(videos) do
     videos
     |> Enum.filter(&(&1["site"] == "YouTube" && &1["type"] in ["Trailer", "Teaser", "Clip"]))
-    |> Enum.take(3) # Limit to 3 videos
+    # Limit to 3 videos
+    |> Enum.take(3)
     |> Enum.map(fn video ->
       %{
         key: video["key"],
@@ -480,6 +532,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
       }
     end)
   end
+
   defp format_videos(_), do: []
 
   defp format_external_links(external_ids, homepage, tmdb_id, type) do
@@ -489,10 +542,31 @@ defmodule EventasaurusWeb.Services.TmdbService do
     }
 
     # Add external links if available
-    links = if external_ids["imdb_id"], do: Map.put(links, :imdb_url, "https://www.imdb.com/title/#{external_ids["imdb_id"]}"), else: links
-    links = if external_ids["facebook_id"], do: Map.put(links, :facebook_url, "https://www.facebook.com/#{external_ids["facebook_id"]}"), else: links
-    links = if external_ids["twitter_id"], do: Map.put(links, :twitter_url, "https://twitter.com/#{external_ids["twitter_id"]}"), else: links
-    links = if external_ids["instagram_id"], do: Map.put(links, :instagram_url, "https://www.instagram.com/#{external_ids["instagram_id"]}"), else: links
+    links =
+      if external_ids["imdb_id"],
+        do: Map.put(links, :imdb_url, "https://www.imdb.com/title/#{external_ids["imdb_id"]}"),
+        else: links
+
+    links =
+      if external_ids["facebook_id"],
+        do:
+          Map.put(links, :facebook_url, "https://www.facebook.com/#{external_ids["facebook_id"]}"),
+        else: links
+
+    links =
+      if external_ids["twitter_id"],
+        do: Map.put(links, :twitter_url, "https://twitter.com/#{external_ids["twitter_id"]}"),
+        else: links
+
+    links =
+      if external_ids["instagram_id"],
+        do:
+          Map.put(
+            links,
+            :instagram_url,
+            "https://www.instagram.com/#{external_ids["instagram_id"]}"
+          ),
+        else: links
 
     links
   end

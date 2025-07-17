@@ -46,7 +46,9 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       |> assign_auth_user(session)
       |> assign_new(:user, fn ->
         case socket.assigns[:auth_user] do
-          nil -> nil
+          nil ->
+            nil
+
           auth_user ->
             case ensure_user_struct(auth_user) do
               {:ok, user} -> user
@@ -72,12 +74,13 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
       _auth_user ->
         # Also assign the processed user for convenience
-        socket = assign_new(socket, :user, fn ->
-          case ensure_user_struct(socket.assigns.auth_user) do
-            {:ok, user} -> user
-            {:error, _} -> nil
-          end
-        end)
+        socket =
+          assign_new(socket, :user, fn ->
+            case ensure_user_struct(socket.assigns.auth_user) do
+              {:ok, user} -> user
+              {:error, _} -> nil
+            end
+          end)
 
         {:cont, socket}
     end
@@ -89,7 +92,9 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       |> assign_auth_user(session)
       |> assign_new(:user, fn ->
         case socket.assigns[:auth_user] do
-          nil -> nil
+          nil ->
+            nil
+
           auth_user ->
             case ensure_user_struct(auth_user) do
               {:ok, user} -> user
@@ -132,10 +137,10 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       nil ->
         # Create new user if doesn't exist
         case Accounts.create_user(%{
-          supabase_id: supabase_id,
-          email: email,
-          name: name
-        }) do
+               supabase_id: supabase_id,
+               email: email,
+               name: name
+             }) do
           {:ok, user} -> {:ok, user}
           {:error, _} -> {:error, :user_creation_failed}
         end

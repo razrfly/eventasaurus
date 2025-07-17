@@ -1,7 +1,6 @@
 defmodule EventasaurusWeb.AnonymousVoterComponent do
   use EventasaurusWeb, :live_component
 
-
   def update(assigns, socket) do
     initial_data = %{"name" => "", "email" => ""}
     form = to_form(initial_data)
@@ -17,8 +16,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
      |> assign(:loading, false)
      |> assign(:errors, [])
      |> assign(:poll_type, poll_type)
-     |> assign(:poll_options, poll_options)
-    }
+     |> assign(:poll_options, poll_options)}
   end
 
   def handle_event("validate", %{"voter" => params}, socket) do
@@ -33,8 +31,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     {:noreply,
      socket
      |> assign(:form, form)
-     |> assign(:form_data, merged_data)
-    }
+     |> assign(:form_data, merged_data)}
   end
 
   def handle_event("submit", %{"voter" => params}, socket) do
@@ -56,9 +53,18 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
           # Send appropriate message based on poll type
           case socket.assigns.poll_type do
             :date_poll ->
-              send(self(), {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes, socket.assigns.poll_options})
+              send(
+                self(),
+                {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes,
+                 socket.assigns.poll_options}
+              )
+
             :generic_poll ->
-              send(self(), {:save_all_poll_votes_for_user, socket.assigns.poll.id, name, email, temp_votes, socket.assigns.poll_options})
+              send(
+                self(),
+                {:save_all_poll_votes_for_user, socket.assigns.poll.id, name, email, temp_votes,
+                 socket.assigns.poll_options}
+              )
           end
 
           {:noreply, socket}
@@ -77,9 +83,11 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     case socket.assigns.poll_type do
       :generic_poll ->
         send(self(), :close_generic_vote_modal)
+
       _ ->
         send(self(), :close_vote_modal)
     end
+
     {:noreply, socket}
   end
 
@@ -138,6 +146,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
           case socket.assigns.poll_type do
             :date_poll ->
               handle_date_poll_single_vote(socket, name, email, option, pending_vote)
+
             :generic_poll ->
               handle_generic_poll_single_vote(socket, name, email, option, pending_vote)
           end
@@ -155,33 +164,45 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
   defp handle_date_poll_single_vote(socket, _name, _email, _option, _pending_vote) do
     # Legacy date poll anonymous voting - replaced with generic polling system
-    {:noreply, assign(socket, :error, "Legacy date poll voting is no longer supported. Please use the generic polling system.")}
+    {:noreply,
+     assign(
+       socket,
+       :error,
+       "Legacy date poll voting is no longer supported. Please use the generic polling system."
+     )}
   end
 
   defp handle_generic_poll_single_vote(socket, _name, _email, _option, _pending_vote) do
     # Legacy anonymous voting function - replaced with generic polling system
-    {:noreply, assign(socket, :error, "Legacy anonymous voting is no longer supported. Please use the generic polling system.")}
+    {:noreply,
+     assign(
+       socket,
+       :error,
+       "Legacy anonymous voting is no longer supported. Please use the generic polling system."
+     )}
   end
 
   defp validate_voter_params(%{"name" => name, "email" => email}) do
     errors = %{}
 
-    errors = if name == nil or String.trim(name) == "" do
-      Map.put(errors, :name, "Name is required")
-    else
-      errors
-    end
-
-    errors = if email == nil or String.trim(email) == "" do
-      Map.put(errors, :email, "Email is required")
-    else
-      # Basic email validation
-      if String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/) do
-        errors
+    errors =
+      if name == nil or String.trim(name) == "" do
+        Map.put(errors, :name, "Name is required")
       else
-        Map.put(errors, :email, "Please enter a valid email address")
+        errors
       end
-    end
+
+    errors =
+      if email == nil or String.trim(email) == "" do
+        Map.put(errors, :email, "Email is required")
+      else
+        # Basic email validation
+        if String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/) do
+          errors
+        else
+          Map.put(errors, :email, "Please enter a valid email address")
+        end
+      end
 
     errors
   end
@@ -284,6 +305,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     case assigns.poll_type do
       :date_poll ->
         render_date_poll_summary(assigns)
+
       :generic_poll ->
         render_generic_poll_summary(assigns)
     end
@@ -340,10 +362,13 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
     case poll_type do
       :binary ->
         render_binary_vote_summary(assigns, votes)
+
       :approval ->
         render_approval_vote_summary(assigns, votes)
+
       :ranked ->
         render_ranked_vote_summary(assigns, votes)
+
       :star ->
         render_star_vote_summary(assigns, votes)
     end
@@ -351,6 +376,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
   defp render_binary_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for {option_id, vote_value} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
@@ -370,6 +396,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
   defp render_approval_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for {option_id, _vote_value} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
@@ -389,6 +416,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
   defp render_ranked_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for vote <- @votes |> Enum.sort_by(fn
           %{rank: rank} -> rank
@@ -415,6 +443,7 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
 
   defp render_star_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for {option_id, stars} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>

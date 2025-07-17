@@ -3,15 +3,15 @@ defmodule EventasaurusApp.Venues.Venue do
   import Ecto.Changeset
 
   schema "venues" do
-    field :name, :string
-    field :address, :string
-    field :city, :string
-    field :state, :string
-    field :country, :string
-    field :latitude, :float
-    field :longitude, :float
+    field(:name, :string)
+    field(:address, :string)
+    field(:city, :string)
+    field(:state, :string)
+    field(:country, :string)
+    field(:latitude, :float)
+    field(:longitude, :float)
 
-    has_many :events, EventasaurusApp.Events.Event
+    has_many(:events, EventasaurusApp.Events.Event)
 
     timestamps()
   end

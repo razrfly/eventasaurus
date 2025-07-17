@@ -51,11 +51,12 @@ defmodule EventasaurusApp.Auth.Client do
   def sign_up(email, password, name \\ nil) do
     url = "#{get_auth_url()}/signup"
 
-    body = Jason.encode!(%{
-      email: email,
-      password: password,
-      data: %{name: name}
-    })
+    body =
+      Jason.encode!(%{
+        email: email,
+        password: password,
+        data: %{name: name}
+      })
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
@@ -79,10 +80,11 @@ defmodule EventasaurusApp.Auth.Client do
     url = "#{get_auth_url()}/token?grant_type=password"
     Logger.debug("Authenticating user #{email} with URL: #{url}")
 
-    body = Jason.encode!(%{
-      email: email,
-      password: password
-    })
+    body =
+      Jason.encode!(%{
+        email: email,
+        password: password
+      })
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
@@ -97,7 +99,9 @@ defmodule EventasaurusApp.Auth.Client do
 
       {:error, %HTTPoison.Error{reason: :nxdomain} = _error} ->
         Logger.error("DNS resolution failed for Supabase URL: #{get_url()}")
-        {:error, %{status: 503, message: "Authentication service unavailable, DNS resolution failed"}}
+
+        {:error,
+         %{status: 503, message: "Authentication service unavailable, DNS resolution failed"}}
 
       {:error, error} ->
         Logger.error("Authentication request failed: #{inspect(error)}")
@@ -134,9 +138,10 @@ defmodule EventasaurusApp.Auth.Client do
   def reset_password(email) do
     url = "#{get_auth_url()}/recover"
 
-    body = Jason.encode!(%{
-      email: email
-    })
+    body =
+      Jason.encode!(%{
+        email: email
+      })
 
     Logger.info("Sending password reset request to: #{url}")
 
@@ -164,9 +169,10 @@ defmodule EventasaurusApp.Auth.Client do
   def update_password(token, new_password) do
     url = "#{get_auth_url()}/user"
 
-    body = Jason.encode!(%{
-      password: new_password
-    })
+    body =
+      Jason.encode!(%{
+        password: new_password
+      })
 
     case HTTPoison.put(url, body, auth_headers(token)) do
       {:ok, %{status_code: 200}} ->
@@ -201,9 +207,10 @@ defmodule EventasaurusApp.Auth.Client do
   def refresh_token(refresh_token) do
     url = "#{get_auth_url()}/token?grant_type=refresh_token"
 
-    body = Jason.encode!(%{
-      refresh_token: refresh_token
-    })
+    body =
+      Jason.encode!(%{
+        refresh_token: refresh_token
+      })
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
@@ -276,14 +283,15 @@ defmodule EventasaurusApp.Auth.Client do
     # Use runtime environment detection instead of compile-time Mix.env()
     runtime_env = System.get_env("MIX_ENV") || "dev"
 
-    service_role_key = if runtime_env == "dev" do
-      System.get_env("SUPABASE_SERVICE_ROLE_KEY_LOCAL") ||
-      System.get_env("SUPABASE_API_SECRET") ||
-      System.get_env("SUPABASE_SERVICE_ROLE_KEY")
-    else
-      System.get_env("SUPABASE_API_SECRET") ||
-      System.get_env("SUPABASE_SERVICE_ROLE_KEY")
-    end
+    service_role_key =
+      if runtime_env == "dev" do
+        System.get_env("SUPABASE_SERVICE_ROLE_KEY_LOCAL") ||
+          System.get_env("SUPABASE_API_SECRET") ||
+          System.get_env("SUPABASE_SERVICE_ROLE_KEY")
+      else
+        System.get_env("SUPABASE_API_SECRET") ||
+          System.get_env("SUPABASE_SERVICE_ROLE_KEY")
+      end
 
     # Fail fast if no service role key is available - don't fall back to regular API key for security
     if is_nil(service_role_key) do
@@ -308,12 +316,14 @@ defmodule EventasaurusApp.Auth.Client do
   def admin_create_user(email, password, user_metadata \\ %{}) do
     url = "#{get_auth_url()}/admin/users"
 
-    body = Jason.encode!(%{
-      email: email,
-      password: password,
-      user_metadata: user_metadata,
-      email_confirm: false  # This requires email confirmation for account access
-    })
+    body =
+      Jason.encode!(%{
+        email: email,
+        password: password,
+        user_metadata: user_metadata,
+        # This requires email confirmation for account access
+        email_confirm: false
+      })
 
     case HTTPoison.post(url, body, admin_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
@@ -385,21 +395,26 @@ defmodule EventasaurusApp.Auth.Client do
   def sign_in_with_otp(email, user_metadata \\ %{}) do
     url = "#{get_auth_url()}/otp"
 
-    body = Jason.encode!(%{
-      email: email,
-      data: user_metadata,  # Include name and other metadata
-      options: %{
-        shouldCreateUser: true,  # Auto-create user if doesn't exist
-        emailRedirectTo: "#{get_config()[:site_url]}/auth/callback"
-      }
-    })
+    body =
+      Jason.encode!(%{
+        email: email,
+        # Include name and other metadata
+        data: user_metadata,
+        options: %{
+          # Auto-create user if doesn't exist
+          shouldCreateUser: true,
+          emailRedirectTo: "#{get_config()[:site_url]}/auth/callback"
+        }
+      })
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
         {:ok, Jason.decode!(response_body)}
+
       {:ok, %{status_code: code, body: response_body}} ->
         error = Jason.decode!(response_body)
         {:error, %{status: code, message: error["message"] || "OTP request failed"}}
+
       {:error, error} ->
         {:error, error}
     end
@@ -414,10 +429,11 @@ defmodule EventasaurusApp.Auth.Client do
   def sign_in_with_facebook_oauth(code) do
     url = "#{get_auth_url()}/token?grant_type=authorization_code"
 
-    body = Jason.encode!(%{
-      code: code,
-      redirect_uri: get_facebook_redirect_uri()
-    })
+    body =
+      Jason.encode!(%{
+        code: code,
+        redirect_uri: get_facebook_redirect_uri()
+      })
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
@@ -465,11 +481,12 @@ defmodule EventasaurusApp.Auth.Client do
   def link_facebook_account(access_token, facebook_oauth_code) do
     url = "#{get_auth_url()}/user/identities"
 
-    body = Jason.encode!(%{
-      provider: "facebook",
-      code: facebook_oauth_code,
-      redirect_uri: get_facebook_redirect_uri()
-    })
+    body =
+      Jason.encode!(%{
+        provider: "facebook",
+        code: facebook_oauth_code,
+        redirect_uri: get_facebook_redirect_uri()
+      })
 
     case HTTPoison.post(url, body, auth_headers(access_token)) do
       {:ok, %{status_code: 200, body: response_body}} ->
@@ -503,7 +520,7 @@ defmodule EventasaurusApp.Auth.Client do
           # Use admin API to unlink the identity
           url = "#{get_auth_url()}/admin/users/#{user_id}/identities/#{identity_id}"
 
-          case HTTPoison.delete(url, admin_headers(), [timeout: 30000, recv_timeout: 30000]) do
+          case HTTPoison.delete(url, admin_headers(), timeout: 30000, recv_timeout: 30000) do
             {:ok, %{status_code: 200, body: response_body}} ->
               response = Jason.decode!(response_body)
               Logger.debug("Facebook account unlinked successfully")
@@ -514,14 +531,18 @@ defmodule EventasaurusApp.Auth.Client do
               case Jason.decode(response_body) do
                 {:ok, error_json} ->
                   message = error_json["message"] || "Identity not found"
+
                   cond do
                     String.contains?(message, "manual_linking_disabled") ->
                       try_user_api_unlink(access_token, identity_id)
+
                     String.contains?(message, "minimum_identity_count") ->
                       {:error, %{status: 422, message: "minimum_identity_count"}}
+
                     true ->
                       try_user_api_unlink(access_token, identity_id)
                   end
+
                 {:error, _} ->
                   # Not JSON, probably HTML 404 page - try user API instead
                   try_user_api_unlink(access_token, identity_id)
@@ -529,13 +550,26 @@ defmodule EventasaurusApp.Auth.Client do
 
             {:ok, %{status_code: 422, body: response_body}} ->
               error = Jason.decode!(response_body)
-              Logger.error("Facebook account unlinking failed - validation error: #{inspect(error)}")
-              {:error, %{status: 422, message: error["message"] || "Cannot unlink last authentication method"}}
+
+              Logger.error(
+                "Facebook account unlinking failed - validation error: #{inspect(error)}"
+              )
+
+              {:error,
+               %{
+                 status: 422,
+                 message: error["message"] || "Cannot unlink last authentication method"
+               }}
 
             {:ok, %{status_code: code, body: response_body}} ->
               error = Jason.decode!(response_body)
-              Logger.error("Facebook account unlinking failed with status #{code}: #{inspect(error)}")
-              {:error, %{status: code, message: error["message"] || "Failed to unlink Facebook account"}}
+
+              Logger.error(
+                "Facebook account unlinking failed with status #{code}: #{inspect(error)}"
+              )
+
+              {:error,
+               %{status: code, message: error["message"] || "Failed to unlink Facebook account"}}
 
             {:error, error} ->
               Logger.error("Facebook account unlinking request failed: #{inspect(error)}")
@@ -577,23 +611,33 @@ defmodule EventasaurusApp.Auth.Client do
 
         case response["users"] do
           users when is_list(users) ->
-            Logger.debug("admin_get_user_by_email: Got #{length(users)} users, manually filtering")
+            Logger.debug(
+              "admin_get_user_by_email: Got #{length(users)} users, manually filtering"
+            )
+
             # Manually filter by exact email match
-            matching_user = Enum.find(users, fn user ->
-              Logger.debug("admin_get_user_by_email: Comparing #{user["email"]} with #{email}")
-              user["email"] == email
-            end)
+            matching_user =
+              Enum.find(users, fn user ->
+                Logger.debug("admin_get_user_by_email: Comparing #{user["email"]} with #{email}")
+                user["email"] == email
+              end)
 
             if matching_user do
-              Logger.debug("admin_get_user_by_email: Found matching user: #{matching_user["email"]}")
+              Logger.debug(
+                "admin_get_user_by_email: Found matching user: #{matching_user["email"]}"
+              )
             else
-              Logger.debug("admin_get_user_by_email: No matching user found after manual filtering")
+              Logger.debug(
+                "admin_get_user_by_email: No matching user found after manual filtering"
+              )
             end
 
             {:ok, matching_user}
+
           _ ->
             Logger.debug("admin_get_user_by_email: Unexpected response format")
-            {:ok, nil}            # Unexpected response format
+            # Unexpected response format
+            {:ok, nil}
         end
 
       {:ok, %{status_code: code, body: response_body}} ->
@@ -627,13 +671,15 @@ defmodule EventasaurusApp.Auth.Client do
         Logger.error("Failed to get real user identities with status #{code}: #{response_body}")
 
         # Try to decode JSON response, but handle cases where it's HTML/plain text
-        error_message = case Jason.decode(response_body) do
-          {:ok, error_json} ->
-            error_json["message"] || "Failed to get user identities"
-          {:error, _} ->
-            # Not JSON, probably HTML 404 page
-            "API endpoint not available (status #{code})"
-        end
+        error_message =
+          case Jason.decode(response_body) do
+            {:ok, error_json} ->
+              error_json["message"] || "Failed to get user identities"
+
+            {:error, _} ->
+              # Not JSON, probably HTML 404 page
+              "API endpoint not available (status #{code})"
+          end
 
         {:error, %{status: code, message: error_message}}
 
@@ -659,13 +705,14 @@ defmodule EventasaurusApp.Auth.Client do
           Logger.debug("User providers extracted from JWT: #{inspect(providers)}")
 
           # Transform providers into identity-like format for compatibility
-          identities = Enum.map(providers, fn provider ->
-            %{
-              "provider" => provider,
-              "provider_type" => provider,
-              "id" => "#{provider}_identity"
-            }
-          end)
+          identities =
+            Enum.map(providers, fn provider ->
+              %{
+                "provider" => provider,
+                "provider_type" => provider,
+                "id" => "#{provider}_identity"
+              }
+            end)
 
           {:ok, %{"identities" => identities}}
 
@@ -693,7 +740,7 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   defp try_user_api_endpoints(access_token, [url | remaining_urls]) do
-    case HTTPoison.delete(url, auth_headers(access_token), [timeout: 30000, recv_timeout: 30000]) do
+    case HTTPoison.delete(url, auth_headers(access_token), timeout: 30000, recv_timeout: 30000) do
       {:ok, %{status_code: 200, body: response_body}} ->
         response = Jason.decode!(response_body)
         Logger.debug("User API unlinking succeeded")
@@ -704,10 +751,12 @@ defmodule EventasaurusApp.Auth.Client do
         try_user_api_endpoints(access_token, remaining_urls)
 
       {:ok, %{status_code: code, body: response_body}} ->
-        error_message = case Jason.decode(response_body) do
-          {:ok, error_json} -> error_json["message"] || "User API unlinking failed"
-          {:error, _} -> "User API unlinking failed (status #{code})"
-        end
+        error_message =
+          case Jason.decode(response_body) do
+            {:ok, error_json} -> error_json["message"] || "User API unlinking failed"
+            {:error, _} -> "User API unlinking failed (status #{code})"
+          end
+
         {:error, %{status: code, message: error_message}}
 
       {:error, _error} when remaining_urls != [] ->
@@ -735,12 +784,15 @@ defmodule EventasaurusApp.Auth.Client do
               case Jason.decode(decoded_payload) do
                 {:ok, json_payload} ->
                   {:ok, json_payload}
+
                 {:error, reason} ->
                   {:error, {:json_decode_error, reason}}
               end
+
             :error ->
               {:error, :base64_decode_error}
           end
+
         _ ->
           {:error, :invalid_jwt_format}
       end

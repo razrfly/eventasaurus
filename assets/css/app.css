@@ -1104,15 +1104,15 @@ body[class*="theme-"] .theme-card:hover {
   }
 
   .date-selection-poll-component .vote-buttons {
-    @apply flex-col space-y-2;
+    @apply flex flex-col space-y-2;
   }
 
   .date-selection-poll-component .vote-summary {
-    @apply flex-wrap gap-2;
+    @apply flex flex-wrap gap-2;
   }
 
   .date-selection-poll-component .anonymous-vote-actions {
-    @apply flex-col space-y-2;
+    @apply flex flex-col space-y-2;
   }
 
   .date-selection-poll-component .anonymous-vote-actions button {

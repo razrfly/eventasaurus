@@ -42,12 +42,15 @@ defmodule EventasaurusWeb.EventManageLive do
               total_participants = Events.count_event_participants(event)
 
               # Load initial batch of participants (first 20)
-              initial_participants = Events.list_event_participants(event, limit: 20, offset: 0)
-                                   |> Enum.sort_by(& &1.inserted_at, :desc)
+              initial_participants =
+                Events.list_event_participants(event, limit: 20, offset: 0)
+                |> Enum.sort_by(& &1.inserted_at, :desc)
 
               tickets = Ticketing.list_tickets_for_event(event.id)
-              orders = Ticketing.list_orders_for_event(event.id)
-                      |> EventasaurusApp.Repo.preload([:ticket, :user])
+
+              orders =
+                Ticketing.list_orders_for_event(event.id)
+                |> EventasaurusApp.Repo.preload([:ticket, :user])
 
               # Fetch analytics data for insights tab
               analytics_data = fetch_analytics_data(event.id)
@@ -60,19 +63,26 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:event, event)
                |> assign(:user, user)
                |> assign(:page_title, "Manage Event")
-               |> assign(:active_tab, "overview")  # Default tab
-               |> assign(:venue, event.venue)  # Add missing venue assign
+               # Default tab
+               |> assign(:active_tab, "overview")
+               # Add missing venue assign
+               |> assign(:venue, event.venue)
                |> assign_participants_with_stats(initial_participants)
                |> assign(:participants_count, total_participants)
                |> assign(:participants_loaded, length(initial_participants))
                |> assign(:participants_loading, false)
-               |> assign(:guests_source_filter, nil)  # Guest filtering state
-               |> assign(:guests_status_filter, nil)  # Smart combined status filtering state
+               # Guest filtering state
+               |> assign(:guests_source_filter, nil)
+               # Smart combined status filtering state
+               |> assign(:guests_status_filter, nil)
                |> assign(:tickets, tickets)
                |> assign(:orders, orders)
-               |> assign(:analytics_data, analytics_data)  # Required for insights tab
-               |> assign(:analytics_loading, false)  # Required for insights tab
-               |> assign(:analytics_error, nil)  # Required for insights tab
+               # Required for insights tab
+               |> assign(:analytics_data, analytics_data)
+               # Required for insights tab
+               |> assign(:analytics_loading, false)
+               # Required for insights tab
+               |> assign(:analytics_error, nil)
                |> assign(:show_guest_invitation_modal, false)
                |> assign(:historical_suggestions, [])
                |> assign(:suggestions_loading, false)
@@ -80,7 +90,8 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:manual_emails, "")
                |> assign(:invitation_message, "")
                |> assign(:add_mode, "invite")
-               |> assign(:open_participant_menu, nil)  # Track which dropdown is open
+               # Track which dropdown is open
+               |> assign(:open_participant_menu, nil)
                # Organizer management state
                |> assign(:organizers, organizers)
                |> assign(:show_organizer_search_modal, false)
@@ -94,7 +105,8 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:organizer_search_total_shown, 0)
                # Poll management state
                |> assign(:polls, [])
-               |> assign(:polls_count, load_poll_count(event))  # Load just the count for tab display
+               # Load just the count for tab display
+               |> assign(:polls_count, load_poll_count(event))
                |> assign(:total_poll_participants, 0)
                |> assign(:total_votes, 0)
                |> assign(:polls_loading, false)
@@ -108,16 +120,17 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    socket = case tab do
-      "polls" ->
-        # Load poll data when switching to polls tab
-        socket
-        |> assign(:polls_loading, true)
-        |> load_poll_data()
+    socket =
+      case tab do
+        "polls" ->
+          # Load poll data when switching to polls tab
+          socket
+          |> assign(:polls_loading, true)
+          |> load_poll_data()
 
-      _ ->
-        socket
-    end
+        _ ->
+          socket
+      end
 
     {:noreply, assign(socket, :active_tab, tab)}
   end
@@ -128,12 +141,15 @@ defmodule EventasaurusWeb.EventManageLive do
     total_participants = Events.count_event_participants(socket.assigns.event)
 
     # Reload initial batch
-    initial_participants = Events.list_event_participants(socket.assigns.event, limit: 20, offset: 0)
-                         |> Enum.sort_by(& &1.inserted_at, :desc)
+    initial_participants =
+      Events.list_event_participants(socket.assigns.event, limit: 20, offset: 0)
+      |> Enum.sort_by(& &1.inserted_at, :desc)
 
     tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
-    orders = Ticketing.list_orders_for_event(socket.assigns.event.id)
-            |> EventasaurusApp.Repo.preload([:ticket, :user])
+
+    orders =
+      Ticketing.list_orders_for_event(socket.assigns.event.id)
+      |> EventasaurusApp.Repo.preload([:ticket, :user])
 
     {:noreply,
      socket
@@ -167,6 +183,7 @@ defmodule EventasaurusWeb.EventManageLive do
     # Track analytics event
     user = socket.assigns.user
     event = socket.assigns.event
+
     PosthogService.track_guest_invitation_modal_opened(
       to_string(user.id),
       to_string(event.id),
@@ -207,34 +224,36 @@ defmodule EventasaurusWeb.EventManageLive do
     user_id = String.to_integer(user_id)
     current_selections = socket.assigns.selected_suggestions
 
-    updated_selections = if user_id in current_selections do
-      List.delete(current_selections, user_id)
-    else
-      # Track analytics event when adding a historical participant
-      organizer = socket.assigns.user
-      event = socket.assigns.event
+    updated_selections =
+      if user_id in current_selections do
+        List.delete(current_selections, user_id)
+      else
+        # Track analytics event when adding a historical participant
+        organizer = socket.assigns.user
+        event = socket.assigns.event
 
-      # Find the suggestion being selected for metadata
-      suggestion = socket.assigns.historical_suggestions
-                  |> Enum.find(&(&1.user_id == user_id))
+        # Find the suggestion being selected for metadata
+        suggestion =
+          socket.assigns.historical_suggestions
+          |> Enum.find(&(&1.user_id == user_id))
 
-      if suggestion do
-        PosthogService.track_historical_participant_selected(
-          to_string(organizer.id),
-          to_string(event.id),
-          %{
-            "event_slug" => event.slug,
-            "participant_user_id" => user_id,
-            "participant_email" => suggestion.email,
-            "recommendation_level" => suggestion.recommendation_level,
-            "participation_count" => suggestion.participation_count,
-            "total_selections" => length(current_selections) + 1
-          }
-        )
+        if suggestion do
+          PosthogService.track_historical_participant_selected(
+            to_string(organizer.id),
+            to_string(event.id),
+            %{
+              "event_slug" => event.slug,
+              "participant_user_id" => user_id,
+              "participant_email" => suggestion.email,
+              "recommendation_level" => suggestion.recommendation_level,
+              "participation_count" => suggestion.participation_count,
+              "total_selections" => length(current_selections) + 1
+            }
+          )
+        end
+
+        [user_id | current_selections]
       end
-
-      [user_id | current_selections]
-    end
 
     {:noreply, assign(socket, :selected_suggestions, updated_selections)}
   end
@@ -257,7 +276,8 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_event("toggle_add_mode", %{"mode" => mode}, socket) when mode in ["invite", "direct"] do
+  def handle_event("toggle_add_mode", %{"mode" => mode}, socket)
+      when mode in ["invite", "direct"] do
     {:noreply, assign(socket, :add_mode, mode)}
   end
 
@@ -273,8 +293,9 @@ defmodule EventasaurusWeb.EventManageLive do
     parsed_emails = parse_email_list(manual_emails)
 
     # Get selected suggestion users
-    suggested_users = socket.assigns.historical_suggestions
-                     |> Enum.filter(&(&1.user_id in selected_suggestions))
+    suggested_users =
+      socket.assigns.historical_suggestions
+      |> Enum.filter(&(&1.user_id in selected_suggestions))
 
     total_invitations = length(suggested_users) + length(parsed_emails)
 
@@ -282,14 +303,15 @@ defmodule EventasaurusWeb.EventManageLive do
       # Determine mode and process invitations
       mode = if socket.assigns.add_mode == "direct", do: :direct_add, else: :invitation
 
-      result = Events.process_guest_invitations(
-        event,
-        organizer,
-        suggestion_structs: suggested_users,
-        manual_emails: parsed_emails,
-        invitation_message: invitation_message,
-        mode: mode
-      )
+      result =
+        Events.process_guest_invitations(
+          event,
+          organizer,
+          suggestion_structs: suggested_users,
+          manual_emails: parsed_emails,
+          invitation_message: invitation_message,
+          mode: mode
+        )
 
       # Track direct guest additions
       if mode == :direct_add and result.successful_invitations > 0 do
@@ -310,16 +332,20 @@ defmodule EventasaurusWeb.EventManageLive do
       success_message = build_invitation_success_message(result)
 
       # Reload participants to show updated list
-      updated_participants = Events.list_event_participants(event)
-                           |> Enum.sort_by(& &1.inserted_at, :desc)
+      updated_participants =
+        Events.list_event_participants(event)
+        |> Enum.sort_by(& &1.inserted_at, :desc)
 
       # Build error flash if there were failures
-      socket_with_errors = if result.failed_invitations > 0 do
-        error_message = "#{result.failed_invitations} invitation(s) failed. #{Enum.join(result.errors, "; ")}"
-        put_flash(socket, :error, error_message)
-      else
-        socket
-      end
+      socket_with_errors =
+        if result.failed_invitations > 0 do
+          error_message =
+            "#{result.failed_invitations} invitation(s) failed. #{Enum.join(result.errors, "; ")}"
+
+          put_flash(socket, :error, error_message)
+        else
+          socket
+        end
 
       {:noreply,
        socket_with_errors
@@ -331,7 +357,8 @@ defmodule EventasaurusWeb.EventManageLive do
        |> assign(:manual_emails, "")
        |> put_flash(:info, success_message)}
     else
-      {:noreply, put_flash(socket, :error, "Please select guests or enter email addresses to invite.")}
+      {:noreply,
+       put_flash(socket, :error, "Please select guests or enter email addresses to invite.")}
     end
   end
 
@@ -343,15 +370,18 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("filter_guests", params, socket) do
-    source_filter = case Map.get(params, "source_filter") do
-      "" -> nil
-      source -> source
-    end
+    source_filter =
+      case Map.get(params, "source_filter") do
+        "" -> nil
+        source -> source
+      end
 
-    status_filter = case Map.get(params, "status_filter") do
-      "" -> nil
-      status -> status  # Keep as string for combined filtering
-    end
+    status_filter =
+      case Map.get(params, "status_filter") do
+        "" -> nil
+        # Keep as string for combined filtering
+        status -> status
+      end
 
     {:noreply,
      socket
@@ -383,7 +413,7 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-    def handle_event("remove_participant", %{"participant_id" => participant_id}, socket) do
+  def handle_event("remove_participant", %{"participant_id" => participant_id}, socket) do
     case Integer.parse(participant_id) do
       {participant_id, _} ->
         case EventasaurusApp.Repo.get(EventasaurusApp.Events.EventParticipant, participant_id) do
@@ -395,10 +425,12 @@ defmodule EventasaurusWeb.EventManageLive do
               {:ok, _} ->
                 # Reload participants
                 updated_participants = Events.list_event_participants(socket.assigns.event)
+
                 {:noreply,
                  socket
                  |> assign_participants_with_stats(updated_participants)
-                 |> assign(:open_participant_menu, nil)  # Close any open dropdown menus
+                 # Close any open dropdown menus
+                 |> assign(:open_participant_menu, nil)
                  |> put_flash(:info, "Participant removed successfully")}
 
               {:error, _changeset} ->
@@ -423,13 +455,17 @@ defmodule EventasaurusWeb.EventManageLive do
       case Events.retry_single_email(participant, event) do
         :ok ->
           # Refresh participants to show updated email status
-          updated_participants = Events.list_event_participants(event, limit: socket.assigns.participants_loaded)
-                               |> Enum.sort_by(& &1.inserted_at, :desc)
+          updated_participants =
+            Events.list_event_participants(event, limit: socket.assigns.participants_loaded)
+            |> Enum.sort_by(& &1.inserted_at, :desc)
 
           {:noreply,
            socket
            |> assign_participants_with_stats(updated_participants)
-           |> put_flash(:info, "Email retry initiated for #{participant.user.name || participant.user.email}")}
+           |> put_flash(
+             :info,
+             "Email retry initiated for #{participant.user.name || participant.user.email}"
+           )}
 
         {:error, reason} ->
           {:noreply,
@@ -454,34 +490,41 @@ defmodule EventasaurusWeb.EventManageLive do
     parsed_emails = parse_email_list(manual_emails)
 
     # Get selected suggestion users
-    suggested_users = socket.assigns.historical_suggestions
-                     |> Enum.filter(&(&1.user_id in selected_suggestions))
+    suggested_users =
+      socket.assigns.historical_suggestions
+      |> Enum.filter(&(&1.user_id in selected_suggestions))
 
     total_guests = length(suggested_users) + length(parsed_emails)
 
     if total_guests > 0 do
       # Use our guest invitation processing but set mode to direct
-      result = Events.process_guest_invitations(event, organizer,
-        suggestion_structs: suggested_users,
-        manual_emails: parsed_emails,
-        invitation_message: nil,  # No message for direct adds
-        mode: :direct_add
-      )
+      result =
+        Events.process_guest_invitations(event, organizer,
+          suggestion_structs: suggested_users,
+          manual_emails: parsed_emails,
+          # No message for direct adds
+          invitation_message: nil,
+          mode: :direct_add
+        )
 
       # Build success message
       success_message = build_direct_add_success_message(result)
 
       # Reload participants to show updated list
-      updated_participants = Events.list_event_participants(event)
-                           |> Enum.sort_by(& &1.inserted_at, :desc)
+      updated_participants =
+        Events.list_event_participants(event)
+        |> Enum.sort_by(& &1.inserted_at, :desc)
 
       # Build error flash if there were failures
-      socket_with_errors = if result.failed_invitations > 0 do
-        error_message = "#{result.failed_invitations} addition(s) failed. #{Enum.join(result.errors, "; ")}"
-        put_flash(socket, :error, error_message)
-      else
-        socket
-      end
+      socket_with_errors =
+        if result.failed_invitations > 0 do
+          error_message =
+            "#{result.failed_invitations} addition(s) failed. #{Enum.join(result.errors, "; ")}"
+
+          put_flash(socket, :error, error_message)
+        else
+          socket
+        end
 
       # Close modal and show success message
       {:noreply,
@@ -493,7 +536,8 @@ defmodule EventasaurusWeb.EventManageLive do
        |> assign(:invitation_message, "")
        |> put_flash(:info, success_message)}
     else
-      {:noreply, put_flash(socket, :error, "Please select guests or enter email addresses to add.")}
+      {:noreply,
+       put_flash(socket, :error, "Please select guests or enter email addresses to add.")}
     end
   end
 
@@ -503,11 +547,13 @@ defmodule EventasaurusWeb.EventManageLive do
       socket = assign(socket, :participants_loading, true)
 
       # Load next batch of participants
-      next_batch = Events.list_event_participants(
-        socket.assigns.event,
-        limit: 20,
-        offset: socket.assigns.participants_loaded
-      ) |> Enum.sort_by(& &1.inserted_at, :desc)
+      next_batch =
+        Events.list_event_participants(
+          socket.assigns.event,
+          limit: 20,
+          offset: socket.assigns.participants_loaded
+        )
+        |> Enum.sort_by(& &1.inserted_at, :desc)
 
       # Combine with existing participants
       updated_participants = socket.assigns.participants ++ next_batch
@@ -561,7 +607,8 @@ defmodule EventasaurusWeb.EventManageLive do
         |> assign(:organizer_search_query, query)
         |> assign(:organizer_search_loading, true)
         |> assign(:organizer_search_error, nil)
-        |> assign(:organizer_search_offset, 0)  # Reset pagination for new search
+        # Reset pagination for new search
+        |> assign(:organizer_search_offset, 0)
         |> assign(:organizer_search_has_more, false)
         |> assign(:organizer_search_total_shown, 0)
 
@@ -585,11 +632,12 @@ defmodule EventasaurusWeb.EventManageLive do
     user_id = String.to_integer(user_id)
     current_selections = socket.assigns.selected_organizer_results
 
-    updated_selections = if user_id in current_selections do
-      List.delete(current_selections, user_id)
-    else
-      [user_id | current_selections]
-    end
+    updated_selections =
+      if user_id in current_selections do
+        List.delete(current_selections, user_id)
+      else
+        [user_id | current_selections]
+      end
 
     {:noreply, assign(socket, :selected_organizer_results, updated_selections)}
   end
@@ -636,7 +684,8 @@ defmodule EventasaurusWeb.EventManageLive do
           {:noreply, put_flash(socket, :info, "All selected users are already organizers")}
       end
     else
-      {:noreply, put_flash(socket, :error, "Please select at least one user to add as an organizer.")}
+      {:noreply,
+       put_flash(socket, :error, "Please select at least one user to add as an organizer.")}
     end
   end
 
@@ -660,10 +709,14 @@ defmodule EventasaurusWeb.EventManageLive do
             {1, _} ->
               # Successfully removed
               updated_organizers = Events.list_event_organizers(event)
+
               {:noreply,
                socket
                |> assign(:organizers, updated_organizers)
-               |> put_flash(:info, "Successfully removed #{user.name || user.email} as an organizer.")}
+               |> put_flash(
+                 :info,
+                 "Successfully removed #{user.name || user.email} as an organizer."
+               )}
 
             {0, _} ->
               {:noreply, put_flash(socket, :error, "User is not an organizer of this event.")}
@@ -687,13 +740,12 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, socket}
   end
 
-
-
   @impl true
   def handle_info({:poll_saved, poll, %{action: action, message: message}}, socket) do
     # Reload polls data to include the new poll with consistent ordering
-    polls = Events.list_polls(socket.assigns.event)
-    |> Enum.sort_by(& &1.id)
+    polls =
+      Events.list_polls(socket.assigns.event)
+      |> Enum.sort_by(& &1.id)
 
     # Update the poll integration component to close the modal
     send_update(EventasaurusWeb.EventPollIntegrationComponent,
@@ -731,7 +783,7 @@ defmodule EventasaurusWeb.EventManageLive do
     handle_info({:poll_saved, poll, %{action: action, message: message}}, socket)
   end
 
-      @impl true
+  @impl true
   def handle_info({:view_poll_details, poll}, socket) do
     # Handle poll viewing/editing - MUST set active_tab to "polls"
     {:noreply,
@@ -756,8 +808,9 @@ defmodule EventasaurusWeb.EventManageLive do
     case Events.delete_poll(poll) do
       {:ok, _deleted_poll} ->
         # Reload event data to refresh polls list
-        event = Events.get_event!(socket.assigns.event.id)
-        |> EventasaurusApp.Repo.preload([:polls])
+        event =
+          Events.get_event!(socket.assigns.event.id)
+          |> EventasaurusApp.Repo.preload([:polls])
 
         {:noreply,
          socket
@@ -781,8 +834,9 @@ defmodule EventasaurusWeb.EventManageLive do
   @impl true
   def handle_info({:poll_deleted, _poll}, socket) do
     # Reload event data to refresh polls list
-    event = Events.get_event!(socket.assigns.event.id)
-    |> EventasaurusApp.Repo.preload([:polls])
+    event =
+      Events.get_event!(socket.assigns.event.id)
+      |> EventasaurusApp.Repo.preload([:polls])
 
     {:noreply,
      socket
@@ -799,7 +853,7 @@ defmodule EventasaurusWeb.EventManageLive do
      |> assign(:editing_poll, nil)}
   end
 
-    @impl true
+  @impl true
   def handle_info({:show_create_poll_modal, _event}, socket) do
     # Handle poll creation modal request from component
     send_update(EventasaurusWeb.EventPollIntegrationComponent,
@@ -836,8 +890,6 @@ defmodule EventasaurusWeb.EventManageLive do
      |> assign(:show_poll_details, false)}
   end
 
-
-
   @impl true
   def handle_info({:hide_dropdown, _id}, socket) do
     # Handle dropdown hide events from components
@@ -871,7 +923,7 @@ defmodule EventasaurusWeb.EventManageLive do
      |> put_flash(:info, "Option removed successfully")}
   end
 
-    @impl true
+  @impl true
   def handle_info({:edit_option, option_id}, socket) do
     # Edit option action triggered (from component) - trigger edit mode in component
     case safe_string_to_integer(option_id) do
@@ -883,6 +935,7 @@ defmodule EventasaurusWeb.EventManageLive do
               id: "poll-options-#{option.poll_id}",
               editing_option_id: option.id
             )
+
             {:noreply, socket}
 
           nil ->
@@ -936,8 +989,6 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, socket}
   end
 
-
-
   @impl true
   def handle_info({:js_push, _command, _params, _id}, socket) do
     # Handle JavaScript push commands - for now just acknowledge
@@ -951,15 +1002,17 @@ defmodule EventasaurusWeb.EventManageLive do
 
     try do
       # Get current participants' user IDs to exclude them from suggestions
-      current_participant_user_ids = socket.assigns.participants
-                                   |> Enum.map(& &1.user_id)
+      current_participant_user_ids =
+        socket.assigns.participants
+        |> Enum.map(& &1.user_id)
 
       # Get historical participants using our guest invitation module
-      suggestions = Events.get_participant_suggestions(organizer,
-        exclude_event_ids: [event.id],
-        exclude_user_ids: current_participant_user_ids,
-        limit: 20
-      )
+      suggestions =
+        Events.get_participant_suggestions(organizer,
+          exclude_event_ids: [event.id],
+          exclude_user_ids: current_participant_user_ids,
+          limit: 20
+        )
 
       {:noreply,
        socket
@@ -968,7 +1021,11 @@ defmodule EventasaurusWeb.EventManageLive do
     rescue
       error ->
         require Logger
-        Logger.error("Guest invitation modal crashed while loading suggestions: #{inspect(error)}")
+
+        Logger.error(
+          "Guest invitation modal crashed while loading suggestions: #{inspect(error)}"
+        )
+
         Logger.error("Stacktrace: #{Exception.format_stacktrace(__STACKTRACE__)}")
         Logger.error("Socket assigns: event=#{event.id}, user=#{organizer.id}")
 
@@ -980,7 +1037,7 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-    # Generic handler for poll data refresh events (catch-all)
+  # Generic handler for poll data refresh events (catch-all)
   @impl true
   def handle_info(message, socket) when is_map(message) or is_tuple(message) do
     case extract_event_info(message) do
@@ -1005,8 +1062,6 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-
-
   # Helper functions
 
   # Pre-compute participant statistics to avoid repeated Enum.count operations
@@ -1030,7 +1085,10 @@ defmodule EventasaurusWeb.EventManageLive do
   # Helper function to extract flash message info from event types
 
   defp count_by_source(participants, "direct_add") do
-    Enum.count(participants, &(is_binary(&1.source) && String.starts_with?(&1.source, "direct_add")))
+    Enum.count(
+      participants,
+      &(is_binary(&1.source) && String.starts_with?(&1.source, "direct_add"))
+    )
   end
 
   defp count_by_source(participants, source) do
@@ -1038,7 +1096,11 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   defp count_invited(participants) do
-    Enum.count(participants, &(&1.invited_at != nil && !(is_binary(&1.source) && String.starts_with?(&1.source, "direct_add"))))
+    Enum.count(
+      participants,
+      &(&1.invited_at != nil &&
+          !(is_binary(&1.source) && String.starts_with?(&1.source, "direct_add")))
+    )
   end
 
   defp count_by_status(participants, status) do
@@ -1048,7 +1110,9 @@ defmodule EventasaurusWeb.EventManageLive do
   defp fetch_analytics_data(event_id) do
     try do
       case PosthogService.get_analytics(event_id, 30) do
-        {:ok, data} -> data
+        {:ok, data} ->
+          data
+
         {:error, reason} ->
           require Logger
           Logger.error("PostHog analytics error: #{inspect(reason)}")
@@ -1172,7 +1236,7 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-# Guest filtering and UI helper functions
+  # Guest filtering and UI helper functions
 
   # Helper function to filter participants by source and combined status
   defp get_filtered_participants(participants, source_filter, status_filter) do
@@ -1182,17 +1246,21 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   defp filter_by_source(participants, nil), do: participants
+
   defp filter_by_source(participants, "direct_add") do
     Enum.filter(participants, fn p ->
       is_binary(p.source) && String.starts_with?(p.source, "direct_add")
     end)
   end
+
   defp filter_by_source(participants, "invitation") do
     Enum.filter(participants, fn p ->
       p.source in ["historical_suggestion", "manual_email"] ||
-      (p.invited_at != nil && is_binary(p.source) && !String.starts_with?(p.source, "direct_add"))
+        (p.invited_at != nil && is_binary(p.source) &&
+           !String.starts_with?(p.source, "direct_add"))
     end)
   end
+
   defp filter_by_source(participants, source) do
     Enum.filter(participants, fn p ->
       case p.source do
@@ -1204,6 +1272,7 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   defp filter_by_combined_status(participants, nil), do: participants
+
   defp filter_by_combined_status(participants, combined_status) do
     alias EventasaurusApp.Events.EventParticipant
 
@@ -1223,10 +1292,13 @@ defmodule EventasaurusWeb.EventManageLive do
 
       "accepted" ->
         Enum.filter(participants, fn p -> p.status == :accepted end)
+
       "declined" ->
         Enum.filter(participants, fn p -> p.status == :declined end)
+
       "cancelled" ->
         Enum.filter(participants, fn p -> p.status == :cancelled end)
+
       "confirmed_with_order" ->
         Enum.filter(participants, fn p -> p.status == :confirmed_with_order end)
 
@@ -1259,16 +1331,22 @@ defmodule EventasaurusWeb.EventManageLive do
     cond do
       is_binary(participant.source) and String.starts_with?(participant.source, "direct_add") ->
         {"Direct Add", "bg-blue-100 text-blue-800"}
+
       participant.source == "public_registration" ->
         {"Self Registered", "bg-green-100 text-green-800"}
+
       participant.source == "ticket_purchase" ->
         {"Ticket Purchase", "bg-orange-100 text-orange-800"}
+
       participant.source in ["historical_suggestion", "manual_email"] ->
         {"Invited", "bg-purple-100 text-purple-800"}
+
       participant.source == "voting_registration" ->
         {"Poll Voter", "bg-indigo-100 text-indigo-800"}
+
       participant.source == "bulk_voting_registration" ->
         {"Bulk Voter", "bg-indigo-100 text-indigo-800"}
+
       true ->
         {"Unknown", "bg-gray-100 text-gray-800"}
     end
@@ -1278,14 +1356,19 @@ defmodule EventasaurusWeb.EventManageLive do
     case status do
       :pending ->
         {"Pending", "bg-yellow-100 text-yellow-800"}
+
       :accepted ->
         {"Accepted", "bg-green-100 text-green-800"}
+
       :declined ->
         {"Declined", "bg-red-100 text-red-800"}
+
       :cancelled ->
         {"Cancelled", "bg-gray-100 text-gray-800"}
+
       :confirmed_with_order ->
         {"Confirmed", "bg-emerald-100 text-emerald-800"}
+
       _ ->
         {"Unknown", "bg-gray-100 text-gray-800"}
     end
@@ -1293,6 +1376,7 @@ defmodule EventasaurusWeb.EventManageLive do
 
   # Helper function to format relative time
   defp format_relative_time(datetime) when is_nil(datetime), do: "never"
+
   defp format_relative_time(%DateTime{} = datetime) do
     now = DateTime.utc_now()
     diff_seconds = DateTime.diff(now, datetime, :second)
@@ -1300,15 +1384,19 @@ defmodule EventasaurusWeb.EventManageLive do
     cond do
       diff_seconds < 60 ->
         "just now"
+
       diff_seconds < 3600 ->
         minutes = div(diff_seconds, 60)
         "#{minutes} minute#{if minutes == 1, do: "", else: "s"} ago"
+
       diff_seconds < 86400 ->
         hours = div(diff_seconds, 3600)
         "#{hours} hour#{if hours == 1, do: "", else: "s"} ago"
-      diff_seconds < 2592000 ->
+
+      diff_seconds < 2_592_000 ->
         days = div(diff_seconds, 86400)
         "#{days} day#{if days == 1, do: "", else: "s"} ago"
+
       true ->
         Calendar.strftime(datetime, "%m/%d/%Y")
     end
@@ -1316,11 +1404,14 @@ defmodule EventasaurusWeb.EventManageLive do
 
   # Helper function to get inviter name by finding the inviter among participants
   defp get_inviter_name(nil, _), do: "Unknown"
+
   defp get_inviter_name(inviter_id, participants) do
     participants
     |> Enum.find(fn p -> p.user && p.user.id == inviter_id end)
     |> case do
-      %{user: %{name: name}} when is_binary(name) -> name
+      %{user: %{name: name}} when is_binary(name) ->
+        name
+
       _ ->
         # Fallback to direct database lookup if inviter not in participant list
         case EventasaurusApp.Accounts.get_user(inviter_id) do
@@ -1336,20 +1427,25 @@ defmodule EventasaurusWeb.EventManageLive do
 
     try do
       # Load all polls for the event safely with consistent ordering
-      polls = case Events.list_polls(event) do
-        polls when is_list(polls) ->
-          # Sort by ID to ensure consistent ordering across renders
-          Enum.sort_by(polls, & &1.id)
-        _ -> []
-      end
+      polls =
+        case Events.list_polls(event) do
+          polls when is_list(polls) ->
+            # Sort by ID to ensure consistent ordering across renders
+            Enum.sort_by(polls, & &1.id)
+
+          _ ->
+            []
+        end
 
       # Get poll statistics safely
-      poll_stats = case Events.get_event_poll_stats(event) do
-        %{total_participants: total_participants} when is_integer(total_participants) ->
-          %{total_participants: total_participants}
-        _ ->
-          %{total_participants: 0}
-      end
+      poll_stats =
+        case Events.get_event_poll_stats(event) do
+          %{total_participants: total_participants} when is_integer(total_participants) ->
+            %{total_participants: total_participants}
+
+          _ ->
+            %{total_participants: 0}
+        end
 
       socket
       |> assign(:polls, polls)
@@ -1360,6 +1456,7 @@ defmodule EventasaurusWeb.EventManageLive do
     rescue
       error ->
         Logger.error("Failed to load poll data: #{inspect(error)}")
+
         socket
         |> assign(:polls, [])
         |> assign(:polls_count, 0)
@@ -1373,8 +1470,10 @@ defmodule EventasaurusWeb.EventManageLive do
   defp load_poll_count(event) do
     try do
       # Load polls with consistent ordering and count them
-      polls = Events.list_polls(event)
-      |> Enum.sort_by(& &1.id)
+      polls =
+        Events.list_polls(event)
+        |> Enum.sort_by(& &1.id)
+
       length(polls)
     rescue
       _ -> 0
@@ -1413,19 +1512,34 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp safe_string_to_integer(_), do: {:error, :invalid_input}
 
-
-
   # Helper to extract event information from messages
-  defp extract_event_info({:option_suggested, _}), do: {:poll_data_refresh, "Option added successfully"}
-  defp extract_event_info(%{type: :option_suggested}), do: {:poll_data_refresh, "Option added successfully"}
-  defp extract_event_info({:option_updated, _}), do: {:poll_data_refresh, "Option updated successfully"}
-  defp extract_event_info({:option_removed, _}), do: {:poll_data_refresh, "Option removed successfully"}
+  defp extract_event_info({:option_suggested, _}),
+    do: {:poll_data_refresh, "Option added successfully"}
+
+  defp extract_event_info(%{type: :option_suggested}),
+    do: {:poll_data_refresh, "Option added successfully"}
+
+  defp extract_event_info({:option_updated, _}),
+    do: {:poll_data_refresh, "Option updated successfully"}
+
+  defp extract_event_info({:option_removed, _}),
+    do: {:poll_data_refresh, "Option removed successfully"}
+
   defp extract_event_info({:poll_phase_changed, _, message}), do: {:poll_data_refresh, message}
   defp extract_event_info({:option_reordered, message}), do: {:poll_data_refresh, message}
-  defp extract_event_info(%{type: :option_visibility_changed}), do: {:poll_data_refresh, "Option updated successfully"}
-  defp extract_event_info(%{type: :poll_phase_changed}), do: {:poll_data_refresh, "Poll phase updated"}
-  defp extract_event_info(%{type: :options_reordered}), do: {:poll_data_refresh, "Options reordered successfully"}
-  defp extract_event_info(%{type: :bulk_moderation_action}), do: {:poll_data_refresh, "Options updated successfully"}
+
+  defp extract_event_info(%{type: :option_visibility_changed}),
+    do: {:poll_data_refresh, "Option updated successfully"}
+
+  defp extract_event_info(%{type: :poll_phase_changed}),
+    do: {:poll_data_refresh, "Poll phase updated"}
+
+  defp extract_event_info(%{type: :options_reordered}),
+    do: {:poll_data_refresh, "Options reordered successfully"}
+
+  defp extract_event_info(%{type: :bulk_moderation_action}),
+    do: {:poll_data_refresh, "Options updated successfully"}
+
   defp extract_event_info({:show_error, message}), do: {:error_flash, message}
   defp extract_event_info({:search_results, _, _}), do: :acknowledge_only
   defp extract_event_info(%{type: :duplicate_detected}), do: :acknowledge_only
@@ -1448,10 +1562,12 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, socket}
   end
 
-  defp handle_specific_message({:save_date_time_slots, %{date: _date, time_slots: _time_slots}}, socket) do
+  defp handle_specific_message(
+         {:save_date_time_slots, %{date: _date, time_slots: _time_slots}},
+         socket
+       ) do
     # Time slot changes from TimeSlotPickerComponent - just acknowledge
     # The component handles the time slots internally
     {:noreply, socket}
   end
-
 end

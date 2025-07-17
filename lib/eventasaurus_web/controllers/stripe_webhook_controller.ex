@@ -69,7 +69,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
     end
   end
 
-    defp validate_webhook_request(raw_body, signature) do
+  defp validate_webhook_request(raw_body, signature) do
     cond do
       is_nil(signature) or signature == "" ->
         {:error, "Missing Stripe signature header"}
@@ -103,7 +103,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
     end
   end
 
-    defp verify_webhook_signature(raw_body, signature) do
+  defp verify_webhook_signature(raw_body, signature) do
     webhook_secret = get_webhook_secret()
 
     # First validate timestamp to prevent replay attacks
@@ -112,29 +112,31 @@ defmodule EventasaurusWeb.StripeWebhookController do
         case stripe_impl().verify_webhook_signature(raw_body, signature, webhook_secret) do
           {:ok, event} ->
             # Validate event structure
-                    case validate_event_structure(event) do
-          :ok ->
-            # Check for duplicate events (idempotency)
-            case check_idempotency(event["id"]) do
+            case validate_event_structure(event) do
               :ok ->
-                Logger.info("Webhook signature verified successfully",
-                  event_type: event["type"],
-                  event_id: event["id"]
-                )
-                {:ok, event}
+                # Check for duplicate events (idempotency)
+                case check_idempotency(event["id"]) do
+                  :ok ->
+                    Logger.info("Webhook signature verified successfully",
+                      event_type: event["type"],
+                      event_id: event["id"]
+                    )
 
-              {:error, :duplicate} ->
-                Logger.info("Duplicate webhook event ignored",
-                  event_type: event["type"],
-                  event_id: event["id"]
-                )
-                {:ok, :duplicate}
+                    {:ok, event}
+
+                  {:error, :duplicate} ->
+                    Logger.info("Duplicate webhook event ignored",
+                      event_type: event["type"],
+                      event_id: event["id"]
+                    )
+
+                    {:ok, :duplicate}
+                end
+
+              {:error, reason} ->
+                Logger.error("Invalid event structure", reason: reason)
+                {:error, reason}
             end
-
-          {:error, reason} ->
-            Logger.error("Invalid event structure", reason: reason)
-            {:error, reason}
-        end
 
           {:error, reason} ->
             Logger.error("Webhook signature verification failed", reason: reason)
@@ -151,6 +153,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
         error: inspect(error),
         stacktrace: Exception.format_stacktrace(__STACKTRACE__)
       )
+
       {:error, "Signature verification failed"}
   end
 
@@ -195,7 +198,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
 
   defp validate_event_structure(_), do: {:error, "Event must be a map"}
 
-    defp process_webhook_event_with_retry(:duplicate, _retries_left) do
+  defp process_webhook_event_with_retry(:duplicate, _retries_left) do
     # Duplicate events are already processed, return success
     :ok
   end
@@ -225,6 +228,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
           event_type: event["type"],
           event_id: event["id"]
         )
+
         {:error, reason}
     end
   end
@@ -234,6 +238,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
       event_type: event["type"],
       event_id: event["id"]
     )
+
     {:error, "Max retries exceeded"}
   end
 
@@ -257,6 +262,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
           reason: reason,
           payment_intent_id: payment_intent_id
         )
+
         {:error, reason}
     end
   end
@@ -280,6 +286,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
                 order_id: updated_order.id,
                 payment_intent_id: payment_intent_id
               )
+
               :ok
 
             {:error, reason} ->
@@ -288,13 +295,16 @@ defmodule EventasaurusWeb.StripeWebhookController do
                 payment_intent_id: payment_intent_id,
                 reason: inspect(reason)
               )
-              :ok  # Don't fail webhook processing
+
+              # Don't fail webhook processing
+              :ok
           end
         else
           {:error, :not_found} ->
             Logger.warning("No order found for failed payment intent",
               payment_intent_id: payment_intent_id
             )
+
             :ok
         end
 
@@ -303,6 +313,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
           reason: reason,
           payment_intent_id: payment_intent_id
         )
+
         {:error, reason}
     end
   end
@@ -328,6 +339,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
           reason: reason,
           session_id: session_id
         )
+
         {:error, reason}
     end
   end
@@ -350,6 +362,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
           reason: reason,
           session_id: session_id
         )
+
         {:error, reason}
     end
   end
@@ -359,6 +372,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
       event_type: event_type,
       event_id: event["id"]
     )
+
     :ok
   end
 
@@ -411,6 +425,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
             if updated_order.status != order.status do
               broadcast_order_update(updated_order)
             end
+
             :ok
 
           {:error, reason} ->
@@ -419,6 +434,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
               payment_intent_id: payment_intent_id,
               reason: inspect(reason)
             )
+
             {:error, "Order sync failed"}
         end
 
@@ -426,13 +442,16 @@ defmodule EventasaurusWeb.StripeWebhookController do
         Logger.warning("No order found for payment intent",
           payment_intent_id: payment_intent_id
         )
-        :ok  # Not an error - might be a different payment
+
+        # Not an error - might be a different payment
+        :ok
 
       {:error, reason} ->
         Logger.error("Error finding order for payment intent",
           payment_intent_id: payment_intent_id,
           reason: inspect(reason)
         )
+
         {:error, "Database error"}
     end
   rescue
@@ -442,10 +461,9 @@ defmodule EventasaurusWeb.StripeWebhookController do
         error: inspect(error),
         stacktrace: Exception.format_stacktrace(__STACKTRACE__)
       )
+
       {:error, "Processing exception"}
   end
-
-
 
   defp process_checkout_session_completed(session_id, session) do
     case find_order_by_session_id(session_id) do
@@ -464,6 +482,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
             if updated_order.status != order.status do
               broadcast_order_update(updated_order)
             end
+
             :ok
 
           {:error, reason} ->
@@ -472,6 +491,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
               session_id: session_id,
               reason: inspect(reason)
             )
+
             {:error, "Order sync failed"}
         end
 
@@ -479,13 +499,16 @@ defmodule EventasaurusWeb.StripeWebhookController do
         Logger.warning("No order found for checkout session",
           session_id: session_id
         )
-        :ok  # Not an error - might be a different checkout
+
+        # Not an error - might be a different checkout
+        :ok
 
       {:error, reason} ->
         Logger.error("Error finding order for checkout session",
           session_id: session_id,
           reason: inspect(reason)
         )
+
         {:error, "Database error"}
     end
   rescue
@@ -495,6 +518,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
         error: inspect(error),
         stacktrace: Exception.format_stacktrace(__STACKTRACE__)
       )
+
       {:error, "Processing exception"}
   end
 
@@ -519,6 +543,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
         session_id: session_id,
         error: inspect(error)
       )
+
       {:error, error}
   end
 
@@ -533,6 +558,7 @@ defmodule EventasaurusWeb.StripeWebhookController do
         payment_intent_id: payment_intent_id,
         error: inspect(error)
       )
+
       {:error, error}
   end
 
@@ -550,15 +576,17 @@ defmodule EventasaurusWeb.StripeWebhookController do
       )
   end
 
-    defp check_idempotency(event_id) do
+  defp check_idempotency(event_id) do
     # Ensure ETS table exists
     unless :ets.whereis(@idempotency_table) != :undefined do
       :ets.new(@idempotency_table, [:set, :public, :named_table])
     end
 
     case :ets.lookup(@idempotency_table, event_id) do
-      [] -> :ok  # Event not seen before
-      [_] -> {:error, :duplicate}  # Event already processed
+      # Event not seen before
+      [] -> :ok
+      # Event already processed
+      [_] -> {:error, :duplicate}
     end
   end
 
@@ -580,7 +608,8 @@ defmodule EventasaurusWeb.StripeWebhookController do
   defp cleanup_old_idempotency_entries do
     # Only cleanup occasionally to avoid performance impact
     if :rand.uniform(100) == 1 do
-      cutoff_time = System.system_time(:second) - 86_400  # 24 hours ago
+      # 24 hours ago
+      cutoff_time = System.system_time(:second) - 86_400
 
       # Delete old entries
       :ets.select_delete(@idempotency_table, [
@@ -594,8 +623,10 @@ defmodule EventasaurusWeb.StripeWebhookController do
       nil ->
         Logger.error("STRIPE_WEBHOOK_SECRET environment variable is not set")
         raise "STRIPE_WEBHOOK_SECRET environment variable is not set"
+
       secret when is_binary(secret) and secret != "" ->
         secret
+
       _ ->
         Logger.error("STRIPE_WEBHOOK_SECRET environment variable is empty")
         raise "STRIPE_WEBHOOK_SECRET environment variable is empty"

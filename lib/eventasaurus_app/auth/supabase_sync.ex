@@ -47,6 +47,7 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
               case result do
                 {:ok, user} ->
                   Logger.info("Successfully created new user", %{user_id: user.id})
+
                 {:error, changeset} ->
                   Logger.error("Failed to create new user", %{errors: inspect(changeset.errors)})
               end
@@ -60,11 +61,13 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
                 user_id: existing_user.id,
                 email_domain: email |> String.split("@") |> List.last()
               })
+
               result = update_user_from_supabase(existing_user, supabase_user, true)
 
               case result do
                 {:ok, user} ->
                   Logger.info("Successfully updated user with Supabase ID", %{user_id: user.id})
+
                 {:error, changeset} ->
                   Logger.error("Failed to update user with Supabase ID", %{
                     user_id: existing_user.id,
@@ -83,6 +86,7 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
           case result do
             {:ok, updated_user} ->
               Logger.debug("Successfully updated existing user", %{user_id: updated_user.id})
+
             {:error, changeset} ->
               Logger.error("Failed to update existing user", %{
                 user_id: user.id,
@@ -112,11 +116,12 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
       name: extract_name_from_supabase(supabase_user)
     }
 
-    user_params = if update_id do
-      Map.put(base_params, :supabase_id, supabase_user["id"])
-    else
-      base_params
-    end
+    user_params =
+      if update_id do
+        Map.put(base_params, :supabase_id, supabase_user["id"])
+      else
+        base_params
+      end
 
     Accounts.update_user(user, user_params)
   end

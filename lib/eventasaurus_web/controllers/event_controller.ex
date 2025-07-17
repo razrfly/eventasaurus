@@ -27,8 +27,9 @@ defmodule EventasaurusWeb.EventController do
               organizers = Events.list_event_organizers(event)
 
               # Load participants (guests) for the event
-              participants = Events.list_event_participants(event)
-                            |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
+              participants =
+                Events.list_event_participants(event)
+                |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
 
               # Legacy polling data removed - using generic polling system
 
@@ -175,11 +176,12 @@ defmodule EventasaurusWeb.EventController do
             if Events.user_can_manage_event?(user, event) do
               case Events.auto_correct_event_status(event) do
                 {:ok, corrected_event} ->
-                  message = if corrected_event.status != event.status do
-                    "Event status corrected from #{event.status} to #{corrected_event.status}"
-                  else
-                    "Event status is already correct"
-                  end
+                  message =
+                    if corrected_event.status != event.status do
+                      "Event status corrected from #{event.status} to #{corrected_event.status}"
+                    else
+                      "Event status is already correct"
+                    end
 
                   conn
                   |> put_flash(:info, message)
@@ -215,7 +217,6 @@ defmodule EventasaurusWeb.EventController do
          {:ok, start_at} <- parse_datetime(params["start_at"]),
          opts <- build_pick_date_opts(params),
          {:ok, updated_event} <- Events.pick_date(event, start_at, opts) do
-
       conn
       |> json(%{
         success: true,
@@ -252,7 +253,6 @@ defmodule EventasaurusWeb.EventController do
     with {:ok, event} <- get_event_with_auth(conn, slug),
          {:ok, polling_deadline} <- parse_datetime(polling_deadline_str),
          {:ok, updated_event} <- Events.enable_polling(event, polling_deadline) do
-
       conn
       |> json(%{
         success: true,
@@ -296,7 +296,6 @@ defmodule EventasaurusWeb.EventController do
          {threshold_count, ""} <- Integer.parse(threshold_count_str),
          true <- threshold_count > 0,
          {:ok, updated_event} <- Events.set_threshold(event, threshold_count) do
-
       conn
       |> json(%{
         success: true,
@@ -344,7 +343,6 @@ defmodule EventasaurusWeb.EventController do
     with {:ok, event} <- get_event_with_auth(conn, slug),
          ticketing_options <- Map.get(params, "ticketing_options", %{}),
          {:ok, updated_event} <- Events.enable_ticketing(event, ticketing_options) do
-
       conn
       |> json(%{
         success: true,
@@ -376,7 +374,6 @@ defmodule EventasaurusWeb.EventController do
     with {:ok, event} <- get_event_with_auth(conn, slug),
          details <- extract_event_details(params),
          {:ok, updated_event} <- Events.add_details(event, details) do
-
       conn
       |> json(%{
         success: true,
@@ -406,7 +403,6 @@ defmodule EventasaurusWeb.EventController do
   def publish(conn, %{"slug" => slug}) do
     with {:ok, event} <- get_event_with_auth(conn, slug),
          {:ok, updated_event} <- Events.publish_event(event) do
-
       conn
       |> json(%{
         success: true,
@@ -499,10 +495,12 @@ defmodule EventasaurusWeb.EventController do
         })
 
       custom_fields when is_list(custom_fields) ->
-        custom_data = custom_fields
-        |> Enum.reduce(%{}, fn field, acc ->
-          Map.put(acc, field, Map.get(event, field))
-        end)
+        custom_data =
+          custom_fields
+          |> Enum.reduce(%{}, fn field, acc ->
+            Map.put(acc, field, Map.get(event, field))
+          end)
+
         Map.merge(base_fields, custom_data)
     end
   end
@@ -533,30 +531,43 @@ defmodule EventasaurusWeb.EventController do
       {:error, _} -> {:error, :invalid_datetime}
     end
   end
+
   defp parse_datetime(_), do: {:error, :invalid_datetime}
 
   defp build_pick_date_opts(params) do
     opts = []
 
-    opts = case params["ends_at"] do
-      ends_at_str when is_binary(ends_at_str) ->
-        case parse_datetime(ends_at_str) do
-          {:ok, ends_at} -> Keyword.put(opts, :ends_at, ends_at)
-          {:error, _} -> opts
-        end
-      _ -> opts
-    end
+    opts =
+      case params["ends_at"] do
+        ends_at_str when is_binary(ends_at_str) ->
+          case parse_datetime(ends_at_str) do
+            {:ok, ends_at} -> Keyword.put(opts, :ends_at, ends_at)
+            {:error, _} -> opts
+          end
 
-    opts = case params["timezone"] do
-      timezone when is_binary(timezone) -> Keyword.put(opts, :timezone, timezone)
-      _ -> opts
-    end
+        _ ->
+          opts
+      end
+
+    opts =
+      case params["timezone"] do
+        timezone when is_binary(timezone) -> Keyword.put(opts, :timezone, timezone)
+        _ -> opts
+      end
 
     opts
   end
 
   defp extract_event_details(params) do
-    allowed_fields = ["title", "description", "tagline", "cover_image_url", "theme", "taxation_type"]
+    allowed_fields = [
+      "title",
+      "description",
+      "tagline",
+      "cover_image_url",
+      "theme",
+      "taxation_type"
+    ]
+
     atom_map = %{
       "title" => :title,
       "description" => :description,
@@ -585,9 +596,11 @@ defmodule EventasaurusWeb.EventController do
   # Helper function to ensure we have a proper User struct
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%Accounts.User{} = user), do: {:ok, user}
+
   defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
     Accounts.find_or_create_from_supabase(supabase_user)
   end
+
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   ## Generic Participant Status Management API Actions
@@ -600,6 +613,7 @@ defmodule EventasaurusWeb.EventController do
   """
   def update_participant_status(conn, %{"slug" => slug} = params) do
     status = params["status"]
+
     case Events.get_event_by_slug(slug) do
       nil ->
         conn
@@ -610,7 +624,14 @@ defmodule EventasaurusWeb.EventController do
         case ensure_user_struct(conn.assigns.auth_user) do
           {:ok, user} ->
             # Validate status is a valid EventParticipant status
-            valid_statuses = ["pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"]
+            valid_statuses = [
+              "pending",
+              "accepted",
+              "declined",
+              "cancelled",
+              "confirmed_with_order",
+              "interested"
+            ]
 
             if status in valid_statuses do
               status_atom = String.to_atom(status)
@@ -636,12 +657,17 @@ defmodule EventasaurusWeb.EventController do
                 {:error, changeset} ->
                   conn
                   |> put_status(:unprocessable_entity)
-                  |> json(%{error: "Unable to update participant status", details: format_changeset_errors(changeset)})
+                  |> json(%{
+                    error: "Unable to update participant status",
+                    details: format_changeset_errors(changeset)
+                  })
               end
             else
               conn
               |> put_status(:bad_request)
-              |> json(%{error: "Invalid status. Valid statuses are: #{Enum.join(valid_statuses, ", ")}"})
+              |> json(%{
+                error: "Invalid status. Valid statuses are: #{Enum.join(valid_statuses, ", ")}"
+              })
             end
 
           {:error, _} ->
@@ -669,10 +695,11 @@ defmodule EventasaurusWeb.EventController do
         case ensure_user_struct(conn.assigns.auth_user) do
           {:ok, user} ->
             # Optional status filter for removal
-            status_filter = case params["status"] do
-              status when is_binary(status) -> String.to_atom(status)
-              _ -> nil
-            end
+            status_filter =
+              case params["status"] do
+                status when is_binary(status) -> String.to_atom(status)
+                _ -> nil
+              end
 
             case Events.remove_participant_status(event, user, status_filter) do
               {:ok, :removed} ->
@@ -775,7 +802,14 @@ defmodule EventasaurusWeb.EventController do
           {:ok, user} ->
             if Events.user_can_manage_event?(user, event) do
               # Validate status
-              valid_statuses = ["pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"]
+              valid_statuses = [
+                "pending",
+                "accepted",
+                "declined",
+                "cancelled",
+                "confirmed_with_order",
+                "interested"
+              ]
 
               if status in valid_statuses do
                 status_atom = String.to_atom(status)
@@ -783,7 +817,6 @@ defmodule EventasaurusWeb.EventController do
                 # Parse pagination parameters safely
                 with {:ok, page} <- safe_parse_integer(Map.get(params, "page", "1")),
                      {:ok, per_page} <- safe_parse_integer(Map.get(params, "per_page", "20")) do
-
                   # Validate pagination parameters
                   page = max(1, page)
                   per_page = min(100, max(1, per_page))
@@ -793,19 +826,21 @@ defmodule EventasaurusWeb.EventController do
                   total_pages = ceil(total_count / per_page)
 
                   # Get paginated participants directly from database
-                  participants = Events.list_participants_by_status(event, status_atom, page, per_page)
+                  participants =
+                    Events.list_participants_by_status(event, status_atom, page, per_page)
 
-                  paginated_participants = participants
-                                        |> Enum.map(fn participant ->
-                                          %{
-                                            id: participant.user.id,
-                                            name: participant.user.name,
-                                            email: participant.user.email,
-                                            status: status,
-                                            updated_at: participant.updated_at,
-                                            metadata: participant.metadata
-                                          }
-                                        end)
+                  paginated_participants =
+                    participants
+                    |> Enum.map(fn participant ->
+                      %{
+                        id: participant.user.id,
+                        name: participant.user.name,
+                        email: participant.user.email,
+                        status: status,
+                        updated_at: participant.updated_at,
+                        metadata: participant.metadata
+                      }
+                    end)
 
                   conn
                   |> json(%{
@@ -825,12 +860,17 @@ defmodule EventasaurusWeb.EventController do
                   {:error, _} ->
                     conn
                     |> put_status(:bad_request)
-                    |> json(%{error: "Invalid pagination parameters. Please provide valid integers for 'page' and 'per_page'."})
+                    |> json(%{
+                      error:
+                        "Invalid pagination parameters. Please provide valid integers for 'page' and 'per_page'."
+                    })
                 end
               else
                 conn
                 |> put_status(:bad_request)
-                |> json(%{error: "Invalid status. Valid statuses are: #{Enum.join(valid_statuses, ", ")}"})
+                |> json(%{
+                  error: "Invalid status. Valid statuses are: #{Enum.join(valid_statuses, ", ")}"
+                })
               end
             else
               conn
@@ -870,7 +910,8 @@ defmodule EventasaurusWeb.EventController do
                 data: %{
                   analytics: analytics,
                   trends: %{
-                    daily_changes: [] # Placeholder - can be enhanced with actual daily tracking
+                    # Placeholder - can be enhanced with actual daily tracking
+                    daily_changes: []
                   }
                 }
               })
@@ -895,6 +936,7 @@ defmodule EventasaurusWeb.EventController do
       _ -> {:error, :invalid_integer}
     end
   end
+
   defp safe_parse_integer(value) when is_integer(value), do: {:ok, value}
   defp safe_parse_integer(_), do: {:error, :invalid_integer}
 end

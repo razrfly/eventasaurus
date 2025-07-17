@@ -18,8 +18,10 @@ defmodule EventasaurusWeb.Plugs.RateLimitPlug do
   end
 
   def call(conn, opts) do
-    limit = Keyword.get(opts, :limit, 100)  # requests per window
-    window = Keyword.get(opts, :window, 60_000)  # window in milliseconds (1 minute)
+    # requests per window
+    limit = Keyword.get(opts, :limit, 100)
+    # window in milliseconds (1 minute)
+    window = Keyword.get(opts, :window, 60_000)
 
     # Ensure table exists as a fallback
     ensure_table_exists()
@@ -64,10 +66,10 @@ defmodule EventasaurusWeb.Plugs.RateLimitPlug do
     window_start = current_time - window
 
     # Clean old entries and get current count
-    case :ets.lookup(@table_name, client_id) do
+    case safe_ets_lookup(@table_name, client_id) do
       [] ->
         # First request from this client
-        :ets.insert(@table_name, {client_id, [current_time]})
+        safe_ets_insert(@table_name, {client_id, [current_time]})
         :ok
 
       [{^client_id, timestamps}] ->
@@ -79,15 +81,48 @@ defmodule EventasaurusWeb.Plugs.RateLimitPlug do
         else
           # Add current timestamp and update
           new_timestamps = [current_time | recent_timestamps]
-          :ets.insert(@table_name, {client_id, new_timestamps})
+          safe_ets_insert(@table_name, {client_id, new_timestamps})
           :ok
         end
+
+      :error ->
+        # ETS table doesn't exist, allow the request
+        Logger.warning("Rate limit table unavailable, allowing request", client_id: client_id)
+        :ok
     end
   end
 
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip(ip) when is_binary(ip), do: ip
   defp format_ip(_), do: "unknown"
+
+  defp safe_ets_lookup(table, key) do
+    try do
+      :ets.lookup(table, key)
+    rescue
+      ArgumentError ->
+        # Table doesn't exist
+        :error
+    end
+  end
+
+  defp safe_ets_insert(table, data) do
+    try do
+      :ets.insert(table, data)
+    rescue
+      ArgumentError ->
+        # Table doesn't exist, create it and try again
+        ensure_table_exists()
+
+        try do
+          :ets.insert(table, data)
+        rescue
+          ArgumentError ->
+            # Still failed, give up
+            false
+        end
+    end
+  end
 
   defp ensure_table_exists do
     if :ets.whereis(@table_name) == :undefined do

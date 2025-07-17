@@ -3,10 +3,10 @@ defmodule EventasaurusApp.Events.EventUser do
   import Ecto.Changeset
 
   schema "event_users" do
-    field :role, :string
+    field(:role, :string)
 
-    belongs_to :event, EventasaurusApp.Events.Event
-    belongs_to :user, EventasaurusApp.Accounts.User
+    belongs_to(:event, EventasaurusApp.Events.Event)
+    belongs_to(:user, EventasaurusApp.Accounts.User)
 
     timestamps()
   end

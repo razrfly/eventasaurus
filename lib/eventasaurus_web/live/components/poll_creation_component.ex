@@ -40,10 +40,14 @@ defmodule EventasaurusWeb.PollCreationComponent do
   ]
 
   @voting_systems [
-    {"binary", "Yes/Maybe/No", "Quick consensus on individual options - great for simple decisions where participants might be unsure"},
-    {"approval", "Approval", "Select multiple acceptable options - perfect when you want to find all viable choices"},
-    {"ranked", "Ranked Choice", "Rank options in order of preference - ideal for finding the most preferred single option"},
-    {"star", "Star Rating", "Rate options from 1 to 5 stars - best for detailed feedback and comparison"}
+    {"binary", "Yes/Maybe/No",
+     "Quick consensus on individual options - great for simple decisions where participants might be unsure"},
+    {"approval", "Approval",
+     "Select multiple acceptable options - perfect when you want to find all viable choices"},
+    {"ranked", "Ranked Choice",
+     "Rank options in order of preference - ideal for finding the most preferred single option"},
+    {"star", "Star Rating",
+     "Rate options from 1 to 5 stars - best for detailed feedback and comparison"}
   ]
 
   @impl true
@@ -64,17 +68,18 @@ defmodule EventasaurusWeb.PollCreationComponent do
     is_editing = poll != nil
 
     # Create changeset
-    changeset = if is_editing do
-      Poll.changeset(poll, %{})
-    else
-      Poll.changeset(%Poll{}, %{
-        event_id: assigns.event.id,
-        created_by_id: assigns.user.id,
-        phase: "list_building",
-        poll_type: "custom",
-        voting_system: "binary"
-      })
-    end
+    changeset =
+      if is_editing do
+        Poll.changeset(poll, %{})
+      else
+        Poll.changeset(%Poll{}, %{
+          event_id: assigns.event.id,
+          created_by_id: assigns.user.id,
+          phase: "list_building",
+          poll_type: "custom",
+          voting_system: "binary"
+        })
+      end
 
     {:ok,
      socket
@@ -410,15 +415,17 @@ defmodule EventasaurusWeb.PollCreationComponent do
     {:noreply, assign(socket, :changeset, changeset)}
   end
 
-
-
   @impl true
   def handle_event("submit_poll", %{"poll" => poll_params}, socket) do
     socket = assign(socket, :loading, true)
 
     case save_poll(socket, poll_params) do
       {:ok, poll} ->
-        message = if socket.assigns.is_editing, do: "Poll updated successfully!", else: "Poll created successfully!"
+        message =
+          if socket.assigns.is_editing,
+            do: "Poll updated successfully!",
+            else: "Poll created successfully!"
+
         send(self(), {:poll_saved, poll, message})
         {:noreply, socket}
 
@@ -436,15 +443,19 @@ defmodule EventasaurusWeb.PollCreationComponent do
     poll = socket.assigns.poll || %Poll{}
 
     # Merge default values for new polls
-    poll_params = if socket.assigns.is_editing do
-      poll_params
-    else
-      Map.merge(%{
-        "event_id" => socket.assigns.event.id,
-        "created_by_id" => socket.assigns.user.id,
-        "phase" => "list_building"
-      }, poll_params)
-    end
+    poll_params =
+      if socket.assigns.is_editing do
+        poll_params
+      else
+        Map.merge(
+          %{
+            "event_id" => socket.assigns.event.id,
+            "created_by_id" => socket.assigns.user.id,
+            "phase" => "list_building"
+          },
+          poll_params
+        )
+      end
 
     Poll.changeset(poll, poll_params)
   end
@@ -454,11 +465,12 @@ defmodule EventasaurusWeb.PollCreationComponent do
       Events.update_poll(socket.assigns.poll, poll_params)
     else
       # Ensure required fields for new polls
-      poll_params = Map.merge(poll_params, %{
-        "event_id" => socket.assigns.event.id,
-        "created_by_id" => socket.assigns.user.id,
-        "phase" => "list_building"
-      })
+      poll_params =
+        Map.merge(poll_params, %{
+          "event_id" => socket.assigns.event.id,
+          "created_by_id" => socket.assigns.user.id,
+          "phase" => "list_building"
+        })
 
       Events.create_poll(poll_params)
     end
@@ -470,12 +482,14 @@ defmodule EventasaurusWeb.PollCreationComponent do
         datetime
         |> DateTime.to_naive()
         |> NaiveDateTime.to_iso8601()
-        |> String.slice(0, 16)  # Remove seconds for datetime-local input
+        # Remove seconds for datetime-local input
+        |> String.slice(0, 16)
 
-      nil -> ""
-      _ -> ""
+      nil ->
+        ""
+
+      _ ->
+        ""
     end
   end
-
-
 end

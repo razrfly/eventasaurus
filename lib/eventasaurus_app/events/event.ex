@@ -4,7 +4,7 @@ defmodule EventasaurusApp.Events.Event do
   alias Nanoid, as: NanoID
   alias EventasaurusApp.EventStateMachine
 
-    # Define state machine using Machinery
+  # Define state machine using Machinery
   use Machinery,
     field: :status,
     states: [:draft, :polling, :threshold, :confirmed, :canceled],
@@ -31,54 +31,66 @@ defmodule EventasaurusApp.Events.Event do
   def valid_taxation_types, do: @valid_taxation_types
 
   schema "events" do
-    field :title, :string
-    field :tagline, :string
-    field :description, :string
-    field :start_at, :utc_datetime
-    field :ends_at, :utc_datetime
-    field :timezone, :string
-    field :visibility, Ecto.Enum, values: [:public, :private], default: :public
-    field :slug, :string
-    field :cover_image_url, :string # for user uploads
-    field :external_image_data, :map # for Unsplash/TMDB images
-    field :rich_external_data, :map, default: %{} # for comprehensive external API data
-    field :status, Ecto.Enum, values: [:draft, :polling, :threshold, :confirmed, :canceled], default: :confirmed
-    field :polling_deadline, :utc_datetime
-    field :threshold_count, :integer
-    field :threshold_type, :string, default: "attendee_count"
-    field :threshold_revenue_cents, :integer
-    field :canceled_at, :utc_datetime
-    field :is_ticketed, :boolean, default: false
-    field :taxation_type, :string, default: "ticketless"
-    field :virtual_venue_url, :string # for virtual meeting URLs
+    field(:title, :string)
+    field(:tagline, :string)
+    field(:description, :string)
+    field(:start_at, :utc_datetime)
+    field(:ends_at, :utc_datetime)
+    field(:timezone, :string)
+    field(:visibility, Ecto.Enum, values: [:public, :private], default: :public)
+    field(:slug, :string)
+    # for user uploads
+    field(:cover_image_url, :string)
+    # for Unsplash/TMDB images
+    field(:external_image_data, :map)
+    # for comprehensive external API data
+    field(:rich_external_data, :map, default: %{})
+
+    field(:status, Ecto.Enum,
+      values: [:draft, :polling, :threshold, :confirmed, :canceled],
+      default: :confirmed
+    )
+
+    field(:polling_deadline, :utc_datetime)
+    field(:threshold_count, :integer)
+    field(:threshold_type, :string, default: "attendee_count")
+    field(:threshold_revenue_cents, :integer)
+    field(:canceled_at, :utc_datetime)
+    field(:is_ticketed, :boolean, default: false)
+    field(:taxation_type, :string, default: "ticketless")
+    # for virtual meeting URLs
+    field(:virtual_venue_url, :string)
 
     # Theme fields for the theming system
-    field :theme, Ecto.Enum,
+    field(:theme, Ecto.Enum,
       values: [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional],
       default: :minimal
-    field :theme_customizations, :map, default: %{}
+    )
+
+    field(:theme_customizations, :map, default: %{})
 
     # Virtual field for date polling validation
-    field :selected_poll_dates, :string, virtual: true
+    field(:selected_poll_dates, :string, virtual: true)
 
     # Virtual field for computed phase
-    field :computed_phase, :string, virtual: true
+    field(:computed_phase, :string, virtual: true)
 
     # Virtual flags for quick state checks
-    field :ended?, :boolean, virtual: true
-    field :can_sell_tickets?, :boolean, virtual: true
-    field :threshold_met?, :boolean, virtual: true
-    field :polling_ended?, :boolean, virtual: true
-    field :active_poll?, :boolean, virtual: true
+    field(:ended?, :boolean, virtual: true)
+    field(:can_sell_tickets?, :boolean, virtual: true)
+    field(:threshold_met?, :boolean, virtual: true)
+    field(:polling_ended?, :boolean, virtual: true)
+    field(:active_poll?, :boolean, virtual: true)
 
-    belongs_to :venue, EventasaurusApp.Venues.Venue
+    belongs_to(:venue, EventasaurusApp.Venues.Venue)
 
-    many_to_many :users, EventasaurusApp.Accounts.User,
+    many_to_many(:users, EventasaurusApp.Accounts.User,
       join_through: EventasaurusApp.Events.EventUser
+    )
 
-    has_many :tickets, EventasaurusApp.Events.Ticket, on_delete: :delete_all
-    has_many :orders, EventasaurusApp.Events.Order, on_delete: :delete_all
-    has_many :polls, EventasaurusApp.Events.Poll, on_delete: :delete_all
+    has_many(:tickets, EventasaurusApp.Events.Ticket, on_delete: :delete_all)
+    has_many(:orders, EventasaurusApp.Events.Order, on_delete: :delete_all)
+    has_many(:polls, EventasaurusApp.Events.Poll, on_delete: :delete_all)
 
     timestamps()
   end
@@ -89,11 +101,32 @@ defmodule EventasaurusApp.Events.Event do
     attrs = normalize_threshold_revenue_cents(attrs)
 
     event
-    |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
-                   :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
-                   :rich_external_data, :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
-                   :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
-                   :virtual_venue_url, :is_ticketed, :taxation_type])
+    |> cast(attrs, [
+      :title,
+      :tagline,
+      :description,
+      :start_at,
+      :ends_at,
+      :timezone,
+      :visibility,
+      :slug,
+      :cover_image_url,
+      :venue_id,
+      :external_image_data,
+      :rich_external_data,
+      :theme,
+      :theme_customizations,
+      :status,
+      :polling_deadline,
+      :threshold_count,
+      :threshold_type,
+      :threshold_revenue_cents,
+      :canceled_at,
+      :selected_poll_dates,
+      :virtual_venue_url,
+      :is_ticketed,
+      :taxation_type
+    ])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
     |> maybe_validate_start_at()
@@ -120,17 +153,24 @@ defmodule EventasaurusApp.Events.Event do
   # Helper function to normalize threshold_revenue_cents field
   defp normalize_threshold_revenue_cents(attrs) when is_map(attrs) do
     case Map.get(attrs, "threshold_revenue_cents") do
-      nil -> attrs
-      "" -> Map.put(attrs, "threshold_revenue_cents", nil)
+      nil ->
+        attrs
+
+      "" ->
+        Map.put(attrs, "threshold_revenue_cents", nil)
+
       value when is_binary(value) ->
         if String.trim(value) == "" do
           Map.put(attrs, "threshold_revenue_cents", nil)
         else
           attrs
         end
-      _ -> attrs
+
+      _ ->
+        attrs
     end
   end
+
   defp normalize_threshold_revenue_cents(attrs), do: attrs
 
   # Note: Transition logic is handled by Machinery state machine
@@ -138,8 +178,12 @@ defmodule EventasaurusApp.Events.Event do
 
   defp validate_status(changeset) do
     case get_field(changeset, :status) do
-      nil -> changeset
-      status when status in [:draft, :polling, :threshold, :confirmed, :canceled] -> changeset
+      nil ->
+        changeset
+
+      status when status in [:draft, :polling, :threshold, :confirmed, :canceled] ->
+        changeset
+
       _invalid_status ->
         valid_statuses_str = @valid_statuses |> Enum.map(&to_string/1) |> Enum.join(", ")
         add_error(changeset, :status, "must be one of: #{valid_statuses_str}")
@@ -150,8 +194,10 @@ defmodule EventasaurusApp.Events.Event do
     case get_field(changeset, :threshold_type) do
       nil ->
         put_change(changeset, :threshold_type, "attendee_count")
+
       threshold_type when threshold_type in @valid_threshold_types ->
         changeset
+
       _invalid_type ->
         valid_types_str = @valid_threshold_types |> Enum.join(", ")
         add_error(changeset, :threshold_type, "must be one of: #{valid_types_str}")
@@ -162,8 +208,10 @@ defmodule EventasaurusApp.Events.Event do
     case get_field(changeset, :taxation_type) do
       nil ->
         put_change(changeset, :taxation_type, "ticketless")
+
       taxation_type when taxation_type in @valid_taxation_types ->
         changeset
+
       _invalid_type ->
         valid_types_str = @valid_taxation_types |> Enum.join(", ")
         add_error(changeset, :taxation_type, "must be one of: #{valid_types_str}")
@@ -178,9 +226,11 @@ defmodule EventasaurusApp.Events.Event do
       # Ticketless events cannot have ticketing enabled
       {"ticketless", true} ->
         add_error(changeset, :is_ticketed, "must be false for ticketless events")
+
       # Contribution collections cannot have ticketing enabled
       {"contribution_collection", true} ->
         add_error(changeset, :is_ticketed, "must be false for contribution collection events")
+
       # All other combinations are valid
       _ ->
         changeset
@@ -197,7 +247,11 @@ defmodule EventasaurusApp.Events.Event do
     case {taxation_type, tickets_count} do
       # Cannot set to ticketless if tickets exist
       {"ticketless", count} when count > 0 ->
-        add_error(changeset, :taxation_type, "cannot be set to ticketless when tickets exist. Please delete all tickets first or choose a different taxation type.")
+        add_error(
+          changeset,
+          :taxation_type,
+          "cannot be set to ticketless when tickets exist. Please delete all tickets first or choose a different taxation type."
+        )
 
       # All other combinations are valid
       _ ->
@@ -207,8 +261,12 @@ defmodule EventasaurusApp.Events.Event do
 
   defp validate_threshold_revenue_cents(changeset) do
     case get_field(changeset, :threshold_revenue_cents) do
-      nil -> changeset
-      revenue when is_integer(revenue) and revenue >= 0 -> changeset
+      nil ->
+        changeset
+
+      revenue when is_integer(revenue) and revenue >= 0 ->
+        changeset
+
       _invalid_revenue ->
         add_error(changeset, :threshold_revenue_cents, "must be a non-negative integer")
     end
@@ -223,10 +281,18 @@ defmodule EventasaurusApp.Events.Event do
     case {status, threshold_type, threshold_count, threshold_revenue_cents} do
       # If status is threshold, we need appropriate threshold values
       {:threshold, "attendee_count", nil, _} ->
-        add_error(changeset, :threshold_count, "is required when threshold type is attendee_count")
+        add_error(
+          changeset,
+          :threshold_count,
+          "is required when threshold type is attendee_count"
+        )
 
       {:threshold, "revenue", _, nil} ->
-        add_error(changeset, :threshold_revenue_cents, "is required when threshold type is revenue")
+        add_error(
+          changeset,
+          :threshold_revenue_cents,
+          "is required when threshold type is revenue"
+        )
 
       {:threshold, "both", nil, _} ->
         add_error(changeset, :threshold_count, "is required when threshold type is both")
@@ -246,13 +312,16 @@ defmodule EventasaurusApp.Events.Event do
     case {status, polling_deadline} do
       {:polling, nil} ->
         add_error(changeset, :polling_deadline, "is required when status is polling")
+
       {:polling, deadline} when not is_nil(deadline) ->
         if DateTime.compare(deadline, DateTime.utc_now()) == :gt do
           changeset
         else
           add_error(changeset, :polling_deadline, "must be in the future")
         end
-      _ -> changeset
+
+      _ ->
+        changeset
     end
   end
 
@@ -265,14 +334,19 @@ defmodule EventasaurusApp.Events.Event do
       # For threshold events with revenue-only type, threshold_count is not required
       {:threshold, "revenue", _} ->
         changeset
+
       # For attendee_count and both types, threshold_count is required
       {:threshold, type, nil} when type in ["attendee_count", "both"] ->
         add_error(changeset, :threshold_count, "is required when threshold type is #{type}")
+
       {:threshold, _type, count} when is_integer(count) and count > 0 ->
         changeset
+
       {:threshold, _type, _} ->
         add_error(changeset, :threshold_count, "must be a positive integer")
-      _ -> changeset
+
+      _ ->
+        changeset
     end
   end
 
@@ -284,7 +358,9 @@ defmodule EventasaurusApp.Events.Event do
       {:canceled, nil} ->
         # Auto-set canceled_at if not provided
         put_change(changeset, :canceled_at, DateTime.utc_now())
-      _ -> changeset
+
+      _ ->
+        changeset
     end
   end
 
@@ -298,6 +374,7 @@ defmodule EventasaurusApp.Events.Event do
     case get_field(changeset, :status) do
       status when status in [:confirmed, :threshold] ->
         validate_required(changeset, [:start_at])
+
       _ ->
         changeset
     end
@@ -305,7 +382,9 @@ defmodule EventasaurusApp.Events.Event do
 
   defp validate_slug(changeset) do
     case get_field(changeset, :slug) do
-      nil -> changeset
+      nil ->
+        changeset
+
       slug ->
         if Regex.match?(~r/^[a-z0-9\-]+$/, slug) do
           changeset
@@ -319,23 +398,25 @@ defmodule EventasaurusApp.Events.Event do
     case get_field(changeset, :slug) do
       nil ->
         # Generate a random slug - first try to use Nanoid (which should be in deps)
-        slug = try do
-          # Generate random slug with 10 characters using the specified alphabet
-          NanoID.generate(10, "0123456789abcdefghijklmnopqrstuvwxyz")
-        rescue
-          _ ->
-            # Fallback to a custom implementation if Nanoid is unavailable
-            alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+        slug =
+          try do
+            # Generate random slug with 10 characters using the specified alphabet
+            NanoID.generate(10, "0123456789abcdefghijklmnopqrstuvwxyz")
+          rescue
+            _ ->
+              # Fallback to a custom implementation if Nanoid is unavailable
+              alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
 
-            1..10
-            |> Enum.map(fn _ ->
-              :rand.uniform(String.length(alphabet)) - 1
-              |> then(fn idx -> String.at(alphabet, idx) end)
-            end)
-            |> Enum.join("")
-        end
+              1..10
+              |> Enum.map(fn _ ->
+                (:rand.uniform(String.length(alphabet)) - 1)
+                |> then(fn idx -> String.at(alphabet, idx) end)
+              end)
+              |> Enum.join("")
+          end
 
         put_change(changeset, :slug, slug)
+
       _ ->
         changeset
     end
@@ -343,8 +424,12 @@ defmodule EventasaurusApp.Events.Event do
 
   defp validate_virtual_venue_url(changeset) do
     case get_change(changeset, :virtual_venue_url) do
-      nil -> changeset
-      "" -> changeset
+      nil ->
+        changeset
+
+      "" ->
+        changeset
+
       url ->
         if valid_url?(url) do
           changeset
@@ -385,6 +470,7 @@ defmodule EventasaurusApp.Events.Event do
       true
   """
   def ended?(%__MODULE__{ends_at: nil}), do: false
+
   def ended?(%__MODULE__{ends_at: ends_at}) do
     DateTime.compare(DateTime.utc_now(), ends_at) == :gt
   end
@@ -401,6 +487,7 @@ defmodule EventasaurusApp.Events.Event do
   def can_sell_tickets?(%__MODULE__{status: :confirmed} = event) do
     EventStateMachine.is_ticketed?(event)
   end
+
   def can_sell_tickets?(%__MODULE__{}), do: false
 
   @doc """
@@ -426,6 +513,7 @@ defmodule EventasaurusApp.Events.Event do
       true
   """
   def polling_ended?(%__MODULE__{polling_deadline: nil}), do: false
+
   def polling_ended?(%__MODULE__{polling_deadline: deadline}) do
     DateTime.compare(DateTime.utc_now(), deadline) == :gt
   end
@@ -441,9 +529,11 @@ defmodule EventasaurusApp.Events.Event do
       true
   """
   def active_poll?(%__MODULE__{status: :polling, polling_deadline: nil}), do: false
+
   def active_poll?(%__MODULE__{status: :polling} = event) do
     not polling_ended?(event)
   end
+
   def active_poll?(%__MODULE__{}), do: false
 
   @doc """
@@ -458,12 +548,13 @@ defmodule EventasaurusApp.Events.Event do
       # Returns event with all flag fields populated
   """
   def with_virtual_flags(%__MODULE__{} = event) do
-    %{event |
-      ended?: ended?(event),
-      can_sell_tickets?: can_sell_tickets?(event),
-      threshold_met?: threshold_met?(event),
-      polling_ended?: polling_ended?(event),
-      active_poll?: active_poll?(event)
+    %{
+      event
+      | ended?: ended?(event),
+        can_sell_tickets?: can_sell_tickets?(event),
+        threshold_met?: threshold_met?(event),
+        polling_ended?: polling_ended?(event),
+        active_poll?: active_poll?(event)
     }
   end
 
@@ -498,17 +589,18 @@ defmodule EventasaurusApp.Events.Event do
   """
   def changeset_with_inferred_status(event, attrs) do
     # Auto-infer status if not explicitly provided
-    attrs_with_status = if Map.has_key?(attrs, :status) or Map.has_key?(attrs, "status") do
-      attrs
-    else
-      inferred_status = EventStateMachine.infer_status(attrs)
-      # Use atom keys for direct API calls, string keys for form data
-      if is_atom(Map.keys(attrs) |> List.first()) do
-        Map.put(attrs, :status, inferred_status)
+    attrs_with_status =
+      if Map.has_key?(attrs, :status) or Map.has_key?(attrs, "status") do
+        attrs
       else
-        Map.put(attrs, "status", to_string(inferred_status))
+        inferred_status = EventStateMachine.infer_status(attrs)
+        # Use atom keys for direct API calls, string keys for form data
+        if is_atom(Map.keys(attrs) |> List.first()) do
+          Map.put(attrs, :status, inferred_status)
+        else
+          Map.put(attrs, "status", to_string(inferred_status))
+        end
       end
-    end
 
     changeset(event, attrs_with_status)
   end
@@ -544,9 +636,11 @@ defmodule EventasaurusApp.Events.Event do
       nil
   """
   def get_tmdb_data(%__MODULE__{rich_external_data: nil}), do: nil
+
   def get_tmdb_data(%__MODULE__{rich_external_data: data}) when is_map(data) do
     Map.get(data, "tmdb")
   end
+
   def get_tmdb_data(%__MODULE__{}), do: nil
 
   @doc """
@@ -596,9 +690,12 @@ defmodule EventasaurusApp.Events.Event do
       %{"id" => "abc123"}
   """
   def get_provider_data(%__MODULE__{rich_external_data: nil}, _provider), do: nil
-  def get_provider_data(%__MODULE__{rich_external_data: data}, provider) when is_map(data) and is_binary(provider) do
+
+  def get_provider_data(%__MODULE__{rich_external_data: data}, provider)
+      when is_map(data) and is_binary(provider) do
     Map.get(data, provider)
   end
+
   def get_provider_data(%__MODULE__{}, _provider), do: nil
 
   @doc """
@@ -610,7 +707,8 @@ defmodule EventasaurusApp.Events.Event do
       iex> Event.put_provider_data(event, "spotify", %{"id" => "abc123"})
       %Event{rich_external_data: %{"spotify" => %{"id" => "abc123"}}}
   """
-  def put_provider_data(%__MODULE__{} = event, provider, data) when is_binary(provider) and is_map(data) do
+  def put_provider_data(%__MODULE__{} = event, provider, data)
+      when is_binary(provider) and is_map(data) do
     rich_data = event.rich_external_data || %{}
     updated_data = Map.put(rich_data, provider, data)
     %{event | rich_external_data: updated_data}
@@ -645,9 +743,11 @@ defmodule EventasaurusApp.Events.Event do
       false
   """
   def has_external_data?(%__MODULE__{rich_external_data: nil}), do: false
+
   def has_external_data?(%__MODULE__{rich_external_data: data}) when is_map(data) do
     map_size(data) > 0
   end
+
   def has_external_data?(%__MODULE__{}), do: false
 
   @doc """
@@ -660,8 +760,10 @@ defmodule EventasaurusApp.Events.Event do
       ["tmdb", "spotify"]
   """
   def list_providers(%__MODULE__{rich_external_data: nil}), do: []
+
   def list_providers(%__MODULE__{rich_external_data: data}) when is_map(data) do
     Map.keys(data)
   end
+
   def list_providers(%__MODULE__{}), do: []
 end

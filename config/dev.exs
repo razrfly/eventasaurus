@@ -14,9 +14,13 @@ config :eventasaurus, :environment, :dev
 # Set development-specific Supabase configuration
 # This overrides the main supabase.exs config for development
 config :eventasaurus, :supabase,
-  url: "http://127.0.0.1:54321",  # Local Supabase URL
-  api_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",  # Default anon key for local Supabase
-  database_url: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",  # Local DB - NOTE: PostgreSQL runs on port 54322
+  # Local Supabase URL
+  url: "http://127.0.0.1:54321",
+  # Default anon key for local Supabase
+  api_key:
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+  # Local DB - NOTE: PostgreSQL runs on port 54322
+  database_url: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
   auth: %{
     site_url: "http://localhost:4000",
     additional_redirect_urls: ["http://localhost:4000/auth/callback"],
@@ -40,8 +44,6 @@ config :eventasaurus, :posthog,
 
 # Configure base URL for email links
 config :eventasaurus, :base_url, "http://localhost:4000"
-
-
 
 config :eventasaurus, EventasaurusWeb.Endpoint,
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.

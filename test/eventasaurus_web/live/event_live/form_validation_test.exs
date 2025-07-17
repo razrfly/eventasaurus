@@ -44,29 +44,33 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       ]
 
       for test_data <- test_cases do
-        log_output = capture_log(fn ->
-          result = view
-          |> form("form[data-test-id='event-form']", test_data)
-          |> render_submit()
+        log_output =
+          capture_log(fn ->
+            result =
+              view
+              |> form("form[data-test-id='event-form']", test_data)
+              |> render_submit()
 
-          # Should either show validation errors or prevent creation
-          case result do
-            {:error, {:redirect, _}} ->
-              # If it redirected, check if event was actually created
-              events_count_before = length(EventasaurusApp.Events.list_events())
-              events = EventasaurusApp.Events.list_events()
+            # Should either show validation errors or prevent creation
+            case result do
+              {:error, {:redirect, _}} ->
+                # If it redirected, check if event was actually created
+                events_count_before = length(EventasaurusApp.Events.list_events())
+                events = EventasaurusApp.Events.list_events()
 
-              if length(events) > events_count_before do
-                # Event was created despite missing field - this may be acceptable
-                # depending on form behavior, but verify basic data integrity
-                [event] = Enum.take(events, -1)  # Get the last created event
-                assert is_binary(event.title) or is_nil(event.title)
-              end
-            html when is_binary(html) ->
-              # Stayed on form - should have form element
-              assert has_element?(view, "form[data-test-id='event-form']")
-          end
-        end)
+                if length(events) > events_count_before do
+                  # Event was created despite missing field - this may be acceptable
+                  # depending on form behavior, but verify basic data integrity
+                  # Get the last created event
+                  [event] = Enum.take(events, -1)
+                  assert is_binary(event.title) or is_nil(event.title)
+                end
+
+              html when is_binary(html) ->
+                # Stayed on form - should have form element
+                assert has_element?(view, "form[data-test-id='event-form']")
+            end
+          end)
 
         # Verify validation was triggered (either in logs or form stayed)
         assert is_binary(log_output), "Expected log output from validation attempt"
@@ -80,22 +84,25 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       # Submit completely empty form
       empty_form = %{}
 
-      log_output = capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", empty_form)
-        |> render_submit()
+      log_output =
+        capture_log(fn ->
+          result =
+            view
+            |> form("form[data-test-id='event-form']", empty_form)
+            |> render_submit()
 
-        case result do
-          {:error, {:redirect, _}} ->
-            # Either validation prevented creation or form has defaults
-            events = EventasaurusApp.Events.list_events()
-            # Accept either outcome - depends on form behavior
-            assert is_list(events)
-          html when is_binary(html) ->
-            # Form displayed - should maintain structure
-            assert has_element?(view, "form[data-test-id='event-form']")
-        end
-      end)
+          case result do
+            {:error, {:redirect, _}} ->
+              # Either validation prevented creation or form has defaults
+              events = EventasaurusApp.Events.list_events()
+              # Accept either outcome - depends on form behavior
+              assert is_list(events)
+
+            html when is_binary(html) ->
+              # Form displayed - should maintain structure
+              assert has_element?(view, "form[data-test-id='event-form']")
+          end
+        end)
 
       # Should have some kind of validation activity
       assert is_binary(log_output)
@@ -107,25 +114,30 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
       # Submit with minimal invalid data
       invalid_data = %{
-        "event[title]" => "",  # Empty title
-        "event[timezone]" => "" # Empty timezone
+        # Empty title
+        "event[title]" => "",
+        # Empty timezone
+        "event[timezone]" => ""
       }
 
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", invalid_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", invalid_data)
+          |> render_submit()
 
         # Should handle validation appropriately
         case result do
           {:error, {:redirect, _}} ->
             # May redirect - check if validation actually prevented creation
             assert true
+
           html when is_binary(html) ->
             # Stayed on form - verify form is still functional
             assert has_element?(view, "form[data-test-id='event-form']")
+
             assert has_element?(view, "input[name='event[title]']") or
-                   has_element?(view, "input[name=\"event[title]\"]")
+                     has_element?(view, "input[name=\"event[title]\"]")
         end
       end)
 
@@ -136,10 +148,12 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
   describe "Edit Event Form Validation" do
     test "preserves event data during validation errors", %{conn: conn} do
-      original_event = insert(:event,
-        title: "Original Title",
-        tagline: "Original Tagline"
-      )
+      original_event =
+        insert(:event,
+          title: "Original Title",
+          tagline: "Original Tagline"
+        )
+
       {conn, _user} = log_in_event_organizer(conn, original_event)
 
       {:ok, view, html} = live(conn, ~p"/events/#{original_event.slug}/edit")
@@ -149,14 +163,16 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
       # Submit with validation issue
       invalid_data = %{
-        "event[title]" => "",  # Clear title
+        # Clear title
+        "event[title]" => "",
         "event[tagline]" => "Updated Tagline"
       }
 
       capture_log(fn ->
-        _result = view
-        |> form("form[data-test-id='event-form']", invalid_data)
-        |> render_submit()
+        _result =
+          view
+          |> form("form[data-test-id='event-form']", invalid_data)
+          |> render_submit()
       end)
 
       # Original event should remain unchanged in database
@@ -177,9 +193,10 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       }
 
       capture_log(fn ->
-        _result = view
-        |> form("form[data-test-id='event-form']", empty_data)
-        |> render_submit()
+        _result =
+          view
+          |> form("form[data-test-id='event-form']", empty_data)
+          |> render_submit()
       end)
 
       # Form should still be accessible and functional
@@ -202,15 +219,17 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       }
 
       capture_log(fn ->
-        _result = view
-        |> form("form[data-test-id='event-form']", test_data)
-        |> render_submit()
+        _result =
+          view
+          |> form("form[data-test-id='event-form']", test_data)
+          |> render_submit()
       end)
 
       # Form should remain accessible
       assert has_element?(view, "form[data-test-id='event-form']")
+
       assert has_element?(view, "input[name='event[title]']") or
-             has_element?(view, "input[name=\"event[title]\"]")
+               has_element?(view, "input[name=\"event[title]\"]")
     end
 
     test "validation does not break form structure", %{conn: conn} do
@@ -220,14 +239,17 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       # Submit with mixed valid/invalid data
       mixed_data = %{
         "event[title]" => "Valid Title",
-        "event[timezone]" => "",  # May be invalid
-        "event[visibility]" => "public"  # Valid
+        # May be invalid
+        "event[timezone]" => "",
+        # Valid
+        "event[visibility]" => "public"
       }
 
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", mixed_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", mixed_data)
+          |> render_submit()
 
         case result do
           {:error, {:redirect, _}} ->
@@ -235,6 +257,7 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
             events = EventasaurusApp.Events.list_events()
             # Accept any outcome based on actual validation logic
             assert is_list(events)
+
           html when is_binary(html) ->
             # Stayed on form - should preserve structure
             assert has_element?(view, "form[data-test-id='event-form']")
@@ -260,9 +283,10 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
         "event[visibility]" => "public"
       }
 
-      result = view
-      |> form("form[data-test-id='event-form']", valid_data)
-      |> render_submit()
+      result =
+        view
+        |> form("form[data-test-id='event-form']", valid_data)
+        |> render_submit()
 
       # Should either redirect (success) or stay on form (for other reasons)
       case result do
@@ -273,6 +297,7 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
           assert length(events) >= 1
           event = List.last(events)
           assert event.title == "Complete Valid Event"
+
         html when is_binary(html) ->
           # If stayed on form, verify form is still functional
           assert has_element?(view, "form[data-test-id='event-form']")
@@ -348,17 +373,21 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
     test "edit form loads existing taxation_type value correctly", %{conn: conn} do
       # Create event with specific taxation_type
-      event = insert(:event,
-        title: "Existing Event",
-        taxation_type: "contribution_collection"
-      )
+      event =
+        insert(:event,
+          title: "Existing Event",
+          taxation_type: "contribution_collection"
+        )
+
       {conn, _user} = log_in_event_organizer(conn, event)
 
       {:ok, view, html} = live(conn, ~p"/events/#{event.slug}/edit")
 
       # Verify the form loads with existing taxation_type selected
       assert html =~ "taxation-type-selector"
-      assert element(view, "input[type='radio'][value='contribution_collection']") |> render() =~ "checked"
+
+      assert element(view, "input[type='radio'][value='contribution_collection']") |> render() =~
+               "checked"
 
       # Verify the other option is not selected
       refute element(view, "input[type='radio'][value='ticketed_event']") |> render() =~ "checked"
@@ -369,10 +398,12 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
     test "edit form allows changing taxation_type and saves correctly", %{conn: conn} do
       # Create event with one taxation type
-      event = insert(:event,
-        title: "Event to Update",
-        taxation_type: "ticketed_event"
-      )
+      event =
+        insert(:event,
+          title: "Event to Update",
+          taxation_type: "ticketed_event"
+        )
+
       {conn, _user} = log_in_event_organizer(conn, event)
 
       {:ok, view, _html} = live(conn, ~p"/events/#{event.slug}/edit")
@@ -403,7 +434,9 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
       # Change to contribution_collection via form data
       view
-      |> form("form[data-test-id='event-form']", %{"event[taxation_type]" => "contribution_collection"})
+      |> form("form[data-test-id='event-form']", %{
+        "event[taxation_type]" => "contribution_collection"
+      })
       |> render_change()
 
       # Verify the change took effect through form validation
@@ -435,14 +468,17 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
       # Submit form with missing required fields (but valid taxation_type)
       partial_data = %{
-        "event[title]" => "",  # Missing title should cause validation error
-        "event[taxation_type]" => "ticketed_event"  # Valid taxation type
+        # Missing title should cause validation error
+        "event[title]" => "",
+        # Valid taxation type
+        "event[taxation_type]" => "ticketed_event"
       }
 
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", partial_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", partial_data)
+          |> render_submit()
 
         case result do
           {:error, {:redirect, _}} ->
@@ -450,6 +486,7 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
             events = EventasaurusApp.Events.list_events()
             # Should not create event with missing title
             assert length(events) == 0
+
           html when is_binary(html) ->
             # Stayed on form due to validation errors
             assert has_element?(view, "form[data-test-id='event-form']")
@@ -477,7 +514,8 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
 
       # Check for proper form labeling
       assert html =~ "Event Taxation Classification"
-      assert html =~ "required" # Required field indicator
+      # Required field indicator
+      assert html =~ "required"
     end
 
     test "taxation_type integrates properly with form submission flow", %{conn: conn} do
@@ -516,7 +554,9 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
   end
 
   describe "taxation_type consistency enforcement" do
-    test "form submission automatically sets is_ticketed=false for contribution_collection", %{conn: conn} do
+    test "form submission automatically sets is_ticketed=false for contribution_collection", %{
+      conn: conn
+    } do
       {conn, _user} = register_and_log_in_user(conn)
       {:ok, view, _html} = live(conn, ~p"/events/new")
 
@@ -530,7 +570,8 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
         "event[ends_time]" => "21:00",
         "event[timezone]" => "America/Los_Angeles",
         "event[taxation_type]" => "contribution_collection",
-        "event[is_ticketed]" => "true"  # This should be automatically corrected
+        # This should be automatically corrected
+        "event[is_ticketed]" => "true"
       }
 
       view
@@ -543,7 +584,8 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       [event] = events
       assert event.title == "Test Contribution Event"
       assert event.taxation_type == "contribution_collection"
-      assert event.is_ticketed == false  # Should be automatically corrected
+      # Should be automatically corrected
+      assert event.is_ticketed == false
 
       # Should redirect to event show page
       assert_redirected(view, "/events/#{event.slug}")
@@ -576,11 +618,11 @@ defmodule EventasaurusWeb.EventLive.FormValidationTest do
       [event] = events
       assert event.title == "Test Ticketed Event"
       assert event.taxation_type == "ticketed_event"
-      assert event.is_ticketed == true  # Should be preserved
+      # Should be preserved
+      assert event.is_ticketed == true
 
       # Should redirect to event show page
       assert_redirected(view, "/events/#{event.slug}")
     end
   end
-
 end

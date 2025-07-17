@@ -40,10 +40,11 @@ defmodule EventasaurusApp.Auth do
     refresh_token = extract_refresh_token(auth_data)
 
     if token do
-      conn = conn
-      |> put_session(:access_token, token)
-      |> maybe_put_refresh_token(refresh_token)
-      |> configure_session_duration(remember_me)
+      conn =
+        conn
+        |> put_session(:access_token, token)
+        |> maybe_put_refresh_token(refresh_token)
+        |> configure_session_duration(remember_me)
 
       {:ok, conn}
     else
@@ -65,7 +66,9 @@ defmodule EventasaurusApp.Auth do
   """
   def get_current_user(conn) do
     case get_session(conn, :access_token) do
-      nil -> nil
+      nil ->
+        nil
+
       token ->
         case AuthHelper.get_current_user(token) do
           {:ok, user} -> user
@@ -230,10 +233,13 @@ defmodule EventasaurusApp.Auth do
     cond do
       is_binary(auth_data) ->
         auth_data
+
       is_map(auth_data) && Map.has_key?(auth_data, :access_token) ->
         auth_data.access_token
+
       is_map(auth_data) && Map.has_key?(auth_data, "access_token") ->
         auth_data["access_token"]
+
       true ->
         nil
     end
@@ -244,8 +250,10 @@ defmodule EventasaurusApp.Auth do
     cond do
       is_map(auth_data) && Map.has_key?(auth_data, :refresh_token) ->
         auth_data.refresh_token
+
       is_map(auth_data) && Map.has_key?(auth_data, "refresh_token") ->
         auth_data["refresh_token"]
+
       true ->
         nil
     end
@@ -253,6 +261,7 @@ defmodule EventasaurusApp.Auth do
 
   # Helper function to store refresh token if available
   defp maybe_put_refresh_token(conn, nil), do: conn
+
   defp maybe_put_refresh_token(conn, refresh_token) do
     put_session(conn, :refresh_token, refresh_token)
   end
@@ -261,7 +270,8 @@ defmodule EventasaurusApp.Auth do
   defp configure_session_duration(conn, remember_me) do
     if remember_me do
       # Remember me: persistent session for 30 days
-      max_age = 30 * 24 * 60 * 60  # 30 days in seconds
+      # 30 days in seconds
+      max_age = 30 * 24 * 60 * 60
       configure_session(conn, max_age: max_age, renew: true)
     else
       # Don't remember: session cookie (expires when browser closes)

@@ -48,7 +48,11 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
      socket
      |> assign(:time_slots, [])
      |> assign(:editing_slot_index, nil)
-     |> assign(:new_slot, %{"start_time" => "12:00", "end_time" => "13:00", "display" => "12:00 PM - 1:00 PM"})
+     |> assign(:new_slot, %{
+       "start_time" => "12:00",
+       "end_time" => "13:00",
+       "display" => "12:00 PM - 1:00 PM"
+     })
      |> assign(:errors, [])}
   end
 
@@ -59,8 +63,10 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
       cond do
         Map.has_key?(assigns, :field) and assigns.field.value != nil ->
           parse_time_slots_from_field(assigns.field.value)
+
         Map.has_key?(assigns, :existing_slots) ->
           assigns.existing_slots || []
+
         true ->
           []
       end
@@ -77,7 +83,11 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
      |> assign_new(:class, fn -> "" end)
      |> assign_new(:required, fn -> false end)
      |> assign(:time_slots, time_slots)
-     |> assign(:new_slot, %{"start_time" => "12:00", "end_time" => "13:00", "display" => "12:00 PM - 1:00 PM"})}
+     |> assign(:new_slot, %{
+       "start_time" => "12:00",
+       "end_time" => "13:00",
+       "display" => "12:00 PM - 1:00 PM"
+     })}
   end
 
   @impl true
@@ -121,22 +131,30 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
     new_slot = Map.put(socket.assigns.new_slot, field, value)
 
     # Auto-adjust end time when start time changes
-    new_slot = if field == "start_time" and value != "" do
-      new_end_time = add_hour_to_time(value)
-      Map.put(new_slot, "end_time", new_end_time)
-    else
-      new_slot
-    end
+    new_slot =
+      if field == "start_time" and value != "" do
+        new_end_time = add_hour_to_time(value)
+        Map.put(new_slot, "end_time", new_end_time)
+      else
+        new_slot
+      end
 
     # Auto-generate display text if both start and end times are set
-    new_slot = if field in ["start_time", "end_time"] and
-                  new_slot["start_time"] != "" and
-                  new_slot["end_time"] != "" do
-      display = generate_time_slot_display(new_slot["start_time"], new_slot["end_time"], socket.assigns.format)
-      Map.put(new_slot, "display", display)
-    else
-      new_slot
-    end
+    new_slot =
+      if field in ["start_time", "end_time"] and
+           new_slot["start_time"] != "" and
+           new_slot["end_time"] != "" do
+        display =
+          generate_time_slot_display(
+            new_slot["start_time"],
+            new_slot["end_time"],
+            socket.assigns.format
+          )
+
+        Map.put(new_slot, "display", display)
+      else
+        new_slot
+      end
 
     {:noreply, assign(socket, :new_slot, new_slot)}
   end
@@ -155,12 +173,19 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
     case validate_time_slot(new_slot) do
       :ok ->
         # Add display text if not provided
-        final_slot = if new_slot["display"] == "" do
-          display = generate_time_slot_display(new_slot["start_time"], new_slot["end_time"], socket.assigns.format)
-          Map.put(new_slot, "display", display)
-        else
-          new_slot
-        end
+        final_slot =
+          if new_slot["display"] == "" do
+            display =
+              generate_time_slot_display(
+                new_slot["start_time"],
+                new_slot["end_time"],
+                socket.assigns.format
+              )
+
+            Map.put(new_slot, "display", display)
+          else
+            new_slot
+          end
 
         updated_slots = socket.assigns.time_slots ++ [final_slot]
 
@@ -173,7 +198,11 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
             {:noreply,
              socket
              |> assign(:time_slots, updated_slots)
-             |> assign(:new_slot, %{"start_time" => "12:00", "end_time" => "13:00", "display" => ""})
+             |> assign(:new_slot, %{
+               "start_time" => "12:00",
+               "end_time" => "13:00",
+               "display" => ""
+             })
              |> assign(:errors, [])}
 
           %Ecto.Changeset{valid?: false} = changeset ->
@@ -222,12 +251,19 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
     case validate_time_slot(updated_slot) do
       :ok ->
         # Add display text if not provided
-        final_slot = if updated_slot["display"] == "" do
-          display = generate_time_slot_display(updated_slot["start_time"], updated_slot["end_time"], socket.assigns.format)
-          Map.put(updated_slot, "display", display)
-        else
-          updated_slot
-        end
+        final_slot =
+          if updated_slot["display"] == "" do
+            display =
+              generate_time_slot_display(
+                updated_slot["start_time"],
+                updated_slot["end_time"],
+                socket.assigns.format
+              )
+
+            Map.put(updated_slot, "display", display)
+          else
+            updated_slot
+          end
 
         updated_slots = List.replace_at(socket.assigns.time_slots, index, final_slot)
 
@@ -241,7 +277,11 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
              socket
              |> assign(:time_slots, updated_slots)
              |> assign(:editing_slot_index, nil)
-             |> assign(:new_slot, %{"start_time" => "12:00", "end_time" => "13:00", "display" => ""})
+             |> assign(:new_slot, %{
+               "start_time" => "12:00",
+               "end_time" => "13:00",
+               "display" => ""
+             })
              |> assign(:errors, [])}
 
           %Ecto.Changeset{valid?: false} = changeset ->
@@ -502,6 +542,7 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
   # Private helper functions
 
   defp parse_time_slots_from_field(nil), do: []
+
   defp parse_time_slots_from_field(value) when is_binary(value) do
     case Jason.decode(value) do
       {:ok, %{"time_slots" => time_slots}} when is_list(time_slots) -> time_slots
@@ -509,9 +550,11 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
       _ -> []
     end
   end
+
   defp parse_time_slots_from_field(value) when is_map(value) do
     Map.get(value, "time_slots", [])
   end
+
   defp parse_time_slots_from_field(_), do: []
 
   defp encode_time_slots_for_field(time_slots, time_enabled, all_day, timezone) do
@@ -534,17 +577,25 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
   defp send_update_to_parent(socket, time_slots) do
     if Map.has_key?(socket.assigns, :field) and socket.assigns.field != nil do
       # Form-based usage: encode time slots and update form field
-      field_value = encode_time_slots_for_field(time_slots, socket.assigns.time_enabled, socket.assigns.all_day, socket.assigns.timezone)
+      field_value =
+        encode_time_slots_for_field(
+          time_slots,
+          socket.assigns.time_enabled,
+          socket.assigns.all_day,
+          socket.assigns.timezone
+        )
+
       send_update_to_form(socket.assigns.field, field_value)
     else
       # Component-based usage: use send_update to communicate with target component
       if Map.has_key?(socket.assigns, :target) and Map.has_key?(socket.assigns, :on_save) do
         # Convert date to string if it's a Date struct
-        date_string = case socket.assigns.date do
-          %Date{} -> Date.to_iso8601(socket.assigns.date)
-          date_str when is_binary(date_str) -> date_str
-          _ -> to_string(socket.assigns.date)
-        end
+        date_string =
+          case socket.assigns.date do
+            %Date{} -> Date.to_iso8601(socket.assigns.date)
+            date_str when is_binary(date_str) -> date_str
+            _ -> to_string(socket.assigns.date)
+          end
 
         send_update(socket.assigns.target, %{
           id: socket.assigns.target,
@@ -554,10 +605,14 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
         })
       else
         # Fallback: send message to parent LiveView
-        send(self(), {:save_date_time_slots, %{
-          date: socket.assigns.date,
-          time_slots: time_slots
-        }})
+        send(
+          self(),
+          {:save_date_time_slots,
+           %{
+             date: socket.assigns.date,
+             time_slots: time_slots
+           }}
+        )
       end
     end
   end
@@ -568,7 +623,7 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
     "#{start_formatted} - #{end_formatted}"
   end
 
-    defp format_time_for_display(time_string, "12_hour") when is_binary(time_string) do
+  defp format_time_for_display(time_string, "12_hour") when is_binary(time_string) do
     TimeUtils.format_time_12hour(time_string)
   end
 
@@ -614,7 +669,9 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
         else
           _ -> false
         end
-      _ -> false
+
+      _ ->
+        false
     end
   end
 
@@ -630,7 +687,9 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
   # Generate time options (30-minute increments)
   defp time_options do
     for hour <- 0..23, minute <- [0, 30] do
-      time_value = "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
+      time_value =
+        "#{String.pad_leading(to_string(hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
+
       display = TimeUtils.format_time_12hour(time_value)
       %{value: time_value, display: display}
     end
@@ -656,14 +715,21 @@ defmodule EventasaurusWeb.TimeSlotPickerComponent do
     case String.split(time_string, ":") do
       [hour_str, minute_str] ->
         case {Integer.parse(hour_str), Integer.parse(minute_str)} do
-          {{hour, ""}, {minute, ""}} when hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 ->
-            new_hour = rem(hour + 1, 24)  # Wrap around at 24 hours
+          {{hour, ""}, {minute, ""}}
+          when hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 ->
+            # Wrap around at 24 hours
+            new_hour = rem(hour + 1, 24)
+
             "#{String.pad_leading(to_string(new_hour), 2, "0")}:#{String.pad_leading(to_string(minute), 2, "0")}"
+
           _ ->
-            time_string  # Return original if invalid
+            # Return original if invalid
+            time_string
         end
+
       _ ->
-        time_string  # Return original if invalid format
+        # Return original if invalid format
+        time_string
     end
   end
 end

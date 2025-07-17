@@ -104,8 +104,12 @@ defmodule EventasaurusWeb.ProfileHTML do
     clean_handle = String.replace(handle, ~r/^@/, "")
 
     case platform do
-      :instagram -> "https://instagram.com/#{clean_handle}"
-      :x -> "https://x.com/#{clean_handle}"
+      :instagram ->
+        "https://instagram.com/#{clean_handle}"
+
+      :x ->
+        "https://x.com/#{clean_handle}"
+
       :youtube ->
         # Handle both @username and full URLs
         if String.starts_with?(handle, ["http://", "https://"]) do
@@ -113,7 +117,10 @@ defmodule EventasaurusWeb.ProfileHTML do
         else
           "https://youtube.com/@#{clean_handle}"
         end
-      :tiktok -> "https://tiktok.com/@#{clean_handle}"
+
+      :tiktok ->
+        "https://tiktok.com/@#{clean_handle}"
+
       :linkedin ->
         # Handle both username and full URLs
         if String.starts_with?(handle, ["http://", "https://"]) do
@@ -121,7 +128,9 @@ defmodule EventasaurusWeb.ProfileHTML do
         else
           "https://linkedin.com/in/#{clean_handle}"
         end
-      _ -> "#"
+
+      _ ->
+        "#"
     end
   end
 
@@ -132,7 +141,8 @@ defmodule EventasaurusWeb.ProfileHTML do
   """
   def social_icon(platform) do
     case platform do
-      :instagram -> "🔗"  # Could be replaced with actual icons
+      # Could be replaced with actual icons
+      :instagram -> "🔗"
       :x -> "🔗"
       :youtube -> "🔗"
       :tiktok -> "🔗"

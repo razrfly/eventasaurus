@@ -24,11 +24,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "includes proper ARIA attributes and semantic HTML", %{venue_data: venue_data} do
-      html = render_component(VenueHeroComponent, %{
-        id: "test-hero",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueHeroComponent, %{
+          id: "test-hero",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Main article structure
       assert html =~ ~s(role="main")
@@ -52,11 +53,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "provides screen reader support", %{venue_data: venue_data} do
-      html = render_component(VenueHeroComponent, %{
-        id: "test-hero-sr",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueHeroComponent, %{
+          id: "test-hero-sr",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Screen reader only content
       assert html =~ ~s(class="sr-only")
@@ -72,11 +74,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "supports keyboard navigation", %{venue_data: venue_data} do
-      html = render_component(VenueHeroComponent, %{
-        id: "test-hero-keyboard",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueHeroComponent, %{
+          id: "test-hero-keyboard",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Focus management
       assert html =~ ~s(tabindex=)
@@ -92,11 +95,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
         "place_id" => "test123"
       }
 
-      html = render_component(VenueHeroComponent, %{
-        id: "test-hero-minimal",
-        rich_data: minimal_data,
-        compact: false
-      })
+      html =
+        render_component(VenueHeroComponent, %{
+          id: "test-hero-minimal",
+          rich_data: minimal_data,
+          compact: false
+        })
 
       # Still maintains semantic structure
       assert html =~ ~s(role="main")
@@ -115,11 +119,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "provides comprehensive ARIA support", %{venue_data: venue_data} do
-      html = render_component(VenueDetailsComponent, %{
-        id: "test-details",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueDetailsComponent, %{
+          id: "test-details",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Main section semantics
       assert html =~ ~s(role="complementary")
@@ -137,11 +142,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "includes proper link accessibility", %{venue_data: venue_data} do
-      html = render_component(VenueDetailsComponent, %{
-        id: "test-details-links",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueDetailsComponent, %{
+          id: "test-details-links",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # External link indicators
       assert html =~ ~s{(opens in new tab)}
@@ -154,11 +160,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "handles status information accessibly", %{venue_data: venue_data} do
-      html = render_component(VenueDetailsComponent, %{
-        id: "test-details-status",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueDetailsComponent, %{
+          id: "test-details-status",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Status communication
       assert html =~ ~s(aria-label="Based on)
@@ -177,11 +184,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "implements lazy loading with accessibility", %{venue_data: venue_data} do
-      html = render_component(VenuePhotosComponent, %{
-        id: "test-photos",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenuePhotosComponent, %{
+          id: "test-photos",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Lazy loading attributes
       assert html =~ ~s(loading="lazy")
@@ -196,11 +204,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "implements pagination for performance", %{venue_data: venue_data} do
-      html = render_component(VenuePhotosComponent, %{
-        id: "test-photos-pagination",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenuePhotosComponent, %{
+          id: "test-photos-pagination",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Pagination controls
       assert html =~ "Page 1 of"
@@ -214,11 +223,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
 
     test "provides keyboard navigation for photo viewer", %{venue_data: venue_data} do
       # Test photo viewer modal accessibility
-      {:ok, view, _html} = live_isolated(VenuePhotosComponent, %{
-        id: "test-photos-modal",
-        rich_data: venue_data,
-        compact: false
-      })
+      {:ok, view, _html} =
+        live_isolated(VenuePhotosComponent, %{
+          id: "test-photos-modal",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Open photo viewer
       view |> element("[phx-click='show_photo'][phx-value-index='0']") |> render_click()
@@ -244,11 +254,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
         ]
       }
 
-      html = render_component(VenuePhotosComponent, %{
-        id: "test-photos-errors",
-        rich_data: broken_venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenuePhotosComponent, %{
+          id: "test-photos-errors",
+          rich_data: broken_venue_data,
+          compact: false
+        })
 
       # Error handling
       assert html =~ ~s(onerror=)
@@ -257,18 +268,20 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "provides performance optimizations", %{venue_data: venue_data} do
-      html = render_component(VenuePhotosComponent, %{
-        id: "test-photos-performance",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenuePhotosComponent, %{
+          id: "test-photos-performance",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Thumbnail optimization
       assert html =~ "thumbnail_url"
 
       # Limited photo display for performance
       photo_count = (html |> String.split(~s(phx-click="show_photo")) |> length()) - 1
-      assert photo_count <= 12  # Should limit photos per page
+      # Should limit photos per page
+      assert photo_count <= 12
 
       # Loading states
       assert html =~ "animate-pulse"
@@ -282,11 +295,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "provides accessible review structure", %{venue_data: venue_data} do
-      html = render_component(VenueReviewsComponent, %{
-        id: "test-reviews",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueReviewsComponent, %{
+          id: "test-reviews",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Accessible review structure
       assert html =~ ~s(role="list")
@@ -308,11 +322,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "maintains accessibility across all sections", %{venue_data: venue_data} do
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-integration",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-integration",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Overall accessibility structure
       assert html =~ ~s(role="main")
@@ -330,11 +345,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     end
 
     test "provides consistent keyboard navigation", %{venue_data: venue_data} do
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-integration-keyboard",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-integration-keyboard",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Consistent tabindex usage
       assert html =~ ~s(tabindex="0")
@@ -349,42 +365,49 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
 
     test "handles performance at scale", %{venue_data: venue_data} do
       # Test with large amounts of data
-      large_venue_data = Map.merge(venue_data, %{
-        "images" => Enum.map(1..100, fn i ->
-          %{"url" => "https://example.com/photo#{i}.jpg"}
-        end),
-        "reviews" => Enum.map(1..50, fn i ->
-          %{
-            "author_name" => "Reviewer #{i}",
-            "rating" => 4,
-            "text" => "Great place! Review #{i}"
-          }
-        end)
-      })
+      large_venue_data =
+        Map.merge(venue_data, %{
+          "images" =>
+            Enum.map(1..100, fn i ->
+              %{"url" => "https://example.com/photo#{i}.jpg"}
+            end),
+          "reviews" =>
+            Enum.map(1..50, fn i ->
+              %{
+                "author_name" => "Reviewer #{i}",
+                "rating" => 4,
+                "text" => "Great place! Review #{i}"
+              }
+            end)
+        })
 
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-integration-performance",
-        rich_data: large_venue_data,
-        compact: false
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-integration-performance",
+          rich_data: large_venue_data,
+          compact: false
+        })
 
       # Should handle large datasets without issues
       assert html =~ "Central Park"
 
       # Should implement pagination/limiting
-      photo_count = html |> String.split("phx-click=\"show_photo\"") |> length() - 1
-      assert photo_count <= 12  # Should limit photos
+      photo_count = html |> String.split("phx-click=\"show_photo\"") |> (length() - 1)
+      # Should limit photos
+      assert photo_count <= 12
 
-      review_count = html |> String.split("Review by") |> length() - 1
-      assert review_count <= 5  # Should limit reviews
+      review_count = html |> String.split("Review by") |> (length() - 1)
+      # Should limit reviews
+      assert review_count <= 5
     end
 
     test "provides progressive enhancement", %{venue_data: venue_data} do
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-integration-progressive",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-integration-progressive",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Progressive image loading
       assert html =~ "thumbnail_url"
@@ -402,11 +425,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
       # Test that LazyImage hook is properly attached
       venue_data = build_test_venue_data()
 
-      html = render_component(VenueHeroComponent, %{
-        id: "test-lazy-loading",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenueHeroComponent, %{
+          id: "test-lazy-loading",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # LazyImage hook attributes
       assert html =~ ~s(phx-hook="LazyImage")
@@ -421,11 +445,12 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
     test "caching optimization indicators" do
       venue_data = build_test_venue_data()
 
-      html = render_component(VenuePhotosComponent, %{
-        id: "test-caching",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(VenuePhotosComponent, %{
+          id: "test-caching",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Should include thumbnail URLs for caching
       assert html =~ "thumbnail_url"
@@ -448,7 +473,7 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
       "formatted_address" => "New York, NY, USA",
       "vicinity" => "New York, NY",
       "rating" => 4.6,
-      "user_ratings_total" => 145289,
+      "user_ratings_total" => 145_289,
       "price_level" => 0,
       "business_status" => "OPERATIONAL",
       "types" => ["park", "tourist_attraction"],
@@ -475,14 +500,15 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
   defp build_test_venue_data_with_many_photos(count) do
     base_data = build_test_venue_data()
 
-    photos = Enum.map(1..count, fn i ->
-      %{
-        "url" => "https://example.com/photo#{i}.jpg",
-        "thumbnail_url" => "https://example.com/thumb#{i}.jpg",
-        "width" => 800,
-        "height" => 600
-      }
-    end)
+    photos =
+      Enum.map(1..count, fn i ->
+        %{
+          "url" => "https://example.com/photo#{i}.jpg",
+          "thumbnail_url" => "https://example.com/thumb#{i}.jpg",
+          "width" => 800,
+          "height" => 600
+        }
+      end)
 
     Map.put(base_data, "images", photos)
   end
@@ -495,13 +521,13 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
         "author_name" => "John Doe",
         "rating" => 5,
         "text" => "Amazing place to visit!",
-        "time" => 1640995200
+        "time" => 1_640_995_200
       },
       %{
         "author_name" => "Jane Smith",
         "rating" => 4,
         "text" => "Great for families and very accessible.",
-        "time" => 1640995100
+        "time" => 1_640_995_100
       }
     ]
 

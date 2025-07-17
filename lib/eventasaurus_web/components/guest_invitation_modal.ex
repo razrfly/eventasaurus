@@ -33,7 +33,8 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
   attr :invitation_message, :string, default: ""
   attr :manual_emails, :string, default: ""
   attr :selected_suggestions, :list, default: []
-  attr :add_mode, :string, default: "invite"  # "invite" or "direct"
+  # "invite" or "direct"
+  attr :add_mode, :string, default: "invite"
   attr :on_close, :any, required: true
   attr :on_invite_selected, :any, default: nil
   attr :on_add_directly, :any, default: nil
@@ -402,8 +403,12 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
 
     email_count =
       case manual_emails do
-        nil -> 0
-        "" -> 0
+        nil ->
+          0
+
+        "" ->
+          0
+
         emails ->
           emails
           |> String.split(~r/[,\n]/)

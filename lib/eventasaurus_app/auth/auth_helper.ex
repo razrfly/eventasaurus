@@ -23,11 +23,12 @@ defmodule EventasaurusApp.Auth.AuthHelper do
       {:ok, user}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
-        errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-          Enum.reduce(opts, msg, fn {key, value}, acc ->
-            String.replace(acc, "%{#{key}}", to_string(value))
+        errors =
+          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+            Enum.reduce(opts, msg, fn {key, value}, acc ->
+              String.replace(acc, "%{#{key}}", to_string(value))
+            end)
           end)
-        end)
 
         Logger.error("User sync error: #{inspect(errors)}")
         # Return the user anyway if we can extract it from the changeset
@@ -90,12 +91,14 @@ defmodule EventasaurusApp.Auth.AuthHelper do
     - {:error, reason} otherwise
   """
   def register_user(email, password, name) do
-        with {:ok, auth_response} <- Client.sign_up(email, password, name) do
+    with {:ok, auth_response} <- Client.sign_up(email, password, name) do
       # Extract user data - it might be nested under "user" or at the top level
-      supabase_user = case auth_response do
-        %{"user" => user_data} when not is_nil(user_data) -> user_data
-        user_data -> user_data  # User data is at the top level
-      end
+      supabase_user =
+        case auth_response do
+          %{"user" => user_data} when not is_nil(user_data) -> user_data
+          # User data is at the top level
+          user_data -> user_data
+        end
 
       case SupabaseSync.sync_user(supabase_user) do
         {:ok, user} ->
@@ -104,10 +107,12 @@ defmodule EventasaurusApp.Auth.AuthHelper do
             %{"access_token" => access_token} when not is_nil(access_token) ->
               # Auto-confirmed signup
               {:ok, %{user: user, access_token: access_token}}
+
             _ ->
               # Email confirmation required
               {:ok, %{user: user, confirmation_required: true}}
           end
+
         {:error, reason} ->
           {:error, reason}
       end

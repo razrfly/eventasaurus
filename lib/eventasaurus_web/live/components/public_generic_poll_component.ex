@@ -23,8 +23,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
     if poll do
       # Load poll options with suggested_by user
-      poll_options = Events.list_poll_options(poll)
-      |> Repo.preload(:suggested_by)
+      poll_options =
+        Events.list_poll_options(poll)
+        |> Repo.preload(:suggested_by)
 
       {:ok,
        socket
@@ -61,7 +62,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   # Handle the select element's event structure (for time selector)
-  def handle_event("update_option_field", %{"_target" => ["time_selector"], "time_selector" => value}, socket) do
+  def handle_event(
+        "update_option_field",
+        %{"_target" => ["time_selector"], "time_selector" => value},
+        socket
+      ) do
     {:noreply, assign(socket, :option_title, value)}
   end
 
@@ -108,8 +113,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
           case Events.create_poll_option(option_params) do
             {:ok, _option} ->
               # Reload poll options to show the new option immediately
-              updated_poll_options = Events.list_poll_options(socket.assigns.poll)
-              |> Repo.preload(:suggested_by)
+              updated_poll_options =
+                Events.list_poll_options(socket.assigns.poll)
+                |> Repo.preload(:suggested_by)
 
               {:noreply,
                socket
@@ -122,6 +128,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
             {:error, changeset} ->
               require Logger
               Logger.error("Failed to create poll option: #{inspect(changeset)}")
+
               {:noreply,
                socket
                |> put_flash(:error, "Failed to add option. Please try again.")
@@ -151,48 +158,59 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     alias EventasaurusWeb.Services.PlacesDataService
 
     # Start with base parameters
-    option_params = Map.merge(poll_option_params, %{
-      "title" => title,
-      "poll_id" => socket.assigns.poll.id,
-      "suggested_by_id" => user.id,
-      "status" => "active"
-    })
+    option_params =
+      Map.merge(poll_option_params, %{
+        "title" => title,
+        "poll_id" => socket.assigns.poll.id,
+        "suggested_by_id" => user.id,
+        "status" => "active"
+      })
 
     # Apply the EXACT SAME processing as the manager area for places
     if socket.assigns.poll.poll_type == "places" &&
-       Map.has_key?(option_params, "external_data") &&
-       not is_nil(option_params["external_data"]) do
-
+         Map.has_key?(option_params, "external_data") &&
+         not is_nil(option_params["external_data"]) do
       Logger.debug("Processing places option with PlacesDataService (public interface)")
 
       # Parse external_data if it's a JSON string (SAME AS MANAGER)
-      external_data = case option_params["external_data"] do
-        data when is_binary(data) ->
-          case Jason.decode(data) do
-            {:ok, decoded} -> decoded
-            {:error, _} -> option_params["external_data"]
-          end
-        data -> data
-      end
+      external_data =
+        case option_params["external_data"] do
+          data when is_binary(data) ->
+            case Jason.decode(data) do
+              {:ok, decoded} -> decoded
+              {:error, _} -> option_params["external_data"]
+            end
+
+          data ->
+            data
+        end
 
       if external_data && is_map(external_data) do
         # Use PlacesDataService to prepare data (SAME AS MANAGER)
         prepared_data = PlacesDataService.prepare_place_option_data(external_data)
 
         # Preserve any user-provided custom title/description over generated ones (SAME AS MANAGER)
-        final_data = prepared_data
-        |> maybe_preserve_user_input("title", option_params["title"])
-        |> maybe_preserve_user_input("description", option_params["description"])
+        final_data =
+          prepared_data
+          |> maybe_preserve_user_input("title", option_params["title"])
+          |> maybe_preserve_user_input("description", option_params["description"])
 
         # CRITICAL: Ensure required fields are preserved after PlacesDataService processing
-        final_data = Map.merge(final_data, %{
-          "poll_id" => option_params["poll_id"],
-          "suggested_by_id" => option_params["suggested_by_id"],
-          "status" => option_params["status"]
-        })
+        final_data =
+          Map.merge(final_data, %{
+            "poll_id" => option_params["poll_id"],
+            "suggested_by_id" => option_params["suggested_by_id"],
+            "status" => option_params["status"]
+          })
 
-        Logger.debug("PlacesDataService applied successfully for place: #{final_data["title"]} (public interface)")
-        Logger.debug("Final data poll_id: #{final_data["poll_id"]}, suggested_by_id: #{final_data["suggested_by_id"]}")
+        Logger.debug(
+          "PlacesDataService applied successfully for place: #{final_data["title"]} (public interface)"
+        )
+
+        Logger.debug(
+          "Final data poll_id: #{final_data["poll_id"]}, suggested_by_id: #{final_data["suggested_by_id"]}"
+        )
+
         final_data
       else
         Logger.debug("PlacesDataService skipped - invalid external_data (public interface)")
@@ -205,9 +223,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   # Helper to preserve user input over generated content (SAME AS MANAGER)
-  defp maybe_preserve_user_input(prepared_data, key, user_value) when is_binary(user_value) and user_value != "" do
+  defp maybe_preserve_user_input(prepared_data, key, user_value)
+       when is_binary(user_value) and user_value != "" do
     Map.put(prepared_data, key, user_value)
   end
+
   defp maybe_preserve_user_input(prepared_data, _key, _user_value), do: prepared_data
 
   @impl true
@@ -487,6 +507,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       case option.external_data do
         %{"latitude" => lat, "longitude" => lng} when is_number(lat) and is_number(lng) ->
           %{latitude: lat, longitude: lng}
+
         _ ->
           nil
       end
@@ -502,13 +523,17 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     10..23
     |> Enum.flat_map(fn hour ->
       [
-        %{value: TimeUtils.format_time_value(hour, 0), display: TimeUtils.format_time_display(hour, 0)},
-        %{value: TimeUtils.format_time_value(hour, 30), display: TimeUtils.format_time_display(hour, 30)}
+        %{
+          value: TimeUtils.format_time_value(hour, 0),
+          display: TimeUtils.format_time_display(hour, 0)
+        },
+        %{
+          value: TimeUtils.format_time_value(hour, 30),
+          display: TimeUtils.format_time_display(hour, 30)
+        }
       ]
     end)
   end
-
-
 
   defp format_time_for_display(time_value) do
     # This function is used to display the time value in a user-friendly format.
@@ -517,8 +542,10 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     case TimeUtils.parse_time_string(time_value) do
       {:ok, {hour, minute}} ->
         TimeUtils.format_time_display(hour, minute)
+
       {:error, _} ->
-        time_value # Return original if parsing fails
+        # Return original if parsing fails
+        time_value
     end
   end
 
@@ -533,5 +560,4 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       Enum.sort_by(options, fn option -> option.title end)
     end
   end
-
 end

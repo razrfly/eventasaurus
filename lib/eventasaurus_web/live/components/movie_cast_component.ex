@@ -158,34 +158,47 @@ defmodule EventasaurusWeb.Live.Components.MovieCastComponent do
   end
 
   defp get_display_cast(cast, show_full_cast, compact) do
-    limit = if show_full_cast do
-      length(cast)
-    else
-      get_initial_cast_limit(compact)
-    end
+    limit =
+      if show_full_cast do
+        length(cast)
+      else
+        get_initial_cast_limit(compact)
+      end
 
     cast
     |> Enum.take(limit)
   end
 
-  defp get_initial_cast_limit(true), do: 6   # Compact mode
-  defp get_initial_cast_limit(false), do: 12 # Full mode
+  # Compact mode
+  defp get_initial_cast_limit(true), do: 6
+  # Full mode
+  defp get_initial_cast_limit(false), do: 12
 
   defp get_featured_crew(crew) when is_list(crew) do
     # Get important crew members, excluding those already shown in overview
     important_jobs = [
-      "Director of Photography", "Cinematography",
-      "Original Music Composer", "Music",
-      "Costume Design", "Costume Designer",
-      "Production Design", "Production Designer",
-      "Film Editor", "Editor", "Editing",
-      "Casting", "Casting Director"
+      "Director of Photography",
+      "Cinematography",
+      "Original Music Composer",
+      "Music",
+      "Costume Design",
+      "Costume Designer",
+      "Production Design",
+      "Production Designer",
+      "Film Editor",
+      "Editor",
+      "Editing",
+      "Casting",
+      "Casting Director"
     ]
 
     crew
     |> Enum.filter(&(&1["job"] in important_jobs))
-    |> Enum.uniq_by(&(&1["name"])) # Remove duplicates by name
-    |> Enum.take(6) # Limit to 6 featured crew members
+    # Remove duplicates by name
+    |> Enum.uniq_by(& &1["name"])
+    # Limit to 6 featured crew members
+    |> Enum.take(6)
   end
+
   defp get_featured_crew(_), do: []
 end
