@@ -62,7 +62,11 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
           five_star_percentage: breakdown.five_star_percentage || 0.0
         }
       "ranked" ->
-        %{rank_quality_percentage: PollStatsHelper.get_rank_quality_percentage(stats.average_rank || 0.0)}
+        average_rank = stats.average_rank || 0.0
+        %{
+          rank_quality_percentage: PollStatsHelper.get_rank_quality_percentage(average_rank),
+          rank_color_class: PollStatsHelper.get_rank_color_class(average_rank)
+        }
       _ ->
         %{}
     end
@@ -165,10 +169,10 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
         </div>
       <% end %>
       
-      <!-- Visual progress bar for ranked voting (lower rank = better) -->
+      <!-- Visual progress bar for ranked voting -->
       <div class={["flex bg-gray-100 rounded-full overflow-hidden", @compact && "h-1.5" || "h-2"]}>
         <%= if @stats.total_votes > 0 do %>
-          <div class="bg-indigo-500" style={"width: #{@breakdown_data.rank_quality_percentage}%"}></div>
+          <div class={@breakdown_data.rank_color_class || "bg-gray-400"} style={"width: #{@breakdown_data.rank_quality_percentage}%"}></div>
         <% else %>
           <div class="bg-gray-200 w-full"></div>
         <% end %>

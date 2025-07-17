@@ -1030,6 +1030,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         new_vote_state = Map.put(socket.assigns.vote_state, option_id, rating)
         send(self(), {:vote_cast, option_id, rating})
 
+
         {:noreply,
          socket
          |> assign(:loading, false)
@@ -1150,7 +1151,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
       "star" ->
         user_votes
-        |> Enum.map(fn vote -> {vote.poll_option_id, vote.vote_numeric} end)
+        |> Enum.map(fn vote -> {vote.poll_option_id, Decimal.to_integer(vote.vote_numeric)} end)
         |> Map.new()
 
       "ranked" ->
@@ -1318,6 +1319,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
           {int, ""} -> int
           _ -> nil
         end
+      %Decimal{} = rating -> Decimal.to_integer(rating)
       _ -> nil
     end
 

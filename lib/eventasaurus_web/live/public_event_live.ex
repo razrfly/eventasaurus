@@ -1128,6 +1128,25 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info({:votes_cleared}, socket) do
+    # Reload poll user votes to show cleared state
+    socket = load_event_polls(socket)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "All votes cleared successfully!")
+    }
+  end
+
+  @impl true
+  def handle_info({:vote_cleared, _option_id}, socket) do
+    # Reload poll user votes to show updated state
+    socket = load_event_polls(socket)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:temp_votes_updated, poll_id, temp_votes}, socket) do
     # Update temp votes for a specific poll
     updated_poll_temp_votes = Map.put(socket.assigns.poll_temp_votes, poll_id, temp_votes)
@@ -1687,18 +1706,6 @@ defmodule EventasaurusWeb.PublicEventLive do
                     </div>
                 <% end %>
 
-                <!-- Voting Statistics (show for all polls in voting phases) -->
-                <%= if poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
-                  <div class="mt-6 border-t border-gray-100 pt-4">
-                    <h3 class="text-sm font-medium text-gray-900 mb-3">Voting Results</h3>
-                    <.live_component
-                      module={EventasaurusWeb.PollVotingStatsComponent}
-                      id={"poll-voting-stats-#{poll.id}"}
-                      poll={poll}
-                      compact_mode={false}
-                    />
-                  </div>
-                <% end %>
                 </div>
               <% end %>
             </div>
