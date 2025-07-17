@@ -8,7 +8,7 @@ defmodule Eventasaurus.Application do
   @impl true
   def start(_type, _args) do
     # Add Sentry logger handler for capturing crash reports
-    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
+    :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
       config: %{metadata: [:file, :line]}
     })
 
