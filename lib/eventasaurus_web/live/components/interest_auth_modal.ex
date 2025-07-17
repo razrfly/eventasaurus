@@ -45,6 +45,7 @@ defmodule EventasaurusWeb.InterestAuthModal do
      |> assign(assigns)
      |> assign_new(:show, fn -> false end)
      |> assign_new(:class, fn -> "" end)
+     |> assign_new(:on_close, fn -> nil end)
      |> assign(:form, form)}
   end
 
@@ -132,7 +133,7 @@ defmodule EventasaurusWeb.InterestAuthModal do
       <.modal
         id={@myself}
         show={@show}
-        on_cancel={JS.push("close", target: @myself)}
+        on_cancel={if @on_close, do: JS.push(@on_close), else: JS.push("close", target: @myself)}
       >
         <:title>
           <%= case @step do %>
@@ -215,8 +216,8 @@ defmodule EventasaurusWeb.InterestAuthModal do
                   Try Different Email
                 </.button>
                 <.button
-                  phx-click="close"
-                  phx-target={@myself}
+                  phx-click={if @on_close, do: @on_close, else: "close"}
+                  phx-target={if @on_close, do: nil, else: @myself}
                 >
                   Got It
                 </.button>

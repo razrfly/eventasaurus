@@ -1151,7 +1151,19 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
       "star" ->
         user_votes
-        |> Enum.map(fn vote -> {vote.poll_option_id, Decimal.to_integer(vote.vote_numeric)} end)
+        |> Enum.map(fn vote -> 
+          rating = case vote.vote_numeric do
+            rating when is_integer(rating) -> rating
+            rating when is_binary(rating) -> 
+              case Integer.parse(rating) do
+                {int, ""} -> int
+                _ -> nil
+              end
+            %Decimal{} = rating -> Decimal.to_integer(rating)
+            _ -> nil
+          end
+          {vote.poll_option_id, rating}
+        end)
         |> Map.new()
 
       "ranked" ->
