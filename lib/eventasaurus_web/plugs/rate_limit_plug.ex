@@ -13,16 +13,16 @@ defmodule EventasaurusWeb.Plugs.RateLimitPlug do
 
   def init(opts) do
     # Ensure ETS table exists
-    unless :ets.whereis(@table_name) != :undefined do
-      :ets.new(@table_name, [:set, :public, :named_table])
-    end
-
+    ensure_table_exists()
     opts
   end
 
   def call(conn, opts) do
     limit = Keyword.get(opts, :limit, 100)  # requests per window
     window = Keyword.get(opts, :window, 60_000)  # window in milliseconds (1 minute)
+
+    # Ensure table exists as a fallback
+    ensure_table_exists()
 
     client_id = get_client_identifier(conn)
     current_time = System.system_time(:millisecond)
@@ -88,4 +88,16 @@ defmodule EventasaurusWeb.Plugs.RateLimitPlug do
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip(ip) when is_binary(ip), do: ip
   defp format_ip(_), do: "unknown"
+
+  defp ensure_table_exists do
+    if :ets.whereis(@table_name) == :undefined do
+      try do
+        :ets.new(@table_name, [:set, :public, :named_table])
+      rescue
+        ArgumentError ->
+          # Table might have been created by another process, ignore
+          :ok
+      end
+    end
+  end
 end
