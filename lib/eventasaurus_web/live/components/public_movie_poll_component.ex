@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusWeb.Services.RichDataManager
   alias EventasaurusWeb.Services.MovieDataService
   alias EventasaurusWeb.Utils.MovieUtils
+  alias EventasaurusWeb.EmbeddedProgressBarComponent
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
@@ -51,6 +52,22 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     # Get temp votes for this poll (for anonymous users)
     temp_votes = assigns[:temp_votes] || %{}
 
+    # Load poll statistics for embedded display
+    poll_stats = if movie_poll do
+      try do
+        Events.get_poll_voting_stats(movie_poll)
+      rescue
+        _ -> %{options: []}
+      end
+    else
+      %{options: []}
+    end
+
+    # Subscribe to poll statistics updates for real-time updates
+    if movie_poll && connected?(socket) do
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{movie_poll.id}:stats")
+    end
+
     {:ok,
      socket
      |> assign(assigns)
@@ -58,6 +75,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
      |> assign(:movie_options, movie_options)
      |> assign(:user_votes, user_votes)
      |> assign(:temp_votes, temp_votes)
+     |> assign(:poll_stats, poll_stats)
      |> assign(:showing_add_form, false)
      |> assign(:search_query, "")
      |> assign(:search_results, [])
@@ -276,6 +294,20 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
+  @impl true
+  def handle_info({:poll_stats_updated, stats}, socket) do
+    {:noreply, assign(socket, :poll_stats, stats)}
+  end
+
+  @impl true
+  def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
+    if socket.assigns.movie_poll && socket.assigns.movie_poll.id == poll_id do
+      {:noreply, assign(socket, :poll_stats, stats)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # Helper function to get movie poll for an event
   defp get_movie_poll(event) do
     Events.list_polls(event)
@@ -330,20 +362,27 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
         <div class="mb-6">
           <div class="mb-4">
             <h3 class="text-lg font-semibold text-gray-900"><%= poll_emoji("movie") %> Movie Suggestions</h3>
-            <p class="text-sm text-gray-600">
-              <%= case @movie_poll.phase do %>
-                <% "list_building" -> %>
-                  Help build the movie list! Add your suggestions below.
-                <% "voting_with_suggestions" -> %>
-                  Vote on your favorite movies and add new suggestions.
-                <% "voting" -> %>
-                  Vote on your favorite movies and add new suggestions.
-                <% "voting_only" -> %>
-                  Vote on your favorite movies below.
-                <% _ -> %>
-                  Vote on your favorite movies below.
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-gray-600">
+                <%= case @movie_poll.phase do %>
+                  <% "list_building" -> %>
+                    Help build the movie list! Add your suggestions below.
+                  <% "voting_with_suggestions" -> %>
+                    Vote on your favorite movies and add new suggestions.
+                  <% "voting" -> %>
+                    Vote on your favorite movies and add new suggestions.
+                  <% "voting_only" -> %>
+                    Vote on your favorite movies below.
+                  <% _ -> %>
+                    Vote on your favorite movies below.
+                <% end %>
+              </p>
+              <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] and @poll_stats.total_unique_voters > 0 do %>
+                <div class="text-sm text-gray-600">
+                  <%= if @poll_stats.total_unique_voters == 1, do: "1 voter", else: "#{@poll_stats.total_unique_voters} voters" %>
+                </div>
               <% end %>
-            </p>
+            </div>
           </div>
 
           <!-- Movie Options List -->
@@ -387,6 +426,23 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                         <p class="text-xs text-gray-500 mb-2">
                           Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
                         </p>
+                      <% end %>
+
+                      <!-- Embedded Progress Bar -->
+                      <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
+                        <div class="mt-2">
+                          <.live_component
+                            module={EmbeddedProgressBarComponent}
+                            id={"progress-#{option.id}"}
+                            poll_stats={@poll_stats}
+                            option_id={option.id}
+                            voting_system={@movie_poll.voting_system}
+                            compact={true}
+                            show_labels={false}
+                            show_counts={true}
+                            anonymous_mode={!@current_user}
+                          />
+                        </div>
                       <% end %>
 
                       <!-- Voting buttons for movie polls in voting phase -->
