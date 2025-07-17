@@ -30,45 +30,13 @@ defmodule EventasaurusWeb.EventController do
               participants = Events.list_event_participants(event)
                             |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
 
-              # Get polling data if event is in polling state
-              {date_options, votes_by_date, votes_breakdown} = if event.status == :polling do
-                poll = Events.get_event_date_poll(event)
-                if poll do
-                  options = Events.list_event_date_options(poll)
-                                      votes = Events.list_votes_for_poll(poll)
-
-                  # Group votes by date
-                  votes_by_date = Enum.group_by(votes, & &1.event_date_option.date)
-
-                  # Pre-compute vote breakdowns to avoid O(n²) in template
-                  votes_breakdown =
-                    votes_by_date
-                    |> Map.new(fn {date, votes} ->
-                      breakdown = Enum.frequencies_by(votes, &to_string(&1.vote_type))
-                      total = length(votes)
-                      {date, %{
-                        total: total,
-                        yes: Map.get(breakdown, "yes", 0),
-                        if_need_be: Map.get(breakdown, "if_need_be", 0),
-                        no: Map.get(breakdown, "no", 0)
-                      }}
-                    end)
-
-                  {options, votes_by_date, votes_breakdown}
-                else
-                  {[], %{}, %{}}
-                end
-              else
-                {[], %{}, %{}}
-              end
+              # Legacy polling data removed - using generic polling system
 
               conn
               |> assign(:venue, venue)
               |> assign(:organizers, organizers)
               |> assign(:participants, participants)
-              |> assign(:date_options, date_options)
-              |> assign(:votes_by_date, votes_by_date)
-              |> assign(:votes_breakdown, votes_breakdown)
+              # Legacy polling assigns removed
               |> assign(:is_manager, true)
               |> assign(:registration_status, registration_status)
               |> render(:show, event: event, user: user)
