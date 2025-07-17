@@ -75,7 +75,12 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
   end
 
   def handle_event("close", _params, socket) do
-    send(self(), :close_vote_modal)
+    case socket.assigns.poll_type do
+      :generic_poll ->
+        send(self(), :close_generic_vote_modal)
+      _ ->
+        send(self(), :close_vote_modal)
+    end
     {:noreply, socket}
   end
 
