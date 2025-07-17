@@ -117,22 +117,45 @@ defmodule EventasaurusWeb.Helpers.PollStatsHelper do
 
   @doc """
   Converts average rank to a quality percentage for visual display.
-  Lower rank numbers indicate better quality (rank 1 = 100%, rank 5 = 20%).
+  Lower rank numbers (better performance) get longer bars.
   
   ## Parameters
   - `average_rank`: The average rank as a float
   
   ## Returns
-  A percentage value between 0 and 100 representing rank quality
+  A percentage value between 20 and 100 representing rank display width
   """
   def get_rank_quality_percentage(average_rank) when is_number(average_rank) do
-    # Convert rank to percentage where rank 1 = 100%, rank 5 = 20%
-    # Formula: max(0, 120 - (average_rank * 20))
-    quality_percentage = max(0, 120 - (average_rank * 20))
+    # Better ranks (lower numbers) get longer bars
+    # Formula: Invert the rank so rank 1 = 100%, rank 5 = 20%
+    # Using max rank of 5 for calculation: max(20, 120 - (average_rank * 20))
+    quality_percentage = max(20, 120 - (average_rank * 20))
     min(100, quality_percentage)
   end
 
   def get_rank_quality_percentage(_), do: 0.0
+
+  @doc """
+  Gets the appropriate color class for ranked voting based on average rank.
+  Better ranks (lower numbers) get better colors.
+  
+  ## Parameters
+  - `average_rank`: The average rank as a float
+  
+  ## Returns
+  A CSS color class string
+  """
+  def get_rank_color_class(average_rank) when is_number(average_rank) do
+    cond do
+      average_rank <= 1.5 -> "bg-green-500"    # Excellent (rank 1-1.5)
+      average_rank <= 2.0 -> "bg-blue-500"     # Good (rank 1.5-2.0)
+      average_rank <= 2.5 -> "bg-yellow-500"   # Average (rank 2.0-2.5)
+      average_rank <= 3.0 -> "bg-orange-500"   # Below average (rank 2.5-3.0)
+      true -> "bg-red-500"                      # Poor (rank 3.0+)
+    end
+  end
+
+  def get_rank_color_class(_), do: "bg-gray-400"
 
   @doc """
   Formats vote counts with proper pluralization.
