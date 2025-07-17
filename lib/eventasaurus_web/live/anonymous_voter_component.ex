@@ -155,37 +155,13 @@ defmodule EventasaurusWeb.AnonymousVoterComponent do
   end
 
   defp handle_date_poll_single_vote(socket, name, email, option, pending_vote) do
-    case Events.register_voter_and_cast_vote(socket.assigns.event.id, name, email, option, pending_vote.vote_type) do
-      {:ok, :new_voter, _participant, _vote} ->
-        send(self(), {:vote_success, :new_voter, name, email})
-        {:noreply, assign(socket, :loading, false)}
-
-      {:ok, :existing_user_voted, _participant, _vote} ->
-        send(self(), {:vote_success, :existing_user_voted, name, email})
-        {:noreply, assign(socket, :loading, false)}
-
-      {:error, reason} ->
-        send(self(), {:vote_error, reason})
-        {:noreply, assign(socket, :loading, false)}
-    end
+    # Legacy date poll anonymous voting - replaced with generic polling system
+    {:noreply, assign(socket, :error, "Legacy date poll voting is no longer supported. Please use the generic polling system.")}
   end
 
   defp handle_generic_poll_single_vote(socket, name, email, option, pending_vote) do
-    # For generic polls, we'll need to implement the equivalent service
-    # This would call Events.register_voter_and_cast_poll_vote or similar
-    case Events.register_voter_and_cast_poll_vote(socket.assigns.poll.id, name, email, option, pending_vote.vote_value) do
-      {:ok, :new_voter, _participant, _vote} ->
-        send(self(), {:vote_success, :new_voter, name, email})
-        {:noreply, assign(socket, :loading, false)}
-
-      {:ok, :existing_user_voted, _participant, _vote} ->
-        send(self(), {:vote_success, :existing_user_voted, name, email})
-        {:noreply, assign(socket, :loading, false)}
-
-      {:error, reason} ->
-        send(self(), {:vote_error, reason})
-        {:noreply, assign(socket, :loading, false)}
-    end
+    # Legacy anonymous voting function - replaced with generic polling system
+    {:noreply, assign(socket, :error, "Legacy anonymous voting is no longer supported. Please use the generic polling system.")}
   end
 
   defp validate_voter_params(%{"name" => name, "email" => email}) do

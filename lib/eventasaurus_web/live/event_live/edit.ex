@@ -1107,31 +1107,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
     {:noreply, assign(socket, :show_image_picker, false)}
   end
 
-        @impl true
-  def handle_info({:selected_dates_changed, dates}, socket) do
-    # Validate and process dates
-    date_strings = case dates do
-      dates when is_list(dates) ->
-        dates
-        |> Enum.uniq()
-        |> Enum.map(fn
-          %Date{} = date -> Date.to_iso8601(date)
-          _ -> nil
-        end)
-        |> Enum.reject(&is_nil/1)
-      _ ->
-        []
-    end
-
-    dates_string = Enum.join(date_strings, ",")
-
-    # Update form_data with the new selected dates
-    form_data = Map.put(socket.assigns.form_data, "selected_poll_dates", dates_string)
-
-    socket = assign(socket, :form_data, form_data)
-
-    {:noreply, socket}
-  end
 
   @impl true
   def handle_info({:rich_data_search, query, provider}, socket) do
