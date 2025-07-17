@@ -138,15 +138,20 @@ defmodule EventasaurusApp.Auth.Client do
       email: email
     })
 
+    Logger.info("Sending password reset request to: #{url}")
+
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: status}} when status in [200, 204] ->
+        Logger.info("Password reset request successful for email: #{email}")
         {:ok, %{email: email}}
 
       {:ok, %{status_code: code, body: response_body}} ->
+        Logger.error("Password reset request failed with status #{code}: #{response_body}")
         error = Jason.decode!(response_body)
         {:error, %{status: code, message: error["message"] || "Password reset request failed"}}
 
       {:error, error} ->
+        Logger.error("HTTP error during password reset request: #{inspect(error)}")
         {:error, error}
     end
   end

@@ -174,7 +174,9 @@ defmodule EventasaurusWeb.Auth.AuthController do
         |> put_flash(:info, "If your email exists in our system, you will receive password reset instructions shortly.")
         |> redirect(to: ~p"/auth/login")
 
-      {:error, _reason} ->
+      {:error, reason} ->
+        require Logger
+        Logger.error("Password reset request failed for email: #{inspect(reason)}")
         conn
         |> put_flash(:error, "There was an error processing your request. Please try again.")
         |> redirect(to: ~p"/auth/forgot-password")
