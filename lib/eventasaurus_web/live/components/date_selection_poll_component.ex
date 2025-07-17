@@ -57,7 +57,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
      |> assign(:selected_dates, [])
      |> assign(:poll_options, [])
      |> assign(:user_votes, [])
-     |> assign(:legacy_poll_data, nil)
+     |> assign(:poll_data, nil)
      |> assign(:vote_summaries, %{})
      |> assign(:phase_display, "list_building")
      # NEW: Time selection state
@@ -86,11 +86,11 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       poll_options = Events.list_poll_options(poll)
       user_votes = if current_user, do: Events.list_user_poll_votes(poll, current_user), else: []
 
-      # Convert to legacy format for calendar UI using our adapter
-      legacy_poll_data = case DatePollAdapter.get_legacy_poll_with_data(poll.id) do
-        {:ok, legacy_data} -> legacy_data
+      # Get poll data using simplified adapter
+      poll_data = case DatePollAdapter.get_poll_with_data(poll.id) do
+        {:ok, data} -> data
         {:error, reason} ->
-          Logger.warning("Failed to convert poll #{poll.id} to legacy format: #{inspect(reason)}")
+          Logger.warning("Failed to get poll #{poll.id} data: #{inspect(reason)}")
           nil
       end
 
@@ -116,7 +116,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
        |> assign(:poll_options, poll_options)
        |> assign(:user_votes, user_votes)
        |> assign(:selected_dates, selected_dates)
-       |> assign(:legacy_poll_data, legacy_poll_data)
+       |> assign(:poll_data, poll_data)
        |> assign(:vote_summaries, vote_summaries)
        |> assign(:phase_display, phase_display)
        |> assign(:poll_stats, poll_stats)
@@ -372,7 +372,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                     </p>
 
                     <div class="calendar-container bg-white rounded-lg border border-gray-200 overflow-hidden">
-                      <%= if @legacy_poll_data do %>
+                      <%= if @poll_data do %>
                         <.live_component
                           module={CalendarComponent}
                           id={"calendar-#{@poll.id}"}
@@ -708,9 +708,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       []
     end
 
-    # Update legacy data
-    legacy_poll_data = case DatePollAdapter.get_legacy_poll_with_data(updated_poll.id) do
-      {:ok, legacy_data} -> legacy_data
+    # Update poll data
+    poll_data = case DatePollAdapter.get_poll_with_data(updated_poll.id) do
+      {:ok, data} -> data
       {:error, _} -> nil
     end
 
@@ -724,7 +724,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
      |> assign(:poll_options, poll_options)
      |> assign(:user_votes, user_votes)
      |> assign(:selected_dates, selected_dates)
-     |> assign(:legacy_poll_data, legacy_poll_data)
+     |> assign(:poll_data, poll_data)
      |> assign(:vote_summaries, vote_summaries)
      |> assign(:phase_display, phase_display)
      |> assign(:loading, false)}
