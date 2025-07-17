@@ -47,26 +47,25 @@ defmodule EventasaurusWeb.Helpers.PollStatsHelper do
   `%{yes_percentage: float, maybe_percentage: float, no_percentage: float}`
   """
   def get_binary_breakdown(poll_stats, option_id) do
-    try do
-      option_data = poll_stats.options
-      |> Enum.find(&(&1.option_id == option_id))
+    case poll_stats do
+      %{options: options} when is_list(options) ->
+        option_data = Enum.find(options, &(&1.option_id == option_id))
+        
+        case option_data do
+          %{tally: tally} ->
+            total_votes = Map.get(tally, :total, 0)
+            yes_count = Map.get(tally, :yes, 0)
+            maybe_count = Map.get(tally, :maybe, 0)
+            no_count = Map.get(tally, :no, 0)
 
-      case option_data do
-        %{tally: tally} ->
-          total_votes = Map.get(tally, :total, 0)
-          yes_count = Map.get(tally, :yes, 0)
-          maybe_count = Map.get(tally, :maybe, 0)
-          no_count = Map.get(tally, :no, 0)
-
-          %{
-            yes_percentage: safe_percentage(yes_count, total_votes),
-            maybe_percentage: safe_percentage(maybe_count, total_votes),
-            no_percentage: safe_percentage(no_count, total_votes)
-          }
-        _ ->
-          %{yes_percentage: 0.0, maybe_percentage: 0.0, no_percentage: 0.0}
-      end
-    rescue
+            %{
+              yes_percentage: safe_percentage(yes_count, total_votes),
+              maybe_percentage: safe_percentage(maybe_count, total_votes),
+              no_percentage: safe_percentage(no_count, total_votes)
+            }
+          _ ->
+            %{yes_percentage: 0.0, maybe_percentage: 0.0, no_percentage: 0.0}
+        end
       _ ->
         %{yes_percentage: 0.0, maybe_percentage: 0.0, no_percentage: 0.0}
     end
@@ -84,34 +83,33 @@ defmodule EventasaurusWeb.Helpers.PollStatsHelper do
   `%{one_star_percentage: float, two_star_percentage: float, ...}`
   """
   def get_star_breakdown(poll_stats, option_id) do
-    try do
-      option_data = poll_stats.options
-      |> Enum.find(&(&1.option_id == option_id))
+    case poll_stats do
+      %{options: options} when is_list(options) ->
+        option_data = Enum.find(options, &(&1.option_id == option_id))
+        
+        case option_data do
+          %{tally: tally} ->
+            total_votes = Map.get(tally, :total, 0)
+            rating_distribution = Map.get(tally, :rating_distribution, [])
 
-      case option_data do
-        %{tally: tally} ->
-          total_votes = Map.get(tally, :total, 0)
-          rating_distribution = Map.get(tally, :rating_distribution, [])
+            # Extract counts for each star rating
+            star_counts = rating_distribution
+            |> Enum.reduce(%{1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0}, fn
+              %{rating: rating, count: count}, acc when rating in 1..5 ->
+                Map.put(acc, rating, count)
+              _, acc -> acc
+            end)
 
-          # Extract counts for each star rating
-          star_counts = rating_distribution
-          |> Enum.reduce(%{1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0}, fn
-            %{rating: rating, count: count}, acc when rating in 1..5 ->
-              Map.put(acc, rating, count)
-            _, acc -> acc
-          end)
-
-          %{
-            one_star_percentage: safe_percentage(star_counts[1], total_votes),
-            two_star_percentage: safe_percentage(star_counts[2], total_votes),
-            three_star_percentage: safe_percentage(star_counts[3], total_votes),
-            four_star_percentage: safe_percentage(star_counts[4], total_votes),
-            five_star_percentage: safe_percentage(star_counts[5], total_votes)
-          }
-        _ ->
-          default_star_breakdown()
-      end
-    rescue
+            %{
+              one_star_percentage: safe_percentage(star_counts[1], total_votes),
+              two_star_percentage: safe_percentage(star_counts[2], total_votes),
+              three_star_percentage: safe_percentage(star_counts[3], total_votes),
+              four_star_percentage: safe_percentage(star_counts[4], total_votes),
+              five_star_percentage: safe_percentage(star_counts[5], total_votes)
+            }
+          _ ->
+            default_star_breakdown()
+        end
       _ ->
         default_star_breakdown()
     end
