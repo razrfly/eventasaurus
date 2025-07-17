@@ -294,12 +294,10 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
-  @impl true
   def handle_info({:poll_stats_updated, stats}, socket) do
     {:noreply, assign(socket, :poll_stats, stats)}
   end
 
-  @impl true
   def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
     if socket.assigns.movie_poll && socket.assigns.movie_poll.id == poll_id do
       {:noreply, assign(socket, :poll_stats, stats)}

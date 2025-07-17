@@ -32,6 +32,7 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
   
   alias EventasaurusWeb.Helpers.PollStatsHelper
   alias EventasaurusWeb.Helpers.VoteDisplayHelper
+  alias EventasaurusWeb.Helpers.VoteCountHelper, as: VC
 
   @impl true
   def update(assigns, socket) do
@@ -121,9 +122,9 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
       
       <%= if @show_labels and @stats.total_votes > 0 and not @compact do %>
         <div class="flex justify-between text-xs text-gray-500 mt-1">
-          <span><%= calculate_vote_count(@breakdown_data.yes_percentage, @stats.total_votes) %> Yes</span>
-          <span><%= calculate_vote_count(@breakdown_data.maybe_percentage, @stats.total_votes) %> Maybe</span>
-          <span><%= calculate_vote_count(@breakdown_data.no_percentage, @stats.total_votes) %> No</span>
+          <span><%= VC.calculate_vote_count(@breakdown_data.yes_percentage, @stats.total_votes) %> Yes</span>
+          <span><%= VC.calculate_vote_count(@breakdown_data.maybe_percentage, @stats.total_votes) %> Maybe</span>
+          <span><%= VC.calculate_vote_count(@breakdown_data.no_percentage, @stats.total_votes) %> No</span>
         </div>
       <% end %>
     </div>
@@ -236,18 +237,5 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
     """
   end
 
-  # Helper function to calculate vote count from percentage
-  defp calculate_vote_count(percentage, total_votes) do
-    round(percentage * total_votes / 100)
-  end
 
-  # Helper function to get voter count display from poll stats
-  defp get_voter_count_display(poll_stats) do
-    case poll_stats do
-      %{total_unique_voters: count} when is_integer(count) and count > 0 ->
-        if count == 1, do: "1 voter", else: "#{count} voters"
-      _ ->
-        "0 voters"
-    end
-  end
 end
