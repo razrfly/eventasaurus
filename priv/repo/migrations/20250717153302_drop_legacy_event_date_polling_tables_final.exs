@@ -22,7 +22,7 @@ defmodule EventasaurusApp.Repo.Migrations.DropLegacyEventDatePollingTablesFinal 
     # 1. Recreate event_date_polls table first
     create table(:event_date_polls) do
       add :event_id, references(:events, on_delete: :delete_all), null: false
-      add :created_by_id, references(:users, on_delete: :nilify_all), null: false
+      add :created_by_id, references(:users, on_delete: :delete_all), null: false
       add :voting_deadline, :utc_datetime
       add :finalized_date, :date
 
