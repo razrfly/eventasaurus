@@ -267,7 +267,7 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
       assert html =~ "thumbnail_url"
 
       # Limited photo display for performance
-      photo_count = html |> String.split(~s(phx-click="show_photo")) |> length() - 1
+      photo_count = (html |> String.split(~s(phx-click="show_photo")) |> length()) - 1
       assert photo_count <= 12  # Should limit photos per page
 
       # Loading states
