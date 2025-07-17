@@ -26,6 +26,26 @@ config :stripity_stripe,
   api_key: System.get_env("STRIPE_SECRET_KEY"),
   connect_client_id: System.get_env("STRIPE_CONNECT_CLIENT_ID")
 
+# Configure Sentry for all environments (dev/test/prod)
+# Using runtime.exs ensures File.cwd() runs at startup, not compile time
+case System.get_env("SENTRY_DSN") do
+  nil ->
+    # Explicitly disable Sentry when SENTRY_DSN is not set
+    config :sentry, dsn: nil
+  dsn ->
+    # Configure Sentry with robust file path handling
+    root_path = case File.cwd() do
+      {:ok, cwd} -> cwd
+      _ -> "."
+    end
+    
+    config :sentry,
+      dsn: dsn,
+      environment_name: config_env(),
+      enable_source_code_context: true,
+      root_source_code_paths: [root_path]
+end
+
 if config_env() == :prod do
   # Validate required Supabase environment variables are set
   for var <- ~w(SUPABASE_URL SUPABASE_API_KEY SUPABASE_DATABASE_URL) do
@@ -156,5 +176,6 @@ if config_env() == :prod do
   config :eventasaurus, :base_url, "https://eventasaur.us"
 
   # Stripe configuration is now handled globally above (lines 25-27)
+  # Sentry configuration is now handled globally above (lines 29-47)
 
 end
