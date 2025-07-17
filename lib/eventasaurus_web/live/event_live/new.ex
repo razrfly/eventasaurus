@@ -59,7 +59,7 @@ defmodule EventasaurusWeb.EventLive.New do
         initial_form_data = %{
           "start_date" => today,
           "ends_date" => today,
-          "enable_date_polling" => false,
+          # Legacy date polling field removed
           "slug" => Nanoid.generate(10),
           "taxation_type" => default_taxation_type,
           "taxation_type_reasoning" => get_taxation_reasoning(default_taxation_type, false)
@@ -94,7 +94,7 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:page, 1)
           |> assign(:per_page, 20)
           |> assign(:image_tab, "search") # Changed from "unsplash" to unified search
-          |> assign(:enable_date_polling, false)
+          |> assign(:enable_date_polling, false)  # Legacy date polling disabled
           |> assign(:setup_path, "confirmed") # default to confirmed for new events
           # New unified picker assigns
           |> assign(:selected_category, "general")
@@ -145,12 +145,10 @@ defmodule EventasaurusWeb.EventLive.New do
   def handle_info({:selected_dates_changed, dates}, socket) do
     # Convert dates to ISO8601 strings for form data
     date_strings = Enum.map(dates, &Date.to_iso8601/1)
-    dates_string = Enum.join(date_strings, ",")
+    _dates_string = Enum.join(date_strings, ",")
 
     # Update form_data with the new selected dates
-    form_data = Map.put(socket.assigns.form_data, "selected_poll_dates", dates_string)
-
-    socket = assign(socket, :form_data, form_data)
+    # Legacy selected_poll_dates handling removed - no changes needed
 
     {:noreply, socket}
   end
@@ -395,7 +393,7 @@ defmodule EventasaurusWeb.EventLive.New do
       %Event{}
       |> Events.change_event(event_params)
       |> Map.put(:action, :validate)
-      |> validate_date_polling(event_params)
+      # Legacy date polling validation removed
 
     {:noreply,
      socket
@@ -513,7 +511,7 @@ defmodule EventasaurusWeb.EventLive.New do
       %Event{}
       |> Events.change_event(final_event_params)
       |> Map.put(:action, :validate)
-      |> validate_date_polling(final_event_params)
+      # Legacy date polling validation removed
 
     if validation_changeset.valid? do
       # No date polling validation errors, proceed normally
@@ -599,7 +597,7 @@ defmodule EventasaurusWeb.EventLive.New do
     form_data =
       socket.assigns.form_data
       |> Map.put("setup_path", path)
-      |> Map.put("enable_date_polling", path == "polling")
+      # Legacy date polling setup removed
       |> Map.put("is_ticketed", path in ["confirmed", "threshold"])
       |> Map.put("requires_threshold", path == "threshold")
 
@@ -607,7 +605,7 @@ defmodule EventasaurusWeb.EventLive.New do
     socket =
       socket
       |> assign(:setup_path, path)
-      |> assign(:enable_date_polling, path == "polling")
+      |> assign(:enable_date_polling, false)  # Legacy date polling disabled
       |> assign(:is_ticketed, path in ["confirmed", "threshold"])
       |> assign(:requires_threshold, path == "threshold")
       |> assign(:form_data, form_data)
@@ -619,20 +617,7 @@ defmodule EventasaurusWeb.EventLive.New do
   def handle_event("select_setup_path", _params, socket),
     do: {:noreply, socket}  # ignore unknown values
 
-  @impl true
-  def handle_event("toggle_date_polling", _params, socket) do
-    enable_date_polling = !socket.assigns.enable_date_polling
-
-    # Update form_data to reflect this change
-    form_data =
-      socket.assigns.form_data
-      |> Map.put("enable_date_polling", enable_date_polling)
-
-    {:noreply,
-     socket
-     |> assign(:enable_date_polling, enable_date_polling)
-     |> assign(:form_data, form_data)}
-  end
+  # Legacy toggle_date_polling handler removed - using generic polling system
 
   @impl true
   def handle_event("open_image_picker", _params, socket) do
@@ -681,14 +666,10 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("calendar_dates_changed", %{"dates" => dates, "component_id" => _id}, socket) do
-    selected_dates = Enum.join(dates, ",")
-    form_data = Map.put(socket.assigns.form_data, "selected_poll_dates", selected_dates)
-    changeset = Events.change_event(%Event{}, form_data)
+  def handle_event("calendar_dates_changed", %{"dates" => _dates, "component_id" => _id}, socket) do
+    # Legacy calendar_dates_changed handler removed - using generic polling system
 
-    {:noreply,
-     assign(socket, :form_data, form_data)
-     |> assign(:changeset, changeset)}
+    {:noreply, socket}
   end
 
   @impl true
@@ -1542,60 +1523,12 @@ defmodule EventasaurusWeb.EventLive.New do
 
   defp process_datetime_fields(params) do
     params
-    |> process_date_polling_datetime()
+    # Legacy date polling processing removed
     |> process_start_datetime()
     |> process_end_datetime()
   end
 
-  defp process_date_polling_datetime(params) do
-    # If date polling is enabled, calculate average date and set start_at/ends_at
-    if Map.get(params, "enable_date_polling", false) do
-      case Map.get(params, "selected_poll_dates") do
-        dates_string when is_binary(dates_string) and dates_string != "" ->
-          # Parse the comma-separated date strings
-          selected_dates =
-            dates_string
-            |> String.split(",")
-            |> Enum.map(&String.trim/1)
-            |> Enum.filter(&(&1 != ""))
-            |> Enum.map(&Date.from_iso8601!/1)
-            |> Enum.sort()
-
-          if length(selected_dates) > 0 do
-            # Calculate the middle date (median)
-            middle_index = div(length(selected_dates), 2)
-            middle_date = Enum.at(selected_dates, middle_index)
-
-            # Get start and end times
-            start_time = Map.get(params, "start_time", "09:00")
-            end_time = Map.get(params, "ends_time", "17:00")
-            timezone = Map.get(params, "timezone", "UTC")
-
-            # Create start_at datetime using middle date and start time
-            case combine_date_time(Date.to_iso8601(middle_date), start_time, timezone) do
-              {:ok, start_datetime} ->
-                # Create ends_at datetime using middle date and end time
-                case combine_date_time(Date.to_iso8601(middle_date), end_time, timezone) do
-                  {:ok, end_datetime} ->
-                    params
-                    |> Map.put("start_at", start_datetime)
-                    |> Map.put("ends_at", end_datetime)
-                  {:error, _} ->
-                    params
-                end
-              {:error, _} ->
-                params
-            end
-          else
-            params
-          end
-        _ ->
-          params
-      end
-    else
-      params
-    end
-  end
+  # Legacy process_date_polling_datetime function removed - using generic polling system
 
   defp process_start_datetime(params) do
     start_date = Map.get(params, "start_date")
@@ -1650,93 +1583,17 @@ defmodule EventasaurusWeb.EventLive.New do
 
   defp combine_date_time(_, _, _), do: {:error, :invalid_input}
 
-  # Helper function to create date poll and options for an event
-  defp create_date_poll_for_event(event, form_data, user) do
-    # Only create date polls if polling is explicitly enabled
-    enable_date_polling = Map.get(form_data, "enable_date_polling", false)
-    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
-
-    unless is_polling_enabled do
-      # If polling is not enabled, just return the original event
-      {:ok, event}
-    else
-      # Check if we have selected poll dates (new calendar approach)
-      case Map.get(form_data, "selected_poll_dates") do
-        dates_string when is_binary(dates_string) and dates_string != "" ->
-          # Parse the comma-separated date strings
-          selected_dates =
-            dates_string
-            |> String.split(",")
-            |> Enum.map(&String.trim/1)
-            |> Enum.filter(&(&1 != ""))
-            |> Enum.map(&Date.from_iso8601!/1)
-            |> Enum.sort()
-
-          # Create the date poll
-          case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
-            {:ok, poll} ->
-              # Create date options for each selected date
-                            case Events.create_date_options_from_list(poll, selected_dates) do
-                  {:ok, _options} ->
-                    # Update event state to 'polling'
-                    case Events.update_event(event, %{status: "polling", polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
-                    {:ok, updated_event} ->
-                      {:ok, updated_event}
-                    {:error, reason} ->
-                      {:error, reason}
-                  end
-                {:error, reason} ->
-                  {:error, reason}
-              end
-            {:error, reason} ->
-              {:error, reason}
-          end
-
-        _ ->
-          # Fall back to old date range approach if no selected dates
-          start_date_str = Map.get(form_data, "start_date")
-          end_date_str = Map.get(form_data, "ends_date")
-
-          if start_date_str && end_date_str do
-            start_date = Date.from_iso8601!(start_date_str)
-            end_date = Date.from_iso8601!(end_date_str)
-
-            # Create the date poll
-            case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
-              {:ok, poll} ->
-                # Create date options for each day in the range
-                case Events.create_date_options_from_range(poll, start_date, end_date) do
-                  {:ok, _options} ->
-                    # Update event state to 'polling'
-                    case Events.update_event(event, %{status: "polling", polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
-                      {:ok, updated_event} ->
-                        {:ok, updated_event}
-                      {:error, reason} ->
-                        {:error, reason}
-                    end
-                  {:error, reason} ->
-                    {:error, reason}
-                end
-              {:error, reason} ->
-                {:error, reason}
-            end
-          else
-            {:error, :missing_date_data}
-          end
-      end
-    end
-  end
+  # Legacy create_date_poll_for_event function removed - using generic polling system
 
   # Helper function to create event with proper error handling
   defp create_event_with_validation(final_event_params, socket) do
     # Set the correct status based on setup path
     setup_path = Map.get(socket.assigns.form_data, "setup_path", "confirmed")
-    enable_date_polling = Map.get(final_event_params, "enable_date_polling", false)
-    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
+    # Legacy date polling logic removed - using generic polling system
 
     # Determine the correct status
     final_status = cond do
-      is_polling_enabled or setup_path == "polling" -> "polling"
+      setup_path == "polling" -> "polling"
       setup_path == "threshold" -> "threshold"
       true -> "confirmed"  # Default for confirmed events
     end
@@ -1746,15 +1603,8 @@ defmodule EventasaurusWeb.EventLive.New do
 
     case Events.create_event_with_organizer(final_event_params_with_status, socket.assigns.user) do
       {:ok, event} ->
-        # If date polling is enabled, create the date poll and options
-        event_with_poll = if Map.get(final_event_params, "enable_date_polling", false) do
-          case create_date_poll_for_event(event, final_event_params, socket.assigns.user) do
-            {:ok, updated_event} -> updated_event
-            {:error, _} -> event # Fall back to original event if poll creation fails
-          end
-        else
-          event
-        end
+        # Legacy date polling creation removed - using generic polling system
+        event_with_poll = event
 
         # If ticketing is enabled, create the tickets
         is_ticketed? = final_event_params["is_ticketed"] in [true, "true"]
@@ -1831,35 +1681,7 @@ defmodule EventasaurusWeb.EventLive.New do
     end
   end
 
-  # Helper function to validate date polling options
-  defp validate_date_polling(changeset, params) do
-    enable_date_polling = Map.get(params, "enable_date_polling", false)
-
-    # Handle string "true"/"false" from form submissions
-    is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
-
-    if is_polling_enabled do
-      selected_dates_string = Map.get(params, "selected_poll_dates", "")
-
-      if selected_dates_string == "" do
-        Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
-      else
-        selected_dates =
-          selected_dates_string
-          |> String.split(",")
-          |> Enum.map(&String.trim/1)
-          |> Enum.filter(&(&1 != ""))
-
-        if length(selected_dates) < 2 do
-          Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
-        else
-          changeset
-        end
-      end
-    else
-      changeset
-    end
-  end
+  # Legacy validate_date_polling function removed - using generic polling system
 
   # ============================================================================
   # Ticketing Helper Functions

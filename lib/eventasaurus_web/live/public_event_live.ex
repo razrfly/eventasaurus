@@ -79,22 +79,7 @@ defmodule EventasaurusWeb.PublicEventLive do
               {:not_authenticated, nil, nil}
           end
 
-          # Load date poll data if event has polling enabled
-          {date_poll, date_options, user_votes} = if event.status == :polling do
-            poll = Events.get_event_date_poll(event)
-            if poll do
-              options = Events.list_event_date_options(poll)
-              votes = case user do
-                nil -> []
-                user -> Events.list_user_votes_for_poll(poll, user)
-              end
-              {poll, options, votes}
-            else
-              {nil, [], []}
-            end
-          else
-            {nil, [], []}
-          end
+          # Legacy date polling removed - now using generic polling system
 
           # Apply event theme to layout
           theme = event.theme || :minimal
@@ -145,12 +130,10 @@ defmodule EventasaurusWeb.PublicEventLive do
            |> assign(:show_registration_modal, false)
            |> assign(:just_registered, false)
            |> assign(:page_title, event.title)
-           |> assign(:date_poll, date_poll)
-           |> assign(:date_options, date_options)
-           |> assign(:user_votes, user_votes)
+           # Legacy date polling assigns removed
            |> assign(:pending_vote, nil)
            |> assign(:show_vote_modal, false)
-           |> assign(:temp_votes, %{})  # Map of option_id => vote_type for anonymous users (legacy date polling)
+           # Legacy temp_votes removed
            |> assign(:poll_temp_votes, %{})  # Map of poll_id => temp_votes for generic polls
            |> assign(:show_generic_vote_modal, false)  # Show generic poll vote modal
            |> assign(:modal_poll, nil)  # Current poll for modal
@@ -631,116 +614,9 @@ defmodule EventasaurusWeb.PublicEventLive do
     }
   end
 
-  def handle_event("cast_vote", %{"option_id" => option_id, "vote_type" => vote_type}, socket) do
-    case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
-        # Authenticated user - proceed with normal voting flow
-        option_id_int = String.to_integer(option_id)
-        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
+  # Legacy cast_vote handler removed - using generic polling system
 
-        if option do
-          vote_type_atom = String.to_atom(vote_type)
-
-          case Events.cast_vote(option, user, vote_type_atom) do
-            {:ok, _vote} ->
-              # Reload user votes and voting summary
-              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
-
-              {:noreply,
-               socket
-               |> assign(:user_votes, user_votes)
-               |> assign(:voting_summary, voting_summary)
-               |> put_flash(:info, "Vote cast successfully!")
-              }
-
-            {:error, :already_voted} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "You have already voted for this option.")
-              }
-
-            {:error, reason} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "Unable to cast vote: #{inspect(reason)}")
-              }
-          end
-        else
-          {:noreply,
-           socket
-           |> put_flash(:error, "Invalid voting option.")
-          }
-        end
-
-      {:error, _} ->
-        # Anonymous user - store vote temporarily and update UI immediately
-        option_id_int = String.to_integer(option_id)
-        vote_type_atom = String.to_atom(vote_type)
-
-        # Update temporary votes
-        updated_temp_votes = Map.put(socket.assigns.temp_votes, option_id_int, vote_type_atom)
-
-        {:noreply,
-         socket
-         |> assign(:temp_votes, updated_temp_votes)
-         |> put_flash(:info, "Vote saved temporarily. Sign in to make it permanent!")
-        }
-    end
-  end
-
-  def handle_event("remove_vote", %{"option_id" => option_id}, socket) do
-    case ensure_user_struct(socket.assigns.auth_user) do
-      {:ok, user} ->
-        # Authenticated user - remove from database
-        option_id_int = String.to_integer(option_id)
-        option = Enum.find(socket.assigns.date_options, &(&1.id == option_id_int))
-
-        if option do
-          case Events.remove_user_vote(option, user) do
-            {:ok, _} ->
-              # Reload user votes and voting summary
-              user_votes = Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-              voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
-
-              {:noreply,
-               socket
-               |> assign(:user_votes, user_votes)
-               |> assign(:voting_summary, voting_summary)
-               |> put_flash(:info, "Vote removed successfully!")
-              }
-
-            {:error, :vote_not_found} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "No vote found to remove.")
-              }
-
-            {:error, reason} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "Unable to remove vote: #{inspect(reason)}")
-              }
-          end
-        else
-          {:noreply,
-           socket
-           |> put_flash(:error, "Invalid voting option.")
-          }
-        end
-
-      {:error, _} ->
-        # Anonymous user - remove from temporary votes
-        option_id_int = String.to_integer(option_id)
-        updated_temp_votes = Map.delete(socket.assigns.temp_votes, option_id_int)
-
-        {:noreply,
-         socket
-         |> assign(:temp_votes, updated_temp_votes)
-         |> put_flash(:info, "Temporary vote removed!")
-        }
-    end
-  end
+  # Legacy remove_vote handler removed - using generic polling system
 
   # ==================== INFO HANDLERS ====================
 
@@ -1015,63 +891,7 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
-  @impl true
-  def handle_info({:save_all_votes_for_user, event_id, name, email, temp_votes, date_options}, socket) do
-    # Convert temp_votes map to the format expected by bulk operations
-    votes_data = for {option_id, vote_type} <- temp_votes do
-      option = Enum.find(date_options, &(&1.id == option_id))
-      %{option: option, vote_type: vote_type}
-    end
-
-    # Use bulk vote operation for better performance
-    case Events.register_voter_and_bulk_cast_votes(event_id, name, email, votes_data) do
-      {:ok, result_type, _participant, _vote_results} ->
-        # Get the user from the database to update socket assigns
-        user = Accounts.get_user_by_email(email)
-
-        # Reload user votes to show updated state
-        user_votes = if user do
-          Events.list_user_votes_for_poll(socket.assigns.date_poll, user)
-        else
-          []
-        end
-
-        # Reload voting summary as well
-        voting_summary = Events.get_poll_vote_tallies(socket.assigns.date_poll)
-
-        message = case result_type do
-          :new_voter ->
-            "All #{map_size(temp_votes)} votes saved successfully! You're now registered for #{socket.assigns.event.title}. Please check your email for a magic link to create your account."
-          :existing_user_voted ->
-            "All #{map_size(temp_votes)} votes saved successfully! You're registered for #{socket.assigns.event.title}."
-        end
-
-        {:noreply,
-         socket
-         |> assign(:show_vote_modal, false)
-         |> assign(:temp_votes, %{})
-         |> assign(:user_votes, user_votes)
-         |> assign(:voting_summary, voting_summary)
-         |> assign(:registration_status, :registered)  # Update registration status
-         |> assign(:user, user)  # Set the user so they see authenticated UI
-         |> assign(:just_registered, result_type == :new_voter)  # Show email verification for new users
-         |> put_flash(:info, message)
-        }
-
-      {:error, reason} ->
-        error_message = case reason do
-          :event_not_found -> "Event not found."
-          :email_confirmation_required -> "A magic link has been sent to your email. Please click the link to verify your email address, then try voting again."
-          _ -> "Failed to save votes. Please try again."
-        end
-
-        {:noreply,
-         socket
-         |> assign(:show_vote_modal, false)
-         |> put_flash(:error, error_message)
-        }
-    end
-  end
+  # Legacy save_all_votes_for_user handler removed - using generic polling system
 
   @impl true
   def handle_info({:ticket_update, %{ticket: updated_ticket, action: action}}, socket) do
@@ -1352,218 +1172,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
           <!-- About section (shared for all events) -->
 
-                     <!-- Date Voting Interface (only show for polling events) -->
-           <%= if @event.status == :polling and not is_nil(@date_poll) and @date_options != [] do %>
-             <div class="mobile-voting-simplified bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm" data-testid="voting-interface">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 class="text-xl font-semibold text-gray-900">Vote on Event Date</h2>
-                  <p class="text-sm text-gray-600">Help us find the best date that works for everyone</p>
-                </div>
-              </div>
-
-              <%= if @user do %>
-                <!-- Voting interface for authenticated users -->
-                <div class="space-y-4">
-                  <%= for option <- @date_options do %>
-                    <% user_vote = Enum.find(@user_votes, &(&1.event_date_option_id == option.id)) %>
-                    <% vote_tally = Events.get_date_option_vote_tally(option) %>
-
-                    <div class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
-                      <div class="flex items-center justify-between mb-3">
-                        <div class="flex-1">
-                          <h3 class="font-medium text-gray-900">
-                            <%= Calendar.strftime(option.date, "%A, %B %d, %Y") %>
-                          </h3>
-                          <p class="text-sm text-gray-500">
-                            <%= vote_tally.total %> <%= if vote_tally.total == 1, do: "vote", else: "votes" %>
-                            · <%= vote_tally.percentage %>% positive
-                          </p>
-                        </div>
-                        <%= if user_vote do %>
-                          <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-green-600">
-                              Your vote: <%= EventasaurusApp.Events.EventDateVote.vote_type_display(user_vote) %>
-                            </span>
-                            <button
-                              phx-click="remove_vote"
-                              phx-value-option_id={option.id}
-                              class="text-gray-400 hover:text-gray-600 transition-colors"
-                              title="Remove vote"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        <% end %>
-                      </div>
-
-                      <!-- Enhanced Vote tally visualization -->
-                      <div class="mb-3">
-                        <div class="flex h-3 bg-gray-100 rounded-full overflow-hidden">
-                          <%= if vote_tally.total > 0 do %>
-                            <div class="bg-green-500" style={"width: #{(vote_tally.yes / vote_tally.total) * 100}%"}></div>
-                            <div class="bg-yellow-400" style={"width: #{(vote_tally.if_need_be / vote_tally.total) * 100}%"}></div>
-                            <div class="bg-red-400" style={"width: #{(vote_tally.no / vote_tally.total) * 100}%"}></div>
-                          <% end %>
-                        </div>
-                        <div class="flex justify-between text-xs text-gray-500 mt-1">
-                          <span>Yes: <%= vote_tally.yes %> (<%= Float.round((vote_tally.yes / max(vote_tally.total, 1)) * 100, 1) %>%)</span>
-                          <span>If needed: <%= vote_tally.if_need_be %> (<%= Float.round((vote_tally.if_need_be / max(vote_tally.total, 1)) * 100, 1) %>%)</span>
-                          <span>No: <%= vote_tally.no %> (<%= Float.round((vote_tally.no / max(vote_tally.total, 1)) * 100, 1) %>%)</span>
-                        </div>
-                        <div class="text-xs text-gray-400 mt-1 text-center">
-                          Overall Score: <%= vote_tally.percentage %>% positive
-                        </div>
-                      </div>
-
-                                             <!-- Voting buttons -->
-                       <div class="voting-buttons flex gap-2">
-                        <button
-                          phx-click="cast_vote"
-                          phx-value-option_id={option.id}
-                          phx-value-vote_type="yes"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
-                            if user_vote && user_vote.vote_type == :yes do
-                              "bg-green-600 text-white"
-                            else
-                              "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
-                            end
-                          }
-                        >
-                          Yes
-                        </button>
-                        <button
-                          phx-click="cast_vote"
-                          phx-value-option_id={option.id}
-                          phx-value-vote_type="if_need_be"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
-                            if user_vote && user_vote.vote_type == :if_need_be do
-                              "bg-yellow-500 text-white"
-                            else
-                              "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"
-                            end
-                          }
-                        >
-                          If needed
-                        </button>
-                        <button
-                          phx-click="cast_vote"
-                          phx-value-option_id={option.id}
-                          phx-value-vote_type="no"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
-                            if user_vote && user_vote.vote_type == :no do
-                              "bg-red-600 text-white"
-                            else
-                              "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
-                            end
-                          }
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
-                  <% end %>
-                </div>
-              <% else %>
-                <!-- Anonymous users see voting buttons and can start voting process -->
-                <div class="space-y-4">
-                  <%= for option <- @date_options do %>
-                    <% vote_tally = Events.get_date_option_vote_tally(option) %>
-                    <% temp_vote = Map.get(@temp_votes, option.id) %>
-
-                    <div class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
-                      <div class="flex items-center justify-between mb-3">
-                        <div class="flex-1">
-                          <h3 class="font-medium text-gray-900">
-                            <%= Calendar.strftime(option.date, "%A, %B %d, %Y") %>
-                          </h3>
-                          <p class="text-sm text-gray-500">
-                            All day
-                          </p>
-                        </div>
-                        <div class="text-sm text-gray-500">
-                          <%= vote_tally.total %> votes
-                        </div>
-                      </div>
-
-                      <div class="flex gap-2">
-                        <button
-                          type="button"
-                          phx-click="cast_vote"
-                          phx-value-option_id={option.id}
-                          phx-value-vote_type="yes"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
-                            if temp_vote == :yes do
-                              "bg-green-600 text-white"
-                            else
-                              "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
-                            end
-                          }
-                        >
-                          Yes
-                        </button>
-
-                        <button
-                          type="button"
-                          phx-click="cast_vote"
-                          phx-value-option_id={option.id}
-                          phx-value-vote_type="if_need_be"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
-                            if temp_vote == :if_need_be do
-                              "bg-yellow-500 text-white"
-                            else
-                              "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"
-                            end
-                          }
-                        >
-                          If needed
-                        </button>
-
-                        <button
-                          type="button"
-                          phx-click="cast_vote"
-                          phx-value-option_id={option.id}
-                          phx-value-vote_type="no"
-                          class={"flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors duration-200 " <>
-                            if temp_vote == :no do
-                              "bg-red-600 text-white"
-                            else
-                              "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
-                            end
-                          }
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
-                  <% end %>
-
-                  <%= if map_size(@temp_votes) > 0 do %>
-                    <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <h3 class="font-medium text-blue-900 mb-2">Ready to save your votes?</h3>
-                      <p class="text-sm text-blue-700 mb-3">
-                        You've voted on <%= map_size(@temp_votes) %> date option(s). Click below to save your votes.
-                      </p>
-                      <button
-                        type="button"
-                        phx-click="save_all_votes"
-                        class="w-full bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 transition-colors"
-                      >
-                        Save My Votes
-                      </button>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
+          <!-- Legacy date voting interface removed - using generic polling system -->
 
           <!-- Host section -->
           <div class="border-t border-gray-200 pt-6 mt-6">
@@ -2016,15 +1625,7 @@ defmodule EventasaurusWeb.PublicEventLive do
       />
     <% end %>
 
-    <%= if @show_vote_modal and map_size(@temp_votes) > 0 do %>
-      <.live_component
-        module={AnonymousVoterComponent}
-        id="vote-modal"
-        event={@event}
-        temp_votes={@temp_votes}
-        date_options={@date_options}
-      />
-    <% end %>
+    <!-- Legacy vote modal removed - using generic polling system -->
 
     <%= if @show_generic_vote_modal and @modal_poll && map_size(@modal_temp_votes) > 0 do %>
       <.live_component
