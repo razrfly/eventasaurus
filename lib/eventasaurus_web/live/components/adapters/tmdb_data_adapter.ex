@@ -42,17 +42,21 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
     has_movie_fields = Map.has_key?(raw_data, "title") || Map.has_key?(raw_data, "name")
 
     # Check for TMDB fields in legacy format (direct keys)
-    has_legacy_tmdb_fields = Map.has_key?(raw_data, "vote_average") || Map.has_key?(raw_data, "poster_path")
+    has_legacy_tmdb_fields =
+      Map.has_key?(raw_data, "vote_average") || Map.has_key?(raw_data, "poster_path")
 
     # Check for TMDB fields in rich data format (nested in metadata)
     metadata = raw_data["metadata"] || %{}
-    has_rich_tmdb_fields = Map.has_key?(metadata, "vote_average") || Map.has_key?(metadata, "poster_path")
+
+    has_rich_tmdb_fields =
+      Map.has_key?(metadata, "vote_average") || Map.has_key?(metadata, "poster_path")
 
     # Check for rich data structure indicators
     has_rich_structure = Map.has_key?(raw_data, "type") && Map.has_key?(raw_data, "metadata")
 
     # Accept if it's either legacy TMDB data or rich TMDB data
-    has_tmdb_id && has_movie_fields && (has_legacy_tmdb_fields || has_rich_tmdb_fields || has_rich_structure)
+    has_tmdb_id && has_movie_fields &&
+      (has_legacy_tmdb_fields || has_rich_tmdb_fields || has_rich_structure)
   end
 
   @impl true
@@ -79,7 +83,8 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
     cond do
       raw_data["title"] -> :movie
       raw_data["name"] && raw_data["first_air_date"] -> :tv
-      raw_data["name"] -> :movie  # Fallback for movies with 'name' field
+      # Fallback for movies with 'name' field
+      raw_data["name"] -> :movie
       true -> :movie
     end
   end
@@ -90,8 +95,13 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
 
   defp get_description(raw_data) do
     # Support both direct fields and rich data format (string and atom keys)
-    tagline = raw_data["tagline"] || get_in(raw_data, ["metadata", "tagline"]) || get_in(raw_data, [:metadata, "tagline"])
-    overview = raw_data["overview"] || get_in(raw_data, ["metadata", "overview"]) || get_in(raw_data, [:metadata, "overview"]) || raw_data["description"]
+    tagline =
+      raw_data["tagline"] || get_in(raw_data, ["metadata", "tagline"]) ||
+        get_in(raw_data, [:metadata, "tagline"])
+
+    overview =
+      raw_data["overview"] || get_in(raw_data, ["metadata", "overview"]) ||
+        get_in(raw_data, [:metadata, "overview"]) || raw_data["description"]
 
     cond do
       tagline && tagline != "" -> tagline
@@ -108,7 +118,9 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
           alt: get_title(raw_data),
           type: :poster
         }
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -120,14 +132,21 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
           alt: "#{get_title(raw_data)} backdrop",
           type: :backdrop
         }
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   defp get_rating_info(raw_data) do
     # Support both legacy and rich data format (string and atom keys)
-    vote_average = raw_data["vote_average"] || get_in(raw_data, ["metadata", "vote_average"]) || get_in(raw_data, [:metadata, "vote_average"])
-    vote_count = raw_data["vote_count"] || get_in(raw_data, ["metadata", "vote_count"]) || get_in(raw_data, [:metadata, "vote_count"])
+    vote_average =
+      raw_data["vote_average"] || get_in(raw_data, ["metadata", "vote_average"]) ||
+        get_in(raw_data, [:metadata, "vote_average"])
+
+    vote_count =
+      raw_data["vote_count"] || get_in(raw_data, ["metadata", "vote_count"]) ||
+        get_in(raw_data, [:metadata, "vote_count"])
 
     case {vote_average, vote_count} do
       {avg, count} when is_number(avg) and is_integer(count) ->
@@ -137,6 +156,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
           count: count,
           display: "#{format_rating(avg)}/10"
         }
+
       {avg, _} when is_number(avg) ->
         %{
           value: avg,
@@ -144,7 +164,9 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
           count: 0,
           display: "#{format_rating(avg)}/10"
         }
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -227,9 +249,10 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
 
   defp build_overview_section(raw_data) do
     # Support both direct overview and nested in description/metadata
-    overview = raw_data["overview"] ||
-               get_in(raw_data, ["metadata", "overview"]) ||
-               raw_data["description"]
+    overview =
+      raw_data["overview"] ||
+        get_in(raw_data, ["metadata", "overview"]) ||
+        raw_data["description"]
 
     if overview do
       %{
@@ -252,24 +275,26 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
 
   defp build_media_section(raw_data) do
     # Support both direct videos/images and nested media structure
-    videos = raw_data["videos"] ||
-             get_in(raw_data, ["media", "videos"]) ||
-             []
+    videos =
+      raw_data["videos"] ||
+        get_in(raw_data, ["media", "videos"]) ||
+        []
 
     # Handle images from multiple possible locations
-    images = cond do
-      # Rich data format: media.images
-      media_images = get_in(raw_data, ["media", "images"]) ->
-        media_images
+    images =
+      cond do
+        # Rich data format: media.images
+        media_images = get_in(raw_data, ["media", "images"]) ->
+          media_images
 
-      # Legacy format: direct images field (only if it's a map)
-      is_map(raw_data["images"]) ->
-        raw_data["images"]
+        # Legacy format: direct images field (only if it's a map)
+        is_map(raw_data["images"]) ->
+          raw_data["images"]
 
-      # Default to empty map
-      true ->
-        %{}
-    end
+        # Default to empty map
+        true ->
+          %{}
+      end
 
     if length(videos) > 0 || map_size(images) > 0 do
       %{
@@ -281,18 +306,21 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
 
   defp build_details_section(raw_data) do
     %{
-      release_date: raw_data["release_date"] ||
-                   raw_data["first_air_date"] ||
-                   get_in(raw_data, ["metadata", "release_date"]) ||
-                   get_in(raw_data, ["metadata", "first_air_date"]),
+      release_date:
+        raw_data["release_date"] ||
+          raw_data["first_air_date"] ||
+          get_in(raw_data, ["metadata", "release_date"]) ||
+          get_in(raw_data, ["metadata", "first_air_date"]),
       runtime: raw_data["runtime"] || get_in(raw_data, ["metadata", "runtime"]),
       status: raw_data["status"] || get_in(raw_data, ["metadata", "status"]),
       budget: raw_data["budget"] || get_in(raw_data, ["metadata", "budget"]),
       revenue: raw_data["revenue"] || get_in(raw_data, ["metadata", "revenue"]),
-      production_companies: raw_data["production_companies"] ||
-                          get_in(raw_data, ["metadata", "production_companies"]) || [],
-      spoken_languages: raw_data["spoken_languages"] ||
-                       get_in(raw_data, ["metadata", "spoken_languages"]) || [],
+      production_companies:
+        raw_data["production_companies"] ||
+          get_in(raw_data, ["metadata", "production_companies"]) || [],
+      spoken_languages:
+        raw_data["spoken_languages"] ||
+          get_in(raw_data, ["metadata", "spoken_languages"]) || [],
       external_ids: raw_data["external_ids"] || %{}
     }
   end
@@ -302,6 +330,7 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
   defp format_rating(rating) when is_number(rating) do
     :erlang.float_to_binary(rating, [{:decimals, 1}])
   end
+
   defp format_rating(_), do: "N/A"
 
   defp truncate_text(text, max_length) when is_binary(text) do
@@ -319,19 +348,23 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
     year = MovieUtils.get_release_year(raw_data)
 
     # Still need to get formatted date for this adapter's specific needs
-    date_string = raw_data["release_date"] ||
-                  raw_data["first_air_date"] ||
-                  get_in(raw_data, ["metadata", "release_date"]) ||
-                  get_in(raw_data, ["metadata", "first_air_date"])
+    date_string =
+      raw_data["release_date"] ||
+        raw_data["first_air_date"] ||
+        get_in(raw_data, ["metadata", "release_date"]) ||
+        get_in(raw_data, ["metadata", "first_air_date"])
 
-    formatted = case date_string do
-      date when is_binary(date) and date != "" ->
-        case Date.from_iso8601(date) do
-          {:ok, date} -> Calendar.strftime(date, "%B %d, %Y")
-          _ -> nil
-        end
-      _ -> nil
-    end
+    formatted =
+      case date_string do
+        date when is_binary(date) and date != "" ->
+          case Date.from_iso8601(date) do
+            {:ok, date} -> Calendar.strftime(date, "%B %d, %Y")
+            _ -> nil
+          end
+
+        _ ->
+          nil
+      end
 
     case {year, formatted} do
       {nil, nil} -> %{}
@@ -340,9 +373,12 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
   end
 
   defp extract_key_crew(nil), do: []
+
   defp extract_key_crew(crew) when is_list(crew) do
     crew
-    |> Enum.filter(&(&1["job"] in ["Director", "Producer", "Executive Producer", "Writer", "Screenplay"]))
+    |> Enum.filter(
+      &(&1["job"] in ["Director", "Producer", "Executive Producer", "Writer", "Screenplay"])
+    )
     |> Enum.take(5)
   end
 
@@ -353,21 +389,25 @@ defmodule EventasaurusWeb.Live.Components.Adapters.TmdbDataAdapter do
   end
 
   defp build_imdb_url(nil), do: nil
+
   defp build_imdb_url(imdb_id) when is_binary(imdb_id) do
     "https://www.imdb.com/title/#{imdb_id}"
   end
 
   defp build_facebook_url(nil), do: nil
+
   defp build_facebook_url(facebook_id) when is_binary(facebook_id) do
     "https://www.facebook.com/#{facebook_id}"
   end
 
   defp build_twitter_url(nil), do: nil
+
   defp build_twitter_url(twitter_id) when is_binary(twitter_id) do
     "https://twitter.com/#{twitter_id}"
   end
 
   defp build_instagram_url(nil), do: nil
+
   defp build_instagram_url(instagram_id) when is_binary(instagram_id) do
     "https://www.instagram.com/#{instagram_id}"
   end

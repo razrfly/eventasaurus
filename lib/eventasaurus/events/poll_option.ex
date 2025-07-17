@@ -5,18 +5,18 @@ defmodule EventasaurusApp.Events.PollOption do
   alias EventasaurusApp.Accounts.User
 
   schema "poll_options" do
-    field :title, :string
-    field :description, :string
-    field :external_id, :string
-    field :external_data, :map
-    field :image_url, :string
-    field :metadata, :map
-    field :status, :string, default: "active"
-    field :order_index, :integer, default: 0
+    field(:title, :string)
+    field(:description, :string)
+    field(:external_id, :string)
+    field(:external_data, :map)
+    field(:image_url, :string)
+    field(:metadata, :map)
+    field(:status, :string, default: "active")
+    field(:order_index, :integer, default: 0)
 
-    belongs_to :poll, Poll
-    belongs_to :suggested_by, User, foreign_key: :suggested_by_id
-    has_many :votes, PollVote
+    belongs_to(:poll, Poll)
+    belongs_to(:suggested_by, User, foreign_key: :suggested_by_id)
+    has_many(:votes, PollVote)
 
     timestamps()
   end
@@ -27,8 +27,16 @@ defmodule EventasaurusApp.Events.PollOption do
 
     poll_option
     |> cast(attrs, [
-      :title, :description, :external_id, :external_data, :image_url,
-      :metadata, :status, :order_index, :poll_id, :suggested_by_id
+      :title,
+      :description,
+      :external_id,
+      :external_data,
+      :image_url,
+      :metadata,
+      :status,
+      :order_index,
+      :poll_id,
+      :suggested_by_id
     ])
     |> validate_required([:title, :poll_id, :suggested_by_id])
     |> validate_length(:title, min: 1, max: 255)
@@ -40,8 +48,9 @@ defmodule EventasaurusApp.Events.PollOption do
     |> foreign_key_constraint(:poll_id)
     |> foreign_key_constraint(:suggested_by_id)
     |> unique_constraint([:poll_id, :suggested_by_id, :title],
-         name: :poll_options_unique_per_user,
-         message: "You have already suggested this option")
+      name: :poll_options_unique_per_user,
+      message: "You have already suggested this option"
+    )
   end
 
   @doc """
@@ -52,8 +61,15 @@ defmodule EventasaurusApp.Events.PollOption do
 
     poll_option
     |> cast(attrs, [
-      :title, :description, :external_id, :external_data, :image_url,
-      :metadata, :order_index, :poll_id, :suggested_by_id
+      :title,
+      :description,
+      :external_id,
+      :external_data,
+      :image_url,
+      :metadata,
+      :order_index,
+      :poll_id,
+      :suggested_by_id
     ])
     |> validate_required([:title, :poll_id, :suggested_by_id])
     |> validate_length(:title, min: 1, max: 255)
@@ -65,8 +81,9 @@ defmodule EventasaurusApp.Events.PollOption do
     |> foreign_key_constraint(:poll_id)
     |> foreign_key_constraint(:suggested_by_id)
     |> unique_constraint([:poll_id, :suggested_by_id, :title],
-         name: :poll_options_unique_per_user,
-         message: "You have already suggested this option")
+      name: :poll_options_unique_per_user,
+      message: "You have already suggested this option"
+    )
   end
 
   @doc """
@@ -93,17 +110,19 @@ defmodule EventasaurusApp.Events.PollOption do
   Creates a changeset for enriching option with external API data.
   """
   def enrichment_changeset(poll_option, external_data) do
-    attrs = case external_data do
-      %{} = data ->
-        %{
-          external_data: data,
-          description: Map.get(data, "description") || poll_option.description,
-          image_url: Map.get(data, "image_url") || poll_option.image_url,
-          metadata: Map.get(data, "metadata") || poll_option.metadata
-        }
-      _ ->
-        %{}
-    end
+    attrs =
+      case external_data do
+        %{} = data ->
+          %{
+            external_data: data,
+            description: Map.get(data, "description") || poll_option.description,
+            image_url: Map.get(data, "image_url") || poll_option.image_url,
+            metadata: Map.get(data, "metadata") || poll_option.metadata
+          }
+
+        _ ->
+          %{}
+      end
 
     poll_option
     |> cast(attrs, [:external_data, :description, :image_url, :metadata])
@@ -171,9 +190,11 @@ defmodule EventasaurusApp.Events.PollOption do
   """
   def to_display_string(%__MODULE__{title: title, description: nil}), do: title
   def to_display_string(%__MODULE__{title: title, description: ""}), do: title
+
   def to_display_string(%__MODULE__{title: title, description: desc}) when byte_size(desc) > 50 do
     "#{title} - #{String.slice(desc, 0, 47)}..."
   end
+
   def to_display_string(%__MODULE__{title: title, description: desc}) do
     "#{title} - #{desc}"
   end
@@ -182,6 +203,7 @@ defmodule EventasaurusApp.Events.PollOption do
   Get external service name from external_id format.
   """
   def external_service(%__MODULE__{external_id: nil}), do: nil
+
   def external_service(%__MODULE__{external_id: id}) do
     cond do
       String.starts_with?(id, "tmdb:") -> "tmdb"
@@ -197,6 +219,7 @@ defmodule EventasaurusApp.Events.PollOption do
   Extract the actual ID from external_id (removing service prefix).
   """
   def extract_external_id(%__MODULE__{external_id: nil}), do: nil
+
   def extract_external_id(%__MODULE__{external_id: id}) do
     case String.split(id, ":", parts: 2) do
       [_service, actual_id] -> actual_id
@@ -210,7 +233,8 @@ defmodule EventasaurusApp.Events.PollOption do
     case external_data do
       nil -> changeset
       %{} = data when map_size(data) == 0 -> changeset
-      %{} = _data -> changeset  # Valid map
+      # Valid map
+      %{} = _data -> changeset
       _ -> add_error(changeset, :external_data, "must be a valid JSON object")
     end
   end
@@ -219,18 +243,25 @@ defmodule EventasaurusApp.Events.PollOption do
     metadata = get_field(changeset, :metadata)
 
     case {poll_type, metadata} do
-      {nil, _} -> changeset  # No poll type provided, skip validation
-      {_, nil} -> changeset  # Metadata is optional for most poll types
+      # No poll type provided, skip validation
+      {nil, _} ->
+        changeset
+
+      # Metadata is optional for most poll types
+      {_, nil} ->
+        changeset
+
       {"date_selection", metadata} when is_map(metadata) ->
         validate_date_metadata(changeset, metadata)
+
       {_, metadata} when is_map(metadata) ->
-        changeset  # No specific validation for other poll types
+        # No specific validation for other poll types
+        changeset
+
       {_, _} ->
         add_error(changeset, :metadata, "must be a valid map")
     end
   end
-
-
 
   defp validate_date_metadata(changeset, metadata) do
     # First validate the raw structure
@@ -243,10 +274,12 @@ defmodule EventasaurusApp.Events.PollOption do
           changeset
         else
           # Transfer errors from the embedded schema changeset
-          Enum.reduce(date_metadata_changeset.errors, changeset, fn {field, {message, opts}}, acc ->
+          Enum.reduce(date_metadata_changeset.errors, changeset, fn {field, {message, opts}},
+                                                                    acc ->
             add_error(acc, :metadata, "#{field} #{message}", opts)
           end)
         end
+
       {:error, message} ->
         add_error(changeset, :metadata, message)
     end
@@ -265,11 +298,13 @@ defmodule EventasaurusApp.Events.PollOption do
       case DateMetadata.validate_metadata_structure(metadata) do
         :ok ->
           changeset = DateMetadata.changeset(%DateMetadata{}, metadata)
+
           if changeset.valid? do
             {:ok, metadata}
           else
             {:error, changeset}
           end
+
         {:error, reason} ->
           {:error, reason}
       end

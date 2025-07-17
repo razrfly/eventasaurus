@@ -32,14 +32,16 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
     case TmdbService.search_multi(query, page) do
       {:ok, results} ->
         # Filter by content_type if specified
-        filtered_results = case content_type do
-          :movie -> Enum.filter(results, &(&1.type == :movie))
-          :tv -> Enum.filter(results, &(&1.type == :tv))
-          _ -> results
-        end
+        filtered_results =
+          case content_type do
+            :movie -> Enum.filter(results, &(&1.type == :movie))
+            :tv -> Enum.filter(results, &(&1.type == :tv))
+            _ -> results
+          end
 
         normalized_results = Enum.map(filtered_results, &normalize_search_result/1)
         {:ok, normalized_results}
+
       {:error, reason} ->
         Logger.error("TMDB search failed: #{inspect(reason)}")
         {:error, reason}
@@ -53,6 +55,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
         case TmdbService.get_movie_details(id) do
           {:ok, movie_data} ->
             {:ok, normalize_movie_details(movie_data)}
+
           {:error, reason} ->
             {:error, reason}
         end
@@ -61,6 +64,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
         case TmdbService.get_tv_details(id) do
           {:ok, tv_data} ->
             {:ok, normalize_tv_details(tv_data)}
+
           {:error, reason} ->
             {:error, reason}
         end
@@ -77,6 +81,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
         case TmdbService.get_cached_movie_details(id) do
           {:ok, movie_data} ->
             {:ok, normalize_movie_details(movie_data)}
+
           {:error, reason} ->
             {:error, reason}
         end
@@ -122,7 +127,8 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
       cache_ttl: %{
         type: :integer,
         required: false,
-        default: 21600, # 6 hours in seconds
+        # 6 hours in seconds
+        default: 21600,
         description: "Cache time-to-live in seconds"
       }
     }
@@ -308,25 +314,33 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   defp build_images_list(poster_path, backdrop_path) do
     images = []
 
-    images = if poster_path do
-      [%{
-        url: tmdb_image_url(poster_path),
-        type: :poster,
-        size: "w500"
-      } | images]
-    else
-      images
-    end
+    images =
+      if poster_path do
+        [
+          %{
+            url: tmdb_image_url(poster_path),
+            type: :poster,
+            size: "w500"
+          }
+          | images
+        ]
+      else
+        images
+      end
 
-    images = if backdrop_path do
-      [%{
-        url: tmdb_image_url(backdrop_path),
-        type: :backdrop,
-        size: "w1280"
-      } | images]
-    else
-      images
-    end
+    images =
+      if backdrop_path do
+        [
+          %{
+            url: tmdb_image_url(backdrop_path),
+            type: :backdrop,
+            size: "w1280"
+          }
+          | images
+        ]
+      else
+        images
+      end
 
     images
   end
@@ -337,19 +351,29 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
     }
 
     # Add IMDB URL if available
-    urls = if Map.get(data, :imdb_id) do
-      Map.put(urls, :imdb, "https://www.imdb.com/title/#{data.imdb_id}")
-    else
-      urls
-    end
+    urls =
+      if Map.get(data, :imdb_id) do
+        Map.put(urls, :imdb, "https://www.imdb.com/title/#{data.imdb_id}")
+      else
+        urls
+      end
 
     # Add other external IDs if available
     case Map.get(data, :external_ids) do
       %{} = external_ids ->
         urls
-        |> maybe_add_external_url(:facebook, external_ids["facebook_id"], "https://www.facebook.com/")
+        |> maybe_add_external_url(
+          :facebook,
+          external_ids["facebook_id"],
+          "https://www.facebook.com/"
+        )
         |> maybe_add_external_url(:twitter, external_ids["twitter_id"], "https://twitter.com/")
-        |> maybe_add_external_url(:instagram, external_ids["instagram_id"], "https://www.instagram.com/")
+        |> maybe_add_external_url(
+          :instagram,
+          external_ids["instagram_id"],
+          "https://www.instagram.com/"
+        )
+
       _ ->
         urls
     end
@@ -362,12 +386,14 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
 
   defp maybe_add_external_url(urls, _key, nil, _base_url), do: urls
   defp maybe_add_external_url(urls, _key, "", _base_url), do: urls
+
   defp maybe_add_external_url(urls, key, id, base_url) do
     Map.put(urls, key, "#{base_url}#{id}")
   end
 
   defp tmdb_image_url(nil), do: nil
   defp tmdb_image_url(""), do: nil
+
   defp tmdb_image_url(path) when is_binary(path) do
     EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(path, "original")
   end

@@ -7,17 +7,19 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
 
   @behaviour EventasaurusWeb.Services.RichDataProviderBehaviour
 
-
-
   require Logger
 
   # Cache keys and TTL
   @cache_name :google_places_cache
-  @photo_cache_ttl 86_400_000  # 24 hours in ms
-  @details_cache_ttl 3_600_000  # 1 hour in ms
+  # 24 hours in ms
+  @photo_cache_ttl 86_400_000
+  # 1 hour in ms
+  @details_cache_ttl 3_600_000
   @rate_limit_key "google_places_rate_limit"
-  @rate_limit_window 1000  # 1 second in ms
-  @rate_limit_max_requests 10  # Max requests per second
+  # 1 second in ms
+  @rate_limit_window 1000
+  # Max requests per second
+  @rate_limit_max_requests 10
 
   @impl true
   def provider_id, do: :google_places
@@ -34,7 +36,9 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
          {:ok, results} <- search_places_api(query, options) do
       {:ok, results}
     else
-      {:error, :rate_limited} = error -> error
+      {:error, :rate_limited} = error ->
+        error
+
       {:error, reason} ->
         require Logger
         Logger.warning("Google Places search failed: #{inspect(reason)}")
@@ -46,6 +50,7 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   def get_details(_provider_id, content_id, _content_type, options \\ %{}) do
     # Use existing fetch_rich_data functionality
     external_data = %{"place_id" => content_id}
+
     case fetch_rich_data(external_data, Enum.into(options, [])) do
       {:ok, rich_data} -> {:ok, rich_data}
       {:error, reason} -> {:error, reason}
@@ -55,6 +60,7 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   @impl true
   def get_cached_details(_provider_id, content_id, _content_type, _options \\ %{}) do
     cache_key = "place_details_#{content_id}"
+
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} -> {:error, :not_found}
       {:ok, cached_data} -> {:ok, cached_data}
@@ -73,9 +79,11 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   def can_handle?(external_data) when is_map(external_data) do
     # Check for Google Places specific fields
     has_place_id = Map.has_key?(external_data, "place_id")
-    has_google_fields = Map.has_key?(external_data, "formatted_address") or
-                       Map.has_key?(external_data, "geometry") or
-                       Map.has_key?(external_data, "rating")
+
+    has_google_fields =
+      Map.has_key?(external_data, "formatted_address") or
+        Map.has_key?(external_data, "geometry") or
+        Map.has_key?(external_data, "rating")
 
     has_place_id and has_google_fields
   end
@@ -89,7 +97,7 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
       {:ok, processed_data}
     else
       {:error, :rate_limited} ->
-                  Logger.warning("Google Places API rate limited")
+        Logger.warning("Google Places API rate limited")
         {:ok, create_fallback_data(external_data)}
 
       {:error, reason} ->
@@ -104,24 +112,29 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     api_key = get_api_key()
 
     if api_key do
-      url = "https://maps.googleapis.com/maps/api/place/textsearch/json?" <>
-        URI.encode_query(%{
-          query: query,
-          key: api_key
-        })
+      url =
+        "https://maps.googleapis.com/maps/api/place/textsearch/json?" <>
+          URI.encode_query(%{
+            query: query,
+            key: api_key
+          })
 
       case HTTPoison.get(url, [], timeout: 10_000, recv_timeout: 10_000) do
         {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
           case Jason.decode(body) do
             {:ok, %{"results" => results, "status" => "OK"}} ->
               {:ok, results}
+
             {:ok, %{"status" => status}} ->
               {:error, "API returned status: #{status}"}
+
             {:error, reason} ->
               {:error, "JSON decode error: #{inspect(reason)}"}
           end
+
         {:ok, %HTTPoison.Response{status_code: status_code}} ->
           {:error, "HTTP #{status_code}"}
+
         {:error, %HTTPoison.Error{reason: reason}} ->
           {:error, "HTTP error: #{inspect(reason)}"}
       end
@@ -136,20 +149,32 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     case Cachex.get(@cache_name, @rate_limit_key) do
       {:ok, nil} ->
         # First request in window
-        Cachex.put(@cache_name, @rate_limit_key, %{count: 1, window_start: current_time}, ttl: @rate_limit_window)
+        Cachex.put(@cache_name, @rate_limit_key, %{count: 1, window_start: current_time},
+          ttl: @rate_limit_window
+        )
+
         :ok
 
       {:ok, %{count: count, window_start: window_start}} ->
         if current_time - window_start > @rate_limit_window do
           # New window, reset counter
-          Cachex.put(@cache_name, @rate_limit_key, %{count: 1, window_start: current_time}, ttl: @rate_limit_window)
+          Cachex.put(@cache_name, @rate_limit_key, %{count: 1, window_start: current_time},
+            ttl: @rate_limit_window
+          )
+
           :ok
         else
           if count >= @rate_limit_max_requests do
             {:error, :rate_limited}
           else
             # Increment counter
-            Cachex.put(@cache_name, @rate_limit_key, %{count: count + 1, window_start: window_start}, ttl: @rate_limit_window)
+            Cachex.put(
+              @cache_name,
+              @rate_limit_key,
+              %{count: count + 1, window_start: window_start},
+              ttl: @rate_limit_window
+            )
+
             :ok
           end
         end
@@ -166,8 +191,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     cache_key = "place_details_#{place_id}"
 
     case get_cached_or_fetch(cache_key, @details_cache_ttl, fn ->
-      fetch_place_details_from_api(place_id, opts)
-    end) do
+           fetch_place_details_from_api(place_id, opts)
+         end) do
       {:ok, enhanced_data} ->
         # Merge original data with enhanced data
         merged_data = Map.merge(external_data, enhanced_data)
@@ -175,7 +200,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
 
       {:error, reason} ->
         Logger.warning("Failed to fetch enhanced place details: #{inspect(reason)}")
-        {:ok, external_data}  # Fallback to original data
+        # Fallback to original data
+        {:ok, external_data}
     end
   end
 
@@ -190,8 +216,10 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
           case Jason.decode(body) do
             {:ok, %{"result" => result, "status" => "OK"}} ->
               {:ok, result}
+
             {:ok, %{"status" => status}} ->
               {:error, "API returned status: #{status}"}
+
             {:error, reason} ->
               {:error, "JSON decode error: #{inspect(reason)}"}
           end
@@ -211,27 +239,39 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     fields = get_fields_for_request(opts)
 
     "https://maps.googleapis.com/maps/api/place/details/json?" <>
-    URI.encode_query(%{
-      place_id: place_id,
-      fields: fields,
-      key: api_key
-    })
+      URI.encode_query(%{
+        place_id: place_id,
+        fields: fields,
+        key: api_key
+      })
   end
 
   defp get_fields_for_request(opts) do
-    base_fields = ["name", "formatted_address", "rating", "user_ratings_total",
-                   "price_level", "types", "business_status", "opening_hours",
-                   "formatted_phone_number", "website", "geometry"]
+    base_fields = [
+      "name",
+      "formatted_address",
+      "rating",
+      "user_ratings_total",
+      "price_level",
+      "types",
+      "business_status",
+      "opening_hours",
+      "formatted_phone_number",
+      "website",
+      "geometry"
+    ]
 
-    additional_fields = case Keyword.get(opts, :include_photos, true) do
-      true -> ["photos"]
-      false -> []
-    end
+    additional_fields =
+      case Keyword.get(opts, :include_photos, true) do
+        true -> ["photos"]
+        false -> []
+      end
 
-    review_fields = case Keyword.get(opts, :include_reviews, true) do
-      true -> ["reviews"]
-      false -> []
-    end
+    review_fields =
+      case Keyword.get(opts, :include_reviews, true) do
+        true -> ["reviews"]
+        false -> []
+      end
 
     (base_fields ++ additional_fields ++ review_fields)
     |> Enum.join(",")
@@ -279,7 +319,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     case get_photos_with_caching(place_data, opts) do
       photos when is_list(photos) ->
         photos
-        |> Enum.take(12)  # Limit to 12 photos for performance
+        # Limit to 12 photos for performance
+        |> Enum.take(12)
         |> Enum.with_index()
         |> Enum.map(fn {photo, index} ->
           %{
@@ -290,7 +331,9 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
             height: photo["height"]
           }
         end)
-      _ -> []
+
+      _ ->
+        []
     end
   end
 
@@ -301,7 +344,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     photos
     |> Enum.take(max_photos)
     |> Enum.map(&process_photo_with_cache/1)
-    |> Enum.filter(& &1)  # Remove failed photo fetches
+    # Remove failed photo fetches
+    |> Enum.filter(& &1)
   end
 
   defp process_photo_with_cache(photo) when is_map(photo) do
@@ -309,8 +353,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     cache_key = "photo_url_#{photo_reference}"
 
     case get_cached_or_fetch(cache_key, @photo_cache_ttl, fn ->
-      fetch_photo_url(photo)
-    end) do
+           fetch_photo_url(photo)
+         end) do
       {:ok, photo_data} -> photo_data
       {:error, _} -> nil
     end
@@ -323,20 +367,25 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     if api_key and photo_reference do
       # Build photo URL with caching-friendly parameters
       base_url = "https://maps.googleapis.com/maps/api/place/photo"
-      max_width = min(Map.get(photo, "width", 800), 800)  # Limit size for performance
+      # Limit size for performance
+      max_width = min(Map.get(photo, "width", 800), 800)
 
-      photo_url = "#{base_url}?" <> URI.encode_query(%{
-        maxwidth: max_width,
-        photo_reference: photo_reference,
-        key: api_key
-      })
+      photo_url =
+        "#{base_url}?" <>
+          URI.encode_query(%{
+            maxwidth: max_width,
+            photo_reference: photo_reference,
+            key: api_key
+          })
 
       # Also generate a thumbnail URL
-      thumbnail_url = "#{base_url}?" <> URI.encode_query(%{
-        maxwidth: 200,
-        photo_reference: photo_reference,
-        key: api_key
-      })
+      thumbnail_url =
+        "#{base_url}?" <>
+          URI.encode_query(%{
+            maxwidth: 200,
+            photo_reference: photo_reference,
+            key: api_key
+          })
 
       photo_data = %{
         "url" => photo_url,
@@ -359,6 +408,7 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
           {:ok, data} ->
             Cachex.put(@cache_name, cache_key, data, ttl: ttl)
             {:ok, data}
+
           error ->
             error
         end
@@ -402,8 +452,10 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     cond do
       Enum.any?(types, &(&1 in ["restaurant", "food", "meal_takeaway", "meal_delivery"])) ->
         :restaurant
+
       Enum.any?(types, &(&1 in ["tourist_attraction", "amusement_park", "zoo", "museum", "park"])) ->
         :activity
+
       true ->
         :venue
     end
@@ -431,7 +483,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     case {business_status, is_open} do
       {"OPERATIONAL", true} -> "open"
       {"OPERATIONAL", false} -> "closed"
-      {"OPERATIONAL", nil} -> "open"  # Assume open if status unknown
+      # Assume open if status unknown
+      {"OPERATIONAL", nil} -> "open"
       {"CLOSED_TEMPORARILY", _} -> "closed"
       {"CLOSED_PERMANENTLY", _} -> "closed"
       _ -> "unknown"
@@ -441,24 +494,27 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   defp extract_categories(place_data) do
     Map.get(place_data, "types", [])
     |> Enum.reject(&(&1 in ["establishment", "point_of_interest"]))
-    |> Enum.take(6)  # Limit categories for performance
+    # Limit categories for performance
+    |> Enum.take(6)
   end
 
   defp build_external_urls(place_data) do
     urls = %{}
 
-    urls = if website = Map.get(place_data, "website") do
-      Map.put(urls, :official, website)
-    else
-      urls
-    end
+    urls =
+      if website = Map.get(place_data, "website") do
+        Map.put(urls, :official, website)
+      else
+        urls
+      end
 
-    urls = if place_id = Map.get(place_data, "place_id") do
-      google_maps_url = "https://www.google.com/maps/place/?q=place_id:#{place_id}"
-      Map.put(urls, :maps, google_maps_url)
-    else
-      urls
-    end
+    urls =
+      if place_id = Map.get(place_data, "place_id") do
+        google_maps_url = "https://www.google.com/maps/place/?q=place_id:#{place_id}"
+        Map.put(urls, :maps, google_maps_url)
+      else
+        urls
+      end
 
     urls
   end
@@ -497,8 +553,10 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
 
     if include_reviews do
       reviews = Map.get(place_data, "reviews", [])
+
       %{
-        reviews: reviews |> Enum.take(5),  # Limit reviews for performance
+        # Limit reviews for performance
+        reviews: reviews |> Enum.take(5),
         overall_rating: Map.get(place_data, "rating"),
         total_ratings: Map.get(place_data, "user_ratings_total")
       }
@@ -515,6 +573,6 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
 
   defp get_api_key do
     Application.get_env(:eventasaurus, :google_places_api_key) ||
-    System.get_env("GOOGLE_PLACES_API_KEY")
+      System.get_env("GOOGLE_PLACES_API_KEY")
   end
 end

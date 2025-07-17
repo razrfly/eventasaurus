@@ -99,8 +99,8 @@ defmodule EventasaurusWeb.DashboardLive do
 
     # Find the order in the current orders list
     case Enum.find(socket.assigns.orders, fn order ->
-      to_string(order.id) == order_id and order.user_id == user.id
-    end) do
+           to_string(order.id) == order_id and order.user_id == user.id
+         end) do
       nil ->
         {:noreply, put_flash(socket, :error, "Ticket not found")}
 
@@ -133,20 +133,23 @@ defmodule EventasaurusWeb.DashboardLive do
     # Load events
     events = Events.list_events_by_user(user)
     now = DateTime.utc_now()
+
     upcoming_events =
       events
       |> Enum.filter(&(&1.start_at && DateTime.compare(&1.start_at, now) != :lt))
       |> Enum.sort_by(& &1.start_at)
+
     past_events =
       events
       |> Enum.filter(&(&1.start_at && DateTime.compare(&1.start_at, now) == :lt))
       |> Enum.sort_by(& &1.start_at, :desc)
 
     # Load orders
-    orders = case Ticketing.list_user_orders(user.id) do
-      orders when is_list(orders) -> orders
-      _ -> []
-    end
+    orders =
+      case Ticketing.list_user_orders(user.id) do
+        orders when is_list(orders) -> orders
+        _ -> []
+      end
 
     socket
     |> assign(:events, events)
@@ -156,9 +159,10 @@ defmodule EventasaurusWeb.DashboardLive do
     |> assign(:loading, false)
   end
 
-# Removed unused ensure_user_struct/1 function
+  # Removed unused ensure_user_struct/1 function
 
   defp filtered_orders(orders, "all"), do: orders
+
   defp filtered_orders(orders, filter) do
     Enum.filter(orders, fn order -> order.status == filter end)
   end
@@ -166,6 +170,7 @@ defmodule EventasaurusWeb.DashboardLive do
   defp format_currency(cents) when is_integer(cents) do
     CurrencyHelpers.format_currency(cents, "usd")
   end
+
   defp format_currency(_), do: "$0.00"
 
   defp status_badge_class(status) do
@@ -189,9 +194,13 @@ defmodule EventasaurusWeb.DashboardLive do
     # Use HMAC with server secret for secure hash generation
     secret_key = TicketCrypto.get_ticket_secret_key()
     data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
-    hash = :crypto.mac(:hmac, :sha256, secret_key, data)
-    |> Base.url_encode64(padding: false)
-    |> String.slice(0, 16)  # Increased entropy to 16 chars
+
+    hash =
+      :crypto.mac(:hmac, :sha256, secret_key, data)
+      |> Base.url_encode64(padding: false)
+      # Increased entropy to 16 chars
+      |> String.slice(0, 16)
+
     "#{base}-#{hash}"
   end
 end

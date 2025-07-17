@@ -58,7 +58,9 @@ defmodule EventasaurusApp.Accounts do
   def get_user_by_username_or_id(identifier) when is_binary(identifier) do
     # First try username lookup
     case get_user_by_username(identifier) do
-      %User{} = user -> user
+      %User{} = user ->
+        user
+
       nil ->
         # Check if it's a "user-{id}" pattern from username_slug
         case Regex.run(~r/^user-(\d+)$/, identifier) do
@@ -67,6 +69,7 @@ defmodule EventasaurusApp.Accounts do
               {id, ""} -> get_user(id)
               _ -> nil
             end
+
           nil ->
             # Try regular ID lookup if not a "user-{id}" pattern
             case Integer.parse(identifier) do
@@ -113,17 +116,24 @@ defmodule EventasaurusApp.Accounts do
   Finds or creates a user from Supabase user data.
   Returns {:ok, user} or {:error, reason}.
   """
-  def find_or_create_from_supabase(%{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata}) do
+  def find_or_create_from_supabase(%{
+        "id" => supabase_id,
+        "email" => email,
+        "user_metadata" => user_metadata
+      }) do
     case get_user_by_supabase_id(supabase_id) do
       %User{} = user ->
         {:ok, user}
+
       nil ->
         name = user_metadata["name"] || extract_name_from_email(email)
+
         user_params = %{
           email: email,
           name: name,
           supabase_id: supabase_id
         }
+
         create_user(user_params)
     end
   end
@@ -139,6 +149,7 @@ defmodule EventasaurusApp.Accounts do
     case get_user_by_email(email) do
       %User{} = user ->
         {:ok, user}
+
       nil ->
         name = extract_name_from_email(email)
         # Generate a temporary supabase_id for guest users
@@ -149,6 +160,7 @@ defmodule EventasaurusApp.Accounts do
           name: name,
           supabase_id: temp_supabase_id
         }
+
         create_user(user_params)
     end
   end
@@ -180,7 +192,8 @@ defmodule EventasaurusApp.Accounts do
       [%User{name: "John Smith", username: "johnsmith"}, ...]
   """
   def search_users_for_organizers(query, opts \\ []) when is_binary(query) do
-    limit = Keyword.get(opts, :limit, 20) |> min(50)  # Cap at 50 for performance
+    # Cap at 50 for performance
+    limit = Keyword.get(opts, :limit, 20) |> min(50)
     offset = Keyword.get(opts, :offset, 0)
     exclude_user_id = Keyword.get(opts, :exclude_user_id)
     include_private = Keyword.get(opts, :include_private, false)
@@ -196,51 +209,62 @@ defmodule EventasaurusApp.Accounts do
     else
       search_pattern = "%#{clean_query}%"
 
-      base_query = from u in User,
-        where: (
-          ilike(u.name, ^search_pattern) or
-          ilike(u.username, ^search_pattern) or
-          ilike(u.email, ^search_pattern)
-        ),
-        limit: ^limit,
-        offset: ^offset,
-        order_by: [
-          # Prioritize exact username matches, then name matches
-          desc: fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.username, ^clean_query),
-          desc: fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.name, ^clean_query),
-          asc: u.name
-        ],
-        select: %{
-          id: u.id,
-          name: u.name,
-          username: u.username,
-          email: u.email,
-          profile_public: u.profile_public
-        }
+      base_query =
+        from(u in User,
+          where:
+            ilike(u.name, ^search_pattern) or
+              ilike(u.username, ^search_pattern) or
+              ilike(u.email, ^search_pattern),
+          limit: ^limit,
+          offset: ^offset,
+          order_by: [
+            # Prioritize exact username matches, then name matches
+            desc:
+              fragment(
+                "CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END",
+                u.username,
+                ^clean_query
+              ),
+            desc:
+              fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.name, ^clean_query),
+            asc: u.name
+          ],
+          select: %{
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            profile_public: u.profile_public
+          }
+        )
 
       # Add privacy filter - include private profiles if user can manage the event
-      query_with_privacy = if include_private or can_see_private_profiles?(requesting_user_id, event_id) do
-        base_query
-      else
-        from u in base_query, where: u.profile_public == true
-      end
+      query_with_privacy =
+        if include_private or can_see_private_profiles?(requesting_user_id, event_id) do
+          base_query
+        else
+          from(u in base_query, where: u.profile_public == true)
+        end
 
       # Exclude users who are already organizers of this event
-      query_with_event_filter = if event_id do
-        from u in query_with_privacy,
-          left_join: eu in EventasaurusApp.Events.EventUser,
-          on: eu.user_id == u.id and eu.event_id == ^event_id,
-          where: is_nil(eu.id)
-      else
-        query_with_privacy
-      end
+      query_with_event_filter =
+        if event_id do
+          from(u in query_with_privacy,
+            left_join: eu in EventasaurusApp.Events.EventUser,
+            on: eu.user_id == u.id and eu.event_id == ^event_id,
+            where: is_nil(eu.id)
+          )
+        else
+          query_with_privacy
+        end
 
       # Exclude specific user if provided
-      final_query = if exclude_user_id do
-        from u in query_with_event_filter, where: u.id != ^exclude_user_id
-      else
-        query_with_event_filter
-      end
+      final_query =
+        if exclude_user_id do
+          from(u in query_with_event_filter, where: u.id != ^exclude_user_id)
+        else
+          query_with_event_filter
+        end
 
       Repo.all(final_query)
     end
@@ -258,9 +282,13 @@ defmodule EventasaurusApp.Accounts do
           case EventasaurusApp.Events.get_event(event_id) do
             %EventasaurusApp.Events.Event{} = event ->
               EventasaurusApp.Events.user_can_manage_event?(user, event)
-            _ -> false
+
+            _ ->
+              false
           end
-        _ -> false
+
+        _ ->
+          false
       end
     end
   end

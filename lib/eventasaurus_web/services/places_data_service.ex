@@ -25,9 +25,12 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
     %{
       "title" => title,
       "description" => description,
-      "external_id" => "places:#{place_id}",  # Follow the "service:id" pattern
-      "external_data" => place_data,          # Store complete Google Places response
-      "image_url" => image_url                # Store first photo URL
+      # Follow the "service:id" pattern
+      "external_id" => "places:#{place_id}",
+      # Store complete Google Places response
+      "external_data" => place_data,
+      # Store first photo URL
+      "image_url" => image_url
     }
   end
 
@@ -36,14 +39,19 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
     photos = Map.get(place_data, "photos") || Map.get(place_data, :photos) || []
 
     case photos do
-      [] -> nil
+      [] ->
+        nil
+
       [first_photo | _] when is_binary(first_photo) ->
         # Photos are already URL strings (from frontend processing)
         first_photo
+
       [first_photo | _] when is_map(first_photo) ->
         # Photos are map objects with "url" key (from raw API)
         Access.get(first_photo, "url") || Access.get(first_photo, :url)
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -54,29 +62,32 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
     parts = []
 
     # Add rating if available
-    parts = if place_data["rating"] || place_data[:rating] do
-      rating = place_data["rating"] || place_data[:rating]
-      rating_text = "Rating: #{format_rating(rating)}★"
-      [rating_text | parts]
-    else
-      parts
-    end
+    parts =
+      if place_data["rating"] || place_data[:rating] do
+        rating = place_data["rating"] || place_data[:rating]
+        rating_text = "Rating: #{format_rating(rating)}★"
+        [rating_text | parts]
+      else
+        parts
+      end
 
     # Add categories (place types)
-    parts = if get_place_categories(place_data) != [] do
-      categories_text = get_place_categories(place_data) |> Enum.join(", ")
-      [categories_text | parts]
-    else
-      parts
-    end
+    parts =
+      if get_place_categories(place_data) != [] do
+        categories_text = get_place_categories(place_data) |> Enum.join(", ")
+        [categories_text | parts]
+      else
+        parts
+      end
 
     # Add location (address or vicinity)
-    parts = if get_place_location(place_data) do
-      location = get_place_location(place_data)
-      [location | parts]
-    else
-      parts
-    end
+    parts =
+      if get_place_location(place_data) do
+        location = get_place_location(place_data)
+        [location | parts]
+      else
+        parts
+      end
 
     case parts do
       [] -> ""
@@ -91,11 +102,13 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
     types = place_data["types"] || place_data[:types] || []
 
     types
-    |> Enum.reject(&(&1 in ["establishment", "point_of_interest"]))  # Filter generic types
+    # Filter generic types
+    |> Enum.reject(&(&1 in ["establishment", "point_of_interest"]))
     |> Enum.map(&humanize_place_type/1)
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
-    |> Enum.take(3)  # Limit to 3 categories for readability
+    # Limit to 3 categories for readability
+    |> Enum.take(3)
   end
 
   @doc """
@@ -103,8 +116,8 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
   """
   def get_place_location(place_data) do
     place_data["vicinity"] || place_data[:vicinity] ||
-    place_data["formatted_address"] || place_data[:formatted_address] ||
-    place_data["address"] || place_data[:address]
+      place_data["formatted_address"] || place_data[:formatted_address] ||
+      place_data["address"] || place_data[:address]
   end
 
   # Private helper functions
@@ -112,12 +125,14 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
   defp format_rating(rating) when is_number(rating) do
     Float.round(rating, 1)
   end
+
   defp format_rating(rating) when is_binary(rating) do
     case Float.parse(rating) do
       {float_val, _} -> Float.round(float_val, 1)
       _ -> rating
     end
   end
+
   defp format_rating(rating), do: rating
 
   defp humanize_place_type(type) do
@@ -142,7 +157,8 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
       "movie_theater" -> "Movie theater"
       "bowling_alley" -> "Bowling alley"
       "casino" -> "Casino"
-      _ -> nil  # Filter out unrecognized types
+      # Filter out unrecognized types
+      _ -> nil
     end
   end
 end

@@ -85,12 +85,13 @@ defmodule EventasaurusWeb.InterestAuthModal do
              |> assign(:email, email)}
 
           {:error, reason} ->
-            error_message = case reason do
-              %{message: msg} -> msg
-              %{status: 422} -> "Invalid email address. Please check and try again."
-              %{status: 429} -> "Too many requests. Please wait a moment and try again."
-              _ -> "Unable to send magic link. Please try again."
-            end
+            error_message =
+              case reason do
+                %{message: msg} -> msg
+                %{status: 422} -> "Invalid email address. Please check and try again."
+                %{status: 429} -> "Too many requests. Please wait a moment and try again."
+                _ -> "Unable to send magic link. Please try again."
+              end
 
             # Send error to parent LiveView
             send(socket.parent_pid, {:magic_link_error, error_message})

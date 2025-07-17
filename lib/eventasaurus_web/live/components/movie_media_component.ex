@@ -192,7 +192,8 @@ defmodule EventasaurusWeb.Live.Components.MovieMediaComponent do
 
     socket
     |> assign(:display_images, images)
-    |> assign(:display_videos, Enum.take(videos, 6)) # Limit videos
+    # Limit videos
+    |> assign(:display_videos, Enum.take(videos, 6))
     |> assign(:backdrop_images, backdrop_images)
     |> assign(:poster_images, poster_images)
     |> assign(:current_image_type, "all")
@@ -206,14 +207,17 @@ defmodule EventasaurusWeb.Live.Components.MovieMediaComponent do
         Enum.filter(images, fn img ->
           img["aspect_ratio"] && img["aspect_ratio"] > 1.5
         end)
+
       "posters" ->
         Enum.filter(images, fn img ->
           img["aspect_ratio"] && img["aspect_ratio"] < 1.5
         end)
+
       _ ->
         images
     end
   end
+
   defp get_images_by_type(_, _), do: []
 
   defp get_filtered_images(assigns, type) do
@@ -231,6 +235,7 @@ defmodule EventasaurusWeb.Live.Components.MovieMediaComponent do
     case {site, key} do
       {"YouTube", key} when is_binary(key) ->
         "https://img.youtube.com/vi/#{key}/maxresdefault.jpg"
+
       _ ->
         nil
     end
@@ -243,8 +248,10 @@ defmodule EventasaurusWeb.Live.Components.MovieMediaComponent do
     case {site, key} do
       {"YouTube", key} when is_binary(key) ->
         "https://www.youtube.com/watch?v=#{key}"
+
       {"Vimeo", key} when is_binary(key) ->
         "https://vimeo.com/#{key}"
+
       _ ->
         "#"
     end
@@ -256,8 +263,10 @@ defmodule EventasaurusWeb.Live.Components.MovieMediaComponent do
     case type do
       "backdrops" ->
         RichDataDisplayComponent.tmdb_image_url(path, "w500")
+
       "posters" ->
         RichDataDisplayComponent.tmdb_image_url(path, "w342")
+
       _ ->
         # Auto-detect based on aspect ratio
         aspect_ratio = image["aspect_ratio"] || 1.0

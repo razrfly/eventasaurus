@@ -9,6 +9,7 @@ defmodule Eventasaurus.Application do
   def start(_type, _args) do
     # Load environment variables from .env file if in dev/test environment
     env = Application.get_env(:eventasaurus, :environment, :prod)
+
     if env in [:dev, :test] do
       # Simple approach to load .env file
       case File.read(Path.expand(".env")) do
@@ -21,7 +22,9 @@ defmodule Eventasaurus.Application do
               System.put_env(String.trim(key), String.trim(value))
             end
           end)
-        _ -> :ok
+
+        _ ->
+          :ok
       end
     end
 

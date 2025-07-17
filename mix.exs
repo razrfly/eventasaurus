@@ -88,7 +88,7 @@ defmodule Eventasaurus.MixProject do
       # Email service for guest invitations
       {:resend, "~> 0.4"},
 
-            # Enhanced polling system dependencies
+      # Enhanced polling system dependencies
       # Caching for API responses and poll results
       {:cachex, "~> 4.1"},
 
@@ -96,8 +96,7 @@ defmodule Eventasaurus.MixProject do
       {:cloak, "~> 1.1"},
 
       # Rate limiting for API endpoints
-      {:hammer, "~> 7.0"},
-
+      {:hammer, "~> 7.0"}
     ]
   end
 

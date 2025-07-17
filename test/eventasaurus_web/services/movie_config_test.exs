@@ -22,6 +22,7 @@ defmodule EventasaurusWeb.Services.MovieConfigTest do
   describe "get_api_key!/0" do
     test "raises when TMDB_API_KEY is not set" do
       System.delete_env("TMDB_API_KEY")
+
       assert_raise RuntimeError, ~r/TMDB API Key Error/, fn ->
         MovieConfig.get_api_key!()
       end
@@ -36,6 +37,7 @@ defmodule EventasaurusWeb.Services.MovieConfigTest do
   describe "validate_config!/0" do
     test "raises when configuration is invalid" do
       System.delete_env("TMDB_API_KEY")
+
       assert_raise RuntimeError, ~r/TMDB Configuration Error/, fn ->
         MovieConfig.validate_config!()
       end
@@ -69,19 +71,31 @@ defmodule EventasaurusWeb.Services.MovieConfigTest do
 
     test "builds correct URL for different sizes" do
       path = "/abc123.jpg"
-      assert "https://image.tmdb.org/t/p/w300/abc123.jpg" == MovieConfig.build_image_url(path, "w300")
-      assert "https://image.tmdb.org/t/p/original/abc123.jpg" == MovieConfig.build_image_url(path, "original")
+
+      assert "https://image.tmdb.org/t/p/w300/abc123.jpg" ==
+               MovieConfig.build_image_url(path, "w300")
+
+      assert "https://image.tmdb.org/t/p/original/abc123.jpg" ==
+               MovieConfig.build_image_url(path, "original")
     end
 
     test "works with different valid file extensions" do
-      assert "https://image.tmdb.org/t/p/w500/test.png" == MovieConfig.build_image_url("/test.png", "w500")
-      assert "https://image.tmdb.org/t/p/w500/test.webp" == MovieConfig.build_image_url("/test.webp", "w500")
-      assert "https://image.tmdb.org/t/p/w500/test.jpeg" == MovieConfig.build_image_url("/test.jpeg", "w500")
+      assert "https://image.tmdb.org/t/p/w500/test.png" ==
+               MovieConfig.build_image_url("/test.png", "w500")
+
+      assert "https://image.tmdb.org/t/p/w500/test.webp" ==
+               MovieConfig.build_image_url("/test.webp", "w500")
+
+      assert "https://image.tmdb.org/t/p/w500/test.jpeg" ==
+               MovieConfig.build_image_url("/test.jpeg", "w500")
     end
 
     test "handles paths with valid special characters" do
-      assert "https://image.tmdb.org/t/p/w500/test_123-abc.jpg" == MovieConfig.build_image_url("/test_123-abc.jpg", "w500")
-      assert "https://image.tmdb.org/t/p/w500/test.name.jpg" == MovieConfig.build_image_url("/test.name.jpg", "w500")
+      assert "https://image.tmdb.org/t/p/w500/test_123-abc.jpg" ==
+               MovieConfig.build_image_url("/test_123-abc.jpg", "w500")
+
+      assert "https://image.tmdb.org/t/p/w500/test.name.jpg" ==
+               MovieConfig.build_image_url("/test.name.jpg", "w500")
     end
 
     test "returns nil for non-string arguments" do
@@ -97,7 +111,8 @@ defmodule EventasaurusWeb.Services.MovieConfigTest do
     end
 
     test "handles leading slash correctly" do
-      assert MovieConfig.build_api_url("/search/movie") == MovieConfig.build_api_url("search/movie")
+      assert MovieConfig.build_api_url("/search/movie") ==
+               MovieConfig.build_api_url("search/movie")
     end
   end
 
@@ -120,7 +135,8 @@ defmodule EventasaurusWeb.Services.MovieConfigTest do
     test "get_rate_limit_config/0 returns sensible limits" do
       config = MovieConfig.get_rate_limit_config()
       assert is_map(config)
-      assert config.max_requests_per_second <= 50  # Should be under TMDB's limit
+      # Should be under TMDB's limit
+      assert config.max_requests_per_second <= 50
       assert config.max_requests_per_second > 0
       assert config.window_seconds > 0
     end
@@ -139,9 +155,8 @@ defmodule EventasaurusWeb.Services.MovieConfigTest do
     end
   end
 
-    describe "log_config_status/0" do
-
-        test "executes log_config_status without errors when API key is present" do
+  describe "log_config_status/0" do
+    test "executes log_config_status without errors when API key is present" do
       System.put_env("TMDB_API_KEY", "test_key_123456789")
       assert :ok = MovieConfig.log_config_status()
     end

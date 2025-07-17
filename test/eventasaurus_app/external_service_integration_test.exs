@@ -18,15 +18,16 @@ defmodule EventasaurusApp.ExternalServiceIntegrationTest do
       # Arrange: Mock the Auth.Client to return successful authentication
       EventasaurusApp.Auth.ClientMock
       |> expect(:sign_in, fn "user@example.com", "password123" ->
-        {:ok, %{
-          "access_token" => "mocked_access_token_12345",
-          "refresh_token" => "mocked_refresh_token_67890",
-          "user" => %{
-            "id" => "user-uuid-12345",
-            "email" => "user@example.com",
-            "user_metadata" => %{"name" => "John Doe"}
-          }
-        }}
+        {:ok,
+         %{
+           "access_token" => "mocked_access_token_12345",
+           "refresh_token" => "mocked_refresh_token_67890",
+           "user" => %{
+             "id" => "user-uuid-12345",
+             "email" => "user@example.com",
+             "user_metadata" => %{"name" => "John Doe"}
+           }
+         }}
       end)
 
       # Act: Simulate calling our authentication logic
@@ -62,32 +63,34 @@ defmodule EventasaurusApp.ExternalServiceIntegrationTest do
       # Arrange: Mock Unsplash API to return search results
       EventasaurusWeb.Services.UnsplashServiceMock
       |> expect(:search_photos, fn "conference", 1, 12 ->
-        {:ok, [
-          %{
-            id: "unsplash-photo-1",
-            description: "Professional conference room",
-            urls: %{
-              regular: "https://images.unsplash.com/photo-1.jpg",
-              thumb: "https://images.unsplash.com/photo-1-thumb.jpg"
-            },
-            user: %{name: "Conference Photographer"},
-            download_location: "https://api.unsplash.com/photos/photo-1/download"
-          },
-          %{
-            id: "unsplash-photo-2",
-            description: "Business meeting setup",
-            urls: %{
-              regular: "https://images.unsplash.com/photo-2.jpg",
-              thumb: "https://images.unsplash.com/photo-2-thumb.jpg"
-            },
-            user: %{name: "Event Photographer"},
-            download_location: "https://api.unsplash.com/photos/photo-2/download"
-          }
-        ]}
+        {:ok,
+         [
+           %{
+             id: "unsplash-photo-1",
+             description: "Professional conference room",
+             urls: %{
+               regular: "https://images.unsplash.com/photo-1.jpg",
+               thumb: "https://images.unsplash.com/photo-1-thumb.jpg"
+             },
+             user: %{name: "Conference Photographer"},
+             download_location: "https://api.unsplash.com/photos/photo-1/download"
+           },
+           %{
+             id: "unsplash-photo-2",
+             description: "Business meeting setup",
+             urls: %{
+               regular: "https://images.unsplash.com/photo-2.jpg",
+               thumb: "https://images.unsplash.com/photo-2-thumb.jpg"
+             },
+             user: %{name: "Event Photographer"},
+             download_location: "https://api.unsplash.com/photos/photo-2/download"
+           }
+         ]}
       end)
 
       # Act: Search for conference photos
-      search_result = EventasaurusWeb.Services.UnsplashServiceMock.search_photos("conference", 1, 12)
+      search_result =
+        EventasaurusWeb.Services.UnsplashServiceMock.search_photos("conference", 1, 12)
 
       # Assert: Verify the search returned properly formatted results
       assert {:ok, photos} = search_result
@@ -122,31 +125,32 @@ defmodule EventasaurusApp.ExternalServiceIntegrationTest do
       # Arrange: Mock TMDb API to return mixed search results
       EventasaurusWeb.Services.TmdbServiceMock
       |> expect(:search_multi, fn "Marvel", 1 ->
-        {:ok, [
-          %{
-            type: :movie,
-            id: 299534,
-            title: "Avengers: Endgame",
-            overview: "The final battle for the fate of Earth...",
-            poster_path: "/or06FN3Dka5tukK1e9sl16pB3iy.jpg",
-            release_date: "2019-04-24"
-          },
-          %{
-            type: :tv,
-            id: 1403,
-            name: "Marvel's Agents of S.H.I.E.L.D.",
-            overview: "Agent Phil Coulson of S.H.I.E.L.D...",
-            poster_path: "/gHUCCMy1vvj58tzE3dZqeC9SXus.jpg",
-            first_air_date: "2013-09-24"
-          },
-          %{
-            type: :person,
-            id: 3223,
-            name: "Robert Downey Jr.",
-            known_for_department: "Acting",
-            profile_path: "/5qHNjhtjMD4YWH3UP0rm4tKwxCL.jpg"
-          }
-        ]}
+        {:ok,
+         [
+           %{
+             type: :movie,
+             id: 299_534,
+             title: "Avengers: Endgame",
+             overview: "The final battle for the fate of Earth...",
+             poster_path: "/or06FN3Dka5tukK1e9sl16pB3iy.jpg",
+             release_date: "2019-04-24"
+           },
+           %{
+             type: :tv,
+             id: 1403,
+             name: "Marvel's Agents of S.H.I.E.L.D.",
+             overview: "Agent Phil Coulson of S.H.I.E.L.D...",
+             poster_path: "/gHUCCMy1vvj58tzE3dZqeC9SXus.jpg",
+             first_air_date: "2013-09-24"
+           },
+           %{
+             type: :person,
+             id: 3223,
+             name: "Robert Downey Jr.",
+             known_for_department: "Acting",
+             profile_path: "/5qHNjhtjMD4YWH3UP0rm4tKwxCL.jpg"
+           }
+         ]}
       end)
 
       # Act: Search for Marvel content
@@ -159,7 +163,7 @@ defmodule EventasaurusApp.ExternalServiceIntegrationTest do
       # Check movie result
       movie = Enum.find(results, &(&1.type == :movie))
       assert movie.title == "Avengers: Endgame"
-      assert movie.id == 299534
+      assert movie.id == 299_534
 
       # Check TV show result
       tv_show = Enum.find(results, &(&1.type == :tv))
@@ -205,11 +209,12 @@ defmodule EventasaurusApp.ExternalServiceIntegrationTest do
       # This test shows how we could mock HTTPoison.Base if needed
       EventasaurusApp.HTTPoison.Mock
       |> expect(:get, fn "https://api.example.com/data", _headers, _options ->
-        {:ok, %HTTPoison.Response{
-          status_code: 200,
-          body: Jason.encode!(%{"data" => "mocked response"}),
-          headers: [{"content-type", "application/json"}]
-        }}
+        {:ok,
+         %HTTPoison.Response{
+           status_code: 200,
+           body: Jason.encode!(%{"data" => "mocked response"}),
+           headers: [{"content-type", "application/json"}]
+         }}
       end)
 
       # Act: Call the mocked HTTP client

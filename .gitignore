@@ -66,4 +66,5 @@ cover/
 # tasks/
 
 # Playwright test results
-test-results/ 
+test-results/
+playwright-report/ 

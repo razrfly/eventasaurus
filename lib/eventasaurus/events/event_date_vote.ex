@@ -5,10 +5,10 @@ defmodule EventasaurusApp.Events.EventDateVote do
   alias EventasaurusApp.Accounts.User
 
   schema "event_date_votes" do
-    field :vote_type, Ecto.Enum, values: [:yes, :if_need_be, :no]
+    field(:vote_type, Ecto.Enum, values: [:yes, :if_need_be, :no])
 
-    belongs_to :event_date_option, EventDateOption
-    belongs_to :user, User
+    belongs_to(:event_date_option, EventDateOption)
+    belongs_to(:user, User)
 
     timestamps()
   end
@@ -21,7 +21,9 @@ defmodule EventasaurusApp.Events.EventDateVote do
     |> validate_inclusion(:vote_type, [:yes, :if_need_be, :no])
     |> foreign_key_constraint(:event_date_option_id)
     |> foreign_key_constraint(:user_id)
-    |> unique_constraint([:event_date_option_id, :user_id], message: "user has already voted for this date option")
+    |> unique_constraint([:event_date_option_id, :user_id],
+      message: "user has already voted for this date option"
+    )
   end
 
   @doc """
@@ -34,7 +36,9 @@ defmodule EventasaurusApp.Events.EventDateVote do
     |> validate_inclusion(:vote_type, [:yes, :if_need_be, :no])
     |> foreign_key_constraint(:event_date_option_id)
     |> foreign_key_constraint(:user_id)
-    |> unique_constraint([:event_date_option_id, :user_id], message: "user has already voted for this date option")
+    |> unique_constraint([:event_date_option_id, :user_id],
+      message: "user has already voted for this date option"
+    )
   end
 
   @doc """

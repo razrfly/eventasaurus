@@ -51,7 +51,9 @@ defmodule EventasaurusWeb.TicketController do
       {parsed_order_id, ""} ->
         # Extract components from ticket ID
         case extract_ticket_components(ticket_id) do
-          {:error, reason} -> {:error, reason}
+          {:error, reason} ->
+            {:error, reason}
+
           {:ok, extracted_order_id, provided_hash} ->
             # Verify order IDs match
             if extracted_order_id != parsed_order_id do
@@ -59,7 +61,9 @@ defmodule EventasaurusWeb.TicketController do
             else
               # Get and validate order
               case get_order_with_validation(parsed_order_id) do
-                {:error, reason} -> {:error, reason}
+                {:error, reason} ->
+                  {:error, reason}
+
                 {:ok, order} ->
                   # Validate cryptographic hash
                   if validate_ticket_hash(order, provided_hash) do
@@ -70,7 +74,9 @@ defmodule EventasaurusWeb.TicketController do
               end
             end
         end
-      _ -> {:error, :invalid_format}
+
+      _ ->
+        {:error, :invalid_format}
     end
   end
 
@@ -78,12 +84,15 @@ defmodule EventasaurusWeb.TicketController do
 
   defp extract_ticket_components("EVT-" <> rest) do
     case String.split(rest, "-", parts: 2) do
-      [order_id_str, hash] when byte_size(hash) == 16 ->  # Updated to 16 chars for HMAC
+      # Updated to 16 chars for HMAC
+      [order_id_str, hash] when byte_size(hash) == 16 ->
         case Integer.parse(order_id_str) do
           {order_id, ""} -> {:ok, order_id, hash}
           _ -> {:error, :invalid_format}
         end
-      _ -> {:error, :invalid_format}
+
+      _ ->
+        {:error, :invalid_format}
     end
   end
 
@@ -91,7 +100,9 @@ defmodule EventasaurusWeb.TicketController do
 
   defp get_order_with_validation(order_id) do
     case Ticketing.get_order(order_id) do
-      nil -> {:error, :not_found}
+      nil ->
+        {:error, :not_found}
+
       order ->
         if order.status == "confirmed" do
           {:ok, order}
@@ -112,12 +123,15 @@ defmodule EventasaurusWeb.TicketController do
     # Use HMAC with server secret for cryptographically secure hash generation
     secret_key = TicketCrypto.get_ticket_secret_key()
     data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
+
     :crypto.mac(:hmac, :sha256, secret_key, data)
     |> Base.url_encode64(padding: false)
-    |> String.slice(0, 16)  # Increased entropy to 16 chars
+    # Increased entropy to 16 chars
+    |> String.slice(0, 16)
   end
 
   defp secure_compare(a, b) when byte_size(a) != byte_size(b), do: false
+
   defp secure_compare(a, b) do
     :crypto.hash_equals(a, b)
   end

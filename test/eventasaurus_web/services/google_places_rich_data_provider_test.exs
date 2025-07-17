@@ -88,8 +88,17 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProviderTest do
 
     test "detailed results follow standardized format" do
       expected_keys = [
-        :id, :type, :title, :description, :metadata,
-        :images, :external_urls, :cast, :crew, :media, :additional_data
+        :id,
+        :type,
+        :title,
+        :description,
+        :metadata,
+        :images,
+        :external_urls,
+        :cast,
+        :crew,
+        :media,
+        :additional_data
       ]
 
       # Verify all required keys for detailed results
@@ -179,7 +188,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProviderTest do
         },
         images: [],
         external_urls: %{
-          google_maps: "https://maps.google.com/maps/place/?q=place_id:ChIJGVtI4by3t4kRr51d_Qm_x58"
+          google_maps:
+            "https://maps.google.com/maps/place/?q=place_id:ChIJGVtI4by3t4kRr51d_Qm_x58"
         }
       }
 
@@ -198,7 +208,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProviderTest do
   describe "Rich Data Provider Architecture compliance" do
     test "implements all required callbacks" do
       # Verify the module implements RichDataProviderBehaviour
-      behaviours = GooglePlacesRichDataProvider.__info__(:attributes)
+      behaviours =
+        GooglePlacesRichDataProvider.__info__(:attributes)
         |> Enum.filter(fn {key, _} -> key == :behaviour end)
         |> Enum.flat_map(fn {_, behaviours} -> behaviours end)
 

@@ -112,7 +112,10 @@ defmodule EventasaurusWeb.ParticipantStatusButtonComponent do
         send(self(), {:remove_participant_status, socket.assigns.event, socket.assigns.user})
       else
         # Set new status
-        send(self(), {:update_participant_status, socket.assigns.event, socket.assigns.user, target_status})
+        send(
+          self(),
+          {:update_participant_status, socket.assigns.event, socket.assigns.user, target_status}
+        )
       end
 
       {:noreply, socket}
@@ -133,7 +136,9 @@ defmodule EventasaurusWeb.ParticipantStatusButtonComponent do
     is_active = current_status == target_status
     is_authenticated = user != nil
 
-    {button_text, aria_label, title_text} = get_button_content(target_status, is_active, is_authenticated)
+    {button_text, aria_label, title_text} =
+      get_button_content(target_status, is_active, is_authenticated)
+
     {active_icon, inactive_icon} = get_button_icons(target_status, size)
 
     base_classes = get_base_classes()
@@ -167,9 +172,14 @@ defmodule EventasaurusWeb.ParticipantStatusButtonComponent do
 
   defp get_button_content(:interested, is_active, is_authenticated) do
     cond do
-      !is_authenticated -> {"Interested", "Sign in to express interest", "Sign in required"}
-      is_active -> {"Interested", "You're interested in this event", "Click to remove your interest"}
-      true -> {"Interested", "Express interest in this event", "Click to mark yourself as interested"}
+      !is_authenticated ->
+        {"Interested", "Sign in to express interest", "Sign in required"}
+
+      is_active ->
+        {"Interested", "You're interested in this event", "Click to remove your interest"}
+
+      true ->
+        {"Interested", "Express interest in this event", "Click to mark yourself as interested"}
     end
   end
 
@@ -178,17 +188,21 @@ defmodule EventasaurusWeb.ParticipantStatusButtonComponent do
   defp get_button_icons(:accepted, size) do
     icon_size = get_icon_size(size)
 
-    active_icon = ~s"""
-    <svg class="#{icon_size}" fill="currentColor" viewBox="0 0 20 20">
-      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-    </svg>
-    """ |> Phoenix.HTML.raw()
+    active_icon =
+      ~s"""
+      <svg class="#{icon_size}" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+      </svg>
+      """
+      |> Phoenix.HTML.raw()
 
-    inactive_icon = ~s"""
-    <svg class="#{icon_size}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-    </svg>
-    """ |> Phoenix.HTML.raw()
+    inactive_icon =
+      ~s"""
+      <svg class="#{icon_size}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+      </svg>
+      """
+      |> Phoenix.HTML.raw()
 
     {active_icon, inactive_icon}
   end
@@ -196,28 +210,36 @@ defmodule EventasaurusWeb.ParticipantStatusButtonComponent do
   defp get_button_icons(:interested, size) do
     icon_size = get_icon_size(size)
 
-    active_icon = ~s"""
-    <svg class="#{icon_size}" fill="currentColor" viewBox="0 0 20 20">
-      <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
-    </svg>
-    """ |> Phoenix.HTML.raw()
+    active_icon =
+      ~s"""
+      <svg class="#{icon_size}" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
+      </svg>
+      """
+      |> Phoenix.HTML.raw()
 
-    inactive_icon = ~s"""
-    <svg class="#{icon_size}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-    </svg>
-    """ |> Phoenix.HTML.raw()
+    inactive_icon =
+      ~s"""
+      <svg class="#{icon_size}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      </svg>
+      """
+      |> Phoenix.HTML.raw()
 
     {active_icon, inactive_icon}
   end
 
   defp get_button_icons(_, size) do
     icon_size = get_icon_size(size)
-    default_icon = ~s"""
-    <svg class="#{icon_size}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-    </svg>
-    """ |> Phoenix.HTML.raw()
+
+    default_icon =
+      ~s"""
+      <svg class="#{icon_size}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+      </svg>
+      """
+      |> Phoenix.HTML.raw()
+
     {default_icon, default_icon}
   end
 

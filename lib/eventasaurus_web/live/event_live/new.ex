@@ -11,7 +11,6 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusWeb.Components.RichDataImportModal
   alias EventasaurusWeb.Services.RichDataManager
 
-
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
@@ -34,26 +33,32 @@ defmodule EventasaurusWeb.EventLive.New do
         # Auto-select a random default image
         random_image = EventasaurusWeb.Services.DefaultImagesService.get_random_image()
 
-        {cover_image_url, external_image_data} = case random_image do
-          nil -> {nil, nil}
-          image -> {
-            image.url,
-            %{
-              "source" => "default",
-              "url" => image.url,
-              "filename" => image.filename,
-              "category" => image.category,
-              "title" => ImageHelpers.title_from_filename(image.filename)
-            }
-          }
-        end
+        {cover_image_url, external_image_data} =
+          case random_image do
+            nil ->
+              {nil, nil}
+
+            image ->
+              {
+                image.url,
+                %{
+                  "source" => "default",
+                  "url" => image.url,
+                  "filename" => image.filename,
+                  "category" => image.category,
+                  "title" => ImageHelpers.title_from_filename(image.filename)
+                }
+              }
+          end
 
         # Enhanced default value logic for taxation_type
         # Smart default based on event characteristics
-        default_taxation_type = determine_smart_taxation_default(%{
-          "is_ticketed" => false,  # New events default to no ticketing
-          "setup_path" => "confirmed"
-        })
+        default_taxation_type =
+          determine_smart_taxation_default(%{
+            # New events default to no ticketing
+            "is_ticketed" => false,
+            "setup_path" => "confirmed"
+          })
 
         # Update form_data with the random image and smart defaults
         initial_form_data = %{
@@ -65,13 +70,17 @@ defmodule EventasaurusWeb.EventLive.New do
           "taxation_type_reasoning" => get_taxation_reasoning(default_taxation_type, false)
         }
 
-        form_data_with_image = case cover_image_url do
-          nil -> initial_form_data
-          url -> Map.merge(initial_form_data, %{
-            "cover_image_url" => url,
-            "external_image_data" => external_image_data
-          })
-        end
+        form_data_with_image =
+          case cover_image_url do
+            nil ->
+              initial_form_data
+
+            url ->
+              Map.merge(initial_form_data, %{
+                "cover_image_url" => url,
+                "external_image_data" => external_image_data
+              })
+          end
 
         socket =
           socket
@@ -93,13 +102,21 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:error, nil)
           |> assign(:page, 1)
           |> assign(:per_page, 20)
-          |> assign(:image_tab, "search") # Changed from "unsplash" to unified search
+          # Changed from "unsplash" to unified search
+          |> assign(:image_tab, "search")
           |> assign(:enable_date_polling, false)
-          |> assign(:setup_path, "confirmed") # default to confirmed for new events
+          # default to confirmed for new events
+          |> assign(:setup_path, "confirmed")
           # New unified picker assigns
           |> assign(:selected_category, "general")
-          |> assign(:default_categories, EventasaurusWeb.Services.DefaultImagesService.get_categories())
-          |> assign(:default_images, EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general"))
+          |> assign(
+            :default_categories,
+            EventasaurusWeb.Services.DefaultImagesService.get_categories()
+          )
+          |> assign(
+            :default_images,
+            EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general")
+          )
           |> assign(:supabase_access_token, session["access_token"])
           # Ticketing assigns
           |> assign(:tickets, [])
@@ -138,10 +155,11 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:search_results, results)
       |> assign(:loading, false)
       |> assign(:error, nil)
+
     {:noreply, socket}
   end
 
-    @impl true
+  @impl true
   def handle_info({:selected_dates_changed, dates}, socket) do
     # Convert dates to ISO8601 strings for form data
     date_strings = Enum.map(dates, &Date.to_iso8601/1)
@@ -161,17 +179,21 @@ defmodule EventasaurusWeb.EventLive.New do
     case provider do
       "tmdb" ->
         perform_rich_data_search(query, :tmdb, socket)
+
       "spotify" ->
         perform_rich_data_search(query, :spotify, socket)
+
       _ ->
         require Logger
         Logger.error("Invalid provider in search: #{provider}")
+
         send_update(RichDataImportModal,
           id: "rich-data-import-modal",
           search_results: [],
           loading: false,
           error: "Invalid provider specified"
         )
+
         {:noreply, socket}
     end
   end
@@ -180,33 +202,52 @@ defmodule EventasaurusWeb.EventLive.New do
   def handle_info({:rich_data_preview, id, provider, type}, socket) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("handle_info rich_data_preview called with id: #{id}, provider: #{provider}, type: #{type}")
+
+      Logger.debug(
+        "handle_info rich_data_preview called with id: #{id}, provider: #{provider}, type: #{type}"
+      )
     end
 
     # Convert provider string to atom safely
-    {provider_atom, type_atom} = case {provider, type} do
-      {"tmdb", "movie"} -> {:tmdb, :movie}
-      {"tmdb", "tv"} -> {:tmdb, :tv}
-      {"spotify", "artist"} -> {:spotify, :artist}
-      {"spotify", "album"} -> {:spotify, :album}
-      {"spotify", "track"} -> {:spotify, :track}
-      _ ->
-        require Logger
-        Logger.error("Invalid provider or type: provider=#{provider}, type=#{type}")
-        send_update(RichDataImportModal,
-          id: "rich-data-import-modal",
-          search_results: [],
-          loading: false,
-          error: "Invalid provider or type specified"
-        )
-        {:noreply, socket}
-    end
+    {provider_atom, type_atom} =
+      case {provider, type} do
+        {"tmdb", "movie"} ->
+          {:tmdb, :movie}
+
+        {"tmdb", "tv"} ->
+          {:tmdb, :tv}
+
+        {"spotify", "artist"} ->
+          {:spotify, :artist}
+
+        {"spotify", "album"} ->
+          {:spotify, :album}
+
+        {"spotify", "track"} ->
+          {:spotify, :track}
+
+        _ ->
+          require Logger
+          Logger.error("Invalid provider or type: provider=#{provider}, type=#{type}")
+
+          send_update(RichDataImportModal,
+            id: "rich-data-import-modal",
+            search_results: [],
+            loading: false,
+            error: "Invalid provider or type specified"
+          )
+
+          {:noreply, socket}
+      end
 
     case RichDataManager.get_details(provider_atom, id, type_atom, %{}) do
       {:ok, details} ->
         if Application.get_env(:eventasaurus, :env) == :dev do
           require Logger
-          Logger.debug("RichDataManager.get_details returned success, details keys: #{inspect(Map.keys(details))}")
+
+          Logger.debug(
+            "RichDataManager.get_details returned success, details keys: #{inspect(Map.keys(details))}"
+          )
         end
 
         send_update(RichDataImportModal,
@@ -240,21 +281,29 @@ defmodule EventasaurusWeb.EventLive.New do
   def handle_info({:rich_data_import, id, provider, type}, socket) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("handle_info rich_data_import called with id: #{id}, provider: #{provider}, type: #{type}")
+
+      Logger.debug(
+        "handle_info rich_data_import called with id: #{id}, provider: #{provider}, type: #{type}"
+      )
     end
 
     # Convert provider string to atom safely
     case {provider, type} do
       {"tmdb", "movie"} ->
         handle_rich_data_details(:tmdb, id, :movie, socket)
+
       {"tmdb", "tv"} ->
         handle_rich_data_details(:tmdb, id, :tv, socket)
+
       {"spotify", "artist"} ->
         handle_rich_data_details(:spotify, id, :artist, socket)
+
       {"spotify", "album"} ->
         handle_rich_data_details(:spotify, id, :album, socket)
+
       {"spotify", "track"} ->
         handle_rich_data_details(:spotify, id, :track, socket)
+
       _ ->
         require Logger
         Logger.error("Invalid provider or type in import: provider=#{provider}, type=#{type}")
@@ -269,7 +318,10 @@ defmodule EventasaurusWeb.EventLive.New do
       socket
       |> assign(:rich_external_data, data)
       |> assign(:show_rich_data_import, false)
-      |> put_flash(:info, "Rich data imported successfully! '#{data.title}' has been added to your event.")
+      |> put_flash(
+        :info,
+        "Rich data imported successfully! '#{data.title}' has been added to your event."
+      )
 
     {:noreply, socket}
   end
@@ -288,16 +340,20 @@ defmodule EventasaurusWeb.EventLive.New do
         flattened_results =
           results
           |> Enum.flat_map(fn {_provider_id, result} ->
-              case result do
-                {:ok, items} when is_list(items) ->
-                  # Add provider information to each item
-                  Enum.map(items, fn item ->
-                    Map.put(item, :provider, provider_atom)
-                  end)
-                {:error, _} -> []
-                _ -> []
-              end
-            end)
+            case result do
+              {:ok, items} when is_list(items) ->
+                # Add provider information to each item
+                Enum.map(items, fn item ->
+                  Map.put(item, :provider, provider_atom)
+                end)
+
+              {:error, _} ->
+                []
+
+              _ ->
+                []
+            end
+          end)
 
         send_update(RichDataImportModal,
           id: "rich-data-import-modal",
@@ -346,7 +402,10 @@ defmodule EventasaurusWeb.EventLive.New do
       require Logger
       Logger.debug("[validate] incoming params: #{inspect(event_params)}")
       Logger.debug("[validate] current socket is_virtual: #{inspect(socket.assigns.is_virtual)}")
-      Logger.debug("[validate] current form_data is_virtual: #{inspect(Map.get(socket.assigns.form_data, "is_virtual"))}")
+
+      Logger.debug(
+        "[validate] current form_data is_virtual: #{inspect(Map.get(socket.assigns.form_data, "is_virtual"))}"
+      )
     end
 
     # Always preserve cover_image_url if not present in params
@@ -356,7 +415,8 @@ defmodule EventasaurusWeb.EventLive.New do
 
     # Always preserve rich_external_data if not present in params
     rich_external_data =
-      event_params["rich_external_data"] || Map.get(socket.assigns.form_data, "rich_external_data") ||
+      event_params["rich_external_data"] ||
+        Map.get(socket.assigns.form_data, "rich_external_data") ||
         socket.assigns.rich_external_data
 
     # Preserve is_virtual unless it's explicitly in the event_params (from form submission, not toggle)
@@ -371,16 +431,23 @@ defmodule EventasaurusWeb.EventLive.New do
     event_params =
       event_params
       |> (fn params ->
-           if cover_image_url, do: Map.put(params, "cover_image_url", cover_image_url), else: params
-         end).()
+            if cover_image_url,
+              do: Map.put(params, "cover_image_url", cover_image_url),
+              else: params
+          end).()
       |> (fn params ->
-           if rich_external_data, do: Map.put(params, "rich_external_data", rich_external_data), else: params
-         end).()
+            if rich_external_data,
+              do: Map.put(params, "rich_external_data", rich_external_data),
+              else: params
+          end).()
       |> Map.put("is_virtual", is_virtual_value)
 
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("[validate] final is_virtual in params: #{inspect(event_params["is_virtual"])}")
+
+      Logger.debug(
+        "[validate] final is_virtual in params: #{inspect(event_params["is_virtual"])}"
+      )
     end
 
     # Merge all params with current form_data, preserving existing values
@@ -388,7 +455,10 @@ defmodule EventasaurusWeb.EventLive.New do
 
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("[validate] final form_data is_virtual: #{inspect(Map.get(form_data, "is_virtual"))}")
+
+      Logger.debug(
+        "[validate] final form_data is_virtual: #{inspect(Map.get(form_data, "is_virtual"))}"
+      )
     end
 
     changeset =
@@ -430,27 +500,39 @@ defmodule EventasaurusWeb.EventLive.New do
     # Decode external_image_data if it's a JSON string
     event_params =
       case Map.get(event_params, "external_image_data") do
-        nil -> event_params
-        "" -> Map.put(event_params, "external_image_data", nil)
+        nil ->
+          event_params
+
+        "" ->
+          Map.put(event_params, "external_image_data", nil)
+
         json_string when is_binary(json_string) ->
           case Jason.decode(json_string) do
             {:ok, decoded_data} -> Map.put(event_params, "external_image_data", decoded_data)
             {:error, _} -> Map.put(event_params, "external_image_data", nil)
           end
-        data when is_map(data) -> event_params
+
+        data when is_map(data) ->
+          event_params
       end
 
     # Decode rich_external_data if it's a JSON string
     event_params =
       case Map.get(event_params, "rich_external_data") do
-        nil -> event_params
-        "" -> Map.put(event_params, "rich_external_data", %{})
+        nil ->
+          event_params
+
+        "" ->
+          Map.put(event_params, "rich_external_data", %{})
+
         json_string when is_binary(json_string) ->
           case Jason.decode(json_string) do
             {:ok, decoded_data} -> Map.put(event_params, "rich_external_data", decoded_data)
             {:error, _} -> Map.put(event_params, "rich_external_data", %{})
           end
-        data when is_map(data) -> event_params
+
+        data when is_map(data) ->
+          event_params
       end
 
     # Process venue data from form_data if present
@@ -462,7 +544,7 @@ defmodule EventasaurusWeb.EventLive.New do
           venue_address = Map.get(form_data, "venue_address")
           is_virtual = Map.get(form_data, "is_virtual", false)
 
-          if !is_virtual and venue_name && venue_name != "" do
+          if (!is_virtual and venue_name) && venue_name != "" do
             # Try to find existing venue or create new one
             venue_attrs = %{
               "name" => venue_name,
@@ -470,22 +552,28 @@ defmodule EventasaurusWeb.EventLive.New do
               "city" => Map.get(form_data, "venue_city"),
               "state" => Map.get(form_data, "venue_state"),
               "country" => Map.get(form_data, "venue_country"),
-              "latitude" => case Map.get(form_data, "venue_latitude") do
-                lat when is_binary(lat) ->
-                  case Float.parse(lat) do
-                    {float_val, _} -> float_val
-                    :error -> nil
-                  end
-                lat -> lat
-              end,
-              "longitude" => case Map.get(form_data, "venue_longitude") do
-                lng when is_binary(lng) ->
-                  case Float.parse(lng) do
-                    {float_val, _} -> float_val
-                    :error -> nil
-                  end
-                lng -> lng
-              end
+              "latitude" =>
+                case Map.get(form_data, "venue_latitude") do
+                  lat when is_binary(lat) ->
+                    case Float.parse(lat) do
+                      {float_val, _} -> float_val
+                      :error -> nil
+                    end
+
+                  lat ->
+                    lat
+                end,
+              "longitude" =>
+                case Map.get(form_data, "venue_longitude") do
+                  lng when is_binary(lng) ->
+                    case Float.parse(lng) do
+                      {float_val, _} -> float_val
+                      :error -> nil
+                    end
+
+                  lng ->
+                    lng
+                end
             }
 
             # Try to find existing venue by address first
@@ -494,8 +582,10 @@ defmodule EventasaurusWeb.EventLive.New do
                 # Create new venue
                 case EventasaurusApp.Venues.create_venue(venue_attrs) do
                   {:ok, venue} -> Map.put(event_params, "venue_id", venue.id)
-                  {:error, _} -> event_params # Fall back to creating without venue
+                  # Fall back to creating without venue
+                  {:error, _} -> event_params
                 end
+
               venue ->
                 # Use existing venue
                 Map.put(event_params, "venue_id", venue.id)
@@ -504,6 +594,7 @@ defmodule EventasaurusWeb.EventLive.New do
             # Virtual event or no venue data - clear venue_id
             Map.put(event_params, "venue_id", nil)
           end
+
         _ ->
           event_params
       end
@@ -557,10 +648,11 @@ defmodule EventasaurusWeb.EventLive.New do
     end
 
     # Determine the new state based on the params
-    is_virtual = case params do
-      %{"value" => value} -> value == "true"
-      _ -> !socket.assigns.is_virtual
-    end
+    is_virtual =
+      case params do
+        %{"value" => value} -> value == "true"
+        _ -> !socket.assigns.is_virtual
+      end
 
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
@@ -594,7 +686,8 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("select_setup_path", %{"path" => path}, socket) when path in @valid_setup_paths do
+  def handle_event("select_setup_path", %{"path" => path}, socket)
+      when path in @valid_setup_paths do
     # Update form_data based on the selected path
     form_data =
       socket.assigns.form_data
@@ -617,7 +710,8 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   def handle_event("select_setup_path", _params, socket),
-    do: {:noreply, socket}  # ignore unknown values
+    # ignore unknown values
+    do: {:noreply, socket}
 
   @impl true
   def handle_event("toggle_date_polling", _params, socket) do
@@ -716,15 +810,16 @@ defmodule EventasaurusWeb.EventLive.New do
     venue_address = Map.get(venue_data, "address", "")
 
     # Update form data with venue information while preserving existing data
-    form_data = (socket.assigns.form_data || %{})
-    |> Map.put("venue_name", venue_name)
-    |> Map.put("venue_address", venue_address)
-    |> Map.put("venue_city", Map.get(venue_data, "city", ""))
-    |> Map.put("venue_state", Map.get(venue_data, "state", ""))
-    |> Map.put("venue_country", Map.get(venue_data, "country", ""))
-    |> Map.put("venue_latitude", Map.get(venue_data, "latitude"))
-    |> Map.put("venue_longitude", Map.get(venue_data, "longitude"))
-    |> Map.put("is_virtual", false)
+    form_data =
+      (socket.assigns.form_data || %{})
+      |> Map.put("venue_name", venue_name)
+      |> Map.put("venue_address", venue_address)
+      |> Map.put("venue_city", Map.get(venue_data, "city", ""))
+      |> Map.put("venue_state", Map.get(venue_data, "state", ""))
+      |> Map.put("venue_country", Map.get(venue_data, "country", ""))
+      |> Map.put("venue_latitude", Map.get(venue_data, "latitude"))
+      |> Map.put("venue_longitude", Map.get(venue_data, "longitude"))
+      |> Map.put("is_virtual", false)
 
     # Update the changeset
     changeset =
@@ -768,10 +863,11 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_event("select_recent_location", %{"location" => location_json}, socket) do
     # Parse the JSON data with error handling
-    location_data = case Jason.decode(location_json) do
-      {:ok, data} -> data
-      {:error, _} -> %{}
-    end
+    location_data =
+      case Jason.decode(location_json) do
+        {:ok, data} -> data
+        {:error, _} -> %{}
+      end
 
     # Handle physical venue (virtual events are excluded from recent locations)
     venue_name = Map.get(location_data, "name", "")
@@ -813,7 +909,12 @@ defmodule EventasaurusWeb.EventLive.New do
 
   @impl true
   def handle_event("filter_recent_locations", %{"query" => query}, socket) do
-    filtered_locations = EventasaurusWeb.Helpers.EventHelpers.filter_locations(socket.assigns.recent_locations, query)
+    filtered_locations =
+      EventasaurusWeb.Helpers.EventHelpers.filter_locations(
+        socket.assigns.recent_locations,
+        query
+      )
+
     {:noreply, assign(socket, :filtered_recent_locations, filtered_locations)}
   end
 
@@ -851,7 +952,10 @@ defmodule EventasaurusWeb.EventLive.New do
   def handle_event("image_uploaded", %{"publicUrl" => image_url, "path" => path}, socket) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("[handle_event :image_uploaded] Image uploaded successfully: #{inspect(image_url)}")
+
+      Logger.debug(
+        "[handle_event :image_uploaded] Image uploaded successfully: #{inspect(image_url)}"
+      )
     end
 
     # Create external_image_data for the uploaded image
@@ -886,9 +990,15 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
-  def handle_event("select_image", %{"source" => source, "image_url" => image_url, "image_data" => image_data} = params, socket) do
+  def handle_event(
+        "select_image",
+        %{"source" => source, "image_url" => image_url, "image_data" => image_data} = params,
+        socket
+      ) do
     external_data = %{
-      "id" => Map.get(params, "id") || Map.get(image_data, "id", "unknown_#{source}_#{System.unique_integer()}"),
+      "id" =>
+        Map.get(params, "id") ||
+          Map.get(image_data, "id", "unknown_#{source}_#{System.unique_integer()}"),
       "url" => image_url,
       "source" => source,
       "metadata" => image_data
@@ -918,14 +1028,17 @@ defmodule EventasaurusWeb.EventLive.New do
   @impl true
   def handle_event("image_selected", %{"cover_image_url" => image_url} = params, socket) do
     # Determine source and extract image data based on what's present in params
-    {source, image_data} = cond do
-      Map.has_key?(params, "unsplash_data") ->
-        {"unsplash", Map.get(params, "unsplash_data", %{})}
-      Map.has_key?(params, "tmdb_data") ->
-        {"tmdb", Map.get(params, "tmdb_data", %{})}
-      true ->
-        {"unknown", %{}}
-    end
+    {source, image_data} =
+      cond do
+        Map.has_key?(params, "unsplash_data") ->
+          {"unsplash", Map.get(params, "unsplash_data", %{})}
+
+        Map.has_key?(params, "tmdb_data") ->
+          {"tmdb", Map.get(params, "tmdb_data", %{})}
+
+        true ->
+          {"unknown", %{}}
+      end
 
     # Ensure consistent structure
     external_data = %{
@@ -936,10 +1049,11 @@ defmodule EventasaurusWeb.EventLive.New do
     }
 
     # Update form_data with the new image
-    form_data = Map.merge(socket.assigns.form_data, %{
-      "cover_image_url" => image_url,
-      "external_image_data" => external_data
-    })
+    form_data =
+      Map.merge(socket.assigns.form_data, %{
+        "cover_image_url" => image_url,
+        "external_image_data" => external_data
+      })
 
     # Update changeset
     changeset =
@@ -961,21 +1075,28 @@ defmodule EventasaurusWeb.EventLive.New do
   # Handle category selection in unified image picker
   @impl true
   def handle_event("select_category", %{"category" => category}, socket) do
-    default_images = EventasaurusWeb.Services.DefaultImagesService.get_images_for_category(category)
+    default_images =
+      EventasaurusWeb.Services.DefaultImagesService.get_images_for_category(category)
 
     socket =
       socket
       |> assign(:selected_category, category)
       |> assign(:default_images, default_images)
-      |> assign(:search_query, "") # Clear search when switching categories
-      |> assign(:search_results, %{unsplash: [], tmdb: []}) # Clear search results
+      # Clear search when switching categories
+      |> assign(:search_query, "")
+      # Clear search results
+      |> assign(:search_results, %{unsplash: [], tmdb: []})
 
     {:noreply, socket}
   end
 
   # Handle default image selection
   @impl true
-  def handle_event("select_default_image", %{"image_url" => image_url, "filename" => filename, "category" => category}, socket) do
+  def handle_event(
+        "select_default_image",
+        %{"image_url" => image_url, "filename" => filename, "category" => category},
+        socket
+      ) do
     external_data = %{
       "id" => filename,
       "url" => image_url,
@@ -989,10 +1110,11 @@ defmodule EventasaurusWeb.EventLive.New do
     }
 
     # Update form_data with the new image
-    form_data = Map.merge(socket.assigns.form_data, %{
-      "cover_image_url" => image_url,
-      "external_image_data" => external_data
-    })
+    form_data =
+      Map.merge(socket.assigns.form_data, %{
+        "cover_image_url" => image_url,
+        "external_image_data" => external_data
+      })
 
     # Update changeset
     changeset =
@@ -1022,6 +1144,7 @@ defmodule EventasaurusWeb.EventLive.New do
         |> assign(:search_results, %{unsplash: [], tmdb: []})
         |> assign(:loading, false)
         |> assign(:error, nil)
+
       {:noreply, socket}
     else
       socket = assign(socket, :loading, true)
@@ -1045,20 +1168,22 @@ defmodule EventasaurusWeb.EventLive.New do
     new_value = !current_bool
 
     # Update form_data with smart taxation type changes
-    form_data = socket.assigns.form_data
-    |> Map.put("is_ticketed", new_value)
-    |> update_taxation_for_ticketing_change(new_value)
+    form_data =
+      socket.assigns.form_data
+      |> Map.put("is_ticketed", new_value)
+      |> update_taxation_for_ticketing_change(new_value)
 
     # Reset ticketing-related assigns when disabling ticketing
-    socket = if new_value do
-      socket
-    else
-      socket
-      |> assign(:tickets, [])
-      |> assign(:show_ticket_modal, false)
-      |> assign(:ticket_form_data, %{})
-      |> assign(:editing_ticket_id, nil)
-    end
+    socket =
+      if new_value do
+        socket
+      else
+        socket
+        |> assign(:tickets, [])
+        |> assign(:show_ticket_modal, false)
+        |> assign(:ticket_form_data, %{})
+        |> assign(:editing_ticket_id, nil)
+      end
 
     socket = assign(socket, :form_data, form_data)
     {:noreply, socket}
@@ -1082,34 +1207,36 @@ defmodule EventasaurusWeb.EventLive.New do
     # Handle both ID-based (for tickets with IDs) and index-based (for temporary tickets)
     tickets = socket.assigns.tickets || []
 
-    {ticket, ticket_id} = cond do
-      # Try to find by ID first (for tickets that have been saved)
-      String.starts_with?(ticket_id_str, "temp_") ->
-        ticket = Enum.find(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
-        {ticket, ticket_id_str}
+    {ticket, ticket_id} =
+      cond do
+        # Try to find by ID first (for tickets that have been saved)
+        String.starts_with?(ticket_id_str, "temp_") ->
+          ticket = Enum.find(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+          {ticket, ticket_id_str}
 
-      # Handle numeric strings - could be either index or ID
-      String.match?(ticket_id_str, ~r/^\d+$/) ->
-        case Integer.parse(ticket_id_str) do
-          {num, ""} ->
-            # Try as index first (for backward compatibility)
-            if num >= 0 and num < length(tickets) do
-              ticket = Enum.at(tickets, num)
-              {ticket, Map.get(ticket, :id, ticket_id_str)}
-            else
-              # Try as ID
-              ticket = Enum.find(tickets, &(Map.get(&1, :id) == num))
-              {ticket, ticket_id_str}
-            end
-          _ ->
-            {nil, nil}
-        end
+        # Handle numeric strings - could be either index or ID
+        String.match?(ticket_id_str, ~r/^\d+$/) ->
+          case Integer.parse(ticket_id_str) do
+            {num, ""} ->
+              # Try as index first (for backward compatibility)
+              if num >= 0 and num < length(tickets) do
+                ticket = Enum.at(tickets, num)
+                {ticket, Map.get(ticket, :id, ticket_id_str)}
+              else
+                # Try as ID
+                ticket = Enum.find(tickets, &(Map.get(&1, :id) == num))
+                {ticket, ticket_id_str}
+              end
 
-      true ->
-        # Try to find by ID
-        ticket = Enum.find(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
-        {ticket, ticket_id_str}
-    end
+            _ ->
+              {nil, nil}
+          end
+
+        true ->
+          # Try to find by ID
+          ticket = Enum.find(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+          {ticket, ticket_id_str}
+      end
 
     if ticket do
       form_data = %{
@@ -1118,7 +1245,10 @@ defmodule EventasaurusWeb.EventLive.New do
         "pricing_model" => Map.get(ticket, :pricing_model, "fixed"),
         "price" => format_price_from_cents(ticket.base_price_cents),
         "minimum_price" => format_price_from_cents(Map.get(ticket, :minimum_price_cents, 0)),
-        "suggested_price" => format_price_from_cents(Map.get(ticket, :suggested_price_cents, ticket.base_price_cents)),
+        "suggested_price" =>
+          format_price_from_cents(
+            Map.get(ticket, :suggested_price_cents, ticket.base_price_cents)
+          ),
         "currency" => Map.get(ticket, :currency, get_currency_with_fallback(socket.assigns.user)),
         "quantity" => Integer.to_string(ticket.quantity),
         "starts_at" => format_datetime_for_input(ticket.starts_at),
@@ -1126,7 +1256,7 @@ defmodule EventasaurusWeb.EventLive.New do
         "tippable" => ticket.tippable
       }
 
-              socket =
+      socket =
         socket
         |> assign(:show_ticket_modal, true)
         |> assign(:ticket_form_data, form_data)
@@ -1143,38 +1273,44 @@ defmodule EventasaurusWeb.EventLive.New do
     tickets = socket.assigns.tickets || []
 
     # Find the ticket to remove - handle both ID and index-based removal
-    updated_tickets = cond do
-      # Handle temporary IDs
-      String.starts_with?(ticket_id_str, "temp_") ->
-        Enum.reject(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+    updated_tickets =
+      cond do
+        # Handle temporary IDs
+        String.starts_with?(ticket_id_str, "temp_") ->
+          Enum.reject(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
 
-      # Handle numeric strings (could be index or ID)
-      String.match?(ticket_id_str, ~r/^\d+$/) ->
-        case Integer.parse(ticket_id_str) do
-          {num, ""} ->
-            # Try removing by index first (for backward compatibility)
-            if num >= 0 and num < length(tickets) do
-              List.delete_at(tickets, num)
-            else
-              # Try removing by ID
-              Enum.reject(tickets, &(Map.get(&1, :id) == num))
-            end
-          _ ->
-            tickets
-        end
+        # Handle numeric strings (could be index or ID)
+        String.match?(ticket_id_str, ~r/^\d+$/) ->
+          case Integer.parse(ticket_id_str) do
+            {num, ""} ->
+              # Try removing by index first (for backward compatibility)
+              if num >= 0 and num < length(tickets) do
+                List.delete_at(tickets, num)
+              else
+                # Try removing by ID
+                Enum.reject(tickets, &(Map.get(&1, :id) == num))
+              end
 
-      true ->
-        # Remove by ID
-        Enum.reject(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
-    end
+            _ ->
+              tickets
+          end
+
+        true ->
+          # Remove by ID
+          Enum.reject(tickets, &(to_string(Map.get(&1, :id, "")) == ticket_id_str))
+      end
 
     # If no tickets remain, update ticketing status
     {updated_form_data, setup_path, is_ticketed} =
       if length(updated_tickets) == 0 do
-        form_data = socket.assigns.form_data
+        form_data =
+          socket.assigns.form_data
           |> Map.put("is_ticketed", false)
-          |> Map.put("taxation_type", "ticketless")  # Update taxation type to match non-ticketed status
-          |> Map.put("setup_path", "confirmed")  # Keep as confirmed but without ticketing
+          # Update taxation type to match non-ticketed status
+          |> Map.put("taxation_type", "ticketless")
+          # Keep as confirmed but without ticketing
+          |> Map.put("setup_path", "confirmed")
+
         {form_data, "confirmed", false}
       else
         # Keep current ticketing status if tickets still exist
@@ -1226,13 +1362,14 @@ defmodule EventasaurusWeb.EventLive.New do
     current_data = socket.assigns.ticket_form_data || %{}
 
     # Handle checkbox properly - if tippable is not in params, it means unchecked
-    updated_data = if Map.has_key?(ticket_params, "tippable") do
-      Map.merge(current_data, ticket_params)
-    else
-      # Checkbox was unchecked, so explicitly set tippable to false
-      ticket_params_with_tippable = Map.put(ticket_params, "tippable", false)
-      Map.merge(current_data, ticket_params_with_tippable)
-    end
+    updated_data =
+      if Map.has_key?(ticket_params, "tippable") do
+        Map.merge(current_data, ticket_params)
+      else
+        # Checkbox was unchecked, so explicitly set tippable to false
+        ticket_params_with_tippable = Map.put(ticket_params, "tippable", false)
+        Map.merge(current_data, ticket_params_with_tippable)
+      end
 
     socket = assign(socket, :ticket_form_data, updated_data)
     {:noreply, socket}
@@ -1272,39 +1409,47 @@ defmodule EventasaurusWeb.EventLive.New do
               base_price_cents: price_cents,
               minimum_price_cents: minimum_price_cents,
               suggested_price_cents: suggested_price_cents,
-                              currency: Map.get(ticket_data, "currency", get_currency_with_fallback(socket.assigns.user)),
-              quantity: case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
-                {n, _} when n >= 0 -> n
-                _ -> 0
-              end,
+              currency:
+                Map.get(ticket_data, "currency", get_currency_with_fallback(socket.assigns.user)),
+              quantity:
+                case Integer.parse(Map.get(ticket_data, "quantity", "0")) do
+                  {n, _} when n >= 0 -> n
+                  _ -> 0
+                end,
               starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
               ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
               tippable: Map.get(ticket_data, "tippable", false) == true
             }
 
             # Add or update ticket in the list
-            updated_tickets = case socket.assigns.editing_ticket_id do
-              nil ->
-                # Adding new ticket - assign a temporary ID for consistency
-                ticket_with_id = Map.put(ticket, :id, "temp_#{System.unique_integer([:positive])}")
-                socket.assigns.tickets ++ [ticket_with_id]
-              ticket_id ->
-                # Updating existing ticket - find by ID and replace
-                Enum.map(socket.assigns.tickets, fn existing_ticket ->
-                  if Map.get(existing_ticket, :id) == ticket_id do
-                    Map.put(ticket, :id, ticket_id)
-                  else
-                    existing_ticket
-                  end
-                end)
-            end
+            updated_tickets =
+              case socket.assigns.editing_ticket_id do
+                nil ->
+                  # Adding new ticket - assign a temporary ID for consistency
+                  ticket_with_id =
+                    Map.put(ticket, :id, "temp_#{System.unique_integer([:positive])}")
+
+                  socket.assigns.tickets ++ [ticket_with_id]
+
+                ticket_id ->
+                  # Updating existing ticket - find by ID and replace
+                  Enum.map(socket.assigns.tickets, fn existing_ticket ->
+                    if Map.get(existing_ticket, :id) == ticket_id do
+                      Map.put(ticket, :id, ticket_id)
+                    else
+                      existing_ticket
+                    end
+                  end)
+              end
 
             # Update form_data to reflect ticketing is enabled
             updated_form_data =
               socket.assigns.form_data
               |> Map.put("is_ticketed", true)
-              |> Map.put("taxation_type", "ticketed_event")  # Update taxation type to match ticketed status
-              |> Map.put("setup_path", "confirmed")  # Default to confirmed when tickets are added
+              # Update taxation type to match ticketed status
+              |> Map.put("taxation_type", "ticketed_event")
+              # Default to confirmed when tickets are added
+              |> Map.put("setup_path", "confirmed")
 
             socket =
               socket
@@ -1343,16 +1488,17 @@ defmodule EventasaurusWeb.EventLive.New do
     zoom_url = EventasaurusWeb.Helpers.EventHelpers.generate_zoom_meeting_url()
 
     # Update form data for virtual meeting
-    form_data = (socket.assigns.form_data || %{})
-    |> Map.put("virtual_venue_url", zoom_url)
-    |> Map.put("is_virtual", true)
-    |> Map.put("venue_name", "")
-    |> Map.put("venue_address", "")
-    |> Map.put("venue_city", "")
-    |> Map.put("venue_state", "")
-    |> Map.put("venue_country", "")
-    |> Map.put("venue_latitude", nil)
-    |> Map.put("venue_longitude", nil)
+    form_data =
+      (socket.assigns.form_data || %{})
+      |> Map.put("virtual_venue_url", zoom_url)
+      |> Map.put("is_virtual", true)
+      |> Map.put("venue_name", "")
+      |> Map.put("venue_address", "")
+      |> Map.put("venue_city", "")
+      |> Map.put("venue_state", "")
+      |> Map.put("venue_country", "")
+      |> Map.put("venue_latitude", nil)
+      |> Map.put("venue_longitude", nil)
 
     # Update the changeset
     changeset =
@@ -1377,16 +1523,17 @@ defmodule EventasaurusWeb.EventLive.New do
     meet_url = EventasaurusWeb.Helpers.EventHelpers.generate_google_meet_url()
 
     # Update form data for virtual meeting
-    form_data = (socket.assigns.form_data || %{})
-    |> Map.put("virtual_venue_url", meet_url)
-    |> Map.put("is_virtual", true)
-    |> Map.put("venue_name", "")
-    |> Map.put("venue_address", "")
-    |> Map.put("venue_city", "")
-    |> Map.put("venue_state", "")
-    |> Map.put("venue_country", "")
-    |> Map.put("venue_latitude", nil)
-    |> Map.put("venue_longitude", nil)
+    form_data =
+      (socket.assigns.form_data || %{})
+      |> Map.put("virtual_venue_url", meet_url)
+      |> Map.put("is_virtual", true)
+      |> Map.put("venue_name", "")
+      |> Map.put("venue_address", "")
+      |> Map.put("venue_city", "")
+      |> Map.put("venue_state", "")
+      |> Map.put("venue_country", "")
+      |> Map.put("venue_latitude", nil)
+      |> Map.put("venue_longitude", nil)
 
     # Update the changeset
     changeset =
@@ -1456,15 +1603,18 @@ defmodule EventasaurusWeb.EventLive.New do
   defp validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
     case pricing_model do
       "flexible" ->
-        minimum_price_cents = case parse_currency(Map.get(ticket_data, "minimum_price", "0")) do
-          nil -> 0
-          cents -> cents
-        end
+        minimum_price_cents =
+          case parse_currency(Map.get(ticket_data, "minimum_price", "0")) do
+            nil -> 0
+            cents -> cents
+          end
 
-        suggested_price_cents = case parse_currency(Map.get(ticket_data, "suggested_price", "")) do
-          nil -> price_cents  # Default to base price if not provided
-          cents -> cents
-        end
+        suggested_price_cents =
+          case parse_currency(Map.get(ticket_data, "suggested_price", "")) do
+            # Default to base price if not provided
+            nil -> price_cents
+            cents -> cents
+          end
 
         cond do
           minimum_price_cents < 0 ->
@@ -1529,9 +1679,10 @@ defmodule EventasaurusWeb.EventLive.New do
 
   # Helper to extract address components
   defp get_address_component(components, type) do
-    component = Enum.find(components, fn comp ->
-      comp["types"] && Enum.member?(comp["types"], type)
-    end)
+    component =
+      Enum.find(components, fn comp ->
+        comp["types"] && Enum.member?(comp["types"], type)
+      end)
 
     if component, do: component["long_name"], else: ""
   end
@@ -1580,15 +1731,18 @@ defmodule EventasaurusWeb.EventLive.New do
                     params
                     |> Map.put("start_at", start_datetime)
                     |> Map.put("ends_at", end_datetime)
+
                   {:error, _} ->
                     params
                 end
+
               {:error, _} ->
                 params
             end
           else
             params
           end
+
         _ ->
           params
       end
@@ -1605,6 +1759,7 @@ defmodule EventasaurusWeb.EventLive.New do
     case combine_date_time(start_date, start_time, timezone) do
       {:ok, datetime} ->
         Map.put(params, "start_at", datetime)
+
       {:error, _} ->
         # Keep existing start_at if combination fails
         params
@@ -1619,13 +1774,15 @@ defmodule EventasaurusWeb.EventLive.New do
     case combine_date_time(ends_date, ends_time, timezone) do
       {:ok, datetime} ->
         Map.put(params, "ends_at", datetime)
+
       {:error, _} ->
         # Keep existing ends_at if combination fails
         params
     end
   end
 
-  defp combine_date_time(date_str, time_str, timezone) when is_binary(date_str) and is_binary(time_str) and date_str != "" and time_str != "" do
+  defp combine_date_time(date_str, time_str, timezone)
+       when is_binary(date_str) and is_binary(time_str) and date_str != "" and time_str != "" do
     try do
       # Parse the date and time
       {:ok, date} = Date.from_iso8601(date_str)
@@ -1640,6 +1797,7 @@ defmodule EventasaurusWeb.EventLive.New do
           # Convert to UTC for storage
           utc_datetime = DateTime.shift_zone!(datetime, "Etc/UTC")
           {:ok, utc_datetime}
+
         {:error, reason} ->
           {:error, reason}
       end
@@ -1676,18 +1834,25 @@ defmodule EventasaurusWeb.EventLive.New do
           case Events.create_event_date_poll(event, user, %{voting_deadline: nil}) do
             {:ok, poll} ->
               # Create date options for each selected date
-                            case Events.create_date_options_from_list(poll, selected_dates) do
-                  {:ok, _options} ->
-                    # Update event state to 'polling'
-                    case Events.update_event(event, %{status: "polling", polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
+              case Events.create_date_options_from_list(poll, selected_dates) do
+                {:ok, _options} ->
+                  # Update event state to 'polling'
+                  case Events.update_event(event, %{
+                         status: "polling",
+                         polling_deadline:
+                           DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)
+                       }) do
                     {:ok, updated_event} ->
                       {:ok, updated_event}
+
                     {:error, reason} ->
                       {:error, reason}
                   end
+
                 {:error, reason} ->
                   {:error, reason}
               end
+
             {:error, reason} ->
               {:error, reason}
           end
@@ -1708,15 +1873,22 @@ defmodule EventasaurusWeb.EventLive.New do
                 case Events.create_date_options_from_range(poll, start_date, end_date) do
                   {:ok, _options} ->
                     # Update event state to 'polling'
-                    case Events.update_event(event, %{status: "polling", polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)}) do
+                    case Events.update_event(event, %{
+                           status: "polling",
+                           polling_deadline:
+                             DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second)
+                         }) do
                       {:ok, updated_event} ->
                         {:ok, updated_event}
+
                       {:error, reason} ->
                         {:error, reason}
                     end
+
                   {:error, reason} ->
                     {:error, reason}
                 end
+
               {:error, reason} ->
                 {:error, reason}
             end
@@ -1735,11 +1907,13 @@ defmodule EventasaurusWeb.EventLive.New do
     is_polling_enabled = enable_date_polling == true or enable_date_polling == "true"
 
     # Determine the correct status
-    final_status = cond do
-      is_polling_enabled or setup_path == "polling" -> "polling"
-      setup_path == "threshold" -> "threshold"
-      true -> "confirmed"  # Default for confirmed events
-    end
+    final_status =
+      cond do
+        is_polling_enabled or setup_path == "polling" -> "polling"
+        setup_path == "threshold" -> "threshold"
+        # Default for confirmed events
+        true -> "confirmed"
+      end
 
     # Ensure the status is correctly set in the event params
     final_event_params_with_status = Map.put(final_event_params, "status", final_status)
@@ -1747,35 +1921,47 @@ defmodule EventasaurusWeb.EventLive.New do
     case Events.create_event_with_organizer(final_event_params_with_status, socket.assigns.user) do
       {:ok, event} ->
         # If date polling is enabled, create the date poll and options
-        event_with_poll = if Map.get(final_event_params, "enable_date_polling", false) do
-          case create_date_poll_for_event(event, final_event_params, socket.assigns.user) do
-            {:ok, updated_event} -> updated_event
-            {:error, _} -> event # Fall back to original event if poll creation fails
+        event_with_poll =
+          if Map.get(final_event_params, "enable_date_polling", false) do
+            case create_date_poll_for_event(event, final_event_params, socket.assigns.user) do
+              {:ok, updated_event} -> updated_event
+              # Fall back to original event if poll creation fails
+              {:error, _} -> event
+            end
+          else
+            event
           end
-        else
-          event
-        end
 
         # If ticketing is enabled, create the tickets
         is_ticketed? = final_event_params["is_ticketed"] in [true, "true"]
 
         case is_ticketed? and length(socket.assigns.tickets) > 0 do
           true ->
-            case create_tickets_for_event(event_with_poll, socket.assigns.tickets, socket.assigns.user) do
+            case create_tickets_for_event(
+                   event_with_poll,
+                   socket.assigns.tickets,
+                   socket.assigns.user
+                 ) do
               :ok ->
                 {:noreply,
                  socket
                  |> put_flash(:info, "Event created successfully")
                  |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
+
               {:error, changeset} ->
                 # Log the error and flash a warning to the user
                 require Logger
                 Logger.error("Failed to create tickets for event: #{inspect(changeset)}")
+
                 {:noreply,
                  socket
-                 |> put_flash(:error, "Event created but tickets could not be created. Please edit the event to add tickets.")
+                 |> put_flash(
+                   :error,
+                   "Event created but tickets could not be created. Please edit the event to add tickets."
+                 )
                  |> redirect(to: ~p"/events/#{event_with_poll.slug}")}
             end
+
           false ->
             {:noreply,
              socket
@@ -1785,7 +1971,11 @@ defmodule EventasaurusWeb.EventLive.New do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         require Logger
-        Logger.error("[submit] Event creation failed with changeset errors: #{inspect(changeset.errors)}")
+
+        Logger.error(
+          "[submit] Event creation failed with changeset errors: #{inspect(changeset.errors)}"
+        )
+
         {:noreply, assign(socket, form: to_form(changeset))}
     end
   end
@@ -1800,17 +1990,19 @@ defmodule EventasaurusWeb.EventLive.New do
       Enum.each(tickets, fn ticket_data ->
         # Get organizer's default currency as fallback
         # Use the passed organizer_user or fall back to USD
-        default_currency = case organizer_user do
-          %{default_currency: _} = user -> get_currency_with_fallback(user)
-          _ -> "usd"
-        end
+        default_currency =
+          case organizer_user do
+            %{default_currency: _} = user -> get_currency_with_fallback(user)
+            _ -> "usd"
+          end
 
         ticket_attrs = %{
           title: Map.get(ticket_data, :title),
           description: Map.get(ticket_data, :description),
           pricing_model: Map.get(ticket_data, :pricing_model, "fixed"),
           base_price_cents: Map.get(ticket_data, :base_price_cents),
-          minimum_price_cents: Map.get(ticket_data, :minimum_price_cents) || Map.get(ticket_data, :base_price_cents),
+          minimum_price_cents:
+            Map.get(ticket_data, :minimum_price_cents) || Map.get(ticket_data, :base_price_cents),
           suggested_price_cents: Map.get(ticket_data, :suggested_price_cents),
           currency: Map.get(ticket_data, :currency, default_currency),
           quantity: Map.get(ticket_data, :quantity),
@@ -1842,7 +2034,11 @@ defmodule EventasaurusWeb.EventLive.New do
       selected_dates_string = Map.get(params, "selected_poll_dates", "")
 
       if selected_dates_string == "" do
-        Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+        Ecto.Changeset.add_error(
+          changeset,
+          :selected_poll_dates,
+          "must select at least 2 dates for polling"
+        )
       else
         selected_dates =
           selected_dates_string
@@ -1851,7 +2047,11 @@ defmodule EventasaurusWeb.EventLive.New do
           |> Enum.filter(&(&1 != ""))
 
         if length(selected_dates) < 2 do
-          Ecto.Changeset.add_error(changeset, :selected_poll_dates, "must select at least 2 dates for polling")
+          Ecto.Changeset.add_error(
+            changeset,
+            :selected_poll_dates,
+            "must select at least 2 dates for polling"
+          )
         else
           changeset
         end
@@ -1874,6 +2074,7 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   defp format_datetime_for_input(nil), do: ""
+
   defp format_datetime_for_input(%DateTime{} = datetime) do
     # Format as local datetime string for input
     datetime
@@ -1882,15 +2083,18 @@ defmodule EventasaurusWeb.EventLive.New do
     |> String.replace("Z", "")
     |> String.replace("+00:00", "")
   end
+
   defp format_datetime_for_input(_), do: ""
 
   defp parse_datetime(nil), do: nil
   defp parse_datetime(""), do: nil
+
   defp parse_datetime(datetime_str) when is_binary(datetime_str) do
     # Handle different datetime formats more carefully
     cond do
       # If it already looks like a complete ISO8601 string, try parsing as-is
-      String.contains?(datetime_str, "T") and (String.contains?(datetime_str, "Z") or String.contains?(datetime_str, "+")) ->
+      String.contains?(datetime_str, "T") and
+          (String.contains?(datetime_str, "Z") or String.contains?(datetime_str, "+")) ->
         case DateTime.from_iso8601(datetime_str) do
           {:ok, datetime, _} -> datetime
           {:error, _} -> nil
@@ -1904,13 +2108,16 @@ defmodule EventasaurusWeb.EventLive.New do
         end
 
       # Otherwise, it's not a valid datetime format
-      true -> nil
+      true ->
+        nil
     end
   end
+
   defp parse_datetime(_), do: nil
 
   # Helper — clears ticket state unless the path is ticket-centric
   defp maybe_reset_ticketing(socket, path) when path in ["confirmed", "threshold"], do: socket
+
   defp maybe_reset_ticketing(socket, _path) do
     socket
     |> assign(:tickets, [])
@@ -1974,7 +2181,10 @@ defmodule EventasaurusWeb.EventLive.New do
       {true, taxation_type} when taxation_type in ["ticketless", "contribution_collection"] ->
         form_data
         |> Map.put("taxation_type", "ticketed_event")
-        |> Map.put("taxation_type_reasoning", "Changed to ticketed_event because ticketing was enabled")
+        |> Map.put(
+          "taxation_type_reasoning",
+          "Changed to ticketed_event because ticketing was enabled"
+        )
 
       # If disabling ticketing and currently ticketed_event, suggest ticketless (most common case)
       {false, "ticketed_event"} ->
@@ -1984,8 +2194,11 @@ defmodule EventasaurusWeb.EventLive.New do
 
       # Otherwise, keep current selection but update reasoning
       _ ->
-        Map.put(form_data, "taxation_type_reasoning",
-          get_taxation_reasoning(current_taxation, true))
+        Map.put(
+          form_data,
+          "taxation_type_reasoning",
+          get_taxation_reasoning(current_taxation, true)
+        )
     end
   end
 
@@ -2000,17 +2213,17 @@ defmodule EventasaurusWeb.EventLive.New do
       # Force is_ticketed to false for contribution_collection and ticketless
       {"contribution_collection", _} ->
         Map.put(event_params, "is_ticketed", false)
+
       {"ticketless", _} ->
         Map.put(event_params, "is_ticketed", false)
+
       # For ticketed_event, preserve the original value
       {"ticketed_event", _} ->
         Map.put(event_params, "is_ticketed", is_ticketed_bool)
+
       # Default case
       _ ->
         Map.put(event_params, "is_ticketed", is_ticketed_bool)
     end
   end
-
-
-
 end

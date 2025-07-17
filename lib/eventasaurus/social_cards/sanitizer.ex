@@ -38,12 +38,16 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
   @spec sanitize_text(any()) :: String.t()
   def sanitize_text(text) when is_binary(text) do
     text
-    |> HtmlSanitizeEx.strip_tags()  # Remove HTML tags completely
-    |> String.replace(~r/[<>&"']/, "")  # Remove any remaining dangerous chars
-    |> String.replace(~r/\s+/, " ")  # Normalize whitespace
+    # Remove HTML tags completely
+    |> HtmlSanitizeEx.strip_tags()
+    # Remove any remaining dangerous chars
+    |> String.replace(~r/[<>&"']/, "")
+    # Normalize whitespace
+    |> String.replace(~r/\s+/, " ")
     |> String.trim()
     |> truncate_text(200)
   end
+
   def sanitize_text(_), do: ""
 
   @doc """
@@ -57,6 +61,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
     else
       # Handle external URLs
       uri = URI.parse(url)
+
       if valid_scheme?(uri.scheme) and valid_host?(uri.host) and image_extension?(url) do
         url
       else
@@ -64,6 +69,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       end
     end
   end
+
   def validate_image_url(_), do: nil
 
   @doc """
@@ -77,6 +83,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       "#6E56CF"
     end
   end
+
   def validate_color(_), do: "#6E56CF"
 
   # Simple private helpers
@@ -86,10 +93,12 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
     else
       # Try to break at word boundary to avoid cutting words
       truncated = String.slice(text, 0, max_length - 3)
+
       case String.split(truncated, " ") do
         [_single_word] ->
           # Single word that's too long, just truncate and add ellipsis
           String.slice(text, 0, max_length - 3) <> "..."
+
         words ->
           # Multiple words, remove last potentially broken word
           words
@@ -115,9 +124,9 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       allowed_prefixes = ["/images/", "/uploads/"]
 
       Enum.any?(allowed_prefixes, fn prefix ->
-        String.starts_with?(normalized_path, prefix) and
         # Ensure no traversal sequences remain after normalization
-        not String.contains?(normalized_path, "..")
+        String.starts_with?(normalized_path, prefix) and
+          not String.contains?(normalized_path, "..")
       end)
     else
       false
@@ -132,7 +141,11 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
     has_format_param = Regex.match?(~r/[&?]fm=(jpe?g|png|gif|webp)/i, url)
 
     # Allow known image service domains even without explicit extensions
-    known_image_service = Regex.match?(~r/^https?:\/\/(images\.unsplash\.com|.*\.cloudinary\.com|.*\.amazonaws\.com)/i, url)
+    known_image_service =
+      Regex.match?(
+        ~r/^https?:\/\/(images\.unsplash\.com|.*\.cloudinary\.com|.*\.amazonaws\.com)/i,
+        url
+      )
 
     has_extension or has_format_param or known_image_service
   end
@@ -143,6 +156,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
     valid_themes = [:minimal, :cosmic, :celebration, :velocity, :retro, :nature, :professional]
     if theme in valid_themes, do: theme, else: :minimal
   end
+
   defp validate_theme(_), do: :minimal
 
   defp sanitize_theme_customizations(customizations) when is_map(customizations) do
@@ -157,10 +171,22 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       {normalized_key, sanitize_theme_value(normalized_key, value)}
     end)
   end
+
   defp sanitize_theme_customizations(_), do: %{}
 
   defp sanitize_theme_value(:colors, colors) when is_map(colors) do
-    allowed_keys = [:primary, :secondary, :accent, :text, :background, "primary", "secondary", "accent", "text", "background"]
+    allowed_keys = [
+      :primary,
+      :secondary,
+      :accent,
+      :text,
+      :background,
+      "primary",
+      "secondary",
+      "accent",
+      "text",
+      "background"
+    ]
 
     colors
     |> Map.take(allowed_keys)
@@ -169,6 +195,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       {normalized_key, validate_color(value)}
     end)
   end
+
   defp sanitize_theme_value(:fonts, fonts) when is_map(fonts) do
     # Only allow safe font properties
     allowed_keys = [:family, :size, :weight, "family", "size", "weight"]
@@ -180,6 +207,7 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       {normalized_key, sanitize_text(to_string(value))}
     end)
   end
+
   defp sanitize_theme_value(:spacing, spacing) when is_map(spacing) do
     # Only allow numeric spacing values
     allowed_keys = [:margin, :padding, :gap, "margin", "padding", "gap"]
@@ -191,18 +219,22 @@ defmodule Eventasaurus.SocialCards.Sanitizer do
       {normalized_key, sanitize_numeric_value(value)}
     end)
   end
+
   defp sanitize_theme_value(_, _), do: %{}
 
   # Helper to normalize keys to atoms
   defp normalize_key(key) when is_atom(key), do: key
   defp normalize_key(key) when is_binary(key), do: String.to_atom(key)
 
-  defp sanitize_numeric_value(value) when is_integer(value) and value >= 0 and value <= 100, do: value
+  defp sanitize_numeric_value(value) when is_integer(value) and value >= 0 and value <= 100,
+    do: value
+
   defp sanitize_numeric_value(value) when is_binary(value) do
     case Integer.parse(value) do
       {num, ""} when num >= 0 and num <= 100 -> num
       _ -> 0
     end
   end
+
   defp sanitize_numeric_value(_), do: 0
 end

@@ -97,8 +97,10 @@ defmodule EventasaurusApp.ThemesTest do
       merged = Themes.merge_customizations(:minimal, custom)
 
       assert merged["colors"]["primary"] == "#ff0000"
-      assert merged["colors"]["secondary"] == "#333333" # Default preserved
-      assert Map.has_key?(merged, "typography") # Other sections preserved
+      # Default preserved
+      assert merged["colors"]["secondary"] == "#333333"
+      # Other sections preserved
+      assert Map.has_key?(merged, "typography")
     end
 
     test "deep merges nested customizations" do
@@ -106,12 +108,15 @@ defmodule EventasaurusApp.ThemesTest do
         "colors" => %{"primary" => "#ff0000"},
         "typography" => %{"font_family" => "Arial"}
       }
+
       merged = Themes.merge_customizations(:minimal, custom)
 
       assert merged["colors"]["primary"] == "#ff0000"
-      assert merged["colors"]["secondary"] == "#333333" # Default preserved
+      # Default preserved
+      assert merged["colors"]["secondary"] == "#333333"
       assert merged["typography"]["font_family"] == "Arial"
-      assert merged["typography"]["heading_weight"] == "600" # Default preserved
+      # Default preserved
+      assert merged["typography"]["heading_weight"] == "600"
     end
   end
 
@@ -172,16 +177,18 @@ defmodule EventasaurusApp.ThemesTest do
     test "accepts valid hex colors in different formats" do
       valid_customizations = %{
         "colors" => %{
-          "primary" => "#ff0000",    # 6 digit with #
-          "secondary" => "00ff00",   # 6 digit without #
-          "accent" => "#f00",        # 3 digit with #
-          "background" => "0f0"      # 3 digit without #
+          # 6 digit with #
+          "primary" => "#ff0000",
+          # 6 digit without #
+          "secondary" => "00ff00",
+          # 3 digit with #
+          "accent" => "#f00",
+          # 3 digit without #
+          "background" => "0f0"
         }
       }
 
       assert {:ok, ^valid_customizations} = Themes.validate_customizations(valid_customizations)
     end
   end
-
-
 end

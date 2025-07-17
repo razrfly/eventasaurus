@@ -87,12 +87,18 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       user_votes = if current_user, do: Events.list_user_poll_votes(poll, current_user), else: []
 
       # Convert to legacy format for calendar UI using our adapter
-      legacy_poll_data = case DatePollAdapter.get_legacy_poll_with_data(poll.id) do
-        {:ok, legacy_data} -> legacy_data
-        {:error, reason} ->
-          Logger.warning("Failed to convert poll #{poll.id} to legacy format: #{inspect(reason)}")
-          nil
-      end
+      legacy_poll_data =
+        case DatePollAdapter.get_legacy_poll_with_data(poll.id) do
+          {:ok, legacy_data} ->
+            legacy_data
+
+          {:error, reason} ->
+            Logger.warning(
+              "Failed to convert poll #{poll.id} to legacy format: #{inspect(reason)}"
+            )
+
+            nil
+        end
 
       # Extract selected dates from poll options for calendar display
       selected_dates = extract_dates_from_options(poll_options)
@@ -104,11 +110,12 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       phase_display = DatePollAdapter.safe_status_display(poll)
 
       # Load poll statistics for embedded display
-      poll_stats = try do
-        Events.get_poll_voting_stats(poll)
-      rescue
-        _ -> %{options: []}
-      end
+      poll_stats =
+        try do
+          Events.get_poll_voting_stats(poll)
+        rescue
+          _ -> %{options: []}
+        end
 
       {:ok,
        socket
@@ -141,8 +148,13 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     {:noreply, assign(socket, :selected_date_for_time, date_string)}
   end
 
-  def handle_event("save_date_time_slots", %{"date" => date_string, "time_slots" => time_slots}, socket) do
+  def handle_event(
+        "save_date_time_slots",
+        %{"date" => date_string, "time_slots" => time_slots},
+        socket
+      ) do
     updated_slots = Map.put(socket.assigns.date_time_slots, date_string, time_slots)
+
     {:noreply,
      socket
      |> assign(:date_time_slots, updated_slots)
@@ -154,11 +166,17 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   end
 
   def handle_event("suggest_date", %{"date" => date_string}, socket) do
-    %{poll: poll, current_user: user, time_enabled: time_enabled, date_time_slots: date_time_slots} = socket.assigns
+    %{
+      poll: poll,
+      current_user: user,
+      time_enabled: time_enabled,
+      date_time_slots: date_time_slots
+    } = socket.assigns
 
     # Only allow date suggestions during list_building phase
     if poll.phase != "list_building" do
-      {:noreply, put_flash(socket, :error, "Cannot add dates during #{socket.assigns.phase_display} phase")}
+      {:noreply,
+       put_flash(socket, :error, "Cannot add dates during #{socket.assigns.phase_display} phase")}
     else
       # Use adapter's date sanitization
       case DatePollAdapter.sanitize_date_input(date_string) do
@@ -166,28 +184,40 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
           case Date.from_iso8601(sanitized_date_string) do
             {:ok, date} ->
               # Check if this date is already an option
-              existing_option = Enum.find(socket.assigns.poll_options, fn option ->
-                case DatePollAdapter.validate_date_option(option) do
-                  {:ok, _} ->
-                    # Use adapter's date extraction function
-                    case DatePollAdapter.extract_date_from_option(option) do
-                      {:ok, existing_date} -> Date.compare(existing_date, date) == :eq
-                      _ -> false
-                    end
-                  _ -> false
-                end
-              end)
+              existing_option =
+                Enum.find(socket.assigns.poll_options, fn option ->
+                  case DatePollAdapter.validate_date_option(option) do
+                    {:ok, _} ->
+                      # Use adapter's date extraction function
+                      case DatePollAdapter.extract_date_from_option(option) do
+                        {:ok, existing_date} -> Date.compare(existing_date, date) == :eq
+                        _ -> false
+                      end
+
+                    _ ->
+                      false
+                  end
+                end)
 
               if existing_option do
                 # Use adapter's safe display formatting
                 formatted_date = DatePollAdapter.safe_format_date_for_display(date)
-                {:noreply, put_flash(socket, :info, "Date #{formatted_date} is already an option")}
+
+                {:noreply,
+                 put_flash(socket, :info, "Date #{formatted_date} is already an option")}
               else
                 # Create enhanced metadata with time support
                 # Use consistent ISO8601 format for time slot lookup
                 date_iso = Date.to_iso8601(date)
                 app_timezone = Application.get_env(:eventasaurus, :timezone, "UTC")
-                metadata = create_date_metadata_with_time(date, time_enabled, date_time_slots[date_iso], app_timezone)
+
+                metadata =
+                  create_date_metadata_with_time(
+                    date,
+                    time_enabled,
+                    date_time_slots[date_iso],
+                    app_timezone
+                  )
 
                 # Create new date option using our generic system with enhanced metadata
                 case Events.create_date_poll_option(poll, user, date, metadata) do
@@ -196,6 +226,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                     send(self(), {:poll_option_added, poll.id})
 
                     formatted_date = DatePollAdapter.safe_format_date_for_display(date)
+
                     {:noreply,
                      socket
                      |> put_flash(:success, "Added #{formatted_date} to the poll")
@@ -702,17 +733,20 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   defp handle_poll_refresh(socket, updated_poll) do
     # Reload fresh data
     poll_options = Events.list_poll_options(updated_poll)
-    user_votes = if socket.assigns.current_user do
-      Events.list_user_poll_votes(updated_poll, socket.assigns.current_user)
-    else
-      []
-    end
+
+    user_votes =
+      if socket.assigns.current_user do
+        Events.list_user_poll_votes(updated_poll, socket.assigns.current_user)
+      else
+        []
+      end
 
     # Update legacy data
-    legacy_poll_data = case DatePollAdapter.get_legacy_poll_with_data(updated_poll.id) do
-      {:ok, legacy_data} -> legacy_data
-      {:error, _} -> nil
-    end
+    legacy_poll_data =
+      case DatePollAdapter.get_legacy_poll_with_data(updated_poll.id) do
+        {:ok, legacy_data} -> legacy_data
+        {:error, _} -> nil
+      end
 
     selected_dates = extract_dates_from_options(poll_options)
     vote_summaries = calculate_vote_summaries(poll_options, user_votes)
@@ -742,7 +776,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     |> Enum.sort()
   end
 
-    defp calculate_vote_summaries(poll_options, _user_votes) do
+  defp calculate_vote_summaries(poll_options, _user_votes) do
     # Calculate vote summaries for each option
     poll_options
     |> Enum.into(%{}, fn option ->
@@ -750,10 +784,11 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       votes = option.votes || []
 
       # Use adapter to safely display option title and validate option
-      option_display = case DatePollAdapter.validate_date_option(option) do
-        {:ok, _} -> DatePollAdapter.safe_option_title(option)
-        {:error, _} -> option.title || "Invalid Option"
-      end
+      option_display =
+        case DatePollAdapter.validate_date_option(option) do
+          {:ok, _} -> DatePollAdapter.safe_option_title(option)
+          {:error, _} -> option.title || "Invalid Option"
+        end
 
       vote_counts = %{
         yes: Enum.count(votes, fn vote -> vote.vote_value == "yes" end),
@@ -768,7 +803,8 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
         option_title: option_display,
         vote_counts: vote_counts,
         total_votes: total_votes,
-        winner_score: vote_counts.yes * 2 + vote_counts.maybe * 1 # Weighted scoring
+        # Weighted scoring
+        winner_score: vote_counts.yes * 2 + vote_counts.maybe * 1
       }
 
       {option.id, summary}
@@ -790,13 +826,17 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   defp format_deadline(%DateTime{} = datetime) do
     case DateTime.compare(datetime, DateTime.utc_now()) do
-      :lt -> "Expired"
+      :lt ->
+        "Expired"
+
       _ ->
         # Format for mobile: shorter format
         timezone = Application.get_env(:eventasaurus, :timezone, "UTC")
+
         case DateTime.shift_zone(datetime, timezone) do
           {:ok, shifted_datetime} ->
             Calendar.strftime(shifted_datetime, "%-m/%-d %I:%M %p")
+
           {:error, _} ->
             # Fallback to UTC if timezone shift fails
             Calendar.strftime(datetime, "%-m/%-d %I:%M %p")
@@ -821,7 +861,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
-    if time_enabled and time_slots && length(time_slots) > 0 do
+    if (time_enabled and time_slots) && length(time_slots) > 0 do
       base_metadata
       |> Map.put("time_enabled", true)
       |> Map.put("all_day", false)
@@ -837,8 +877,10 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   defp has_time_slots?(option) do
     case option.metadata do
-      %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) and length(time_slots) > 0 ->
+      %{"time_enabled" => true, "time_slots" => time_slots}
+      when is_list(time_slots) and length(time_slots) > 0 ->
         true
+
       _ ->
         false
     end
@@ -848,6 +890,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     case option.metadata do
       %{"time_enabled" => true, "time_slots" => time_slots} when is_list(time_slots) ->
         time_slots
+
       _ ->
         []
     end
@@ -860,6 +903,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
         start_display = TimeUtils.format_time_12hour(start_time)
         end_display = TimeUtils.format_time_12hour(end_time)
         "#{start_display} - #{end_display}"
+
       _ ->
         "Invalid time slot"
     end

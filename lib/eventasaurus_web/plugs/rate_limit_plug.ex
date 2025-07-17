@@ -21,8 +21,10 @@ defmodule EventasaurusWeb.Plugs.RateLimitPlug do
   end
 
   def call(conn, opts) do
-    limit = Keyword.get(opts, :limit, 100)  # requests per window
-    window = Keyword.get(opts, :window, 60_000)  # window in milliseconds (1 minute)
+    # requests per window
+    limit = Keyword.get(opts, :limit, 100)
+    # window in milliseconds (1 minute)
+    window = Keyword.get(opts, :window, 60_000)
 
     client_id = get_client_identifier(conn)
     current_time = System.system_time(:millisecond)

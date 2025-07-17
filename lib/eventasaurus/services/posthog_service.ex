@@ -10,8 +10,10 @@ defmodule Eventasaurus.Services.PosthogService do
   require Logger
 
   @api_base "https://eu.i.posthog.com/api"
-  @cache_ttl_ms 5 * 60 * 1000  # 5 minutes
-  @max_cache_entries 100  # Prevent unbounded cache growth
+  # 5 minutes
+  @cache_ttl_ms 5 * 60 * 1000
+  # Prevent unbounded cache growth
+  @max_cache_entries 100
 
   # Client API
 
@@ -100,12 +102,17 @@ defmodule Eventasaurus.Services.PosthogService do
   @doc """
   Tracks when a guest invitation modal is opened.
   """
-  @spec track_guest_invitation_modal_opened(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  @spec track_guest_invitation_modal_opened(String.t(), String.t(), map()) ::
+          {:ok, :sent} | {:error, any()}
   def track_guest_invitation_modal_opened(user_id, event_id, metadata \\ %{}) do
-    properties = Map.merge(%{
-      event_id: event_id,
-      source: "guest_invitation_modal"
-    }, metadata)
+    properties =
+      Map.merge(
+        %{
+          event_id: event_id,
+          source: "guest_invitation_modal"
+        },
+        metadata
+      )
 
     send_event("guest_invitation_modal_opened", user_id, properties)
   end
@@ -113,12 +120,17 @@ defmodule Eventasaurus.Services.PosthogService do
   @doc """
   Tracks when a historical participant is selected for invitation.
   """
-  @spec track_historical_participant_selected(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  @spec track_historical_participant_selected(String.t(), String.t(), map()) ::
+          {:ok, :sent} | {:error, any()}
   def track_historical_participant_selected(user_id, event_id, metadata \\ %{}) do
-    properties = Map.merge(%{
-      event_id: event_id,
-      source: "historical_suggestions"
-    }, metadata)
+    properties =
+      Map.merge(
+        %{
+          event_id: event_id,
+          source: "historical_suggestions"
+        },
+        metadata
+      )
 
     send_event("historical_participant_selected", user_id, properties)
   end
@@ -126,12 +138,17 @@ defmodule Eventasaurus.Services.PosthogService do
   @doc """
   Tracks when a guest is added directly to an event.
   """
-  @spec track_guest_added_directly(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  @spec track_guest_added_directly(String.t(), String.t(), map()) ::
+          {:ok, :sent} | {:error, any()}
   def track_guest_added_directly(user_id, event_id, metadata \\ %{}) do
-    properties = Map.merge(%{
-      event_id: event_id,
-      source: "direct_addition"
-    }, metadata)
+    properties =
+      Map.merge(
+        %{
+          event_id: event_id,
+          source: "direct_addition"
+        },
+        metadata
+      )
 
     send_event("guest_added_directly", user_id, properties)
   end
@@ -147,9 +164,13 @@ defmodule Eventasaurus.Services.PosthogService do
       !api_key ->
         # Log only once per application start, not for every event
         if not Application.get_env(:eventasaurus, :posthog_warning_logged, false) do
-          Logger.info("PostHog not configured - event tracking disabled. Set POSTHOG_PUBLIC_API_KEY to enable.")
+          Logger.info(
+            "PostHog not configured - event tracking disabled. Set POSTHOG_PUBLIC_API_KEY to enable."
+          )
+
           Application.put_env(:eventasaurus, :posthog_warning_logged, true)
         end
+
         {:error, :no_api_key}
 
       !user_id or user_id == "" ->
@@ -186,12 +207,14 @@ defmodule Eventasaurus.Services.PosthogService do
               spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
               updated_state = Map.put(state, pending_key, [from])
               {:noreply, updated_state}
+
             pending_requests ->
               # Add to existing pending requests queue
               updated_state = Map.put(state, pending_key, [from | pending_requests])
               {:noreply, updated_state}
           end
         end
+
       _ ->
         # No cache entry, check if we already have a pending request
         case Map.get(state, pending_key) do
@@ -200,6 +223,7 @@ defmodule Eventasaurus.Services.PosthogService do
             spawn_async_fetch(event_id, date_range, current_time, cache_key, from)
             updated_state = Map.put(state, pending_key, [from])
             {:noreply, updated_state}
+
           pending_requests ->
             # Add to existing pending requests queue
             updated_state = Map.put(state, pending_key, [from | pending_requests])
@@ -209,20 +233,25 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   @impl true
-  def handle_cast({:cache_analytics_result, cache_key, current_time, analytics_data, _from}, state) do
+  def handle_cast(
+        {:cache_analytics_result, cache_key, current_time, analytics_data, _from},
+        state
+      ) do
     pending_key = "pending_#{cache_key}"
 
     # Store the result
-    updated_state = Map.put(state, cache_key, %{
-      timestamp: current_time,
-      data: analytics_data
-    })
+    updated_state =
+      Map.put(state, cache_key, %{
+        timestamp: current_time,
+        data: analytics_data
+      })
 
     # Reply to all pending requests
     case Map.get(state, pending_key) do
       nil ->
         # No pending requests (shouldn't happen but handle gracefully)
         :ok
+
       pending_requests ->
         Enum.each(pending_requests, fn from ->
           GenServer.reply(from, {:ok, analytics_data})
@@ -244,7 +273,7 @@ defmodule Eventasaurus.Services.PosthogService do
     {:noreply, final_state}
   end
 
-    @impl true
+  @impl true
   def handle_cast({:cache_analytics_error, cache_key, reason, _from}, state) do
     pending_key = "pending_#{cache_key}"
 
@@ -265,10 +294,12 @@ defmodule Eventasaurus.Services.PosthogService do
       nil ->
         # No pending requests (shouldn't happen but handle gracefully)
         {:noreply, state}
+
       pending_requests ->
         Enum.each(pending_requests, fn from ->
           GenServer.reply(from, {:ok, error_analytics})
         end)
+
         updated_state = Map.delete(state, pending_key)
         {:noreply, updated_state}
     end
@@ -284,7 +315,10 @@ defmodule Eventasaurus.Services.PosthogService do
   def handle_cast({:clear_cache, event_id}, state) when is_binary(event_id) do
     Logger.info("Clearing PostHog cache for event #{event_id}")
 
-    cache = state |> Enum.filter(fn {key, _} -> not String.starts_with?(key, "analytics_#{event_id}_") end) |> Enum.into(%{})
+    cache =
+      state
+      |> Enum.filter(fn {key, _} -> not String.starts_with?(key, "analytics_#{event_id}_") end)
+      |> Enum.into(%{})
 
     {:noreply, cache}
   end
@@ -295,35 +329,48 @@ defmodule Eventasaurus.Services.PosthogService do
     case reason do
       :no_api_key ->
         "PostHog private API key not configured - analytics unavailable"
+
       :no_project_id ->
         "PostHog project ID missing - please contact support"
+
       {:api_error, 403} ->
         "PostHog authentication failed - please check private API key permissions"
+
       {:api_error, status} ->
         "PostHog API error (#{status}) - analytics temporarily unavailable"
+
       _ ->
         "Analytics temporarily unavailable"
     end
   end
 
   defp fetch_analytics_from_api(event_id, date_range) do
-    api_key = get_private_api_key()  # Use private key for analytics
+    # Use private key for analytics
+    api_key = get_private_api_key()
     project_id = get_project_id()
 
     cond do
       !api_key ->
         # Log only once per application start, not for every analytics call
         if not Application.get_env(:eventasaurus, :posthog_analytics_warning_logged, false) do
-          Logger.info("PostHog analytics not configured - private API key missing. Set POSTHOG_PRIVATE_API_KEY to enable.")
+          Logger.info(
+            "PostHog analytics not configured - private API key missing. Set POSTHOG_PRIVATE_API_KEY to enable."
+          )
+
           Application.put_env(:eventasaurus, :posthog_analytics_warning_logged, true)
         end
+
         {:error, :no_api_key}
 
       !project_id ->
         if not Application.get_env(:eventasaurus, :posthog_project_warning_logged, false) do
-          Logger.info("PostHog analytics not configured - project ID missing. Set POSTHOG_PROJECT_ID to enable.")
+          Logger.info(
+            "PostHog analytics not configured - project ID missing. Set POSTHOG_PROJECT_ID to enable."
+          )
+
           Application.put_env(:eventasaurus, :posthog_project_warning_logged, true)
         end
+
         {:error, :no_project_id}
 
       true ->
@@ -331,20 +378,28 @@ defmodule Eventasaurus.Services.PosthogService do
         case sanitize_event_id(event_id) do
           {:ok, safe_event_id} ->
             case fetch_all_analytics(safe_event_id, date_range, api_key) do
-              {:ok, %{visitors: visitors, registrations: registrations, votes: votes, checkouts: checkouts}} ->
+              {:ok,
+               %{
+                 visitors: visitors,
+                 registrations: registrations,
+                 votes: votes,
+                 checkouts: checkouts
+               }} ->
                 registration_rate = calculate_rate(registrations, visitors)
                 checkout_rate = calculate_rate(checkouts, registrations)
 
-                {:ok, %{
-                  unique_visitors: visitors,
-                  registrations: registrations,
-                  votes_cast: votes,
-                  ticket_checkouts: checkouts,
-                  registration_rate: registration_rate,
-                  checkout_conversion_rate: checkout_rate
-                }}
+                {:ok,
+                 %{
+                   unique_visitors: visitors,
+                   registrations: registrations,
+                   votes_cast: votes,
+                   ticket_checkouts: checkouts,
+                   registration_rate: registration_rate,
+                   checkout_conversion_rate: checkout_rate
+                 }}
 
-              {:error, reason} -> {:error, reason}
+              {:error, reason} ->
+                {:error, reason}
             end
 
           {:error, reason} ->
@@ -381,7 +436,9 @@ defmodule Eventasaurus.Services.PosthogService do
           {:ok, metrics} -> {:ok, metrics}
           {:error, reason} -> {:error, reason}
         end
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -389,12 +446,14 @@ defmodule Eventasaurus.Services.PosthogService do
     case response do
       %{"results" => [result]} when is_list(result) and length(result) == 4 ->
         [visitors, registrations, votes, checkouts] = result
-        {:ok, %{
-          visitors: visitors || 0,
-          registrations: registrations || 0,
-          votes: votes || 0,
-          checkouts: checkouts || 0
-        }}
+
+        {:ok,
+         %{
+           visitors: visitors || 0,
+           registrations: registrations || 0,
+           votes: votes || 0,
+           checkouts: checkouts || 0
+         }}
 
       %{"results" => []} ->
         {:ok, %{visitors: 0, registrations: 0, votes: 0, checkouts: 0}}
@@ -411,6 +470,7 @@ defmodule Eventasaurus.Services.PosthogService do
     if project_id do
       # Use the correct PostHog API format with project ID
       url = "#{@api_base}/projects/#{project_id}#{endpoint}"
+
       headers = [
         {"Authorization", "Bearer #{api_key}"},
         {"Content-Type", "application/json"}
@@ -425,9 +485,11 @@ defmodule Eventasaurus.Services.PosthogService do
             {:ok, data} -> {:ok, data}
             {:error, _} -> {:error, :invalid_json}
           end
+
         {:ok, %HTTPoison.Response{status_code: status_code, body: body}} ->
           Logger.error("PostHog API returned status #{status_code}: #{body}")
           {:error, {:api_error, status_code}}
+
         {:error, %HTTPoison.Error{reason: reason}} ->
           Logger.error("PostHog API request failed: #{inspect(reason)}")
           {:error, {:request_failed, reason}}
@@ -471,11 +533,12 @@ defmodule Eventasaurus.Services.PosthogService do
       api_key: api_key,
       event: event_name,
       distinct_id: user_id,
-      properties: Map.merge(properties, %{
-        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "$lib" => "eventasaurus-backend",
-        "$lib_version" => "0.1.0"
-      })
+      properties:
+        Map.merge(properties, %{
+          "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+          "$lib" => "eventasaurus-backend",
+          "$lib_version" => "0.1.0"
+        })
     }
 
     headers = [
@@ -491,7 +554,10 @@ defmodule Eventasaurus.Services.PosthogService do
         {:ok, :sent}
 
       {:ok, %HTTPoison.Response{status_code: 401, body: response_body}} ->
-        Logger.warning("PostHog authentication failed - check your API key configuration: #{response_body}")
+        Logger.warning(
+          "PostHog authentication failed - check your API key configuration: #{response_body}"
+        )
+
         {:error, {:api_error, 401}}
 
       {:ok, %HTTPoison.Response{status_code: status_code, body: response_body}} ->
@@ -542,7 +608,11 @@ defmodule Eventasaurus.Services.PosthogService do
     Task.start(fn ->
       case fetch_analytics_from_api(event_id, date_range) do
         {:ok, analytics_data} ->
-          GenServer.cast(parent_pid, {:cache_analytics_result, cache_key, current_time, analytics_data, from})
+          GenServer.cast(
+            parent_pid,
+            {:cache_analytics_result, cache_key, current_time, analytics_data, from}
+          )
+
         {:error, reason} ->
           GenServer.cast(parent_pid, {:cache_analytics_error, cache_key, reason, from})
       end
@@ -557,10 +627,12 @@ defmodule Eventasaurus.Services.PosthogService do
       state
       |> Enum.filter(fn {key, value} ->
         # Only keep cache entries (not pending requests)
-        not String.starts_with?(key, "pending_") and is_map(value) and Map.has_key?(value, :timestamp)
+        not String.starts_with?(key, "pending_") and is_map(value) and
+          Map.has_key?(value, :timestamp)
       end)
       |> Enum.sort_by(fn {_key, %{timestamp: ts}} -> ts end, :desc)
-      |> Enum.take(@max_cache_entries - 10)  # Remove oldest 10 entries
+      # Remove oldest 10 entries
+      |> Enum.take(@max_cache_entries - 10)
 
     # Preserve pending_* entries and add back the filtered cache entries
     pending_entries =
@@ -574,6 +646,4 @@ defmodule Eventasaurus.Services.PosthogService do
     |> Enum.concat(pending_entries)
     |> Enum.into(%{})
   end
-
-
 end

@@ -404,9 +404,9 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
       no_count = Enum.count(votes, &(&1.vote_value == "no"))
       total_votes = yes_count + maybe_count + no_count
 
-      yes_percentage = if total_votes > 0, do: (yes_count / total_votes) * 100, else: 0
-      maybe_percentage = if total_votes > 0, do: (maybe_count / total_votes) * 100, else: 0
-      no_percentage = if total_votes > 0, do: (no_count / total_votes) * 100, else: 0
+      yes_percentage = if total_votes > 0, do: yes_count / total_votes * 100, else: 0
+      maybe_percentage = if total_votes > 0, do: maybe_count / total_votes * 100, else: 0
+      no_percentage = if total_votes > 0, do: no_count / total_votes * 100, else: 0
 
       stats = %{
         yes_count: yes_count,
@@ -431,7 +431,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
       votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
       approval_count = length(votes)
 
-      approval_percentage = if total_voters > 0, do: (approval_count / total_voters) * 100, else: 0
+      approval_percentage = if total_voters > 0, do: approval_count / total_voters * 100, else: 0
 
       stats = %{
         approval_count: approval_count,
@@ -449,13 +449,14 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
       votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
 
       # Calculate points (higher rank = more points)
-      total_points = votes
-      |> Enum.map(fn vote ->
-        max_rank = length(poll.poll_options)
-        rank = vote.vote_rank || max_rank
-        max_rank - rank + 1
-      end)
-      |> Enum.sum()
+      total_points =
+        votes
+        |> Enum.map(fn vote ->
+          max_rank = length(poll.poll_options)
+          rank = vote.vote_rank || max_rank
+          max_rank - rank + 1
+        end)
+        |> Enum.sum()
 
       first_choice_count = Enum.count(votes, &(&1.vote_rank == 1))
       total_votes = length(votes)
@@ -476,20 +477,22 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
     |> Enum.map(fn option ->
       votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
 
-      ratings = Enum.map(votes, fn vote ->
-        if vote.vote_numeric, do: Decimal.to_float(vote.vote_numeric), else: 0
-      end)
+      ratings =
+        Enum.map(votes, fn vote ->
+          if vote.vote_numeric, do: Decimal.to_float(vote.vote_numeric), else: 0
+        end)
 
       rating_count = length(ratings)
       average_rating = if rating_count > 0, do: Enum.sum(ratings) / rating_count, else: 0
 
       # Calculate distribution
-      star_distribution = 1..5
-      |> Enum.map(fn star ->
-        count = Enum.count(ratings, &(trunc(&1) == star))
-        {star, count}
-      end)
-      |> Enum.into(%{})
+      star_distribution =
+        1..5
+        |> Enum.map(fn star ->
+          count = Enum.count(ratings, &(trunc(&1) == star))
+          {star, count}
+        end)
+        |> Enum.into(%{})
 
       stats = %{
         average_rating: average_rating,
@@ -553,7 +556,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   defp get_star_percentage(stats, star) do
     total = stats.rating_count
     count = Map.get(stats.star_distribution, star, 0)
-    if total > 0, do: (count / total) * 100, else: 0
+    if total > 0, do: count / total * 100, else: 0
   end
 
   defp format_rating(rating) do
@@ -562,7 +565,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
 
   defp format_percentage(count, total) do
     if total > 0 do
-      percentage = (count / total) * 100
+      percentage = count / total * 100
       "#{round(percentage)}%"
     else
       "0%"
@@ -581,7 +584,9 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
           diff < 1440 -> "#{div(diff, 60)}h ago"
           true -> "#{div(diff, 1440)}d ago"
         end
-      _ -> "unknown"
+
+      _ ->
+        "unknown"
     end
   end
 
@@ -591,7 +596,9 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
         dt
         |> DateTime.to_date()
         |> Date.to_string()
-      _ -> "Not set"
+
+      _ ->
+        "Not set"
     end
   end
 

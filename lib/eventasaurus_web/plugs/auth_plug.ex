@@ -58,10 +58,12 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       plug :assign_user_struct
   """
   def assign_user_struct(conn, _opts) do
-    user = case ensure_user_struct(conn.assigns[:auth_user]) do
-      {:ok, user} -> user
-      {:error, _} -> nil
-    end
+    user =
+      case ensure_user_struct(conn.assigns[:auth_user]) do
+        {:ok, user} -> user
+        {:error, _} -> nil
+      end
+
     assign(conn, :user, user)
   end
 
@@ -105,7 +107,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       else
         # Enhanced: Validate JWT token integrity
         case validate_jwt_token(conn) do
-          {:ok, conn} -> conn
+          {:ok, conn} ->
+            conn
+
           {:error, _reason} ->
             conn
             |> put_status(:unauthorized)
@@ -191,7 +195,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     resource = Keyword.get(opts, :resource)
 
     case validate_user_permission(conn.assigns[:user], action, resource, conn.params) do
-      :ok -> conn
+      :ok ->
+        conn
+
       {:error, reason} ->
         conn
         |> put_status(:forbidden)
@@ -225,13 +231,16 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
             sanitized_params: sanitize_params_for_logging(sanitized_params)
           })
         end
+
         %{conn | params: sanitized_params}
+
       {:error, errors} ->
         # Log security violation attempt
         log_security_event(conn, "input_validation_failed", %{
           errors: errors,
           params: sanitize_params_for_logging(conn.params)
         })
+
         conn
         |> put_status(:bad_request)
         |> Phoenix.Controller.json(%{
@@ -378,10 +387,13 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     cond do
       is_map(auth_data) && Map.has_key?(auth_data, key) ->
         Map.get(auth_data, key)
+
       is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
         Map.get(auth_data, String.to_atom(key))
+
       is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
         Map.get(auth_data, "token")
+
       true ->
         nil
     end
@@ -390,9 +402,11 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   # Helper function to ensure we have a proper User struct
   defp ensure_user_struct(nil), do: {:error, :no_user}
   defp ensure_user_struct(%EventasaurusApp.Accounts.User{} = user), do: {:ok, user}
+
   defp ensure_user_struct(%{"id" => _supabase_id} = supabase_user) do
     EventasaurusApp.Accounts.find_or_create_from_supabase(supabase_user)
   end
+
   defp ensure_user_struct(_), do: {:error, :invalid_user_data}
 
   # Helper function to detect password recovery sessions
@@ -417,14 +431,17 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       case Client.validate_token(access_token) do
         {:ok, _token_data} ->
           {:ok, conn}
+
         {:error, :expired} ->
           # Token expired, try to refresh
           refreshed_conn = maybe_refresh_token_api(conn)
+
           if refreshed_conn.halted do
             {:error, "token_expired"}
           else
             {:ok, refreshed_conn}
           end
+
         {:error, reason} ->
           {:error, "token_invalid: #{reason}"}
       end
@@ -434,7 +451,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   # Enhanced permission validation with role-based access control
-  defp validate_user_permission(nil, _action, _resource, _params), do: {:error, "User not authenticated"}
+  defp validate_user_permission(nil, _action, _resource, _params),
+    do: {:error, "User not authenticated"}
+
   defp validate_user_permission(user, action, resource, params) do
     case {action, resource} do
       {:search_users, _} ->
@@ -449,6 +468,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       {:manage_events, _} ->
         # Check if user can manage the specific event
         event_id = params["event_id"]
+
         if event_id do
           case validate_event_management_permission(user, event_id) do
             :ok -> :ok
@@ -461,6 +481,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       {:add_organizers, _} ->
         # Only event creators and existing organizers can add new organizers
         event_id = params["event_id"]
+
         if event_id do
           case validate_organizer_management_permission(user, event_id) do
             :ok -> :ok
@@ -484,6 +505,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
         else
           {:error, "You don't have permission to manage this event"}
         end
+
       nil ->
         {:error, "Event not found"}
     end
@@ -498,6 +520,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
         else
           {:error, "Only event organizers can add new organizers"}
         end
+
       nil ->
         {:error, "Event not found"}
     end
@@ -511,6 +534,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       |> Enum.reduce({%{}, []}, fn
         {:ok, {key, value}}, {acc_params, acc_errors} ->
           {Map.put(acc_params, key, value), acc_errors}
+
         {:error, error}, {acc_params, acc_errors} ->
           {acc_params, [error | acc_errors]}
       end)
@@ -533,13 +557,20 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     sanitized =
       value
       |> String.trim()
-      |> String.replace(~r/[<>\"'&%]/, "")  # Remove HTML/script injection chars
-      |> String.replace(~r/javascript:/i, "")  # Remove javascript: protocol
-      |> String.replace(~r/data:/i, "")  # Remove data: protocol
-      |> String.replace(~r/vbscript:/i, "")  # Remove vbscript: protocol
-      |> String.replace(~r/on\w+\s*=/i, "")  # Remove event handlers (onclick, onload, etc.)
-      |> String.replace(~r/\s+/, " ")  # Normalize whitespace
-      |> String.slice(0, 100)  # Limit length
+      # Remove HTML/script injection chars
+      |> String.replace(~r/[<>\"'&%]/, "")
+      # Remove javascript: protocol
+      |> String.replace(~r/javascript:/i, "")
+      # Remove data: protocol
+      |> String.replace(~r/data:/i, "")
+      # Remove vbscript: protocol
+      |> String.replace(~r/vbscript:/i, "")
+      # Remove event handlers (onclick, onload, etc.)
+      |> String.replace(~r/on\w+\s*=/i, "")
+      # Normalize whitespace
+      |> String.replace(~r/\s+/, " ")
+      # Limit length
+      |> String.slice(0, 100)
 
     if String.length(sanitized) >= 2 do
       {:ok, sanitized}
@@ -551,24 +582,28 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   defp sanitize_value(key, value) when key in ["page", "per_page", "event_id"] do
     case safe_parse_positive_integer(value, nil) do
       nil -> {:error, "Must be a positive integer"}
-      int when int > 0 and int <= 10000 -> {:ok, int}  # Reasonable upper limit
+      # Reasonable upper limit
+      int when int > 0 and int <= 10000 -> {:ok, int}
       _ -> {:error, "Must be a positive integer within reasonable limits"}
     end
   end
 
   # Enhanced validation for string fields that might contain user content
-  defp sanitize_value(key, value) when key in ["title", "description", "name"] and is_binary(value) do
+  defp sanitize_value(key, value)
+       when key in ["title", "description", "name"] and is_binary(value) do
     sanitized =
       value
       |> String.trim()
       |> sanitize_html_content()
-      |> String.slice(0, 255)  # Reasonable length limit for most text fields
+      # Reasonable length limit for most text fields
+      |> String.slice(0, 255)
 
     {:ok, sanitized}
   end
 
   # Enhanced validation for URL fields
-  defp sanitize_value(key, value) when key in ["website_url", "callback_url", "redirect_url"] and is_binary(value) do
+  defp sanitize_value(key, value)
+       when key in ["website_url", "callback_url", "redirect_url"] and is_binary(value) do
     if String.match?(value, ~r/^https?:\/\/[\w\-\.]+(:\d+)?(\/.*)?$/i) do
       {:ok, value}
     else
@@ -590,8 +625,10 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   # Helper function to sanitize HTML content
   defp sanitize_html_content(content) when is_binary(content) do
     content
-    |> String.replace(~r/<script[^>]*>.*?<\/script>/is, "")  # Remove script tags
-    |> String.replace(~r/<[^>]+>/, "")  # Remove all HTML tags
+    # Remove script tags
+    |> String.replace(~r/<script[^>]*>.*?<\/script>/is, "")
+    # Remove all HTML tags
+    |> String.replace(~r/<[^>]+>/, "")
     |> String.replace(~r/javascript:/i, "")
     |> String.replace(~r/data:/i, "")
     |> String.replace(~r/vbscript:/i, "")
@@ -600,13 +637,16 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   # Helper function for safe integer parsing (reused from existing code)
-  defp safe_parse_positive_integer(value, _default) when is_integer(value) and value > 0, do: value
+  defp safe_parse_positive_integer(value, _default) when is_integer(value) and value > 0,
+    do: value
+
   defp safe_parse_positive_integer(value, default) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int > 0 -> int
       _ -> default
     end
   end
+
   defp safe_parse_positive_integer(nil, default), do: default
   defp safe_parse_positive_integer(_, default), do: default
 
@@ -617,7 +657,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     user_agent = get_req_header(conn, "user-agent") |> List.first() || "unknown"
 
     require Logger
-    Logger.warning("Security Event: #{event_type}", [
+
+    Logger.warning("Security Event: #{event_type}",
       event_type: event_type,
       user_id: user_id,
       remote_ip: remote_ip,
@@ -626,7 +667,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       method: conn.method,
       details: details,
       timestamp: DateTime.utc_now()
-    ])
+    )
   end
 
   defp params_were_modified?(original_params, sanitized_params) do
@@ -642,7 +683,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     |> Enum.into(%{})
   end
 
-  defp sanitize_value_for_logging(key, _value) when key in ["password", "token", "secret", "key"] do
+  defp sanitize_value_for_logging(key, _value)
+       when key in ["password", "token", "secret", "key"] do
     "[REDACTED]"
   end
 
@@ -651,6 +693,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     case String.split(value, "@") do
       [user, domain] when byte_size(user) > 2 ->
         "#{String.slice(user, 0, 2)}***@#{domain}"
+
       _ ->
         "***@***"
     end
@@ -665,7 +708,9 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   defp get_remote_ip(conn) do
     case get_req_header(conn, "x-forwarded-for") do
-      [ip | _] -> ip
+      [ip | _] ->
+        ip
+
       [] ->
         case :inet.ntoa(conn.remote_ip) do
           ip when is_list(ip) -> to_string(ip)

@@ -27,7 +27,6 @@ defmodule EventasaurusWeb.CheckoutController do
          {:ok, ticket} <- get_ticket(params["ticket_id"]),
          {:ok, session_params} <- validate_session_params(params),
          {:ok, result} <- Ticketing.create_checkout_session(user, ticket, session_params) do
-
       Logger.info("Checkout session created successfully",
         order_id: result.order.id,
         session_id: result.session_id,
@@ -73,12 +72,14 @@ defmodule EventasaurusWeb.CheckoutController do
 
       {:error, reason} when is_binary(reason) ->
         Logger.error("Checkout session creation failed", reason: reason)
+
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{error: reason})
 
       {:error, reason} ->
         Logger.error("Unexpected checkout session creation error", error: inspect(reason))
+
         conn
         |> put_status(:internal_server_error)
         |> json(%{error: "Unable to create checkout session"})
@@ -90,7 +91,7 @@ defmodule EventasaurusWeb.CheckoutController do
 
   GET /orders/:order_id/success?session_id=<session_id>
   """
-    def success(conn, %{"order_id" => order_id, "session_id" => session_id}) do
+  def success(conn, %{"order_id" => order_id, "session_id" => session_id}) do
     try do
       order = Ticketing.get_order!(order_id) |> EventasaurusApp.Repo.preload([:event, :ticket])
 
@@ -177,43 +178,61 @@ defmodule EventasaurusWeb.CheckoutController do
     session_params = %{}
 
     # Quantity validation
-    session_params = case params["quantity"] do
-      nil -> Map.put(session_params, :quantity, 1)
-      quantity when is_integer(quantity) and quantity > 0 ->
-        Map.put(session_params, :quantity, quantity)
-      quantity when is_binary(quantity) ->
-        case Integer.parse(quantity) do
-          {q, ""} when q > 0 -> Map.put(session_params, :quantity, q)
-          _ -> Map.put(session_params, :quantity, 1)
-        end
-      _ -> Map.put(session_params, :quantity, 1)
-    end
+    session_params =
+      case params["quantity"] do
+        nil ->
+          Map.put(session_params, :quantity, 1)
+
+        quantity when is_integer(quantity) and quantity > 0 ->
+          Map.put(session_params, :quantity, quantity)
+
+        quantity when is_binary(quantity) ->
+          case Integer.parse(quantity) do
+            {q, ""} when q > 0 -> Map.put(session_params, :quantity, q)
+            _ -> Map.put(session_params, :quantity, 1)
+          end
+
+        _ ->
+          Map.put(session_params, :quantity, 1)
+      end
 
     # Custom price validation
-    session_params = case params["custom_price_cents"] do
-      nil -> session_params
-      price when is_integer(price) and price > 0 ->
-        Map.put(session_params, :custom_price_cents, price)
-      price when is_binary(price) ->
-        case Integer.parse(price) do
-          {p, ""} when p > 0 -> Map.put(session_params, :custom_price_cents, p)
-          _ -> session_params
-        end
-      _ -> session_params
-    end
+    session_params =
+      case params["custom_price_cents"] do
+        nil ->
+          session_params
+
+        price when is_integer(price) and price > 0 ->
+          Map.put(session_params, :custom_price_cents, price)
+
+        price when is_binary(price) ->
+          case Integer.parse(price) do
+            {p, ""} when p > 0 -> Map.put(session_params, :custom_price_cents, p)
+            _ -> session_params
+          end
+
+        _ ->
+          session_params
+      end
 
     # Tip validation
-    session_params = case params["tip_cents"] do
-      nil -> Map.put(session_params, :tip_cents, 0)
-      tip when is_integer(tip) and tip >= 0 ->
-        Map.put(session_params, :tip_cents, tip)
-      tip when is_binary(tip) ->
-        case Integer.parse(tip) do
-          {t, ""} when t >= 0 -> Map.put(session_params, :tip_cents, t)
-          _ -> Map.put(session_params, :tip_cents, 0)
-        end
-      _ -> Map.put(session_params, :tip_cents, 0)
-    end
+    session_params =
+      case params["tip_cents"] do
+        nil ->
+          Map.put(session_params, :tip_cents, 0)
+
+        tip when is_integer(tip) and tip >= 0 ->
+          Map.put(session_params, :tip_cents, tip)
+
+        tip when is_binary(tip) ->
+          case Integer.parse(tip) do
+            {t, ""} when t >= 0 -> Map.put(session_params, :tip_cents, t)
+            _ -> Map.put(session_params, :tip_cents, 0)
+          end
+
+        _ ->
+          Map.put(session_params, :tip_cents, 0)
+      end
 
     {:ok, session_params}
   end

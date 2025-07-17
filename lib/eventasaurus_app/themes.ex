@@ -33,6 +33,7 @@ defmodule EventasaurusApp.Themes do
   """
   @spec valid_theme?(atom() | String.t()) :: boolean()
   def valid_theme?(theme) when is_atom(theme), do: theme in @valid_themes
+
   def valid_theme?(theme) when is_binary(theme) do
     theme
     |> String.to_existing_atom()
@@ -40,6 +41,7 @@ defmodule EventasaurusApp.Themes do
   rescue
     ArgumentError -> false
   end
+
   def valid_theme?(_), do: false
 
   @doc """
@@ -51,7 +53,8 @@ defmodule EventasaurusApp.Themes do
       %{"colors" => %{"primary" => "#ff0000", "secondary" => "#333333", ...}, ...}
   """
   @spec merge_customizations(atom(), map()) :: map()
-  def merge_customizations(theme, customizations) when is_atom(theme) and is_map(customizations) do
+  def merge_customizations(theme, customizations)
+      when is_atom(theme) and is_map(customizations) do
     default_customizations = get_default_customizations(theme)
     deep_merge(default_customizations, customizations)
   end
@@ -98,10 +101,13 @@ defmodule EventasaurusApp.Themes do
       ArgumentError -> "theme-minimal"
     end
   end
+
   def get_theme_css_class(theme) when theme in @valid_themes do
     "theme-#{theme}"
   end
-  def get_theme_css_class(_), do: "theme-minimal" # Fallback to default
+
+  # Fallback to default
+  def get_theme_css_class(_), do: "theme-minimal"
 
   @doc """
   Returns the default customizations for a given theme.
@@ -326,16 +332,26 @@ defmodule EventasaurusApp.Themes do
     Map.merge(left, right, fn
       _key, %{} = left_val, %{} = right_val ->
         deep_merge(left_val, right_val)
+
       _key, _left_val, right_val ->
         right_val
     end)
   end
 
   defp validate_colors(colors) when is_map(colors) do
-    valid_keys = ["primary", "secondary", "accent", "background", "text", "text_secondary", "border"]
+    valid_keys = [
+      "primary",
+      "secondary",
+      "accent",
+      "background",
+      "text",
+      "text_secondary",
+      "border"
+    ]
 
     # Check for unknown keys
     unknown_keys = Map.keys(colors) -- valid_keys
+
     if length(unknown_keys) > 0 do
       {:error, "Unknown color keys: #{Enum.join(unknown_keys, ", ")}"}
     else
@@ -350,35 +366,54 @@ defmodule EventasaurusApp.Themes do
       end)
     end
   end
+
   defp validate_colors(_), do: {:error, "Colors must be a map"}
 
   defp validate_typography(typography) when is_map(typography) do
-    valid_keys = ["font_family", "font_family_heading", "heading_weight", "body_size", "body_weight"]
+    valid_keys = [
+      "font_family",
+      "font_family_heading",
+      "heading_weight",
+      "body_size",
+      "body_weight"
+    ]
 
     unknown_keys = Map.keys(typography) -- valid_keys
+
     if length(unknown_keys) > 0 do
       {:error, "Unknown typography keys: #{Enum.join(unknown_keys, ", ")}"}
     else
       {:ok, typography}
     end
   end
+
   defp validate_typography(_), do: {:error, "Typography must be a map"}
 
   defp validate_layout(layout) when is_map(layout) do
-    valid_keys = ["border_radius", "border_radius_large", "shadow_style", "button_border_radius", "card_border_radius", "input_border_radius"]
+    valid_keys = [
+      "border_radius",
+      "border_radius_large",
+      "shadow_style",
+      "button_border_radius",
+      "card_border_radius",
+      "input_border_radius"
+    ]
 
     unknown_keys = Map.keys(layout) -- valid_keys
+
     if length(unknown_keys) > 0 do
       {:error, "Unknown layout keys: #{Enum.join(unknown_keys, ", ")}"}
     else
       {:ok, layout}
     end
   end
+
   defp validate_layout(_), do: {:error, "Layout must be a map"}
 
   defp validate_mode(mode) when mode in ["light", "dark", "auto"] do
     {:ok, mode}
   end
+
   defp validate_mode(mode) do
     {:error, "Invalid mode: #{mode}. Must be 'light', 'dark', or 'auto'"}
   end
@@ -387,5 +422,6 @@ defmodule EventasaurusApp.Themes do
     # Match hex colors with 3, 4, 6, or 8 characters (with or without #)
     Regex.match?(~r/^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8}|[A-Fa-f0-9]{3}|[A-Fa-f0-9]{4})$/, color)
   end
+
   defp valid_hex_color?(_), do: false
 end

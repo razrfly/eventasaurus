@@ -72,8 +72,10 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
     case type do
       :music ->
         mock_album_details(id)
+
       :artist ->
         mock_artist_details(id)
+
       _ ->
         {:error, "Unsupported content type: #{type}"}
     end
@@ -94,8 +96,10 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
     cond do
       is_nil(client_id) or client_id == "" ->
         {:error, "SPOTIFY_CLIENT_ID environment variable is not set"}
+
       is_nil(client_secret) or client_secret == "" ->
         {:error, "SPOTIFY_CLIENT_SECRET environment variable is not set"}
+
       true ->
         :ok
     end
@@ -129,7 +133,8 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
       cache_ttl: %{
         type: :integer,
         required: false,
-        default: 3600, # 1 hour in seconds
+        # 1 hour in seconds
+        default: 3600,
         description: "Cache time-to-live in seconds"
       }
     }
@@ -163,14 +168,33 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
         ]
       },
       images: [
-        %{url: "https://i.scdn.co/image/640x640", type: :cover, size: "640x640", width: 640, height: 640},
-        %{url: "https://i.scdn.co/image/300x300", type: :cover, size: "300x300", width: 300, height: 300},
-        %{url: "https://i.scdn.co/image/64x64", type: :cover, size: "64x64", width: 64, height: 64}
+        %{
+          url: "https://i.scdn.co/image/640x640",
+          type: :cover,
+          size: "640x640",
+          width: 640,
+          height: 640
+        },
+        %{
+          url: "https://i.scdn.co/image/300x300",
+          type: :cover,
+          size: "300x300",
+          width: 300,
+          height: 300
+        },
+        %{
+          url: "https://i.scdn.co/image/64x64",
+          type: :cover,
+          size: "64x64",
+          width: 64,
+          height: 64
+        }
       ],
       external_urls: %{
         spotify: "https://open.spotify.com/album/#{album_id}"
       },
-      cast: [], # Not applicable for music
+      # Not applicable for music
+      cast: [],
       crew: [
         %{name: "Producer Name", job: "Producer", department: "Production"},
         %{name: "Engineer Name", job: "Audio Engineer", department: "Sound"}
@@ -180,7 +204,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
           %{
             id: "track1",
             name: "Track 1 Title",
-            duration_ms: 180000,
+            duration_ms: 180_000,
             track_number: 1,
             explicit: false,
             preview_url: "https://p.scdn.co/mp3-preview/example"
@@ -188,7 +212,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
           %{
             id: "track2",
             name: "Track 2 Title",
-            duration_ms: 210000,
+            duration_ms: 210_000,
             track_number: 2,
             explicit: false,
             preview_url: nil
@@ -219,21 +243,41 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
       description: "A popular music artist with comprehensive metadata",
       metadata: %{
         spotify_id: artist_id,
-        followers: 1250000,
+        followers: 1_250_000,
         genres: ["pop", "electronic", "indie"],
         popularity: 78,
         artist_type: "artist"
       },
       images: [
-        %{url: "https://i.scdn.co/image/artist640", type: :photo, size: "640x640", width: 640, height: 640},
-        %{url: "https://i.scdn.co/image/artist320", type: :photo, size: "320x320", width: 320, height: 320},
-        %{url: "https://i.scdn.co/image/artist160", type: :photo, size: "160x160", width: 160, height: 160}
+        %{
+          url: "https://i.scdn.co/image/artist640",
+          type: :photo,
+          size: "640x640",
+          width: 640,
+          height: 640
+        },
+        %{
+          url: "https://i.scdn.co/image/artist320",
+          type: :photo,
+          size: "320x320",
+          width: 320,
+          height: 320
+        },
+        %{
+          url: "https://i.scdn.co/image/artist160",
+          type: :photo,
+          size: "160x160",
+          width: 160,
+          height: 160
+        }
       ],
       external_urls: %{
         spotify: "https://open.spotify.com/artist/#{artist_id}"
       },
-      cast: [], # Not applicable for artists
-      crew: [], # Not applicable for artists
+      # Not applicable for artists
+      cast: [],
+      # Not applicable for artists
+      crew: [],
       media: %{
         top_tracks: [
           %{

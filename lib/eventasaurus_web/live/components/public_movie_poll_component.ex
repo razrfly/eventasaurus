@@ -31,37 +31,41 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     movie_options = if movie_poll, do: Events.list_poll_options(movie_poll), else: []
 
     # Load user votes for this poll
-    user_votes = if assigns.current_user && movie_poll do
-      Events.list_user_poll_votes(movie_poll, assigns.current_user)
-    else
-      []
-    end
+    user_votes =
+      if assigns.current_user && movie_poll do
+        Events.list_user_poll_votes(movie_poll, assigns.current_user)
+      else
+        []
+      end
 
     # Preload suggested_by for all options with graceful handling of missing users
-    movie_options = Enum.map(movie_options, fn option ->
-      if option.suggested_by_id do
-        case EventasaurusApp.Accounts.get_user(option.suggested_by_id) do
-          nil -> option # Leave suggested_by as nil if user not found
-          user -> %{option | suggested_by: user}
+    movie_options =
+      Enum.map(movie_options, fn option ->
+        if option.suggested_by_id do
+          case EventasaurusApp.Accounts.get_user(option.suggested_by_id) do
+            # Leave suggested_by as nil if user not found
+            nil -> option
+            user -> %{option | suggested_by: user}
+          end
+        else
+          option
         end
-      else
-        option
-      end
-    end)
+      end)
 
     # Get temp votes for this poll (for anonymous users)
     temp_votes = assigns[:temp_votes] || %{}
 
     # Load poll statistics for embedded display
-    poll_stats = if movie_poll do
-      try do
-        Events.get_poll_voting_stats(movie_poll)
-      rescue
-        _ -> %{options: []}
+    poll_stats =
+      if movie_poll do
+        try do
+          Events.get_poll_voting_stats(movie_poll)
+        rescue
+          _ -> %{options: []}
+        end
+      else
+        %{options: []}
       end
-    else
-      %{options: []}
-    end
 
     # Subscribe to poll statistics updates for real-time updates
     if movie_poll && connected?(socket) do
@@ -172,40 +176,41 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   def handle_event("search_movies", %{"value" => query}, socket) do
     if socket.assigns.current_user do
-    if String.length(query) >= 2 do
-      # Use the centralized RichDataManager system (same as backend)
-      search_options = %{
-        providers: [:tmdb],
-        limit: 5,
-        content_type: :movie
-      }
+      if String.length(query) >= 2 do
+        # Use the centralized RichDataManager system (same as backend)
+        search_options = %{
+          providers: [:tmdb],
+          limit: 5,
+          content_type: :movie
+        }
 
-      case RichDataManager.search(query, search_options) do
-        {:ok, results_by_provider} ->
-          # Extract movie results from TMDB provider
-          movie_results = case Map.get(results_by_provider, :tmdb) do
-            {:ok, results} when is_list(results) -> results
-            {:ok, result} -> [result]
-            _ -> []
-          end
+        case RichDataManager.search(query, search_options) do
+          {:ok, results_by_provider} ->
+            # Extract movie results from TMDB provider
+            movie_results =
+              case Map.get(results_by_provider, :tmdb) do
+                {:ok, results} when is_list(results) -> results
+                {:ok, result} -> [result]
+                _ -> []
+              end
 
-          {:noreply,
-           socket
-           |> assign(:search_query, query)
-           |> assign(:search_results, movie_results)}
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, movie_results)}
 
-        {:error, _} ->
-          {:noreply,
-           socket
-           |> assign(:search_query, query)
-           |> assign(:search_results, [])}
+          {:error, _} ->
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, [])}
+        end
+      else
+        {:noreply,
+         socket
+         |> assign(:search_query, query)
+         |> assign(:search_results, [])}
       end
-    else
-      {:noreply,
-       socket
-       |> assign(:search_query, query)
-       |> assign(:search_results, [])}
-    end
     else
       {:noreply, socket}
     end
@@ -224,16 +229,17 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
          |> put_flash(:error, "You must be logged in to add movies.")
          |> assign(:adding_movie, false)}
       else
-                # Find the movie in search results
+        # Find the movie in search results
         # Handle both string and integer movie_id formats
-        movie_data = socket.assigns.search_results
-        |> Enum.find(fn movie ->
-          # Compare both integer and string formats to handle type mismatches
-          case Integer.parse(movie_id) do
-            {id, _} -> movie.id == id
-            :error -> to_string(movie.id) == movie_id
-          end
-        end)
+        movie_data =
+          socket.assigns.search_results
+          |> Enum.find(fn movie ->
+            # Compare both integer and string formats to handle type mismatches
+            case Integer.parse(movie_id) do
+              {id, _} -> movie.id == id
+              :error -> to_string(movie.id) == movie_id
+            end
+          end)
 
         if movie_data do
           # Set adding_movie to true to prevent multiple requests
@@ -243,20 +249,22 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
           case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
             {:ok, rich_movie_data} ->
               # Use the shared MovieDataService to prepare movie data consistently
-              option_params = MovieDataService.prepare_movie_option_data(
-                movie_data.id,
-                rich_movie_data
-              )
-              |> Map.merge(%{
-                "poll_id" => socket.assigns.movie_poll.id,
-                "suggested_by_id" => user.id
-              })
+              option_params =
+                MovieDataService.prepare_movie_option_data(
+                  movie_data.id,
+                  rich_movie_data
+                )
+                |> Map.merge(%{
+                  "poll_id" => socket.assigns.movie_poll.id,
+                  "suggested_by_id" => user.id
+                })
 
               case Events.create_poll_option(option_params) do
                 {:ok, _option} ->
                   # Reload movie options to show the new movie immediately
-                  updated_movie_options = Events.list_poll_options(socket.assigns.movie_poll)
-                  |> Repo.preload(:suggested_by)
+                  updated_movie_options =
+                    Events.list_poll_options(socket.assigns.movie_poll)
+                    |> Repo.preload(:suggested_by)
 
                   {:noreply,
                    socket
@@ -270,6 +278,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                 {:error, changeset} ->
                   require Logger
                   Logger.error("Failed to create poll option: #{inspect(changeset)}")
+
                   {:noreply,
                    socket
                    |> put_flash(:error, "Failed to add movie. Please try again.")
@@ -279,6 +288,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
             {:error, reason} ->
               require Logger
               Logger.error("Failed to fetch rich movie data: #{inspect(reason)}")
+
               {:noreply,
                socket
                |> put_flash(:error, "Failed to fetch movie details. Please try again.")
@@ -322,7 +332,8 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   # Helper function to generate button classes based on vote state
   defp binary_button_class(current_vote, button_vote) do
-    base_classes = "inline-flex items-center px-3 py-1 text-xs font-medium rounded-full transition-colors"
+    base_classes =
+      "inline-flex items-center px-3 py-1 text-xs font-medium rounded-full transition-colors"
 
     if current_vote == button_vote do
       case button_vote do
@@ -332,9 +343,14 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       end
     else
       case button_vote do
-        "yes" -> "#{base_classes} bg-white text-green-700 border border-green-300 hover:bg-green-50"
-        "maybe" -> "#{base_classes} bg-white text-yellow-700 border border-yellow-300 hover:bg-yellow-50"
-        "no" -> "#{base_classes} bg-white text-red-700 border border-red-300 hover:bg-red-50"
+        "yes" ->
+          "#{base_classes} bg-white text-green-700 border border-green-300 hover:bg-green-50"
+
+        "maybe" ->
+          "#{base_classes} bg-white text-yellow-700 border border-yellow-300 hover:bg-yellow-50"
+
+        "no" ->
+          "#{base_classes} bg-white text-red-700 border border-red-300 hover:bg-red-50"
       end
     end
   end
@@ -342,11 +358,14 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   # Helper function to parse enhanced description into details line and main description
   defp parse_enhanced_description(description) do
     description = description || ""
+
     case String.split(description, "\n\n", parts: 2) do
       [details_line, main_description] ->
         {details_line, main_description}
+
       [details_line] ->
         {details_line, nil}
+
       _ ->
         {nil, description}
     end
@@ -654,5 +673,4 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     </div>
     """
   end
-
 end

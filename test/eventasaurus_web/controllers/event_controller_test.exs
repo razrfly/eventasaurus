@@ -25,7 +25,10 @@ defmodule EventasaurusWeb.EventControllerTest do
       assert json["event"]["taxation_type"] == "contribution_collection"
     end
 
-    test "updates event details without taxation_type parameter (backward compatibility)", %{conn: conn, event: event} do
+    test "updates event details without taxation_type parameter (backward compatibility)", %{
+      conn: conn,
+      event: event
+    } do
       params = %{
         "title" => "Updated Title Only",
         "description" => "Updated description only"
@@ -50,7 +53,10 @@ defmodule EventasaurusWeb.EventControllerTest do
 
       assert json = json_response(conn, 422)
       assert json["error"] == "Validation failed"
-      assert json["details"]["taxation_type"] == ["must be one of: ticketed_event, contribution_collection"]
+
+      assert json["details"]["taxation_type"] == [
+               "must be one of: ticketed_event, contribution_collection"
+             ]
     end
 
     test "returns 404 for non-existent event", %{conn: conn} do
@@ -100,15 +106,22 @@ defmodule EventasaurusWeb.EventControllerTest do
       assert json["event"]["taxation_type"] == "ticketed_event"
     end
 
-    test "returns validation error when enabling ticketing for contribution_collection", %{conn: conn, event: event} do
+    test "returns validation error when enabling ticketing for contribution_collection", %{
+      conn: conn,
+      event: event
+    } do
       # First update event to contribution_collection
-      {:ok, updated_event} = EventasaurusApp.Events.add_details(event, %{taxation_type: "contribution_collection"})
+      {:ok, updated_event} =
+        EventasaurusApp.Events.add_details(event, %{taxation_type: "contribution_collection"})
 
       conn = post(conn, ~p"/api/events/#{updated_event.slug}/enable-ticketing")
 
       assert json = json_response(conn, 422)
       assert json["error"] == "Validation failed"
-      assert json["details"]["is_ticketed"] == ["must be false for contribution collection events"]
+
+      assert json["details"]["is_ticketed"] == [
+               "must be false for contribution collection events"
+             ]
     end
 
     test "includes taxation_type in response", %{conn: conn, event: event} do
@@ -129,6 +142,7 @@ defmodule EventasaurusWeb.EventControllerTest do
 
     test "picks date and includes taxation_type in response", %{conn: conn, event: event} do
       future_date = DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.to_iso8601()
+
       params = %{
         "start_at" => future_date,
         "timezone" => "UTC"
@@ -238,7 +252,10 @@ defmodule EventasaurusWeb.EventControllerTest do
       %{conn: conn, user: user, event: event}
     end
 
-    test "complete workflow: create event → update taxation_type → enable ticketing fails", %{conn: conn, event: event} do
+    test "complete workflow: create event → update taxation_type → enable ticketing fails", %{
+      conn: conn,
+      event: event
+    } do
       # Step 1: Update event to contribution_collection
       update_params = %{"taxation_type" => "contribution_collection"}
       conn = post(conn, ~p"/api/events/#{event.slug}/add-details", update_params)
@@ -248,7 +265,10 @@ defmodule EventasaurusWeb.EventControllerTest do
       conn = post(conn, ~p"/api/events/#{event.slug}/enable-ticketing")
       assert json = json_response(conn, 422)
       assert json["error"] == "Validation failed"
-      assert json["details"]["is_ticketed"] == ["must be false for contribution collection events"]
+
+      assert json["details"]["is_ticketed"] == [
+               "must be false for contribution collection events"
+             ]
     end
 
     test "complete workflow: update between different taxation types", %{conn: conn, event: event} do
@@ -266,7 +286,10 @@ defmodule EventasaurusWeb.EventControllerTest do
       assert json_response(conn, 200)["event"]["taxation_type"] == "ticketed_event"
     end
 
-    test "all action endpoints include taxation_type in their responses", %{conn: conn, event: event} do
+    test "all action endpoints include taxation_type in their responses", %{
+      conn: conn,
+      event: event
+    } do
       future_date_1 = DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.to_iso8601()
       future_date_2 = DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.to_iso8601()
 
@@ -275,7 +298,11 @@ defmodule EventasaurusWeb.EventControllerTest do
       assert Map.has_key?(json_response(conn, 200)["event"], "taxation_type")
 
       # Test enable-polling endpoint
-      conn = post(conn, ~p"/api/events/#{event.slug}/enable-polling", %{"polling_deadline" => future_date_2})
+      conn =
+        post(conn, ~p"/api/events/#{event.slug}/enable-polling", %{
+          "polling_deadline" => future_date_2
+        })
+
       assert Map.has_key?(json_response(conn, 200)["event"], "taxation_type")
 
       # Test set-threshold endpoint

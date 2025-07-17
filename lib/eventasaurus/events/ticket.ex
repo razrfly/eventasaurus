@@ -6,23 +6,23 @@ defmodule EventasaurusApp.Events.Ticket do
   @pricing_models ~w(fixed flexible dynamic)
 
   schema "tickets" do
-    field :title, :string
-    field :description, :string
+    field(:title, :string)
+    field(:description, :string)
 
     # Flexible pricing fields
-    field :base_price_cents, :integer
-    field :minimum_price_cents, :integer, default: 0
-    field :suggested_price_cents, :integer
-    field :pricing_model, :string, default: "fixed"
+    field(:base_price_cents, :integer)
+    field(:minimum_price_cents, :integer, default: 0)
+    field(:suggested_price_cents, :integer)
+    field(:pricing_model, :string, default: "fixed")
 
-    field :currency, :string, default: "usd"
-    field :quantity, :integer
-    field :starts_at, :utc_datetime
-    field :ends_at, :utc_datetime
-    field :tippable, :boolean, default: false
+    field(:currency, :string, default: "usd")
+    field(:quantity, :integer)
+    field(:starts_at, :utc_datetime)
+    field(:ends_at, :utc_datetime)
+    field(:tippable, :boolean, default: false)
 
-    belongs_to :event, EventasaurusApp.Events.Event
-    has_many :orders, EventasaurusApp.Events.Order
+    belongs_to(:event, EventasaurusApp.Events.Event)
+    has_many(:orders, EventasaurusApp.Events.Order)
 
     timestamps()
   end
@@ -30,16 +30,33 @@ defmodule EventasaurusApp.Events.Ticket do
   @doc false
   def changeset(ticket, attrs) do
     ticket
-    |> cast(attrs, [:title, :description, :base_price_cents, :minimum_price_cents,
-                   :suggested_price_cents, :pricing_model, :currency, :quantity, :starts_at,
-                   :ends_at, :tippable, :event_id])
+    |> cast(attrs, [
+      :title,
+      :description,
+      :base_price_cents,
+      :minimum_price_cents,
+      :suggested_price_cents,
+      :pricing_model,
+      :currency,
+      :quantity,
+      :starts_at,
+      :ends_at,
+      :tippable,
+      :event_id
+    ])
     |> validate_required([:title, :base_price_cents, :quantity, :event_id])
     |> validate_pricing_fields()
     |> validate_number(:quantity, greater_than: 0, message: "must be greater than 0")
     |> validate_length(:title, min: 1, max: 255)
     |> validate_length(:description, max: 1000)
-    |> validate_inclusion(:currency, EventasaurusWeb.Helpers.CurrencyHelpers.supported_currency_codes(), message: "must be a supported currency")
-    |> validate_inclusion(:pricing_model, @pricing_models, message: "must be a valid pricing model")
+    |> validate_inclusion(
+      :currency,
+      EventasaurusWeb.Helpers.CurrencyHelpers.supported_currency_codes(),
+      message: "must be a supported currency"
+    )
+    |> validate_inclusion(:pricing_model, @pricing_models,
+      message: "must be a valid pricing model"
+    )
     |> validate_availability_window()
     |> foreign_key_constraint(:event_id)
   end
@@ -51,12 +68,24 @@ defmodule EventasaurusApp.Events.Ticket do
     suggested_price = get_field(changeset, :suggested_price_cents)
 
     changeset
-    |> validate_number(:base_price_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
-    |> validate_number(:minimum_price_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
+    |> validate_number(:base_price_cents,
+      greater_than_or_equal_to: 0,
+      message: "cannot be negative"
+    )
+    |> validate_number(:minimum_price_cents,
+      greater_than_or_equal_to: 0,
+      message: "cannot be negative"
+    )
     |> validate_pricing_relationships(pricing_model, base_price, minimum_price, suggested_price)
   end
 
-  defp validate_pricing_relationships(changeset, pricing_model, base_price, minimum_price, suggested_price) do
+  defp validate_pricing_relationships(
+         changeset,
+         pricing_model,
+         base_price,
+         minimum_price,
+         suggested_price
+       ) do
     cond do
       pricing_model == "flexible" && base_price && minimum_price && minimum_price > base_price ->
         add_error(changeset, :minimum_price_cents, "cannot be greater than base price")
@@ -68,7 +97,11 @@ defmodule EventasaurusApp.Events.Ticket do
         add_error(changeset, :suggested_price_cents, "should be at least the minimum price")
 
       suggested_price && base_price && suggested_price >= 0 && suggested_price > base_price * 2 ->
-        add_error(changeset, :suggested_price_cents, "suggested price seems too high compared to base price")
+        add_error(
+          changeset,
+          :suggested_price_cents,
+          "suggested price seems too high compared to base price"
+        )
 
       true ->
         changeset
@@ -111,12 +144,15 @@ defmodule EventasaurusApp.Events.Ticket do
   def effective_price(%__MODULE__{pricing_model: "fixed", base_price_cents: base_price}) do
     base_price || 0
   end
+
   def effective_price(%__MODULE__{pricing_model: "flexible", minimum_price_cents: min_price}) do
     min_price || 0
   end
+
   def effective_price(%__MODULE__{pricing_model: "dynamic", base_price_cents: base_price}) do
     base_price || 0
   end
+
   def effective_price(_), do: 0
 
   @doc """
@@ -125,6 +161,7 @@ defmodule EventasaurusApp.Events.Ticket do
   def max_flexible_price(%__MODULE__{pricing_model: "flexible", base_price_cents: base_price}) do
     base_price
   end
+
   def max_flexible_price(_), do: nil
 
   @doc """
@@ -136,10 +173,14 @@ defmodule EventasaurusApp.Events.Ticket do
   @doc """
   Get the suggested price for a ticket, if any.
   """
-  def suggested_price(%__MODULE__{suggested_price_cents: suggested}) when not is_nil(suggested), do: suggested
-  def suggested_price(%__MODULE__{pricing_model: "flexible", base_price_cents: base}) when not is_nil(base) do
+  def suggested_price(%__MODULE__{suggested_price_cents: suggested}) when not is_nil(suggested),
+    do: suggested
+
+  def suggested_price(%__MODULE__{pricing_model: "flexible", base_price_cents: base})
+      when not is_nil(base) do
     # If no explicit suggested price, use base price as suggestion for flexible tickets
     base
   end
+
   def suggested_price(_), do: nil
 end

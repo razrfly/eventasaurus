@@ -3,11 +3,11 @@ defmodule EventasaurusWeb.Helpers.VoteCountHelper do
 
   @doc """
   Calculates vote count from percentage and total votes.
-  
+
   ## Parameters
   - `percentage`: The percentage as a float
   - `total_votes`: The total number of votes as an integer
-  
+
   ## Returns
   The calculated vote count as an integer
   """
