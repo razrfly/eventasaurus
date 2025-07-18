@@ -43,6 +43,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.EmbeddedProgressBarComponent
+  import EventasaurusWeb.VoterCountDisplay
+  import EventasaurusWeb.ClearVotesButton
 
 
   @impl true
@@ -118,12 +120,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <h3 class="text-lg font-medium text-gray-900">
                 <%= get_voting_title(@poll.voting_system) %>
               </h3>
-              <%= if Map.get(@poll_stats, :total_unique_voters, 0) > 0 do %>
-                <div class="text-sm text-gray-600 ml-4">
-                  <% voter_count = Map.get(@poll_stats, :total_unique_voters, 0) %>
-                  <%= if voter_count == 1, do: "1 voter", else: "#{voter_count} voters" %>
-                </div>
-              <% end %>
+              <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="ml-4" />
             </div>
             <p class="text-sm text-gray-500">
               <%= get_voting_instructions(@poll.voting_system) %>
@@ -138,17 +135,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <% end %>
           </div>
 
-          <%= if has_votes?(@vote_state, @poll.voting_system) do %>
-            <button
-              type="button"
-              phx-click="clear_all_votes"
-              phx-target={@myself}
-              data-confirm="Are you sure you want to clear all your votes?"
-              class="text-sm text-red-600 hover:text-red-900 font-medium"
-            >
-              Clear All Votes
-            </button>
-          <% end %>
+          <.clear_votes_button
+            id={"clear-votes-#{@poll.id}"}
+            target={@myself}
+            has_votes={has_votes?(@vote_state, @poll.voting_system)}
+            loading={@loading}
+            anonymous_mode={@anonymous_mode}
+            variant="text"
+          />
         </div>
       </div>
 
