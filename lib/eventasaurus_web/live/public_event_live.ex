@@ -1126,15 +1126,22 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   @impl true
   def handle_info({:poll_stats_updated, _stats}, socket) do
-    # Trigger component re-render by updating a timestamp
-    {:noreply, assign(socket, :poll_stats_updated_at, DateTime.utc_now())}
+    require Logger
+    Logger.info("DEBUG: PublicEventLive received poll_stats_updated")
+    
+    # Reload all polls to get fresh data with votes
+    socket = load_event_polls(socket)
+    {:noreply, socket}
   end
 
   @impl true
   def handle_info({:poll_stats_updated, poll_id, _stats}, socket) do
-    # Trigger component re-render for specific poll
-    poll_updates = Map.put(socket.assigns[:poll_updates] || %{}, poll_id, DateTime.utc_now())
-    {:noreply, assign(socket, :poll_updates, poll_updates)}
+    require Logger
+    Logger.info("DEBUG: PublicEventLive received poll_stats_updated for poll #{poll_id}")
+    
+    # Reload all polls to get fresh data with votes
+    socket = load_event_polls(socket)
+    {:noreply, socket}
   end
 
   @impl true
