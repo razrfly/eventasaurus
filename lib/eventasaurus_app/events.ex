@@ -3901,29 +3901,22 @@ defmodule EventasaurusApp.Events do
   # =================
 
   defp cast_vote_with_transaction(poll, poll_option, user, vote_data, voting_system) do
-    require Logger
-    Logger.info("DEBUG: Casting vote for poll #{poll.id}, option #{poll_option.id}, user #{user.id}")
-    
     Repo.transaction(fn ->
       # For binary and star voting, remove existing vote first (replace behavior)
       if voting_system in ["binary", "star"] do
         case get_user_poll_vote(poll_option, user) do
           nil -> :ok
-          existing_vote -> 
-            Logger.info("DEBUG: Deleting existing vote #{existing_vote.id}")
-            Repo.delete!(existing_vote)
+          existing_vote -> Repo.delete!(existing_vote)
         end
       end
 
       case create_poll_vote(poll_option, user, vote_data, voting_system) do
         {:ok, vote} ->
-          Logger.info("DEBUG: Vote created successfully: #{inspect(vote)}")
           broadcast_poll_update(poll, :votes_updated)
           # Broadcast enhanced statistics update
           broadcast_poll_stats_update(poll)
           vote
         {:error, changeset} ->
-          Logger.error("DEBUG: Failed to create vote: #{inspect(changeset)}")
           Repo.rollback(changeset)
       end
     end)
@@ -3939,22 +3932,8 @@ defmodule EventasaurusApp.Events do
   end
 
   defp broadcast_poll_update(poll, event_type) do
-    # Temporarily bypass BroadcastThrottler for debugging
-    Phoenix.PubSub.broadcast(
-      Eventasaurus.PubSub,
-      "polls:#{poll.id}",
-      {event_type, poll}
-    )
-
-    # Also broadcast to event channel for real-time event updates
-    Phoenix.PubSub.broadcast(
-      Eventasaurus.PubSub,
-      "events:#{poll.event_id}",
-      {:poll_updated, poll}
-    )
-
-    require Logger
-    Logger.info("DEBUG: Broadcasted poll update for poll #{poll.id} with event_type: #{event_type}")
+    # Use BroadcastThrottler for efficient real-time updates
+    EventasaurusWeb.Services.BroadcastThrottler.throttle_poll_update_broadcast(poll.id, event_type, poll.event_id)
   end
 
   # =================
@@ -5335,14 +5314,8 @@ defmodule EventasaurusApp.Events do
   Similar to legacy system but works for all poll types.
   """
   def get_poll_voting_stats(%Poll{} = poll) do
-    require Logger
-    Logger.info("DEBUG: Getting poll voting stats for poll #{poll.id}")
-    
     enhanced_tallies = get_enhanced_poll_vote_tallies(poll)
-    Logger.info("DEBUG: Enhanced tallies: #{inspect(enhanced_tallies)}")
-    
     total_voters = enhanced_tallies.total_unique_voters
-    Logger.info("DEBUG: Total voters: #{total_voters}")
 
     # Calculate relative percentages for approval voting
     options_with_stats = Enum.map(enhanced_tallies.options_with_tallies, fn %{option: option, tally: tally} ->
@@ -5385,22 +5358,8 @@ defmodule EventasaurusApp.Events do
   def broadcast_poll_stats_update(%Poll{} = poll) do
     stats = get_poll_voting_stats(poll)
 
-    # Temporarily bypass BroadcastThrottler for debugging
-    Phoenix.PubSub.broadcast(
-      Eventasaurus.PubSub,
-      "polls:#{poll.id}:stats",
-      {:poll_stats_updated, stats}
-    )
-
-    # Also broadcast to event channel
-    Phoenix.PubSub.broadcast(
-      Eventasaurus.PubSub,
-      "events:#{poll.event_id}:polls",
-      {:poll_stats_updated, poll.id, stats}
-    )
-
-    require Logger
-    Logger.info("DEBUG: Broadcasted poll stats update for poll #{poll.id} with stats: #{inspect(stats)}")
+    # Use BroadcastThrottler for efficient real-time updates
+    EventasaurusWeb.Services.BroadcastThrottler.throttle_poll_stats_broadcast(poll.id, stats, poll.event_id)
 
     stats
   end
