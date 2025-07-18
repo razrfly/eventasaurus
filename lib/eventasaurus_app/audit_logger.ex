@@ -148,10 +148,7 @@ defmodule EventasaurusApp.AuditLogger do
   end
 
   defp get_ip_from_conn(conn) do
-    case Plug.Conn.get_req_header(conn, "x-forwarded-for") do
-      [ip | _] -> ip
-      [] -> to_string(:inet.ntoa(conn.remote_ip))
-    end
+    EventasaurusApp.IPExtractor.get_ip_from_conn(conn)
   end
 
   # Uncomment and implement if database audit storage is needed

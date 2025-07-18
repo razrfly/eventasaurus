@@ -108,10 +108,7 @@ defmodule EventasaurusWeb.Plugs.VoteRateLimitPlug do
   end
 
   defp get_client_ip(conn) do
-    case get_req_header(conn, "x-forwarded-for") do
-      [ip | _] -> ip
-      [] -> to_string(:inet.ntoa(conn.remote_ip))
-    end
+    EventasaurusApp.IPExtractor.get_ip_from_conn(conn)
   end
 
   defp get_poll_id(conn) do
