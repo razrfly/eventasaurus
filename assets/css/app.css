@@ -1113,6 +1113,7 @@ body[class*="theme-"] .theme-card:hover {
   }
 
   .date-selection-poll-component .vote-summary {
+    display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
   }
@@ -1136,7 +1137,7 @@ body[class*="theme-"] .theme-card:hover {
   
   /* Container and layout optimizations */
   .event-page-grid {
-    @apply gap-4;
+    gap: 1rem; /* gap-4 equivalent */
   }
   
   .main-content {
@@ -1153,8 +1154,8 @@ body[class*="theme-"] .theme-card:hover {
   }
   
   /* Event detail cards mobile optimization */
-  .event-page-grid .main-content .flex.items-start.gap-3 {
-    @apply mb-4;
+  .event-page-grid .main-content .flex.items-start[class*="gap-3"] {
+    margin-bottom: 1rem; /* mb-4 equivalent */
   }
   
   .event-page-grid .main-content .flex-shrink-0.w-8.h-8 {
@@ -1218,8 +1219,10 @@ body[class*="theme-"] .theme-card:hover {
   }
   
   /* Host section mobile optimization */
-  .event-page-grid .main-content .flex.items-center.gap-3 img {
-    @apply w-12 h-12 rounded-full;
+  .event-page-grid .main-content .flex.items-center[class*="gap-3"] img {
+    width: 3rem; /* w-12 equivalent */
+    height: 3rem; /* h-12 equivalent */
+    border-radius: 9999px; /* rounded-full equivalent */
   }
   
   /* Attendee avatars mobile optimization */
@@ -1288,6 +1291,246 @@ body[class*="theme-"] .theme-card:hover {
   /* Footer mobile optimization */
   .event-page-grid + footer {
     @apply mt-8 pt-8 border-t border-gray-200;
+  }
+
+  /* ============================================================================
+     MOBILE POLLING INTERFACE FIXES
+     ============================================================================ */
+  
+  /* Mobile-first approach - styles for screens smaller than 640px */
+  @media (max-width: 639px) {
+    /* Movie suggestion cards mobile optimization */
+  .event-page-grid .main-content .option-card {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  
+  /* Movie poster and content layout */
+  .event-page-grid .main-content .option-card > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .event-page-grid .main-content .option-card img {
+    width: 100%;
+    max-width: 80px;
+    height: auto;
+    border-radius: 0.5rem;
+    flex-shrink: 0;
+    align-self: flex-start;
+  }
+  
+  /* Movie title mobile optimization */
+  .event-page-grid .main-content .option-card h4 {
+    font-size: 1.125rem;
+    line-height: 1.375;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #1f2937;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    hyphens: auto;
+  }
+  
+  /* Movie description mobile optimization */
+  .event-page-grid .main-content .option-card p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  /* Vote summary mobile optimization */
+  .event-page-grid .main-content .option-card .vote-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    color: #6b7280;
+  }
+  
+  /* Voting buttons mobile optimization - CRITICAL FIX */
+  .event-page-grid .main-content .option-card .voting-buttons,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    margin-top: 0.75rem !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button {
+    width: 100% !important;
+    min-height: 2.75rem !important; /* 44px minimum touch target */
+    padding: 0.75rem 1rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #d1d5db !important;
+    background: #ffffff !important;
+    color: #374151 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+    transition: all 0.2s ease !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+    margin-left: 0 !important; /* Override space-x utilities */
+  }
+  
+  /* Button states */
+  .event-page-grid .main-content .option-card .voting-buttons button:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button:hover {
+    background: #f9fafb !important;
+    border-color: #9ca3af !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button:active,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button:active {
+    background: #f3f4f6 !important;
+    transform: translateY(1px);
+  }
+  
+  /* Yes button styling */
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="green"],
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="green"] {
+    background: #10b981 !important;
+    color: #ffffff !important;
+    border-color: #10b981 !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="green"]:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="green"]:hover {
+    background: #059669 !important;
+    border-color: #059669 !important;
+  }
+  
+  /* Maybe button styling */
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="yellow"],
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="yellow"] {
+    background: #f59e0b !important;
+    color: #ffffff !important;
+    border-color: #f59e0b !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="yellow"]:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="yellow"]:hover {
+    background: #d97706 !important;
+    border-color: #d97706 !important;
+  }
+  
+  /* No button styling */
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="red"],
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="red"] {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="red"]:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="red"]:hover {
+    background: #dc2626 !important;
+    border-color: #dc2626 !important;
+  }
+  }
+}
+
+/* Additional mobile-specific voting button fixes */
+@media (max-width: 639px) {
+  /* Ensure movie poll voting buttons are properly styled */
+  .public-movie-poll .flex[class*="space-x"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    margin-top: 0.75rem !important;
+  }
+  
+  .public-movie-poll .flex[class*="space-x"] button {
+    width: 100% !important;
+    min-height: 2.75rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  /* Movie option card mobile layout - stack everything vertically */
+  .public-movie-poll .bg-white.border.border-gray-200 > div:first-child {
+    flex-direction: column !important;
+  }
+  
+  /* Movie poster on mobile - center and make larger */
+  .public-movie-poll img[alt*="poster"] {
+    width: 100% !important;
+    max-width: 10rem !important; /* Larger poster on mobile */
+    height: auto !important;
+    margin: 0 auto 1rem auto !important; /* Center the image */
+    display: block !important;
+  }
+  
+  /* Ensure the text content takes full width */
+  .public-movie-poll .flex-1 {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+}
+
+/* Progressive enhancement for larger screens */
+@media (min-width: 640px) {
+  .event-page-grid .main-content .option-card > div {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  
+  .event-page-grid .main-content .option-card img {
+    max-width: 120px;
+    margin-right: 1rem;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"],
+  .public-movie-poll .flex[class*="space-x"] {
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    width: auto !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button,
+  .public-movie-poll .flex[class*="space-x"] button {
+    width: auto !important;
+    min-width: 5rem !important;
+    padding: 0.5rem 1rem !important;
+    margin-left: 0.5rem !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button:first-child,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button:first-child,
+  .public-movie-poll .flex[class*="space-x"] button:first-child {
+    margin-left: 0 !important;
+  }
+  
+  .event-page-grid .main-content .option-card h4 {
+    font-size: 1.25rem;
+  }
+  
+  .event-page-grid .main-content .option-card p {
+    font-size: 0.875rem;
+    -webkit-line-clamp: 4;
   }
 }
 
