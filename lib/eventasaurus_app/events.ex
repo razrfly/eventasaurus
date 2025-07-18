@@ -3482,7 +3482,13 @@ defmodule EventasaurusApp.Events do
           _ -> PollVote.changeset(%PollVote{}, attrs)
         end
 
-        Repo.insert(changeset)
+        case Repo.insert(changeset) do
+          {:ok, vote} ->
+            # Invalidate cache for performance
+            EventasaurusApp.Events.PollStatsCache.invalidate(poll.id)
+            {:ok, vote}
+          error -> error
+        end
     end
   end
 
@@ -3499,7 +3505,20 @@ defmodule EventasaurusApp.Events do
   Deletes a poll vote.
   """
   def delete_poll_vote(%PollVote{} = poll_vote) do
-    Repo.delete(poll_vote)
+    # Load the poll to enable broadcasting
+    poll_vote = Repo.preload(poll_vote, poll_option: :poll)
+    poll = poll_vote.poll_option.poll
+    
+    case Repo.delete(poll_vote) do
+      {:ok, deleted_vote} ->
+        # Invalidate cache for performance
+        EventasaurusApp.Events.PollStatsCache.invalidate(poll.id)
+        # Broadcast updates after successful deletion
+        broadcast_poll_update(poll, :votes_updated)
+        broadcast_poll_stats_update(poll)
+        {:ok, deleted_vote}
+      error -> error
+    end
   end
 
   # =================
