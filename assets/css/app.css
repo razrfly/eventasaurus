@@ -1452,7 +1452,6 @@ body[class*="theme-"] .theme-card:hover {
     border-color: #dc2626 !important;
   }
   }
-}
 
 /* Additional mobile-specific voting button fixes */
 @media (max-width: 639px) {
