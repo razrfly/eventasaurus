@@ -63,10 +63,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       %{options: []}
     end
 
-    # Subscribe to poll statistics updates for real-time updates
-    if movie_poll && connected?(socket) do
-      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{movie_poll.id}:stats")
-    end
+    # Note: Real-time updates handled by parent LiveView
 
     {:ok,
      socket
@@ -294,17 +291,8 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
-  def handle_info({:poll_stats_updated, stats}, socket) do
-    {:noreply, assign(socket, :poll_stats, stats)}
-  end
-
-  def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
-    if socket.assigns.movie_poll && socket.assigns.movie_poll.id == poll_id do
-      {:noreply, assign(socket, :poll_stats, stats)}
-    else
-      {:noreply, socket}
-    end
-  end
+  # Note: LiveComponents don't support handle_info callbacks
+  # Real-time updates are handled by the parent LiveView which reloads the poll data
 
   # Helper function to get movie poll for an event
   defp get_movie_poll(event) do

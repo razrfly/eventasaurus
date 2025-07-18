@@ -1126,19 +1126,13 @@ defmodule EventasaurusWeb.PublicEventLive do
 
   @impl true
   def handle_info({:poll_stats_updated, _stats}, socket) do
-    require Logger
-    Logger.info("DEBUG: PublicEventLive received poll_stats_updated")
-    
     # Reload all polls to get fresh data with votes
     socket = load_event_polls(socket)
     {:noreply, socket}
   end
 
   @impl true
-  def handle_info({:poll_stats_updated, poll_id, _stats}, socket) do
-    require Logger
-    Logger.info("DEBUG: PublicEventLive received poll_stats_updated for poll #{poll_id}")
-    
+  def handle_info({:poll_stats_updated, _poll_id, _stats}, socket) do
     # Reload all polls to get fresh data with votes
     socket = load_event_polls(socket)
     {:noreply, socket}
