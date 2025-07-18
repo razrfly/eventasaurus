@@ -1455,11 +1455,25 @@ body[class*="theme-"] .theme-card:hover {
 
 /* Mobile layout improvements */
 @media (max-width: 639px) {
-  /* Content area with minimal padding on mobile - scoped to event pages */
-  .public-event-page .container,
-  .event-page-grid .container {
-    padding-left: 0.1875rem !important; /* 3px padding on mobile - 50% wider content */
-    padding-right: 0.1875rem !important; /* 3px padding on mobile - 50% wider content */
+  /* Balanced padding for mobile event pages - ~81% viewport usage */
+  /* Using specific selectors that work with the actual DOM structure */
+  
+  /* Target containers that are parents of event-page-grid */
+  .min-h-screen .px-6.lg\:px-8 {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  
+  /* Target the p-6 wrapper */
+  .min-h-screen .p-6 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  
+  /* Target the container specifically when it contains event content */
+  .container.mx-auto.px-4 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
   }
   
   /* Stack voting section header on mobile - more specific selector */
