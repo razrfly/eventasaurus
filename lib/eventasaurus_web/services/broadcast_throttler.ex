@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
   
   # Maximum number of total pending broadcasts allowed
   # When this limit is reached, the oldest pending broadcast will be dropped
-  @max_pending_broadcasts 5
+  @max_pending_broadcasts 50
   
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -56,7 +56,9 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
       throttle_ms: throttle_ms,
       last_broadcast: %{},
       pending_broadcasts: %{},
-      timers: %{}
+      timers: %{},
+      queue_times: %{},  # Track when each broadcast was queued
+      start_time: System.monotonic_time(:millisecond)  # Track when the server started
     }
     
     {:ok, state}
@@ -70,11 +72,13 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
     
     if time_since_last >= state.throttle_ms do
       # Enough time has passed, broadcast immediately
+      Logger.debug("BroadcastThrottler: Broadcasting immediately for poll #{poll_id} (time since last: #{time_since_last}ms)")
       do_broadcast(poll_id, data, type)
       new_state = %{state | last_broadcast: Map.put(state.last_broadcast, poll_id, now)}
       {:noreply, new_state}
     else
       # Too soon, queue the broadcast
+      Logger.debug("BroadcastThrottler: Throttling broadcast for poll #{poll_id} (time since last: #{time_since_last}ms)")
       new_state = queue_broadcast(state, poll_id, data, type)
       {:noreply, new_state}
     end
@@ -92,9 +96,12 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
   def handle_info({:send_queued_broadcast, poll_id}, state) do
     case Map.get(state.pending_broadcasts, poll_id) do
       nil ->
-        # No pending broadcast, clean up timer
-        new_timers = Map.delete(state.timers, poll_id)
-        {:noreply, %{state | timers: new_timers}}
+        # No pending broadcast, clean up timer and queue time
+        new_state = %{state | 
+          timers: Map.delete(state.timers, poll_id),
+          queue_times: Map.delete(state.queue_times, poll_id)
+        }
+        {:noreply, new_state}
       
       {data, type} ->
         # Send the queued broadcast
@@ -104,7 +111,8 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
         new_state = %{state |
           last_broadcast: Map.put(state.last_broadcast, poll_id, now),
           pending_broadcasts: Map.delete(state.pending_broadcasts, poll_id),
-          timers: Map.delete(state.timers, poll_id)
+          timers: Map.delete(state.timers, poll_id),
+          queue_times: Map.delete(state.queue_times, poll_id)
         }
         {:noreply, new_state}
     end
@@ -113,46 +121,67 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
   ## Private Functions
   
   defp queue_broadcast(state, poll_id, data, type) do
-    # Cancel existing timer if there is one
-    existing_timer = Map.get(state.timers, poll_id)
-    if existing_timer do
-      Process.cancel_timer(existing_timer)
+    # Cancel existing timer if there is one and remove from pending broadcasts
+    {_existing_timer, cleaned_state} = if Map.has_key?(state.timers, poll_id) do
+      timer = Map.get(state.timers, poll_id)
+      if timer, do: Process.cancel_timer(timer)
+      
+      # Remove the existing pending broadcast for this poll
+      cleaned = %{state |
+        pending_broadcasts: Map.delete(state.pending_broadcasts, poll_id),
+        timers: Map.delete(state.timers, poll_id),
+        queue_times: Map.delete(state.queue_times, poll_id)
+      }
+      {timer, cleaned}
+    else
+      {nil, state}
     end
     
     # Check if we already have too many pending broadcasts globally
-    total_pending_count = map_size(state.pending_broadcasts)
+    # (after removing any existing broadcast for this poll)
+    total_pending_count = map_size(cleaned_state.pending_broadcasts)
     new_state = if total_pending_count >= @max_pending_broadcasts do
-      Logger.warning("Too many pending broadcasts (#{total_pending_count}), dropping oldest")
+      Logger.warning("BroadcastThrottler: Too many pending broadcasts (#{total_pending_count}), dropping oldest")
       # Find and drop the oldest pending broadcast
-      drop_oldest_pending_broadcast(state)
+      drop_oldest_pending_broadcast(cleaned_state)
     else
-      state
+      cleaned_state
     end
     
     # Schedule the broadcast
     time_to_wait = calculate_wait_time(new_state, poll_id)
     timer_ref = Process.send_after(self(), {:send_queued_broadcast, poll_id}, time_to_wait)
     
+    # Track when this broadcast was queued
+    now = System.monotonic_time(:millisecond)
+    
+    Logger.debug("BroadcastThrottler: Queuing broadcast for poll #{poll_id}, will send in #{time_to_wait}ms")
+    
     %{new_state |
       pending_broadcasts: Map.put(new_state.pending_broadcasts, poll_id, {data, type}),
-      timers: Map.put(new_state.timers, poll_id, timer_ref)
+      timers: Map.put(new_state.timers, poll_id, timer_ref),
+      queue_times: Map.put(new_state.queue_times, poll_id, now)
     }
   end
   
   defp calculate_wait_time(state, poll_id) do
     now = System.monotonic_time(:millisecond)
-    last_broadcast_time = Map.get(state.last_broadcast, poll_id, 0)
+    # For polls that have never broadcast, use a time before the server started
+    # This ensures they can broadcast immediately on first attempt
+    default_time = state.start_time - state.throttle_ms - 1
+    last_broadcast_time = Map.get(state.last_broadcast, poll_id, default_time)
     time_since_last = now - last_broadcast_time
     
     max(0, state.throttle_ms - time_since_last)
   end
   
   defp drop_oldest_pending_broadcast(state) do
-    # Find the oldest pending broadcast based on last_broadcast times
+    # Find the oldest pending broadcast based on actual queue times
     oldest_poll_id = state.pending_broadcasts
     |> Map.keys()
     |> Enum.min_by(fn poll_id -> 
-      Map.get(state.last_broadcast, poll_id, 0)
+      # Use the actual queue time, defaulting to current time if not found
+      Map.get(state.queue_times, poll_id, System.monotonic_time(:millisecond))
     end, fn -> nil end)
     
     if oldest_poll_id do
@@ -162,7 +191,8 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
       
       %{state |
         pending_broadcasts: Map.delete(state.pending_broadcasts, oldest_poll_id),
-        timers: Map.delete(state.timers, oldest_poll_id)
+        timers: Map.delete(state.timers, oldest_poll_id),
+        queue_times: Map.delete(state.queue_times, oldest_poll_id)
       }
     else
       state
@@ -170,6 +200,8 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
   end
   
   defp do_broadcast(poll_id, data, type) do
+    Logger.debug("BroadcastThrottler: Broadcasting for poll #{poll_id}, type: #{inspect(type)}")
+    
     case type do
       :poll_stats ->
         {stats, event_id} = data
@@ -187,6 +219,7 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
           {:poll_stats_updated, poll_id, stats}
         )
         
+        Logger.debug("BroadcastThrottler: Sent poll_stats broadcast for poll #{poll_id} to event #{event_id}")
       
       :poll_update ->
         {event_type, event_id} = data
@@ -204,6 +237,7 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
           {:poll_updated, %{poll_id: poll_id}}
         )
         
+        Logger.debug("BroadcastThrottler: Sent poll_update broadcast for poll #{poll_id}, event_type: #{inspect(event_type)}")
     end
   end
   
