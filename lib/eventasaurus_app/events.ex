@@ -3906,7 +3906,11 @@ defmodule EventasaurusApp.Events do
       if voting_system in ["binary", "star"] do
         case get_user_poll_vote(poll_option, user) do
           nil -> :ok
-          existing_vote -> Repo.delete!(existing_vote)
+          existing_vote -> 
+            case delete_poll_vote(existing_vote) do
+              {:ok, _} -> :ok
+              {:error, reason} -> Repo.rollback(reason)
+            end
         end
       end
 
