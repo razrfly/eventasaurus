@@ -1455,11 +1455,31 @@ body[class*="theme-"] .theme-card:hover {
 
 /* Mobile layout improvements */
 @media (max-width: 639px) {
-  /* Content area with minimal padding on mobile - scoped to event pages */
-  .public-event-page .container,
-  .event-page-grid .container {
-    padding-left: 0.1875rem !important; /* 3px padding on mobile - 50% wider content */
-    padding-right: 0.1875rem !important; /* 3px padding on mobile - 50% wider content */
+  /* Balanced padding for mobile event pages - ~81% viewport usage */
+  /* Target the radiant component wrapper specifically */
+  .min-h-screen .px-6:has(.event-page-grid) {
+    padding-left: max(1rem, env(safe-area-inset-left)) !important;
+    padding-right: max(1rem, env(safe-area-inset-right)) !important;
+  }
+  
+  /* Also target with higher specificity using multiple classes */
+  .px-6[class*="lg:px-8"]:has(.event-page-grid) {
+    padding-left: max(1rem, env(safe-area-inset-left)) !important;
+    padding-right: max(1rem, env(safe-area-inset-right)) !important;
+  }
+  
+  /* Target the p-6 wrapper inside container */
+  .p-6:has(.event-page-grid) {
+    padding: 0.5rem !important;
+  }
+  
+  /* Content area with balanced padding on mobile - scoped to event pages */
+  /* Target containers that have event-page-grid as a child */
+  .container:has(.event-page-grid),
+  .public-event-page .container {
+    /* 8px padding for better balance */
+    padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
+    padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
   }
   
   /* Stack voting section header on mobile - more specific selector */
