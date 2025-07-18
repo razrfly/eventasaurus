@@ -664,13 +664,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   defp sanitize_value_for_logging(_key, value), do: value
 
   defp get_remote_ip(conn) do
-    case get_req_header(conn, "x-forwarded-for") do
-      [ip | _] -> ip
-      [] ->
-        case :inet.ntoa(conn.remote_ip) do
-          ip when is_list(ip) -> to_string(ip)
-          _ -> "unknown"
-        end
-    end
+    EventasaurusApp.IPExtractor.get_ip_from_conn(conn)
   end
 end

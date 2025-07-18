@@ -3,9 +3,11 @@ defmodule EventasaurusApp.Events.VoteValidator do
   Server-side validation for poll votes to ensure data integrity and prevent abuse.
   """
 
-  alias EventasaurusApp.Events.{Poll, PollOption}
+  alias EventasaurusApp.Events.{Poll, PollOption, PollVote}
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusApp.Repo
   alias Decimal
+  import Ecto.Query
 
   @doc """
   Validates a vote before it's cast, checking all business rules.
@@ -169,7 +171,10 @@ defmodule EventasaurusApp.Events.VoteValidator do
   end
 
   defp sanitize_vote_params("star", params) do
-    %{vote_numeric: Decimal.cast(params.vote_numeric)}
+    case Decimal.cast(params.vote_numeric) do
+      {:ok, decimal} -> %{vote_numeric: decimal}
+      _ -> %{vote_numeric: nil}
+    end
   end
 
   defp sanitize_vote_params("ranked", params) do
@@ -181,15 +186,23 @@ defmodule EventasaurusApp.Events.VoteValidator do
   end
 
   # Helper Functions
-  defp get_user_votes_count(%Poll{} = _poll, %User{} = _user) do
-    # This would need to be implemented with actual database queries
-    # For now, return 0 to avoid compilation errors
-    0
+  defp get_user_votes_count(%Poll{} = poll, %User{} = user) do
+    # Query actual vote count for this user in this poll
+    query = from v in PollVote,
+      join: po in PollOption, on: v.poll_option_id == po.id,
+      where: po.poll_id == ^poll.id and v.voter_id == ^user.id,
+      select: count(v.id)
+    
+    Repo.one(query) || 0
   end
 
-  defp get_user_ranks(%Poll{} = _poll, %User{} = _user) do
-    # This would need to be implemented with actual database queries
-    # For now, return empty list to avoid compilation errors
-    []
+  defp get_user_ranks(%Poll{} = poll, %User{} = user) do
+    # Query actual ranks for this user in this poll
+    query = from v in PollVote,
+      join: po in PollOption, on: v.poll_option_id == po.id,
+      where: po.poll_id == ^poll.id and v.voter_id == ^user.id and not is_nil(v.vote_rank),
+      select: v.vote_rank
+    
+    Repo.all(query)
   end
 end

@@ -7,10 +7,5 @@ defmodule EventasaurusApp.Repo.Migrations.AddPollVoteIndexes do
     
     # Add index for counting unique voters per poll (only if doesn't exist)
     create_if_not_exists index(:poll_options, [:poll_id])
-    
-    # Add index for faster vote queries by poll option
-    create_if_not_exists index(:poll_votes, [:poll_option_id], 
-      name: "poll_votes_by_option_idx"
-    )
   end
 end
