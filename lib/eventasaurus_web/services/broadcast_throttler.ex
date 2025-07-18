@@ -13,8 +13,9 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
   # Default throttling interval in milliseconds
   @default_throttle_ms 500
   
-  # Maximum number of pending broadcasts per poll
-  @max_pending_per_poll 5
+  # Maximum number of total pending broadcasts allowed
+  # When this limit is reached, the oldest pending broadcast will be dropped
+  @max_pending_broadcasts 5
   
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -118,19 +119,23 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
       Process.cancel_timer(existing_timer)
     end
     
-    # Check if we already have too many pending broadcasts for this poll
-    pending_count = map_size(state.pending_broadcasts)
-    if pending_count >= @max_pending_per_poll do
-      Logger.warning("Too many pending broadcasts for poll #{poll_id}, dropping oldest")
+    # Check if we already have too many pending broadcasts globally
+    total_pending_count = map_size(state.pending_broadcasts)
+    new_state = if total_pending_count >= @max_pending_broadcasts do
+      Logger.warning("Too many pending broadcasts (#{total_pending_count}), dropping oldest")
+      # Find and drop the oldest pending broadcast
+      drop_oldest_pending_broadcast(state)
+    else
+      state
     end
     
     # Schedule the broadcast
-    time_to_wait = calculate_wait_time(state, poll_id)
+    time_to_wait = calculate_wait_time(new_state, poll_id)
     timer_ref = Process.send_after(self(), {:send_queued_broadcast, poll_id}, time_to_wait)
     
-    %{state |
-      pending_broadcasts: Map.put(state.pending_broadcasts, poll_id, {data, type}),
-      timers: Map.put(state.timers, poll_id, timer_ref)
+    %{new_state |
+      pending_broadcasts: Map.put(new_state.pending_broadcasts, poll_id, {data, type}),
+      timers: Map.put(new_state.timers, poll_id, timer_ref)
     }
   end
   
@@ -140,6 +145,28 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
     time_since_last = now - last_broadcast_time
     
     max(0, state.throttle_ms - time_since_last)
+  end
+  
+  defp drop_oldest_pending_broadcast(state) do
+    # Find the oldest pending broadcast based on last_broadcast times
+    oldest_poll_id = state.pending_broadcasts
+    |> Map.keys()
+    |> Enum.min_by(fn poll_id -> 
+      Map.get(state.last_broadcast, poll_id, 0)
+    end, fn -> nil end)
+    
+    if oldest_poll_id do
+      # Cancel the timer for the oldest broadcast
+      timer = Map.get(state.timers, oldest_poll_id)
+      if timer, do: Process.cancel_timer(timer)
+      
+      %{state |
+        pending_broadcasts: Map.delete(state.pending_broadcasts, oldest_poll_id),
+        timers: Map.delete(state.timers, oldest_poll_id)
+      }
+    else
+      state
+    end
   end
   
   defp do_broadcast(poll_id, data, type) do
