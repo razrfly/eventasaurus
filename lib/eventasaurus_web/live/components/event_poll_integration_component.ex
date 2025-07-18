@@ -48,12 +48,17 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:error_message, nil)
      |> assign(:success_message, nil)
      |> assign(:loading, false)
-     |> assign(:integration_stats, %{})}
+     |> assign(:integration_stats, %{})
+     |> assign(:polls, [])
+     |> assign(:poll_filter, "all")
+     |> assign(:poll_sort, "newest")
+     |> assign(:selected_polls, [])
+     |> assign(:open_poll_menu, nil)}
   end
 
-    @impl true
+  @impl true
   def update(assigns, socket) do
-        # Handle partial updates - if event is not in assigns, keep the existing one
+    # Handle partial updates - if event is not in assigns, keep the existing one
     event = assigns[:event] || socket.assigns[:event]
     current_user = assigns[:current_user] || socket.assigns[:current_user]
 
@@ -81,37 +86,48 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
       is_organizer = Events.user_is_organizer?(event, current_user)
 
       # Handle editing poll - show creation modal when editing_poll is set, unless explicitly set to false
-      showing_creation_modal = case assigns[:showing_creation_modal] do
-        false -> false  # Explicitly set to false, don't show modal
-        true -> true    # Explicitly set to true, show modal
-        nil -> socket.assigns[:showing_creation_modal] || assigns[:editing_poll] != nil  # Use default logic
-      end
+      showing_creation_modal =
+        case assigns[:showing_creation_modal] do
+          # Explicitly set to false, don't show modal
+          false -> false
+          # Explicitly set to true, show modal
+          true -> true
+          # Use default logic
+          nil -> socket.assigns[:showing_creation_modal] || assigns[:editing_poll] != nil
+        end
 
       # Use parent's show_poll_details state if provided
-      active_view = if Map.get(assigns, :show_poll_details, false) do
-        "poll_details"
-      else
-        Map.get(socket.assigns, :active_view, "overview")
-      end
+      active_view =
+        if Map.get(assigns, :show_poll_details, false) do
+          "poll_details"
+        else
+          Map.get(socket.assigns, :active_view, "overview")
+        end
 
       # Always prioritize parent's selected_poll, then refresh with updated data
-      updated_selected_poll = case assigns[:selected_poll] do
-        %{id: poll_id} ->
-          # Find the poll with matching ID in the updated polls list to get fresh data
-          Enum.find(polls, fn poll -> poll.id == poll_id end) || assigns[:selected_poll]
-        _ ->
-          assigns[:selected_poll]
-      end
+      updated_selected_poll =
+        case assigns[:selected_poll] do
+          %{id: poll_id} ->
+            # Find the poll with matching ID in the updated polls list to get fresh data
+            Enum.find(polls, fn poll -> poll.id == poll_id end) || assigns[:selected_poll]
+
+          _ ->
+            assigns[:selected_poll]
+        end
 
       {:ok,
        socket
        |> assign(assigns)
        |> assign(:event, event)
        |> assign(:current_user, current_user)
+       |> assign(:polls, polls)
        |> assign_new(:integration_mode, fn -> "embedded" end)
        |> assign_new(:show_creation_prompt, fn -> true end)
        |> assign_new(:compact_mode, fn -> false end)
        |> assign_new(:open_poll_menu, fn -> nil end)
+       |> assign_new(:selected_polls, fn -> [] end)
+       |> assign(:poll_filter, assigns[:poll_filter] || socket.assigns[:poll_filter] || "all")
+       |> assign(:poll_sort, assigns[:poll_sort] || socket.assigns[:poll_sort] || "newest")
        |> assign(:integration_stats, integration_stats)
        |> assign(:can_create_polls, can_create_polls)
        |> assign(:is_organizer, is_organizer)
@@ -198,11 +214,131 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
       <% else %>
         <!-- Poll List View -->
         <%= if @polls && length(@polls) > 0 do %>
+          <!-- Filtering and Sorting Controls -->
+          <div class="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <form phx-change="filter_polls" phx-target={@myself} class="flex flex-wrap items-center gap-3">
+              <div class="text-sm font-medium text-gray-700">Filter by:</div>
+              
+              <!-- Filter Dropdown -->
+              <div class="relative">
+                <select
+                  name="poll_filter"
+                  value={@poll_filter || "all"}
+                  class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style="background-image: none !important;"
+                >
+                  <option value="all">All Polls</option>
+                  <option value="active">Active Only</option>
+                  <option value="closed">Closed Only</option>
+                  <option value="date_selection">Date Polls</option>
+                  <option value="general">General Polls</option>
+                </select>
+                <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              
+              <!-- Sort Dropdown -->
+              <div class="relative">
+                <select
+                  name="poll_sort"
+                  value={@poll_sort || "newest"}
+                  class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  style="background-image: none !important;"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="most_votes">Most Votes</option>
+                  <option value="least_votes">Least Votes</option>
+                  <option value="name">Name (A-Z)</option>
+                </select>
+                <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              
+              <!-- Clear Filters -->
+              <%= if @poll_filter != "all" || @poll_sort != "newest" do %>
+                <button
+                  phx-click="clear_poll_filters"
+                  phx-target={@myself}
+                  type="button"
+                  class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
+                >
+                  <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear
+                </button>
+              <% end %>
+            </form>
+            
+            <!-- Select All Checkbox -->
+            <div class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                phx-click="toggle_select_all"
+                phx-target={@myself}
+                checked={length(@selected_polls) == length(get_filtered_polls(@polls || [], @poll_filter))}
+                class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              />
+              <label class="text-sm text-gray-700">Select All</label>
+            </div>
+          </div>
+          
+          <!-- Batch Operations Bar -->
+          <%= if length(Map.get(assigns, :selected_polls, [])) > 0 do %>
+            <div class="px-6 py-3 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-indigo-900">
+                  <%= length(@selected_polls) %> poll<%= if length(@selected_polls) > 1, do: "s" %> selected
+                </span>
+                <button
+                  phx-click="clear_selection"
+                  phx-target={@myself}
+                  class="text-sm text-indigo-600 hover:text-indigo-800"
+                >
+                  Clear
+                </button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  phx-click="batch_close_polls"
+                  phx-target={@myself}
+                  data-confirm={"Are you sure you want to close #{length(@selected_polls)} poll(s)?"}
+                  class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                >
+                  Close Selected
+                </button>
+                <button
+                  phx-click="batch_delete_polls"
+                  phx-target={@myself}
+                  data-confirm={"Are you sure you want to delete #{length(@selected_polls)} poll(s)? This cannot be undone."}
+                  class="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+          <% end %>
+          
           <!-- Match the exact guests tab structure -->
           <div class="divide-y divide-gray-200">
-        <%= for poll <- (@polls || []) do %>
+        <%= for poll <- get_sorted_polls(get_filtered_polls(@polls || [], @poll_filter), @poll_sort) do %>
           <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
             <div class="flex items-center justify-between">
+              <!-- Checkbox for batch selection -->
+              <div class="flex items-center gap-3 mr-3">
+                <input
+                  type="checkbox"
+                  phx-click="toggle_poll_selection"
+                  phx-value-poll_id={poll.id}
+                  phx-target={@myself}
+                  checked={poll.id in Map.get(assigns, :selected_polls, [])}
+                  class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+              </div>
+              
               <!-- Poll Info (matching user info structure) -->
               <div class="flex items-center gap-3 flex-1 min-w-0">
                 <!-- Poll Type Specific Icon -->
@@ -275,6 +411,53 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                       <%= get_poll_vote_count(poll) %> votes
                     </div>
                   </div>
+                  
+                  <!-- Quick Action Buttons -->
+                  <div class="flex items-center gap-1 mt-1">
+                    <!-- View Results Button -->
+                    <button
+                      phx-click="view_poll_details"
+                      phx-value-poll_id={poll.id}
+                      phx-target={@myself}
+                      class="p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                      title="View Results"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </button>
+                    
+                    <%= if can_manage_poll?(poll, @current_user, @event) do %>
+                      <!-- Edit Button -->
+                      <button
+                        phx-click="edit_poll"
+                        phx-value-poll_id={poll.id}
+                        phx-target={@myself}
+                        class="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Edit Poll"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    <% end %>
+                    
+                    <%= if can_close_poll?(poll, @current_user, @event) do %>
+                      <!-- Close Poll Button -->
+                      <button
+                        phx-click="close_poll"
+                        phx-value-poll_id={poll.id}
+                        phx-target={@myself}
+                        class="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Close Poll"
+                        data-confirm="Are you sure you want to close this poll? This action cannot be undone."
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      </button>
+                    <% end %>
+                  </div>
                 </div>
 
                 <!-- Actions Menu (matching guests actions) -->
@@ -311,19 +494,21 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                           View Details
                         </button>
 
-                        <button
-                          phx-click="edit_poll"
-                          phx-value-poll_id={poll.id}
-                          phx-target={@myself}
-                          class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          Edit Poll
-                        </button>
+                        <%= if can_manage_poll?(poll, @current_user, @event) do %>
+                          <button
+                            phx-click="edit_poll"
+                            phx-value-poll_id={poll.id}
+                            phx-target={@myself}
+                            class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit Poll
+                          </button>
+                        <% end %>
 
-                        <%= if Map.get(poll, :phase, "list_building") in ["list_building", "voting"] do %>
+                        <%= if can_close_poll?(poll, @current_user, @event) do %>
                           <button
                             phx-click="close_poll"
                             phx-value-poll_id={poll.id}
@@ -337,18 +522,20 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                           </button>
                         <% end %>
 
-                        <button
-                          phx-click="delete_poll"
-                          phx-value-poll_id={poll.id}
-                          phx-target={@myself}
-                          data-confirm="Are you sure you want to delete this poll?"
-                          class="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
-                        >
-                          <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Delete
-                        </button>
+                        <%= if can_delete_poll?(poll, @current_user, @event) do %>
+                          <button
+                            phx-click="delete_poll"
+                            phx-value-poll_id={poll.id}
+                            phx-target={@myself}
+                            data-confirm="Are you sure you want to delete this poll?"
+                            class="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                          >
+                            <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete
+                          </button>
+                        <% end %>
                       </div>
                     </div>
                   <% end %>
@@ -443,7 +630,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   #             </div>
   #           </div>
   #         <% end %>
-
 
   #       </div>
   #     </div>
@@ -918,9 +1104,170 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   end
 
   @impl true
-  def handle_event("close_poll", %{"poll_id" => _poll_id}, socket) do
-    # Handle closing a poll - you'd implement this based on your business logic
-    {:noreply, socket}
+  def handle_event("close_poll", %{"poll_id" => poll_id}, socket) do
+    poll_id = String.to_integer(poll_id)
+    poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
+
+    if poll && can_close_poll?(poll, socket.assigns.current_user, socket.assigns.event) do
+      case Events.transition_poll_phase(poll, "closed") do
+        {:ok, updated_poll} ->
+          # Update the poll in the list
+          updated_polls =
+            Enum.map(socket.assigns.polls, fn p ->
+              if p.id == updated_poll.id, do: updated_poll, else: p
+            end)
+
+          {:noreply,
+           socket
+           |> assign(:polls, updated_polls)
+           |> assign(:open_poll_menu, nil)
+           |> put_flash(:info, "Poll '#{updated_poll.title}' has been closed.")}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to close poll")}
+
+        _ ->
+          {:noreply, socket}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to close this poll")}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_poll_selection", %{"poll_id" => poll_id}, socket) do
+    poll_id = String.to_integer(poll_id)
+    selected_polls = socket.assigns.selected_polls || []
+
+    updated_selected =
+      if poll_id in selected_polls do
+        Enum.reject(selected_polls, &(&1 == poll_id))
+      else
+        [poll_id | selected_polls]
+      end
+
+    {:noreply, assign(socket, :selected_polls, updated_selected)}
+  end
+
+  @impl true
+  def handle_event("clear_selection", _params, socket) do
+    {:noreply, assign(socket, :selected_polls, [])}
+  end
+
+  @impl true
+  def handle_event("batch_close_polls", _params, socket) do
+    selected_polls = socket.assigns.selected_polls || []
+
+    polls_to_close =
+      socket.assigns.polls
+      |> Enum.filter(&(&1.id in selected_polls))
+      |> Enum.filter(&can_close_poll?(&1, socket.assigns.current_user, socket.assigns.event))
+
+    {success_count, updated_polls} =
+      Enum.reduce(polls_to_close, {0, socket.assigns.polls}, fn poll, {count, polls} ->
+        case Events.transition_poll_phase(poll, "closed") do
+          {:ok, updated_poll} ->
+            updated_list =
+              Enum.map(polls, fn p ->
+                if p.id == updated_poll.id, do: updated_poll, else: p
+              end)
+
+            {count + 1, updated_list}
+
+          _ ->
+            {count, polls}
+        end
+      end)
+
+    message =
+      if success_count > 0 do
+        "Successfully closed #{success_count} poll(s)"
+      else
+        "Failed to close selected polls"
+      end
+
+    {:noreply,
+     socket
+     |> assign(:polls, updated_polls)
+     |> assign(:selected_polls, [])
+     |> put_flash(:info, message)}
+  end
+
+  @impl true
+  def handle_event("batch_delete_polls", _params, socket) do
+    selected_polls = socket.assigns.selected_polls || []
+
+    polls_to_delete =
+      socket.assigns.polls
+      |> Enum.filter(&(&1.id in selected_polls))
+      |> Enum.filter(&can_delete_poll?(&1, socket.assigns.current_user, socket.assigns.event))
+
+    {success_count, failed_count} =
+      Enum.reduce(polls_to_delete, {0, 0}, fn poll, {success, failed} ->
+        case Events.delete_poll(poll) do
+          {:ok, _} -> {success + 1, failed}
+          _ -> {success, failed + 1}
+        end
+      end)
+
+    # Remove deleted polls from the list
+    remaining_polls = Enum.reject(socket.assigns.polls, &(&1.id in selected_polls))
+    integration_stats = calculate_integration_stats_with_polls(remaining_polls)
+
+    message =
+      cond do
+        failed_count == 0 -> "Successfully deleted #{success_count} poll(s)"
+        success_count > 0 -> "Deleted #{success_count} poll(s), #{failed_count} failed"
+        true -> "Failed to delete selected polls"
+      end
+
+    {:noreply,
+     socket
+     |> assign(:polls, remaining_polls)
+     |> assign(:integration_stats, integration_stats)
+     |> assign(:selected_polls, [])
+     |> put_flash(:info, message)}
+  end
+
+  @impl true
+  def handle_event("filter_polls", params, socket) do
+    poll_filter = case Map.get(params, "poll_filter") do
+      "" -> "all"
+      filter -> filter
+    end
+
+    poll_sort = case Map.get(params, "poll_sort") do
+      "" -> "newest"
+      sort -> sort
+    end
+
+    {:noreply,
+     socket
+     |> assign(:poll_filter, poll_filter)
+     |> assign(:poll_sort, poll_sort)}
+  end
+
+  @impl true
+  def handle_event("clear_poll_filters", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:poll_filter, "all")
+     |> assign(:poll_sort, "newest")}
+  end
+
+  @impl true
+  def handle_event("toggle_select_all", _params, socket) do
+    filtered_polls = get_filtered_polls(socket.assigns.polls, socket.assigns.poll_filter)
+    all_poll_ids = Enum.map(filtered_polls, & &1.id)
+
+    updated_selected =
+      if length(socket.assigns.selected_polls) == length(all_poll_ids) do
+        []
+      else
+        all_poll_ids
+      end
+
+    {:noreply, assign(socket, :selected_polls, updated_selected)}
   end
 
   @impl true
@@ -928,24 +1275,28 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     poll_id = String.to_integer(poll_id)
     poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
 
-    case poll && Events.delete_poll(poll) do
-      {:ok, _} ->
-        # Remove the poll from the list and recalculate stats
-        updated_polls = Enum.reject(socket.assigns.polls, &(&1.id == poll_id))
-        integration_stats = calculate_integration_stats_with_polls(updated_polls)
+    if poll && can_delete_poll?(poll, socket.assigns.current_user, socket.assigns.event) do
+      case Events.delete_poll(poll) do
+        {:ok, _} ->
+          # Remove the poll from the list and recalculate stats
+          updated_polls = Enum.reject(socket.assigns.polls, &(&1.id == poll_id))
+          integration_stats = calculate_integration_stats_with_polls(updated_polls)
 
-        {:noreply,
-         socket
-         |> assign(:polls, updated_polls)
-         |> assign(:integration_stats, integration_stats)
-         |> assign(:open_poll_menu, nil)
-         |> assign(:success_message, "Poll deleted successfully!")}
+          {:noreply,
+           socket
+           |> assign(:polls, updated_polls)
+           |> assign(:integration_stats, integration_stats)
+           |> assign(:open_poll_menu, nil)
+           |> assign(:success_message, "Poll deleted successfully!")}
 
-      {:error, _changeset} ->
-        {:noreply, assign(socket, :error_message, "Failed to delete poll. Please try again.")}
+        {:error, _changeset} ->
+          {:noreply, assign(socket, :error_message, "Failed to delete poll. Please try again.")}
 
-      nil ->
-        {:noreply, assign(socket, :error_message, "Poll not found.")}
+        nil ->
+          {:noreply, assign(socket, :error_message, "Poll not found.")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to delete this poll")}
     end
   end
 
@@ -961,7 +1312,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     {:noreply, assign(socket, :showing_creation_modal, false)}
   end
 
-    @impl true
+  @impl true
   def handle_event("view_poll_details", %{"poll_id" => poll_id}, socket) do
     poll_id = String.to_integer(poll_id)
     polls = socket.assigns.polls
@@ -1010,7 +1361,9 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   def handle_info({:poll_created, poll}, socket) do
     # Update polls list with new poll and recalculate stats
     updated_polls = [poll | socket.assigns.polls]
-    integration_stats = calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
+
+    integration_stats =
+      calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
 
     {:noreply,
      socket
@@ -1023,18 +1376,21 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   def handle_info({:poll_updated, updated_poll}, socket) do
     # Update the specific poll in the polls list
-    updated_polls = Enum.map(socket.assigns.polls, fn poll ->
-      if poll.id == updated_poll.id, do: updated_poll, else: poll
-    end)
+    updated_polls =
+      Enum.map(socket.assigns.polls, fn poll ->
+        if poll.id == updated_poll.id, do: updated_poll, else: poll
+      end)
 
-    integration_stats = calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
+    integration_stats =
+      calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
 
     # Update selected poll if it's the one that changed
-    selected_poll = if socket.assigns.selected_poll && socket.assigns.selected_poll.id == updated_poll.id do
-      updated_poll
-    else
-      socket.assigns.selected_poll
-    end
+    selected_poll =
+      if socket.assigns.selected_poll && socket.assigns.selected_poll.id == updated_poll.id do
+        updated_poll
+      else
+        socket.assigns.selected_poll
+      end
 
     {:noreply,
      socket
@@ -1045,25 +1401,29 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   def handle_info({:vote_cast, _poll_id, _user_id}, socket) do
     # Recalculate integration statistics
-    integration_stats = calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
+    integration_stats =
+      calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
+
     {:noreply, assign(socket, :integration_stats, integration_stats)}
   end
 
   # Enhanced PubSub handlers for the new polling system
   def handle_info(%{type: :option_suggested, poll_id: poll_id} = message, socket) do
     # Find the poll and update it with the new option
-    updated_polls = Enum.map(socket.assigns.polls, fn poll ->
-      if poll.id == poll_id do
-        # Add the new option to the poll's options
-        new_option = message.option
-        updated_options = [new_option | (poll.poll_options || [])]
-        %{poll | poll_options: updated_options}
-      else
-        poll
-      end
-    end)
+    updated_polls =
+      Enum.map(socket.assigns.polls, fn poll ->
+        if poll.id == poll_id do
+          # Add the new option to the poll's options
+          new_option = message.option
+          updated_options = [new_option | poll.poll_options || []]
+          %{poll | poll_options: updated_options}
+        else
+          poll
+        end
+      end)
 
-    integration_stats = calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
+    integration_stats =
+      calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
 
     {:noreply,
      socket
@@ -1073,48 +1433,54 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   def handle_info(%{type: :option_visibility_changed, poll_id: poll_id} = message, socket) do
     # Update the option visibility in the poll
-    updated_polls = Enum.map(socket.assigns.polls, fn poll ->
-      if poll.id == poll_id do
-        updated_options = Enum.map(poll.poll_options || [], fn option ->
-          if option.id == message.option.id do
-            %{option | is_visible: message.option.is_visible}
-          else
-            option
-          end
-        end)
-        %{poll | poll_options: updated_options}
-      else
-        poll
-      end
-    end)
+    updated_polls =
+      Enum.map(socket.assigns.polls, fn poll ->
+        if poll.id == poll_id do
+          updated_options =
+            Enum.map(poll.poll_options || [], fn option ->
+              if option.id == message.option.id do
+                %{option | is_visible: message.option.is_visible}
+              else
+                option
+              end
+            end)
+
+          %{poll | poll_options: updated_options}
+        else
+          poll
+        end
+      end)
 
     {:noreply, assign(socket, :polls, updated_polls)}
   end
 
   def handle_info(%{type: :options_reordered, poll_id: poll_id} = message, socket) do
     # Update the poll with reordered options
-    updated_polls = Enum.map(socket.assigns.polls, fn poll ->
-      if poll.id == poll_id do
-        %{poll | poll_options: message.updated_options}
-      else
-        poll
-      end
-    end)
+    updated_polls =
+      Enum.map(socket.assigns.polls, fn poll ->
+        if poll.id == poll_id do
+          %{poll | poll_options: message.updated_options}
+        else
+          poll
+        end
+      end)
 
     {:noreply, assign(socket, :polls, updated_polls)}
   end
 
   def handle_info(%{type: :poll_phase_changed, poll_id: poll_id} = message, socket) do
     # Update the poll's phase
-    updated_polls = Enum.map(socket.assigns.polls, fn poll ->
-      if poll.id == poll_id do
-        %{poll | phase: message.new_phase}
-      else
-        poll
-      end
-    end)
+    updated_polls =
+      Enum.map(socket.assigns.polls, fn poll ->
+        if poll.id == poll_id do
+          %{poll | phase: message.new_phase}
+        else
+          poll
+        end
+      end)
 
-    integration_stats = calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
+    integration_stats =
+      calculate_integration_stats_with_polls(updated_polls, socket.assigns.event)
 
     {:noreply,
      socket
@@ -1125,19 +1491,28 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   def handle_info(%{type: :poll_counters_updated, poll_id: _poll_id} = _message, socket) do
     # Update counters - mainly affects statistics
-    integration_stats = calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
+    integration_stats =
+      calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
+
     {:noreply, assign(socket, :integration_stats, integration_stats)}
   end
 
   def handle_info(%{type: :participant_joined, poll_id: _poll_id} = _message, socket) do
     # Update participant count
-    integration_stats = calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
+    integration_stats =
+      calculate_integration_stats_with_polls(socket.assigns.polls, socket.assigns.event)
+
     {:noreply, assign(socket, :integration_stats, integration_stats)}
   end
 
   def handle_info(%{type: :duplicate_detected} = message, socket) do
     # Show a notification about duplicate detection
-    {:noreply, assign(socket, :error_message, "Duplicate option detected: #{message.suggested_option.title}")}
+    {:noreply,
+     assign(
+       socket,
+       :error_message,
+       "Duplicate option detected: #{message.suggested_option.title}"
+     )}
   end
 
   def handle_info({:poll_saved, poll, message}, socket) do
@@ -1166,6 +1541,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   def handle_info({:close_poll_creation_modal}, socket) do
     # Close the modal and reset all editing states
     send(self(), {:close_poll_editing})
+
     {:noreply,
      socket
      |> assign(:showing_creation_modal, false)
@@ -1180,7 +1556,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   # Private helper functions
 
-    # Render poll type specific icon
+  # Render poll type specific icon
   defp render_poll_type_icon(poll_type) do
     case poll_type do
       "movie" ->
@@ -1212,7 +1588,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         </svg>
         """)
 
-      _ -> # Default for "custom" and any other type
+      # Default for "custom" and any other type
+      _ ->
         Phoenix.HTML.raw("""
         <svg class="h-5 w-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
@@ -1220,8 +1597,6 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         """)
     end
   end
-
-
 
   defp calculate_integration_stats_with_polls(polls, event \\ nil) do
     total_polls = length(polls)
@@ -1231,43 +1606,47 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     total_options = polls |> Enum.map(&length(&1.poll_options || [])) |> Enum.sum()
 
     # Safely get poll votes - handle case where association isn't loaded
-    total_votes = polls
-    |> Enum.map(fn poll ->
-      case Map.get(poll, :poll_votes) do
-        %Ecto.Association.NotLoaded{} -> 0
-        votes when is_list(votes) -> length(votes)
-        nil -> 0
-      end
-    end)
-    |> Enum.sum()
-
-    # Calculate participation rate (if event is provided)
-    {participation_rate, unique_voters} = if event do
-      total_participants = length(event.participants || [])
-
-      # Safely get unique voters - handle case where association isn't loaded
-      unique_voters = polls
-      |> Enum.flat_map(fn poll ->
+    total_votes =
+      polls
+      |> Enum.map(fn poll ->
         case Map.get(poll, :poll_votes) do
-          %Ecto.Association.NotLoaded{} -> []
-          votes when is_list(votes) -> votes
-          nil -> []
+          %Ecto.Association.NotLoaded{} -> 0
+          votes when is_list(votes) -> length(votes)
+          nil -> 0
         end
       end)
-      |> Enum.map(&(&1.voter_id))
-      |> Enum.uniq()
-      |> length()
+      |> Enum.sum()
 
-      participation_rate = if total_participants > 0 do
-        round((unique_voters / total_participants) * 100)
+    # Calculate participation rate (if event is provided)
+    {participation_rate, unique_voters} =
+      if event do
+        total_participants = length(event.participants || [])
+
+        # Safely get unique voters - handle case where association isn't loaded
+        unique_voters =
+          polls
+          |> Enum.flat_map(fn poll ->
+            case Map.get(poll, :poll_votes) do
+              %Ecto.Association.NotLoaded{} -> []
+              votes when is_list(votes) -> votes
+              nil -> []
+            end
+          end)
+          |> Enum.map(& &1.voter_id)
+          |> Enum.uniq()
+          |> length()
+
+        participation_rate =
+          if total_participants > 0 do
+            round(unique_voters / total_participants * 100)
+          else
+            0
+          end
+
+        {participation_rate, unique_voters}
       else
-        0
+        {0, 0}
       end
-
-      {participation_rate, unique_voters}
-    else
-      {0, 0}
-    end
 
     %{
       total_polls: total_polls,
@@ -1320,12 +1699,24 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   # Helper functions for the new guests-style layout
   defp get_poll_status_badge_data(phase) do
     case phase do
-      "list_building" -> {"Building", "bg-blue-100 text-blue-800"}
-      "voting" -> {"Voting", "bg-green-100 text-green-800"}
-      "voting_with_suggestions" -> {"Voting + Suggestions", "bg-green-100 text-green-800"}
-      "voting_only" -> {"Voting Only", "bg-amber-100 text-amber-800"}
-      "closed" -> {"Closed", "bg-gray-100 text-gray-800"}
-      _ -> {"Unknown", "bg-gray-100 text-gray-800"}
+      "list_building" ->
+        {"🔨 Building", "bg-blue-100 text-blue-800 border border-blue-200"}
+
+      "voting" ->
+        {"🟢 Active", "bg-green-100 text-green-800 border border-green-200 animate-pulse"}
+
+      "voting_with_suggestions" ->
+        {"🟢 Active + Suggestions",
+         "bg-green-100 text-green-800 border border-green-200 animate-pulse"}
+
+      "voting_only" ->
+        {"🟡 Voting Only", "bg-amber-100 text-amber-800 border border-amber-200"}
+
+      "closed" ->
+        {"🔴 Closed", "bg-gray-100 text-gray-800 border border-gray-200"}
+
+      _ ->
+        {"Unknown", "bg-gray-100 text-gray-800 border border-gray-200"}
     end
   end
 
@@ -1338,29 +1729,140 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
             _ -> acc
           end
         end)
-      _ -> 0
+
+      _ ->
+        0
     end
   end
+
+  # Authorization helper functions
+  defp can_manage_poll?(poll, user, event) do
+    # User can manage poll if they are:
+    # 1. The poll creator
+    # 2. An event organizer
+    # 3. The event creator
+    cond do
+      is_nil(user) -> false
+      poll.created_by_id == user.id -> true
+      event.user_id == user.id -> true
+      Events.user_is_organizer?(event, user) -> true
+      true -> false
+    end
+  end
+
+  defp can_close_poll?(poll, user, event) do
+    can_manage_poll?(poll, user, event) &&
+      Map.get(poll, :phase, "list_building") in [
+        "list_building",
+        "voting",
+        "voting_with_suggestions",
+        "voting_only"
+      ]
+  end
+
+  defp can_delete_poll?(poll, user, event) do
+    # Only poll creator or event creator can delete
+    cond do
+      is_nil(user) -> false
+      poll.created_by_id == user.id -> true
+      event.user_id == user.id -> true
+      true -> false
+    end
+  end
+
+  # Filtering helper functions
+  defp get_filtered_polls(polls, filter) when is_list(polls) do
+    case filter do
+      "all" ->
+        polls
+
+      "active" ->
+        Enum.filter(polls, fn poll ->
+          Map.get(poll, :phase, "list_building") in [
+            "list_building",
+            "voting",
+            "voting_with_suggestions",
+            "voting_only"
+          ]
+        end)
+
+      "closed" ->
+        Enum.filter(polls, fn poll ->
+          Map.get(poll, :phase, "list_building") == "closed"
+        end)
+
+      "date_selection" ->
+        Enum.filter(polls, fn poll ->
+          Map.get(poll, :poll_type, "general") == "date_selection"
+        end)
+
+      "general" ->
+        Enum.filter(polls, fn poll ->
+          Map.get(poll, :poll_type, "general") == "general"
+        end)
+
+      _ ->
+        polls
+    end
+  end
+  
+  defp get_filtered_polls(_, _), do: []
+
+  # Sorting helper functions
+  defp get_sorted_polls(polls, sort) when is_list(polls) do
+    case sort do
+      "newest" ->
+        Enum.sort_by(polls, & &1.inserted_at, {:desc, NaiveDateTime})
+
+      "oldest" ->
+        Enum.sort_by(polls, & &1.inserted_at, {:asc, NaiveDateTime})
+
+      "most_votes" ->
+        Enum.sort_by(polls, &get_poll_vote_count/1, :desc)
+
+      "least_votes" ->
+        Enum.sort_by(polls, &get_poll_vote_count/1, :asc)
+
+      "name" ->
+        Enum.sort_by(polls, & &1.title, :asc)
+
+      _ ->
+        polls
+    end
+  end
+  
+  defp get_sorted_polls(_, _), do: []
 
   # Helper function to format time for display
   defp format_relative_time(datetime) do
     case datetime do
-      nil -> "recently"
+      nil ->
+        "recently"
+
       datetime ->
         now = DateTime.utc_now()
-        datetime_utc = case datetime do
-          %DateTime{} = dt -> dt
-          %NaiveDateTime{} = ndt ->
-            case DateTime.from_naive(ndt, "Etc/UTC") do
-              {:ok, dt} -> dt
-              {:error, _} -> now
-            end
-          _ ->
-            # Log unexpected type for debugging
-            require Logger
-            Logger.warning("Unexpected datetime type in format_relative_time: #{inspect(datetime)}")
-            now
-        end
+
+        datetime_utc =
+          case datetime do
+            %DateTime{} = dt ->
+              dt
+
+            %NaiveDateTime{} = ndt ->
+              case DateTime.from_naive(ndt, "Etc/UTC") do
+                {:ok, dt} -> dt
+                {:error, _} -> now
+              end
+
+            _ ->
+              # Log unexpected type for debugging
+              require Logger
+
+              Logger.warning(
+                "Unexpected datetime type in format_relative_time: #{inspect(datetime)}"
+              )
+
+              now
+          end
 
         diff = DateTime.diff(now, datetime_utc, :second)
 
@@ -1368,8 +1870,8 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           diff < 60 -> "just now"
           diff < 3600 -> "#{div(diff, 60)}m ago"
           diff < 86400 -> "#{div(diff, 3600)}h ago"
-          diff < 2592000 -> "#{div(diff, 86400)}d ago"
-          true -> "#{div(diff, 2592000)}mo ago"
+          diff < 2_592_000 -> "#{div(diff, 86400)}d ago"
+          true -> "#{div(diff, 2_592_000)}mo ago"
         end
     end
   end
