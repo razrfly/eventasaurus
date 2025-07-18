@@ -397,7 +397,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   defp calculate_binary_analytics(poll) do
     poll.poll_options
     |> Enum.map(fn option ->
-      votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
+      votes = option.votes || []
 
       yes_count = Enum.count(votes, &(&1.vote_value == "yes"))
       maybe_count = Enum.count(votes, &(&1.vote_value == "maybe"))
@@ -428,7 +428,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
 
     poll.poll_options
     |> Enum.map(fn option ->
-      votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
+      votes = option.votes || []
       approval_count = length(votes)
 
       approval_percentage = if total_voters > 0, do: (approval_count / total_voters) * 100, else: 0
@@ -446,7 +446,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   defp calculate_ranked_analytics(poll) do
     poll.poll_options
     |> Enum.map(fn option ->
-      votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
+      votes = option.votes || []
 
       # Calculate points (higher rank = more points)
       total_points = votes
@@ -474,7 +474,7 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   defp calculate_star_analytics(poll) do
     poll.poll_options
     |> Enum.map(fn option ->
-      votes = Enum.filter(poll.poll_votes, &(&1.poll_option_id == option.id))
+      votes = option.votes || []
 
       ratings = Enum.map(votes, fn vote ->
         if vote.vote_numeric, do: Decimal.to_float(vote.vote_numeric), else: 0
@@ -503,7 +503,8 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
   end
 
   defp count_unique_voters(poll) do
-    poll.poll_votes
+    poll.poll_options
+    |> Enum.flat_map(fn option -> option.votes || [] end)
     |> Enum.map(& &1.voter_id)
     |> Enum.uniq()
     |> length()

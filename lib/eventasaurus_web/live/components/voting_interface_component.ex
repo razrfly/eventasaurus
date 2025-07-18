@@ -58,6 +58,9 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def update(assigns, socket) do
+    # Always recalculate stats on update to ensure real-time updates
+    require Logger
+    Logger.info("DEBUG: VotingInterfaceComponent update called for poll #{assigns.poll.id}")
     # Determine if we're in anonymous mode
     anonymous_mode = assigns[:anonymous_mode] || is_nil(assigns[:user])
     temp_votes = assigns[:temp_votes] || %{}
@@ -896,17 +899,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
   end
 
-  def handle_info({:poll_stats_updated, stats}, socket) do
-    {:noreply, assign(socket, :poll_stats, stats)}
-  end
-
-  def handle_info({:poll_stats_updated, poll_id, stats}, socket) do
-    if socket.assigns.poll.id == poll_id do
-      {:noreply, assign(socket, :poll_stats, stats)}
-    else
-      {:noreply, socket}
-    end
-  end
+  # Note: LiveComponents don't support handle_info callbacks
+  # Real-time updates are handled by the parent LiveView which reloads the poll data
 
   # Anonymous vote handlers
 

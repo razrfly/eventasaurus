@@ -69,6 +69,8 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Services.TmdbService,
       # Start Rich Data Manager for external API providers
       EventasaurusWeb.Services.RichDataManager,
+      # Start Broadcast Throttler for real-time poll updates
+      EventasaurusWeb.Services.BroadcastThrottler,
       # Start a worker by calling: Eventasaurus.Worker.start_link(arg)
       # {Eventasaurus.Worker, arg},
       # Start to serve requests, typically the last entry
