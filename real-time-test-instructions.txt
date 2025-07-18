@@ -1,0 +1,5 @@
+To test real-time updates:
+1. Open poll in multiple browser tabs: http://localhost:4000/[your-poll-url]
+2. Cast votes in one tab
+3. Watch vote counts update in other tabs immediately
+4. Check browser DevTools → Network → WS (WebSocket) for live connections
