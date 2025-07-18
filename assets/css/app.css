@@ -1455,8 +1455,9 @@ body[class*="theme-"] .theme-card:hover {
 
 /* Mobile layout improvements */
 @media (max-width: 639px) {
-  /* Content area with reduced padding on mobile */
-  .container {
+  /* Content area with reduced padding on mobile - scoped to event pages */
+  .public-event-page .container,
+  .event-page-grid .container {
     padding-left: 0.375rem !important; /* 6px padding on mobile */
     padding-right: 0.375rem !important; /* 6px padding on mobile */
   }
@@ -1546,7 +1547,7 @@ body[class*="theme-"] .theme-card:hover {
   
   .public-movie-poll .flex[class*="space-x"] button {
     width: auto !important;
-    min-height: 2.25rem !important;
+    min-height: 2.75rem !important; /* maintain 44px touch target for accessibility */
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
