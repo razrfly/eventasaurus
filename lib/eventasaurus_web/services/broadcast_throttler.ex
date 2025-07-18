@@ -180,8 +180,9 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
     oldest_poll_id = state.pending_broadcasts
     |> Map.keys()
     |> Enum.min_by(fn poll_id -> 
-      # Use the actual queue time, defaulting to current time if not found
-      Map.get(state.queue_times, poll_id, System.monotonic_time(:millisecond))
+      # Use the actual queue time, defaulting to 0 (very old) if not found
+      # This ensures broadcasts without queue times are dropped first
+      Map.get(state.queue_times, poll_id, 0)
     end, fn -> nil end)
     
     if oldest_poll_id do
