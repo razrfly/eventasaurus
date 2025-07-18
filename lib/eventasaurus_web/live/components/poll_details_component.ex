@@ -26,7 +26,6 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
-  alias Phoenix.PubSub
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
@@ -41,12 +40,6 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   @impl true
   def update(assigns, socket) do
-    # Subscribe to real-time poll updates
-    if connected?(socket) do
-      PubSub.subscribe(Eventasaurus.PubSub, "polls:#{assigns.poll.id}")
-      PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{assigns.poll.id}")
-    end
-
     # Calculate poll statistics
     poll_stats = calculate_poll_statistics(assigns.poll)
 
@@ -394,34 +387,8 @@ defmodule EventasaurusWeb.PollDetailsComponent do
     {:noreply, socket}
   end
 
-  # PubSub Event Handlers
-  def handle_info({:poll_updated, updated_poll}, socket) do
-    poll_stats = calculate_poll_statistics(updated_poll)
-
-    {:noreply,
-     socket
-     |> assign(:poll, updated_poll)
-     |> assign(:poll_stats, poll_stats)}
-  end
-
-  def handle_info({:vote_cast, _option_id, _vote}, socket) do
-    # Recalculate statistics when votes are cast
-    poll_stats = calculate_poll_statistics(socket.assigns.poll)
-    {:noreply, assign(socket, :poll_stats, poll_stats)}
-  end
-
-  def handle_info({:votes_updated, updated_poll}, socket) do
-    poll_stats = calculate_poll_statistics(updated_poll)
-
-    {:noreply,
-     socket
-     |> assign(:poll, updated_poll)
-     |> assign(:poll_stats, poll_stats)}
-  end
-
-  def handle_info(_msg, socket) do
-    {:noreply, socket}
-  end
+  # Note: LiveComponents don't support handle_info callbacks
+  # Real-time updates are handled by the parent LiveView which reloads the poll data
 
   # Private helper functions
 

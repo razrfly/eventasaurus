@@ -160,7 +160,6 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
           {:poll_stats_updated, poll_id, stats}
         )
         
-        Logger.debug("Broadcasted poll stats update for poll #{poll_id}")
       
       :poll_update ->
         {event_type, event_id} = data
@@ -178,7 +177,6 @@ defmodule EventasaurusWeb.Services.BroadcastThrottler do
           {:poll_updated, %{poll_id: poll_id}}
         )
         
-        Logger.debug("Broadcasted poll update for poll #{poll_id}: #{event_type}")
     end
   end
   

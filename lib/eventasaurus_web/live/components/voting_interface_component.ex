@@ -58,9 +58,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def update(assigns, socket) do
-    # Always recalculate stats on update to ensure real-time updates
-    require Logger
-    Logger.info("DEBUG: VotingInterfaceComponent update called for poll #{assigns.poll.id}")
     # Determine if we're in anonymous mode
     anonymous_mode = assigns[:anonymous_mode] || is_nil(assigns[:user])
     temp_votes = assigns[:temp_votes] || %{}
