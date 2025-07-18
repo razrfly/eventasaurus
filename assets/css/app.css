@@ -1455,40 +1455,12 @@ body[class*="theme-"] .theme-card:hover {
 
 /* Mobile layout improvements */
 @media (max-width: 639px) {
-  /* Balanced padding for mobile event pages - ~81% viewport usage */
-  /* Using specific selectors that work with the actual DOM structure */
-  
-  /* Target containers that are parents of event-page-grid */
-  .min-h-screen .px-6.lg\:px-8 {
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
-  }
-  
-  /* Target the p-6 wrapper */
-  .min-h-screen .p-6 {
-    padding-left: 0.5rem !important;
-    padding-right: 0.5rem !important;
-  }
-  
-  /* Target the container specifically when it contains event content */
-  .container.mx-auto.px-4 {
-    padding-left: 0.5rem !important;
-    padding-right: 0.5rem !important;
-  }
-  
-  /* Increase spacing between movie cards on mobile */
-  .event-page-grid .space-y-3 > * + * {
-    margin-top: 1.25rem !important;
-  }
-  
-  /* Ensure proper padding for movie cards on mobile */
-  .event-page-grid [class*="border"][class*="rounded-lg"] {
-    padding: 1.25rem !important;
-  }
-  
-  /* Maintain good padding for the main poll container */
-  .event-page-grid [class*="border"][class*="rounded-xl"][class*="p-6"] {
-    padding: 1.5rem !important;
+  /* Content area with minimal padding on mobile - scoped to event pages */
+  /* Includes safe area support for devices with notches */
+  .public-event-page .container,
+  .event-page-grid .container {
+    padding-left: max(0.1875rem, env(safe-area-inset-left)) !important; /* 3px or safe area */
+    padding-right: max(0.1875rem, env(safe-area-inset-right)) !important; /* 3px or safe area */
   }
   
   /* Stack voting section header on mobile - more specific selector */
