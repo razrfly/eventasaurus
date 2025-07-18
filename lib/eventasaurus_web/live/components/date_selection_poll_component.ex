@@ -45,6 +45,8 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   # Import utilities for date handling and display
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
+  import EventasaurusWeb.VoterCountDisplay
+  import EventasaurusWeb.ClearVotesButton
 
   @impl true
   def mount(socket) do
@@ -242,7 +244,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     {:noreply, assign(socket, :loading, true)}
   end
 
-  def handle_event("clear_temp_votes", _params, socket) do
+  def handle_event("clear_all_votes", _params, socket) do
     {:noreply, assign(socket, :temp_votes, %{})}
   end
 
@@ -307,11 +309,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                 <%= if @poll.description && @poll.description != "" do %>
                   <p class="text-sm text-gray-600 mt-1 line-clamp-2 sm:line-clamp-none"><%= @poll.description %></p>
                 <% end %>
-                <%= if @poll.phase in ["voting", "voting_with_suggestions", "voting_only"] and @poll_stats.total_unique_voters > 0 do %>
-                  <div class="text-sm text-gray-600 mt-1">
-                    <%= if @poll_stats.total_unique_voters == 1, do: "1 voter", else: "#{@poll_stats.total_unique_voters} voters" %>
-                  </div>
-                <% end %>
+                <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="mt-1" />
               </div>
             </div>
 
@@ -451,40 +449,58 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                     </h4>
                     <div class="space-y-2">
                       <%= for option <- @poll_options do %>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div class="flex items-center space-x-3">
-                            <span class="text-lg">📅</span>
-                            <div class="flex-1">
-                              <div class="flex items-center space-x-2 mb-1">
-                                <p class="font-medium text-gray-900"><%= option.title %></p>
-                                <%= if @time_enabled and has_time_slots?(option) do %>
-                                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    Times
-                                  </span>
-                                <% end %>
-                              </div>
-
-                              <!-- Time Slots Display -->
-                              <%= if @time_enabled and has_time_slots?(option) do %>
-                                <div class="mt-2 flex flex-wrap gap-2">
-                                  <%= for time_slot <- get_time_slots_from_option(option) do %>
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-sm bg-white border border-gray-200 text-gray-700">
-                                      <%= format_time_slot_display(time_slot) %>
+                        <div class="p-3 bg-gray-50 rounded-lg">
+                          <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3 flex-1">
+                              <span class="text-lg">📅</span>
+                              <div class="flex-1">
+                                <div class="flex items-center space-x-2 mb-1">
+                                  <p class="font-medium text-gray-900"><%= option.title %></p>
+                                  <%= if @time_enabled and has_time_slots?(option) do %>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                      <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                      </svg>
+                                      Times
                                     </span>
                                   <% end %>
                                 </div>
-                              <% end %>
 
-                              <%= if option.suggested_by do %>
-                                <p class="text-sm text-gray-500 mt-1">
-                                  Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
-                                </p>
-                              <% end %>
+                                <!-- Time Slots Display -->
+                                <%= if @time_enabled and has_time_slots?(option) do %>
+                                  <div class="mt-2 flex flex-wrap gap-2">
+                                    <%= for time_slot <- get_time_slots_from_option(option) do %>
+                                      <span class="inline-flex items-center px-2.5 py-1 rounded-md text-sm bg-white border border-gray-200 text-gray-700">
+                                        <%= format_time_slot_display(time_slot) %>
+                                      </span>
+                                    <% end %>
+                                  </div>
+                                <% end %>
+
+                                <%= if option.suggested_by do %>
+                                  <p class="text-sm text-gray-500 mt-1">
+                                    Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
+                                  </p>
+                                <% end %>
+
+                                <!-- Embedded Progress Bar for list building phase -->
+                                <%= if @poll_stats && @poll.phase == "list_building" do %>
+                                  <div class="mt-2">
+                                    <.live_component
+                                      module={EventasaurusWeb.EmbeddedProgressBarComponent}
+                                      id={"progress-list-#{option.id}"}
+                                      poll_stats={@poll_stats}
+                                      option_id={option.id}
+                                      voting_system={@poll.voting_system || "binary"}
+                                      compact={true}
+                                      show_labels={false}
+                                      show_counts={true}
+                                      anonymous_mode={false}
+                                    />
+                                  </div>
+                                <% end %>
+                              </div>
                             </div>
-                          </div>
 
                           <!-- Time Configuration Button -->
                           <%= if @time_enabled do %>
@@ -503,7 +519,8 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                               </button>
                             </div>
                           <% end %>
-                                                </div>
+                          </div>
+                        </div>
                       <% end %>
                     </div>
                   </div>
@@ -573,14 +590,14 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                         <% end %>
                         Save My Votes
                       </button>
-                      <button
-                        type="button"
-                        phx-click="clear_temp_votes"
-                        phx-target={@myself}
-                        class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        Clear All
-                      </button>
+                      <.clear_votes_button
+                        id={"clear-temp-votes-date-#{@poll.id}"}
+                        target={@myself}
+                        has_votes={map_size(@temp_votes) > 0}
+                        loading={@loading}
+                        anonymous_mode={true}
+                        variant="button"
+                      />
                     </div>
                   </div>
                 <% end %>
@@ -603,34 +620,51 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                     </div>
                   <% end %>
 
-                  <!-- Vote Summary -->
+                  <!-- Vote Summary with Embedded Results -->
                   <%= if length(@poll_options) > 0 do %>
                     <div class="space-y-3">
                       <%= for option <- @poll_options do %>
-                        <% summary = Map.get(@vote_summaries, option.id, %{vote_counts: %{yes: 0, maybe: 0, no: 0}, total_votes: 0}) %>
-                        <div class="p-3 border border-gray-200 rounded-lg">
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 space-y-1 sm:space-y-0">
-                            <span class="font-medium text-gray-900 truncate"><%= option.title %></span>
-                            <span class="text-sm text-gray-500"><%= summary.total_votes %> vote<%= if summary.total_votes != 1, do: "s" %></span>
-                          </div>
-                          <%= if summary.total_votes > 0 do %>
-                            <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
-                              <div class="flex items-center">
-                                <span class="w-3 h-3 bg-green-500 rounded-full mr-1"></span>
-                                <span class="text-gray-600">Yes: <%= summary.vote_counts.yes %></span>
+                        <% is_finalized = option.id in (@poll.finalized_option_ids || []) %>
+                        <div class={"p-4 border border-gray-200 rounded-lg #{if is_finalized, do: "bg-green-50 border-green-300", else: "bg-white"}"}>
+                          <div class="flex items-start space-x-3">
+                            <span class="text-lg mt-0.5">📅</span>
+                            <div class="flex-1">
+                              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
+                                <div>
+                                  <h4 class="font-medium text-gray-900"><%= option.title %></h4>
+                                  <%= if option.id in (@poll.finalized_option_ids || []) do %>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                      ✓ Selected
+                                    </span>
+                                  <% end %>
+                                </div>
                               </div>
-                              <div class="flex items-center">
-                                <span class="w-3 h-3 bg-yellow-500 rounded-full mr-1"></span>
-                                <span class="text-gray-600">Maybe: <%= summary.vote_counts.maybe %></span>
-                              </div>
-                              <div class="flex items-center">
-                                <span class="w-3 h-3 bg-red-500 rounded-full mr-1"></span>
-                                <span class="text-gray-600">No: <%= summary.vote_counts.no %></span>
-                              </div>
+
+                              <!-- Time Slots Display -->
+                              <%= if has_time_slots?(option) do %>
+                                <div class="mb-2 flex flex-wrap gap-2">
+                                  <%= for time_slot <- get_time_slots_from_option(option) do %>
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-sm bg-white border border-gray-200 text-gray-700">
+                                      <%= format_time_slot_display(time_slot) %>
+                                    </span>
+                                  <% end %>
+                                </div>
+                              <% end %>
+
+                              <!-- Embedded Progress Bar for Results -->
+                              <.live_component
+                                module={EventasaurusWeb.EmbeddedProgressBarComponent}
+                                id={"progress-result-#{option.id}"}
+                                poll_stats={@poll_stats}
+                                option_id={option.id}
+                                voting_system={@poll.voting_system || "binary"}
+                                compact={false}
+                                show_labels={true}
+                                show_counts={true}
+                                anonymous_mode={false}
+                              />
                             </div>
-                          <% else %>
-                            <p class="text-sm text-gray-500">No votes</p>
-                          <% end %>
+                          </div>
                         </div>
                       <% end %>
                     </div>

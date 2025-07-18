@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   alias EventasaurusWeb.Utils.TimeUtils
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
+  import EventasaurusWeb.VoterCountDisplay
 
   @impl true
   def update(assigns, socket) do
@@ -25,6 +26,13 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       # Load poll options with suggested_by user
       poll_options = Events.list_poll_options(poll)
       |> Repo.preload(:suggested_by)
+      
+      # Load poll statistics for voter count display
+      poll_stats = try do
+        Events.get_poll_voting_stats(poll)
+      rescue
+        _ -> %{options: [], total_unique_voters: 0}
+      end
 
       {:ok,
        socket
@@ -32,6 +40,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
        |> assign(:current_user, user)
        |> assign(:poll, poll)
        |> assign(:poll_options, poll_options)
+       |> assign(:poll_stats, poll_stats)
        |> assign(:showing_add_form, false)
        |> assign(:option_title, "")
        |> assign(:adding_option, false)}
@@ -227,6 +236,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                 Vote on your favorite <%= get_poll_type_text(@poll.poll_type) %> below.
               <% end %>
             </p>
+            <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="mt-1" />
           </div>
 
           <!-- Poll Options List -->
