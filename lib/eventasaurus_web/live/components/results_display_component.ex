@@ -22,7 +22,6 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
 
   use EventasaurusWeb, :live_component
 
-  alias Phoenix.PubSub
 
   @impl true
   def mount(socket) do
@@ -35,11 +34,6 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
 
   @impl true
   def update(assigns, socket) do
-    # Subscribe to real-time vote updates
-    if connected?(socket) do
-      PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{assigns.poll.id}")
-    end
-
     # Calculate analytics
     analytics = calculate_vote_analytics(assigns.poll)
     total_voters = count_unique_voters(assigns.poll)
@@ -344,44 +338,8 @@ defmodule EventasaurusWeb.ResultsDisplayComponent do
     """
   end
 
-  # Event Handlers
-  def handle_info({:vote_cast, _option_id, _vote}, socket) do
-    # Recalculate analytics when votes are cast
-    analytics = calculate_vote_analytics(socket.assigns.poll)
-    total_voters = count_unique_voters(socket.assigns.poll)
-
-    {:noreply,
-     socket
-     |> assign(:vote_analytics, analytics)
-     |> assign(:total_voters, total_voters)}
-  end
-
-  def handle_info({:vote_cleared, _option_id}, socket) do
-    # Recalculate analytics when votes are cleared
-    analytics = calculate_vote_analytics(socket.assigns.poll)
-    total_voters = count_unique_voters(socket.assigns.poll)
-
-    {:noreply,
-     socket
-     |> assign(:vote_analytics, analytics)
-     |> assign(:total_voters, total_voters)}
-  end
-
-  def handle_info({:votes_updated, poll}, socket) do
-    # Update poll data and recalculate analytics
-    analytics = calculate_vote_analytics(poll)
-    total_voters = count_unique_voters(poll)
-
-    {:noreply,
-     socket
-     |> assign(:poll, poll)
-     |> assign(:vote_analytics, analytics)
-     |> assign(:total_voters, total_voters)}
-  end
-
-  def handle_info(_msg, socket) do
-    {:noreply, socket}
-  end
+  # Note: LiveComponents don't support handle_info callbacks
+  # Real-time updates are handled by the parent LiveView which reloads the poll data
 
   # Private helper functions
 
