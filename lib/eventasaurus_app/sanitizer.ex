@@ -131,16 +131,8 @@ defmodule EventasaurusApp.Sanitizer do
   # Private functions
 
   defp sanitize_html(text) do
-    # Basic HTML sanitization - remove potentially dangerous tags
-    text
-    |> String.replace(~r/<script[^>]*>.*?<\/script>/i, "")
-    |> String.replace(~r/<iframe[^>]*>.*?<\/iframe>/i, "")
-    |> String.replace(~r/<object[^>]*>.*?<\/object>/i, "")
-    |> String.replace(~r/<embed[^>]*>/i, "")
-    |> String.replace(~r/<link[^>]*>/i, "")
-    |> String.replace(~r/<style[^>]*>.*?<\/style>/i, "")
-    |> String.replace(~r/javascript:/i, "")
-    |> String.replace(~r/on\w+\s*=/i, "")
+    # Use proper HTML sanitization library for better security
+    HtmlSanitizeEx.strip_tags(text)
   end
 
   defp sanitize_metadata_key(key) when is_binary(key) do

@@ -20,6 +20,10 @@ defmodule EventasaurusApp.Events.Poll do
     field :max_options_per_user, :integer
     field :auto_finalize, :boolean, default: false
 
+    # Virtual fields for attaching stats in queries
+    field :stats, {:array, :map}, virtual: true
+    field :unique_voters, :integer, virtual: true
+
     belongs_to :event, Event
     belongs_to :created_by, User, foreign_key: :created_by_id
     has_many :poll_options, PollOption
