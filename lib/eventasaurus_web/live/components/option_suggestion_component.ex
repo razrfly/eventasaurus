@@ -1480,17 +1480,34 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
               _ -> true
             end
           end)
-          |> Enum.map(fn {{:error, changeset}, index} ->
+          |> Enum.map(fn {result, index} ->
             date = Enum.at(socket.assigns.selected_dates, index)
-            {date, changeset}
+            case result do
+              {:error, %{suggestion_limit: [message]}} -> {date, message}
+              {:error, changeset} -> {date, changeset}
+              _ -> {date, "Unknown error"}
+            end
           end)
 
-        Logger.error("Failed to save dates: #{inspect(failed_results |> Enum.map(fn {date, changeset} -> {date, changeset.errors} end))}")
+        Logger.error("Failed to save dates: #{inspect(failed_results |> Enum.map(fn
+          {date, changeset} when is_map(changeset) and is_map_key(changeset, :errors) -> {date, changeset.errors}
+          {date, message} -> {date, message}
+        end))}")
+
+        # Check if any errors are suggestion limit errors
+        suggestion_limit_errors = failed_results
+          |> Enum.any?(fn {_, error} -> is_binary(error) && String.contains?(error, "suggestion limit") end)
+
+        error_message = if suggestion_limit_errors do
+          "You have reached your suggestion limit. Please remove some suggestions before adding new ones."
+        else
+          "Failed to save #{failed_count} date(s). Please try again."
+        end
 
         {:noreply,
          socket
          |> assign(:loading, false)
-         |> put_flash(:error, "Failed to save #{failed_count} date(s). Please try again.")}
+         |> put_flash(:error, error_message)}
       end
     else
       # Non-date polls - use original single option logic
@@ -1531,6 +1548,12 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
            |> assign(:date_time_slots, %{})
            |> assign(:changeset, changeset)
            |> assign(:loading_rich_data, false)}
+
+        {:error, %{suggestion_limit: [message]}} ->
+          {:noreply,
+           socket
+           |> assign(:loading, false)
+           |> put_flash(:error, message)}
 
         {:error, changeset} ->
           {:noreply,
@@ -1962,11 +1985,35 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp safe_poll_options_empty?(poll_options) when is_list(poll_options), do: Enum.empty?(poll_options)
   defp safe_poll_options_empty?(_), do: true
 
+  # Helper function to calculate user's current suggestion count
+  defp calculate_user_suggestion_count(%Ecto.Association.NotLoaded{}, _user_id), do: 0
+  defp calculate_user_suggestion_count(poll_options, user_id) when is_list(poll_options) do
+    Enum.count(poll_options, fn option ->
+      option.suggested_by_id == user_id && option.status == "active"
+    end)
+  end
+  defp calculate_user_suggestion_count(_, _user_id), do: 0
+
 
 
   defp save_option(socket, option_params) do
     require Logger
 
+    # Check suggestion limit for non-creators
+    if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
+      user_suggestion_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id)
+      if user_suggestion_count >= socket.assigns.poll.max_options_per_user do
+        Logger.warning("User #{socket.assigns.user.id} attempted to exceed suggestion limit #{socket.assigns.poll.max_options_per_user}")
+        {:error, %{suggestion_limit: ["You have reached your suggestion limit of #{socket.assigns.poll.max_options_per_user}"]}}
+      else
+        do_save_option(socket, option_params)
+      end
+    else
+      do_save_option(socket, option_params)
+    end
+  end
+
+  defp do_save_option(socket, option_params) do
     # Ensure ALL movie options get consistent data structure with fallback logic
     option_params = if socket.assigns.poll.poll_type == "movie" &&
                       Map.has_key?(option_params, "external_data") &&

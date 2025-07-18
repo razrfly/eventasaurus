@@ -1121,16 +1121,16 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
            socket
            |> assign(:polls, updated_polls)
            |> assign(:open_poll_menu, nil)
-           |> put_flash(:info, "Poll '#{updated_poll.title}' has been closed.")}
+           |> assign(:success_message, "Poll '#{updated_poll.title}' has been closed.")}
 
         {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Failed to close poll")}
+          {:noreply, assign(socket, :error_message, "Failed to close poll")}
 
         _ ->
           {:noreply, socket}
       end
     else
-      {:noreply, put_flash(socket, :error, "You don't have permission to close this poll")}
+      {:noreply, assign(socket, :error_message, "You don't have permission to close this poll")}
     end
   end
 
@@ -1190,7 +1190,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      socket
      |> assign(:polls, updated_polls)
      |> assign(:selected_polls, [])
-     |> put_flash(:info, message)}
+     |> assign(:success_message, message)}
   end
 
   @impl true
@@ -1226,7 +1226,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:polls, remaining_polls)
      |> assign(:integration_stats, integration_stats)
      |> assign(:selected_polls, [])
-     |> put_flash(:info, message)}
+     |> assign(:success_message, message)}
   end
 
   @impl true
@@ -1296,7 +1296,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           {:noreply, assign(socket, :error_message, "Poll not found.")}
       end
     else
-      {:noreply, put_flash(socket, :error, "You don't have permission to delete this poll")}
+      {:noreply, assign(socket, :error_message, "You don't have permission to delete this poll")}
     end
   end
 
@@ -1415,7 +1415,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         if poll.id == poll_id do
           # Add the new option to the poll's options
           new_option = message.option
-          updated_options = [new_option | poll.poll_options || []]
+          updated_options = [new_option | (poll.poll_options || [])]
           %{poll | poll_options: updated_options}
         else
           poll
