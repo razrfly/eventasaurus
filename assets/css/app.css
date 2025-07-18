@@ -1455,14 +1455,14 @@ body[class*="theme-"] .theme-card:hover {
 
 /* Mobile layout improvements */
 @media (max-width: 639px) {
-  /* Content area 90% of screen width (5% margins on each side) */
+  /* Content area with reduced padding on mobile */
   .container {
-    padding-left: 0.375rem !important; /* 6px - 90% content area */
-    padding-right: 0.375rem !important; /* 6px - 90% content area */
+    padding-left: 0.375rem !important; /* 6px padding on mobile */
+    padding-right: 0.375rem !important; /* 6px padding on mobile */
   }
   
-  /* Stack voting section header on mobile - target the specific flex container */
-  .space-y-6 > div > div:first-child {
+  /* Stack voting section header on mobile - more specific selector */
+  .public-movie-poll .space-y-6 > div > div:first-child {
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
@@ -1507,6 +1507,48 @@ body[class*="theme-"] .theme-card:hover {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
+}
+
+/* Desktop layout improvements - restore horizontal layouts */
+@media (min-width: 640px) {
+  /* Reset mobile-only styles for desktop */
+  .public-movie-poll .bg-white.border.border-gray-200 > div:first-child {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+  }
   
+  /* Movie poster styling on desktop */
+  .public-movie-poll img[alt*="poster"] {
+    width: 64px !important;
+    height: 96px !important;
+    max-width: none !important;
+    margin: 0 !important;
+    display: block !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* Ensure the text content flows beside the image */
+  .public-movie-poll .flex-1 {
+    width: auto !important;
+    text-align: left !important;
+  }
+  
+  /* Ensure movie poll voting buttons are horizontal on desktop */
+  .public-movie-poll .flex[class*="space-x"] {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.5rem !important;
+    width: auto !important;
+    margin-top: 0.75rem !important;
+  }
+  
+  .public-movie-poll .flex[class*="space-x"] button {
+    width: auto !important;
+    min-height: 2.25rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
 }
 
