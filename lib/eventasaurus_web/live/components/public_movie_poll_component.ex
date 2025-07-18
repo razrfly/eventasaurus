@@ -18,6 +18,8 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusWeb.EmbeddedProgressBarComponent
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
+  import EventasaurusWeb.VoterCountDisplay
+  import EventasaurusWeb.ClearVotesButton
 
   @impl true
   def mount(socket) do
@@ -131,13 +133,22 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
-  def handle_event("clear_temp_votes", _params, socket) do
-    %{movie_poll: poll} = socket.assigns
+  def handle_event("clear_all_votes", _params, socket) do
+    %{movie_poll: poll, current_user: user} = socket.assigns
 
-    # Clear temp votes
-    send(self(), {:temp_votes_updated, poll.id, %{}})
-
-    {:noreply, assign(socket, :temp_votes, %{})}
+    if user do
+      # Clear all votes for authenticated user
+      {:ok, _} = Events.clear_user_poll_votes(poll, user)
+      
+      # Reload user votes to update the UI
+      user_votes = Events.list_user_poll_votes(poll, user)
+      
+      {:noreply, assign(socket, :user_votes, user_votes)}
+    else
+      # Clear temp votes for anonymous user
+      send(self(), {:temp_votes_updated, poll.id, %{}})
+      {:noreply, assign(socket, :temp_votes, %{})}
+    end
   end
 
   def handle_event("save_votes", _params, socket) do
@@ -347,26 +358,37 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       <%= if @movie_poll do %>
         <div class="mb-6">
           <div class="mb-4">
-            <h3 class="text-lg font-semibold text-gray-900"><%= poll_emoji("movie") %> Movie Suggestions</h3>
             <div class="flex items-center justify-between">
-              <p class="text-sm text-gray-600">
-                <%= case @movie_poll.phase do %>
-                  <% "list_building" -> %>
-                    Help build the movie list! Add your suggestions below.
-                  <% "voting_with_suggestions" -> %>
-                    Vote on your favorite movies and add new suggestions.
-                  <% "voting" -> %>
-                    Vote on your favorite movies and add new suggestions.
-                  <% "voting_only" -> %>
-                    Vote on your favorite movies below.
-                  <% _ -> %>
-                    Vote on your favorite movies below.
-                <% end %>
-              </p>
-              <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] and @poll_stats.total_unique_voters > 0 do %>
-                <div class="text-sm text-gray-600">
-                  <%= if @poll_stats.total_unique_voters == 1, do: "1 voter", else: "#{@poll_stats.total_unique_voters} voters" %>
+              <div>
+                <div class="flex items-center">
+                  <h3 class="text-lg font-semibold text-gray-900"><%= poll_emoji("movie") %> Movie Suggestions</h3>
+                  <.voter_count poll_stats={@poll_stats} poll_phase={@movie_poll.phase} class="ml-4" />
                 </div>
+                <p class="text-sm text-gray-600 mt-1">
+                  <%= case @movie_poll.phase do %>
+                    <% "list_building" -> %>
+                      Help build the movie list! Add your suggestions below.
+                    <% "voting_with_suggestions" -> %>
+                      Vote on your favorite movies and add new suggestions.
+                    <% "voting" -> %>
+                      Vote on your favorite movies and add new suggestions.
+                    <% "voting_only" -> %>
+                      Vote on your favorite movies below.
+                    <% _ -> %>
+                      Vote on your favorite movies below.
+                  <% end %>
+                </p>
+              </div>
+              
+              <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
+                <.clear_votes_button
+                  id={"clear-all-votes-movie-#{@movie_poll.id}"}
+                  target={@myself}
+                  has_votes={@current_user && length(@user_votes) > 0 || !@current_user && map_size(@temp_votes) > 0}
+                  loading={false}
+                  anonymous_mode={!@current_user}
+                  variant="text"
+                />
               <% end %>
             </div>
           </div>
@@ -522,14 +544,14 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                   </svg>
                   Save My Votes
                 </button>
-                <button
-                  type="button"
-                  phx-click="clear_temp_votes"
-                  phx-target={@myself}
-                  class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Clear All Votes
-                </button>
+                <.clear_votes_button
+                  id={"clear-temp-votes-movie-#{@movie_poll.id}"}
+                  target={@myself}
+                  has_votes={map_size(@temp_votes) > 0}
+                  loading={false}
+                  anonymous_mode={true}
+                  variant="button"
+                />
               </div>
             </div>
           <% end %>
