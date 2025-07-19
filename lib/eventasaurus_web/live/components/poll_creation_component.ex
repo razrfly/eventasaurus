@@ -32,11 +32,11 @@ defmodule EventasaurusWeb.PollCreationComponent do
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
   @poll_types [
-    {"custom", "General Poll", "Create a custom poll"},
+    {"custom", "General", "Create a custom poll"},
     {"movie", "Movie", "Vote on movies to watch"},
-    {"places", "Places", "Pick places to visit"},
+    {"places", "Place", "Pick places to visit"},
     {"time", "Time/Schedule", "Schedule events"},
-    {"date_selection", "Date Selection", "Vote on possible dates"}
+    {"date_selection", "DateTime", "Vote on possible dates"}
   ]
 
   @voting_systems [

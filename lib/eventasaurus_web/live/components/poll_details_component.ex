@@ -26,6 +26,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
+  alias EventasaurusWeb.Utils.PollPhaseUtils
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
@@ -136,7 +137,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
             </div>
             <div>
               <span class="text-gray-500">Poll Type:</span>
-              <span class="ml-2 font-medium"><%= format_poll_type(@poll.poll_type) %></span>
+              <span class="ml-2 font-medium"><%= PollPhaseUtils.format_poll_type(@poll.poll_type) %></span>
             </div>
             <div>
               <span class="text-gray-500">Max Options per User:</span>
@@ -463,15 +464,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
     end
   end
 
-  defp format_poll_type(poll_type) do
-    case poll_type do
-      "movie" -> "Movie"
-      "places" -> "Places"
-      "time" -> "Time"
-      "custom" -> "Custom"
-      _ -> String.capitalize(poll_type)
-    end
-  end
+  # Moved to PollPhaseUtils.format_poll_type/1 for centralized formatting
 
   defp format_relative_time(datetime) do
     case datetime do
