@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.PublicGenericPollComponent
+  alias EventasaurusWeb.DateSelectionPollComponent
 
   alias EventasaurusWeb.ReservedSlugs
 
@@ -868,7 +869,21 @@ defmodule EventasaurusWeb.PublicEventLive do
             poll = Events.get_poll!(poll_id)
             
             # Cast votes based on the voting system
-            vote_results = for {option_id, vote_value} <- temp_votes do
+            # Handle different temp_votes structures
+            votes_to_cast = case temp_votes do
+              %{votes: votes, poll_type: :ranked} ->
+                # Convert ranked structure to expected format
+                Enum.map(votes, fn %{rank: rank, option_id: option_id} -> 
+                  {option_id, rank}
+                end)
+              map when is_map(map) ->
+                # Regular map structure
+                Enum.to_list(map)
+              _ ->
+                []
+            end
+            
+            vote_results = for {option_id, vote_value} <- votes_to_cast do
               case Events.get_poll_option(option_id) do
                 nil ->
                   {:error, :option_not_found}
@@ -955,7 +970,21 @@ defmodule EventasaurusWeb.PublicEventLive do
             poll = Events.get_poll!(poll_id)
             
             # Cast votes based on the voting system
-            vote_results = for {option_id, vote_value} <- temp_votes do
+            # Handle different temp_votes structures
+            votes_to_cast = case temp_votes do
+              %{votes: votes, poll_type: :ranked} ->
+                # Convert ranked structure to expected format
+                Enum.map(votes, fn %{rank: rank, option_id: option_id} -> 
+                  {option_id, rank}
+                end)
+              map when is_map(map) ->
+                # Regular map structure
+                Enum.to_list(map)
+              _ ->
+                []
+            end
+            
+            vote_results = for {option_id, vote_value} <- votes_to_cast do
               case Events.get_poll_option(option_id) do
                 nil ->
                   {:error, :option_not_found}
@@ -1125,6 +1154,13 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info({:votes_updated, %{poll_id: _poll_id}}, socket) do
+    # Reload all polls to get fresh data with votes
+    socket = load_event_polls(socket)
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:poll_stats_updated, _stats}, socket) do
     # Reload all polls to get fresh data with votes
     socket = load_event_polls(socket)
@@ -1134,6 +1170,13 @@ defmodule EventasaurusWeb.PublicEventLive do
   @impl true
   def handle_info({:poll_stats_updated, _poll_id, _stats}, socket) do
     # Reload all polls to get fresh data with votes
+    socket = load_event_polls(socket)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:poll_option_added, _poll_id}, socket) do
+    # Reload all polls to get fresh data with new options
     socket = load_event_polls(socket)
     {:noreply, socket}
   end
@@ -1426,21 +1469,20 @@ defmodule EventasaurusWeb.PublicEventLive do
                         temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
                       />
 
-                    <% poll.phase in ["voting", "voting_with_suggestions", "voting_only"] -> %>
-                      <!-- Show voting interface for all users (authenticated and anonymous) -->
+                    <% poll.poll_type == "date_selection" -> %>
+                      <!-- Date selection polls have their own component -->
                       <.live_component
-                        module={EventasaurusWeb.VotingInterfaceComponent}
-                        id={"voting-interface-#{poll.id}"}
+                        module={EventasaurusWeb.DateSelectionPollComponent}
+                        id={"date-poll-#{poll.id}"}
                         poll={poll}
-                        user={@user}
-                        user_votes={Map.get(@poll_user_votes || %{}, poll.id, [])}
-                        loading={false}
+                        event={@event}
+                        current_user={@user}
                         temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
                         anonymous_mode={is_nil(@user)}
                       />
 
-                    <% poll.phase == "list_building" -> %>
-                      <!-- List building phase: Use generic poll component for non-movie polls -->
+                    <% poll.phase in ["list_building", "voting", "voting_with_suggestions", "voting_only"] -> %>
+                      <!-- Generic polls (places, time, custom, etc) -->
                       <.live_component
                         module={PublicGenericPollComponent}
                         id={"public-generic-poll-#{poll.id}"}
