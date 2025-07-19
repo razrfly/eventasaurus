@@ -13,7 +13,6 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.PollPhaseUtils
-  alias EventasaurusWeb.VotingInterfaceComponent
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
@@ -35,6 +34,16 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       rescue
         _ -> %{options: [], total_unique_voters: 0}
       end
+      
+      # Load user votes for this poll
+      user_votes = if user do
+        Events.list_user_poll_votes(poll, user)
+      else
+        []
+      end
+      
+      # Get temp votes from assigns or default to empty
+      temp_votes = Map.get(assigns, :temp_votes, %{})
 
       {:ok,
        socket
@@ -43,6 +52,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
        |> assign(:poll, poll)
        |> assign(:poll_options, poll_options)
        |> assign(:poll_stats, poll_stats)
+       |> assign(:user_votes, user_votes)
+       |> assign(:temp_votes, temp_votes)
        |> assign(:showing_add_form, false)
        |> assign(:option_title, "")
        |> assign(:adding_option, false)}
@@ -250,9 +261,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                   id={"voting-interface-#{@poll.id}"}
                   poll={@poll}
                   user={@current_user}
-                  user_votes={[]}
+                  user_votes={@user_votes}
                   loading={false}
-                  temp_votes={%{}}
+                  temp_votes={@temp_votes}
                   anonymous_mode={is_nil(@current_user)}
                 />
               </div>
@@ -470,15 +481,6 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     end
   end
 
-  defp get_poll_type_text(poll_type) do
-    case poll_type do
-      "places" -> "places"
-      "time" -> "times"
-      "date_selection" -> "dates"
-      "custom" -> "options"
-      _ -> "options"
-    end
-  end
 
   defp get_suggestion_title(poll_type) do
     case poll_type do

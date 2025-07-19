@@ -67,7 +67,8 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
      # NEW: Time selection state
      |> assign(:time_enabled, false)
      |> assign(:selected_date_for_time, nil)
-     |> assign(:date_time_slots, %{})}
+     |> assign(:date_time_slots, %{})
+     |> assign(:time_slots, [])}
   end
 
   @impl true
@@ -155,6 +156,21 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   def handle_event("toggle_time_selection", _params, socket) do
     {:noreply, assign(socket, :time_enabled, !socket.assigns.time_enabled)}
   end
+  
+  def handle_event("toggle_time_enabled", _params, socket) do
+    time_enabled = !socket.assigns.time_enabled
+    # If enabling time and no time slots exist, add a default one
+    time_slots = if time_enabled && socket.assigns.time_slots == [] do
+      [%{"start_time" => "09:00", "end_time" => "17:00"}]
+    else
+      socket.assigns.time_slots
+    end
+    
+    {:noreply, 
+     socket
+     |> assign(:time_enabled, time_enabled)
+     |> assign(:time_slots, time_slots)}
+  end
 
   def handle_event("configure_date_time", %{"date" => date_string}, socket) do
     {:noreply, assign(socket, :selected_date_for_time, date_string)}
@@ -171,23 +187,51 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   def handle_event("cancel_time_config", _params, socket) do
     {:noreply, assign(socket, :selected_date_for_time, nil)}
   end
+  
+  def handle_event("add_time_slot", _params, socket) do
+    new_slot = %{"start_time" => "09:00", "end_time" => "10:00"}
+    updated_slots = socket.assigns.time_slots ++ [new_slot]
+    {:noreply, assign(socket, :time_slots, updated_slots)}
+  end
+  
+  def handle_event("remove_time_slot", %{"index" => index_str}, socket) do
+    index = String.to_integer(index_str)
+    updated_slots = List.delete_at(socket.assigns.time_slots, index)
+    {:noreply, assign(socket, :time_slots, updated_slots)}
+  end
+  
+  def handle_event("update_time_slot", %{"index" => index_str, "field" => field, "value" => value}, socket) do
+    index = String.to_integer(index_str)
+    updated_slots = List.update_at(socket.assigns.time_slots, index, fn slot ->
+      Map.put(slot, field, value)
+    end)
+    {:noreply, assign(socket, :time_slots, updated_slots)}
+  end
 
   def handle_event("add_selected_dates", _params, socket) do
     # Process all selected dates at once
     %{selected_dates: selected_dates} = socket.assigns
     
     if length(selected_dates) == 0 do
-      {:noreply, put_flash(socket, :info, "Please select at least one date")}
+      {:noreply, put_flash(socket, :error, "Please select at least one date")}
     else
-      # Process each selected date
-      socket = Enum.reduce(selected_dates, socket, fn date, acc_socket ->
-        # Create the date suggestion for each selected date
-        date_string = Date.to_iso8601(date)
-        case handle_event("suggest_date", %{"date" => date_string}, acc_socket) do
-          {:noreply, updated_socket} -> updated_socket
-          _ -> acc_socket
-        end
+      # Process each selected date and collect results
+      results = Enum.map(selected_dates, fn date ->
+        suggest_date_internal(socket, Date.to_iso8601(date))
       end)
+      
+      successful = Enum.count(results, &match?({:ok, _}, &1))
+      failed = length(results) - successful
+      
+      # Provide appropriate feedback
+      socket = cond do
+        failed == 0 -> 
+          put_flash(socket, :success, "Added #{successful} date(s) successfully")
+        successful == 0 -> 
+          put_flash(socket, :error, "Failed to add dates")
+        true -> 
+          put_flash(socket, :warning, "Added #{successful} date(s), #{failed} failed")
+      end
       
       # Clear selected dates and close calendar after adding them
       {:noreply, 
@@ -208,67 +252,37 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   end
 
   def handle_event("suggest_date", %{"date" => date_string}, socket) do
-    %{poll: poll, current_user: user, time_enabled: time_enabled, date_time_slots: date_time_slots} = socket.assigns
-
-    # Only allow date suggestions during list_building and voting_with_suggestions phases
-    unless PollPhaseUtils.suggestions_allowed?(poll.phase) do
-      {:noreply, put_flash(socket, :error, "Cannot add dates during #{socket.assigns.phase_display} phase")}
-    else
-      # Use adapter's date sanitization
-      case DatePollAdapter.sanitize_date_input(date_string) do
-        {:ok, date} ->
-          # Check if this date is already an option
-          existing_option = Enum.find(socket.assigns.poll_options, fn option ->
-                case DatePollAdapter.validate_date_option(option) do
-                  {:ok, _} ->
-                    # Use adapter's date extraction function
-                    case DatePollAdapter.extract_date_from_option(option) do
-                      {:ok, existing_date} -> Date.compare(existing_date, date) == :eq
-                      _ -> false
-                    end
-                  _ -> false
-                end
-              end)
-
-              if existing_option do
-                # Use plain formatting for flash message
-                formatted_date = format_date_for_display(date)
-                {:noreply, put_flash(socket, :info, "Date #{formatted_date} is already an option")}
-              else
-                # Create enhanced metadata with time support
-                # Use consistent ISO8601 format for time slot lookup
-                date_iso = Date.to_iso8601(date)
-                app_timezone = Application.get_env(:eventasaurus, :timezone, "UTC")
-                metadata_map = create_date_metadata_with_time(date, time_enabled, date_time_slots[date_iso], app_timezone)
-                
-                # Convert metadata map to keyword list for Events.create_date_poll_option
-                metadata_opts = Enum.map(metadata_map, fn {k, v} -> {String.to_atom(k), v} end)
-
-                # Create new date option using our generic system with enhanced metadata
-                case Events.create_date_poll_option(poll, user, date, metadata_opts) do
-                  {:ok, _option} ->
-                    # Broadcast real-time update to all subscribers
-                    PubSub.broadcast(Eventasaurus.PubSub, "polls:#{poll.id}", {:poll_option_added, poll.id})
-                    # Also send to parent LiveView
-                    send(self(), {:poll_option_added, poll.id})
-
-                    formatted_date = format_date_for_display(date)
-                    {:noreply,
-                     socket
-                     |> put_flash(:success, "Added #{formatted_date} to the poll")
-                     |> assign(:loading, false)
-                     # Clear time slots for this date after creating option
-                     |> assign(:date_time_slots, Map.delete(date_time_slots, date_iso))}
-
-                  {:error, reason} ->
-                    Logger.error("Failed to create date option: #{inspect(reason)}")
-                    {:noreply, put_flash(socket, :error, "Failed to add date option")}
-                end
-              end
-
-        {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Invalid date input: #{reason}")}
-      end
+    case suggest_date_internal(socket, date_string) do
+      {:ok, _option} ->
+        case DatePollAdapter.sanitize_date_input(date_string) do
+          {:ok, date} ->
+            formatted_date = format_date_for_display(date)
+            date_iso = Date.to_iso8601(date)
+            {:noreply,
+             socket
+             |> put_flash(:success, "Added #{formatted_date} to the poll")
+             |> assign(:loading, false)
+             # Clear time slots for this date after creating option
+             |> assign(:date_time_slots, Map.delete(socket.assigns.date_time_slots, date_iso))}
+          _ ->
+            {:noreply, socket}
+        end
+        
+      {:error, "Date already exists"} ->
+        case DatePollAdapter.sanitize_date_input(date_string) do
+          {:ok, date} ->
+            formatted_date = format_date_for_display(date)
+            {:noreply, put_flash(socket, :info, "Date #{formatted_date} is already an option")}
+          _ ->
+            {:noreply, socket}
+        end
+        
+      {:error, reason} when is_binary(reason) ->
+        {:noreply, put_flash(socket, :error, reason)}
+        
+      {:error, reason} ->
+        Logger.error("Failed to create date option: #{inspect(reason)}")
+        {:noreply, put_flash(socket, :error, "Failed to add date option")}
     end
   end
 
@@ -1178,23 +1192,67 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   end
 
   defp format_deadline(_), do: "Invalid"
+  
+  # Private helper to suggest a date internally
+  defp suggest_date_internal(socket, date_string) do
+    %{poll: poll, current_user: user, time_enabled: time_enabled, date_time_slots: date_time_slots} = socket.assigns
+    
+    # Only allow date suggestions during list_building and voting_with_suggestions phases
+    unless PollPhaseUtils.suggestions_allowed?(poll.phase) do
+      {:error, "Cannot add dates during #{socket.assigns.phase_display} phase"}
+    else
+      # Use adapter's date sanitization
+      case DatePollAdapter.sanitize_date_input(date_string) do
+        {:ok, date} ->
+          # Check if this date is already an option
+          existing_option = Enum.find(socket.assigns.poll_options, fn option ->
+            case DatePollAdapter.validate_date_option(option) do
+              {:ok, _} ->
+                # Use adapter's date extraction function
+                case DatePollAdapter.extract_date_from_option(option) do
+                  {:ok, existing_date} -> Date.compare(existing_date, date) == :eq
+                  _ -> false
+                end
+              _ -> false
+            end
+          end)
+          
+          if existing_option do
+            {:error, "Date already exists"}
+          else
+            # Create enhanced metadata with time support
+            date_iso = Date.to_iso8601(date)
+            app_timezone = Application.get_env(:eventasaurus, :timezone, "UTC")
+            metadata_map = create_date_metadata_with_time(date, time_enabled, date_time_slots[date_iso], app_timezone)
+            
+            # Convert metadata map to keyword list for Events.create_date_poll_option
+            metadata_opts = Enum.map(metadata_map, fn {k, v} -> {String.to_atom(k), v} end)
+            
+            # Create new date option using our generic system with enhanced metadata
+            case Events.create_date_poll_option(poll, user, date, metadata_opts) do
+              {:ok, option} ->
+                # Broadcast real-time update to all subscribers
+                PubSub.broadcast(Eventasaurus.PubSub, "polls:#{poll.id}", {:poll_option_added, poll.id})
+                # Also send to parent LiveView
+                send(self(), {:poll_option_added, poll.id})
+                {:ok, option}
+                
+              {:error, reason} ->
+                {:error, reason}
+            end
+          end
+          
+        {:error, _} ->
+          {:error, "Invalid date format"}
+      end
+    end
+  end
 
   defp format_date_for_display(date) do
     month_name = Calendar.strftime(date, "%B")
     "#{month_name} #{date.day}, #{date.year}"
   end
 
-  defp get_day_name(day_of_week) do
-    case day_of_week do
-      1 -> "Monday"
-      2 -> "Tuesday"
-      3 -> "Wednesday"
-      4 -> "Thursday"
-      5 -> "Friday"
-      6 -> "Saturday"
-      7 -> "Sunday"
-    end
-  end
 
   defp create_date_metadata_with_time(date, time_enabled, time_slots, timezone) do
     base_metadata = %{
