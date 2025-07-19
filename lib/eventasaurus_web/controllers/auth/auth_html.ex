@@ -101,6 +101,20 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
         <.input field={f[:password]} type="password" label="Password" required />
         <.input field={f[:password_confirmation]} type="password" label="Confirm password" required />
 
+        <!-- Cloudflare Turnstile Widget -->
+        <% turnstile_config = Application.get_env(:eventasaurus, :turnstile, []) %>
+        <%= if turnstile_config[:site_key] do %>
+          <div class="flex justify-center my-4">
+            <div 
+              class="cf-turnstile" 
+              data-sitekey={turnstile_config[:site_key]}
+              data-theme="light"
+              data-appearance="always"
+              data-size="normal"
+            ></div>
+          </div>
+        <% end %>
+
         <:actions>
           <.button phx-disable-with="Creating account..." class="w-full">
             Create an account <span aria-hidden="true">→</span>
