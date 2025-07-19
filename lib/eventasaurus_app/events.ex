@@ -2827,10 +2827,14 @@ defmodule EventasaurusApp.Events do
           where: po.poll_id == ^poll.id,
           order_by: [asc: fragment("
             CASE 
-              WHEN ?->'date' IS NOT NULL THEN (?->>'date')::date
+              WHEN ?->'date' IS NOT NULL THEN 
+                CASE 
+                  WHEN ?->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN (?->>'date')::date
+                  ELSE '9999-12-31'::date
+                END
               ELSE '9999-12-31'::date
             END
-          ", po.metadata, po.metadata)],
+          ", po.metadata, po.metadata, po.metadata)],
           preload: [:suggested_by, :votes]
       else
         from po in PollOption,
@@ -2856,10 +2860,14 @@ defmodule EventasaurusApp.Events do
         where: po.poll_id == ^poll.id,
         order_by: [asc: fragment("
           CASE 
-            WHEN ?->'date' IS NOT NULL THEN (?->>'date')::date
+            WHEN ?->'date' IS NOT NULL THEN 
+              CASE 
+                WHEN ?->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN (?->>'date')::date
+                ELSE '9999-12-31'::date
+              END
             ELSE '9999-12-31'::date
           END
-        ", po.metadata, po.metadata)],
+        ", po.metadata, po.metadata, po.metadata)],
         preload: [:suggested_by, :votes]
     else
       # For other poll types, use the regular order_index
