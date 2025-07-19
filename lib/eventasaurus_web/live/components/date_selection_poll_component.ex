@@ -387,61 +387,66 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   @impl true
   def render(assigns) do
+    # Check if we should show the container styling (for standalone use) or not (when wrapped by parent)
+    assigns = assign(assigns, :show_container, Map.get(assigns, :show_container, true))
+    
     ~H"""
-    <div class="date-selection-poll-component bg-white border border-gray-200 rounded-xl shadow-sm" data-testid="date-selection-poll">
+    <div class={"date-selection-poll-component #{if @show_container, do: "bg-white border border-gray-200 rounded-xl shadow-sm", else: ""}"} data-testid="date-selection-poll">
       <%= if @error_message do %>
         <div class="p-4 bg-red-50 border-l-4 border-red-400">
           <p class="text-sm text-red-700"><%= @error_message %></p>
         </div>
       <% else %>
-        <!-- Poll Header -->
-        <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-            <div class="flex items-center space-x-3">
-              <div class="flex-shrink-0">
-                <span class="text-2xl"><%= poll_emoji(@poll.poll_type) %></span>
+        <!-- Poll Header (only show when standalone) -->
+        <%= if @show_container do %>
+          <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+              <div class="flex items-center space-x-3">
+                <div class="flex-shrink-0">
+                  <span class="text-2xl"><%= poll_emoji(@poll.poll_type) %></span>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <h3 class="text-lg font-semibold text-gray-900 truncate"><%= @poll.title %></h3>
+                  <%= if @poll.description && @poll.description != "" do %>
+                    <p class="text-sm text-gray-600 mt-1 line-clamp-2 sm:line-clamp-none"><%= @poll.description %></p>
+                  <% end %>
+                  <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="mt-1" />
+                </div>
               </div>
-              <div class="min-w-0 flex-1">
-                <h3 class="text-lg font-semibold text-gray-900 truncate"><%= @poll.title %></h3>
-                <%= if @poll.description && @poll.description != "" do %>
-                  <p class="text-sm text-gray-600 mt-1 line-clamp-2 sm:line-clamp-none"><%= @poll.description %></p>
+
+              <!-- Phase Badge -->
+              <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                <div class="flex items-center justify-between sm:justify-start">
+                  <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{phase_badge_class(@poll.phase)}"}>
+                    <%= @phase_display %>
+                  </span>
+
+                  <!-- Calendar Toggle for mobile -->
+                  <button
+                    type="button"
+                    phx-click="toggle_calendar"
+                    phx-target={@myself}
+                    class="sm:hidden ml-2 p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Toggle calendar view"
+                  >
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <%= if @poll.voting_deadline do %>
+                  <span class="text-xs text-gray-500 sm:text-left">
+                    Deadline: <%= format_deadline(@poll.voting_deadline) %>
+                  </span>
                 <% end %>
-                <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="mt-1" />
               </div>
-            </div>
-
-            <!-- Phase Badge -->
-            <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-              <div class="flex items-center justify-between sm:justify-start">
-                <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{phase_badge_class(@poll.phase)}"}>
-                  <%= @phase_display %>
-                </span>
-
-                <!-- Calendar Toggle for mobile -->
-                <button
-                  type="button"
-                  phx-click="toggle_calendar"
-                  phx-target={@myself}
-                  class="sm:hidden ml-2 p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label="Toggle calendar view"
-                >
-                  <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"/>
-                  </svg>
-                </button>
-              </div>
-
-              <%= if @poll.voting_deadline do %>
-                <span class="text-xs text-gray-500 sm:text-left">
-                  Deadline: <%= format_deadline(@poll.voting_deadline) %>
-                </span>
-              <% end %>
             </div>
           </div>
-        </div>
+        <% end %>
 
         <!-- Main Content -->
-        <div class={"#{if @compact_view, do: "p-3 sm:p-4", else: "p-4 sm:p-6"}"}>
+        <div class={"#{if @compact_view, do: "p-3 sm:p-4", else: if(@show_container, do: "p-4 sm:p-6", else: "")}"}>
           <%= cond do %>
             <% @poll.phase == "list_building" -> %>
               <!-- Date Suggestion Phase -->
@@ -648,7 +653,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                       <%= PollPhaseUtils.get_phase_description(@poll.phase, "date_selection") %>
                     </p>
 
-                    <!-- Use the generic VotingInterfaceComponent -->
+                    <!-- Use the generic VotingInterfaceComponent without header -->
                     <.live_component
                       module={VotingInterfaceComponent}
                       id={"voting-#{@poll.id}"}
@@ -658,6 +663,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                       loading={@loading}
                       temp_votes={@temp_votes}
                       anonymous_mode={@anonymous_mode}
+                      show_header={false}
                     />
                   </div>
                 <% else %>
@@ -912,7 +918,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                       Select your availability for each date. You can choose Yes, Maybe, or No for each option.
                     </p>
 
-                    <!-- Use the generic VotingInterfaceComponent -->
+                    <!-- Use the generic VotingInterfaceComponent without header -->
                     <.live_component
                       module={VotingInterfaceComponent}
                       id={"voting-#{@poll.id}"}
@@ -922,6 +928,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                       loading={@loading}
                       temp_votes={@temp_votes}
                       anonymous_mode={@anonymous_mode}
+                      show_header={false}
                     />
                   </div>
                 <% else %>

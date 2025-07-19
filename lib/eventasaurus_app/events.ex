@@ -4,6 +4,7 @@ defmodule EventasaurusApp.Events do
   """
 
   import Ecto.Query, warn: false
+  import Ecto.Changeset, only: [add_error: 3]
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
   alias EventasaurusApp.EventStateMachine
@@ -2988,9 +2989,63 @@ defmodule EventasaurusApp.Events do
   Creates a poll option.
   """
   def create_poll_option(attrs \\ %{}, opts \\ []) do
-    %PollOption{}
-    |> PollOption.creation_changeset(attrs, opts)
-    |> Repo.insert()
+    # Normalize attrs to handle both string and atom keys
+    poll_id = attrs["poll_id"] || attrs[:poll_id]
+    title = attrs["title"] || attrs[:title]
+    suggested_by_id = attrs["suggested_by_id"] || attrs[:suggested_by_id]
+    
+    # Check if title already exists in this poll before attempting to create
+    if poll_id && title && suggested_by_id do
+      case check_duplicate_option_title(poll_id, title, suggested_by_id) do
+        {:ok, :unique} ->
+          %PollOption{}
+          |> PollOption.creation_changeset(attrs, opts)
+          |> Repo.insert()
+        
+        {:error, :duplicate_by_same_user} ->
+          changeset = %PollOption{}
+          |> PollOption.creation_changeset(attrs, opts)
+          |> add_error(:title, "You have already suggested this option")
+          {:error, changeset}
+        
+        {:error, :duplicate_by_other_user} ->
+          changeset = %PollOption{}
+          |> PollOption.creation_changeset(attrs, opts)
+          |> add_error(:title, "This option has already been suggested by another user")
+          {:error, changeset}
+      end
+    else
+      %PollOption{}
+      |> PollOption.creation_changeset(attrs, opts)
+      |> Repo.insert()
+    end
+  end
+
+  # Helper function to check for duplicate option titles
+  defp check_duplicate_option_title(poll_id, title, current_user_id) do
+    # Ensure poll_id and current_user_id are integers
+    poll_id = case poll_id do
+      id when is_integer(id) -> id
+      id when is_binary(id) -> String.to_integer(id)
+      _ -> poll_id
+    end
+    
+    current_user_id = case current_user_id do
+      id when is_integer(id) -> id
+      id when is_binary(id) -> String.to_integer(id)
+      _ -> current_user_id
+    end
+    
+    query = from po in PollOption,
+            where: po.poll_id == ^poll_id and po.title == ^title and po.status == "active"
+    
+    case Repo.one(query) do
+      nil -> {:ok, :unique}
+      %PollOption{suggested_by_id: ^current_user_id} ->
+        {:error, :duplicate_by_same_user}
+      %PollOption{suggested_by_id: _other_user_id} ->
+        {:error, :duplicate_by_other_user}
+    end
   end
 
   @doc """

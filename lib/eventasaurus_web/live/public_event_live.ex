@@ -1478,6 +1478,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                         current_user={@user}
                         temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
                         anonymous_mode={is_nil(@user)}
+                        show_container={false}
                       />
 
                     <% poll.phase in ["list_building", "voting", "voting_with_suggestions", "voting_only"] -> %>
