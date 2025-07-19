@@ -18,7 +18,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Show the login form.
   """
-  def login(conn, _params) do
+  def login(conn, params) do
+    # Store return URL if provided
+    conn = case params["return_to"] do
+      nil -> conn
+      return_to -> 
+        Logger.debug("Storing return_to in session: #{return_to}")
+        put_session(conn, :return_to, return_to)
+    end
+    
     render(conn, :login)
   end
 
@@ -47,10 +55,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
             user = Auth.get_current_user(conn)
             Logger.debug("User data fetched: #{inspect(user)}")
 
+            # Check for stored return URL
+            return_to = get_session(conn, :return_to)
+            Logger.debug("Retrieved return_to from session: #{inspect(return_to)}")
+            
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
-            |> redirect(to: ~p"/dashboard")
+            |> delete_session(:return_to)
+            |> redirect(to: return_to || ~p"/dashboard")
 
           {:error, reason} ->
             Logger.error("Failed to store session: #{inspect(reason)}")
@@ -71,10 +84,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           user ->
             Logger.info("Found existing user with email #{mask_email(email)}, logging in directly")
+            
+            # Check for stored return URL
+            return_to = get_session(conn, :return_to)
+            Logger.debug("Retrieved return_to from session: #{inspect(return_to)}")
+            
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
-            |> redirect(to: ~p"/dashboard")
+            |> delete_session(:return_to)
+            |> redirect(to: return_to || ~p"/dashboard")
         end
 
       {:error, reason} ->
@@ -100,7 +119,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Show the registration form.
   """
-  def register(conn, _params) do
+  def register(conn, params) do
+    # Store return URL if provided
+    conn = case params["return_to"] do
+      nil -> conn
+      return_to -> put_session(conn, :return_to, return_to)
+    end
+    
     render(conn, :register)
   end
 
@@ -441,12 +466,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
       # Sync user with local database (using existing pattern)
       case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
         {:ok, user} ->
+          # Check for stored return URL
+          return_to = get_session(conn, :return_to)
+          
           conn
           |> put_session(:access_token, access_token)
           |> put_session(:refresh_token, refresh_token)
           |> put_session(:current_user_id, user.id)
           |> put_flash(:info, "Successfully signed in with Facebook!")
-          |> redirect(to: ~p"/dashboard")
+          |> delete_session(:return_to)
+          |> redirect(to: return_to || ~p"/dashboard")
 
         {:error, reason} ->
           Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
