@@ -39,8 +39,14 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :terms)
   end
 
-  def redirect_to_auth_login(conn, _params) do
-    redirect(conn, to: ~p"/auth/login")
+  def redirect_to_auth_login(conn, params) do
+    # Preserve return_to parameter if present
+    query_string = case params["return_to"] do
+      nil -> ""
+      return_to -> "?return_to=#{URI.encode_www_form(return_to)}"
+    end
+    
+    redirect(conn, to: "/auth/login#{query_string}")
   end
 
   def redirect_to_auth_register(conn, _params) do
