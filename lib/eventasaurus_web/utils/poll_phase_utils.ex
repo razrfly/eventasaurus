@@ -113,4 +113,19 @@ defmodule EventasaurusWeb.Utils.PollPhaseUtils do
       _ -> {"No suggestions yet", "Be the first to add a suggestion!"}
     end
   end
+
+  @doc """
+  Returns a user-friendly display name for the poll type.
+  Centralizes poll type formatting to ensure consistency across all components.
+  """
+  def format_poll_type(poll_type) do
+    case poll_type do
+      "movie" -> "Movie"
+      "places" -> "Place"
+      "time" -> "Time"
+      "custom" -> "General"
+      "date_selection" -> "DateTime"
+      _ -> String.capitalize(to_string(poll_type))
+    end
+  end
 end
