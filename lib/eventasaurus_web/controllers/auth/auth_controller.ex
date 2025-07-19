@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   require Logger
 
   alias EventasaurusApp.Auth
+  alias EventasaurusApp.Services.Turnstile
 
   # Privacy-safe email logging for GDPR/CCPA compliance
   defp mask_email(email) do
@@ -151,11 +152,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Process the registration form submission.
   """
-    def create_user(conn, %{"user" => %{"name" => name, "email" => email, "password" => password}}) do
+    def create_user(conn, %{"user" => %{"name" => name, "email" => email, "password" => password}} = params) do
     require Logger
     Logger.info("Registration attempt for email: #{mask_email(email)}")
 
-    case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
+    # Verify Turnstile token if enabled
+    with :ok <- verify_turnstile(params) do
+      case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
       {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
         Logger.info("Registration successful with tokens")
         
@@ -197,6 +200,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
         Logger.error("Registration failed with reason: #{inspect(reason)}")
         conn
         |> put_flash(:error, "Unable to create account")
+        |> render(:register)
+      end
+    else
+      {:error, :turnstile_failed} ->
+        Logger.warning("Registration blocked by Turnstile verification")
+        conn
+        |> put_flash(:error, "Please complete the security verification")
         |> render(:register)
     end
   end
@@ -661,4 +671,22 @@ defmodule EventasaurusWeb.Auth.AuthController do
          |> redirect(to: ~p"/dashboard")
      end
    end
+
+  # Verify Turnstile token for bot protection
+  defp verify_turnstile(params) do
+    if Turnstile.enabled?() do
+      token = params["cf-turnstile-response"] || params["user"]["cf-turnstile-response"] || ""
+      
+      case Turnstile.verify_token(token) do
+        {:ok, true} -> :ok
+        {:ok, false} -> {:error, :turnstile_failed}
+        {:error, reason} ->
+          Logger.error("Turnstile verification error: #{inspect(reason)}")
+          # Allow registration to proceed on network/config errors to avoid blocking legitimate users
+          :ok
+      end
+    else
+      :ok
+    end
+  end
  end
