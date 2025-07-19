@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.Auth.AuthHTML do
   use EventasaurusWeb, :html
 
-  embed_templates "auth_html/*", suffix: "_template"
+  # Note: Template files were removed as they're replaced by function components below
 
   # Define the required flash attribute for the flash_messages function
   attr :flash, :map, required: true
@@ -108,9 +108,9 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
             <div 
               class="cf-turnstile" 
               data-sitekey={turnstile_config[:site_key]}
-              data-theme="light"
-              data-appearance="always"
-              data-size="normal"
+              data-theme={turnstile_config[:theme] || "light"}
+              data-appearance={turnstile_config[:appearance] || "always"}
+              data-size={turnstile_config[:size] || "normal"}
             ></div>
           </div>
         <% end %>
