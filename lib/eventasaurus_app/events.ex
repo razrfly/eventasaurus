@@ -2968,6 +2968,19 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Returns poll options by their IDs with specified preloads.
+  Only returns active options and filters out any missing records safely.
+  """
+  def list_poll_options_by_ids(option_ids, preloads \\ []) when is_list(option_ids) do
+    query = from po in PollOption,
+            where: po.id in ^option_ids and po.status == "active",
+            order_by: [asc: po.order_index, asc: po.inserted_at],
+            preload: ^preloads
+
+    Repo.all(query)
+  end
+
+  @doc """
   Gets a single poll option.
   """
   def get_poll_option!(id) do
