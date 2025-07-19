@@ -1525,12 +1525,15 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   end
 
   # Helper functions for deletion time display
+  defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
   defp get_deletion_time_remaining(inserted_at) do
     elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
+    # Use < 300 to match can_delete_own_suggestion? boundary condition (≤ 300)
+    # When elapsed_seconds = 300, remaining = 0, so button disappears at same time as countdown
     max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
   end
 
-  defp format_deletion_time_remaining(seconds) when seconds <= 0, do: nil
+  defp format_deletion_time_remaining(seconds) when seconds <= 0, do: ""
   defp format_deletion_time_remaining(seconds) do
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
