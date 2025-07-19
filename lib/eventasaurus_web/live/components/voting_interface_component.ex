@@ -66,15 +66,33 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     
     # Ensure poll options are preloaded with suggested_by
     poll = if assigns.poll do
-      options_with_suggested_by = Enum.map(assigns.poll.poll_options, fn option ->
-        case option.suggested_by do
-          %Ecto.Association.NotLoaded{} ->
-            # Reload the option with suggested_by preloaded
-            Events.get_poll_option!(option.id)
-          _ ->
-            option
-        end
-      end)
+      # Batch preload suggested_by association for options that don't have it loaded
+      options_with_suggested_by = case assigns.poll.poll_options do
+        [] -> 
+          []
+        options ->
+          # Check if any options need preloading
+          needs_preload = Enum.any?(options, fn option ->
+            match?(%Ecto.Association.NotLoaded{}, option.suggested_by)
+          end)
+          
+          if needs_preload do
+            # Get all option IDs and batch load them with suggested_by preloaded
+            option_ids = Enum.map(options, & &1.id)
+            preloaded_options = Events.list_poll_options_by_ids(option_ids, [:suggested_by])
+            
+            # Create a map for quick lookup
+            preloaded_map = Map.new(preloaded_options, fn option -> {option.id, option} end)
+            
+            # Return options with preloaded data, filtering out any that were deleted
+            options
+            |> Enum.filter(fn option -> Map.has_key?(preloaded_map, option.id) end)
+            |> Enum.map(fn option -> Map.get(preloaded_map, option.id, option) end)
+          else
+            # All options already have suggested_by loaded
+            options
+          end
+      end
       %{assigns.poll | poll_options: options_with_suggested_by}
     else
       assigns.poll
