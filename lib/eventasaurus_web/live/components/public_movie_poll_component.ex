@@ -40,17 +40,32 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       []
     end
 
-    # Preload suggested_by for all options with graceful handling of missing users
-    movie_options = Enum.map(movie_options, fn option ->
-      if option.suggested_by_id do
-        case EventasaurusApp.Accounts.get_user(option.suggested_by_id) do
-          nil -> option # Leave suggested_by as nil if user not found
-          user -> %{option | suggested_by: user}
-        end
+    # Preload suggested_by for all options using batch loading
+    movie_options = if movie_poll && length(movie_options) > 0 do
+      # Check if any options need preloading
+      needs_preload = Enum.any?(movie_options, fn option ->
+        match?(%Ecto.Association.NotLoaded{}, option.suggested_by)
+      end)
+      
+      if needs_preload do
+        # Get all option IDs and batch load them with suggested_by preloaded
+        option_ids = Enum.map(movie_options, & &1.id)
+        preloaded_options = Events.list_poll_options_by_ids(option_ids, [:suggested_by])
+        
+        # Create a map for quick lookup
+        preloaded_map = Map.new(preloaded_options, fn option -> {option.id, option} end)
+        
+        # Return options with preloaded data, filtering out any that were deleted
+        movie_options
+        |> Enum.filter(fn option -> Map.has_key?(preloaded_map, option.id) end)
+        |> Enum.map(fn option -> Map.get(preloaded_map, option.id, option) end)
       else
-        option
+        # All options already have suggested_by loaded
+        movie_options
       end
-    end)
+    else
+      movie_options
+    end
 
     # Get temp votes for this poll (for anonymous users)
     temp_votes = assigns[:temp_votes] || %{}
@@ -312,18 +327,9 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       
       case Events.delete_poll_option(option) do
         {:ok, _} ->
-          # Reload movie options
+          # Reload movie options with proper preloading
           updated_movie_options = Events.list_poll_options(socket.assigns.movie_poll)
-          |> Enum.map(fn option ->
-            if option.suggested_by_id do
-              case EventasaurusApp.Accounts.get_user(option.suggested_by_id) do
-                nil -> option
-                user -> %{option | suggested_by: user}
-              end
-            else
-              option
-            end
-          end)
+          |> Repo.preload(:suggested_by)
           
           # Notify parent to reload
           send(self(), {:poll_stats_updated, socket.assigns.movie_poll.id, %{}})
