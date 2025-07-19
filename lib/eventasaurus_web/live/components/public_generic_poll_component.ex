@@ -13,7 +13,6 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.PollPhaseUtils
-  alias EventasaurusWeb.Utils.PollNameUtils
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
@@ -507,7 +506,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     case poll_type do
       "places" -> "Enter place name..."
       "time" -> "Select a time..."
-      "date_selection" -> "Select a date..."
+      "date_selection" -> "Select a DateTime..."
       "custom" -> "Enter your option..."
       _ -> "Enter title..."
     end
