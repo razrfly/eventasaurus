@@ -2031,8 +2031,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         end)
       
       _ ->
-        # For other poll types, keep the existing order (by order_index)
-        options
+        # For other poll types, sort by order_index
+        Enum.sort_by(options, fn option ->
+          option.order_index || 0
+        end)
     end
   end
 
