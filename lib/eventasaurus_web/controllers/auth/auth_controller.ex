@@ -19,12 +19,25 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the login form.
   """
   def login(conn, params) do
-    # Store return URL if provided
+    require Logger
+    Logger.debug("Login action - params: #{inspect(params)}")
+    
+    # Store return URL if provided in query params (voluntary login)
     conn = case params["return_to"] do
-      nil -> conn
-      return_to -> 
-        Logger.debug("Storing return_to in session: #{return_to}")
-        put_session(conn, :return_to, return_to)
+      nil -> 
+        Logger.debug("No return_to parameter provided")
+        conn
+      return_to when is_binary(return_to) ->
+        Logger.debug("return_to parameter: #{return_to}")
+        # Validate the URL before storing
+        if valid_internal_url?(return_to) do
+          Logger.debug("Valid return URL, storing in session: #{return_to}")
+          put_session(conn, :user_return_to, return_to)
+        else
+          Logger.warning("Invalid return URL rejected: #{return_to}")
+          conn
+        end
+      _ -> conn
     end
     
     render(conn, :login)
@@ -55,14 +68,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
             user = Auth.get_current_user(conn)
             Logger.debug("User data fetched: #{inspect(user)}")
 
-            # Check for stored return URL
-            return_to = get_session(conn, :return_to)
-            Logger.debug("Retrieved return_to from session: #{inspect(return_to)}")
+            # Check for stored return URL using the standard session key
+            return_to = get_session(conn, :user_return_to)
+            Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
             
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
-            |> delete_session(:return_to)
+            |> delete_session(:user_return_to)
             |> redirect(to: return_to || ~p"/dashboard")
 
           {:error, reason} ->
@@ -85,14 +98,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
           user ->
             Logger.info("Found existing user with email #{mask_email(email)}, logging in directly")
             
-            # Check for stored return URL
-            return_to = get_session(conn, :return_to)
-            Logger.debug("Retrieved return_to from session: #{inspect(return_to)}")
+            # Check for stored return URL using the standard session key
+            return_to = get_session(conn, :user_return_to)
+            Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
             
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
-            |> delete_session(:return_to)
+            |> delete_session(:user_return_to)
             |> redirect(to: return_to || ~p"/dashboard")
         end
 
@@ -120,10 +133,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Show the registration form.
   """
   def register(conn, params) do
-    # Store return URL if provided
+    # Store return URL if provided in query params
     conn = case params["return_to"] do
       nil -> conn
-      return_to -> put_session(conn, :return_to, return_to)
+      return_to when is_binary(return_to) ->
+        if valid_internal_url?(return_to) do
+          put_session(conn, :user_return_to, return_to)
+        else
+          conn
+        end
+      _ -> conn
     end
     
     render(conn, :register)
@@ -139,18 +158,28 @@ defmodule EventasaurusWeb.Auth.AuthController do
     case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
       {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
         Logger.info("Registration successful with tokens")
+        
+        # Check for stored return URL
+        return_to = get_session(conn, :user_return_to)
+        
         conn
         |> put_session(:access_token, access_token)
         |> put_session(:refresh_token, refresh_token)
         |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
-        |> redirect(to: ~p"/dashboard")
+        |> delete_session(:user_return_to)
+        |> redirect(to: return_to || ~p"/dashboard")
 
       {:ok, %{user: _user, access_token: access_token}} ->
         Logger.info("Registration successful with access token")
+        
+        # Check for stored return URL
+        return_to = get_session(conn, :user_return_to)
+        
         conn
         |> put_session(:access_token, access_token)
         |> put_flash(:info, "Account created successfully!")
-        |> redirect(to: ~p"/dashboard")
+        |> delete_session(:user_return_to)
+        |> redirect(to: return_to || ~p"/dashboard")
 
       {:ok, %{user: _user, confirmation_required: true}} ->
         Logger.info("Registration successful, confirmation required")
@@ -466,15 +495,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
       # Sync user with local database (using existing pattern)
       case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
         {:ok, user} ->
-          # Check for stored return URL
-          return_to = get_session(conn, :return_to)
+          # Check for stored return URL using the standard session key
+          return_to = get_session(conn, :user_return_to)
           
           conn
           |> put_session(:access_token, access_token)
           |> put_session(:refresh_token, refresh_token)
           |> put_session(:current_user_id, user.id)
           |> put_flash(:info, "Successfully signed in with Facebook!")
-          |> delete_session(:return_to)
+          |> delete_session(:user_return_to)
           |> redirect(to: return_to || ~p"/dashboard")
 
         {:error, reason} ->
@@ -492,6 +521,31 @@ defmodule EventasaurusWeb.Auth.AuthController do
   end
 
   # ============ PRIVATE FUNCTIONS ============
+
+  # Validate that a URL is internal to our application
+  defp valid_internal_url?(url) when is_binary(url) do
+    # First check if it starts with "/" (relative URL)
+    if String.starts_with?(url, "/") do
+      # Additional check: ensure no protocol in path (prevents //evil.com)
+      not String.contains?(url, "//")
+    else
+      # For absolute URLs, parse and check the host
+      case URI.parse(url) do
+        %URI{host: nil} -> 
+          # No host means relative URL, but should start with "/"
+          String.starts_with?(url, "/")
+        %URI{host: host, scheme: scheme} when scheme in ["http", "https"] ->
+          # Check if it's our domain
+          app_host = EventasaurusWeb.Endpoint.host()
+          host == app_host || (host == "localhost" && app_host == "localhost")
+        _ ->
+          false
+      end
+    end
+  rescue
+    _ -> false
+  end
+  defp valid_internal_url?(_), do: false
 
   # Handle post-authentication actions like processing pending interest registrations.
   defp handle_post_auth_actions(conn, access_token) do
