@@ -197,8 +197,12 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   def handle_event("remove_time_slot", %{"index" => index_str}, socket) do
     case Integer.parse(index_str) do
       {index, ""} when index >= 0 ->
-        updated_slots = List.delete_at(socket.assigns.time_slots, index)
-        {:noreply, assign(socket, :time_slots, updated_slots)}
+        if index < length(socket.assigns.time_slots) do
+          updated_slots = List.delete_at(socket.assigns.time_slots, index)
+          {:noreply, assign(socket, :time_slots, updated_slots)}
+        else
+          {:noreply, put_flash(socket, :error, "Time slot index out of range")}
+        end
       _ ->
         {:noreply, put_flash(socket, :error, "Invalid time slot index")}
     end
@@ -231,7 +235,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       unique_dates = Enum.uniq(selected_dates)
       
       # Process each selected date using reduce to maintain state
-      {results, _updated_socket} = Enum.reduce(unique_dates, {[], socket}, fn date, {acc_results, acc_socket} ->
+      {results, updated_socket} = Enum.reduce(unique_dates, {[], socket}, fn date, {acc_results, acc_socket} ->
         result = suggest_date_internal(acc_socket, Date.to_iso8601(date))
         
         # Update socket's poll_options if successful to prevent duplicates
@@ -251,18 +255,18 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       failed = length(results) - successful
       
       # Provide appropriate feedback
-      socket = cond do
+      final_socket = cond do
         failed == 0 -> 
-          put_flash(socket, :success, "Added #{successful} date(s) successfully")
+          put_flash(updated_socket, :success, "Added #{successful} date(s) successfully")
         successful == 0 -> 
-          put_flash(socket, :error, "Failed to add dates")
+          put_flash(updated_socket, :error, "Failed to add dates")
         true -> 
-          put_flash(socket, :warning, "Added #{successful} date(s), #{failed} failed")
+          put_flash(updated_socket, :warning, "Added #{successful} date(s), #{failed} failed")
       end
       
       # Clear selected dates and close calendar after adding them
       {:noreply, 
-       socket
+       final_socket
        |> assign(:selected_dates, [])
        |> assign(:showing_calendar, false)}
     end
