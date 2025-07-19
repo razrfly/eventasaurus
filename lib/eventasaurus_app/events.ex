@@ -3105,6 +3105,20 @@ defmodule EventasaurusApp.Events do
     Repo.delete(poll_option)
   end
 
+  @doc """
+  Checks if a user can delete their own poll suggestion within the 5-minute window.
+  
+  Returns true if:
+  - The user is the one who suggested the option
+  - The option was created less than 5 minutes ago
+  """
+  def can_delete_own_suggestion?(%PollOption{} = poll_option, %User{} = user) do
+    poll_option.suggested_by_id == user.id &&
+    NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) <= 300
+  end
+
+  def can_delete_own_suggestion?(_, _), do: false
+
   # =================
   # Date Selection Poll Options
   # =================

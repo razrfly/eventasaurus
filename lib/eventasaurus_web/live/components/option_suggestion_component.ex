@@ -917,18 +917,28 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       </button>
                     <% end %>
 
-                    <%= if @is_creator do %>
+                    <%= if @is_creator || Events.can_delete_own_suggestion?(option, @user) do %>
                       <!-- Remove option button -->
-                      <button
-                        type="button"
-                        phx-click="remove_option"
-                        phx-value-option-id={option.id}
-                        phx-target={@myself}
-                        data-confirm="Are you sure you want to remove this option? This action cannot be undone."
-                        class="text-red-600 hover:text-red-900 text-sm font-medium touch-target interactive-element"
-                      >
-                        Remove
-                      </button>
+                      <div class="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          phx-click="remove_option"
+                          phx-value-option-id={option.id}
+                          phx-target={@myself}
+                          data-confirm="Are you sure you want to remove this option? This action cannot be undone."
+                          class="text-red-600 hover:text-red-900 text-sm font-medium touch-target interactive-element"
+                        >
+                          Remove
+                        </button>
+                        <%= if !@is_creator && option.suggested_by_id == @user.id do %>
+                          <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
+                          <%= if time_remaining > 0 do %>
+                            <span class="text-xs text-gray-500">
+                              (<%= format_deletion_time_remaining(time_remaining) %> left)
+                            </span>
+                          <% end %>
+                        <% end %>
+                      </div>
                     <% end %>
                   </div>
                 </div>
@@ -1629,16 +1639,28 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
             {:noreply, socket}
 
           poll_option ->
-            case Events.delete_poll_option(poll_option) do
-              {:ok, _} ->
-                # For option removal, we could broadcast a bulk moderation action
-                # or handle it as a special case
-                send(self(), {:option_removed, option_id})
-                {:noreply, socket}
+            # Check if user is authorized to delete this option
+            if socket.assigns.is_creator || Events.can_delete_own_suggestion?(poll_option, socket.assigns.user) do
+              case Events.delete_poll_option(poll_option) do
+                {:ok, _} ->
+                  # Broadcast the deletion to all participants
+                  PollPubSubService.broadcast_bulk_moderation_action(
+                    socket.assigns.poll,
+                    "delete",
+                    [option_id_int],
+                    socket.assigns.user
+                  )
+                  
+                  send(self(), {:option_removed, option_id})
+                  {:noreply, socket}
 
-              {:error, _} ->
-                send(self(), {:show_error, "Failed to remove option"})
-                {:noreply, socket}
+                {:error, _} ->
+                  send(self(), {:show_error, "Failed to remove option"})
+                  {:noreply, socket}
+              end
+            else
+              send(self(), {:show_error, "You are not authorized to remove this option"})
+              {:noreply, socket}
             end
         end
 
@@ -2477,6 +2499,24 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         |> Enum.filter(& &1)
         |> Enum.sort(Date)
       _ -> []
+    end
+  end
+
+  # Calculate remaining seconds for deletion window
+  defp get_deletion_time_remaining(inserted_at) do
+    elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
+    max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
+  end
+
+  # Format remaining time for display
+  defp format_deletion_time_remaining(seconds) when seconds <= 0, do: nil
+  defp format_deletion_time_remaining(seconds) do
+    minutes = div(seconds, 60)
+    remaining_seconds = rem(seconds, 60)
+    
+    cond do
+      minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
+      true -> "#{remaining_seconds}s"
     end
   end
 end
