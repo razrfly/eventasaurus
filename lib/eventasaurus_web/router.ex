@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.Router do
     plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug EventasaurusWeb.Plugs.CSPPlug
     plug :fetch_auth_user
     plug :assign_user_struct
   end

@@ -80,6 +80,20 @@
           />
         </div>
 
+        <!-- Cloudflare Turnstile Widget -->
+        <% turnstile_config = Application.get_env(:eventasaurus, :turnstile, []) %>
+        <%= if turnstile_config[:site_key] do %>
+          <div class="flex justify-center">
+            <div 
+              class="cf-turnstile" 
+              data-sitekey={turnstile_config[:site_key]}
+              data-theme="light"
+              data-appearance="always"
+              data-size="normal"
+            ></div>
+          </div>
+        <% end %>
+
         <div class="pt-2">
           <button
             type="submit"

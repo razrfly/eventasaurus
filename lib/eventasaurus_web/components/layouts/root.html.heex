@@ -72,6 +72,12 @@
     <!-- Alpine.js for interactive components -->
     <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" integrity="sha384-l8f0VcPi/M1iHPv8egOnY/15TDwqgbOR1anMIJWvU6nLRgZVLTLSaNqi/TOoT5Fh" crossorigin="anonymous"></script>
     
+    <!-- Cloudflare Turnstile for bot protection -->
+    <% turnstile_config = Application.get_env(:eventasaurus, :turnstile, []) %>
+    <%= if turnstile_config[:site_key] do %>
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <% end %>
+    
     <!-- Supabase configuration meta tags -->
     <meta name="supabase-url" content={supabase_url} />
     <meta name="supabase-anon-key" content={supabase_api_key} />
