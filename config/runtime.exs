@@ -29,7 +29,11 @@ config :stripity_stripe,
 # Configure Cloudflare Turnstile for bot protection
 config :eventasaurus, :turnstile,
   site_key: System.get_env("TURNSTILE_SITE_KEY"),
-  secret_key: System.get_env("TURNSTILE_SECRET_KEY")
+  secret_key: System.get_env("TURNSTILE_SECRET_KEY"),
+  # Optional configuration (defaults shown)
+  theme: System.get_env("TURNSTILE_THEME", "light"),        # "light", "dark", "auto"
+  appearance: System.get_env("TURNSTILE_APPEARANCE", "always"),  # "always", "execute", "interaction-only"
+  size: System.get_env("TURNSTILE_SIZE", "normal")         # "normal", "compact"
 
 # Configure Sentry for all environments (dev/test/prod)
 # Using runtime.exs ensures File.cwd() runs at startup, not compile time
