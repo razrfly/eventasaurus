@@ -195,17 +195,29 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   end
   
   def handle_event("remove_time_slot", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    updated_slots = List.delete_at(socket.assigns.time_slots, index)
-    {:noreply, assign(socket, :time_slots, updated_slots)}
+    case Integer.parse(index_str) do
+      {index, ""} when index >= 0 ->
+        updated_slots = List.delete_at(socket.assigns.time_slots, index)
+        {:noreply, assign(socket, :time_slots, updated_slots)}
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid time slot index")}
+    end
   end
   
   def handle_event("update_time_slot", %{"index" => index_str, "field" => field, "value" => value}, socket) do
-    index = String.to_integer(index_str)
-    updated_slots = List.update_at(socket.assigns.time_slots, index, fn slot ->
-      Map.put(slot, field, value)
-    end)
-    {:noreply, assign(socket, :time_slots, updated_slots)}
+    case Integer.parse(index_str) do
+      {index, ""} when index >= 0 ->
+        if index < length(socket.assigns.time_slots) do
+          updated_slots = List.update_at(socket.assigns.time_slots, index, fn slot ->
+            Map.put(slot, field, value)
+          end)
+          {:noreply, assign(socket, :time_slots, updated_slots)}
+        else
+          {:noreply, put_flash(socket, :error, "Time slot index out of range")}
+        end
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid time slot index")}
+    end
   end
 
   def handle_event("add_selected_dates", _params, socket) do
@@ -215,9 +227,24 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     if length(selected_dates) == 0 do
       {:noreply, put_flash(socket, :error, "Please select at least one date")}
     else
-      # Process each selected date and collect results
-      results = Enum.map(selected_dates, fn date ->
-        suggest_date_internal(socket, Date.to_iso8601(date))
+      # Remove duplicates from selected dates first
+      unique_dates = Enum.uniq(selected_dates)
+      
+      # Process each selected date using reduce to maintain state
+      {results, _updated_socket} = Enum.reduce(unique_dates, {[], socket}, fn date, {acc_results, acc_socket} ->
+        result = suggest_date_internal(acc_socket, Date.to_iso8601(date))
+        
+        # Update socket's poll_options if successful to prevent duplicates
+        updated_socket = case result do
+          {:ok, option} ->
+            # Add the new option to poll_options for duplicate detection
+            current_options = acc_socket.assigns.poll_options || []
+            assign(acc_socket, :poll_options, current_options ++ [option])
+          _ ->
+            acc_socket
+        end
+        
+        {acc_results ++ [result], updated_socket}
       end)
       
       successful = Enum.count(results, &match?({:ok, _}, &1))

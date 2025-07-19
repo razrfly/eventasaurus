@@ -139,15 +139,11 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
     if user do
       # Clear all votes for authenticated user
-      case Events.clear_user_poll_votes(poll, user) do
-        {:ok, _} ->
-          # Reload user votes to update the UI
-          user_votes = Events.list_user_poll_votes(poll, user)
-          {:noreply, assign(socket, :user_votes, user_votes)}
-          
-        {:error, _reason} ->
-          {:noreply, put_flash(socket, :error, "Failed to clear votes. Please try again.")}
-      end
+      {:ok, _} = Events.clear_user_poll_votes(poll, user)
+      
+      # Reload user votes to update the UI
+      user_votes = Events.list_user_poll_votes(poll, user)
+      {:noreply, assign(socket, :user_votes, user_votes)}
     else
       # Clear temp votes for anonymous user
       send(self(), {:temp_votes_updated, poll.id, %{}})
