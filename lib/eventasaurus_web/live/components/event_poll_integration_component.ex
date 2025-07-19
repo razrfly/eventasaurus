@@ -32,6 +32,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Services.PollPubSubService
+  alias EventasaurusWeb.Utils.PollPhaseUtils
 
   # Import the other polling components
   alias EventasaurusWeb.PollCreationComponent
@@ -172,7 +173,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                 <% end %>
                 <div class="mt-2 flex items-center gap-3">
                   <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    <%= String.capitalize(to_string(Map.get(@selected_poll, :poll_type, "poll"))) %>
+                    <%= PollPhaseUtils.format_poll_type(to_string(Map.get(@selected_poll, :poll_type, "poll"))) %>
                   </span>
                   <span class="text-xs text-gray-500">
                     <%= if @selected_poll.inserted_at do %>
@@ -358,7 +359,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                     </div>
                     <!-- Poll Type Badge (matching source badge) -->
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      <%= String.capitalize(to_string(Map.get(poll, :poll_type, "poll"))) %>
+                      <%= PollPhaseUtils.format_poll_type(to_string(Map.get(poll, :poll_type, "poll"))) %>
                     </span>
                     <!-- Voting System Badge -->
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
