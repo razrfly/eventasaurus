@@ -170,6 +170,34 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     handle_event("add_option", %{"poll_option" => poll_option_params}, socket)
   end
 
+  def handle_event("delete_option", %{"option-id" => option_id}, socket) do
+    with {option_id_int, _} <- Integer.parse(option_id),
+         option when not is_nil(option) <- Events.get_poll_option(option_id_int),
+         true <- Events.can_delete_own_suggestion?(option, socket.assigns.current_user) do
+      
+      case Events.delete_poll_option(option) do
+        {:ok, _} ->
+          # Reload poll options
+          updated_poll_options = Events.list_poll_options(socket.assigns.poll)
+          |> Repo.preload(:suggested_by)
+          
+          # Notify parent to reload
+          send(self(), {:poll_stats_updated, socket.assigns.poll.id, %{}})
+          
+          {:noreply,
+           socket
+           |> put_flash(:info, "Option removed successfully.")
+           |> assign(:poll_options, updated_poll_options)}
+           
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to remove option.")}
+      end
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, "You are not authorized to remove this option.")}
+    end
+  end
+
   # Process poll option parameters using the SAME logic as manager area (OptionSuggestionComponent)
   defp prepare_option_params(socket, poll_option_params, title, user) do
     require Logger
@@ -298,9 +326,32 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
                       <!-- Show who suggested this option -->
                       <%= if option.suggested_by do %>
-                        <p class="text-xs text-gray-500 mb-2">
-                          Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
-                        </p>
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500 mb-2">
+                            Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
+                          </p>
+                          <!-- Delete button for own suggestions within 5 minutes -->
+                          <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>
+                            <div class="flex items-center space-x-2">
+                              <button
+                                type="button"
+                                phx-click="delete_option"
+                                phx-value-option-id={option.id}
+                                phx-target={@myself}
+                                data-confirm="Are you sure you want to remove this option? This action cannot be undone."
+                                class="text-red-600 hover:text-red-900 text-sm font-medium"
+                              >
+                                Remove
+                              </button>
+                              <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
+                              <%= if time_remaining > 0 do %>
+                                <span class="text-xs text-gray-500">
+                                  (<%= format_deletion_time_remaining(time_remaining) %> left)
+                                </span>
+                              <% end %>
+                            </div>
+                          <% end %>
+                        </div>
                       <% end %>
 
                       <!-- Voting buttons removed - handled by VotingInterfaceComponent in public_event_live.ex -->
@@ -562,6 +613,25 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     else
       # For non-time polls, sort by title (alphabetically)
       Enum.sort_by(options, fn option -> option.title end)
+    end
+  end
+
+  # Calculate remaining seconds for deletion window
+  defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
+  defp get_deletion_time_remaining(inserted_at) do
+    elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
+    max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
+  end
+
+  # Format remaining time for display
+  defp format_deletion_time_remaining(seconds) when seconds <= 0, do: ""
+  defp format_deletion_time_remaining(seconds) do
+    minutes = div(seconds, 60)
+    remaining_seconds = rem(seconds, 60)
+    
+    cond do
+      minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
+      true -> "#{remaining_seconds}s"
     end
   end
 

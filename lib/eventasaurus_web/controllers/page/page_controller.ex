@@ -39,7 +39,7 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :terms)
   end
 
-  def redirect_to_auth_login(conn, params) do
+  def redirect_to_auth_login(conn, _params) do
     # Preserve query parameters when redirecting
     query_string = conn.query_string
     path = if query_string != "" do
@@ -50,7 +50,7 @@ defmodule EventasaurusWeb.PageController do
     redirect(conn, to: path)
   end
 
-  def redirect_to_auth_register(conn, params) do
+  def redirect_to_auth_register(conn, _params) do
     # Preserve query parameters when redirecting
     query_string = conn.query_string
     path = if query_string != "" do

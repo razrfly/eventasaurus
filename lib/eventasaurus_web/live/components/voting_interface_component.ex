@@ -63,43 +63,64 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     # Determine if we're in anonymous mode
     anonymous_mode = assigns[:anonymous_mode] || is_nil(assigns[:user])
     temp_votes = assigns[:temp_votes] || %{}
+    
+    # Ensure poll options are preloaded with suggested_by
+    poll = if assigns.poll do
+      options_with_suggested_by = Enum.map(assigns.poll.poll_options, fn option ->
+        case option.suggested_by do
+          %Ecto.Association.NotLoaded{} ->
+            # Reload the option with suggested_by preloaded
+            Events.get_poll_option!(option.id)
+          _ ->
+            option
+        end
+      end)
+      %{assigns.poll | poll_options: options_with_suggested_by}
+    else
+      assigns.poll
+    end
 
     # Initialize vote state based on user votes or temp votes
     vote_state = if anonymous_mode do
-      initialize_anonymous_vote_state(assigns.poll, temp_votes)
+      initialize_anonymous_vote_state(poll, temp_votes)
     else
-      initialize_vote_state(assigns.poll, assigns.user_votes)
+      initialize_vote_state(poll, assigns.user_votes)
     end
 
     # For ranked voting, initialize ordered options
-    ranked_options = case assigns.poll.voting_system do
+    ranked_options = case poll && poll.voting_system do
       "ranked" ->
         if anonymous_mode do
-          initialize_anonymous_ranked_options(assigns.poll.poll_options, temp_votes)
+          initialize_anonymous_ranked_options(poll.poll_options, temp_votes)
         else
-          initialize_ranked_options(assigns.poll.poll_options, assigns.user_votes)
+          initialize_ranked_options(poll.poll_options, assigns.user_votes)
         end
       _ -> []
     end
 
     # Load poll statistics for embedded display
-    poll_stats = try do
-      Events.get_poll_voting_stats(assigns.poll)
-    rescue
-      error in [ArgumentError, RuntimeError] ->
-        require Logger
-        Logger.error("Failed to load poll stats: #{inspect(error)}")
-        %{options: [], total_unique_voters: 0}
+    poll_stats = if poll do
+      try do
+        Events.get_poll_voting_stats(poll)
+      rescue
+        error in [ArgumentError, RuntimeError] ->
+          require Logger
+          Logger.error("Failed to load poll stats: #{inspect(error)}")
+          %{options: [], total_unique_voters: 0}
+      end
+    else
+      %{options: [], total_unique_voters: 0}
     end
 
     # Subscribe to poll statistics updates for real-time updates
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{assigns.poll.id}:stats")
+    if connected?(socket) && poll do
+      Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
     end
 
     {:ok,
      socket
      |> assign(assigns)
+     |> assign(:poll, poll)
      |> assign(:vote_state, vote_state)
      |> assign(:ranked_options, ranked_options)
      |> assign(:temp_votes, temp_votes)
@@ -110,44 +131,49 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def render(assigns) do
+    # Default show_header to true if not provided
+    assigns = assign_new(assigns, :show_header, fn -> true end)
+    
     ~H"""
-    <div class="bg-white shadow rounded-lg">
-      <!-- Header -->
-      <div class="px-6 py-4 border-b border-gray-200">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900">
-                <%= get_voting_title(@poll.voting_system) %>
-              </h3>
-              <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="ml-4" />
-            </div>
-            <p class="text-sm text-gray-500">
-              <%= get_voting_instructions(@poll.voting_system) %>
-            </p>
-            <%= if @anonymous_mode and has_temp_votes?(@temp_votes, @poll.voting_system) do %>
-              <div class="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                </svg>
-                Temporary votes stored
+    <div class={if @show_header, do: "bg-white shadow rounded-lg", else: ""}>
+      <!-- Header (optional) -->
+      <%= if @show_header do %>
+        <div class="px-6 py-4 border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">
+                  <%= get_voting_title(@poll.voting_system) %>
+                </h3>
+                <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="ml-4" />
               </div>
-            <% end %>
-          </div>
+              <p class="text-sm text-gray-500">
+                <%= get_voting_instructions(@poll.voting_system) %>
+              </p>
+              <%= if @anonymous_mode and has_temp_votes?(@temp_votes, @poll.voting_system) do %>
+                <div class="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                  </svg>
+                  Temporary votes stored
+                </div>
+              <% end %>
+            </div>
 
-          <.clear_votes_button
-            id={"clear-votes-#{@poll.id}"}
-            target={@myself}
-            has_votes={has_votes?(@vote_state, @poll.voting_system)}
-            loading={@loading}
-            anonymous_mode={@anonymous_mode}
-            variant="text"
-          />
+            <.clear_votes_button
+              id={"clear-votes-#{@poll.id}"}
+              target={@myself}
+              has_votes={has_votes?(@vote_state, @poll.voting_system)}
+              loading={@loading}
+              anonymous_mode={@anonymous_mode}
+              variant="text"
+            />
+          </div>
         </div>
-      </div>
+      <% end %>
 
       <!-- Voting Interface -->
-      <div class="divide-y divide-gray-200">
+      <div class={if @show_header, do: "divide-y divide-gray-200", else: ""}>
         <%= case @poll.voting_system do %>
           <% "binary" -> %>
             <%= render_binary_voting(assigns) %>
@@ -213,6 +239,28 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+            <% end %>
+            
+            <!-- Delete button for user's own suggestions -->
+            <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+              <div class="mt-2 flex items-center space-x-2">
+                <button
+                  type="button"
+                  phx-click="delete_option"
+                  phx-value-option-id={option.id}
+                  phx-target={@myself}
+                  data-confirm="Are you sure you want to remove this option? This action cannot be undone."
+                  class="text-red-600 hover:text-red-900 text-xs font-medium"
+                >
+                  Remove my suggestion
+                </button>
+                <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
+                <%= if time_remaining > 0 do %>
+                  <span class="text-xs text-gray-500">
+                    (<%= format_deletion_time_remaining(time_remaining) %> left)
+                  </span>
+                <% end %>
+              </div>
             <% end %>
 
             <!-- Time Slots Display -->
@@ -324,6 +372,28 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+            <% end %>
+            
+            <!-- Delete button for user's own suggestions -->
+            <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+              <div class="mt-2 flex items-center space-x-2">
+                <button
+                  type="button"
+                  phx-click="delete_option"
+                  phx-value-option-id={option.id}
+                  phx-target={@myself}
+                  data-confirm="Are you sure you want to remove this option? This action cannot be undone."
+                  class="text-red-600 hover:text-red-900 text-xs font-medium"
+                >
+                  Remove my suggestion
+                </button>
+                <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
+                <%= if time_remaining > 0 do %>
+                  <span class="text-xs text-gray-500">
+                    (<%= format_deletion_time_remaining(time_remaining) %> left)
+                  </span>
+                <% end %>
+              </div>
             <% end %>
 
             <!-- Time Slots Display -->
@@ -466,6 +536,28 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     <%= if option.description do %>
                       <p class="text-xs text-gray-500 mt-1"><%= option.description %></p>
                     <% end %>
+                    
+                    <!-- Delete button for user's own suggestions -->
+                    <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+                      <div class="mt-2 flex items-center space-x-2">
+                        <button
+                          type="button"
+                          phx-click="delete_option"
+                          phx-value-option-id={option.id}
+                          phx-target={@myself}
+                          data-confirm="Are you sure you want to remove this option? This action cannot be undone."
+                          class="text-red-600 hover:text-red-900 text-xs font-medium"
+                        >
+                          Remove my suggestion
+                        </button>
+                        <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
+                        <%= if time_remaining > 0 do %>
+                          <span class="text-xs text-gray-500">
+                            (<%= format_deletion_time_remaining(time_remaining) %> left)
+                          </span>
+                        <% end %>
+                      </div>
+                    <% end %>
 
                     <!-- Embedded Progress Bar -->
                     <div class="mt-1">
@@ -511,6 +603,28 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+            <% end %>
+            
+            <!-- Delete button for user's own suggestions -->
+            <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+              <div class="mt-2 flex items-center space-x-2">
+                <button
+                  type="button"
+                  phx-click="delete_option"
+                  phx-value-option-id={option.id}
+                  phx-target={@myself}
+                  data-confirm="Are you sure you want to remove this option? This action cannot be undone."
+                  class="text-red-600 hover:text-red-900 text-xs font-medium"
+                >
+                  Remove my suggestion
+                </button>
+                <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
+                <%= if time_remaining > 0 do %>
+                  <span class="text-xs text-gray-500">
+                    (<%= format_deletion_time_remaining(time_remaining) %> left)
+                  </span>
+                <% end %>
+              </div>
             <% end %>
 
             <!-- Embedded Progress Bar -->
@@ -860,6 +974,30 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
           {:noreply, assign(socket, :ranked_options, new_ranked_options)}
         end
       {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("delete_option", %{"option-id" => option_id}, socket) do
+    with {option_id_int, _} <- Integer.parse(option_id),
+         option when not is_nil(option) <- Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id_int)),
+         true <- Events.can_delete_own_suggestion?(option, socket.assigns.user) do
+      
+      case Events.delete_poll_option(option) do
+        {:ok, _} ->
+          # Send message to parent to reload poll
+          send(self(), {:poll_stats_updated, socket.assigns.poll.id, %{}})
+          
+          {:noreply, socket}
+          
+        {:error, _} ->
+          send(self(), {:show_error, "Failed to remove option"})
+          {:noreply, socket}
+      end
+    else
+      _ ->
+        send(self(), {:show_error, "You are not authorized to remove this option"})
         {:noreply, socket}
     end
   end
@@ -1383,6 +1521,26 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
       _ ->
         nil
+    end
+  end
+
+  # Helper functions for deletion time display
+  defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
+  defp get_deletion_time_remaining(inserted_at) do
+    elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
+    # Use < 300 to match can_delete_own_suggestion? boundary condition (≤ 300)
+    # When elapsed_seconds = 300, remaining = 0, so button disappears at same time as countdown
+    max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
+  end
+
+  defp format_deletion_time_remaining(seconds) when seconds <= 0, do: ""
+  defp format_deletion_time_remaining(seconds) do
+    minutes = div(seconds, 60)
+    remaining_seconds = rem(seconds, 60)
+    
+    cond do
+      minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
+      true -> "#{remaining_seconds}s"
     end
   end
 end
