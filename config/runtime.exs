@@ -27,22 +27,9 @@ config :stripity_stripe,
   connect_client_id: System.get_env("STRIPE_CONNECT_CLIENT_ID")
 
 # Configure Cloudflare Turnstile for bot protection
-# Helper function to handle empty env vars
-get_env_with_default = fn var, default ->
-  case System.get_env(var) do
-    nil -> default
-    "" -> default
-    value -> value
-  end
-end
-
 config :eventasaurus, :turnstile,
   site_key: System.get_env("TURNSTILE_SITE_KEY"),
-  secret_key: System.get_env("TURNSTILE_SECRET_KEY"),
-  # Optional configuration (defaults shown)
-  theme: get_env_with_default.("TURNSTILE_THEME", "light"),        # "light", "dark", "auto"
-  appearance: get_env_with_default.("TURNSTILE_APPEARANCE", "execute"),  # "always", "execute", "interaction-only"
-  size: get_env_with_default.("TURNSTILE_SIZE", "normal")         # "normal", "compact"
+  secret_key: System.get_env("TURNSTILE_SECRET_KEY")
 
 # Configure Sentry for all environments (dev/test/prod)
 # Using runtime.exs ensures File.cwd() runs at startup, not compile time
