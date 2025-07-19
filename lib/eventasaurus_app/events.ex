@@ -3013,6 +3013,12 @@ defmodule EventasaurusApp.Events do
           |> PollOption.creation_changeset(attrs, opts)
           |> add_error(:title, "This option has already been suggested by another user")
           {:error, changeset}
+        
+        {:error, error_message} when is_binary(error_message) ->
+          changeset = %PollOption{}
+          |> PollOption.creation_changeset(attrs, opts)
+          |> add_error(:base, error_message)
+          {:error, changeset}
       end
     else
       %PollOption{}
@@ -3023,28 +3029,39 @@ defmodule EventasaurusApp.Events do
 
   # Helper function to check for duplicate option titles
   defp check_duplicate_option_title(poll_id, title, current_user_id) do
-    # Ensure poll_id and current_user_id are integers
-    poll_id = case poll_id do
-      id when is_integer(id) -> id
-      id when is_binary(id) -> String.to_integer(id)
-      _ -> poll_id
+    # Safely convert poll_id and current_user_id to integers
+    with {:ok, poll_id_int} <- safe_to_integer(poll_id, :poll_id),
+         {:ok, user_id_int} <- safe_to_integer(current_user_id, :user_id) do
+      
+      query = from po in PollOption,
+              where: po.poll_id == ^poll_id_int and po.title == ^title and po.status == "active"
+      
+      case Repo.one(query) do
+        nil -> {:ok, :unique}
+        %PollOption{suggested_by_id: ^user_id_int} ->
+          {:error, :duplicate_by_same_user}
+        %PollOption{suggested_by_id: _other_user_id} ->
+          {:error, :duplicate_by_other_user}
+      end
+    else
+      {:error, :invalid_poll_id} ->
+        {:error, "Invalid poll ID provided"}
+      {:error, :invalid_user_id} ->
+        {:error, "Invalid user ID provided"}
     end
-    
-    current_user_id = case current_user_id do
-      id when is_integer(id) -> id
-      id when is_binary(id) -> String.to_integer(id)
-      _ -> current_user_id
-    end
-    
-    query = from po in PollOption,
-            where: po.poll_id == ^poll_id and po.title == ^title and po.status == "active"
-    
-    case Repo.one(query) do
-      nil -> {:ok, :unique}
-      %PollOption{suggested_by_id: ^current_user_id} ->
-        {:error, :duplicate_by_same_user}
-      %PollOption{suggested_by_id: _other_user_id} ->
-        {:error, :duplicate_by_other_user}
+  end
+
+  # Helper function for safe integer conversion
+  defp safe_to_integer(value, field_type) do
+    case value do
+      nil -> {:error, :"invalid_#{field_type}"}
+      id when is_integer(id) -> {:ok, id}
+      id when is_binary(id) ->
+        case Integer.parse(id) do
+          {parsed_int, ""} -> {:ok, parsed_int}
+          _ -> {:error, :"invalid_#{field_type}"}
+        end
+      _ -> {:error, :"invalid_#{field_type}"}
     end
   end
 
@@ -3169,7 +3186,7 @@ defmodule EventasaurusApp.Events do
   """
   def can_delete_own_suggestion?(%PollOption{} = poll_option, %User{} = user) do
     poll_option.suggested_by_id == user.id &&
-    NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) <= 300
+    NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) < 300
   end
 
   def can_delete_own_suggestion?(_, _), do: false

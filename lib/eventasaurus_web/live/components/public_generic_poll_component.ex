@@ -617,13 +617,14 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
   # Calculate remaining seconds for deletion window
+  defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
   defp get_deletion_time_remaining(inserted_at) do
     elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
     max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
   end
 
   # Format remaining time for display
-  defp format_deletion_time_remaining(seconds) when seconds <= 0, do: nil
+  defp format_deletion_time_remaining(seconds) when seconds <= 0, do: ""
   defp format_deletion_time_remaining(seconds) do
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
