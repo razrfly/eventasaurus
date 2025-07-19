@@ -2816,17 +2816,64 @@ defmodule EventasaurusApp.Events do
     query = from p in Poll,
             where: p.event_id == ^event.id and p.phase != "closed",
             order_by: [asc: p.inserted_at],
-            preload: [:created_by, poll_options: [:suggested_by, :votes]]
+            preload: [:created_by]
 
-    Repo.all(query)
+    polls = Repo.all(query)
+    
+    # Load poll options with proper ordering for each poll
+    Enum.map(polls, fn poll ->
+      poll_options_query = if poll.poll_type == "date_selection" do
+        from po in PollOption,
+          where: po.poll_id == ^poll.id,
+          order_by: [asc: fragment("
+            CASE 
+              WHEN ?->'date' IS NOT NULL THEN (?->>'date')::date
+              ELSE '9999-12-31'::date
+            END
+          ", po.metadata, po.metadata)],
+          preload: [:suggested_by, :votes]
+      else
+        from po in PollOption,
+          where: po.poll_id == ^poll.id,
+          order_by: [asc: po.order_index],
+          preload: [:suggested_by, :votes]
+      end
+      
+      poll_options = Repo.all(poll_options_query)
+      Map.put(poll, :poll_options, poll_options)
+    end)
   end
 
   @doc """
   Gets a single poll.
   """
   def get_poll!(id) do
-    Repo.get!(Poll, id)
-    |> Repo.preload([:event, :created_by, poll_options: [:suggested_by, :votes]])
+    poll = Repo.get!(Poll, id)
+    
+    # For date_selection polls, we need to order the options chronologically
+    poll_options_query = if poll.poll_type == "date_selection" do
+      from po in PollOption,
+        where: po.poll_id == ^poll.id,
+        order_by: [asc: fragment("
+          CASE 
+            WHEN ?->'date' IS NOT NULL THEN (?->>'date')::date
+            ELSE '9999-12-31'::date
+          END
+        ", po.metadata, po.metadata)],
+        preload: [:suggested_by, :votes]
+    else
+      # For other poll types, use the regular order_index
+      from po in PollOption,
+        where: po.poll_id == ^poll.id,
+        order_by: [asc: po.order_index],
+        preload: [:suggested_by, :votes]
+    end
+    
+    poll_options = Repo.all(poll_options_query)
+    
+    poll
+    |> Repo.preload([:event, :created_by])
+    |> Map.put(:poll_options, poll_options)
   end
 
   @doc """
@@ -4110,8 +4157,8 @@ defmodule EventasaurusApp.Events do
   Gets all active polls for an event with event context.
   """
   def list_event_active_polls(%Event{} = event) do
+    # list_active_polls already handles the proper ordering for date_selection polls
     list_active_polls(event)
-    |> Repo.preload([:created_by, poll_options: [:suggested_by, :votes]])
   end
 
   @doc """

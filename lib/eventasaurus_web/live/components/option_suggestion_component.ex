@@ -32,6 +32,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService, RichDataManager}
   alias EventasaurusWeb.Services.PollPubSubService
   alias EventasaurusWeb.Utils.TimeUtils
+  alias EventasaurusWeb.Adapters.DatePollAdapter
 
   @impl true
   def mount(socket) do
@@ -44,6 +45,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:search_results, [])
      |> assign(:search_loading, false)
      |> assign(:selected_dates, [])
+     |> assign(:existing_dates, [])  # Track existing dates for calendar display
      # NEW: Time selection state
      |> assign(:time_enabled, false)
      |> assign(:selected_date_for_time, nil)
@@ -135,6 +137,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
             {max_opts, suggestions_allowed_by_phase && user_suggestion_count < max_opts}
           end
 
+        # Extract existing dates for date_selection polls
+        existing_dates = if assigns.poll.poll_type == "date_selection" do
+          extract_dates_from_poll_options(assigns.poll.poll_options)
+        else
+          []
+        end
+
         {:ok,
          socket
          |> assign(assigns)
@@ -144,6 +153,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:max_options, max_options)
          |> assign(:suggestions_allowed_by_phase, suggestions_allowed_by_phase)
          |> assign(:phase_suggestion_message, get_phase_suggestion_message(assigns.poll.phase))
+         |> assign(:existing_dates, existing_dates)
          |> assign_new(:loading, fn -> false end)
          |> assign_new(:suggestion_form_visible, fn -> false end)
          |> assign_new(:editing_option_id, fn -> nil end)
@@ -318,6 +328,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         module={EventasaurusWeb.CalendarComponent}
                         id={"date-suggestion-calendar-#{@id}"}
                         selected_dates={@selected_dates || []}
+                        existing_dates={@existing_dates || []}
                         year={Date.utc_today().year}
                         month={Date.utc_today().month}
                         compact={false}
@@ -388,7 +399,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       <%= if length(@selected_dates || []) > 0 do %>
                         <div class="space-y-2">
                           <%= for date <- (@selected_dates || []) do %>
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md">
                               <div class="flex items-center space-x-3">
                                 <div class="flex-shrink-0">
                                   <div class="w-2 h-2 bg-indigo-600 rounded-full"></div>
@@ -592,9 +603,17 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Adding...
+                      <%= if @poll.poll_type == "date_selection", do: "Adding Dates...", else: "Adding..." %>
                     <% else %>
-                      Add Suggestion
+                      <%= if @poll.poll_type == "date_selection" do %>
+                        <%= if length(@selected_dates || []) > 0 do %>
+                          Add <%= length(@selected_dates) %> <%= ngettext("Date", "Dates", length(@selected_dates)) %>
+                        <% else %>
+                          Select Dates
+                        <% end %>
+                      <% else %>
+                        Add Suggestion
+                      <% end %>
                     <% end %>
                   </button>
                 </div>
@@ -614,8 +633,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       <!-- Options List -->
       <div
         class="divide-y divide-gray-200 min-h-[100px] relative"
-        phx-hook={if @poll.poll_type == "time", do: "", else: "PollOptionDragDrop"}
-        data-can-reorder={if(@is_creator && @poll.poll_type != "time", do: "true", else: "false")}
+        phx-hook={if @poll.poll_type in ["time", "date_selection"], do: "", else: "PollOptionDragDrop"}
+        data-can-reorder={if(@is_creator && @poll.poll_type not in ["time", "date_selection"], do: "true", else: "false")}
         id={"option-list-#{@id}"}
       >
         <%= if safe_poll_options_empty?(@poll.poll_options) do %>
@@ -687,10 +706,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           </div>
         <% else %>
           <div data-role="options-container">
-            <%= for option <- sort_options_by_order(@poll.poll_options, @poll.poll_type) do %>
+            <%= for option <- sort_poll_options(@poll.poll_options, @poll.poll_type) do %>
               <div
-                class="px-6 py-4 transition-all duration-150 ease-out option-card mobile-optimized-animation"
-                data-draggable={if(@is_creator && @poll.poll_type != "time", do: "true", else: "false")}
+                class="px-6 py-4 transition-all duration-200 ease-out option-card mobile-optimized-animation hover:bg-gray-50 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
+                data-draggable={if(@is_creator && @poll.poll_type not in ["time", "date_selection"], do: "true", else: "false")}
                 data-option-id={option.id}
               >
                 <!-- Edit Form (only shown when editing this specific option) -->
@@ -699,21 +718,42 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <div class="space-y-4">
                       <input type="hidden" name="option_id" value={option.id} />
 
-                      <div>
-                        <label for={"edit_title_#{option.id}"} class="block text-sm font-medium text-gray-700">
-                          Title <span class="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="poll_option[title]"
-                          id={"edit_title_#{option.id}"}
-                          value={@edit_changeset.changes[:title] || option.title}
-                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
-                        <%= if error = @edit_changeset.errors[:title] do %>
-                          <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
-                        <% end %>
-                      </div>
+                      <%= if @poll.poll_type == "date_selection" do %>
+                        <!-- For date selection polls, show the date as read-only -->
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">
+                            Date
+                          </label>
+                          <div class="mt-1 p-3 bg-gray-50 border border-gray-300 rounded-md">
+                            <div class="flex items-center">
+                              <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                              </svg>
+                              <span class="text-sm text-gray-900"><%= option.title %></span>
+                            </div>
+                          </div>
+                          <p class="mt-1 text-xs text-gray-500">Date options cannot be changed after creation</p>
+                          <!-- Keep the title in a hidden field to maintain form data -->
+                          <input type="hidden" name="poll_option[title]" value={option.title} />
+                        </div>
+                      <% else %>
+                        <!-- Regular title input for other poll types -->
+                        <div>
+                          <label for={"edit_title_#{option.id}"} class="block text-sm font-medium text-gray-700">
+                            Title <span class="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            name="poll_option[title]"
+                            id={"edit_title_#{option.id}"}
+                            value={@edit_changeset.changes[:title] || option.title}
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          />
+                          <%= if error = @edit_changeset.errors[:title] do %>
+                            <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
+                          <% end %>
+                        </div>
+                      <% end %>
 
                       <%= if @poll.poll_type != "time" do %>
                         <div>
@@ -801,7 +841,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <!-- Normal Option Display -->
                   <div class="flex items-start justify-between">
                     <!-- Drag handle for creators -->
-                    <%= if @is_creator && @poll.poll_type != "time" do %>
+                    <%= if @is_creator && @poll.poll_type not in ["time", "date_selection"] do %>
                       <div class="drag-handle mr-3 mt-1 flex-shrink-0 touch-target" title="Drag to reorder">
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                           <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
@@ -824,10 +864,18 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                         <div class="flex-1 min-w-0">
                           <div class="flex items-center">
                             <h4 class="text-sm font-medium text-gray-900 truncate">
-                              <%= if @poll.poll_type == "time" do %>
-                                <%= format_time_for_display(option.title) %>
-                              <% else %>
-                                <%= option.title %>
+                              <%= cond do %>
+                                <% @poll.poll_type == "time" -> %>
+                                  <%= format_time_for_display(option.title) %>
+                                <% @poll.poll_type == "date_selection" -> %>
+                                  <span class="inline-flex items-center group">
+                                    <svg class="w-4 h-4 mr-1 text-gray-500 group-hover:text-indigo-600 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    <span class="group-hover:text-indigo-600 transition-colors duration-200"><%= option.title %></span>
+                                  </span>
+                                <% true -> %>
+                                  <%= option.title %>
                               <% end %>
                             </h4>
                             <%= if option.status == "hidden" do %>
@@ -845,7 +893,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                             <span>Suggested by <%= option.suggested_by.name || option.suggested_by.username %></span>
                             <span class="mx-1">•</span>
                             <span><%= format_relative_time(option.inserted_at) %></span>
-                            <%= if @poll.poll_type != "time" do %>
+                            <%= if @poll.poll_type not in ["time", "date_selection"] do %>
                               <span class="mx-1">•</span>
                               <span>Order: <%= option.order_index %></span>
                             <% end %>
@@ -1459,6 +1507,12 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           status: "active"
         })
 
+        # Show success message
+        success_message = case length(successful_options) do
+          1 -> "Date added successfully!"
+          n -> "#{n} dates added successfully!"
+        end
+
         {:noreply,
          socket
          |> assign(:loading, false)
@@ -1469,7 +1523,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
          |> assign(:selected_date_for_time, nil)
          |> assign(:date_time_slots, %{})
          |> assign(:changeset, changeset)
-         |> assign(:loading_rich_data, false)}
+         |> assign(:loading_rich_data, false)
+         |> put_flash(:info, success_message)}
       else
         # Handle errors - show which dates failed
         failed_results = results
@@ -1954,18 +2009,31 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp maybe_put_param(params, key, value), do: Map.put(params, key, value)
 
   # Template helper functions
-
-  defp sort_options_by_order(poll_options, poll_type) do
-    safe_poll_options(poll_options)
-    |> Enum.sort_by(fn option ->
-      if poll_type == "time" do
+  
+  # Sort poll options based on poll type
+  defp sort_poll_options(poll_options, poll_type) do
+    options = safe_poll_options(poll_options)
+    
+    case poll_type do
+      "date_selection" ->
+        # Sort date selection polls chronologically
+        Enum.sort_by(options, fn option ->
+          case DatePollAdapter.extract_date_from_option(option) do
+            {:ok, date} -> date
+            _ -> ~D[9999-12-31]  # Put invalid dates at the end
+          end
+        end, Date)
+      
+      "time" ->
         # Sort time polls by their time value
-        TimeUtils.parse_time_for_sort(option.title)
-      else
-        # Sort other polls by order_index
-        option.order_index || 0
-      end
-    end, :asc)
+        Enum.sort_by(options, fn option ->
+          TimeUtils.parse_time_for_sort(option.title)
+        end)
+      
+      _ ->
+        # For other poll types, keep the existing order (by order_index)
+        options
+    end
   end
 
 
@@ -2389,6 +2457,24 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     case date do
       %Date{} = d -> format_date_for_display(d)
       _ -> "Invalid date"
+    end
+  end
+
+  # Extract dates from poll options for calendar display
+  defp extract_dates_from_poll_options(poll_options) do
+    case poll_options do
+      %Ecto.Association.NotLoaded{} -> []
+      poll_options when is_list(poll_options) ->
+        poll_options
+        |> Enum.map(fn option ->
+          case DatePollAdapter.extract_date_from_option(option) do
+            {:ok, date} -> date
+            _ -> nil
+          end
+        end)
+        |> Enum.filter(& &1)
+        |> Enum.sort(Date)
+      _ -> []
     end
   end
 end
