@@ -83,4 +83,50 @@ defmodule EventasaurusApp.EventsFixtures do
 
     participant
   end
+
+  @doc """
+  Generate a poll.
+  """
+  def poll_fixture(attrs \\ %{}) do
+    event = Map.get_lazy(attrs, :event, fn -> event_fixture() end)
+    user = Map.get_lazy(attrs, :user, fn -> EventasaurusApp.AccountsFixtures.user_fixture() end)
+
+    {:ok, poll} =
+      attrs
+      |> Enum.into(%{
+        event_id: event.id,
+        created_by_id: user.id,
+        title: "Test Poll",
+        description: "A test poll",
+        poll_type: "general",
+        voting_system: "binary",
+        phase: "list_building",
+        max_options_per_user: 3
+      })
+      |> Events.create_poll()
+
+    poll
+  end
+
+  @doc """
+  Generate a poll option.
+  """
+  def poll_option_fixture(attrs \\ %{}) do
+    poll = Map.get_lazy(attrs, :poll, fn -> poll_fixture() end)
+    user = Map.get_lazy(attrs, :user, fn -> EventasaurusApp.AccountsFixtures.user_fixture() end)
+
+    {:ok, poll_option} =
+      attrs
+      |> Enum.into(%{
+        poll_id: poll.id,
+        suggested_by_id: user.id,
+        title: "Test Option",
+        description: "A test option",
+        status: "active",
+        order_index: 0
+      })
+      |> Events.create_poll_option()
+
+    poll_option
+  end
 end
