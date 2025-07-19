@@ -37,8 +37,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Adapters.DatePollAdapter
   alias EventasaurusWeb.CalendarComponent
-  alias EventasaurusWeb.Components.VotingInterfaceComponent
+  alias EventasaurusWeb.VotingInterfaceComponent
   alias EventasaurusWeb.Utils.TimeUtils
+  alias EventasaurusWeb.Utils.PollPhaseUtils
   alias Phoenix.PubSub
 
   require Logger
@@ -55,8 +56,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
      |> assign(:loading, false)
      |> assign(:error_message, nil)
      |> assign(:success_message, nil)
-     |> assign(:showing_calendar, true)
+     |> assign(:showing_calendar, false)
      |> assign(:selected_dates, [])
+     |> assign(:existing_dates, [])
      |> assign(:poll_options, [])
      |> assign(:user_votes, [])
      |> assign(:poll_data, nil)
@@ -70,62 +72,77 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   @impl true
   def update(assigns, socket) do
-    poll = assigns.poll
-    current_user = assigns.current_user
-
-    # Validate this is a date_selection poll
-    unless poll.poll_type == "date_selection" do
-      {:ok, assign(socket, :error_message, "Invalid poll type - expected date_selection")}
+    # Handle calendar events from send_update
+    if Map.has_key?(assigns, :calendar_event) do
+      case assigns.calendar_event do
+        {"dates_selected", dates} ->
+          {:ok, assign(socket, :selected_dates, dates)}
+        _ ->
+          {:ok, socket}
+      end
     else
-      # Subscribe to real-time updates for this poll
-      if connected?(socket) do
-        PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}")
-        PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{poll.id}")
-        PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
+      poll = assigns.poll
+      current_user = assigns.current_user
+
+      # Validate this is a date_selection poll
+      unless poll.poll_type == "date_selection" do
+        {:ok, assign(socket, :error_message, "Invalid poll type - expected date_selection")}
+      else
+        # Subscribe to real-time updates for this poll
+        if connected?(socket) do
+          PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}")
+          PubSub.subscribe(Eventasaurus.PubSub, "votes:poll:#{poll.id}")
+          PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
+        end
+
+        # Load poll options and votes
+        poll_options = Events.list_poll_options(poll) |> sort_poll_options_by_date()
+        user_votes = if current_user, do: Events.list_user_poll_votes(poll, current_user), else: []
+
+        # Get poll data using simplified adapter
+        poll_data = case DatePollAdapter.get_poll_with_data(poll.id) do
+          {:ok, data} -> data
+          {:error, reason} ->
+            Logger.warning("Failed to get poll #{poll.id} data: #{inspect(reason)}")
+            nil
+        end
+
+        # Extract existing dates from poll options for calendar display
+        existing_dates = extract_dates_from_options(poll_options)
+
+        # Calculate vote summaries for results display
+        vote_summaries = calculate_vote_summaries(poll_options, user_votes)
+
+        # Determine phase display string
+        phase_display = DatePollAdapter.safe_status_display(poll)
+
+        # Load poll statistics for embedded display
+        poll_stats = try do
+          Events.get_poll_voting_stats(poll)
+        rescue
+          _ -> %{options: []}
+        end
+
+        # Update the poll struct with sorted options for VotingInterfaceComponent
+        poll_with_sorted_options = %{poll | poll_options: poll_options}
+        
+        {:ok,
+         socket
+         |> assign(assigns)
+         |> assign(:poll, poll_with_sorted_options)
+         |> assign(:poll_options, poll_options)
+         |> assign(:user_votes, user_votes)
+         |> assign(:existing_dates, existing_dates)
+         |> assign(:selected_dates, [])
+         |> assign(:poll_data, poll_data)
+         |> assign(:vote_summaries, vote_summaries)
+         |> assign(:phase_display, phase_display)
+         |> assign(:poll_stats, poll_stats)
+         |> assign_new(:temp_votes, fn -> %{} end)
+         |> assign_new(:show_results, fn -> false end)
+         |> assign_new(:anonymous_mode, fn -> is_nil(current_user) end)
+         |> assign_new(:compact_view, fn -> false end)}
       end
-
-      # Load poll options and votes
-      poll_options = Events.list_poll_options(poll)
-      user_votes = if current_user, do: Events.list_user_poll_votes(poll, current_user), else: []
-
-      # Get poll data using simplified adapter
-      poll_data = case DatePollAdapter.get_poll_with_data(poll.id) do
-        {:ok, data} -> data
-        {:error, reason} ->
-          Logger.warning("Failed to get poll #{poll.id} data: #{inspect(reason)}")
-          nil
-      end
-
-      # Extract selected dates from poll options for calendar display
-      selected_dates = extract_dates_from_options(poll_options)
-
-      # Calculate vote summaries for results display
-      vote_summaries = calculate_vote_summaries(poll_options, user_votes)
-
-      # Determine phase display string
-      phase_display = DatePollAdapter.safe_status_display(poll)
-
-      # Load poll statistics for embedded display
-      poll_stats = try do
-        Events.get_poll_voting_stats(poll)
-      rescue
-        _ -> %{options: []}
-      end
-
-      {:ok,
-       socket
-       |> assign(assigns)
-       |> assign(:poll_options, poll_options)
-       |> assign(:user_votes, user_votes)
-       |> assign(:selected_dates, selected_dates)
-       |> assign(:poll_data, poll_data)
-       |> assign(:vote_summaries, vote_summaries)
-       |> assign(:phase_display, phase_display)
-       |> assign(:poll_stats, poll_stats)
-       |> assign_new(:temp_votes, fn -> %{} end)
-       |> assign_new(:show_results, fn -> false end)
-       |> assign_new(:anonymous_mode, fn -> is_nil(current_user) end)
-       |> assign_new(:compact_view, fn -> false end)}
     end
   end
 
@@ -155,20 +172,53 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     {:noreply, assign(socket, :selected_date_for_time, nil)}
   end
 
+  def handle_event("add_selected_dates", _params, socket) do
+    # Process all selected dates at once
+    %{selected_dates: selected_dates} = socket.assigns
+    
+    if length(selected_dates) == 0 do
+      {:noreply, put_flash(socket, :info, "Please select at least one date")}
+    else
+      # Process each selected date
+      socket = Enum.reduce(selected_dates, socket, fn date, acc_socket ->
+        # Create the date suggestion for each selected date
+        date_string = Date.to_iso8601(date)
+        case handle_event("suggest_date", %{"date" => date_string}, acc_socket) do
+          {:noreply, updated_socket} -> updated_socket
+          _ -> acc_socket
+        end
+      end)
+      
+      # Clear selected dates and close calendar after adding them
+      {:noreply, 
+       socket
+       |> assign(:selected_dates, [])
+       |> assign(:showing_calendar, false)}
+    end
+  end
+
+  def handle_event("remove_date", %{"date" => date_string}, socket) do
+    case Date.from_iso8601(date_string) do
+      {:ok, date} ->
+        updated_dates = List.delete(socket.assigns.selected_dates, date)
+        {:noreply, assign(socket, :selected_dates, updated_dates)}
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("suggest_date", %{"date" => date_string}, socket) do
     %{poll: poll, current_user: user, time_enabled: time_enabled, date_time_slots: date_time_slots} = socket.assigns
 
-    # Only allow date suggestions during list_building phase
-    if poll.phase != "list_building" do
+    # Only allow date suggestions during list_building and voting_with_suggestions phases
+    unless PollPhaseUtils.suggestions_allowed?(poll.phase) do
       {:noreply, put_flash(socket, :error, "Cannot add dates during #{socket.assigns.phase_display} phase")}
     else
       # Use adapter's date sanitization
       case DatePollAdapter.sanitize_date_input(date_string) do
-        {:ok, sanitized_date_string} ->
-          case Date.from_iso8601(sanitized_date_string) do
-            {:ok, date} ->
-              # Check if this date is already an option
-              existing_option = Enum.find(socket.assigns.poll_options, fn option ->
+        {:ok, date} ->
+          # Check if this date is already an option
+          existing_option = Enum.find(socket.assigns.poll_options, fn option ->
                 case DatePollAdapter.validate_date_option(option) do
                   {:ok, _} ->
                     # Use adapter's date extraction function
@@ -181,23 +231,28 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
               end)
 
               if existing_option do
-                # Use adapter's safe display formatting
-                formatted_date = DatePollAdapter.safe_format_date_for_display(date)
+                # Use plain formatting for flash message
+                formatted_date = format_date_for_display(date)
                 {:noreply, put_flash(socket, :info, "Date #{formatted_date} is already an option")}
               else
                 # Create enhanced metadata with time support
                 # Use consistent ISO8601 format for time slot lookup
                 date_iso = Date.to_iso8601(date)
                 app_timezone = Application.get_env(:eventasaurus, :timezone, "UTC")
-                metadata = create_date_metadata_with_time(date, time_enabled, date_time_slots[date_iso], app_timezone)
+                metadata_map = create_date_metadata_with_time(date, time_enabled, date_time_slots[date_iso], app_timezone)
+                
+                # Convert metadata map to keyword list for Events.create_date_poll_option
+                metadata_opts = Enum.map(metadata_map, fn {k, v} -> {String.to_atom(k), v} end)
 
                 # Create new date option using our generic system with enhanced metadata
-                case Events.create_date_poll_option(poll, user, date, metadata) do
+                case Events.create_date_poll_option(poll, user, date, metadata_opts) do
                   {:ok, _option} ->
-                    # Send real-time update
+                    # Broadcast real-time update to all subscribers
+                    PubSub.broadcast(Eventasaurus.PubSub, "polls:#{poll.id}", {:poll_option_added, poll.id})
+                    # Also send to parent LiveView
                     send(self(), {:poll_option_added, poll.id})
 
-                    formatted_date = DatePollAdapter.safe_format_date_for_display(date)
+                    formatted_date = format_date_for_display(date)
                     {:noreply,
                      socket
                      |> put_flash(:success, "Added #{formatted_date} to the poll")
@@ -210,10 +265,6 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                     {:noreply, put_flash(socket, :error, "Failed to add date option")}
                 end
               end
-
-            {:error, _} ->
-              {:noreply, put_flash(socket, :error, "Invalid date format")}
-          end
 
         {:error, reason} ->
           {:noreply, put_flash(socket, :error, "Invalid date input: #{reason}")}
@@ -288,6 +339,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     end
   end
 
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -334,9 +386,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                 </button>
               </div>
 
-              <%= if @poll.deadline do %>
+              <%= if @poll.voting_deadline do %>
                 <span class="text-xs text-gray-500 sm:text-left">
-                  Deadline: <%= format_deadline(@poll.deadline) %>
+                  Deadline: <%= format_deadline(@poll.voting_deadline) %>
                 </span>
               <% end %>
             </div>
@@ -375,6 +427,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                           module={CalendarComponent}
                           id={"calendar-#{@poll.id}"}
                           selected_dates={@selected_dates}
+                          existing_dates={@existing_dates}
+                          target={@myself}
+                          on_date_select="dates_selected"
                         />
                       <% else %>
                         <div class="p-3 sm:p-4 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -535,7 +590,271 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                 <% end %>
               </div>
 
-            <% @poll.phase in ["voting", "voting_with_suggestions", "voting_only"] -> %>
+            <% @poll.phase == "voting_with_suggestions" -> %>
+              <!-- Voting with Suggestions Phase -->
+              <div class="space-y-4 sm:space-y-6">
+                <!-- Voting Section -->
+                <%= if length(@poll_options) > 0 do %>
+                  <div>
+                    <h4 class="text-sm font-medium text-gray-900 mb-3">
+                      Vote on the possible dates
+                    </h4>
+                    <p class="text-sm text-gray-600 mb-4">
+                      <%= PollPhaseUtils.get_phase_description(@poll.phase, "date_selection") %>
+                    </p>
+
+                    <!-- Use the generic VotingInterfaceComponent -->
+                    <.live_component
+                      module={VotingInterfaceComponent}
+                      id={"voting-#{@poll.id}"}
+                      poll={@poll}
+                      user={@current_user}
+                      user_votes={@user_votes}
+                      loading={@loading}
+                      temp_votes={@temp_votes}
+                      anonymous_mode={@anonymous_mode}
+                    />
+                  </div>
+                <% else %>
+                  <div class="text-center py-8 text-gray-500">
+                    <% {title, subtitle} = PollPhaseUtils.get_empty_state_message("date_selection") %>
+                    <p class="font-medium"><%= title %></p>
+                    <p class="text-sm"><%= subtitle %></p>
+                  </div>
+                <% end %>
+
+                <!-- Divider -->
+                <div class="relative">
+                  <div class="absolute inset-0 flex items-center" aria-hidden="true">
+                    <div class="w-full border-t border-gray-300"></div>
+                  </div>
+                  <div class="relative flex justify-center">
+                    <span class="px-3 bg-white text-sm text-gray-500">or add new dates</span>
+                  </div>
+                </div>
+
+                <!-- Date Suggestion Section -->
+                <%= if @showing_calendar do %>
+                  <!-- Calendar for Date Selection -->
+                  <div class="overflow-hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
+                      <h4 class="text-sm font-medium text-gray-900">
+                        Suggest additional dates
+                      </h4>
+                      <button
+                        type="button"
+                        phx-click="toggle_calendar"
+                        phx-target={@myself}
+                        class="sm:hidden text-sm text-blue-600 hover:text-blue-700 font-medium mt-1"
+                      >
+                        Hide Calendar
+                      </button>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">
+                      Click on calendar dates to suggest them for the event.
+                    </p>
+
+                    <div class="calendar-container bg-white rounded-lg border border-gray-200 overflow-hidden">
+                      <%= if @poll_data do %>
+                        <.live_component
+                          module={CalendarComponent}
+                          id={"calendar-#{@poll.id}"}
+                          selected_dates={@selected_dates}
+                          existing_dates={@existing_dates}
+                          target={@myself}
+                          on_date_select="dates_selected"
+                        />
+                      <% else %>
+                        <div class="p-3 sm:p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                          <p class="text-sm text-yellow-700">Calendar temporarily unavailable. Please try refreshing the page.</p>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+
+                <!-- Time Selection for Suggestions -->
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                      <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                      <div>
+                        <h4 class="text-sm font-medium text-gray-900">Specify times</h4>
+                        <p class="text-xs text-gray-600">Include start and end times for each option</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      phx-click="toggle_time_enabled"
+                      phx-target={@myself}
+                      class={"relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 #{if @time_enabled, do: "bg-blue-600", else: "bg-gray-200"}"}
+                    >
+                      <span class={"inline-block h-4 w-4 transform rounded-full bg-white transition-transform #{if @time_enabled, do: "translate-x-6", else: "translate-x-1"}"} />
+                    </button>
+                  </div>
+
+                  <%= if @time_enabled do %>
+                    <div class="mt-3 space-y-2">
+                      <%= for {time_slot, idx} <- Enum.with_index(@time_slots) do %>
+                        <div class="flex items-center space-x-2">
+                          <input
+                            type="time"
+                            value={time_slot["start_time"]}
+                            phx-change="update_time_slot"
+                            phx-value-index={idx}
+                            phx-value-field="start_time"
+                            phx-target={@myself}
+                            class="block rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+                          />
+                          <span class="text-gray-500">to</span>
+                          <input
+                            type="time"
+                            value={time_slot["end_time"]}
+                            phx-change="update_time_slot"
+                            phx-value-index={idx}
+                            phx-value-field="end_time"
+                            phx-target={@myself}
+                            class="block rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            phx-click="remove_time_slot"
+                            phx-value-index={idx}
+                            phx-target={@myself}
+                            class="text-red-600 hover:text-red-700"
+                          >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                          </button>
+                        </div>
+                      <% end %>
+                      <button
+                        type="button"
+                        phx-click="add_time_slot"
+                        phx-target={@myself}
+                        class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        + Add time slot
+                      </button>
+                    </div>
+                  <% end %>
+                </div>
+
+                <!-- Selected Dates Preview -->
+                <%= if length(@selected_dates) > 0 do %>
+                  <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h4 class="text-sm font-medium text-blue-900 mb-2">Dates ready to suggest:</h4>
+                    <div class="space-y-2">
+                      <%= for date <- @selected_dates do %>
+                        <div class="flex items-center justify-between text-sm">
+                          <span class="text-blue-800">
+                            <%= DatePollAdapter.safe_format_date_for_display(date) %>
+                            <%= if @time_enabled do %>
+                              <span class="text-xs text-blue-600 ml-2">
+                                (with times)
+                              </span>
+                            <% end %>
+                          </span>
+                          <button
+                            type="button"
+                            phx-click="remove_date"
+                            phx-value-date={date}
+                            phx-target={@myself}
+                            class="text-blue-600 hover:text-blue-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      <% end %>
+                    </div>
+                    <div class="mt-4">
+                      <button
+                        type="button"
+                        phx-click="add_selected_dates"
+                        phx-target={@myself}
+                        disabled={@loading}
+                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                      >
+                        <%= if @loading do %>
+                          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Adding...
+                        <% else %>
+                          Add <%= length(@selected_dates) %> Date<%= if length(@selected_dates) > 1, do: "s" %>
+                        <% end %>
+                      </button>
+                    </div>
+                  </div>
+                    <% end %>
+                <% else %>
+                  <!-- Show Add Date Button -->
+                  <%= if @current_user do %>
+                    <div class="mt-4">
+                      <button
+                        type="button"
+                        phx-click="toggle_calendar"
+                        phx-target={@myself}
+                        class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 border-dashed rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors"
+                      >
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"/>
+                        </svg>
+                        <%= PollPhaseUtils.get_add_button_text("date_selection") %>
+                      </button>
+                    </div>
+                  <% else %>
+                    <!-- Show login prompt for anonymous users -->
+                    <div class="mt-4">
+                      <p class="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                        Please <.link href="/login" class="text-blue-600 hover:underline">log in</.link> to suggest options.
+                      </p>
+                    </div>
+                  <% end %>
+                <% end %>
+
+                <!-- Anonymous Vote Summary -->
+                <%= if @anonymous_mode and map_size(@temp_votes) > 0 do %>
+                  <div class="p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <h4 class="text-sm font-medium text-blue-900 mb-2">Your temporary votes</h4>
+                    <p class="text-sm text-blue-700 mb-3">
+                      Your votes are saved temporarily. To make them count, please provide your details.
+                    </p>
+                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                      <button
+                        type="button"
+                        phx-click="save_anonymous_votes"
+                        phx-target={@myself}
+                        disabled={@loading}
+                        class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                      >
+                        <%= if @loading do %>
+                          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        <% else %>
+                          Save My Votes
+                        <% end %>
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="clear_anonymous_votes"
+                        phx-target={@myself}
+                        class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        Clear Votes
+                      </button>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+
+            <% @poll.phase in ["voting", "voting_only"] -> %>
               <!-- Voting Phase -->
               <div class="space-y-4 sm:space-y-6">
                 <!-- Date Options with Voting Interface -->
@@ -735,7 +1054,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   defp handle_poll_refresh(socket, updated_poll) do
     # Reload fresh data
-    poll_options = Events.list_poll_options(updated_poll)
+    poll_options = Events.list_poll_options(updated_poll) |> sort_poll_options_by_date()
     user_votes = if socket.assigns.current_user do
       Events.list_user_poll_votes(updated_poll, socket.assigns.current_user)
     else
@@ -748,16 +1067,19 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
       {:error, _} -> nil
     end
 
-    selected_dates = extract_dates_from_options(poll_options)
+    existing_dates = extract_dates_from_options(poll_options)
     vote_summaries = calculate_vote_summaries(poll_options, user_votes)
     phase_display = DatePollAdapter.safe_status_display(updated_poll)
 
+    # Update the poll struct with sorted options for VotingInterfaceComponent
+    poll_with_sorted_options = %{updated_poll | poll_options: poll_options}
+    
     {:noreply,
      socket
-     |> assign(:poll, updated_poll)
+     |> assign(:poll, poll_with_sorted_options)
      |> assign(:poll_options, poll_options)
      |> assign(:user_votes, user_votes)
-     |> assign(:selected_dates, selected_dates)
+     |> assign(:existing_dates, existing_dates)
      |> assign(:poll_data, poll_data)
      |> assign(:vote_summaries, vote_summaries)
      |> assign(:phase_display, phase_display)
@@ -774,6 +1096,16 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     end)
     |> Enum.filter(& &1)
     |> Enum.sort()
+  end
+
+  defp sort_poll_options_by_date(poll_options) do
+    poll_options
+    |> Enum.sort_by(fn option ->
+      case DatePollAdapter.extract_date_from_option(option) do
+        {:ok, date} -> date
+        _ -> ~D[9999-12-31]  # Put invalid dates at the end
+      end
+    end, Date)
   end
 
     defp calculate_vote_summaries(poll_options, _user_votes) do
@@ -847,10 +1179,27 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   defp format_deadline(_), do: "Invalid"
 
+  defp format_date_for_display(date) do
+    month_name = Calendar.strftime(date, "%B")
+    "#{month_name} #{date.day}, #{date.year}"
+  end
+
+  defp get_day_name(day_of_week) do
+    case day_of_week do
+      1 -> "Monday"
+      2 -> "Tuesday"
+      3 -> "Wednesday"
+      4 -> "Thursday"
+      5 -> "Friday"
+      6 -> "Saturday"
+      7 -> "Sunday"
+    end
+  end
+
   defp create_date_metadata_with_time(date, time_enabled, time_slots, timezone) do
     base_metadata = %{
       "date" => Date.to_iso8601(date),
-      "display_date" => DatePollAdapter.safe_format_date_for_display(date),
+      "display_date" => format_date_for_display(date),
       "date_type" => "single_date",
       "created_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }

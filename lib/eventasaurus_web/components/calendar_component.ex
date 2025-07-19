@@ -19,6 +19,7 @@ defmodule EventasaurusWeb.CalendarComponent do
       socket
       |> assign(:current_month, today)
       |> assign(:selected_dates, [])
+      |> assign(:existing_dates, [])
       |> assign(:hover_date, nil)
 
     {:ok, socket}
@@ -32,10 +33,17 @@ defmodule EventasaurusWeb.CalendarComponent do
       dates -> dates
     end
 
+    # Handle existing_dates from parent (dates already in the poll that can't be removed)
+    existing_dates = case Map.get(assigns, :existing_dates) do
+      nil -> Map.get(socket.assigns, :existing_dates, [])
+      dates -> dates
+    end
+
     socket =
       socket
       |> assign(assigns)
       |> assign(:selected_dates, selected_dates)
+      |> assign(:existing_dates, existing_dates)
 
     {:ok, socket}
   end
@@ -202,6 +210,7 @@ defmodule EventasaurusWeb.CalendarComponent do
               date={date}
               current_month={@current_month}
               selected_dates={@selected_dates}
+              existing_dates={@existing_dates}
               hover_date={@hover_date}
               myself={@myself}
             />
@@ -213,7 +222,7 @@ defmodule EventasaurusWeb.CalendarComponent do
       <%= if length(@selected_dates) > 0 do %>
         <div class="px-3 py-3 sm:px-4 border-t border-gray-200 bg-gray-50">
           <h4 class="text-sm font-medium text-gray-700 mb-2" role="status" aria-live="polite">
-            Selected dates (<%= length(@selected_dates) %>):
+            Your selected dates (<%= length(@selected_dates) %>):
           </h4>
           <div class="flex flex-wrap gap-1">
             <%= for date <- Enum.sort(@selected_dates, Date) do %>
@@ -238,6 +247,16 @@ defmodule EventasaurusWeb.CalendarComponent do
           </div>
         </div>
       <% end %>
+
+      <!-- Existing dates info (non-removable) -->
+      <%= if length(@existing_dates) > 0 do %>
+        <div class="px-3 py-2 sm:px-4 text-xs text-gray-600 bg-purple-50 border-t border-purple-100">
+          <div class="flex items-center">
+            <div class="w-3 h-3 bg-purple-200 rounded mr-2"></div>
+            <span>Purple dates = Already suggested by others</span>
+          </div>
+        </div>
+      <% end %>
     </div>
     """
   end
@@ -247,6 +266,7 @@ defmodule EventasaurusWeb.CalendarComponent do
     today = Date.utc_today()
     is_current_month = assigns.date.month == assigns.current_month.month
     is_selected = assigns.date in assigns.selected_dates
+    is_existing = assigns.date in assigns.existing_dates
     is_today = assigns.date == today
     is_past = Date.compare(assigns.date, today) == :lt
     is_hovered = assigns.date == assigns.hover_date
@@ -263,6 +283,10 @@ defmodule EventasaurusWeb.CalendarComponent do
 
       is_selected ->
         "#{base_classes} bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:bg-blue-700"
+
+      is_existing and is_current_month ->
+        # Existing dates have a distinct style - highlighted but not selected
+        "#{base_classes} bg-purple-100 text-purple-800 font-medium border border-purple-200 hover:bg-purple-200 focus:bg-purple-200"
 
       is_today and is_current_month ->
         "#{base_classes} bg-blue-50 text-blue-600 font-semibold border border-blue-200 hover:bg-blue-100 focus:bg-blue-100"
@@ -283,6 +307,7 @@ defmodule EventasaurusWeb.CalendarComponent do
       |> assign(:is_current_month, is_current_month)
       |> assign(:is_past, is_past)
       |> assign(:is_selected, is_selected)
+      |> assign(:is_existing, is_existing)
       |> assign(:is_today, is_today)
 
     ~H"""
@@ -295,16 +320,25 @@ defmodule EventasaurusWeb.CalendarComponent do
       phx-value-date={Date.to_iso8601(@date)}
       phx-mouseenter={if @is_current_month and !@is_past, do: "hover_date"}
       phx-mouseleave={if @is_current_month and !@is_past, do: "unhover_date"}
-      aria-label={"#{if @is_selected, do: "Deselect", else: "Select"} #{Calendar.strftime(@date, "%B %d, %Y")}"}
+      aria-label={"#{cond do
+        @is_selected -> "Deselect"
+        @is_existing -> "Already suggested"
+        true -> "Select"
+      end} #{Calendar.strftime(@date, "%B %d, %Y")}"}
       aria-pressed={if @is_selected, do: "true", else: "false"}
       role="gridcell"
       tabindex={if @is_current_month and !@is_past, do: "0", else: "-1"}
-      title={"#{Calendar.strftime(@date, "%B %d, %Y")}#{if @is_today, do: " (Today)", else: ""}#{if @is_selected, do: " - Selected", else: ""}"}
+      title={"#{Calendar.strftime(@date, "%B %d, %Y")}#{if @is_today, do: " (Today)", else: ""}#{cond do
+        @is_selected -> " - Selected"
+        @is_existing -> " - Already suggested"
+        true -> ""
+      end}"}
     >
       <span class="sr-only">
         <%= Calendar.strftime(@date, "%B %d, %Y") %>
         <%= if @is_today, do: " (Today)" %>
         <%= if @is_selected, do: " - Selected" %>
+        <%= if @is_existing, do: " - Already suggested" %>
       </span>
       <span aria-hidden="true"><%= @date.day %></span>
       <%= if @is_today do %>
