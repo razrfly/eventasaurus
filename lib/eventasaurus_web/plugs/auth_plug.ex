@@ -81,9 +81,19 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       conn
     else
       conn
+      |> maybe_store_return_to()
       |> put_flash(:error, "You must log in to access this page.")
       |> redirect(to: ~p"/auth/login")
       |> halt()
+    end
+  end
+  
+  # Store the current path in session for redirect after login
+  defp maybe_store_return_to(conn) do
+    if conn.method == "GET" do
+      put_session(conn, :user_return_to, current_path(conn))
+    else
+      conn
     end
   end
 

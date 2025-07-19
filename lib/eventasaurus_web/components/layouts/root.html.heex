@@ -261,10 +261,10 @@
               </a>
             <% else %>
               <!-- Anonymous user UI -->
-              <a href={"/login?return_to=#{URI.encode_www_form(@conn.request_path)}"} class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
+              <a href={"/login?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500">
                 Sign In
               </a>
-              <a href="/register" class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 dark:bg-white shadow-md text-base font-medium whitespace-nowrap text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
+              <a href={"/register?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="inline-flex items-center justify-center px-4 py-2 rounded-full border border-transparent bg-gray-950 dark:bg-white shadow-md text-base font-medium whitespace-nowrap text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
                 Get Started
               </a>
             <% end %>
@@ -339,10 +339,10 @@
               Log out
             </a>
           <% else %>
-            <a href={"/login?return_to=#{URI.encode_www_form(@conn.request_path)}"} class="block w-full text-center px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <a href={"/login?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="block w-full text-center px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               Sign In
             </a>
-            <a href="/register" class="block w-full text-center px-4 py-2 rounded-md bg-gray-950 dark:bg-white text-base font-medium text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors">
+            <a href={"/register?return_to=#{URI.encode_www_form(Phoenix.Controller.current_path(@conn))}"} class="block w-full text-center px-4 py-2 rounded-md bg-gray-950 dark:bg-white text-base font-medium text-white dark:text-gray-950 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors">
               Get Started
             </a>
           <% end %>
