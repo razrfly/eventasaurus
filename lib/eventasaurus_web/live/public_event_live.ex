@@ -12,7 +12,6 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.PublicGenericPollComponent
-  alias EventasaurusWeb.DateSelectionPollComponent
 
   alias EventasaurusWeb.ReservedSlugs
 
