@@ -12,6 +12,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Utils.TimeUtils
+  alias EventasaurusWeb.Utils.PollPhaseUtils
+  alias EventasaurusWeb.VotingInterfaceComponent
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
@@ -119,6 +121,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
               # Reload poll options to show the new option immediately
               updated_poll_options = Events.list_poll_options(socket.assigns.poll)
               |> Repo.preload(:suggested_by)
+
+              # Notify the parent LiveView to reload polls for all users
+              send(self(), {:poll_stats_updated, socket.assigns.poll.id, %{}})
 
               {:noreply,
                socket
@@ -230,19 +235,31 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
               <%= poll_emoji(@poll.poll_type) %> <%= get_poll_title(@poll.poll_type) %>
             </h3>
             <p class="text-sm text-gray-600">
-              <%= if @poll.phase == "list_building" do %>
-                Help build the <%= @poll.poll_type %> list! Add your suggestions below.
-              <% else %>
-                Vote on your favorite <%= get_poll_type_text(@poll.poll_type) %> below.
-              <% end %>
+              <%= PollPhaseUtils.get_phase_description(@poll.phase, @poll.poll_type) %>
             </p>
             <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="mt-1" />
           </div>
 
-          <!-- Poll Options List -->
+          <!-- Poll Options List with Voting -->
           <%= if length(@poll_options) > 0 do %>
-            <div class="space-y-3">
-              <%= for option <- sort_options_by_time(@poll_options, @poll.poll_type) do %>
+            <%= if PollPhaseUtils.voting_allowed?(@poll.phase) do %>
+              <!-- Voting Interface -->
+              <div class="mb-6">
+                <.live_component
+                  module={EventasaurusWeb.VotingInterfaceComponent}
+                  id={"voting-interface-#{@poll.id}"}
+                  poll={@poll}
+                  user={@current_user}
+                  user_votes={[]}
+                  loading={false}
+                  temp_votes={%{}}
+                  anonymous_mode={is_nil(@current_user)}
+                />
+              </div>
+            <% else %>
+              <!-- List Building Phase - Show Options Without Voting -->
+              <div class="space-y-3">
+                <%= for option <- sort_options_by_time(@poll_options, @poll.poll_type) do %>
                 <div class="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
                   <div class="flex">
                     <!-- Option Image (same as manager area) -->
@@ -280,19 +297,21 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                   </div>
                 </div>
               <% end %>
-            </div>
+              </div>
+            <% end %>
           <% else %>
             <div class="text-center py-8 text-gray-500">
               <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
               </svg>
-              <p class="font-medium">No <%= get_poll_type_text(@poll.poll_type) %> suggested yet</p>
-              <p class="text-sm">Be the first to add a suggestion!</p>
+              <% {title, subtitle} = PollPhaseUtils.get_empty_state_message(@poll.poll_type) %>
+              <p class="font-medium"><%= title %></p>
+              <p class="text-sm"><%= subtitle %></p>
             </div>
           <% end %>
 
           <!-- Add Option Button/Form -->
-          <%= if @poll.phase == "list_building" do %>
+          <%= if PollPhaseUtils.suggestions_allowed?(@poll.phase) do %>
             <%= if @current_user do %>
               <%= if @showing_add_form do %>
                 <!-- Inline Add Option Form -->
@@ -416,7 +435,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
-                    Add <%= get_suggestion_title(@poll.poll_type) %>
+                    <%= PollPhaseUtils.get_add_button_text(@poll.poll_type) %>
                   </button>
                 </div>
               <% end %>

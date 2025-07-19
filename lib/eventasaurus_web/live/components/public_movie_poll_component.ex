@@ -16,6 +16,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusWeb.Services.MovieDataService
   alias EventasaurusWeb.Utils.MovieUtils
   alias EventasaurusWeb.EmbeddedProgressBarComponent
+  alias EventasaurusWeb.Utils.PollPhaseUtils
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
@@ -266,6 +267,9 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                   updated_movie_options = Events.list_poll_options(socket.assigns.movie_poll)
                   |> Repo.preload(:suggested_by)
 
+                  # Notify the parent LiveView to reload polls for all users
+                  send(self(), {:poll_stats_updated, socket.assigns.movie_poll.id, %{}})
+
                   {:noreply,
                    socket
                    |> put_flash(:info, "Movie added successfully!")
@@ -365,18 +369,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                   <.voter_count poll_stats={@poll_stats} poll_phase={@movie_poll.phase} class="ml-4" />
                 </div>
                 <p class="text-sm text-gray-600 mt-1">
-                  <%= case @movie_poll.phase do %>
-                    <% "list_building" -> %>
-                      Help build the movie list! Add your suggestions below.
-                    <% "voting_with_suggestions" -> %>
-                      Vote on your favorite movies and add new suggestions.
-                    <% "voting" -> %>
-                      Vote on your favorite movies and add new suggestions.
-                    <% "voting_only" -> %>
-                      Vote on your favorite movies below.
-                    <% _ -> %>
-                      Vote on your favorite movies below.
-                  <% end %>
+                  <%= PollPhaseUtils.get_phase_description(@movie_poll.phase, "movie") %>
                 </p>
               </div>
               
@@ -512,8 +505,9 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
               <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2m0 0V3a1 1 0 011 1v4a1 1 0 01-1-1h-2m-6 0h8m-8 0V8a1 1 0 01-1-1V3a1 1 0 011-1h2"/>
               </svg>
-              <p class="font-medium">No movies suggested yet</p>
-              <p class="text-sm">Be the first to add a movie suggestion!</p>
+              <% {title, subtitle} = PollPhaseUtils.get_empty_state_message("movie") %>
+              <p class="font-medium"><%= title %></p>
+              <p class="text-sm"><%= subtitle %></p>
             </div>
           <% end %>
 
@@ -557,7 +551,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
           <% end %>
 
           <!-- Add Movie Button/Form -->
-          <%= if @movie_poll.phase in ["list_building", "voting_with_suggestions", "voting"] do %>
+          <%= if PollPhaseUtils.suggestions_allowed?(@movie_poll.phase) do %>
             <%= if @current_user do %>
               <%= if @showing_add_form do %>
                 <!-- Inline Add Movie Form -->
@@ -640,7 +634,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
-                    Add Movie Suggestion
+                    <%= PollPhaseUtils.get_add_button_text("movie") %>
                   </button>
                 </div>
               <% end %>

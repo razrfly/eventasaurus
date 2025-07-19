@@ -3276,8 +3276,8 @@ defmodule EventasaurusApp.Events do
 
 
   defp format_date_for_display(%Date{} = date) do
-    # Format as "Monday, December 25, 2024"
-    Calendar.strftime(date, "%A, %B %d, %Y")
+    # Format as "December 25, 2024" (without day name to match existing dates)
+    Calendar.strftime(date, "%B %-d, %Y")
   end
 
   defp validate_date_range(%Date{} = start_date, %Date{} = end_date) do
