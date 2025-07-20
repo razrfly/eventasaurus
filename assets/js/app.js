@@ -139,6 +139,10 @@ class PostHogManager {
         // Performance settings
         capture_pageview: this.privacyConsent.analytics,
         capture_pageleave: this.privacyConsent.analytics,
+        
+        // Disable autocapture to prevent duplicate tracking with our custom events
+        // We track specific poll interactions manually for better control
+        autocapture: false,
         loaded: (posthogInstance) => {
           this.onPostHogLoaded(posthogInstance);
         },
