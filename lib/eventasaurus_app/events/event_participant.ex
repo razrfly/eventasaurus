@@ -2,6 +2,7 @@ defmodule EventasaurusApp.Events.EventParticipant do
   use Ecto.Schema
   import Ecto.Changeset
   import Ecto.Query
+  import Ecto.SoftDelete.Schema
 
   schema "event_participants" do
     field :role, Ecto.Enum, values: [:invitee, :poll_voter, :ticket_holder]
@@ -17,7 +18,12 @@ defmodule EventasaurusApp.Events.EventParticipant do
     belongs_to :user, EventasaurusApp.Accounts.User
     belongs_to :invited_by_user, EventasaurusApp.Accounts.User
 
+    # Deletion metadata fields
+    field :deletion_reason, :string
+    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+
     timestamps()
+    soft_delete_schema()
   end
 
   @doc false
