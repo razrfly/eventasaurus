@@ -1,6 +1,7 @@
 defmodule EventasaurusApp.Events.PollOption do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.SoftDelete.Schema
   alias EventasaurusApp.Events.{Poll, PollVote, DateMetadata}
   alias EventasaurusApp.Accounts.User
 
@@ -18,7 +19,12 @@ defmodule EventasaurusApp.Events.PollOption do
     belongs_to :suggested_by, User, foreign_key: :suggested_by_id
     has_many :votes, PollVote
 
+    # Deletion metadata fields
+    field :deletion_reason, :string
+    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+
     timestamps()
+    soft_delete_schema()
   end
 
   @doc false

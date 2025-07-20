@@ -1,6 +1,7 @@
 defmodule EventasaurusApp.Events.Order do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.SoftDelete.Schema
 
   @valid_statuses ~w(pending confirmed refunded canceled)
 
@@ -26,7 +27,12 @@ defmodule EventasaurusApp.Events.Order do
     belongs_to :ticket, EventasaurusApp.Events.Ticket
     belongs_to :stripe_connect_account, EventasaurusApp.Stripe.StripeConnectAccount
 
+    # Deletion metadata fields
+    field :deletion_reason, :string
+    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+
     timestamps()
+    soft_delete_schema()
   end
 
   @doc false
