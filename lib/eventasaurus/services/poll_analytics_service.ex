@@ -19,35 +19,39 @@ defmodule Eventasaurus.Services.PollAnalyticsService do
   end
 
   # Poll voting events
-  @spec track_poll_vote(String.t() | nil, String.t(), String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  @spec track_poll_vote(String.t(), String.t(), String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
   def track_poll_vote(user_id, poll_id, option_id, voting_system, metadata \\ %{}) do
+    # Require a valid user_id (can be anonymous ID from AnonymousIdService)
+    unless user_id && user_id != "" do
+      raise ArgumentError, "user_id is required - use AnonymousIdService.get_user_identifier/2 for anonymous users"
+    end
+    
     properties = Map.merge(%{
       poll_id: poll_id,
       option_id: option_id,
       voting_system: voting_system,
-      is_anonymous: is_nil(user_id),
+      is_anonymous: String.starts_with?(user_id, "anon_"),
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
     }, metadata)
-
-    # Use anonymous ID if user_id is nil
-    user_identifier = user_id || "anonymous_#{:rand.uniform(1_000_000)}"
     
-    PosthogService.send_event("poll_vote", user_identifier, properties)
+    PosthogService.send_event("poll_vote", user_id, properties)
   end
 
   # Poll option suggestion events
-  @spec track_poll_suggestion_created(String.t() | nil, String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  @spec track_poll_suggestion_created(String.t(), String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
   def track_poll_suggestion_created(user_id, poll_id, suggestion_id, metadata \\ %{}) do
+    unless user_id && user_id != "" do
+      raise ArgumentError, "user_id is required - use AnonymousIdService.get_user_identifier/2 for anonymous users"
+    end
+    
     properties = Map.merge(%{
       poll_id: poll_id,
       suggestion_id: suggestion_id,
-      is_anonymous: is_nil(user_id),
+      is_anonymous: String.starts_with?(user_id, "anon_"),
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
     }, metadata)
-
-    user_identifier = user_id || "anonymous_#{:rand.uniform(1_000_000)}"
     
-    PosthogService.send_event("poll_suggestion_created", user_identifier, properties)
+    PosthogService.send_event("poll_suggestion_created", user_id, properties)
   end
 
   # Poll suggestion approval events
@@ -77,31 +81,35 @@ defmodule Eventasaurus.Services.PollAnalyticsService do
   end
 
   # Poll view events
-  @spec track_poll_viewed(String.t() | nil, String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  @spec track_poll_viewed(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
   def track_poll_viewed(user_id, poll_id, metadata \\ %{}) do
+    unless user_id && user_id != "" do
+      raise ArgumentError, "user_id is required - use AnonymousIdService.get_user_identifier/2 for anonymous users"
+    end
+    
     properties = Map.merge(%{
       poll_id: poll_id,
-      is_anonymous: is_nil(user_id),
+      is_anonymous: String.starts_with?(user_id, "anon_"),
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
     }, metadata)
-
-    user_identifier = user_id || "anonymous_#{:rand.uniform(1_000_000)}"
     
-    PosthogService.send_event("poll_viewed", user_identifier, properties)
+    PosthogService.send_event("poll_viewed", user_id, properties)
   end
 
   # Poll results view events
-  @spec track_poll_results_viewed(String.t() | nil, String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  @spec track_poll_results_viewed(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
   def track_poll_results_viewed(user_id, poll_id, metadata \\ %{}) do
+    unless user_id && user_id != "" do
+      raise ArgumentError, "user_id is required - use AnonymousIdService.get_user_identifier/2 for anonymous users"
+    end
+    
     properties = Map.merge(%{
       poll_id: poll_id,
-      is_anonymous: is_nil(user_id),
+      is_anonymous: String.starts_with?(user_id, "anon_"),
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
     }, metadata)
-
-    user_identifier = user_id || "anonymous_#{:rand.uniform(1_000_000)}"
     
-    PosthogService.send_event("poll_results_viewed", user_identifier, properties)
+    PosthogService.send_event("poll_results_viewed", user_id, properties)
   end
 
   # Clear votes events
