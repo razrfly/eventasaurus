@@ -62,15 +62,16 @@ defmodule Eventasaurus.Services.PosthogMonitor do
   def health_check do
     stats = get_stats()
     
-    cond do
-      stats.analytics.failure_rate > 0.5 ->
-        {:unhealthy, "High failure rate: #{Float.round(stats.analytics.failure_rate * 100, 1)}%"}
-      stats.analytics.timeout_rate > 0.3 ->
-        {:degraded, "High timeout rate: #{Float.round(stats.analytics.timeout_rate * 100, 1)}%"}
-      stats.analytics.avg_duration > 10000 ->
-        {:degraded, "Slow response times: #{stats.analytics.avg_duration}ms average"}
-      true ->
-        {:healthy, "All systems operational"}
+    analytics_health = check_type_health(stats.analytics, "analytics")
+    events_health = check_type_health(stats.events, "events")
+    
+    # Return the worst health status
+    case {analytics_health, events_health} do
+      {{:unhealthy, msg}, _} -> {:unhealthy, msg}
+      {_, {:unhealthy, msg}} -> {:unhealthy, msg}
+      {{:degraded, msg}, _} -> {:degraded, msg}
+      {_, {:degraded, msg}} -> {:degraded, msg}
+      _ -> {:healthy, "All systems operational"}
     end
   end
   
@@ -110,7 +111,7 @@ defmodule Eventasaurus.Services.PosthogMonitor do
       |> update_in([type, :failures, reason_key], &((&1 || 0) + 1))
     
     # Log critical failures immediately
-    if reason_key == :timeout and get_in(state, [type, :failures, :timeout]) >= 5 do
+    if reason_key == :timeout and get_in(new_state, [type, :failures, :timeout]) >= 5 do
       Logger.error("PostHog #{type} experiencing repeated timeouts (#{get_in(new_state, [type, :failures, :timeout])} in current period)")
     end
     
@@ -235,6 +236,19 @@ defmodule Eventasaurus.Services.PosthogMonitor do
       :no_api_key -> :config_error
       :no_project_id -> :config_error
       _ -> :other
+    end
+  end
+  
+  defp check_type_health(type_stats, type_name) do
+    cond do
+      type_stats.failure_rate > 0.5 ->
+        {:unhealthy, "High #{type_name} failure rate: #{Float.round(type_stats.failure_rate * 100, 1)}%"}
+      type_stats.timeout_rate > 0.3 ->
+        {:degraded, "High #{type_name} timeout rate: #{Float.round(type_stats.timeout_rate * 100, 1)}%"}
+      type_stats.avg_duration > 10000 ->
+        {:degraded, "Slow #{type_name} response times: #{type_stats.avg_duration}ms average"}
+      true ->
+        {:healthy, nil}
     end
   end
   

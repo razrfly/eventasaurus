@@ -138,6 +138,9 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       if !socket.assigns[:poll_view_tracked] do
         user_id = if anonymous_mode, do: nil, else: assigns[:user] && assigns.user.id
         
+        # Get consistent anonymous ID for this session
+        user_identifier = Eventasaurus.Services.AnonymousIdService.get_user_identifier(user_id, socket)
+        
         metadata = %{
           event_id: poll.event_id,
           poll_type: poll.voting_system,
@@ -146,7 +149,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         }
         
         Eventasaurus.Services.PollAnalyticsService.track_poll_viewed(
-          user_id,
+          user_identifier,
           poll.id,
           metadata
         )
@@ -163,7 +166,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
      |> assign(:anonymous_mode, anonymous_mode)
      |> assign(:poll_stats, poll_stats)
      |> assign(:poll_view_tracked, true)
-     |> assign_new(:loading, fn -> false end)}
+     |> assign_new(:loading, fn -> false end)
+     |> Eventasaurus.Services.AnonymousIdService.assign_anonymous_id()}
   end
 
   @impl true

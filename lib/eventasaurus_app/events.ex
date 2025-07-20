@@ -2851,6 +2851,17 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Gets a single poll.
+  
+  Returns nil if poll not found.
+  """
+  def get_poll(id) do
+    Repo.get(Poll, id)
+  end
+  
+  @doc """
+  Gets a single poll.
+  
+  Raises if poll not found.
   """
   def get_poll!(id) do
     poll = Repo.get!(Poll, id)
@@ -2907,16 +2918,17 @@ defmodule EventasaurusApp.Events do
     case result do
       {:ok, poll} ->
         # Track poll creation analytics
-        if user_id = attrs["creator_id"] || attrs[:creator_id] do
+        # The created_by_id is already set in the poll from the changeset
+        if poll.created_by_id do
           metadata = %{
             event_id: poll.event_id,
             poll_type: poll.voting_system,
-            options_count: length(poll.options || []),
+            options_count: 0,  # New polls don't have options yet
             is_anonymous: poll.is_anonymous || false
           }
           
           Eventasaurus.Services.PollAnalyticsService.track_poll_created(
-            user_id,
+            poll.created_by_id,
             poll.id,
             metadata
           )
@@ -3048,7 +3060,7 @@ defmodule EventasaurusApp.Events do
                   event_id: poll.event_id,
                   poll_type: poll.voting_system,
                   option_title: option.title,
-                  is_approved: option.is_suggestion_approved || false
+                  is_approved: false  # New suggestions are not approved yet
                 }
                 
                 Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_created(
@@ -3132,8 +3144,8 @@ defmodule EventasaurusApp.Events do
   Updates a poll option.
   """
   def update_poll_option(%PollOption{} = poll_option, attrs, opts \\ []) do
-    # Check if this is a suggestion approval
-    was_approved = poll_option.is_suggestion_approved
+    # Check if this is a suggestion approval (status changing to active)
+    was_active = poll_option.status == "active"
     
     result = poll_option
     |> PollOption.changeset(attrs, opts)
@@ -3141,27 +3153,33 @@ defmodule EventasaurusApp.Events do
     
     case result do
       {:ok, updated_option} ->
-        # Track suggestion approval if status changed
-        is_now_approved = Map.get(attrs, :is_suggestion_approved) || Map.get(attrs, "is_suggestion_approved")
+        # Track suggestion approval if status changed to active
+        is_now_active = updated_option.status == "active"
         
-        if !was_approved && is_now_approved && updated_option.suggested_by_id do
-          poll = get_poll!(updated_option.poll_id)
-          approver_id = Map.get(opts, :approver_id) || Map.get(opts, :current_user_id)
-          
-          if approver_id do
-            metadata = %{
-              event_id: poll.event_id,
-              poll_type: poll.voting_system,
-              option_title: updated_option.title,
-              suggested_by_id: updated_option.suggested_by_id
-            }
-            
-            Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_approved(
-              approver_id,
-              updated_option.poll_id,
-              updated_option.id,
-              metadata
-            )
+        if !was_active && is_now_active && updated_option.suggested_by_id do
+          # Use get_poll instead of get_poll! to avoid crashes
+          case get_poll(updated_option.poll_id) do
+            nil -> 
+              # Poll was deleted, skip analytics
+              :ok
+            poll ->
+              approver_id = Map.get(opts, :approver_id) || Map.get(opts, :current_user_id)
+              
+              if approver_id do
+                metadata = %{
+                  event_id: poll.event_id,
+                  poll_type: poll.voting_system,
+                  option_title: updated_option.title,
+                  suggested_by_id: updated_option.suggested_by_id
+                }
+                
+                Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_approved(
+                  approver_id,
+                  updated_option.poll_id,
+                  updated_option.id,
+                  metadata
+                )
+              end
           end
         end
         
@@ -3730,9 +3748,9 @@ defmodule EventasaurusApp.Events do
             metadata = %{
               event_id: poll.event_id,
               poll_type: voting_system,
-              vote_value: Map.get(vote_data, :value) || Map.get(vote_data, "value"),
-              rank: Map.get(vote_data, :rank) || Map.get(vote_data, "rank"),
-              rating: Map.get(vote_data, :rating) || Map.get(vote_data, "rating")
+              vote_value: Map.get(vote_data, :vote_value) || Map.get(vote_data, "vote_value"),
+              rank: Map.get(vote_data, :vote_rank) || Map.get(vote_data, "vote_rank"),
+              rating: if(vote_numeric = Map.get(vote_data, :vote_numeric) || Map.get(vote_data, "vote_numeric"), do: Decimal.to_float(vote_numeric), else: nil)
             }
             
             Eventasaurus.Services.PollAnalyticsService.track_poll_vote(
