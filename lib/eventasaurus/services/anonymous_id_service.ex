@@ -43,7 +43,8 @@ defmodule Eventasaurus.Services.AnonymousIdService do
   def generate_anonymous_id do
     # Use microsecond timestamp for better uniqueness
     timestamp = System.os_time(:microsecond)
-    random_component = :rand.uniform(999_999)
+    # Use :crypto for better randomness and more entropy (48 bits)
+    random_component = :crypto.strong_rand_bytes(6) |> Base.encode16(case: :lower)
     
     "anon_#{timestamp}_#{random_component}"
   end
@@ -70,6 +71,10 @@ defmodule Eventasaurus.Services.AnonymousIdService do
   
   def get_user_identifier(user_id, _socket_or_session) when is_binary(user_id) and user_id != "" do
     user_id
+  end
+  
+  def get_user_identifier(user_id, _socket_or_session) when is_integer(user_id) do
+    to_string(user_id)
   end
   
   def get_user_identifier(_user_id, socket_or_session) do

@@ -130,16 +130,23 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       %{options: [], total_unique_voters: 0}
     end
 
+    # Ensure anonymous ID is assigned before we use it
+    socket_with_anon_id = if anonymous_mode do
+      Eventasaurus.Services.AnonymousIdService.assign_anonymous_id(socket)
+    else
+      socket
+    end
+    
     # Subscribe to poll statistics updates for real-time updates
-    if connected?(socket) && poll do
+    if connected?(socket_with_anon_id) && poll do
       Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
       
       # Track poll view analytics (only on initial mount, not on updates)
-      if !socket.assigns[:poll_view_tracked] do
+      if !socket_with_anon_id.assigns[:poll_view_tracked] do
         user_id = if anonymous_mode, do: nil, else: assigns[:user] && assigns.user.id
         
         # Get consistent anonymous ID for this session
-        user_identifier = Eventasaurus.Services.AnonymousIdService.get_user_identifier(user_id, socket)
+        user_identifier = Eventasaurus.Services.AnonymousIdService.get_user_identifier(user_id, socket_with_anon_id)
         
         metadata = %{
           event_id: poll.event_id,
@@ -157,7 +164,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
 
     {:ok,
-     socket
+     socket_with_anon_id
      |> assign(assigns)
      |> assign(:poll, poll)
      |> assign(:vote_state, vote_state)
@@ -166,8 +173,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
      |> assign(:anonymous_mode, anonymous_mode)
      |> assign(:poll_stats, poll_stats)
      |> assign(:poll_view_tracked, true)
-     |> assign_new(:loading, fn -> false end)
-     |> Eventasaurus.Services.AnonymousIdService.assign_anonymous_id()}
+     |> assign_new(:loading, fn -> false end)}
   end
 
   @impl true
