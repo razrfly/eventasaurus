@@ -70,7 +70,7 @@ defmodule Eventasaurus.Services.PosthogService do
     end
   catch
     :exit, {:timeout, _} ->
-      Logger.warn("PostHog analytics GenServer timeout for event #{event_id}, returning cached or default values")
+      Logger.warning("PostHog analytics GenServer timeout for event #{event_id}, returning cached or default values")
       # Try to get from cache directly as a last resort
       case get_cached_analytics(event_id, date_range) do
         {:ok, data} -> 
@@ -186,13 +186,18 @@ defmodule Eventasaurus.Services.PosthogService do
         {:error, :no_api_key}
 
       !user_id or user_id == "" ->
-        # For anonymous users, generate a consistent anonymous ID
-        anonymous_id = "anonymous_#{:erlang.phash2(DateTime.utc_now())}"
-        Logger.debug("Tracking PostHog event #{event_name} with anonymous ID: #{anonymous_id}")
-        send_event_to_posthog(event_name, anonymous_id, Map.put(properties, :is_anonymous, true), api_key)
+        # For anonymous users, we expect the caller to provide a consistent anonymous ID
+        # This should be generated using AnonymousIdService
+        Logger.warning("PostHog event #{event_name} called without user_id. Use AnonymousIdService.get_user_identifier/2")
+        {:error, :no_user_id}
 
       true ->
-        send_event_to_posthog(event_name, user_id, properties, api_key)
+        # Check if this is an anonymous ID
+        is_anonymous = String.starts_with?(user_id, "anon_")
+        properties_with_anon = if is_anonymous, do: Map.put(properties, :is_anonymous, true), else: properties
+        
+        Logger.debug("Tracking PostHog event #{event_name} for user: #{user_id}")
+        send_event_to_posthog(event_name, user_id, properties_with_anon, api_key)
     end
   end
 
@@ -403,6 +408,9 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp fetch_all_analytics(event_id, date_range, api_key) do
+    # Sanitize event_id to prevent SQL injection
+    sanitized_event_id = sanitize_for_sql(event_id)
+    
     # Combined query to get all metrics in a single API call
     current_time = current_time_string()
 
@@ -416,7 +424,7 @@ defmodule Eventasaurus.Services.PosthogService do
           count(CASE WHEN event = 'event_date_vote_cast' THEN 1 ELSE NULL END) as votes,
           count(CASE WHEN event = 'ticket_checkout_initiated' THEN 1 ELSE NULL END) as checkouts
         FROM events
-        WHERE properties.event_id = '#{event_id}'
+        WHERE properties.event_id = '#{sanitized_event_id}'
           AND timestamp >= '#{days_ago(date_range)}'
           AND timestamp <= '#{current_time}'
         LIMIT 10000
@@ -432,7 +440,7 @@ defmodule Eventasaurus.Services.PosthogService do
         end
       {:error, {:request_failed, :timeout}} ->
         # Try a simpler query on timeout
-        Logger.warn("PostHog analytics timeout, trying simplified query for event #{event_id}")
+        Logger.warning("PostHog analytics timeout, trying simplified query for event #{event_id}")
         fetch_simplified_analytics(event_id, date_range, api_key)
       error -> 
         error
@@ -440,7 +448,11 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   defp fetch_simplified_analytics(event_id, date_range, api_key) do
+    # Sanitize event_id to prevent SQL injection
+    sanitized_event_id = sanitize_for_sql(event_id)
+    
     # Much simpler query that should execute faster
+    # Using LIMIT 1000 (vs 10000 in main query) for faster execution in timeout scenarios
     current_time = current_time_string()
 
     query_params = %{
@@ -450,7 +462,7 @@ defmodule Eventasaurus.Services.PosthogService do
         SELECT
           count(DISTINCT person_id) as visitors
         FROM events
-        WHERE properties.event_id = '#{event_id}'
+        WHERE properties.event_id = '#{sanitized_event_id}'
           AND event = 'event_page_viewed'
           AND timestamp >= '#{days_ago(date_range)}'
           AND timestamp <= '#{current_time}'
@@ -646,6 +658,22 @@ defmodule Eventasaurus.Services.PosthogService do
 
   defp sanitize_event_id(_event_id) do
     {:error, :invalid_event_id}
+  end
+  
+  defp sanitize_for_sql(value) when is_binary(value) do
+    # Escape single quotes and backslashes to prevent SQL injection
+    value
+    |> String.replace("\\", "\\\\")
+    |> String.replace("'", "''")
+  end
+  
+  defp sanitize_for_sql(value) when is_integer(value) do
+    to_string(value)
+  end
+  
+  defp sanitize_for_sql(_value) do
+    # For any other type, return empty string to avoid injection
+    ""
   end
 
   # Spawn async task to fetch analytics without blocking GenServer
