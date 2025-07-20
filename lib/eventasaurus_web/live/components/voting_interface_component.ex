@@ -133,6 +133,24 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     # Subscribe to poll statistics updates for real-time updates
     if connected?(socket) && poll do
       Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "polls:#{poll.id}:stats")
+      
+      # Track poll view analytics (only on initial mount, not on updates)
+      if !socket.assigns[:poll_view_tracked] do
+        user_id = if anonymous_mode, do: nil, else: assigns[:user] && assigns.user.id
+        
+        metadata = %{
+          event_id: poll.event_id,
+          poll_type: poll.voting_system,
+          poll_phase: poll.phase,
+          is_anonymous: anonymous_mode
+        }
+        
+        Eventasaurus.Services.PollAnalyticsService.track_poll_viewed(
+          user_id,
+          poll.id,
+          metadata
+        )
+      end
     end
 
     {:ok,
@@ -144,6 +162,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
      |> assign(:temp_votes, temp_votes)
      |> assign(:anonymous_mode, anonymous_mode)
      |> assign(:poll_stats, poll_stats)
+     |> assign(:poll_view_tracked, true)
      |> assign_new(:loading, fn -> false end)}
   end
 

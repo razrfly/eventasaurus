@@ -2900,9 +2900,33 @@ defmodule EventasaurusApp.Events do
   Creates a poll.
   """
   def create_poll(attrs \\ %{}) do
-    %Poll{}
+    result = %Poll{}
     |> Poll.creation_changeset(attrs)
     |> Repo.insert()
+
+    case result do
+      {:ok, poll} ->
+        # Track poll creation analytics
+        if user_id = attrs["creator_id"] || attrs[:creator_id] do
+          metadata = %{
+            event_id: poll.event_id,
+            poll_type: poll.voting_system,
+            options_count: length(poll.options || []),
+            is_anonymous: poll.is_anonymous || false
+          }
+          
+          Eventasaurus.Services.PollAnalyticsService.track_poll_created(
+            user_id,
+            poll.id,
+            metadata
+          )
+        end
+        
+        {:ok, poll}
+        
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -3011,9 +3035,35 @@ defmodule EventasaurusApp.Events do
     if poll_id && title && suggested_by_id do
       case check_duplicate_option_title(poll_id, title, suggested_by_id) do
         {:ok, :unique} ->
-          %PollOption{}
+          result = %PollOption{}
           |> PollOption.creation_changeset(attrs, opts)
           |> Repo.insert()
+          
+          case result do
+            {:ok, option} ->
+              # Track poll suggestion analytics if it's a user suggestion
+              if suggested_by_id do
+                poll = get_poll!(poll_id)
+                metadata = %{
+                  event_id: poll.event_id,
+                  poll_type: poll.voting_system,
+                  option_title: option.title,
+                  is_approved: option.is_suggestion_approved || false
+                }
+                
+                Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_created(
+                  suggested_by_id,
+                  poll_id,
+                  option.id,
+                  metadata
+                )
+              end
+              
+              {:ok, option}
+              
+            error ->
+              error
+          end
         
         {:error, :duplicate_by_same_user} ->
           changeset = %PollOption{}
@@ -3082,9 +3132,44 @@ defmodule EventasaurusApp.Events do
   Updates a poll option.
   """
   def update_poll_option(%PollOption{} = poll_option, attrs, opts \\ []) do
-    poll_option
+    # Check if this is a suggestion approval
+    was_approved = poll_option.is_suggestion_approved
+    
+    result = poll_option
     |> PollOption.changeset(attrs, opts)
     |> Repo.update()
+    
+    case result do
+      {:ok, updated_option} ->
+        # Track suggestion approval if status changed
+        is_now_approved = Map.get(attrs, :is_suggestion_approved) || Map.get(attrs, "is_suggestion_approved")
+        
+        if !was_approved && is_now_approved && updated_option.suggested_by_id do
+          poll = get_poll!(updated_option.poll_id)
+          approver_id = Map.get(opts, :approver_id) || Map.get(opts, :current_user_id)
+          
+          if approver_id do
+            metadata = %{
+              event_id: poll.event_id,
+              poll_type: poll.voting_system,
+              option_title: updated_option.title,
+              suggested_by_id: updated_option.suggested_by_id
+            }
+            
+            Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_approved(
+              approver_id,
+              updated_option.poll_id,
+              updated_option.id,
+              metadata
+            )
+          end
+        end
+        
+        {:ok, updated_option}
+        
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -3640,6 +3725,24 @@ defmodule EventasaurusApp.Events do
           {:ok, vote} ->
             # Invalidate cache for performance
             EventasaurusApp.Events.PollStatsCache.invalidate(poll.id)
+            
+            # Track poll vote analytics
+            metadata = %{
+              event_id: poll.event_id,
+              poll_type: voting_system,
+              vote_value: Map.get(vote_data, :value) || Map.get(vote_data, "value"),
+              rank: Map.get(vote_data, :rank) || Map.get(vote_data, "rank"),
+              rating: Map.get(vote_data, :rating) || Map.get(vote_data, "rating")
+            }
+            
+            Eventasaurus.Services.PollAnalyticsService.track_poll_vote(
+              user.id,
+              poll.id,
+              poll_option.id,
+              voting_system,
+              metadata
+            )
+            
             {:ok, vote}
           error -> error
         end
