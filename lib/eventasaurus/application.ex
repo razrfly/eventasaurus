@@ -63,6 +63,8 @@ defmodule Eventasaurus.Application do
       {Task.Supervisor, name: Eventasaurus.TaskSupervisor},
       # Start PostHog analytics service
       Eventasaurus.Services.PosthogService,
+      # Start PostHog monitoring service
+      Eventasaurus.Services.PosthogMonitor,
       # Start Stripe Currency Service for caching supported currencies
       EventasaurusWeb.Services.StripeCurrencyService,
       # Start TMDB Service for movie/TV data caching
