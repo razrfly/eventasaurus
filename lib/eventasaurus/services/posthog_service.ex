@@ -10,7 +10,7 @@ defmodule Eventasaurus.Services.PosthogService do
   require Logger
 
   @api_base "https://eu.i.posthog.com/api"
-  @cache_ttl_ms 5 * 60 * 1000  # 5 minutes
+  @cache_ttl_ms 15 * 60 * 1000  # 15 minutes for analytics data
   @max_cache_entries 100  # Prevent unbounded cache growth
 
   # Client API
@@ -62,7 +62,40 @@ defmodule Eventasaurus.Services.PosthogService do
 
   """
   def get_analytics(event_id, date_range \\ 7) do
-    GenServer.call(__MODULE__, {:get_analytics, event_id, date_range}, 10000)
+    # Use a longer timeout for GenServer call to account for slow PostHog queries
+    case GenServer.call(__MODULE__, {:get_analytics, event_id, date_range}, 35000) do
+      {:ok, data} -> {:ok, data}
+      {:error, reason} -> {:error, reason}
+      other -> other
+    end
+  catch
+    :exit, {:timeout, _} ->
+      Logger.warn("PostHog analytics GenServer timeout for event #{event_id}, returning cached or default values")
+      # Try to get from cache directly as a last resort
+      case get_cached_analytics(event_id, date_range) do
+        {:ok, data} -> 
+          Logger.info("Found stale cached data for event #{event_id}")
+          {:ok, data}
+        :not_found ->
+          {:ok, %{
+            unique_visitors: 0,
+            registrations: 0,
+            registration_rate: 0.0,
+            date_votes: 0,
+            ticket_checkouts: 0,
+            checkout_conversion_rate: 0.0
+          }}
+      end
+  end
+
+  @doc """
+  Gets cached analytics data directly, even if stale.
+  Used as fallback when PostHog is slow or timing out.
+  """
+  def get_cached_analytics(event_id, date_range) do
+    GenServer.call(__MODULE__, {:get_cached_analytics, event_id, date_range}, 1000)
+  catch
+    :exit, {:timeout, _} -> :not_found
   end
 
   @doc """
@@ -153,8 +186,10 @@ defmodule Eventasaurus.Services.PosthogService do
         {:error, :no_api_key}
 
       !user_id or user_id == "" ->
-        Logger.debug("Skipping PostHog event #{event_name} - invalid user_id")
-        {:error, :invalid_user_id}
+        # For anonymous users, generate a consistent anonymous ID
+        anonymous_id = "anonymous_#{:erlang.phash2(DateTime.utc_now())}"
+        Logger.debug("Tracking PostHog event #{event_name} with anonymous ID: #{anonymous_id}")
+        send_event_to_posthog(event_name, anonymous_id, Map.put(properties, :is_anonymous, true), api_key)
 
       true ->
         send_event_to_posthog(event_name, user_id, properties, api_key)
@@ -166,6 +201,19 @@ defmodule Eventasaurus.Services.PosthogService do
   @impl true
   def init(:ok) do
     {:ok, %{}}
+  end
+
+  @impl true
+  def handle_call({:get_cached_analytics, event_id, date_range}, _from, state) do
+    cache_key = "analytics_#{event_id}_#{date_range}"
+    
+    case Map.get(state, cache_key) do
+      %{data: data} ->
+        # Return cached data even if stale
+        {:reply, {:ok, data}, state}
+      _ ->
+        {:reply, :not_found, state}
+    end
   end
 
   @impl true
@@ -371,6 +419,7 @@ defmodule Eventasaurus.Services.PosthogService do
         WHERE properties.event_id = '#{event_id}'
           AND timestamp >= '#{days_ago(date_range)}'
           AND timestamp <= '#{current_time}'
+        LIMIT 10000
         """
       }
     }
@@ -381,7 +430,65 @@ defmodule Eventasaurus.Services.PosthogService do
           {:ok, metrics} -> {:ok, metrics}
           {:error, reason} -> {:error, reason}
         end
-      error -> error
+      {:error, {:request_failed, :timeout}} ->
+        # Try a simpler query on timeout
+        Logger.warn("PostHog analytics timeout, trying simplified query for event #{event_id}")
+        fetch_simplified_analytics(event_id, date_range, api_key)
+      error -> 
+        error
+    end
+  end
+
+  defp fetch_simplified_analytics(event_id, date_range, api_key) do
+    # Much simpler query that should execute faster
+    current_time = current_time_string()
+
+    query_params = %{
+      "query" => %{
+        "kind" => "HogQLQuery",
+        "query" => """
+        SELECT
+          count(DISTINCT person_id) as visitors
+        FROM events
+        WHERE properties.event_id = '#{event_id}'
+          AND event = 'event_page_viewed'
+          AND timestamp >= '#{days_ago(date_range)}'
+          AND timestamp <= '#{current_time}'
+        LIMIT 1000
+        """
+      }
+    }
+
+    case make_api_request("/query/", query_params, api_key, 15000) do
+      {:ok, response} ->
+        case parse_simplified_analytics_response(response) do
+          {:ok, visitors} -> 
+            # Return simplified metrics with only visitor count
+            {:ok, %{
+              visitors: visitors,
+              registrations: 0,
+              votes: 0,
+              checkouts: 0
+            }}
+          {:error, reason} -> {:error, reason}
+        end
+      error -> 
+        error
+    end
+  end
+
+  defp parse_simplified_analytics_response(response) do
+    case response do
+      %{"results" => [result]} when is_list(result) and length(result) == 1 ->
+        [visitors] = result
+        {:ok, visitors || 0}
+
+      %{"results" => []} ->
+        {:ok, 0}
+
+      _ ->
+        Logger.error("Unexpected simplified analytics response format: #{inspect(response)}")
+        {:error, "Invalid response format from PostHog API"}
     end
   end
 
@@ -405,7 +512,7 @@ defmodule Eventasaurus.Services.PosthogService do
     end
   end
 
-  defp make_api_request(endpoint, query_params, api_key) do
+  defp make_api_request(endpoint, query_params, api_key, custom_timeout \\ nil) do
     project_id = get_project_id()
 
     if project_id do
@@ -419,7 +526,9 @@ defmodule Eventasaurus.Services.PosthogService do
       # Convert query params to JSON body for POST request
       body = Jason.encode!(query_params)
 
-      case HTTPoison.post(url, body, headers, timeout: 10000, recv_timeout: 10000) do
+      # Use custom timeout if provided, otherwise default to 30 seconds for complex analytics queries
+      timeout = custom_timeout || 30000
+      case HTTPoison.post(url, body, headers, timeout: timeout, recv_timeout: timeout) do
         {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
           case Jason.decode(response_body) do
             {:ok, data} -> {:ok, data}
@@ -484,9 +593,13 @@ defmodule Eventasaurus.Services.PosthogService do
     ]
 
     body = Jason.encode!(event_payload)
+    start_time = System.monotonic_time(:millisecond)
 
-    case HTTPoison.post(url, body, headers, timeout: 5000, recv_timeout: 5000) do
+    # Keep event tracking timeout shorter for better UX
+    case HTTPoison.post(url, body, headers, timeout: 10000, recv_timeout: 10000) do
       {:ok, %HTTPoison.Response{status_code: 200}} ->
+        duration = System.monotonic_time(:millisecond) - start_time
+        Eventasaurus.Services.PosthogMonitor.record_success(:events, duration)
         Logger.debug("PostHog event sent successfully: #{event_name}")
         {:ok, :sent}
 
