@@ -598,6 +598,7 @@ defmodule EventasaurusWeb.EventComponents do
   attr :show_recent_locations, :boolean, default: false, doc: "whether to show the recent locations dropdown"
   attr :filtered_recent_locations, :list, default: [], doc: "filtered list of recent locations based on search"
   attr :rich_external_data, :map, default: %{}, doc: "rich data imported from external APIs (TMDB, Spotify, etc.)"
+  attr :user_groups, :list, default: [], doc: "list of groups the user can assign the event to"
 
   def event_form(assigns) do
     assigns = assign_new(assigns, :id, fn ->
@@ -784,7 +785,24 @@ defmodule EventasaurusWeb.EventComponents do
               <.input field={f[:title]} type="text" label="Event Title" required class="text-lg" />
             </div>
 
-
+            <!-- Group Assignment -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Assign to Group (optional)
+              </label>
+              <select
+                name="event[group_id]"
+                class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              >
+                <option value="">No group - personal event</option>
+                <%= for group <- @user_groups do %>
+                  <option value={group.id} selected={group.id == @form_data["group_id"]}>
+                    <%= group.name %>
+                  </option>
+                <% end %>
+              </select>
+              <p class="mt-1 text-xs text-gray-500">Events assigned to groups will appear on the group's calendar and be visible to all members.</p>
+            </div>
 
             <!-- Date & Time (compact) -->
             <div class="mb-4">

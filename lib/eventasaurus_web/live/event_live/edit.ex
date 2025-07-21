@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
 
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Groups
   alias EventasaurusApp.Venues
   alias EventasaurusWeb.Services.UnsplashService
   alias EventasaurusWeb.Services.SearchService
@@ -33,6 +34,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
         {:ok, user} ->
           # Check if user can edit this event
           if Events.user_can_manage_event?(user, event) do
+            # Load groups that the user is a member of or created
+            user_groups = Groups.list_user_groups(user)
             changeset = Events.change_event(event)
 
             # Convert the event to a changeset
@@ -93,6 +96,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               socket
               |> assign(:event, event)
               |> assign(:venues, venues)
+              |> assign(:user_groups, user_groups)
               |> assign(:form, to_form(changeset))
               |> assign(:changeset, changeset)
               |> assign(:user, user)
@@ -105,6 +109,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "is_virtual" => is_virtual,
                 "cover_image_url" => event.cover_image_url,
                 "external_image_data" => event.external_image_data,
+                "group_id" => event.group_id,
                 "venue_name" => venue_name,
                 "venue_address" => venue_address,
                 "venue_city" => venue_city,
@@ -308,7 +313,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
               :error -> nil
             end
           lng -> lng
-        end
+        end,
+        "venue_type" => Map.get(event_params, "venue_type", "venue")
       }
 
       # Try to find existing venue by address first
@@ -332,42 +338,50 @@ defmodule EventasaurusWeb.EventLive.Edit do
     # Keep date polling fields for our custom logic
     final_event_params = final_event_params
     |> Map.drop(["venue_name", "venue_address", "venue_city", "venue_state",
-                 "venue_country", "venue_latitude", "venue_longitude", "is_virtual",
+                 "venue_country", "venue_latitude", "venue_longitude", "venue_type", "is_virtual",
                  "start_date", "start_time", "ends_date", "ends_time"])
 
     # Legacy status transition based on date polling removed - using generic polling system
 
-    # Validate date polling before saving
-    validation_changeset =
-      socket.assigns.event
-      |> Events.change_event(final_event_params)
-      |> Map.put(:action, :validate)
-      # Legacy date polling validation removed
+    # Authorize group assignment if specified
+    case validate_group_assignment(final_event_params, socket.assigns.user) do
+      {:ok, authorized_params} ->
+        # Validate date polling before saving
+        validation_changeset =
+          socket.assigns.event
+          |> Events.change_event(authorized_params)
+          |> Map.put(:action, :validate)
+          # Legacy date polling validation removed
 
-    Logger.info("=== VALIDATION STEP ===")
-    Logger.info("Validation changeset valid?: #{validation_changeset.valid?}")
-    Logger.info("Validation errors: #{inspect(validation_changeset.errors)}")
+        Logger.info("=== VALIDATION STEP ===")
+        Logger.info("Validation changeset valid?: #{validation_changeset.valid?}")
+        Logger.info("Validation errors: #{inspect(validation_changeset.errors)}")
 
-    if validation_changeset.valid? do
-      Logger.info("Validation passed, calling Events.update_event")
+        if validation_changeset.valid? do
+          Logger.info("Validation passed, calling Events.update_event")
 
-      # Legacy date polling updates removed - continue with event update
-      case Events.update_event(socket.assigns.event, final_event_params) do
-        {:ok, event} ->
-          {:noreply,
-           socket
-           |> put_flash(:info, "Event updated successfully")
-           |> redirect(to: ~p"/events/#{event.slug}")}
+          # Legacy date polling updates removed - continue with event update
+          case Events.update_event(socket.assigns.event, authorized_params) do
+            {:ok, event} ->
+              {:noreply,
+               socket
+               |> put_flash(:info, "Event updated successfully")
+               |> redirect(to: ~p"/events/#{event.slug}")}
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          {:noreply, assign(socket, form: to_form(changeset))}
-      end
-    else
-      Logger.info("Validation failed, not calling Events.update_event")
-      {:noreply, assign(socket,
-        form: to_form(validation_changeset),
-        changeset: validation_changeset
-      )}
+            {:error, %Ecto.Changeset{} = changeset} ->
+              {:noreply, assign(socket, form: to_form(changeset))}
+          end
+        else
+          Logger.info("Validation failed, not calling Events.update_event")
+          {:noreply, assign(socket,
+            form: to_form(validation_changeset),
+            changeset: validation_changeset
+          )}
+        end
+      
+      {:error, message} ->
+        socket = put_flash(socket, :error, message)
+        {:noreply, socket}
     end
   end
 
@@ -1644,6 +1658,29 @@ defmodule EventasaurusWeb.EventLive.Edit do
       {"spotify", "album"} -> {:ok, :spotify, :album}
       {"spotify", "track"} -> {:ok, :spotify, :track}
       _ -> {:error, "Invalid provider/type combination: #{provider}/#{type}"}
+    end
+  end
+
+  # Helper function to validate group assignment authorization
+  defp validate_group_assignment(event_params, user) do
+    case Map.get(event_params, "group_id") do
+      nil -> {:ok, event_params}
+      "" -> 
+        # Empty string means personal event
+        {:ok, Map.put(event_params, "group_id", nil)}
+      group_id when is_binary(group_id) ->
+        # Validate user is member of the group
+        case Groups.is_member?(group_id, user.id) do
+          true -> {:ok, event_params}
+          false -> {:error, "You can only assign events to groups you are a member of"}
+        end
+      group_id when is_integer(group_id) ->
+        # Handle integer group_id
+        case Groups.is_member?(group_id, user.id) do
+          true -> {:ok, event_params}
+          false -> {:error, "You can only assign events to groups you are a member of"}
+        end
+      _ -> {:ok, event_params}
     end
   end
 
