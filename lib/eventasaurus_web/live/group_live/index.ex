@@ -111,45 +111,9 @@ defmodule EventasaurusWeb.GroupLive.Index do
     search_query = socket.assigns.search_query
     show_my_groups_only = socket.assigns.show_my_groups_only
     
-    # Get groups based on filter
-    groups = if show_my_groups_only do
-      Groups.list_user_groups(user)
-    else
-      Groups.list_groups()
-    end
-    
-    # Apply search filter if query is present
-    filtered_groups = if search_query != "" && String.length(search_query) > 0 do
-      query_lower = String.downcase(search_query)
-      Enum.filter(groups, fn group ->
-        String.contains?(String.downcase(group.name), query_lower) ||
-        (group.description && String.contains?(String.downcase(group.description), query_lower))
-      end)
-    else
-      groups
-    end
-    
-    # Add event counts and membership info to each group
-    groups_with_info = Enum.map(filtered_groups, fn group ->
-      event_count = Groups.count_group_events(group)
-      is_member = Groups.user_in_group?(group, user)
-      user_role = if is_member, do: get_user_role(group, user), else: nil
-      
-      group
-      |> Map.put(:event_count, event_count)
-      |> Map.put(:is_member, is_member)
-      |> Map.put(:user_role, user_role)
-    end)
+    # Use the new batch query method to avoid N+1 queries
+    groups_with_info = Groups.list_groups_with_user_info(user, search_query, show_my_groups_only)
     
     assign(socket, :groups, groups_with_info)
-  end
-  
-  defp get_user_role(group, user) do
-    cond do
-      group.created_by_id == user.id -> "owner"
-      Groups.is_admin?(group, user) -> "admin"
-      Groups.user_in_group?(group, user) -> "member"
-      true -> nil
-    end
   end
 end

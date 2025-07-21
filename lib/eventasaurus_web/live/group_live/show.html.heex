@@ -18,7 +18,10 @@
           <% else %>
             <div class="h-full w-full flex items-center justify-center bg-gray-200 dark:bg-gray-600">
               <span class="text-3xl font-semibold text-gray-600 dark:text-gray-300">
-                <%= String.first(@group.name) |> String.upcase() %>
+                <%= case String.first(@group.name || "") do
+                  nil -> "G"
+                  letter -> String.upcase(letter)
+                end %>
               </span>
             </div>
           <% end %>
@@ -148,15 +151,15 @@
               <.link navigate={"/events/#{event.slug}"} class="block">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow duration-200">
                   <%= if event.cover_image_url do %>
-                    <img src={event.cover_image_url} alt={event.name} class="w-full h-48 object-cover rounded-t-lg" />
+                    <img src={event.cover_image_url} alt={event.title} class="w-full h-48 object-cover rounded-t-lg" />
                   <% else %>
                     <div class="w-full h-48 bg-gradient-to-br from-blue-500 to-purple-600 rounded-t-lg"></div>
                   <% end %>
                   
                   <div class="p-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white"><%= event.name %></h3>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white"><%= event.title %></h3>
                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      <%= Calendar.strftime(event.date_time, "%B %d, %Y at %I:%M %p") %>
+                      <%= Calendar.strftime(event.start_at, "%B %d, %Y at %I:%M %p") %>
                     </p>
                     <%= if event.venue do %>
                       <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -182,7 +185,7 @@
             <%= if @is_creator do %>
               <div class="mt-6">
                 <.link
-                  navigate="/events/new"
+                  navigate={"/events/new?group_id=#{@group.id}"}
                   class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                 >
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -407,10 +407,4 @@ defmodule EventasaurusWeb.GroupLive.Edit do
   defp maybe_put_image_url(params, key, url) when is_binary(url) do
     Map.put(params, Atom.to_string(key), url)
   end
-  
-  defp error_to_string(:too_large), do: "File too large (max 5MB)"
-  defp error_to_string(:not_accepted), do: "Invalid file type. Please use PNG, JPG, or GIF."
-  defp error_to_string(:too_many_files), do: "Too many files selected"
-  defp error_to_string(:external_client_failure), do: "Upload failed"
-  defp error_to_string(_), do: "Unknown error"
 end

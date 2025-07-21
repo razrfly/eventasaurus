@@ -10,7 +10,11 @@ defmodule EventasaurusApp.Services.UploadService do
   
   @max_file_size 5 * 1024 * 1024  # 5MB
   @allowed_mime_types ~w[image/jpeg image/png image/gif image/webp]
-  @bucket_name "images"
+  
+  # Get bucket name from config with fallback
+  defp get_bucket_name do
+    Application.get_env(:eventasaurus, :supabase)[:bucket] || "images"
+  end
   
   @doc """
   Upload a file to Supabase Storage.
@@ -142,7 +146,7 @@ defmodule EventasaurusApp.Services.UploadService do
   end
   
   defp upload_to_supabase(storage_path, file_data, content_type, access_token) do
-    url = "#{get_storage_url()}/object/#{@bucket_name}/#{storage_path}"
+    url = "#{get_storage_url()}/object/#{get_bucket_name()}/#{storage_path}"
     
     headers = [
       {"Authorization", "Bearer #{access_token}"},
@@ -162,7 +166,7 @@ defmodule EventasaurusApp.Services.UploadService do
   end
   
   defp delete_from_supabase(storage_path, access_token) do
-    url = "#{get_storage_url()}/object/#{@bucket_name}/#{storage_path}"
+    url = "#{get_storage_url()}/object/#{get_bucket_name()}/#{storage_path}"
     
     headers = [
       {"Authorization", "Bearer #{access_token}"}
@@ -180,11 +184,11 @@ defmodule EventasaurusApp.Services.UploadService do
   end
   
   defp build_public_url(storage_path) do
-    "#{get_storage_url()}/object/public/#{@bucket_name}/#{storage_path}"
+    "#{get_storage_url()}/object/public/#{get_bucket_name()}/#{storage_path}"
   end
   
   defp extract_storage_path(public_url) do
-    case String.split(public_url, "/object/public/#{@bucket_name}/") do
+    case String.split(public_url, "/object/public/#{get_bucket_name()}/") do
       [_base, storage_path] -> {:ok, storage_path}
       _ -> {:error, :invalid_url}
     end

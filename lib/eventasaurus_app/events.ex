@@ -213,9 +213,9 @@ defmodule EventasaurusApp.Events do
   - group: The group to filter events by
   - opts: Options for filtering (e.g., include_deleted)
   """
-  def list_events_for_group(group, opts \\ []) do
+  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, opts \\ []) when not is_nil(group_id) do
     query = from e in Event,
-            where: e.group_id == ^group.id,
+            where: e.group_id == ^group_id,
             preload: [:venue, :users]
 
     query = apply_soft_delete_filter(query, opts)

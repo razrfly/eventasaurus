@@ -44,7 +44,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
               
               # Load group events
               events = Events.list_events_for_group(group)
-                      |> Enum.sort_by(& &1.date_time, {:desc, DateTime})
+                      |> Enum.sort_by(& &1.start_at, {:desc, DateTime})
               event_count = length(events)
               
               {:ok,
@@ -75,7 +75,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
         member_count = length(members)
         
         events = Events.list_events_for_group(group)
-                |> Enum.sort_by(& &1.date_time, {:desc, DateTime})
+                |> Enum.sort_by(& &1.start_at, {:desc, DateTime})
         event_count = length(events)
         
         {:noreply,

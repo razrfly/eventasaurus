@@ -270,7 +270,7 @@
                             <%= if event.participants && length(event.participants) > 0 do %>
                               <div class="flex items-center">
                                 <div class="flex -space-x-1.5 mr-2">
-                                  <%= for {participant, index} <- Enum.with_index(Enum.take(event.participants, 3)) do %>
+                                  <%= for {participant, _index} <- Enum.with_index(Enum.take(event.participants, 3)) do %>
                                     <%= if participant.user do %>
                                       <div class="relative group">
                                         <img 

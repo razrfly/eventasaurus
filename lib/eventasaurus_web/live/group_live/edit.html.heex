@@ -74,7 +74,9 @@
                       phx-click="select_recent_location"
                       phx-value-location={case Jason.encode(location) do
                         {:ok, json} -> json
-                        {:error, _} -> "{}"
+                        {:error, _reason} -> 
+                          # Return empty JSON to avoid client errors
+                          "{}"
                       end}
                       class="w-full text-left p-2 recent-location-item border-b border-gray-100 last:border-b-0"
                     >
@@ -179,7 +181,10 @@
           <% else %>
             <div class="h-20 w-20 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
               <span class="text-2xl font-semibold text-gray-600 dark:text-gray-300">
-                <%= String.first(@group.name) |> String.upcase() %>
+                <%= case String.first(@group.name || "") do
+                  nil -> "G"
+                  letter -> String.upcase(letter)
+                end %>
               </span>
             </div>
           <% end %>
