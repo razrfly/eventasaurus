@@ -1,7 +1,29 @@
 defmodule EventasaurusWeb.Components.ImagePickerModal do
   use EventasaurusWeb, :html
 
+  @doc """
+  A reusable image picker modal component that can be used for events, groups, or any other entity requiring image selection.
+  
+  Required assigns:
+  - id: unique identifier for the modal
+  - show: boolean to control modal visibility
+  - selected_category: currently selected image category
+  - default_categories: list of available categories
+  - default_images: list of default images for current category
+  - search_query: current search query string
+  - search_results: map with search results from different sources
+  - loading: boolean indicating if search is in progress
+  - error: error message if any
+  - supabase_access_token: token for image upload
+  - on_close: event to close modal
+  
+  Optional assigns:
+  - title: modal title (defaults to "Choose a Cover Image")
+  - context: context for the picker (e.g., "event", "group") for event naming
+  """
   def image_picker_modal(assigns) do
+    assigns = assign_new(assigns, :title, fn -> "Choose a Cover Image" end)
+    assigns = assign_new(assigns, :context, fn -> "image" end)
     ~H"""
     <%= if @show do %>
       <div
@@ -17,7 +39,7 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
         <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col" phx-click-away={@on_close}>
           <!-- Header -->
           <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 id={"#{@id}-title"} class="text-xl font-bold">Choose a Cover Image</h2>
+            <h2 id={"#{@id}-title"} class="text-xl font-bold"><%= @title %></h2>
             <button type="button" phx-click={@on_close} aria-label="Close image picker" class="text-gray-500 hover:text-gray-700">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>

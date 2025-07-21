@@ -1,0 +1,705 @@
+defmodule EventasaurusApp.Groups do
+  @moduledoc """
+  The Groups context provides comprehensive group management functionality
+  for the Eventasaurus application.
+  
+  This module handles all operations related to groups and group membership,
+  including CRUD operations, membership management, role-based permissions,
+  and comprehensive audit logging.
+  
+  ## Core Features
+  
+  * **Group Management**: Create, read, update, delete groups with soft delete support
+  * **Membership Management**: Add/remove members, role assignments, and membership queries
+  * **Role-Based Permissions**: Admin and member roles with ownership-based access control
+  * **Audit Logging**: Comprehensive logging of all group operations for security and compliance
+  * **Venue Integration**: Support for venue assignment to groups with location data
+  
+  ## Roles and Permissions
+  
+  Groups support two roles:
+  * **admin** - Can manage group settings and members
+  * **member** - Regular group member
+  
+  Group creators are automatically assigned as admins. Group owners (creators)
+  have ultimate management permissions regardless of their role status.
+  
+  ## Usage Examples
+  
+      # Create a group with automatic creator membership
+      user = Accounts.get_user!(123)
+      {:ok, group} = Groups.create_group_with_creator(%{
+        name: "SF Tech Meetup",
+        description: "Weekly tech meetups in San Francisco"
+      }, user)
+      
+      # Add a member to the group
+      new_member = Accounts.get_user!(456)
+      {:ok, _membership} = Groups.add_user_to_group(group, new_member, "member", user)
+      
+      # Check permissions
+      Groups.can_manage?(group, user) # => true (owner)
+      Groups.is_admin?(group, new_member) # => false
+      
+      # List members with roles
+      members = Groups.list_group_members_with_roles(group)
+      # => [%{user: %User{}, role: "admin", joined_at: ~U[...]}, ...]
+      
+  ## Audit Logging
+  
+  All group operations are automatically logged for security and compliance:
+  * Group creation, updates, and deletion
+  * Member additions and removals with reasons
+  * Role changes with before/after states
+  * IP address and metadata tracking for all operations
+  
+  Audit logs include actor identification, timestamps, and operation metadata.
+  """
+
+  import Ecto.Query, warn: false
+  alias EventasaurusApp.Repo
+  alias EventasaurusApp.Groups.{Group, GroupUser}
+  alias EventasaurusApp.Accounts.User
+  alias EventasaurusApp.AuditLogger
+
+  @doc """
+  Returns the list of groups.
+
+  ## Examples
+
+      iex> list_groups()
+      [%Group{}, ...]
+
+  """
+  def list_groups do
+    Repo.all(Group)
+  end
+
+  @doc """
+  Returns the list of groups for a specific user.
+
+  ## Examples
+
+      iex> list_user_groups(user)
+      [%Group{}, ...]
+
+  """
+  def list_user_groups(%User{} = user) do
+    user
+    |> Ecto.assoc(:groups)
+    |> Repo.all()
+    |> Repo.preload([:venue, :created_by])
+  end
+
+  @doc """
+  Gets a single group.
+
+  Raises `Ecto.NoResultsError` if the Group does not exist.
+
+  ## Examples
+
+      iex> get_group!(123)
+      %Group{}
+
+      iex> get_group!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_group!(id) do
+    Group
+    |> Repo.get!(id)
+    |> Repo.preload([:venue, :users, :created_by])
+  end
+
+  @doc """
+  Gets a single group by slug.
+
+  Returns nil if the Group does not exist.
+
+  ## Examples
+
+      iex> get_group_by_slug("my-group")
+      %Group{}
+
+      iex> get_group_by_slug("nonexistent")
+      nil
+
+  """
+  def get_group_by_slug(slug) when is_binary(slug) do
+    Group
+    |> where(slug: ^slug)
+    |> preload([:venue, :users, :created_by])
+    |> Repo.one()
+  end
+
+  @doc """
+  Creates a group with audit logging.
+  
+  This function creates a new group and automatically logs the creation
+  if a creator is specified via the `created_by_id` attribute.
+  
+  ## Parameters
+  
+  * `attrs` - Map of group attributes (name, description, etc.)
+  * `metadata` - Optional audit metadata (IP address, request context, etc.)
+  
+  ## Returns
+  
+  * `{:ok, %Group{}}` - Successfully created group with preloaded associations
+  * `{:error, %Ecto.Changeset{}}` - Validation or database errors
+
+  ## Examples
+
+      # Basic group creation
+      iex> create_group(%{name: "Tech Meetup", slug: "tech-meetup"})
+      {:ok, %Group{name: "Tech Meetup"}}
+
+      # Group creation with creator and audit metadata
+      iex> create_group(%{
+      ...>   name: "SF Developers",
+      ...>   slug: "sf-developers", 
+      ...>   created_by_id: 123
+      ...> }, %{ip_address: "192.168.1.1"})
+      {:ok, %Group{}}
+
+      # Invalid data
+      iex> create_group(%{name: ""})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def create_group(attrs \\ %{}, metadata \\ %{}) do
+    %Group{}
+    |> Group.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, group} ->
+        # Log group creation
+        if Map.get(attrs, "created_by_id") || Map.get(attrs, :created_by_id) do
+          user_id = Map.get(attrs, "created_by_id") || Map.get(attrs, :created_by_id)
+          AuditLogger.log_group_created(group.id, user_id, metadata)
+        end
+        
+        {:ok, Repo.preload(group, [:venue, :users, :created_by])}
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Creates a group with the creator automatically added as an admin member.
+  
+  This is the recommended way to create groups as it ensures proper
+  ownership setup and membership initialization. The operation is
+  performed in a database transaction to ensure consistency.
+  
+  ## Parameters
+  
+  * `group_attrs` - Map of group attributes
+  * `user` - User struct of the group creator
+  * `metadata` - Optional audit metadata for logging
+  
+  ## Returns
+  
+  * `{:ok, %Group{}}` - Successfully created group with creator as admin
+  * `{:error, %Ecto.Changeset{}}` - Validation or database errors
+  
+  ## Examples
+
+      iex> user = %User{id: 123}
+      iex> create_group_with_creator(%{
+      ...>   name: "Local Hikers",
+      ...>   slug: "local-hikers",
+      ...>   description: "Weekend hiking group"
+      ...> }, user)
+      {:ok, %Group{name: "Local Hikers", created_by_id: 123}}
+
+      # With audit metadata
+      iex> create_group_with_creator(%{name: "Book Club"}, user, %{
+      ...>   ip_address: "10.0.0.1",
+      ...>   user_agent: "Mozilla/5.0..."
+      ...> })
+      {:ok, %Group{}}
+
+      # Invalid group data rolls back the entire transaction
+      iex> create_group_with_creator(%{name: ""}, user)
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def create_group_with_creator(group_attrs, %User{} = user, metadata \\ %{}) do
+    group_attrs = Map.put(group_attrs, "created_by_id", user.id)
+    
+    Repo.transaction(fn ->
+      with {:ok, group} <- create_group(group_attrs, metadata),
+           {:ok, _} <- add_user_to_group(group, user, "admin", user, metadata) do
+        Repo.preload(group, [:venue, :users, :created_by])
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  Updates a group.
+
+  ## Examples
+
+      iex> update_group(group, %{field: new_value})
+      {:ok, %Group{}}
+
+      iex> update_group(group, %{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def update_group(%Group{} = group, attrs, acting_user_id \\ nil, metadata \\ %{}) do
+    changeset = Group.changeset(group, attrs)
+    
+    changeset
+    |> Repo.update()
+    |> case do
+      {:ok, updated_group} ->
+        # Log group update with changes
+        if acting_user_id do
+          changes = changeset.changes
+          AuditLogger.log_group_updated(updated_group.id, acting_user_id, changes, metadata)
+        end
+        
+        {:ok, Repo.preload(updated_group, [:venue, :users, :created_by])}
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Deletes a group.
+
+  ## Examples
+
+      iex> delete_group(group)
+      {:ok, %Group{}}
+
+      iex> delete_group(group)
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def delete_group(%Group{} = group, acting_user_id \\ nil, metadata \\ %{}) do
+    result = Repo.delete(group)
+    
+    # Log group deletion
+    case result do
+      {:ok, deleted_group} ->
+        if acting_user_id do
+          AuditLogger.log_group_deleted(deleted_group.id, acting_user_id, metadata)
+        end
+        result
+      _ ->
+        result
+    end
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking group changes.
+
+  ## Examples
+
+      iex> change_group(group)
+      %Ecto.Changeset{data: %Group{}}
+
+  """
+  def change_group(%Group{} = group, attrs \\ %{}) do
+    Group.changeset(group, attrs)
+  end
+
+  @doc """
+  Adds a user to a group with role assignment and audit logging.
+  
+  Prevents duplicate memberships and logs the addition with the acting user
+  and optional metadata. All membership additions should specify the role
+  and acting user for proper audit trails.
+  
+  ## Parameters
+  
+  * `group` - Group struct to add member to
+  * `user` - User struct of the new member
+  * `role` - Role to assign ("admin" or "member", defaults to "member")
+  * `acting_user` - User struct performing the action (for audit logging)
+  * `metadata` - Optional audit metadata (IP, context, etc.)
+  
+  ## Returns
+  
+  * `{:ok, %GroupUser{}}` - Successfully added member
+  * `{:error, :already_member}` - User is already a group member
+  * `{:error, %Ecto.Changeset{}}` - Validation or database errors
+  
+  ## Examples
+
+      iex> group = %Group{id: 1}
+      iex> new_member = %User{id: 456}
+      iex> admin_user = %User{id: 123}
+      iex> add_user_to_group(group, new_member, "member", admin_user)
+      {:ok, %GroupUser{role: "member"}}
+
+      # Adding an admin with audit metadata
+      iex> add_user_to_group(group, new_member, "admin", admin_user, %{
+      ...>   ip_address: "192.168.1.100",
+      ...>   reason: "promoted for event planning"
+      ...> })
+      {:ok, %GroupUser{role: "admin"}}
+
+      # Duplicate membership prevention
+      iex> add_user_to_group(group, existing_member)
+      {:error, :already_member}
+
+  """
+  def add_user_to_group(%Group{} = group, %User{} = user, role \\ "member", acting_user \\ nil, metadata \\ %{}) do
+    # Check if user is already a member
+    case user_in_group?(group, user) do
+      true ->
+        {:error, :already_member}
+      false ->
+        attrs = %{
+          group_id: group.id,
+          user_id: user.id,
+          role: role || "member"
+        }
+
+        result = %GroupUser{}
+        |> GroupUser.changeset(attrs)
+        |> Repo.insert()
+        
+        # Log membership addition
+        case result do
+          {:ok, _group_user} ->
+            if acting_user do
+              AuditLogger.log_member_added(group.id, user.id, acting_user.id, role, metadata)
+            end
+            result
+          _ ->
+            result
+        end
+    end
+  end
+
+  @doc """
+  Removes a user from a group.
+
+  ## Examples
+
+      iex> remove_user_from_group(group, user)
+      {:ok, %GroupUser{}}
+
+      iex> remove_user_from_group(group, user)
+      {:error, :not_found}
+
+  """
+  def remove_user_from_group(%Group{} = group, %User{} = user, acting_user \\ nil, reason \\ nil, metadata \\ %{}) do
+    case Repo.get_by(GroupUser, group_id: group.id, user_id: user.id) do
+      nil ->
+        {:error, :not_found}
+      group_user ->
+        # If we have deletion metadata, update the record with audit info
+        updated_attrs = %{}
+        updated_attrs = if reason, do: Map.put(updated_attrs, :deletion_reason, reason), else: updated_attrs
+        updated_attrs = if acting_user, do: Map.put(updated_attrs, :deleted_by_user_id, acting_user.id), else: updated_attrs
+        
+        # Update with deletion metadata if provided
+        group_user = if map_size(updated_attrs) > 0 do
+          {:ok, updated} = group_user
+          |> GroupUser.changeset(updated_attrs)
+          |> Repo.update()
+          updated
+        else
+          group_user
+        end
+        
+        result = Repo.delete(group_user)
+        
+        # Log membership removal
+        case result do
+          {:ok, _deleted_group_user} ->
+            if acting_user do
+              AuditLogger.log_member_removed(group.id, user.id, acting_user.id, reason, metadata)
+            end
+            result
+          _ ->
+            result
+        end
+    end
+  end
+
+  @doc """
+  Checks if a user is a member of a group.
+  
+  This function respects soft delete semantics and only returns true
+  for active (non-deleted) memberships.
+
+  ## Parameters
+  
+  * `group` - Group struct to check membership in
+  * `user` - User struct to check membership for
+  
+  ## Returns
+  
+  * `true` - User is an active member of the group
+  * `false` - User is not a member or membership is soft-deleted
+
+  ## Examples
+
+      iex> group = %Group{id: 1}
+      iex> member = %User{id: 123}
+      iex> non_member = %User{id: 456}
+      iex> user_in_group?(group, member)
+      true
+      
+      iex> user_in_group?(group, non_member)
+      false
+
+  """
+  def user_in_group?(%Group{} = group, %User{} = user) do
+    Repo.exists?(
+      from gu in GroupUser,
+      where: gu.group_id == ^group.id and gu.user_id == ^user.id
+    )
+  end
+
+  @doc """
+  Checks if a user is a member of a group using IDs.
+  
+  This function provides ID-based membership checking for cases where
+  you don't have the full structs available. Supports both string and
+  integer IDs for flexibility in different contexts (web forms, APIs, etc.).
+
+  ## Parameters
+  
+  * `group_id` - Group ID (integer or string)
+  * `user_id` - User ID (integer)
+  
+  ## Returns
+  
+  * `true` - User is an active member of the group
+  * `false` - User is not a member, IDs are invalid, or membership is soft-deleted
+
+  ## Examples
+
+      iex> is_member?(1, 123)
+      true
+      
+      iex> is_member?("1", 123)  # String group_id from web form
+      true
+      
+      iex> is_member?(1, 999)    # Non-existent user
+      false
+      
+      iex> is_member?("invalid", 123)  # Invalid ID format
+      false
+
+  """
+  def is_member?(group_id, user_id) when is_binary(group_id) do
+    case Integer.parse(group_id) do
+      {id, _} -> is_member?(id, user_id)
+      :error -> false
+    end
+  end
+
+  def is_member?(group_id, user_id) when is_integer(group_id) and is_integer(user_id) do
+    Repo.exists?(
+      from gu in GroupUser,
+      where: gu.group_id == ^group_id and gu.user_id == ^user_id
+    )
+  end
+
+  def is_member?(_, _), do: false
+
+  @doc """
+  Checks if a user is an admin of a group.
+
+  ## Examples
+
+      iex> is_admin?(group, user)
+      true
+
+      iex> is_admin?(group, user)
+      false
+
+  """
+  def is_admin?(%Group{} = group, %User{} = user) do
+    query = from gu in GroupUser,
+            where: gu.group_id == ^group.id and gu.user_id == ^user.id and gu.role == "admin"
+    
+    Repo.exists?(query)
+  end
+
+  def is_admin?(group_id, user_id) when is_binary(group_id) do
+    case Integer.parse(group_id) do
+      {id, _} -> is_admin?(id, user_id)
+      :error -> false
+    end
+  end
+
+  def is_admin?(group_id, user_id) when is_integer(group_id) and is_integer(user_id) do
+    query = from gu in GroupUser,
+            where: gu.group_id == ^group_id and gu.user_id == ^user_id and gu.role == "admin"
+    
+    Repo.exists?(query)
+  end
+
+  def is_admin?(_, _), do: false
+
+  @doc """
+  Checks if a user can manage a group (is admin or owner).
+  
+  This function implements the authorization logic for group management
+  operations. Users can manage a group if they are either:
+  1. The group creator/owner (created_by_id matches user.id)
+  2. An admin member of the group
+  
+  Group owners always have management rights regardless of their role status.
+
+  ## Parameters
+  
+  * `group` - Group struct to check management rights for
+  * `user` - User struct to check permissions for
+  
+  ## Returns
+  
+  * `true` - User can manage the group (owner or admin)
+  * `false` - User cannot manage the group
+  
+  ## Examples
+
+      iex> owner = %User{id: 123}
+      iex> group = %Group{id: 1, created_by_id: 123}
+      iex> can_manage?(group, owner)
+      true   # Owner can always manage
+
+      iex> admin = %User{id: 456}  # Admin member but not owner
+      iex> can_manage?(group, admin)
+      true   # If admin role in group_users table
+
+      iex> regular_member = %User{id: 789}  # Regular member
+      iex> can_manage?(group, regular_member)
+      false  # Cannot manage
+
+      iex> non_member = %User{id: 999}
+      iex> can_manage?(group, non_member)
+      false  # Not even a member
+
+  """
+  def can_manage?(%Group{} = group, %User{} = user) do
+    # Owner can always manage
+    if group.created_by_id == user.id do
+      true
+    else
+      # Check if user is admin
+      is_admin?(group, user)
+    end
+  end
+
+  @doc """
+  Updates a user's role in a group.
+
+  ## Examples
+
+      iex> update_member_role(group, user, "admin", acting_user)
+      {:ok, %GroupUser{}}
+
+      iex> update_member_role(group, user, "invalid_role", acting_user)
+      {:error, :invalid_role}
+
+  """
+  def update_member_role(%Group{} = group, %User{} = user, new_role, acting_user \\ nil, metadata \\ %{}) do
+    valid_roles = ["admin", "member"]
+    
+    if new_role not in valid_roles do
+      {:error, :invalid_role}
+    else
+      case Repo.get_by(GroupUser, group_id: group.id, user_id: user.id) do
+        nil ->
+          {:error, :not_member}
+        group_user ->
+          old_role = group_user.role
+          
+          result = group_user
+          |> GroupUser.changeset(%{role: new_role})
+          |> Repo.update()
+          
+          # Log role change
+          case result do
+            {:ok, _updated_group_user} ->
+              if acting_user do
+                AuditLogger.log_member_role_changed(group.id, user.id, acting_user.id, old_role, new_role, metadata)
+              end
+              result
+            _ ->
+              result
+          end
+      end
+    end
+  end
+
+  @doc """
+  Lists all members of a group.
+
+  ## Examples
+
+      iex> list_group_members(group)
+      [%User{}, ...]
+
+  """
+  def list_group_members(%Group{} = group) do
+    query = from u in User,
+            join: gu in GroupUser, on: gu.user_id == u.id,
+            where: gu.group_id == ^group.id,
+            select: u
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Lists all members of a group with their roles.
+
+  ## Examples
+
+      iex> list_group_members_with_roles(group)
+      [%{user: %User{}, role: "admin"}, ...]
+
+  """
+  def list_group_members_with_roles(%Group{} = group) do
+    query = from u in User,
+            join: gu in GroupUser, on: gu.user_id == u.id,
+            where: gu.group_id == ^group.id,
+            select: %{user: u, role: gu.role, joined_at: gu.inserted_at}
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Lists all events for a group.
+
+  ## Examples
+
+      iex> list_group_events(group)
+      [%Event{}, ...]
+
+  """
+  def list_group_events(%Group{} = group) do
+    EventasaurusApp.Events.Event
+    |> where(group_id: ^group.id)
+    |> Repo.all()
+    |> Repo.preload([:venue, :users])
+  end
+
+  @doc """
+  Counts the number of events in a group.
+
+  ## Examples
+
+      iex> count_group_events(group)
+      5
+
+  """
+  def count_group_events(%Group{} = group) do
+    EventasaurusApp.Events.Event
+    |> where(group_id: ^group.id)
+    |> Repo.aggregate(:count, :id)
+  end
+end

@@ -34,7 +34,8 @@ defmodule EventasaurusApp.Factory do
       state: "CA",
       country: "USA",
       latitude: 37.7749,
-      longitude: -122.4194
+      longitude: -122.4194,
+      venue_type: "venue"
     }
   end
 

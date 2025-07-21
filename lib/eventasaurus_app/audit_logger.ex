@@ -137,6 +137,75 @@ defmodule EventasaurusApp.AuditLogger do
       Map.merge(metadata, %{resource_type: resource_type, resource_id: resource_id}))
   end
 
+  @doc """
+  Logs group-related audit events.
+  """
+  def log_group_event(event_type, group_id, user_id, metadata \\ %{}) do
+    audit_data = %{
+      event_type: event_type,
+      resource_type: "group",
+      resource_id: group_id,
+      user_id: user_id,
+      metadata: metadata,
+      timestamp: DateTime.utc_now(),
+      ip_address: get_client_ip(metadata)
+    }
+
+    Logger.info("AUDIT: #{event_type}", audit_data)
+    
+    # Store in database if needed for compliance
+    # store_audit_record(audit_data)
+  end
+
+  @doc """
+  Logs group membership-related audit events.
+  """
+  def log_group_membership_event(event_type, group_id, target_user_id, acting_user_id, metadata \\ %{}) do
+    audit_data = %{
+      event_type: event_type,
+      resource_type: "group_membership",
+      resource_id: "#{group_id}:#{target_user_id}",
+      user_id: acting_user_id,
+      metadata: Map.put(metadata, :target_user_id, target_user_id),
+      timestamp: DateTime.utc_now(),
+      ip_address: get_client_ip(metadata)
+    }
+
+    Logger.info("AUDIT: #{event_type}", audit_data)
+    
+    # Store in database if needed for compliance
+    # store_audit_record(audit_data)
+  end
+
+  # Group-specific audit events
+
+  def log_group_created(group_id, user_id, metadata \\ %{}) do
+    log_group_event("group_created", group_id, user_id, metadata)
+  end
+
+  def log_group_updated(group_id, user_id, changes, metadata \\ %{}) do
+    log_group_event("group_updated", group_id, user_id, Map.put(metadata, :changes, changes))
+  end
+
+  def log_group_deleted(group_id, user_id, metadata \\ %{}) do
+    log_group_event("group_deleted", group_id, user_id, metadata)
+  end
+
+  def log_member_added(group_id, target_user_id, acting_user_id, role, metadata \\ %{}) do
+    log_group_membership_event("member_added", group_id, target_user_id, acting_user_id,
+      Map.put(metadata, :role, role))
+  end
+
+  def log_member_removed(group_id, target_user_id, acting_user_id, reason, metadata \\ %{}) do
+    log_group_membership_event("member_removed", group_id, target_user_id, acting_user_id,
+      Map.put(metadata, :reason, reason))
+  end
+
+  def log_member_role_changed(group_id, target_user_id, acting_user_id, from_role, to_role, metadata \\ %{}) do
+    log_group_membership_event("member_role_changed", group_id, target_user_id, acting_user_id,
+      Map.merge(metadata, %{from_role: from_role, to_role: to_role}))
+  end
+
   # Private functions
 
   defp get_client_ip(metadata) do
