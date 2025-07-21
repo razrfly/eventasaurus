@@ -988,15 +988,9 @@ defmodule EventasaurusApp.Events do
           order_by: [desc: coalesce(e.start_at, e.inserted_at)],
           limit: ^limit
       :archived ->
-<<<<<<< HEAD
-        # Archived events are already filtered at the query level
+        # Archived events are handled separately in the LiveView
         from e in subquery(union_query),
-=======
-        # TODO: Implement proper archived events using soft-deleted entries
-        # For now, return empty result set
-        from e in subquery(union_query), 
           where: false,
->>>>>>> 19793db (getting closer)
           order_by: [desc: coalesce(e.start_at, e.inserted_at)],
           limit: ^limit
       :all -> 
