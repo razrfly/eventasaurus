@@ -1037,6 +1037,126 @@ defmodule EventasaurusApp.Events do
     end)
   end
 
+  @doc """
+  Optimized version of list_unified_events_for_user that uses a single query with LEFT JOINs
+  instead of UNION to improve performance. This reduces database round trips from 3+ to 1.
+  """
+  def list_unified_events_for_user_optimized(%User{} = user, opts \\ []) do
+    time_filter = Keyword.get(opts, :time_filter, :all)
+    ownership_filter = Keyword.get(opts, :ownership_filter, :all)
+    limit = Keyword.get(opts, :limit, 50)
+    now = DateTime.utc_now()
+
+    # Build the base query with LEFT JOINs
+    base_query = 
+      from e in Event,
+        left_join: eu in EventUser, on: e.id == eu.event_id and eu.user_id == ^user.id,
+        left_join: ep in EventParticipant, on: e.id == ep.event_id and ep.user_id == ^user.id,
+        left_join: v in assoc(e, :venue),
+        where: is_nil(e.deleted_at),
+        where: not is_nil(eu.id) or not is_nil(ep.id),
+        select: %{
+          # Event fields
+          id: e.id,
+          title: e.title,
+          slug: e.slug,
+          description: e.description,
+          start_at: e.start_at,
+          ends_at: e.ends_at,
+          timezone: e.timezone,
+          status: e.status,
+          taxation_type: e.taxation_type,
+          venue_id: e.venue_id,
+          cover_image_url: e.cover_image_url,
+          inserted_at: e.inserted_at,
+          updated_at: e.updated_at,
+          deleted_at: e.deleted_at,
+          
+          # User relationship fields
+          user_role: fragment("CASE WHEN ? IS NOT NULL THEN 'organizer' ELSE 'participant' END", eu.id),
+          user_status: fragment("COALESCE(?, 'confirmed')", ep.status),
+          can_manage: fragment("? IS NOT NULL", eu.id),
+          
+          # Venue fields (flattened)
+          venue: %{
+            id: v.id,
+            name: v.name,
+            address: v.address,
+            city: v.city,
+            state: v.state,
+            country: v.country,
+            latitude: v.latitude,
+            longitude: v.longitude,
+            venue_type: v.venue_type
+          }
+        }
+
+    # Apply ownership filter
+    filtered_query = case ownership_filter do
+      :created -> 
+        from [e, eu, ep, v] in base_query,
+          where: not is_nil(eu.id)
+      :participating -> 
+        from [e, eu, ep, v] in base_query,
+          where: not is_nil(ep.id)
+      :all -> 
+        base_query
+    end
+
+    # Apply time filter
+    time_filtered_query = case time_filter do
+      :upcoming -> 
+        from [e, eu, ep, v] in filtered_query,
+          where: is_nil(e.start_at) or e.start_at > ^now
+      :past ->
+        from [e, eu, ep, v] in filtered_query,
+          where: not is_nil(e.start_at) and e.start_at <= ^now
+      :archived ->
+        # Archived events are handled separately in the LiveView
+        from [e, eu, ep, v] in filtered_query,
+          where: false
+      :all -> 
+        filtered_query
+    end
+
+    # Apply ordering and limit
+    final_query = 
+      from [e, eu, ep, v] in time_filtered_query,
+        order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+        limit: ^limit
+
+    # Execute the single query
+    results = Repo.all(final_query, with_deleted: true)
+
+    # Get event IDs for participant loading
+    event_ids = results |> Enum.map(& &1.id) |> Enum.uniq()
+    
+    # Load participants in a single query
+    participants_by_event = if length(event_ids) > 0 do
+      from(ep in EventParticipant,
+        where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
+        preload: [:user]
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.event_id)
+    else
+      %{}
+    end
+
+    # Transform results to match expected format
+    results
+    |> Enum.map(fn result ->
+      # Get participants for this event
+      event_participants = Map.get(participants_by_event, result.id, [])
+      participant_count = length(event_participants)
+
+      result
+      |> Map.put(:participants, event_participants)
+      |> Map.put(:participant_count, participant_count)
+      |> Map.put(:venue, if(result.venue.id, do: result.venue, else: nil))
+    end)
+  end
+
   # Helper functions for preloading
   defp get_venues_for_events([]), do: []
   defp get_venues_for_events(event_ids) do
