@@ -15,13 +15,56 @@ defmodule EventasaurusWeb.DashboardLive do
         Phoenix.PubSub.subscribe(Eventasaurus.PubSub, "orders:#{user.id}")
       end
 
+      # Start async tasks to preload all tabs
+      socket_with_tasks = if connected?(socket) do
+        upcoming_task = Task.async(fn ->
+          Events.list_unified_events_for_user(user, [
+            time_filter: :upcoming,
+            ownership_filter: :all,
+            limit: 50
+          ])
+        end)
+        
+        past_task = Task.async(fn ->
+          Events.list_unified_events_for_user(user, [
+            time_filter: :past,
+            ownership_filter: :all,
+            limit: 50
+          ])
+        end)
+        
+        archived_task = Task.async(fn ->
+          Events.list_deleted_events_by_user(user)
+          |> Enum.map(fn event ->
+            # Transform to match unified events structure
+            event
+            |> Map.put(:user_role, "organizer")
+            |> Map.put(:user_status, "confirmed")
+            |> Map.put(:can_manage, true)
+            |> Map.put(:participant_count, 0)
+            |> Map.put(:participants, [])
+          end)
+        end)
+        
+        socket
+        |> assign(:loading_tasks, %{
+          upcoming: upcoming_task,
+          past: past_task,
+          archived: archived_task
+        })
+      else
+        socket
+        |> assign(:loading_tasks, %{})
+      end
+
       {:ok,
-       socket
+       socket_with_tasks
        |> assign(:user, user)
        |> assign(:loading, true)
        |> assign(:time_filter, :upcoming)
        |> assign(:ownership_filter, :all)
        |> assign(:events, [])
+       |> assign(:events_cache, %{})
        |> assign(:filter_counts, %{})
        |> assign(:selected_order, nil)
        |> load_unified_events()}
@@ -49,30 +92,95 @@ defmodule EventasaurusWeb.DashboardLive do
   def handle_event("filter_time", %{"filter" => filter}, socket) do
     time_filter = safe_to_atom(filter, [:upcoming, :past, :archived])
     
+    # Use cached data if available, otherwise load
+    socket = if cached_events = socket.assigns.events_cache[time_filter] do
+      socket
+      |> assign(:time_filter, time_filter)
+      |> assign(:events, apply_ownership_filter(cached_events, socket.assigns.ownership_filter))
+      |> assign(:loading, false)
+    else
+      socket
+      |> assign(:time_filter, time_filter)
+      |> assign(:loading, true)
+      |> load_unified_events()
+    end
+    
     {:noreply,
      socket
-     |> assign(:time_filter, time_filter)
-     |> push_patch(to: build_dashboard_path(time_filter, socket.assigns.ownership_filter))
-     |> load_unified_events()}
+     |> push_patch(to: build_dashboard_path(time_filter, socket.assigns.ownership_filter))}
   end
 
   @impl true
   def handle_event("filter_ownership", %{"filter" => filter}, socket) do
     ownership_filter = safe_to_atom(filter, [:all, :created, :participating])
     
+    # Use cached data if available
+    socket = if cached_events = socket.assigns.events_cache[socket.assigns.time_filter] do
+      socket
+      |> assign(:ownership_filter, ownership_filter)
+      |> assign(:events, apply_ownership_filter(cached_events, ownership_filter))
+      |> assign(:loading, false)
+    else
+      socket
+      |> assign(:ownership_filter, ownership_filter)
+      |> assign(:loading, true)
+      |> load_unified_events()
+    end
+    
     {:noreply,
      socket
-     |> assign(:ownership_filter, ownership_filter)
-     |> push_patch(to: build_dashboard_path(socket.assigns.time_filter, ownership_filter))
-     |> load_unified_events()}
+     |> push_patch(to: build_dashboard_path(socket.assigns.time_filter, ownership_filter))}
   end
 
   @impl true
   def handle_event("refresh_events", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:loading, true)
-     |> load_unified_events()}
+    user = socket.assigns.user
+    
+    # Clear cache and restart all async tasks
+    socket = if connected?(socket) do
+      upcoming_task = Task.async(fn ->
+        Events.list_unified_events_for_user(user, [
+          time_filter: :upcoming,
+          ownership_filter: :all,
+          limit: 50
+        ])
+      end)
+      
+      past_task = Task.async(fn ->
+        Events.list_unified_events_for_user(user, [
+          time_filter: :past,
+          ownership_filter: :all,
+          limit: 50
+        ])
+      end)
+      
+      archived_task = Task.async(fn ->
+        Events.list_deleted_events_by_user(user)
+        |> Enum.map(fn event ->
+          event
+          |> Map.put(:user_role, "organizer")
+          |> Map.put(:user_status, "confirmed")
+          |> Map.put(:can_manage, true)
+          |> Map.put(:participant_count, 0)
+          |> Map.put(:participants, [])
+        end)
+      end)
+      
+      socket
+      |> assign(:loading_tasks, %{
+        upcoming: upcoming_task,
+        past: past_task,
+        archived: archived_task
+      })
+      |> assign(:events_cache, %{})
+      |> assign(:loading, true)
+    else
+      socket
+      |> assign(:loading, true)
+      |> load_unified_events()
+    end
+    
+    {:noreply, socket}
   end
 
   @impl true
@@ -121,6 +229,52 @@ defmodule EventasaurusWeb.DashboardLive do
   def handle_info({:order_updated, _order}, socket) do
     # Reload events to reflect any ticket changes
     {:noreply, load_unified_events(socket)}
+  end
+
+  @impl true
+  def handle_info({ref, result}, socket) when is_reference(ref) do
+    # Handle async task completion
+    loading_tasks = socket.assigns[:loading_tasks] || %{}
+    
+    # Find which task completed
+    {task_type, updated_tasks} = cond do
+      loading_tasks[:upcoming] && loading_tasks[:upcoming].ref == ref ->
+        {:upcoming, Map.delete(loading_tasks, :upcoming)}
+      loading_tasks[:past] && loading_tasks[:past].ref == ref ->
+        {:past, Map.delete(loading_tasks, :past)}
+      loading_tasks[:archived] && loading_tasks[:archived].ref == ref ->
+        {:archived, Map.delete(loading_tasks, :archived)}
+      true ->
+        {nil, loading_tasks}
+    end
+    
+    # Update cache with result if task was found
+    socket = if task_type do
+      events_cache = Map.put(socket.assigns.events_cache, task_type, result)
+      
+      # Calculate filter counts from cached data
+      filter_counts = calculate_filter_counts_from_cache(events_cache, socket.assigns.user)
+      
+      # If this is the current tab, update the displayed events
+      socket = if socket.assigns.time_filter == task_type do
+        assign(socket, :events, apply_ownership_filter(result, socket.assigns.ownership_filter))
+      else
+        socket
+      end
+      
+      socket
+      |> assign(:events_cache, events_cache)
+      |> assign(:filter_counts, filter_counts)
+      |> assign(:loading_tasks, updated_tasks)
+      |> assign(:loading, map_size(updated_tasks) > 0)
+    else
+      socket
+    end
+    
+    # Clean up the task reference
+    Process.demonitor(ref, [:flush])
+    
+    {:noreply, socket}
   end
 
   # Private helper functions
@@ -236,6 +390,34 @@ defmodule EventasaurusWeb.DashboardLive do
     if atom in allowed_atoms, do: atom, else: hd(allowed_atoms)
   rescue
     ArgumentError -> hd(allowed_atoms)
+  end
+
+  defp apply_ownership_filter(events, ownership_filter) do
+    case ownership_filter do
+      :created ->
+        Enum.filter(events, &(&1.user_role == "organizer"))
+      :participating ->
+        Enum.filter(events, &(&1.user_role == "participant"))
+      :all ->
+        events
+    end
+  end
+
+  defp calculate_filter_counts_from_cache(events_cache, _user) do
+    # Calculate counts from cached data
+    upcoming_events = Map.get(events_cache, :upcoming, [])
+    past_events = Map.get(events_cache, :past, [])
+    archived_events = Map.get(events_cache, :archived, [])
+    
+    all_events = upcoming_events ++ past_events
+    
+    %{
+      upcoming: length(upcoming_events),
+      past: length(past_events),
+      archived: length(archived_events),
+      created: all_events |> Enum.filter(&(&1.user_role == "organizer")) |> length(),
+      participating: all_events |> Enum.filter(&(&1.user_role == "participant")) |> length()
+    }
   end
 
 end
