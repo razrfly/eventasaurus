@@ -207,6 +207,24 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Returns the list of events for a specific group.
+
+  ## Parameters
+  - group: The group to filter events by
+  - opts: Options for filtering (e.g., include_deleted)
+  """
+  def list_events_for_group(group, opts \\ []) do
+    query = from e in Event,
+            where: e.group_id == ^group.id,
+            preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
+
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
   Gets a single event.
 
   Raises `Ecto.NoResultsError` if the Event does not exist or is soft-deleted.
