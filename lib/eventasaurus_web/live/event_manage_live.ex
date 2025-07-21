@@ -100,7 +100,12 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:polls_loading, false)
                |> assign(:editing_poll, nil)
                |> assign(:selected_poll, nil)
-               |> assign(:show_poll_details, false)}
+               |> assign(:show_poll_details, false)
+               # Deletion state
+               |> assign(:show_delete_modal, false)
+               |> assign(:deletion_reason, "")
+               |> assign(:can_hard_delete, false)
+               |> assign(:deletion_ineligibility_reason, nil)}
             end
         end
     end
@@ -688,6 +693,104 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
 
+  # Event Deletion Handlers
+  
+  @impl true
+  def handle_event("open_delete_modal", _params, socket) do
+    event = socket.assigns.event
+    user = socket.assigns.user
+    
+    # Check if event can be hard deleted
+    can_hard_delete = case Events.eligible_for_hard_delete?(event.id, user.id) do
+      {:ok, _} -> true
+      {:error, _} -> false
+    end
+    
+    # Get ineligibility reason if applicable
+    ineligibility_reason = if not can_hard_delete do
+      Events.get_hard_delete_ineligibility_reason(event.id, user.id)
+    end
+    
+    {:noreply, 
+     socket
+     |> assign(:show_delete_modal, true)
+     |> assign(:can_hard_delete, can_hard_delete)
+     |> assign(:deletion_ineligibility_reason, ineligibility_reason)
+     |> assign(:deletion_reason, "")}
+  end
+  
+  @impl true
+  def handle_event("close_delete_modal", _params, socket) do
+    {:noreply, 
+     socket
+     |> assign(:show_delete_modal, false)
+     |> assign(:deletion_reason, "")}
+  end
+  
+  @impl true
+  def handle_event("update_deletion_reason", %{"value" => reason}, socket) do
+    {:noreply, assign(socket, :deletion_reason, reason)}
+  end
+  
+  @impl true
+  def handle_event("delete_event", _params, socket) do
+    event = socket.assigns.event
+    user = socket.assigns.user
+    deletion_reason = socket.assigns.deletion_reason
+    
+    case String.trim(deletion_reason) do
+      "" ->
+        {:noreply, put_flash(socket, :error, "Please provide a reason for deletion")}
+      
+      reason ->
+        case Events.delete_event(event.id, user.id, reason) do
+          {:ok, :hard_deleted} ->
+            # TODO: Re-enable when PosthogService.capture/3 is implemented
+            # PosthogService.capture(
+            #   to_string(user.id),
+            #   "event_deleted",
+            #   %{
+            #     "event_id" => to_string(event.id),
+            #     "event_slug" => event.slug,
+            #     "deletion_type" => "hard",
+            #     "deletion_reason" => reason
+            #   }
+            # )
+            
+            {:noreply,
+             socket
+             |> put_flash(:info, "Event has been permanently deleted")
+             |> redirect(to: ~p"/dashboard")}
+          
+          {:ok, :soft_deleted} ->
+            # TODO: Re-enable when PosthogService.capture/3 is implemented
+            # PosthogService.capture(
+            #   to_string(user.id),
+            #   "event_deleted",
+            #   %{
+            #     "event_id" => to_string(event.id),
+            #     "event_slug" => event.slug,
+            #     "deletion_type" => "soft",
+            #     "deletion_reason" => reason
+            #   }
+            # )
+            
+            {:noreply,
+             socket
+             |> put_flash(:info, "Event has been archived and can be restored by an administrator")
+             |> redirect(to: ~p"/dashboard")}
+          
+          {:error, :permission_denied} ->
+            {:noreply, put_flash(socket, :error, "You don't have permission to delete this event")}
+          
+          {:error, :event_not_found} ->
+            {:noreply, put_flash(socket, :error, "Event not found")}
+          
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to delete event: #{reason}")}
+        end
+    end
+  end
 
   @impl true
   def handle_info({:poll_saved, poll, %{action: action, message: message}}, socket) do
