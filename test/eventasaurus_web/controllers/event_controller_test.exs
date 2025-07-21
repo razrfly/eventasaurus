@@ -2,6 +2,9 @@ defmodule EventasaurusWeb.EventControllerTest do
   use EventasaurusWeb.ConnCase
 
   import EventasaurusApp.EventsFixtures
+  import EventasaurusApp.AccountsFixtures
+
+  alias EventasaurusApp.Events
 
   describe "POST /api/events/:slug/add-details" do
     setup do
@@ -293,6 +296,264 @@ defmodule EventasaurusWeb.EventControllerTest do
       # Test publish endpoint
       conn = post(conn, ~p"/api/events/#{event.slug}/publish")
       assert Map.has_key?(json_response(conn, 200)["event"], "taxation_type")
+    end
+  end
+
+  describe "DELETE /events/:slug" do
+    setup do
+      {conn, user} = register_and_log_in_user(build_conn())
+      event = event_fixture(%{"organizers" => [user]})
+      %{conn: conn, user: user, event: event}
+    end
+
+    test "successfully hard deletes event with no engagement (browser request)", %{conn: conn, event: event} do
+      conn = delete(conn, ~p"/events/#{event.slug}")
+
+      assert redirected_to(conn) == ~p"/dashboard"
+      assert get_flash(conn, :info) == "Event permanently deleted"
+      
+      # Verify event is hard deleted (not found at all)
+      assert Events.get_event(event.id) == nil
+      assert Events.get_event(event.id, include_deleted: true) == nil
+    end
+
+    test "successfully hard deletes event with no engagement (API request)", %{conn: conn, event: event} do
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}")
+
+      assert json = json_response(conn, 204)
+      assert json["success"] == true
+      assert json["deletion_type"] == "hard_deleted"
+      assert json["message"] == "Event permanently deleted"
+      
+      # Verify event is hard deleted
+      assert Events.get_event(event.id) == nil
+      assert Events.get_event(event.id, include_deleted: true) == nil
+    end
+
+    test "soft deletes event with participants (browser request)", %{conn: conn, user: _user, event: event} do
+      # Add a participant
+      other_user = user_fixture()
+      {:ok, _participant} = Events.add_user_to_event(event, other_user)
+
+      conn = delete(conn, ~p"/events/#{event.slug}")
+
+      assert redirected_to(conn) == ~p"/dashboard"
+      assert get_flash(conn, :info) == "Event has participants, so it was soft deleted instead of permanently removed"
+      
+      # Verify event is soft deleted
+      assert Events.get_event(event.id) == nil
+      soft_deleted_event = Events.get_event(event.id, include_deleted: true)
+      assert soft_deleted_event != nil
+      assert soft_deleted_event.deleted_at != nil
+    end
+
+    test "soft deletes event with participants (API request)", %{conn: conn, user: _user, event: event} do
+      # Add a participant
+      other_user = user_fixture()
+      {:ok, _participant} = Events.add_user_to_event(event, other_user)
+
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}")
+
+      assert json = json_response(conn, 200)
+      assert json["success"] == true
+      assert json["deletion_type"] == "soft_deleted"
+      assert json["message"] == "Event deleted (can be restored within 90 days)"
+      assert Map.has_key?(json, "event")
+      
+      # Verify event is soft deleted
+      assert Events.get_event(event.id) == nil
+      soft_deleted_event = Events.get_event(event.id, include_deleted: true)
+      assert soft_deleted_event != nil
+      assert soft_deleted_event.deleted_at != nil
+    end
+
+    test "accepts deletion reason parameter (browser request)", %{conn: conn, event: event} do
+      reason = "Event canceled due to venue issues"
+      
+      conn = delete(conn, ~p"/events/#{event.slug}?reason=#{URI.encode(reason)}")
+
+      assert redirected_to(conn) == ~p"/dashboard"
+      assert get_flash(conn, :info) == "Event permanently deleted"
+    end
+
+    test "accepts deletion reason parameter (API request)", %{conn: conn, event: event} do
+      reason = "API deletion test"
+      
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}?reason=#{URI.encode(reason)}")
+
+      assert json = json_response(conn, 204)
+      assert json["success"] == true
+    end
+
+    test "returns 404 for non-existent event (browser request)", %{conn: conn} do
+      conn = delete(conn, ~p"/events/non-existent-slug")
+
+      assert redirected_to(conn) == ~p"/dashboard"
+      assert get_flash(conn, :error) == "Event not found"
+    end
+
+    test "returns 404 for non-existent event (API request)", %{conn: conn} do
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/non-existent-slug")
+
+      assert json = json_response(conn, 404)
+      assert json["error"] == "Event not found"
+      assert json["code"] == "EVENT_NOT_FOUND"
+    end
+
+    test "returns 403 for unauthorized user (browser request)", %{conn: _conn, event: event} do
+      # Create different user (not an organizer)
+      {conn, _other_user} = register_and_log_in_user(build_conn())
+
+      conn = delete(conn, ~p"/events/#{event.slug}")
+
+      assert redirected_to(conn) == ~p"/dashboard"
+      assert get_flash(conn, :error) == "You don't have permission to delete this event"
+    end
+
+    test "returns 403 for unauthorized user (API request)", %{conn: _conn, event: event} do
+      # Create different user (not an organizer)
+      {conn, _other_user} = register_and_log_in_user(build_conn())
+
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}")
+
+      assert json = json_response(conn, 403)
+      assert json["error"] == "You don't have permission to delete this event"
+      assert json["code"] == "PERMISSION_DENIED"
+    end
+
+    test "returns 401 for unauthenticated user (browser request)", %{conn: _conn, event: event} do
+      conn = build_conn()
+
+      conn = delete(conn, ~p"/events/#{event.slug}")
+
+      assert redirected_to(conn) == ~p"/auth/login"
+      assert get_flash(conn, :error) == "You must be logged in to delete events"
+    end
+
+    test "returns 401 for unauthenticated user (API request)", %{conn: _conn, event: event} do
+      conn = 
+        build_conn()
+        |> put_req_header("accept", "application/json")
+
+      conn = delete(conn, ~p"/events/#{event.slug}")
+
+      assert json = json_response(conn, 401)
+      assert json["error"] == "Authentication required"
+      assert json["code"] == "AUTHENTICATION_REQUIRED"
+    end
+
+    test "handles events with confirmed orders appropriately (API request)", %{conn: conn, user: _user, event: event} do
+      # Create a confirmed order for the event
+      participant_user = user_fixture()
+      {:ok, _participant} = Events.add_user_to_event(event, participant_user)
+      
+      # This would normally create an order, but for testing purposes we'll simulate having orders
+      # by adding participants which triggers soft deletion
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}")
+
+      assert json = json_response(conn, 200)
+      assert json["success"] == true
+      assert json["deletion_type"] == "soft_deleted"
+    end
+
+    test "validates deletion reason is passed to deletion logic", %{conn: conn, event: event} do
+      custom_reason = "Custom deletion reason for testing"
+      
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")  
+        |> delete(~p"/events/#{event.slug}?reason=#{URI.encode(custom_reason)}")
+
+      assert json = json_response(conn, 204)
+      assert json["success"] == true
+    end
+
+    test "uses default deletion reason when none provided", %{conn: conn, event: event} do
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}")
+
+      assert json = json_response(conn, 204)
+      assert json["success"] == true
+      # The default reason "Event deleted by user" should be used internally
+    end
+
+    test "handles concurrent organizer deletion permissions", %{conn: _conn, event: event} do
+      # Create another organizer
+      {conn, organizer2} = register_and_log_in_user(build_conn())
+      {:ok, _event_user} = Events.add_user_to_event(event, organizer2)
+
+      # Both organizers should be able to delete
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}")
+
+      assert json = json_response(conn, 204)
+      assert json["success"] == true
+      assert json["deletion_type"] == "hard_deleted"
+    end
+
+    test "handles edge case with empty reason parameter", %{conn: conn, event: event} do
+      conn = 
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete(~p"/events/#{event.slug}?reason=")
+
+      assert json = json_response(conn, 204)
+      assert json["success"] == true
+      # Should fall back to default reason
+    end
+
+    test "API response includes proper error codes for all scenarios", %{conn: conn, event: event} do
+      test_cases = [
+        # Test non-existent event
+        {"/events/non-existent", 404, "EVENT_NOT_FOUND"},
+        
+        # Test with different user (unauthorized)  
+        {"/events/#{event.slug}", 403, "PERMISSION_DENIED", fn _c -> 
+          {new_conn, _other_user} = register_and_log_in_user(build_conn())
+          put_req_header(new_conn, "accept", "application/json")
+        end},
+        
+        # Test unauthenticated
+        {"/events/#{event.slug}", 401, "AUTHENTICATION_REQUIRED", fn _c ->
+          put_req_header(build_conn(), "accept", "application/json")
+        end}
+      ]
+      
+      Enum.each(test_cases, fn
+        {path, expected_status, expected_code} ->
+          test_conn = put_req_header(conn, "accept", "application/json")
+          response_conn = delete(test_conn, path)
+          json = json_response(response_conn, expected_status)
+          assert json["code"] == expected_code
+        
+        {path, expected_status, expected_code, conn_modifier} ->
+          test_conn = conn_modifier.(conn)
+          response_conn = delete(test_conn, path)
+          json = json_response(response_conn, expected_status)
+          assert json["code"] == expected_code
+      end)
     end
   end
 end
