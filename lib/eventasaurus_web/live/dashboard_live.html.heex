@@ -195,9 +195,10 @@
                 <%= for event <- date_events do %>
                   <div class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow">
                     <div class="p-3">
-                      <!-- Event Header -->
-                      <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2">
-                        <div class="flex-1 pr-0 sm:pr-3">
+                      <!-- Event Header with Image -->
+                      <div class="flex flex-col sm:flex-row gap-3">
+                        <!-- Left Content -->
+                        <div class="flex-1">
                           <h4 class="text-2xl font-semibold text-gray-900 mb-1">
                             <%= event.title %>
                           </h4>
@@ -209,7 +210,7 @@
                             </p>
                           <% end %>
                           
-                          <div class="flex flex-wrap gap-2">
+                          <div class="flex flex-wrap gap-2 mb-2">
                             <!-- Role Badge -->
                             <span class={[
                               "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
@@ -238,10 +239,83 @@
                                 </span>
                             <% end %>
                           </div>
+
+                          <!-- Event Details -->
+                          <div class="space-y-1.5 text-sm text-gray-600">
+                            <!-- Time and Location -->
+                            <div class="flex gap-4">
+                              <!-- Time -->
+                              <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <%= format_time(event.start_at, event.timezone) %>
+                              </div>
+                              
+                              <!-- Location -->
+                              <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <%= if event.venue do %>
+                                  <%= event.venue.name %>
+                                <% else %>
+                                  Virtual Event
+                                <% end %>
+                              </div>
+                            </div>
+                            
+                            <!-- Participants with Avatars -->
+                            <%= if event.participants && length(event.participants) > 0 do %>
+                              <div class="flex items-center">
+                                <div class="flex -space-x-1.5 mr-2">
+                                  <%= for {participant, index} <- Enum.with_index(Enum.take(event.participants, 3)) do %>
+                                    <%= if participant.user do %>
+                                      <div class="relative group">
+                                        <img 
+                                          src={EventasaurusApp.Accounts.User.avatar_url(participant.user, %{size: 40})}
+                                          alt={participant.user.name || participant.user.email}
+                                          class="w-10 h-10 rounded-full border-2 border-white hover:z-20 hover:scale-110 transition-transform cursor-pointer relative"
+                                        >
+                                        <!-- Tooltip -->
+                                        <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                                          <%= participant.user.name || participant.user.email %>
+                                          <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                                        </div>
+                                      </div>
+                                    <% end %>
+                                  <% end %>
+                                  <%= if length(event.participants) > 3 do %>
+                                    <div class="relative group">
+                                      <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white hover:z-20 hover:scale-110 transition-transform cursor-pointer">
+                                        +<%= length(event.participants) - 3 %>
+                                      </div>
+                                      <!-- Tooltip -->
+                                      <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                                        <%= length(event.participants) - 3 %> more participants
+                                        <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                                      </div>
+                                    </div>
+                                  <% end %>
+                                </div>
+                                <span class="text-sm text-gray-600">
+                                  <%= event.participant_count || 0 %> attending
+                                </span>
+                              </div>
+                            <% else %>
+                              <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                                </svg>
+                                0 attending
+                              </div>
+                            <% end %>
+                          </div>
                         </div>
                         
                         <!-- Event Image -->
-                        <div class="mt-2 sm:mt-0 w-full sm:w-48 aspect-[4/3] rounded-lg overflow-hidden flex-shrink-0">
+                        <div class="w-full sm:w-56 h-32 sm:h-auto sm:self-stretch rounded-lg overflow-hidden flex-shrink-0">
                           <%= if event.cover_image_url do %>
                             <img src={event.cover_image_url} alt={event.title} class="w-full h-full object-cover">
                           <% else %>
@@ -252,79 +326,6 @@
                             </div>
                           <% end %>
                         </div>
-                      </div>
-
-                      <!-- Event Details -->
-                      <div class="space-y-1.5 text-sm text-gray-600 mb-2">
-                        <!-- Time and Location -->
-                        <div class="flex gap-4">
-                          <!-- Time -->
-                          <div class="flex items-center">
-                            <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <%= format_time(event.start_at, event.timezone) %>
-                          </div>
-                          
-                          <!-- Location -->
-                          <div class="flex items-center">
-                            <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            <%= if event.venue do %>
-                              <%= event.venue.name %>
-                            <% else %>
-                              Virtual Event
-                            <% end %>
-                          </div>
-                        </div>
-                        
-                        <!-- Participants with Avatars -->
-                        <%= if event.participants && length(event.participants) > 0 do %>
-                          <div class="flex items-center">
-                            <div class="flex -space-x-1.5 mr-2">
-                              <%= for {participant, index} <- Enum.with_index(Enum.take(event.participants, 3)) do %>
-                                <%= if participant.user do %>
-                                  <div class="relative group">
-                                    <img 
-                                      src={EventasaurusApp.Accounts.User.avatar_url(participant.user, %{size: 40})}
-                                      alt={participant.user.name || participant.user.email}
-                                      class="w-10 h-10 rounded-full border-2 border-white hover:z-20 hover:scale-110 transition-transform cursor-pointer relative"
-                                    >
-                                    <!-- Tooltip -->
-                                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                                      <%= participant.user.name || participant.user.email %>
-                                      <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
-                                    </div>
-                                  </div>
-                                <% end %>
-                              <% end %>
-                              <%= if length(event.participants) > 3 do %>
-                                <div class="relative group">
-                                  <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white hover:z-20 hover:scale-110 transition-transform cursor-pointer">
-                                    +<%= length(event.participants) - 3 %>
-                                  </div>
-                                  <!-- Tooltip -->
-                                  <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                                    <%= length(event.participants) - 3 %> more participants
-                                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
-                                  </div>
-                                </div>
-                              <% end %>
-                            </div>
-                            <span class="text-sm text-gray-600">
-                              <%= event.participant_count || 0 %> attending
-                            </span>
-                          </div>
-                        <% else %>
-                          <div class="flex items-center">
-                            <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                            </svg>
-                            0 attending
-                          </div>
-                        <% end %>
                       </div>
 
                       <!-- Actions -->
