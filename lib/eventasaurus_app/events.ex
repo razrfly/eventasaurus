@@ -227,15 +227,9 @@ defmodule EventasaurusApp.Events do
   Returns nil if the Event does not exist or is soft-deleted (unless include_deleted: true).
   """
   def get_event(id, opts \\ []) do
-    include_deleted = Keyword.get(opts, :include_deleted, false)
-    
     query = from e in Event, where: e.id == ^id
     
-    query = if include_deleted do
-      query
-    else
-      from e in query, where: is_nil(e.deleted_at)
-    end
+    query = apply_soft_delete_filter(query, opts)
     
     Repo.one(query) |> maybe_preload()
   end
@@ -252,15 +246,9 @@ defmodule EventasaurusApp.Events do
   Returns nil if the Event does not exist or is soft-deleted (unless include_deleted: true).
   """
   def get_event_by_slug(slug, opts \\ []) do
-    include_deleted = Keyword.get(opts, :include_deleted, false)
-    
     query = from e in Event, where: e.slug == ^slug
     
-    query = if include_deleted do
-      query
-    else
-      from e in query, where: is_nil(e.deleted_at)
-    end
+    query = apply_soft_delete_filter(query, opts)
     
     Repo.one(query)
     |> maybe_preload()
@@ -396,12 +384,6 @@ defmodule EventasaurusApp.Events do
     EventasaurusApp.Events.SoftDelete.soft_delete_event(event_id, reason, user_id)
   end
 
-  @doc """
-  Restores a soft-deleted event and all its associated records.
-  """
-  def restore_event(event_id, user_id) do
-    EventasaurusApp.Events.SoftDelete.restore_event(event_id, user_id)
-  end
 
   @doc """
   Checks if an event can be soft deleted.
@@ -452,6 +434,42 @@ defmodule EventasaurusApp.Events do
     EventasaurusApp.Events.Delete.soft_delete_reason(event, user)
   end
 
+  # Event Restoration Functions
+
+  @doc """
+  Restores a soft-deleted event and all its associated records.
+  
+  ## Parameters
+    - event_id: ID of the soft-deleted event to restore
+    - user_id: ID of the user performing the restoration
+    
+  ## Returns
+    - {:ok, event} - Event was successfully restored
+    - {:error, reason} - Restoration failed
+  """
+  def restore_event(event_id, user_id) do
+    EventasaurusApp.Events.Restore.restore_event(event_id, user_id)
+  end
+
+  @doc """
+  Checks if an event is eligible for restoration.
+  
+  Returns {:ok, event} if eligible, {:error, reason} if not.
+  """
+  def eligible_for_restoration?(event_id) do
+    EventasaurusApp.Events.Restore.eligible_for_restoration?(event_id)
+  end
+
+  @doc """
+  Gets restoration statistics for reporting purposes.
+  
+  ## Options
+    - days_back: Number of days to look back (default: 30)
+  """
+  def get_restoration_stats(opts \\ []) do
+    EventasaurusApp.Events.Restore.get_restoration_stats(opts)
+  end
+
   @doc """
   Counts the number of confirmed orders for an event.
   """
@@ -460,7 +478,7 @@ defmodule EventasaurusApp.Events do
     
     Repo.aggregate(
       from(o in Order, 
-           where: o.event_id == ^event_id and o.status in ["confirmed", "pending"]),
+           where: o.event_id == ^event_id and o.status in ["confirmed", "pending"] and is_nil(o.deleted_at)),
       :count,
       :id
     )
@@ -473,10 +491,10 @@ defmodule EventasaurusApp.Events do
     alias EventasaurusApp.Events.Ticket
     alias EventasaurusApp.Ticketing
     
-    # Get all ticket IDs for this event
+    # Get all ticket IDs for this event (excluding soft-deleted)
     ticket_ids = Repo.all(
       from(t in Ticket, 
-           where: t.event_id == ^event_id, 
+           where: t.event_id == ^event_id and is_nil(t.deleted_at), 
            select: t.id)
     )
     
@@ -572,6 +590,24 @@ defmodule EventasaurusApp.Events do
             preload: [:venue, :users]
 
     query = apply_soft_delete_filter(query, opts)
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Returns the list of soft-deleted events where the user is an organizer.
+  Only returns events deleted within the last 90 days that can be restored.
+  """
+  def list_deleted_events_by_user(%User{} = user) do
+    ninety_days_ago = DateTime.utc_now() |> DateTime.add(-90, :day)
+    
+    query = from e in Event,
+            join: eu in EventUser, on: e.id == eu.event_id,
+            where: eu.user_id == ^user.id and
+                   not is_nil(e.deleted_at) and
+                   e.deleted_at > ^ninety_days_ago,
+            preload: [:users, :venue, :tickets],
+            order_by: [desc: e.deleted_at]
 
     Repo.all(query)
   end
@@ -3121,7 +3157,7 @@ defmodule EventasaurusApp.Events do
       query
     else
       from [p, e] in query,
-        where: is_nil(e.deleted_at)
+        where: is_nil(e.deleted_at) and is_nil(p.deleted_at)
     end
     
     query = from [p, e] in query,

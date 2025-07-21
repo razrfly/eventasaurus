@@ -82,40 +82,200 @@ defmodule EventasaurusWeb.EventController do
     end
   end
 
-  def delete(conn, %{"slug" => slug}) do
+  @doc """
+  Deletes an event using the unified deletion logic.
+  
+  For browser requests: Redirects with flash messages (existing behavior).
+  For API requests: Returns JSON responses with appropriate HTTP status codes.
+  
+  Accepts optional 'reason' parameter for deletion audit trail.
+  """
+  def delete(conn, %{"slug" => slug} = params) do
     case Events.get_event_by_slug(slug) do
       nil ->
-        conn
-        |> put_flash(:error, "Event not found")
-        |> redirect(to: ~p"/dashboard")
+        handle_delete_response(conn, {:error, :event_not_found})
 
       event ->
         case ensure_user_struct(conn.assigns.auth_user) do
           {:ok, user} ->
-            if Events.user_can_manage_event?(user, event) do
-              case Events.delete_event(event) do
-                {:ok, _} ->
-                  conn
-                  |> put_flash(:info, "Event deleted successfully")
-                  |> redirect(to: ~p"/dashboard")
-
-                {:error, _} ->
-                  conn
-                  |> put_flash(:error, "Unable to delete event")
-                  |> redirect(to: ~p"/dashboard")
-              end
-            else
-              conn
-              |> put_flash(:error, "You don't have permission to delete this event")
-              |> redirect(to: ~p"/dashboard")
+            # Extract deletion reason from params (query string or body)
+            reason = params["reason"] || "Event deleted by user"
+            
+            # Use the unified deletion logic
+            case Events.delete_event(event.id, user.id, reason) do
+              {:ok, deletion_type} ->
+                handle_delete_response(conn, {:ok, deletion_type, event})
+                
+              {:error, error_reason} ->
+                handle_delete_response(conn, {:error, error_reason})
             end
 
           {:error, _} ->
-            conn
-            |> put_flash(:error, "You must be logged in to delete events")
-            |> redirect(to: ~p"/auth/login")
+            handle_delete_response(conn, {:error, :authentication_required})
         end
     end
+  end
+
+  # Handle deletion responses for both browser and API requests
+  defp handle_delete_response(conn, result) do
+    case get_req_header(conn, "accept") do
+      ["application/json" | _] -> handle_delete_json_response(conn, result)
+      _ -> handle_delete_browser_response(conn, result)
+    end
+  end
+
+  defp handle_delete_json_response(conn, {:ok, :hard_deleted, _event}) do
+    conn
+    |> put_status(:no_content)
+    |> json(%{
+      success: true,
+      deletion_type: "hard_deleted",
+      message: "Event permanently deleted"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:ok, :soft_deleted, event}) do
+    conn
+    |> put_status(:ok)
+    |> json(%{
+      success: true,
+      deletion_type: "soft_deleted", 
+      message: "Event deleted (can be restored within 90 days)",
+      event: serialize_event_for_json(event, :default)
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, :event_not_found}) do
+    conn
+    |> put_status(:not_found)
+    |> json(%{
+      error: "Event not found",
+      code: "EVENT_NOT_FOUND"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, :authentication_required}) do
+    conn
+    |> put_status(:unauthorized)
+    |> json(%{
+      error: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, :permission_denied}) do
+    conn
+    |> put_status(:forbidden)
+    |> json(%{
+      error: "You don't have permission to delete this event",
+      code: "PERMISSION_DENIED"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, :has_participants}) do
+    conn
+    |> put_status(:conflict)
+    |> json(%{
+      error: "Cannot delete event with participants. Event has been soft deleted instead.",
+      code: "HAS_PARTICIPANTS"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, :has_orders}) do
+    conn
+    |> put_status(:conflict)
+    |> json(%{
+      error: "Cannot delete event with confirmed orders",
+      code: "HAS_ORDERS"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, :has_sold_tickets}) do
+    conn
+    |> put_status(:conflict)
+    |> json(%{
+      error: "Cannot delete event with sold tickets",
+      code: "HAS_SOLD_TICKETS"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, reason}) when is_binary(reason) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{
+      error: reason,
+      code: "DELETION_FAILED"
+    })
+  end
+
+  defp handle_delete_json_response(conn, {:error, reason}) do
+    conn
+    |> put_status(:internal_server_error)
+    |> json(%{
+      error: "An unexpected error occurred during deletion",
+      code: "INTERNAL_ERROR",
+      details: inspect(reason)
+    })
+  end
+
+  defp handle_delete_browser_response(conn, {:ok, :hard_deleted, _event}) do
+    conn
+    |> put_flash(:info, "Event permanently deleted")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:ok, :soft_deleted, _event}) do
+    conn
+    |> put_flash(:info, "Event deleted successfully (can be restored within 90 days)")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, :event_not_found}) do
+    conn
+    |> put_flash(:error, "Event not found")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, :authentication_required}) do
+    conn
+    |> put_flash(:error, "You must be logged in to delete events")
+    |> redirect(to: ~p"/auth/login")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, :permission_denied}) do
+    conn
+    |> put_flash(:error, "You don't have permission to delete this event")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, :has_participants}) do
+    conn
+    |> put_flash(:info, "Event has participants, so it was soft deleted instead of permanently removed")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, :has_orders}) do
+    conn
+    |> put_flash(:error, "Cannot delete event with confirmed orders")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, :has_sold_tickets}) do
+    conn
+    |> put_flash(:error, "Cannot delete event with sold tickets")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, reason}) when is_binary(reason) do
+    conn
+    |> put_flash(:error, reason)
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_delete_browser_response(conn, {:error, _reason}) do
+    conn
+    |> put_flash(:error, "Unable to delete event")
+    |> redirect(to: ~p"/dashboard")
   end
 
   @doc """

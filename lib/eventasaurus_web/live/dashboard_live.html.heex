@@ -60,6 +60,20 @@
         >
           🎫 My Tickets
         </button>
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="archived"
+          class={[
+            "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm",
+            if @active_tab == "archived" do
+              "border-indigo-500 text-indigo-600"
+            else
+              "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            end
+          ]}
+        >
+          🗄️ Archived Events
+        </button>
       </nav>
     </div>
 
@@ -370,6 +384,96 @@
               </tbody>
             </table>
           </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <!-- Archived Events Tab -->
+    <%= if @active_tab == "archived" and not @loading do %>
+      <div class="space-y-6">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-semibold">Archived Events</h2>
+          <div class="flex space-x-3">
+            <button
+              phx-click="refresh_data"
+              class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <%= if Enum.empty?(@archived_events) do %>
+          <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No archived events</h3>
+            <p class="mt-1 text-sm text-gray-500">Events you delete will appear here for 90 days.</p>
+          </div>
+        <% else %>
+          <div class="bg-yellow-50 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+            <p class="text-sm">
+              <strong>Note:</strong> Archived events can be restored within 90 days of deletion. After that, they will be permanently removed.
+            </p>
+          </div>
+          
+          <.table id="archived-events" rows={@archived_events}>
+            <:col :let={event} label="Title">
+              <span class="text-gray-600 font-medium">
+                <%= event.title %>
+              </span>
+            </:col>
+            <:col :let={event} label="Original Date">
+              <%= if event.start_at do %>
+                <div class="text-sm text-gray-600">
+                  <%= EventasaurusWeb.EventHTML.format_date(event.start_at, event.timezone) %>
+                </div>
+              <% else %>
+                <span class="text-gray-500 italic">No date set</span>
+              <% end %>
+            </:col>
+            <:col :let={event} label="Deleted">
+              <div class="text-sm">
+                <div class="text-gray-900">
+                  <%= Calendar.strftime(event.deleted_at, "%B %d, %Y") %>
+                </div>
+                <div class="text-gray-500">
+                  <%= Calendar.strftime(event.deleted_at, "%I:%M %p") %>
+                </div>
+              </div>
+            </:col>
+            <:col :let={event} label="Expires In">
+              <% days_until_expiry = div(DateTime.diff(DateTime.add(event.deleted_at, 90, :day), DateTime.utc_now()), 86400) %>
+              <%= if days_until_expiry > 0 do %>
+                <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                  <%= days_until_expiry %> days
+                </span>
+              <% else %>
+                <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+                  Expired
+                </span>
+              <% end %>
+            </:col>
+            <:col :let={event} label="">
+              <% days_until_expiry = div(DateTime.diff(DateTime.add(event.deleted_at, 90, :day), DateTime.utc_now()), 86400) %>
+              <%= if days_until_expiry > 0 do %>
+                <button
+                  phx-click="restore_event"
+                  phx-value-event_id={event.id}
+                  data-confirm="Are you sure you want to restore this event?"
+                  class="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                >
+                  Restore
+                </button>
+              <% else %>
+                <span class="text-gray-400 text-sm">Cannot restore</span>
+              <% end %>
+            </:col>
+          </.table>
         <% end %>
       </div>
     <% end %>

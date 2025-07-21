@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.DashboardLive do
        |> assign(:events, [])
        |> assign(:upcoming_events, [])
        |> assign(:past_events, [])
+       |> assign(:archived_events, [])
        |> assign(:order_filter, "all")
        |> assign(:selected_order, nil)
        |> load_dashboard_data()}
@@ -115,6 +116,35 @@ defmodule EventasaurusWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("restore_event", %{"event_id" => event_id}, socket) do
+    event_id = String.to_integer(event_id)
+    user = socket.assigns.user
+    
+    case Events.restore_event(event_id, user) do
+      {:ok, _event} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Event successfully restored")
+         |> load_dashboard_data()}
+      
+      {:error, :event_not_found} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Event not found")}
+      
+      {:error, :restoration_period_expired} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Event cannot be restored - 90 day limit exceeded")}
+      
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to restore event")}
+    end
+  end
+
+  @impl true
   def handle_info({:order_updated, order}, socket) do
     # Update the specific order in the list
     updated_orders =
@@ -142,6 +172,9 @@ defmodule EventasaurusWeb.DashboardLive do
       |> Enum.filter(&(&1.start_at && DateTime.compare(&1.start_at, now) == :lt))
       |> Enum.sort_by(& &1.start_at, :desc)
 
+    # Load archived events (soft-deleted)
+    archived_events = Events.list_deleted_events_by_user(user)
+
     # Load orders
     orders = case Ticketing.list_user_orders(user.id) do
       orders when is_list(orders) -> orders
@@ -152,6 +185,7 @@ defmodule EventasaurusWeb.DashboardLive do
     |> assign(:events, events)
     |> assign(:upcoming_events, upcoming_events)
     |> assign(:past_events, past_events)
+    |> assign(:archived_events, archived_events)
     |> assign(:orders, orders)
     |> assign(:loading, false)
   end
