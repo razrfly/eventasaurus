@@ -27,6 +27,9 @@ defmodule EventasaurusApp.Accounts.User do
     many_to_many :events, EventasaurusApp.Events.Event,
       join_through: EventasaurusApp.Events.EventUser
 
+    many_to_many :groups, EventasaurusApp.Groups.Group,
+      join_through: EventasaurusApp.Groups.GroupUser
+
     has_many :poll_votes, EventasaurusApp.Events.PollVote, foreign_key: :voter_id
     has_many :orders, EventasaurusApp.Events.Order
 

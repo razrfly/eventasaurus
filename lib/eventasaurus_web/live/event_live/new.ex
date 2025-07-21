@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
   alias EventasaurusApp.Venues
+  alias EventasaurusApp.Groups
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Helpers.ImageHelpers
 
@@ -27,6 +28,8 @@ defmodule EventasaurusWeb.EventLive.New do
         changeset = Events.change_event(%Event{})
         today = Date.utc_today() |> Date.to_iso8601()
         venues = Venues.list_venues()
+        # Load groups that the user is a member of or created
+        user_groups = Groups.list_user_groups(user)
 
         # Load recent locations for the user
         recent_locations = Events.get_recent_locations_for_user(user.id, limit: 5)
@@ -77,6 +80,7 @@ defmodule EventasaurusWeb.EventLive.New do
           socket
           |> assign(:form, to_form(changeset))
           |> assign(:venues, venues)
+          |> assign(:user_groups, user_groups)
           |> assign(:user, user)
           |> assign(:changeset, changeset)
           |> assign(:form_data, form_data_with_image)
@@ -471,7 +475,8 @@ defmodule EventasaurusWeb.EventLive.New do
                     :error -> nil
                   end
                 lng -> lng
-              end
+              end,
+              "venue_type" => Map.get(form_data, "venue_type", "venue")
             }
 
             # Try to find existing venue by address first
@@ -494,19 +499,27 @@ defmodule EventasaurusWeb.EventLive.New do
           event_params
       end
 
-    # Validate date polling before saving
-    validation_changeset =
-      %Event{}
-      |> Events.change_event(final_event_params)
-      |> Map.put(:action, :validate)
-      # Legacy date polling validation removed
+    # Authorize group assignment if specified
+    case validate_group_assignment(final_event_params, socket.assigns.user) do
+      {:ok, authorized_params} ->
+        # Validate date polling before saving
+        validation_changeset =
+          %Event{}
+          |> Events.change_event(authorized_params)
+          |> Map.put(:action, :validate)
+          # Legacy date polling validation removed
 
-    if validation_changeset.valid? do
-      # No date polling validation errors, proceed normally
-      create_event_with_validation(final_event_params, socket)
-    else
-      # Validation failed, show errors
-      {:noreply, assign(socket, form: to_form(validation_changeset))}
+        if validation_changeset.valid? do
+          # No date polling validation errors, proceed normally
+          create_event_with_validation(authorized_params, socket)
+        else
+          # Validation failed, show errors
+          {:noreply, assign(socket, form: to_form(validation_changeset))}
+        end
+      
+      {:error, message} ->
+        socket = put_flash(socket, :error, message)
+        {:noreply, socket}
     end
   end
 
@@ -1811,6 +1824,29 @@ defmodule EventasaurusWeb.EventLive.New do
       # Default case
       _ ->
         Map.put(event_params, "is_ticketed", is_ticketed_bool)
+    end
+  end
+
+  # Helper function to validate group assignment authorization
+  defp validate_group_assignment(event_params, user) do
+    case Map.get(event_params, "group_id") do
+      nil -> {:ok, event_params}
+      "" -> 
+        # Empty string means personal event
+        {:ok, Map.put(event_params, "group_id", nil)}
+      group_id when is_binary(group_id) ->
+        # Validate user is member of the group
+        case Groups.is_member?(group_id, user.id) do
+          true -> {:ok, event_params}
+          false -> {:error, "You can only assign events to groups you are a member of"}
+        end
+      group_id when is_integer(group_id) ->
+        # Handle integer group_id
+        case Groups.is_member?(group_id, user.id) do
+          true -> {:ok, event_params}
+          false -> {:error, "You can only assign events to groups you are a member of"}
+        end
+      _ -> {:ok, event_params}
     end
   end
 

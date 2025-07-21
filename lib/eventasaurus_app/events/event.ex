@@ -73,6 +73,7 @@ defmodule EventasaurusApp.Events.Event do
     field :active_poll?, :boolean, virtual: true
 
     belongs_to :venue, EventasaurusApp.Venues.Venue
+    belongs_to :group, EventasaurusApp.Groups.Group
 
     many_to_many :users, EventasaurusApp.Accounts.User,
       join_through: EventasaurusApp.Events.EventUser
@@ -96,7 +97,7 @@ defmodule EventasaurusApp.Events.Event do
 
     event
     |> cast(attrs, [:title, :tagline, :description, :start_at, :ends_at, :timezone,
-                   :visibility, :slug, :cover_image_url, :venue_id, :external_image_data,
+                   :visibility, :slug, :cover_image_url, :venue_id, :group_id, :external_image_data,
                    :rich_external_data, :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
                    :virtual_venue_url, :is_ticketed, :taxation_type])
@@ -118,6 +119,7 @@ defmodule EventasaurusApp.Events.Event do
     |> validate_canceled_at()
     |> validate_status_consistency()
     |> foreign_key_constraint(:venue_id)
+    |> foreign_key_constraint(:group_id)
     |> unique_constraint(:slug)
     |> check_constraint(:taxation_type, name: :valid_taxation_type)
     |> maybe_generate_slug()
