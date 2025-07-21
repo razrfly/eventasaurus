@@ -170,6 +170,15 @@ defmodule Eventasaurus.Services.PosthogService do
   end
 
   @doc """
+  Tracks a custom event via PostHog.
+  Alias for send_event/3 to match PostHog SDK naming conventions.
+  """
+  @spec capture(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
+  def capture(user_id, event_name, properties \\ %{}) do
+    send_event(event_name, user_id, properties)
+  end
+
+  @doc """
   Sends a custom event to PostHog.
   """
   @spec send_event(String.t(), String.t(), map()) :: {:ok, :sent} | {:error, any()}
