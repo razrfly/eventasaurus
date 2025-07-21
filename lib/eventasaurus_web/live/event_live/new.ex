@@ -80,10 +80,12 @@ defmodule EventasaurusWeb.EventLive.New do
         selected_group_id = Map.get(params, "group_id")
         
         # Update changeset with selected group if provided and user is a member
-        changeset = if selected_group_id && Enum.any?(user_groups, & &1.id == selected_group_id) do
-          Events.change_event(%Event{group_id: selected_group_id})
+        changeset = with group_id_str when is_binary(group_id_str) <- selected_group_id,
+                         {group_id_int, ""} <- Integer.parse(group_id_str),
+                         true <- Enum.any?(user_groups, & &1.id == group_id_int) do
+          Events.change_event(%Event{group_id: group_id_int})
         else
-          changeset
+          _ -> changeset
         end
 
         socket =
