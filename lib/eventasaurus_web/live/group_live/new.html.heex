@@ -192,7 +192,9 @@
                       phx-click="select_recent_location"
                       phx-value-location={case Jason.encode(location) do
                         {:ok, json} -> json
-                        {:error, _} -> "{}"
+                        {:error, _reason} -> 
+                          # Return empty JSON to avoid client errors
+                          "{}"
                       end}
                       class="w-full text-left p-2 recent-location-item border-b border-gray-100 last:border-b-0"
                     >

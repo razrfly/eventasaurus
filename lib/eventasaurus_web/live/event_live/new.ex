@@ -22,7 +22,7 @@ defmodule EventasaurusWeb.EventLive.New do
   @valid_setup_paths ~w[polling confirmed threshold]
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(params, session, socket) do
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         changeset = Events.change_event(%Event{})
@@ -74,6 +74,16 @@ defmodule EventasaurusWeb.EventLive.New do
             "cover_image_url" => url,
             "external_image_data" => external_image_data
           })
+        end
+        
+        # Check if group_id was provided in params
+        selected_group_id = Map.get(params, "group_id")
+        
+        # Update changeset with selected group if provided and user is a member
+        changeset = if selected_group_id && Enum.any?(user_groups, & &1.id == selected_group_id) do
+          Events.change_event(%Event{group_id: selected_group_id})
+        else
+          changeset
         end
 
         socket =

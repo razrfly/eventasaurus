@@ -74,6 +74,74 @@ defmodule EventasaurusApp.Groups do
   def list_groups do
     Repo.all(Group)
   end
+  
+  @doc """
+  Returns groups with preloaded user info and event counts.
+  This avoids N+1 queries when displaying group lists.
+  
+  ## Parameters
+  - user: The current user to check membership
+  - search_query: Optional search term for filtering groups
+  - only_user_groups: If true, only returns groups the user is a member of
+  
+  ## Examples
+  
+      iex> list_groups_with_user_info(user, "", false)
+      [%{group: %Group{}, event_count: 5, is_member: true, user_role: "admin"}, ...]
+  """
+  def list_groups_with_user_info(%User{} = user, search_query \\ "", only_user_groups \\ false) do
+    # Base query for groups
+    base_query = from g in Group,
+      left_join: gu in GroupUser,
+      on: gu.group_id == g.id and gu.user_id == ^user.id,
+      preload: [:venue, :created_by]
+    
+    # Apply search filter
+    query = if search_query && String.trim(search_query) != "" do
+      search_term = "%#{search_query}%"
+      from [g, gu] in base_query,
+        where: ilike(g.name, ^search_term) or ilike(g.description, ^search_term)
+    else
+      base_query
+    end
+    
+    # Apply user groups filter
+    query = if only_user_groups do
+      from [g, gu] in query,
+        where: not is_nil(gu.id)
+    else
+      query
+    end
+    
+    # Get groups with user info
+    groups_with_membership = from [g, gu] in query,
+      select: %{
+        group: g,
+        is_member: not is_nil(gu.id),
+        user_role: gu.role
+      }
+    
+    # Execute query and get groups
+    results = Repo.all(groups_with_membership)
+    
+    # Get event counts in batch
+    group_ids = Enum.map(results, & &1.group.id)
+    event_counts = from e in EventasaurusApp.Events.Event,
+      where: e.group_id in ^group_ids,
+      group_by: e.group_id,
+      select: {e.group_id, count(e.id)}
+    
+    event_count_map = Repo.all(event_counts) |> Map.new()
+    
+    # Combine results
+    Enum.map(results, fn %{group: group, is_member: is_member, user_role: user_role} ->
+      Map.merge(group, %{
+        event_count: Map.get(event_count_map, group.id, 0),
+        is_member: is_member,
+        user_role: user_role
+      })
+    end)
+  end
 
   @doc """
   Returns the list of groups for a specific user.
