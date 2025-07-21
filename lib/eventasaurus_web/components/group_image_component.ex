@@ -126,7 +126,7 @@ defmodule EventasaurusWeb.Components.GroupImageComponent do
   defp assign_defaults(assigns) do
     assigns
     |> assign_new(:class, fn -> "" end)
-    |> assign_new(:alt, fn -> assigns.group.name || "Group image" end)
+    |> assign_new(:alt, fn -> assigns[:group] && assigns.group.name || "Group image" end)
     |> assign_new(:size, fn -> "w-12 h-12" end)
     |> assign_new(:aspect_ratio, fn -> "aspect-w-16 aspect-h-9" end)
   end
