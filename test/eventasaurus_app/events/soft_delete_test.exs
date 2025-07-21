@@ -47,16 +47,14 @@ defmodule EventasaurusApp.Events.SoftDeleteTest do
       poll_option = poll_option_fixture(%{poll: poll, user: user})
       
       # Create tickets and orders (using the Ticketing context)
-      {:ok, ticket} = Ticketing.create_ticket(%{
-        event_id: event.id,
-        name: "General Admission",
-        price: Decimal.new("25.00"),
+      {:ok, ticket} = Ticketing.create_ticket(event, %{
+        title: "General Admission",
+        base_price_cents: 2500,
         quantity: 100
       })
       
       {:ok, order} = Ticketing.create_order(user, ticket, %{
-        quantity: 2,
-        status: "pending"
+        quantity: 2
       })
 
       reason = "Event cancelled"

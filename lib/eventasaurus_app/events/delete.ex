@@ -7,7 +7,7 @@ defmodule EventasaurusApp.Events.Delete do
   determining whether to perform a hard or soft deletion based on event criteria.
   """
 
-  alias EventasaurusApp.{Repo, Events, Accounts}
+  alias EventasaurusApp.{Repo, Events}
   alias EventasaurusApp.Events.{Event, HardDelete, SoftDelete}
   alias EventasaurusApp.Accounts.User
   require Logger
@@ -126,7 +126,7 @@ defmodule EventasaurusApp.Events.Delete do
       
       {:error, error_reason} ->
         # If hard delete fails, fall back to soft delete
-        Logger.warn("Hard delete failed, falling back to soft delete", %{
+        Logger.warning("Hard delete failed, falling back to soft delete", %{
           event_id: event.id,
           user_id: user.id,
           error: error_reason
