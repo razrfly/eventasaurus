@@ -602,7 +602,7 @@ defmodule EventasaurusApp.Events do
     ninety_days_ago = DateTime.utc_now() |> DateTime.add(-90, :day)
     
     query = from e in Event,
-            join: eu in EventUser, on: e.id == eu.event_id,
+            join: eu in EventasaurusApp.Events.EventUser, on: e.id == eu.event_id,
             where: eu.user_id == ^user.id and
                    not is_nil(e.deleted_at) and
                    e.deleted_at > ^ninety_days_ago,
@@ -855,6 +855,185 @@ defmodule EventasaurusApp.Events do
     
     query = apply_soft_delete_filter(query, opts)
     Repo.all(query)
+  end
+
+  @doc """
+  Returns a unified list of events for a user, combining events they created
+  and events they participate in, with role and participation information.
+  """
+  def list_unified_events_for_user(%User{} = user, opts \\ []) do
+    time_filter = Keyword.get(opts, :time_filter, :all)
+    ownership_filter = Keyword.get(opts, :ownership_filter, :all)
+    limit = Keyword.get(opts, :limit, 50)
+
+    # Base queries for organizer and participant events
+    organizer_query = 
+      from e in Event,
+        join: eu in EventUser, on: e.id == eu.event_id,
+        where: eu.user_id == ^user.id,
+        select: %{
+          id: e.id,
+          title: e.title,
+          slug: e.slug,
+          description: e.description,
+          start_at: e.start_at,
+          ends_at: e.ends_at,
+          timezone: e.timezone,
+          status: e.status,
+          taxation_type: e.taxation_type,
+          venue_id: e.venue_id,
+          cover_image_url: e.cover_image_url,
+          inserted_at: e.inserted_at,
+          updated_at: e.updated_at,
+          user_role: fragment("'organizer'"),
+          user_status: fragment("'confirmed'"),
+          can_manage: fragment("true")
+        }
+
+    participant_query =
+      from e in Event,
+        join: ep in EventParticipant, on: e.id == ep.event_id,
+        where: ep.user_id == ^user.id,
+        select: %{
+          id: e.id,
+          title: e.title,
+          slug: e.slug,
+          description: e.description,
+          start_at: e.start_at,
+          ends_at: e.ends_at,
+          timezone: e.timezone,
+          status: e.status,
+          taxation_type: e.taxation_type,
+          venue_id: e.venue_id,
+          cover_image_url: e.cover_image_url,
+          inserted_at: e.inserted_at,
+          updated_at: e.updated_at,
+          user_role: fragment("'participant'"),
+          user_status: ep.status,
+          can_manage: fragment("false")
+        }
+
+    # Apply ownership filter
+    {organizer_query, participant_query} = case ownership_filter do
+      :created -> 
+        # Return empty participant query but with same structure
+        empty_participant_query = from e in Event,
+          join: ep in EventParticipant, on: e.id == ep.event_id,
+          where: false,
+          select: %{
+            id: e.id,
+            title: e.title,
+            slug: e.slug,
+            description: e.description,
+            start_at: e.start_at,
+            ends_at: e.ends_at,
+            timezone: e.timezone,
+            status: e.status,
+            taxation_type: e.taxation_type,
+            venue_id: e.venue_id,
+            cover_image_url: e.cover_image_url,
+            inserted_at: e.inserted_at,
+            updated_at: e.updated_at,
+            user_role: fragment("'participant'"),
+            user_status: ep.status,
+            can_manage: fragment("false")
+          }
+        {organizer_query, empty_participant_query}
+      :participating -> 
+        # Return empty organizer query but with same structure
+        empty_organizer_query = from e in Event,
+          join: eu in EventUser, on: e.id == eu.event_id,
+          where: false,
+          select: %{
+            id: e.id,
+            title: e.title,
+            slug: e.slug,
+            description: e.description,
+            start_at: e.start_at,
+            ends_at: e.ends_at,
+            timezone: e.timezone,
+            status: e.status,
+            taxation_type: e.taxation_type,
+            venue_id: e.venue_id,
+            cover_image_url: e.cover_image_url,
+            inserted_at: e.inserted_at,
+            updated_at: e.updated_at,
+            user_role: fragment("'organizer'"),
+            user_status: fragment("'confirmed'"),
+            can_manage: fragment("true")
+          }
+        {empty_organizer_query, participant_query}
+      :all -> {organizer_query, participant_query}
+    end
+
+    # Apply soft delete filter to both queries - exclude deleted events for unified view
+    organizer_query = from e in organizer_query, where: is_nil(e.deleted_at)
+    participant_query = from e in participant_query, where: is_nil(e.deleted_at)
+
+    # Union the queries
+    union_query = union_all(organizer_query, ^participant_query)
+
+    # Apply time filter to union query before finalizing
+    time_filtered_query = case time_filter do
+      :upcoming -> 
+        now = DateTime.utc_now()
+        from e in subquery(union_query), 
+          where: is_nil(e.start_at) or e.start_at > ^now,
+          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+          limit: ^limit
+      :past ->
+        now = DateTime.utc_now()
+        from e in subquery(union_query), 
+          where: not is_nil(e.start_at) and e.start_at <= ^now,
+          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+          limit: ^limit
+      :archived ->
+        # Archived events are already filtered at the query level
+        from e in subquery(union_query),
+          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+          limit: ^limit
+      :all -> 
+        from e in subquery(union_query),
+          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+          limit: ^limit
+    end
+
+    # Use with_deleted option to bypass automatic soft delete filtering from Ecto.SoftDelete.Repo
+    events = Repo.all(time_filtered_query, with_deleted: true)
+
+    # Preload associations and add computed fields
+    event_ids = Enum.map(events, & &1.id)
+    venues = get_venues_for_events(event_ids)
+    participants = get_participants_for_events(event_ids)
+
+    events
+    |> Enum.map(fn event ->
+      venue = Enum.find(venues, &(&1.id == event.venue_id))
+      event_participants = Enum.filter(participants, &(&1.event_id == event.id))
+      
+      event
+      |> Map.put(:venue, venue)
+      |> Map.put(:participants, event_participants)
+      |> Map.put(:participant_count, length(event_participants))
+    end)
+  end
+
+  # Helper functions for preloading
+  defp get_venues_for_events([]), do: []
+  defp get_venues_for_events(event_ids) do
+    from(v in Venue, where: v.id in subquery(
+      from e in Event, where: e.id in ^event_ids, select: e.venue_id
+    ))
+    |> Repo.all()
+  end
+
+  defp get_participants_for_events([]), do: []
+  defp get_participants_for_events(event_ids) do
+    from(ep in EventParticipant, 
+      where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
+      preload: [:user]
+    )
+    |> Repo.all()
   end
 
   @doc """

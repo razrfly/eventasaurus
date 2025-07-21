@@ -2,7 +2,7 @@ defmodule EventasaurusWeb.DashboardLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.{Events, Ticketing}
-  alias EventasaurusWeb.Helpers.{CurrencyHelpers, TicketCrypto}
+  alias EventasaurusWeb.Helpers.TicketCrypto
 
   @impl true
   def mount(_params, _session, socket) do
@@ -19,15 +19,12 @@ defmodule EventasaurusWeb.DashboardLive do
        socket
        |> assign(:user, user)
        |> assign(:loading, true)
-       |> assign(:active_tab, "events")
-       |> assign(:orders, [])
+       |> assign(:time_filter, :upcoming)
+       |> assign(:ownership_filter, :all)
        |> assign(:events, [])
-       |> assign(:upcoming_events, [])
-       |> assign(:past_events, [])
-       |> assign(:archived_events, [])
-       |> assign(:order_filter, "all")
+       |> assign(:filter_counts, %{})
        |> assign(:selected_order, nil)
-       |> load_dashboard_data()}
+       |> load_unified_events()}
     else
       {:ok,
        socket
@@ -38,70 +35,51 @@ defmodule EventasaurusWeb.DashboardLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    tab = Map.get(params, "tab", "events")
-    {:noreply, assign(socket, :active_tab, tab)}
-  end
-
-  @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
+    time_filter = safe_to_atom(Map.get(params, "time", "upcoming"), [:upcoming, :past, :archived])
+    ownership_filter = safe_to_atom(Map.get(params, "ownership", "all"), [:all, :created, :participating])
+    
     {:noreply,
      socket
-     |> assign(:active_tab, tab)
-     |> push_patch(to: "/dashboard?tab=#{tab}", replace: true)}
+     |> assign(:time_filter, time_filter)
+     |> assign(:ownership_filter, ownership_filter)
+     |> load_unified_events()}
   end
 
   @impl true
-  def handle_event("filter_orders", %{"status" => status}, socket) do
-    valid_statuses = ["all", "pending", "payment_pending", "confirmed", "cancelled", "refunded"]
-    validated_status = if status in valid_statuses, do: status, else: "all"
-    {:noreply, assign(socket, :order_filter, validated_status)}
+  def handle_event("filter_time", %{"filter" => filter}, socket) do
+    time_filter = safe_to_atom(filter, [:upcoming, :past, :archived])
+    
+    {:noreply,
+     socket
+     |> assign(:time_filter, time_filter)
+     |> push_patch(to: build_dashboard_path(time_filter, socket.assigns.ownership_filter))
+     |> load_unified_events()}
   end
 
   @impl true
-  def handle_event("refresh_data", _params, socket) do
+  def handle_event("filter_ownership", %{"filter" => filter}, socket) do
+    ownership_filter = safe_to_atom(filter, [:all, :created, :participating])
+    
+    {:noreply,
+     socket
+     |> assign(:ownership_filter, ownership_filter)
+     |> push_patch(to: build_dashboard_path(socket.assigns.time_filter, ownership_filter))
+     |> load_unified_events()}
+  end
+
+  @impl true
+  def handle_event("refresh_events", _params, socket) do
     {:noreply,
      socket
      |> assign(:loading, true)
-     |> load_dashboard_data()}
-  end
-
-  @impl true
-  def handle_event("cancel_order", %{"order_id" => order_id}, socket) do
-    case Ticketing.get_user_order(socket.assigns.user.id, order_id) do
-      nil ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Order not found")}
-
-      order ->
-        case Ticketing.cancel_order(order) do
-          {:ok, _order} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Order cancelled successfully")
-             |> load_dashboard_data()}
-
-          {:error, :cannot_cancel} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "This order cannot be cancelled")}
-
-          {:error, _reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, "Failed to cancel order")}
-        end
-    end
+     |> load_unified_events()}
   end
 
   @impl true
   def handle_event("show_ticket_modal", %{"order_id" => order_id}, socket) do
     user = socket.assigns.user
 
-    # Find the order in the current orders list
-    case Enum.find(socket.assigns.orders, fn order ->
-      to_string(order.id) == order_id and order.user_id == user.id
-    end) do
+    case Ticketing.get_user_order(user.id, order_id) do
       nil ->
         {:noreply, put_flash(socket, :error, "Ticket not found")}
 
@@ -116,105 +94,112 @@ defmodule EventasaurusWeb.DashboardLive do
   end
 
   @impl true
-  def handle_event("restore_event", %{"event_id" => event_id}, socket) do
-    event_id = String.to_integer(event_id)
+  def handle_event("update_participant_status", %{"event_id" => event_id, "status" => status}, socket) do
     user = socket.assigns.user
+    status_atom = safe_to_atom(status, [:interested, :accepted, :declined])
     
-    case Events.restore_event(event_id, user) do
-      {:ok, _event} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Event successfully restored")
-         |> load_dashboard_data()}
-      
-      {:error, :event_not_found} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Event not found")}
-      
-      {:error, :restoration_period_expired} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Event cannot be restored - 90 day limit exceeded")}
-      
-      {:error, _} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Failed to restore event")}
+    case Events.get_event(event_id) do
+      nil -> 
+        {:noreply, put_flash(socket, :error, "Event not found")}
+      event ->
+        case Events.update_participant_status(event, user, status_atom) do
+          {:ok, _participant} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Status updated successfully")
+             |> load_unified_events()}
+          
+          {:error, _reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Failed to update status")}
+        end
     end
   end
 
   @impl true
-  def handle_info({:order_updated, order}, socket) do
-    # Update the specific order in the list
-    updated_orders =
-      Enum.map(socket.assigns.orders, fn existing_order ->
-        if existing_order.id == order.id, do: order, else: existing_order
-      end)
-
-    {:noreply, assign(socket, :orders, updated_orders)}
+  def handle_info({:order_updated, _order}, socket) do
+    # Reload events to reflect any ticket changes
+    {:noreply, load_unified_events(socket)}
   end
 
   # Private helper functions
 
-  defp load_dashboard_data(socket) do
+  defp load_unified_events(socket) do
     user = socket.assigns.user
+    time_filter = socket.assigns.time_filter
+    ownership_filter = socket.assigns.ownership_filter
 
-    # Load events
-    events = Events.list_events_by_user(user)
-    now = DateTime.utc_now()
-    upcoming_events =
-      events
-      |> Enum.filter(&(&1.start_at && DateTime.compare(&1.start_at, now) != :lt))
-      |> Enum.sort_by(& &1.start_at)
-    past_events =
-      events
-      |> Enum.filter(&(&1.start_at && DateTime.compare(&1.start_at, now) == :lt))
-      |> Enum.sort_by(& &1.start_at, :desc)
-
-    # Load archived events (soft-deleted)
-    archived_events = Events.list_deleted_events_by_user(user)
-
-    # Load orders
-    orders = case Ticketing.list_user_orders(user.id) do
-      orders when is_list(orders) -> orders
-      _ -> []
+    events = if time_filter == :archived do
+      # For archived events, use the dedicated function
+      Events.list_deleted_events_by_user(user)
+      |> Enum.map(fn event ->
+        # Transform to match unified events structure
+        event
+        |> Map.put(:user_role, "organizer")
+        |> Map.put(:user_status, "confirmed")
+        |> Map.put(:can_manage, true)
+        |> Map.put(:participant_count, 0)
+        |> Map.put(:participants, [])
+      end)
+    else
+      # For active events, use the unified function
+      Events.list_unified_events_for_user(user, [
+        time_filter: time_filter,
+        ownership_filter: ownership_filter,
+        limit: 50
+      ])
     end
+
+    # Calculate filter counts for badges
+    filter_counts = %{
+      upcoming: count_events_by_filter(user, :upcoming, :all),
+      past: count_events_by_filter(user, :past, :all),
+      archived: count_archived_events(user),
+      created: count_events_by_filter(user, :all, :created),
+      participating: count_events_by_filter(user, :all, :participating)
+    }
 
     socket
     |> assign(:events, events)
-    |> assign(:upcoming_events, upcoming_events)
-    |> assign(:past_events, past_events)
-    |> assign(:archived_events, archived_events)
-    |> assign(:orders, orders)
+    |> assign(:filter_counts, filter_counts)
     |> assign(:loading, false)
   end
 
-# Removed unused ensure_user_struct/1 function
-
-  defp filtered_orders(orders, "all"), do: orders
-  defp filtered_orders(orders, filter) do
-    Enum.filter(orders, fn order -> order.status == filter end)
+  defp count_events_by_filter(user, time_filter, ownership_filter) do
+    Events.list_unified_events_for_user(user, [
+      time_filter: time_filter,
+      ownership_filter: ownership_filter,
+      limit: 1000
+    ])
+    |> length()
   end
 
-  defp format_currency(cents) when is_integer(cents) do
-    CurrencyHelpers.format_currency(cents, "usd")
+  defp count_archived_events(user) do
+    Events.list_deleted_events_by_user(user)
+    |> length()
   end
-  defp format_currency(_), do: "$0.00"
 
-  defp status_badge_class(status) do
-    case status do
-      "pending" -> "bg-yellow-100 text-yellow-800"
-      "payment_pending" -> "bg-blue-100 text-blue-800"
-      "confirmed" -> "bg-green-100 text-green-800"
-      "cancelled" -> "bg-red-100 text-red-800"
-      "refunded" -> "bg-gray-100 text-gray-800"
-      _ -> "bg-gray-100 text-gray-800"
+  defp build_dashboard_path(time_filter, ownership_filter) do
+    query_params = []
+    query_params = if time_filter != :upcoming, do: [{"time", Atom.to_string(time_filter)} | query_params], else: query_params
+    query_params = if ownership_filter != :all, do: [{"ownership", Atom.to_string(ownership_filter)} | query_params], else: query_params
+    
+    case query_params do
+      [] -> "/dashboard"
+      params -> "/dashboard?" <> URI.encode_query(params)
     end
   end
 
-  defp can_cancel_order?(order) do
-    order.status in ["pending", "payment_pending"]
+  defp format_time(datetime, timezone) do
+    if datetime do
+      datetime
+      |> DateTime.shift_zone!(timezone || "UTC")
+      |> Calendar.strftime("%I:%M %p")
+      |> String.trim()
+    else
+      "TBD"
+    end
   end
 
   defp generate_ticket_id(order) do
@@ -225,7 +210,32 @@ defmodule EventasaurusWeb.DashboardLive do
     data = "#{order.id}#{order.inserted_at}#{order.user_id}#{order.status}"
     hash = :crypto.mac(:hmac, :sha256, secret_key, data)
     |> Base.url_encode64(padding: false)
-    |> String.slice(0, 16)  # Increased entropy to 16 chars
+    |> String.slice(0, 16)
     "#{base}-#{hash}"
   end
+
+  defp group_events_by_date(events) do
+    events
+    |> Enum.group_by(fn event ->
+      if event.start_at do
+        event.start_at |> DateTime.to_date()
+      else
+        :no_date
+      end
+    end)
+    |> Enum.sort_by(fn {date, _events} ->
+      case date do
+        :no_date -> ~D[9999-12-31]  # Sort no_date events last
+        date -> date
+      end
+    end, :desc)
+  end
+
+  defp safe_to_atom(value, allowed_atoms) do
+    atom = String.to_existing_atom(value)
+    if atom in allowed_atoms, do: atom, else: hd(allowed_atoms)
+  rescue
+    ArgumentError -> hd(allowed_atoms)
+  end
+
 end
