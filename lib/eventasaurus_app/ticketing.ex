@@ -21,7 +21,10 @@ defmodule EventasaurusApp.Ticketing do
   ## Ticket Management
 
   @doc """
-  Returns the list of tickets for an event.
+  Returns the list of tickets for an event, excluding soft-deleted ones by default.
+
+  ## Options
+    - include_deleted: if true, includes soft-deleted tickets (default: false)
 
   ## Examples
 
@@ -29,11 +32,20 @@ defmodule EventasaurusApp.Ticketing do
       [%Ticket{}, ...]
 
   """
-  def list_tickets_for_event(event_id) do
-    Ticket
+  def list_tickets_for_event(event_id, opts \\ []) do
+    include_deleted = Keyword.get(opts, :include_deleted, false)
+    
+    query = Ticket
     |> where([t], t.event_id == ^event_id)
     |> order_by([t], t.inserted_at)
-    |> Repo.all()
+    
+    query = if include_deleted do
+      query
+    else
+      where(query, [t], is_nil(t.deleted_at))
+    end
+    
+    Repo.all(query)
   end
 
   @doc """
@@ -248,7 +260,10 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   @doc """
-  Returns the list of orders for an event.
+  Returns the list of orders for an event, excluding soft-deleted ones by default.
+
+  ## Options
+    - include_deleted: if true, includes soft-deleted orders (default: false)
 
   ## Examples
 
@@ -256,12 +271,21 @@ defmodule EventasaurusApp.Ticketing do
       [%Order{}, ...]
 
   """
-  def list_orders_for_event(event_id) do
-    Order
+  def list_orders_for_event(event_id, opts \\ []) do
+    include_deleted = Keyword.get(opts, :include_deleted, false)
+    
+    query = Order
     |> where([o], o.event_id == ^event_id)
     |> order_by([o], desc: o.inserted_at)
     |> preload([:user, :ticket])
-    |> Repo.all()
+    
+    query = if include_deleted do
+      query
+    else
+      where(query, [o], is_nil(o.deleted_at))
+    end
+    
+    Repo.all(query)
   end
 
   @doc """

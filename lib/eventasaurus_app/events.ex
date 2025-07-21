@@ -19,27 +19,49 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.GuestInvitations
   require Logger
 
+  # Private helper for applying soft delete filtering
+  defp apply_soft_delete_filter(query, opts) do
+    if Keyword.get(opts, :include_deleted, false) do
+      query
+    else
+      from e in query, where: is_nil(e.deleted_at)
+    end
+  end
+
   @doc """
-  Returns the list of events.
+  Returns the list of events, excluding soft-deleted ones by default.
+
+  ## Options
+    - include_deleted: if true, includes soft-deleted events (default: false)
 
   ## Examples
 
       iex> list_events()
       [%Event{}, ...]
 
+      iex> list_events(include_deleted: true)
+      [%Event{}, ...]
+
   """
-  def list_events do
-    Repo.all(Event)
+  def list_events(opts \\ []) do
+    query = from e in Event
+    
+    query = apply_soft_delete_filter(query, opts)
+    
+    Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
   end
 
   @doc """
   Returns the list of events that are currently active (not ended or canceled).
+  Excludes soft-deleted events by default.
   """
-  def list_active_events do
+  def list_active_events(opts \\ []) do
     query = from e in Event,
             where: e.status != ^:canceled and (is_nil(e.ends_at) or e.ends_at > ^DateTime.utc_now()),
             preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
 
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
@@ -47,8 +69,9 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Returns the list of events that have active polls.
+  Excludes soft-deleted events by default.
   """
-  def list_polling_events do
+  def list_polling_events(opts \\ []) do
     current_time = DateTime.utc_now()
 
     query = from e in Event,
@@ -57,17 +80,22 @@ defmodule EventasaurusApp.Events do
                    e.polling_deadline > ^current_time,
             preload: [:venue, :users]
 
+    query = apply_soft_delete_filter(query, opts)
+
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
   end
 
   @doc """
   Returns the list of events that can sell tickets.
+  Excludes soft-deleted events by default.
   """
-  def list_ticketed_events do
+  def list_ticketed_events(opts \\ []) do
     query = from e in Event,
             where: e.status == :confirmed,
             preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
 
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
@@ -76,25 +104,30 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Returns the list of events that have ended.
+  Excludes soft-deleted events by default unless include_deleted: true is passed.
   """
-  def list_ended_events do
+  def list_ended_events(opts \\ []) do
     current_time = DateTime.utc_now()
 
     query = from e in Event,
             where: not is_nil(e.ends_at) and e.ends_at < ^current_time,
             preload: [:venue, :users]
-
+    
+    query = apply_soft_delete_filter(query, opts)
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
   end
 
   @doc """
   Returns the list of events that are currently in threshold pre-sale mode.
+  Excludes soft-deleted events by default.
   """
-  def list_threshold_events do
+  def list_threshold_events(opts \\ []) do
     query = from e in Event,
             where: e.status == :threshold,
             preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
 
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
@@ -106,10 +139,12 @@ defmodule EventasaurusApp.Events do
   ## Parameters
   - threshold_type: "attendee_count", "revenue", or "both"
   """
-  def list_events_by_threshold_type(threshold_type) when threshold_type in ["attendee_count", "revenue", "both"] do
+  def list_events_by_threshold_type(threshold_type, opts \\ []) when threshold_type in ["attendee_count", "revenue", "both"] do
     query = from e in Event,
             where: e.threshold_type == ^threshold_type,
             preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
 
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
@@ -117,17 +152,19 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Returns the list of events that have met their threshold requirements.
+  Excludes soft-deleted events by default unless include_deleted: true is passed.
   """
-  def list_threshold_met_events do
-    list_threshold_events()
+  def list_threshold_met_events(opts \\ []) do
+    list_threshold_events(opts)
     |> Enum.filter(&EventasaurusApp.EventStateMachine.threshold_met?/1)
   end
 
   @doc """
   Returns the list of events that have NOT yet met their threshold requirements.
+  Excludes soft-deleted events by default unless include_deleted: true is passed.
   """
-  def list_threshold_pending_events do
-    list_threshold_events()
+  def list_threshold_pending_events(opts \\ []) do
+    list_threshold_events(opts)
     |> Enum.reject(&EventasaurusApp.EventStateMachine.threshold_met?/1)
   end
 
@@ -137,12 +174,14 @@ defmodule EventasaurusApp.Events do
   ## Parameters
   - min_revenue_cents: Minimum revenue threshold in cents
   """
-  def list_events_by_min_revenue(min_revenue_cents) when is_integer(min_revenue_cents) do
+  def list_events_by_min_revenue(min_revenue_cents, opts \\ []) when is_integer(min_revenue_cents) do
     query = from e in Event,
             where: e.threshold_type in ["revenue", "both"] and
                    not is_nil(e.threshold_revenue_cents) and
                    e.threshold_revenue_cents >= ^min_revenue_cents,
             preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
 
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
@@ -154,12 +193,14 @@ defmodule EventasaurusApp.Events do
   ## Parameters
   - min_attendee_count: Minimum attendee count threshold
   """
-  def list_events_by_min_attendee_count(min_attendee_count) when is_integer(min_attendee_count) do
+  def list_events_by_min_attendee_count(min_attendee_count, opts \\ []) when is_integer(min_attendee_count) do
     query = from e in Event,
             where: e.threshold_type in ["attendee_count", "both"] and
                    not is_nil(e.threshold_count) and
                    e.threshold_count >= ^min_attendee_count,
             preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
 
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
@@ -168,28 +209,61 @@ defmodule EventasaurusApp.Events do
   @doc """
   Gets a single event.
 
-  Raises `Ecto.NoResultsError` if the Event does not exist.
+  Raises `Ecto.NoResultsError` if the Event does not exist or is soft-deleted.
   """
-  def get_event!(id), do: Repo.get!(Event, id) |> Repo.preload([:venue, :users]) |> Event.with_computed_fields()
+  def get_event!(id) do
+    query = from e in Event,
+            where: e.id == ^id and is_nil(e.deleted_at)
+    
+    Repo.one!(query) |> Repo.preload([:venue, :users]) |> Event.with_computed_fields()
+  end
 
   @doc """
-  Gets a single event.
+  Gets a single event, excluding soft-deleted ones by default.
 
-  Returns nil if the Event does not exist.
+  ## Options
+    - include_deleted: if true, includes soft-deleted events (default: false)
+
+  Returns nil if the Event does not exist or is soft-deleted (unless include_deleted: true).
   """
-  def get_event(id), do: Repo.get(Event, id) |> maybe_preload()
+  def get_event(id, opts \\ []) do
+    include_deleted = Keyword.get(opts, :include_deleted, false)
+    
+    query = from e in Event, where: e.id == ^id
+    
+    query = if include_deleted do
+      query
+    else
+      from e in query, where: is_nil(e.deleted_at)
+    end
+    
+    Repo.one(query) |> maybe_preload()
+  end
 
   defp maybe_preload(nil), do: nil
   defp maybe_preload(event), do: Repo.preload(event, [:venue, :users]) |> Event.with_computed_fields()
 
   @doc """
-  Gets a single event by slug.
+  Gets a single event by slug, excluding soft-deleted ones by default.
 
-  Returns nil if the Event does not exist.
+  ## Options
+    - include_deleted: if true, includes soft-deleted events (default: false)
+
+  Returns nil if the Event does not exist or is soft-deleted (unless include_deleted: true).
   """
-  def get_event_by_slug(slug) do
-    Repo.get_by(Event, slug: slug)
-    |> Repo.preload([:venue, :users])
+  def get_event_by_slug(slug, opts \\ []) do
+    include_deleted = Keyword.get(opts, :include_deleted, false)
+    
+    query = from e in Event, where: e.slug == ^slug
+    
+    query = if include_deleted do
+      query
+    else
+      from e in query, where: is_nil(e.deleted_at)
+    end
+    
+    Repo.one(query)
+    |> maybe_preload()
   end
 
   @doc """
@@ -207,14 +281,17 @@ defmodule EventasaurusApp.Events do
 
   """
   def get_event_by_slug!(slug) do
-    Repo.get_by!(Event, slug: slug)
+    query = from e in Event,
+            where: e.slug == ^slug and is_nil(e.deleted_at)
+    
+    Repo.one!(query)
     |> Repo.preload([:venue, :users])
   end
 
   @doc """
   Gets a single event by title.
 
-  Returns `nil` if the Event does not exist.
+  Returns `nil` if the Event does not exist or is soft-deleted.
 
   ## Examples
 
@@ -225,8 +302,13 @@ defmodule EventasaurusApp.Events do
       nil
 
   """
-  def get_event_by_title(title) do
-    case Repo.get_by(Event, title: title) do
+  def get_event_by_title(title, opts \\ []) do
+    query = from e in Event,
+            where: e.title == ^title
+    
+    query = apply_soft_delete_filter(query, opts)
+    
+    case Repo.one(query) do
       nil -> nil
       event -> Repo.preload(event, [:venue, :users])
     end
@@ -282,6 +364,126 @@ defmodule EventasaurusApp.Events do
   """
   def delete_event(%Event{} = event) do
     Repo.delete(event)
+  end
+
+  @doc """
+  Hard deletes an event if it meets eligibility criteria.
+  Uses the HardDelete module to check eligibility and perform the deletion.
+  """
+  def hard_delete_event(event_id, user_id, opts \\ []) do
+    EventasaurusApp.Events.HardDelete.hard_delete_event(event_id, user_id, opts)
+  end
+
+  @doc """
+  Checks if an event is eligible for hard deletion.
+  """
+  def eligible_for_hard_delete?(event_id, user_id, opts \\ []) do
+    EventasaurusApp.Events.HardDelete.eligible_for_hard_delete?(event_id, user_id, opts)
+  end
+
+  @doc """
+  Gets a human-readable reason why an event cannot be hard deleted.
+  """
+  def get_hard_delete_ineligibility_reason(event_id, user_id, opts \\ []) do
+    EventasaurusApp.Events.HardDelete.get_ineligibility_reason(event_id, user_id, opts)
+  end
+
+  @doc """
+  Soft deletes an event and all its associated records.
+  Uses the SoftDelete module to perform cascading soft deletion.
+  """
+  def soft_delete_event(event_id, reason, user_id) do
+    EventasaurusApp.Events.SoftDelete.soft_delete_event(event_id, reason, user_id)
+  end
+
+  @doc """
+  Restores a soft-deleted event and all its associated records.
+  """
+  def restore_event(event_id, user_id) do
+    EventasaurusApp.Events.SoftDelete.restore_event(event_id, user_id)
+  end
+
+  @doc """
+  Checks if an event can be soft deleted.
+  """
+  def can_soft_delete?(event_id) do
+    EventasaurusApp.Events.SoftDelete.can_soft_delete?(event_id)
+  end
+
+  @doc """
+  Gets statistics about soft deletion for reporting purposes.
+  """
+  def get_deletion_stats(opts \\ []) do
+    EventasaurusApp.Events.SoftDelete.get_deletion_stats(opts)
+  end
+
+  @doc """
+  Unified deletion function that automatically determines whether to perform
+  a hard or soft deletion based on event criteria.
+  
+  ## Parameters
+    - event_id: ID of the event to delete
+    - user_id: ID of the user performing the deletion
+    - reason: String explaining why the event is being deleted
+    
+  ## Returns
+    - {:ok, :hard_deleted} - Event was permanently deleted
+    - {:ok, :soft_deleted} - Event was soft deleted
+    - {:error, reason} - Deletion failed
+  """
+  def delete_event(event_id, user_id, reason) do
+    EventasaurusApp.Events.Delete.delete_event(event_id, user_id, reason)
+  end
+
+  @doc """
+  Determines the appropriate deletion method for an event.
+  
+  Returns :hard if the event is eligible for hard deletion, :soft otherwise.
+  """
+  def deletion_method(event, user) do
+    EventasaurusApp.Events.Delete.deletion_method(event, user)
+  end
+
+  @doc """
+  Returns a human-readable explanation of why an event would be soft deleted
+  instead of hard deleted.
+  """
+  def soft_delete_reason(event, user) do
+    EventasaurusApp.Events.Delete.soft_delete_reason(event, user)
+  end
+
+  @doc """
+  Counts the number of confirmed orders for an event.
+  """
+  def count_orders_for_event(event_id) do
+    alias EventasaurusApp.Events.Order
+    
+    Repo.aggregate(
+      from(o in Order, 
+           where: o.event_id == ^event_id and o.status in ["confirmed", "pending"]),
+      :count,
+      :id
+    )
+  end
+
+  @doc """
+  Counts the total number of sold tickets for an event across all ticket types.
+  """
+  def count_sold_tickets_for_event(event_id) do
+    alias EventasaurusApp.Events.Ticket
+    alias EventasaurusApp.Ticketing
+    
+    # Get all ticket IDs for this event
+    ticket_ids = Repo.all(
+      from(t in Ticket, 
+           where: t.event_id == ^event_id, 
+           select: t.id)
+    )
+    
+    # Sum up sold tickets across all ticket types
+    Enum.reduce(ticket_ids, 0, fn ticket_id, acc ->
+      acc + Ticketing.count_sold_tickets(ticket_id)
+    end)
   end
 
   @doc """
@@ -363,11 +565,13 @@ defmodule EventasaurusApp.Events do
   @doc """
   Returns the list of events by a specific user.
   """
-  def list_events_by_user(%User{} = user) do
+  def list_events_by_user(%User{} = user, opts \\ []) do
     query = from e in Event,
             join: eu in EventUser, on: e.id == eu.event_id,
             where: eu.user_id == ^user.id,
             preload: [:venue, :users]
+
+    query = apply_soft_delete_filter(query, opts)
 
     Repo.all(query)
   end
@@ -607,12 +811,13 @@ defmodule EventasaurusApp.Events do
   @doc """
   Lists all events a user is participating in.
   """
-  def list_events_with_participation(%User{} = user) do
+  def list_events_with_participation(%User{} = user, opts \\ []) do
     query = from e in Event,
             join: ep in EventParticipant, on: e.id == ep.event_id,
             where: ep.user_id == ^user.id,
             preload: [:venue, :users]
-
+    
+    query = apply_soft_delete_filter(query, opts)
     Repo.all(query)
   end
 
@@ -1219,12 +1424,12 @@ defmodule EventasaurusApp.Events do
   Get all events organized by a user for guest invitation suggestions.
   Only returns events that have participants (to avoid empty suggestion lists).
   """
-  def list_organizer_events_with_participants(%User{} = user) do
+  def list_organizer_events_with_participants(%User{} = user, opts \\ []) do
     query = from e in Event,
             join: eu in EventUser, on: e.id == eu.event_id,
             join: ep in EventParticipant, on: e.id == ep.event_id,
             where: eu.user_id == ^user.id,
-            group_by: [e.id, e.title, e.start_at, e.status],
+            group_by: [e.id, e.title, e.start_at, e.status, e.deleted_at],
             select: %{
               id: e.id,
               title: e.title,
@@ -1233,7 +1438,8 @@ defmodule EventasaurusApp.Events do
               participant_count: count(ep.id, :distinct)
             },
             order_by: [desc: e.start_at]
-
+    
+    query = apply_soft_delete_filter(query, opts)
     Repo.all(query)
   end
 
@@ -1286,7 +1492,8 @@ defmodule EventasaurusApp.Events do
             join: eu in EventUser, on: e.id == eu.event_id,
             join: u in User, on: p.user_id == u.id,
             where: eu.user_id == ^organizer.id and
-                   p.user_id != ^organizer.id,  # Exclude organizer from suggestions
+                   p.user_id != ^organizer.id and  # Exclude organizer from suggestions
+                   is_nil(e.deleted_at),  # Exclude soft-deleted events
             group_by: [u.id, u.name, u.email, u.username],
             select: %{
               user_id: u.id,
@@ -1324,9 +1531,10 @@ defmodule EventasaurusApp.Events do
 
   @doc false
   defp get_organizer_event_ids_basic(organizer_id) do
-    # Basic query for organizer's event IDs
+    # Basic query for organizer's event IDs, excluding soft-deleted events
     query = from eu in EventUser,
-            where: eu.user_id == ^organizer_id,
+            join: e in Event, on: eu.event_id == e.id,
+            where: eu.user_id == ^organizer_id and is_nil(e.deleted_at),
             select: eu.event_id
 
     Repo.all(query)
@@ -1339,7 +1547,8 @@ defmodule EventasaurusApp.Events do
             join: e in Event, on: p.event_id == e.id,
             join: u in User, on: p.user_id == u.id,
             where: p.event_id in ^event_ids and
-                   p.user_id != ^organizer_id,  # Exclude organizer from suggestions
+                   p.user_id != ^organizer_id and  # Exclude organizer from suggestions
+                   is_nil(e.deleted_at),  # Exclude soft-deleted events
             group_by: [u.id, u.name, u.email, u.username],
             select: %{
               user_id: u.id,
@@ -1577,7 +1786,8 @@ defmodule EventasaurusApp.Events do
             left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
             where: eu.user_id == ^organizer.id and
                    not is_nil(ep.invited_at) and
-                   ep.invited_at >= ^cutoff_date,
+                   ep.invited_at >= ^cutoff_date and
+                   is_nil(e.deleted_at),  # Exclude soft-deleted events
             group_by: [ep.invited_by_user_id, inviter.name, ep.status],
             select: %{
               invited_by_user_id: ep.invited_by_user_id,
@@ -1658,7 +1868,8 @@ defmodule EventasaurusApp.Events do
             left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
             where: eu.user_id == ^organizer.id and
                    not is_nil(ep.invited_at) and
-                   ep.invited_at >= ^cutoff_date,
+                   ep.invited_at >= ^cutoff_date and
+                   is_nil(e.deleted_at),  # Exclude soft-deleted events
             select: %{
               event_id: e.id,
               event_title: e.title,
@@ -2899,11 +3110,23 @@ defmodule EventasaurusApp.Events do
   @doc """
   Gets a poll for a specific event and poll type.
   """
-  def get_event_poll(%Event{} = event, poll_type) do
+  def get_event_poll(%Event{} = event, poll_type, opts \\ []) do
+    include_deleted = Keyword.get(opts, :include_deleted, false)
+    
     query = from p in Poll,
-            where: p.event_id == ^event.id and p.poll_type == ^poll_type,
+            join: e in Event, on: p.event_id == e.id,
+            where: p.event_id == ^event.id and p.poll_type == ^poll_type
+    
+    query = if include_deleted do
+      query
+    else
+      from [p, e] in query,
+        where: is_nil(e.deleted_at)
+    end
+    
+    query = from [p, e] in query,
             preload: [:created_by, poll_options: [:suggested_by, :votes]]
-
+    
     Repo.one(query)
   end
 
@@ -2924,7 +3147,7 @@ defmodule EventasaurusApp.Events do
             event_id: poll.event_id,
             poll_type: poll.voting_system,
             options_count: 0,  # New polls don't have options yet
-            is_anonymous: poll.is_anonymous || false
+            is_anonymous: false  # All users must be authenticated - no anonymous functionality
           }
           
           Eventasaurus.Services.PollAnalyticsService.track_poll_created(
