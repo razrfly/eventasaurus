@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.EventManageLive do
   use EventasaurusWeb, :live_view
 
-  alias EventasaurusApp.{Events, Ticketing}
+  alias EventasaurusApp.{Events, Ticketing, Accounts}
   alias EventasaurusApp.Events.PollOption
   alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
@@ -125,29 +125,6 @@ defmodule EventasaurusWeb.EventManageLive do
     end
 
     {:noreply, assign(socket, :active_tab, tab)}
-  end
-
-  @impl true
-  def handle_event("refresh_data", _params, socket) do
-    # Refresh all data with lazy loading
-    total_participants = Events.count_event_participants(socket.assigns.event)
-
-    # Reload initial batch
-    initial_participants = Events.list_event_participants(socket.assigns.event, limit: 20, offset: 0)
-                         |> Enum.sort_by(& &1.inserted_at, :desc)
-
-    tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
-    orders = Ticketing.list_orders_for_event(socket.assigns.event.id)
-            |> EventasaurusApp.Repo.preload([:ticket, :user])
-
-    {:noreply,
-     socket
-     |> assign_participants_with_stats(initial_participants)
-     |> assign(:participants_count, total_participants)
-     |> assign(:participants_loaded, length(initial_participants))
-     |> assign(:tickets, tickets)
-     |> assign(:orders, orders)
-     |> put_flash(:info, "Data refreshed")}
   end
 
   @impl true
@@ -1539,6 +1516,62 @@ defmodule EventasaurusWeb.EventManageLive do
   defp extract_event_info({:hide_dropdown, _}), do: :acknowledge_only
   defp extract_event_info(_), do: :unhandled
 
+  # Handle organizer search functionality
+  defp handle_organizer_search(query, socket, mode) do
+    event = socket.assigns.event
+    current_user = socket.assigns.user
+    
+    # Determine offset based on mode
+    offset = case mode do
+      :new_search -> 0
+      :load_more -> socket.assigns[:organizer_search_offset] || 0
+    end
+    
+    # Search for users
+    search_opts = [
+      limit: 20,
+      offset: offset,
+      exclude_user_id: current_user.id,
+      event_id: event.id
+    ]
+    
+    case Accounts.search_users_for_organizers(query, search_opts) do
+      users when is_list(users) ->
+        # Format users for display
+        formatted_users = Enum.map(users, fn user ->
+          %{
+            "id" => user.id,
+            "name" => user.name,
+            "email" => user.email,
+            "username" => user.username,
+            "avatar_url" => EventasaurusApp.Avatars.generate_user_avatar(user, size: 40)
+          }
+        end)
+        
+        # Update results based on mode
+        updated_results = case mode do
+          :new_search -> formatted_users
+          :load_more -> (socket.assigns[:organizer_search_results] || []) ++ formatted_users
+        end
+        
+        {:noreply, 
+         socket
+         |> assign(:organizer_search_results, updated_results)
+         |> assign(:organizer_search_loading, false)
+         |> assign(:organizer_search_offset, offset + length(users))
+         |> assign(:organizer_search_has_more, length(users) == 20)
+         |> assign(:organizer_search_total_shown, length(updated_results))
+        }
+        
+      _ ->
+        {:noreply,
+         socket
+         |> assign(:organizer_search_loading, false)
+         |> assign(:organizer_search_error, "Failed to search users")
+        }
+    end
+  end
+
   # Handle specific messages that need custom logic
   defp handle_specific_message({:edit_option, option_id}, socket) do
     # Delegate to the existing handle_info implementation to avoid duplication
@@ -1555,6 +1588,16 @@ defmodule EventasaurusWeb.EventManageLive do
     # Time slot changes from TimeSlotPickerComponent - just acknowledge
     # The component handles the time slots internally
     {:noreply, socket}
+  end
+
+  defp handle_specific_message({:search_users_for_organizers, query}, socket) do
+    # Perform the organizer search
+    handle_organizer_search(query, socket, :new_search)
+  end
+
+  defp handle_specific_message({:search_users_for_organizers, query, :load_more}, socket) do
+    # Load more results for organizer search
+    handle_organizer_search(query, socket, :load_more)
   end
 
 end
