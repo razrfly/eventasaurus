@@ -155,11 +155,7 @@ defmodule EventasaurusWeb.DashboardLive do
     filter_counts = %{
       upcoming: count_events_by_filter(user, :upcoming, :all),
       past: count_events_by_filter(user, :past, :all),
-<<<<<<< HEAD
       archived: count_archived_events(user),
-=======
-      archived: count_events_by_filter(user, :archived, :all),
->>>>>>> 19793db (getting closer)
       created: count_events_by_filter(user, :all, :created),
       participating: count_events_by_filter(user, :all, :participating)
     }
