@@ -103,7 +103,10 @@ defmodule Eventasaurus.MixProject do
       {:hackney, "~> 1.8"},
       
       # Override nimble_ownership version for Sentry compatibility
-      {:nimble_ownership, "~> 1.0", override: true}
+      {:nimble_ownership, "~> 1.0", override: true},
+
+      # Soft delete functionality for preserving data
+      {:ecto_soft_delete, "~> 2.1"}
     ]
   end
 

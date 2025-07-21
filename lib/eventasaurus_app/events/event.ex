@@ -1,6 +1,7 @@
 defmodule EventasaurusApp.Events.Event do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.SoftDelete.Schema
   alias Nanoid, as: NanoID
   alias EventasaurusApp.EventStateMachine
 
@@ -80,7 +81,12 @@ defmodule EventasaurusApp.Events.Event do
     has_many :orders, EventasaurusApp.Events.Order, on_delete: :delete_all
     has_many :polls, EventasaurusApp.Events.Poll, on_delete: :delete_all
 
+    # Deletion metadata fields
+    field :deletion_reason, :string
+    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+
     timestamps()
+    soft_delete_schema()
   end
 
   @doc false

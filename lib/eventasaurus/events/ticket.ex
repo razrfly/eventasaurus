@@ -1,6 +1,7 @@
 defmodule EventasaurusApp.Events.Ticket do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.SoftDelete.Schema
 
   # Valid pricing models
   @pricing_models ~w(fixed flexible dynamic)
@@ -24,7 +25,12 @@ defmodule EventasaurusApp.Events.Ticket do
     belongs_to :event, EventasaurusApp.Events.Event
     has_many :orders, EventasaurusApp.Events.Order
 
+    # Deletion metadata fields
+    field :deletion_reason, :string
+    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+
     timestamps()
+    soft_delete_schema()
   end
 
   @doc false
