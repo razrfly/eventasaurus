@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
     ~H"""
     <div role="main" aria-label="Events timeline">
       <!-- Desktop Timeline -->
-      <div class="space-y-8 hidden sm:block" role="list" aria-label="Timeline events by date">
+      <div class="space-y-4 hidden sm:block" role="list" aria-label="Timeline events by date">
         <%= for {date, date_events} <- @grouped_events do %>
           <div class="relative flex items-start space-x-3" role="listitem">
             <!-- Date Section -->
@@ -55,11 +55,11 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
       </div>
 
       <!-- Mobile Version (no timeline visual) -->
-      <div class="space-y-8 sm:hidden" role="list" aria-label="Events by date (mobile view)">
+      <div class="space-y-4 sm:hidden" role="list" aria-label="Events by date (mobile view)">
         <%= for {date, date_events} <- @grouped_events do %>
           <div role="listitem">
             <!-- Date Header -->
-            <div class="mb-4">
+            <div class="mb-2">
               <%= if date == :no_date do %>
                 <div class="text-lg font-semibold text-gray-900">Date TBD</div>
               <% else %>
@@ -73,7 +73,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
             </div>
             
             <!-- Events for this date -->
-            <div class="space-y-3">
+            <div class="space-y-2">
               <%= for event <- date_events do %>
                 <.live_component
                   module={EventCard}

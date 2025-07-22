@@ -171,12 +171,20 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   end
 
   defp format_time(nil, _timezone), do: "Time TBD"
-  defp format_time(datetime, _timezone) do
-    # This is a simplified version - in reality you'd want proper timezone handling
-    case datetime do
-      %DateTime{} -> Calendar.strftime(datetime, "%I:%M %p")
-      %NaiveDateTime{} -> Calendar.strftime(datetime, "%I:%M %p")
-      _ -> "Time TBD"
+  defp format_time(%DateTime{} = datetime, timezone) do
+    converted_dt = if timezone do
+      EventasaurusWeb.TimezoneHelpers.convert_to_timezone(datetime, timezone)
+    else
+      datetime
     end
+
+    Calendar.strftime(converted_dt, "%I:%M %p")
+    |> String.replace(" 0", " ")
   end
+  defp format_time(%NaiveDateTime{} = datetime, _timezone) do
+    # NaiveDateTime doesn't have timezone info, format as-is
+    Calendar.strftime(datetime, "%I:%M %p")
+    |> String.replace(" 0", " ")
+  end
+  defp format_time(_, _), do: "Time TBD"
 end
