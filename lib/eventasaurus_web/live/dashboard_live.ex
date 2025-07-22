@@ -225,6 +225,51 @@ defmodule EventasaurusWeb.DashboardLive do
     end
   end
 
+  # Handle filter changes from EventTimelineComponent
+  @impl true
+  def handle_info({:filter_time, time_filter}, socket) do
+    time_filter = safe_to_atom(Atom.to_string(time_filter), [:upcoming, :past, :archived])
+    
+    # Use cached data if available, otherwise load
+    socket = if cached_events = socket.assigns.events_cache[time_filter] do
+      socket
+      |> assign(:time_filter, time_filter)
+      |> assign(:events, apply_ownership_filter(cached_events, socket.assigns.ownership_filter))
+      |> assign(:loading, false)
+    else
+      socket
+      |> assign(:time_filter, time_filter)
+      |> assign(:loading, true)
+      |> load_unified_events()
+    end
+    
+    {:noreply,
+     socket
+     |> push_patch(to: build_dashboard_path(time_filter, socket.assigns.ownership_filter))}
+  end
+
+  @impl true
+  def handle_info({:filter_ownership, ownership_filter}, socket) do
+    ownership_filter = safe_to_atom(Atom.to_string(ownership_filter), [:all, :created, :participating])
+    
+    # Use cached data if available
+    socket = if cached_events = socket.assigns.events_cache[socket.assigns.time_filter] do
+      socket
+      |> assign(:ownership_filter, ownership_filter)
+      |> assign(:events, apply_ownership_filter(cached_events, ownership_filter))
+      |> assign(:loading, false)
+    else
+      socket
+      |> assign(:ownership_filter, ownership_filter)
+      |> assign(:loading, true)
+      |> load_unified_events()
+    end
+    
+    {:noreply,
+     socket
+     |> push_patch(to: build_dashboard_path(socket.assigns.time_filter, ownership_filter))}
+  end
+
   @impl true
   def handle_info({:order_updated, _order}, socket) do
     # Reload events to reflect any ticket changes

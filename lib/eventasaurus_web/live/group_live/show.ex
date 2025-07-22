@@ -43,9 +43,11 @@ defmodule EventasaurusWeb.GroupLive.Show do
               members = Groups.list_group_members_with_roles(group)
               member_count = length(members)
               
-              # Load group events
-              events = Events.list_events_for_group(group)
-                      |> Enum.sort_by(& &1.start_at, {:desc, DateTime})
+              # Load group events with time filtering
+              time_filter = :upcoming  # Default to upcoming events
+              all_events = Events.list_events_for_group(group)
+              events = filter_events_by_time(all_events, time_filter)
+              filter_counts = calculate_filter_counts(all_events)
               event_count = length(events)
               
               {:ok,
@@ -59,6 +61,8 @@ defmodule EventasaurusWeb.GroupLive.Show do
                |> assign(:member_count, member_count)
                |> assign(:events, events)
                |> assign(:event_count, event_count)
+               |> assign(:time_filter, time_filter)
+               |> assign(:filter_counts, filter_counts)
                |> assign(:active_tab, "events")
                |> assign(:search_query, "")
                |> assign(:role_filter, "all")
@@ -86,8 +90,11 @@ defmodule EventasaurusWeb.GroupLive.Show do
         members = Groups.list_group_members_with_roles(group)
         member_count = length(members)
         
-        events = Events.list_events_for_group(group)
-                |> Enum.sort_by(& &1.start_at, {:desc, DateTime})
+        # Load group events with time filtering
+        time_filter = :upcoming
+        all_events = Events.list_events_for_group(group)
+        events = filter_events_by_time(all_events, time_filter)
+        filter_counts = calculate_filter_counts(all_events)
         event_count = length(events)
         
         {:noreply,
@@ -98,6 +105,8 @@ defmodule EventasaurusWeb.GroupLive.Show do
          |> assign(:member_count, member_count)
          |> assign(:events, events)
          |> assign(:event_count, event_count)
+         |> assign(:time_filter, time_filter)
+         |> assign(:filter_counts, filter_counts)
          |> assign(:active_tab, "events")
          |> assign(:search_query, "")
          |> assign(:role_filter, "all")
@@ -430,5 +439,71 @@ defmodule EventasaurusWeb.GroupLive.Show do
     |> assign(:paginated_members, result.entries)
     |> assign(:total_pages, result.total_pages)
     |> assign(:current_page, result.page)
+  end
+
+  # Handle time filter changes from EventTimelineComponent
+  @impl true
+  def handle_info({:filter_time, time_filter}, socket) do
+    group = socket.assigns.group
+    all_events = Events.list_events_for_group(group)
+    events = filter_events_by_time(all_events, time_filter)
+    filter_counts = calculate_filter_counts(all_events)
+    
+    {:noreply,
+     socket
+     |> assign(:time_filter, time_filter)
+     |> assign(:events, events)
+     |> assign(:filter_counts, filter_counts)}
+  end
+
+  # Helper functions
+
+  defp filter_events_by_time(events, :upcoming) do
+    now = DateTime.utc_now()
+    events
+    |> Enum.filter(fn event -> 
+      case event.start_at do
+        nil -> true  # Include events without dates as upcoming
+        start_at -> DateTime.compare(start_at, now) in [:gt, :eq]
+      end
+    end)
+    |> Enum.sort_by(fn event -> event.start_at || DateTime.utc_now() end, :asc)
+  end
+
+  defp filter_events_by_time(events, :past) do
+    now = DateTime.utc_now()
+    events
+    |> Enum.filter(fn event -> 
+      case event.start_at do
+        nil -> false  # Don't include no-date events in past
+        start_at -> DateTime.compare(start_at, now) == :lt
+      end
+    end)
+    |> Enum.sort_by(& &1.start_at, :desc)
+  end
+
+  defp calculate_filter_counts(events) do
+    now = DateTime.utc_now()
+    
+    upcoming_count = events
+    |> Enum.count(fn event ->
+      case event.start_at do
+        nil -> true
+        start_at -> DateTime.compare(start_at, now) in [:gt, :eq]
+      end
+    end)
+    
+    past_count = events
+    |> Enum.count(fn event ->
+      case event.start_at do
+        nil -> false
+        start_at -> DateTime.compare(start_at, now) == :lt
+      end
+    end)
+    
+    %{
+      upcoming: upcoming_count,
+      past: past_count
+    }
   end
 end
