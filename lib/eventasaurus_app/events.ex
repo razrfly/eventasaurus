@@ -1141,6 +1141,7 @@ defmodule EventasaurusApp.Events do
     participants_by_event = if length(event_ids) > 0 do
       from(ep in EventParticipant,
         where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
+        order_by: [asc: ep.event_id, desc: ep.inserted_at],
         preload: [:user]
       )
       |> Repo.all()
