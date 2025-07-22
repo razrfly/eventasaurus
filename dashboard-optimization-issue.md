@@ -140,3 +140,190 @@ Load all events once and filter on the client using Alpine.js or hooks:
 - Consider implementing a "stale-while-revalidate" pattern
 - Add proper error handling for failed async loads
 - Implement connection-aware loading (don't preload on slow connections)
+
+---
+
+## UPDATE: Further Performance Analysis
+
+After implementing the initial optimization (async preloading), the performance improvement was minimal. A deeper analysis reveals several fundamental issues:
+
+### Root Cause Analysis
+
+1. **UNION Query Overhead**
+   - The `list_unified_events_for_user/2` uses a UNION ALL to combine organizer and participant events
+   - This creates a complex execution plan that's inherently slow
+   - Each subquery must be executed separately before the UNION
+   - The database can't optimize across the UNION boundary effectively
+
+2. **Multiple Database Round Trips**
+   - Main query fetches events (with UNION)
+   - `get_venues_for_events/1` runs a separate query for venues
+   - `get_participants_for_events/1` runs another query for participants
+   - This results in 3+ database round trips per tab load
+
+3. **N+1 Query Pattern**
+   - Although batch loading is attempted, the venue and participant queries still run separately
+   - Each event's computed fields require additional processing
+
+4. **Inefficient Filtering**
+   - Time filtering happens AFTER the UNION in a subquery
+   - This means both queries run fully before filtering
+   - Database can't use indexes effectively on the UNION result
+
+5. **Separate Count Queries**
+   - Filter counts run the same expensive queries again
+   - No reuse of already fetched data
+
+### Recommended Optimizations
+
+#### 1. **Single Query Approach (High Priority)**
+Replace the UNION with a single query using conditional logic:
+
+```elixir
+def list_all_user_events(%User{} = user) do
+  from e in Event,
+    left_join: eu in EventUser, on: e.id == eu.event_id and eu.user_id == ^user.id,
+    left_join: ep in EventParticipant, on: e.id == ep.event_id and ep.user_id == ^user.id,
+    left_join: v in assoc(e, :venue),
+    left_join: all_participants in assoc(e, :participants),
+    where: not is_nil(eu.id) or not is_nil(ep.id),
+    where: is_nil(e.deleted_at),
+    select: %{
+      event: e,
+      venue: v,
+      is_organizer: not is_nil(eu.id),
+      participant_status: ep.status,
+      # Include aggregated participant data
+    },
+    preload: [participants: all_participants]
+end
+```
+
+Benefits:
+- Single query instead of UNION + 2 additional queries
+- All data loaded in one round trip
+- Better index utilization
+- Easier to filter and paginate
+
+#### 2. **Materialized View for Dashboard**
+Create a materialized view that pre-computes user event relationships:
+
+```sql
+CREATE MATERIALIZED VIEW user_event_dashboard AS
+SELECT 
+  e.*,
+  v.name as venue_name,
+  v.address as venue_address,
+  CASE WHEN eu.user_id IS NOT NULL THEN 'organizer' ELSE 'participant' END as user_role,
+  COALESCE(ep.status, 'confirmed') as user_status,
+  COUNT(DISTINCT ep2.user_id) as participant_count
+FROM events e
+LEFT JOIN event_users eu ON e.id = eu.event_id
+LEFT JOIN event_participants ep ON e.id = ep.event_id
+LEFT JOIN venues v ON e.venue_id = v.id
+LEFT JOIN event_participants ep2 ON e.id = ep2.event_id
+WHERE e.deleted_at IS NULL
+GROUP BY e.id, eu.user_id, ep.user_id, ep.status, v.id;
+
+CREATE INDEX idx_user_event_dashboard_user_start ON user_event_dashboard(user_id, start_at);
+```
+
+Refresh strategy:
+- Refresh on event changes via triggers
+- Or refresh periodically (every few minutes)
+
+#### 3. **Denormalization Strategy**
+Add computed fields directly to the events table:
+
+```elixir
+alter table(:events) do
+  add :participant_count, :integer, default: 0
+  add :organizer_count, :integer, default: 0
+end
+```
+
+Update counts via database triggers or application logic when participants change.
+
+#### 4. **Smart Caching with ETS**
+Implement an ETS-based cache at the context level:
+
+```elixir
+defmodule EventasaurusApp.Events.DashboardCache do
+  use GenServer
+  
+  def get_user_events(user_id) do
+    case :ets.lookup(:dashboard_cache, user_id) do
+      [{^user_id, events, inserted_at}] ->
+        if DateTime.diff(DateTime.utc_now(), inserted_at, :second) < 300 do
+          {:ok, events}
+        else
+          {:miss, :stale}
+        end
+      [] ->
+        {:miss, :not_found}
+    end
+  end
+  
+  def put_user_events(user_id, events) do
+    :ets.insert(:dashboard_cache, {user_id, events, DateTime.utc_now()})
+  end
+end
+```
+
+#### 5. **Optimized Count Strategy**
+Calculate counts from the already-loaded events instead of separate queries:
+
+```elixir
+defp calculate_counts_from_events(events) do
+  Enum.reduce(events, %{upcoming: 0, past: 0, created: 0, participating: 0}, fn event, acc ->
+    acc
+    |> update_time_counts(event)
+    |> update_role_counts(event)
+  end)
+end
+```
+
+#### 6. **PostgreSQL-Specific Optimizations**
+
+```sql
+-- Partial indexes for common queries
+CREATE INDEX idx_events_upcoming ON events(start_at) 
+WHERE deleted_at IS NULL AND (start_at IS NULL OR start_at > NOW());
+
+CREATE INDEX idx_events_past ON events(start_at DESC) 
+WHERE deleted_at IS NULL AND start_at <= NOW();
+
+-- Composite indexes for the joins
+CREATE INDEX idx_event_users_composite ON event_users(user_id, event_id) INCLUDE (role);
+CREATE INDEX idx_event_participants_composite ON event_participants(user_id, event_id) INCLUDE (status);
+
+-- Enable parallel queries
+SET max_parallel_workers_per_gather = 4;
+```
+
+### Implementation Priority
+
+1. **Immediate**: Replace UNION with single query approach
+2. **Short-term**: Implement ETS caching
+3. **Medium-term**: Add materialized view for complex dashboards
+4. **Long-term**: Consider GraphQL with DataLoader for optimal query batching
+
+### Expected Performance Gains
+
+- **Single Query**: 60-70% reduction in query time
+- **ETS Caching**: Near-instant tab switches for cached data
+- **Materialized View**: 80-90% faster initial loads
+- **Combined**: Sub-100ms dashboard loads
+
+### Database Query Analysis Tools
+
+To measure improvements:
+```elixir
+# Add to config/dev.exs
+config :eventasaurus, EventasaurusApp.Repo,
+  log: :debug,
+  show_sensitive_data_on_connection_error: true
+
+# Use EXPLAIN ANALYZE
+Repo.explain(:all, query, analyze: true, verbose: true)
+```
