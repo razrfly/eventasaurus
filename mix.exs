@@ -106,7 +106,10 @@ defmodule Eventasaurus.MixProject do
       {:nimble_ownership, "~> 1.0", override: true},
 
       # Soft delete functionality for preserving data
-      {:ecto_soft_delete, "~> 2.1"}
+      {:ecto_soft_delete, "~> 2.1"},
+      
+      # HTML helpers for text truncation and more
+      {:phoenix_html_simplified_helpers, "~> 2.1.0"}
     ]
   end
 
