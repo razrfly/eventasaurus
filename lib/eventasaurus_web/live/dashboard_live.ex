@@ -345,17 +345,6 @@ defmodule EventasaurusWeb.DashboardLive do
     end
   end
 
-  defp format_time(datetime, timezone) do
-    if datetime do
-      datetime
-      |> DateTime.shift_zone!(timezone || "UTC")
-      |> Calendar.strftime("%I:%M %p")
-      |> String.trim()
-    else
-      "TBD"
-    end
-  end
-
   defp generate_ticket_id(order) do
     # Generate a cryptographically secure ticket ID using HMAC
     base = "EVT-#{order.id}"
@@ -366,23 +355,6 @@ defmodule EventasaurusWeb.DashboardLive do
     |> Base.url_encode64(padding: false)
     |> String.slice(0, 16)
     "#{base}-#{hash}"
-  end
-
-  defp group_events_by_date(events) do
-    events
-    |> Enum.group_by(fn event ->
-      if event.start_at do
-        event.start_at |> DateTime.to_date()
-      else
-        :no_date
-      end
-    end)
-    |> Enum.sort_by(fn {date, _events} ->
-      case date do
-        :no_date -> ~D[9999-12-31]  # Sort no_date events last
-        date -> date
-      end
-    end, :desc)
   end
 
   defp safe_to_atom(value, allowed_atoms) do
