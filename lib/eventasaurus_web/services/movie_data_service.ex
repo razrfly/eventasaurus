@@ -4,7 +4,8 @@ defmodule EventasaurusWeb.Services.MovieDataService do
   Ensures admin and public interfaces save identical data structures.
   """
 
-    alias EventasaurusWeb.Utils.MovieUtils
+  import Phoenix.HTML.SimplifiedHelpers.Truncate
+  alias EventasaurusWeb.Utils.MovieUtils
 
   @doc """
   Prepares movie option data in a consistent format for both admin and public interfaces.
@@ -43,42 +44,10 @@ defmodule EventasaurusWeb.Services.MovieDataService do
     )
 
     # Truncate description to fit within 1000 character limit
-    # Leave some buffer for safety (980 chars max)
-    truncated_description = if is_binary(enhanced_description) && String.length(enhanced_description) > 980 do
-      # Truncate to 977 chars and add ellipsis
-      truncated = String.slice(enhanced_description, 0, 977)
-      
-      # Try to find the last complete sentence within the truncated text
-      # Find all positions of sentence endings
-      sentence_endings = [". ", "! ", "? "]
-      |> Enum.flat_map(fn pattern ->
-        case :binary.matches(truncated, pattern) do
-          [] -> []
-          matches -> Enum.map(matches, fn {pos, _len} -> pos end)
-        end
-      end)
-      |> Enum.filter(&(&1 > 800))  # Only consider if we keep at least 800 chars
-      
-      case sentence_endings do
-        [] ->
-          # No good sentence boundary found, truncate at word boundary
-          words = String.split(truncated, " ")
-          # Take words until we would exceed the limit
-          {kept_words, _} = Enum.reduce_while(words, {[], 0}, fn word, {acc, len} ->
-            new_len = len + String.length(word) + 1  # +1 for space
-            if new_len > 977 do
-              {:halt, {acc, len}}
-            else
-              {:cont, {acc ++ [word], new_len}}
-            end
-          end)
-          Enum.join(kept_words, " ") <> "..."
-          
-        positions ->
-          # Use the last sentence boundary
-          last_pos = Enum.max(positions)
-          String.slice(enhanced_description, 0, last_pos + 1)
-      end
+    # Using phoenix_html_simplified_helpers for smart truncation
+    truncated_description = if is_binary(enhanced_description) do
+      # Truncate at word boundary with 980 char limit to leave buffer
+      truncate(enhanced_description, length: 980, separator: " ")
     else
       enhanced_description
     end
