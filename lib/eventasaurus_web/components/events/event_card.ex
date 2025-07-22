@@ -12,15 +12,19 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   @impl true
   def render(assigns) do
+    # Generate a unique ID based on the component's ID (which includes layout prefix)
+    unique_id = assigns.id || "#{assigns.layout}-event-#{assigns.event.id}"
+    assigns = assign(assigns, :unique_id, unique_id)
+    
     ~H"""
-    <article class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer" role="article" aria-labelledby={"event-title-#{@event.id}"}>
+    <article class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer" role="article" aria-labelledby={"event-title-#{@unique_id}"}>
       <div class={card_padding(@layout)}>
         <!-- Event Header with Image -->
         <div class={card_layout(@layout)}>
           <!-- Left Content -->
           <div class="flex-1">
             <a href={get_event_url(@event, @context)} class="block" aria-label={"View #{@event.title}"}>
-              <h4 id={"event-title-#{@event.id}"} class={title_size(@layout)}>
+              <h4 id={"event-title-#{@unique_id}"} class={title_size(@layout)}>
                 <%= @event.title %>
               </h4>
               
