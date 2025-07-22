@@ -18,7 +18,7 @@ defmodule EventasaurusWeb.DashboardLive do
       # Start async tasks to preload all tabs
       socket_with_tasks = if connected?(socket) do
         upcoming_task = Task.async(fn ->
-          Events.list_unified_events_for_user(user, [
+          Events.list_unified_events_for_user_optimized(user, [
             time_filter: :upcoming,
             ownership_filter: :all,
             limit: 50
@@ -26,7 +26,7 @@ defmodule EventasaurusWeb.DashboardLive do
         end)
         
         past_task = Task.async(fn ->
-          Events.list_unified_events_for_user(user, [
+          Events.list_unified_events_for_user_optimized(user, [
             time_filter: :past,
             ownership_filter: :all,
             limit: 50
@@ -139,7 +139,7 @@ defmodule EventasaurusWeb.DashboardLive do
     # Clear cache and restart all async tasks
     socket = if connected?(socket) do
       upcoming_task = Task.async(fn ->
-        Events.list_unified_events_for_user(user, [
+        Events.list_unified_events_for_user_optimized(user, [
           time_filter: :upcoming,
           ownership_filter: :all,
           limit: 50
@@ -147,7 +147,7 @@ defmodule EventasaurusWeb.DashboardLive do
       end)
       
       past_task = Task.async(fn ->
-        Events.list_unified_events_for_user(user, [
+        Events.list_unified_events_for_user_optimized(user, [
           time_filter: :past,
           ownership_filter: :all,
           limit: 50
@@ -298,7 +298,7 @@ defmodule EventasaurusWeb.DashboardLive do
       end)
     else
       # For active events, use the unified function
-      Events.list_unified_events_for_user(user, [
+      Events.list_unified_events_for_user_optimized(user, [
         time_filter: time_filter,
         ownership_filter: ownership_filter,
         limit: 50
@@ -321,7 +321,7 @@ defmodule EventasaurusWeb.DashboardLive do
   end
 
   defp count_events_by_filter(user, time_filter, ownership_filter) do
-    Events.list_unified_events_for_user(user, [
+    Events.list_unified_events_for_user_optimized(user, [
       time_filter: time_filter,
       ownership_filter: ownership_filter,
       limit: 1000
