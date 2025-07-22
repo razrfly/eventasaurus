@@ -3623,8 +3623,8 @@ defmodule EventasaurusApp.Events do
           }
           
           Eventasaurus.Services.PollAnalyticsService.track_poll_created(
-            poll.created_by_id,
-            poll.id,
+            to_string(poll.created_by_id),
+            to_string(poll.id),
             metadata
           )
         end
@@ -3759,9 +3759,9 @@ defmodule EventasaurusApp.Events do
                 }
                 
                 Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_created(
-                  suggested_by_id,
-                  poll_id,
-                  option.id,
+                  to_string(suggested_by_id),
+                  to_string(poll_id),
+                  to_string(option.id),
                   metadata
                 )
               end
@@ -3869,9 +3869,9 @@ defmodule EventasaurusApp.Events do
                 }
                 
                 Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_approved(
-                  approver_id,
-                  updated_option.poll_id,
-                  updated_option.id,
+                  to_string(approver_id),
+                  to_string(updated_option.poll_id),
+                  to_string(updated_option.id),
                   metadata
                 )
               end
@@ -4449,9 +4449,9 @@ defmodule EventasaurusApp.Events do
             }
             
             Eventasaurus.Services.PollAnalyticsService.track_poll_vote(
-              user.id,
-              poll.id,
-              poll_option.id,
+              to_string(user.id),
+              to_string(poll.id),
+              to_string(poll_option.id),
               voting_system,
               metadata
             )
