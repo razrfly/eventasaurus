@@ -78,14 +78,14 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
 
         <!-- Ownership Filter - User Dashboard Only -->
         <%= if @context == :user_dashboard do %>
-          <div class="flex-1">
+          <div class="ml-auto">
             <label for="ownership-filter" class="sr-only">Ownership filter</label>
             <select 
               id="ownership-filter"
               phx-change="filter_ownership"
               phx-target={@myself}
               name="filter"
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              class="w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
               aria-label="Filter events by ownership"
             >
               <option value="all" selected={@filters.ownership_filter == :all}>
