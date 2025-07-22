@@ -14,13 +14,13 @@ defmodule EventasaurusWeb.Components.Events.ParticipantAvatars do
           <div class="flex -space-x-1.5 mr-2">
             <%= for {participant, _index} <- Enum.with_index(Enum.take(@participant_data.participants_list, 3)) do %>
               <%= if participant.user do %>
-                <div class="relative group">
+                <div class="relative group/avatar">
                   <img 
                     src={generate_avatar_url(participant.user)}
                     alt={participant.user.name || participant.user.email}
                     class="w-10 h-10 rounded-full border-2 border-white hover:z-20 hover:scale-110 transition-transform cursor-pointer relative"
                   >
-                  <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                  <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover/avatar:opacity-100 group-hover/avatar:visible transition-all duration-200 z-50 pointer-events-none">
                     <%= participant.user.name || participant.user.email %>
                     <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                   </div>
@@ -29,11 +29,11 @@ defmodule EventasaurusWeb.Components.Events.ParticipantAvatars do
             <% end %>
             
             <%= if @participant_data.more_count > 0 do %>
-              <div class="relative group">
+              <div class="relative group/more">
                 <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white hover:z-20 hover:scale-110 transition-transform cursor-pointer">
                   +<%= @participant_data.more_count %>
                 </div>
-                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover/more:opacity-100 group-hover/more:visible transition-all duration-200 z-50 pointer-events-none">
                   <%= @participant_data.more_count %> more participants
                   <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                 </div>
