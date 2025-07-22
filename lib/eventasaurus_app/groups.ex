@@ -57,6 +57,7 @@ defmodule EventasaurusApp.Groups do
   """
 
   import Ecto.Query, warn: false
+  require Logger
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Groups.{Group, GroupUser}
   alias EventasaurusApp.Accounts.User
@@ -769,5 +770,389 @@ defmodule EventasaurusApp.Groups do
     EventasaurusApp.Events.Event
     |> where(group_id: ^group.id)
     |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
+  Syncs event participants to group members.
+  
+  This function finds all users who have purchased tickets for events in the group
+  and automatically adds them as members if they're not already members.
+  
+  ## Parameters
+  
+  * `group` - Group struct to sync members for
+  * `acting_user` - User performing the sync (for audit logging)
+  * `metadata` - Optional metadata for audit logging
+  
+  ## Returns
+  
+  * `{:ok, %{added: count, already_members: count}}` - Success with counts
+  * `{:error, reason}` - If sync fails
+  
+  ## Examples
+  
+      iex> sync_participants_to_group(group, admin_user)
+      {:ok, %{added: 5, already_members: 3}}
+      
+  """
+  def sync_participants_to_group(%Group{} = group, acting_user \\ nil, metadata \\ %{}) do
+    Repo.transaction(fn ->
+      # Get all events in the group
+      event_ids = from(e in EventasaurusApp.Events.Event,
+        where: e.group_id == ^group.id,
+        select: e.id
+      ) |> Repo.all()
+      
+      if Enum.empty?(event_ids) do
+        %{added: 0, already_members: 0}
+      else
+        # Get all unique users who are participants in these events
+        participant_users = from(ep in EventasaurusApp.Events.EventParticipant,
+          where: ep.event_id in ^event_ids,
+          where: is_nil(ep.deleted_at),
+          join: u in User, on: ep.user_id == u.id,
+          distinct: true,
+          select: u
+        ) |> Repo.all()
+        
+        # Process each user
+        results = Enum.reduce(participant_users, %{added: 0, already_members: 0}, fn user, acc ->
+          case add_user_to_group(group, user, "member", acting_user, metadata) do
+            {:ok, _} -> 
+              %{acc | added: acc.added + 1}
+            {:error, :already_member} -> 
+              %{acc | already_members: acc.already_members + 1}
+            {:error, reason} ->
+              Logger.error("Failed to add user #{user.id} to group #{group.id}: #{inspect(reason)}")
+              acc
+          end
+        end)
+        
+        # Log the sync operation
+        if acting_user do
+          AuditLogger.log_group_sync(group.id, acting_user.id, results, metadata)
+        end
+        
+        results
+      end
+    end)
+  end
+
+  @doc """
+  Syncs participants from a specific event to group members.
+  
+  This is useful when a single event is added to a group and you want to
+  sync only that event's participants rather than all events.
+  
+  ## Parameters
+  
+  * `group` - Group struct to sync members to
+  * `event` - Event struct whose participants to sync
+  * `acting_user` - User performing the sync
+  * `metadata` - Optional metadata for audit logging
+  
+  ## Examples
+  
+      iex> sync_event_participants_to_group(group, event, admin_user)
+      {:ok, %{added: 3, already_members: 2}}
+      
+  """
+  def sync_event_participants_to_group(%Group{} = group, %EventasaurusApp.Events.Event{} = event, acting_user \\ nil, metadata \\ %{}) do
+    if event.group_id != group.id do
+      {:error, :event_not_in_group}
+    else
+      Repo.transaction(fn ->
+        # Get all users who are participants of this event
+        participant_users = from(ep in EventasaurusApp.Events.EventParticipant,
+          where: ep.event_id == ^event.id,
+          where: is_nil(ep.deleted_at),
+          join: u in User, on: ep.user_id == u.id,
+          distinct: true,
+          select: u
+        ) |> Repo.all()
+        
+        # Process each user
+        results = Enum.reduce(participant_users, %{added: 0, already_members: 0}, fn user, acc ->
+          case add_user_to_group(group, user, "member", acting_user, metadata) do
+            {:ok, _} -> 
+              %{acc | added: acc.added + 1}
+            {:error, :already_member} -> 
+              %{acc | already_members: acc.already_members + 1}
+            {:error, reason} ->
+              Logger.error("Failed to add user #{user.id} to group #{group.id}: #{inspect(reason)}")
+              acc
+          end
+        end)
+        
+        # Log the sync operation
+        if acting_user do
+          event_metadata = Map.merge(metadata, %{event_id: event.id, event_title: event.title})
+          AuditLogger.log_event_sync(group.id, event.id, acting_user.id, results, event_metadata)
+        end
+        
+        results
+      end)
+    end
+  end
+
+  @doc """
+  Syncs participants from a specific event to group members by event ID.
+  
+  This is a convenience function that fetches the event and group, then
+  delegates to the main sync function. Used by async triggers.
+  
+  ## Parameters
+  
+  * `event_id` - ID of the event whose participants to sync
+  
+  ## Returns
+  
+  * `{:ok, %{added: count, already_members: count}}` - Success with counts
+  * `{:error, reason}` - If sync fails
+  
+  """
+  def sync_event_participants_to_group(event_id) do
+    alias EventasaurusApp.Events
+    
+    with event when not is_nil(event) <- Events.get_event(event_id),
+         group when not is_nil(group) <- Repo.get(Group, event.group_id) do
+      sync_event_participants_to_group(group, event)
+    else
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Lists event participants who are not yet group members.
+  
+  Returns users who have attended events in the group but are not yet members.
+  This is useful for discovering potential members from past event attendees.
+  
+  ## Parameters
+  
+  * `group` - Group struct
+  * `opts` - Options including:
+    * `:limit` - Maximum number of results (default: 50)
+    * `:order_by` - Order results by :event_count or :recent_event (default: :event_count)
+  
+  ## Returns
+  
+  List of maps with user info and participation stats:
+  * `user` - User struct  
+  * `event_count` - Number of events attended in this group
+  * `most_recent_event` - Title of their most recent event
+  * `most_recent_date` - Date of their most recent event
+  
+  ## Examples
+  
+      iex> list_event_participants_not_in_group(group, limit: 20)
+      [%{user: %User{}, event_count: 5, most_recent_event: "Movie Night", ...}, ...]
+      
+  """
+  def list_event_participants_not_in_group(%Group{} = group, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+    order_by = Keyword.get(opts, :order_by, :event_count)
+    
+    # Get existing member IDs
+    existing_member_ids = from(gu in GroupUser,
+      where: gu.group_id == ^group.id,
+      select: gu.user_id
+    ) |> Repo.all()
+    
+    # Query for potential members
+    base_query = from(o in EventasaurusApp.Events.Order,
+      join: e in EventasaurusApp.Events.Event, on: o.event_id == e.id,
+      join: u in User, on: o.user_id == u.id,
+      where: e.group_id == ^group.id and o.status == "confirmed",
+      where: o.user_id not in ^existing_member_ids,
+      group_by: [u.id, u.name, u.email],
+      select: %{
+        user: u,
+        event_count: count(e.id, :distinct),
+        most_recent_date: max(o.confirmed_at),
+        # We'll need a subquery for the most recent event title
+        user_id: u.id
+      }
+    )
+    
+    # Apply ordering
+    query = case order_by do
+      :recent_event -> order_by(base_query, [o, e, u], desc: max(o.confirmed_at))
+      _ -> order_by(base_query, [o, e, u], desc: count(e.id, :distinct))
+    end
+    
+    query = limit(query, ^limit)
+    
+    potential_members = Repo.all(query)
+    
+    # Get most recent event titles for each user
+    user_ids = Enum.map(potential_members, & &1.user_id)
+    
+    recent_events = if Enum.empty?(user_ids) do
+      %{}
+    else
+      from(o in EventasaurusApp.Events.Order,
+        join: e in EventasaurusApp.Events.Event, on: o.event_id == e.id,
+        where: o.user_id in ^user_ids and e.group_id == ^group.id and o.status == "confirmed",
+        distinct: [o.user_id],
+        order_by: [asc: o.user_id, desc: o.confirmed_at],
+        select: {o.user_id, e.title}
+      )
+      |> Repo.all()
+      |> Map.new()
+    end
+    
+    # Combine results
+    Enum.map(potential_members, fn member ->
+      Map.merge(member, %{
+        most_recent_event: Map.get(recent_events, member.user_id, "Unknown")
+      })
+      |> Map.delete(:user_id)
+    end)
+  end
+
+  @doc """
+  Lists potential group members by searching all users not in the group.
+  
+  This is used for the add member modal to search for any user to add to the group.
+  
+  ## Parameters
+  
+  * `group` - Group struct
+  * `opts` - Options including:
+    * `:search` - Search term for user name/email
+    * `:limit` - Maximum number of results (default: 10)
+  
+  ## Returns
+  
+  List of User structs that are not currently members
+  
+  """
+  def list_potential_group_members(%Group{} = group, opts \\ []) do
+    search = Keyword.get(opts, :search, "")
+    limit = Keyword.get(opts, :limit, 10)
+    
+    # Get existing member IDs
+    existing_member_ids = from(gu in GroupUser,
+      where: gu.group_id == ^group.id,
+      select: gu.user_id
+    ) |> Repo.all()
+    
+    # Query for non-member users
+    query = from(u in User,
+      where: u.id not in ^existing_member_ids
+    )
+    
+    # Apply search if provided
+    query = if search && String.trim(search) != "" do
+      search_term = "%#{search}%"
+      where(query, [u], ilike(u.name, ^search_term) or ilike(u.email, ^search_term))
+    else
+      query
+    end
+    
+    query
+    |> order_by([u], asc: u.name)
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  @doc """
+  Counts the number of members in a group.
+  
+  ## Examples
+  
+      iex> count_group_members(group)
+      42
+      
+  """
+  def count_group_members(%Group{} = group) do
+    from(gu in GroupUser,
+      where: gu.group_id == ^group.id,
+      select: count(gu.id)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Lists group members with pagination and search.
+  
+  ## Parameters
+  
+  * `group` - Group struct
+  * `opts` - Options including:
+    * `:page` - Page number (default: 1)
+    * `:per_page` - Items per page (default: 20)
+    * `:search` - Search term for name/email
+    * `:role` - Filter by role ("admin" or "member")
+    * `:order_by` - Order by :joined_at or :name (default: :joined_at)
+  
+  ## Returns
+  
+  Map with:
+  * `:entries` - List of member maps with user and membership info
+  * `:page` - Current page
+  * `:per_page` - Items per page
+  * `:total` - Total number of members
+  * `:total_pages` - Total number of pages
+  
+  """
+  def list_group_members_paginated(%Group{} = group, opts \\ []) do
+    page = Keyword.get(opts, :page, 1)
+    per_page = Keyword.get(opts, :per_page, 20)
+    search = Keyword.get(opts, :search, "")
+    role_filter = Keyword.get(opts, :role)
+    order_by = Keyword.get(opts, :order_by, :joined_at)
+    
+    offset = (page - 1) * per_page
+    
+    # Base query
+    base_query = from(gu in GroupUser,
+      join: u in User, on: gu.user_id == u.id,
+      where: gu.group_id == ^group.id
+    )
+    
+    # Apply role filter
+    query = if role_filter do
+      where(base_query, [gu, u], gu.role == ^role_filter)
+    else
+      base_query
+    end
+    
+    # Apply search
+    query = if search && String.trim(search) != "" do
+      search_term = "%#{search}%"
+      where(query, [gu, u], ilike(u.name, ^search_term) or ilike(u.email, ^search_term))
+    else
+      query
+    end
+    
+    # Get total count
+    total = Repo.aggregate(query, :count, :id)
+    
+    # Apply ordering
+    query = case order_by do
+      :name -> order_by(query, [gu, u], asc: u.name)
+      _ -> order_by(query, [gu, u], desc: gu.inserted_at)
+    end
+    
+    # Apply pagination and select
+    members = query
+    |> limit(^per_page)
+    |> offset(^offset)
+    |> select([gu, u], %{
+      user: u,
+      role: gu.role,
+      joined_at: gu.inserted_at
+    })
+    |> Repo.all()
+    
+    %{
+      entries: members,
+      page: page,
+      per_page: per_page,
+      total: total,
+      total_pages: ceil(total / per_page)
+    }
   end
 end
