@@ -266,34 +266,41 @@ defmodule EventasaurusWeb.GroupLive.Show do
   
   @impl true
   def handle_event("select_user", %{"user_id" => user_id}, socket) do
-    user_id = String.to_integer(user_id)
-    {:noreply, assign(socket, :selected_user_id, user_id)}
+    case Integer.parse(user_id) do
+      {parsed_id, _} ->
+        {:noreply, assign(socket, :selected_user_id, parsed_id)}
+      :error ->
+        {:noreply, socket |> put_flash(:error, "Invalid user ID")}
+    end
   end
   
   @impl true
   def handle_event("add_member", %{"role" => role}, socket) do
     if socket.assigns.selected_user_id do
-      user = EventasaurusApp.Accounts.get_user!(socket.assigns.selected_user_id)
-      
-      case Groups.add_user_to_group(socket.assigns.group, user, role, socket.assigns.user) do
-        {:ok, _} ->
-          # Reload members
-          socket = load_members_page(socket, 1)
-          member_count = Groups.count_group_members(socket.assigns.group)
-          
-          {:noreply,
-           socket
-           |> assign(:show_add_modal, false)
-           |> assign(:potential_members, [])
-           |> assign(:add_member_search, "")
-           |> assign(:selected_user_id, nil)
-           |> assign(:member_count, member_count)
-           |> put_flash(:info, "Member added successfully")}
-           
-        {:error, _} ->
-          {:noreply,
-           socket
-           |> put_flash(:error, "Failed to add member")}
+      case EventasaurusApp.Accounts.get_user(socket.assigns.selected_user_id) do
+        nil ->
+          {:noreply, socket |> put_flash(:error, "User not found")}
+        user ->
+          case Groups.add_user_to_group(socket.assigns.group, user, role, socket.assigns.user) do
+            {:ok, _} ->
+              # Reload members
+              socket = load_members_page(socket, 1)
+              member_count = Groups.count_group_members(socket.assigns.group)
+              
+              {:noreply,
+               socket
+               |> assign(:show_add_modal, false)
+               |> assign(:potential_members, [])
+               |> assign(:add_member_search, "")
+               |> assign(:selected_user_id, nil)
+               |> assign(:member_count, member_count)
+               |> put_flash(:info, "Member added successfully")}
+               
+            {:error, _} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "Failed to add member")}
+          end
       end
     else
       {:noreply,
@@ -304,12 +311,14 @@ defmodule EventasaurusWeb.GroupLive.Show do
   
   @impl true
   def handle_event("toggle_member_menu", %{"user_id" => user_id}, socket) do
-    user_id = String.to_integer(user_id)
-    
-    # Toggle menu - if same user clicked, close it; otherwise open new one
-    open_menu = if socket.assigns.open_member_menu == user_id, do: nil, else: user_id
-    
-    {:noreply, assign(socket, :open_member_menu, open_menu)}
+    case Integer.parse(user_id) do
+      {parsed_id, _} ->
+        # Toggle menu - if same user clicked, close it; otherwise open new one
+        open_menu = if socket.assigns.open_member_menu == parsed_id, do: nil, else: parsed_id
+        {:noreply, assign(socket, :open_member_menu, open_menu)}
+      :error ->
+        {:noreply, socket |> put_flash(:error, "Invalid user ID")}
+    end
   end
   
   @impl true
@@ -319,63 +328,74 @@ defmodule EventasaurusWeb.GroupLive.Show do
 
   @impl true
   def handle_event("remove_member", %{"user_id" => user_id}, socket) do
-    user_id = String.to_integer(user_id)
-    
-    # Only creators and the member themselves can remove
-    if socket.assigns.is_creator or socket.assigns.user.id == user_id do
-      user = EventasaurusApp.Accounts.get_user!(user_id)
-      
-      case Groups.remove_user_from_group(socket.assigns.group, user, socket.assigns.user) do
-        {:ok, _} ->
-          # Reload members
-          socket = load_members_page(socket, socket.assigns.current_page)
-          
-          # Update member count
-          member_count = Groups.count_group_members(socket.assigns.group)
-          
+    case Integer.parse(user_id) do
+      {parsed_id, _} ->
+        # Only creators and the member themselves can remove
+        if socket.assigns.is_creator or socket.assigns.user.id == parsed_id do
+          case EventasaurusApp.Accounts.get_user(parsed_id) do
+            nil ->
+              {:noreply, socket |> put_flash(:error, "User not found")}
+            user ->
+              case Groups.remove_user_from_group(socket.assigns.group, user, socket.assigns.user) do
+                {:ok, _} ->
+                  # Reload members
+                  socket = load_members_page(socket, socket.assigns.current_page)
+                  
+                  # Update member count
+                  member_count = Groups.count_group_members(socket.assigns.group)
+                  
+                  {:noreply,
+                   socket
+                   |> assign(:member_count, member_count)
+                   |> put_flash(:info, "Member removed successfully")}
+                   
+                {:error, _} ->
+                  {:noreply,
+                   socket
+                   |> put_flash(:error, "Failed to remove member")}
+              end
+          end
+        else
           {:noreply,
            socket
-           |> assign(:member_count, member_count)
-           |> put_flash(:info, "Member removed successfully")}
-           
-        {:error, _} ->
-          {:noreply,
-           socket
-           |> put_flash(:error, "Failed to remove member")}
-      end
-    else
-      {:noreply,
-       socket
-       |> put_flash(:error, "You don't have permission to remove this member")}
+           |> put_flash(:error, "You don't have permission to remove this member")}
+        end
+      :error ->
+        {:noreply, socket |> put_flash(:error, "Invalid user ID")}
     end
   end
   
   # Helper functions
   
   def format_relative_time(datetime) do
-    # Convert to DateTime if it's a NaiveDateTime
+    # Convert to DateTime if it's a NaiveDateTime, return fallback for invalid types
     datetime = case datetime do
       %NaiveDateTime{} = ndt -> 
         DateTime.from_naive!(ndt, "Etc/UTC")
       %DateTime{} = dt -> 
         dt
       _ -> 
-        # Fallback for other types
-        DateTime.from_naive!(datetime, "Etc/UTC")
+        # Return fallback for unsupported types (nil, string, integer, etc.)
+        nil
     end
     
-    now = DateTime.utc_now()
-    diff_seconds = DateTime.diff(now, datetime)
-    diff_minutes = div(diff_seconds, 60)
-    diff_hours = div(diff_minutes, 60)
-    diff_days = div(diff_hours, 24)
-    
-    cond do
-      diff_seconds < 60 -> "just now"
-      diff_minutes < 60 -> "#{diff_minutes} minute#{if diff_minutes != 1, do: "s"} ago"
-      diff_hours < 24 -> "#{diff_hours} hour#{if diff_hours != 1, do: "s"} ago"
-      diff_days < 7 -> "#{diff_days} day#{if diff_days != 1, do: "s"} ago"
-      true -> Calendar.strftime(datetime, "%b %d, %Y")
+    # Handle nil case - return fallback string
+    if datetime == nil do
+      "unknown"
+    else
+      now = DateTime.utc_now()
+      diff_seconds = DateTime.diff(now, datetime)
+      diff_minutes = div(diff_seconds, 60)
+      diff_hours = div(diff_minutes, 60)
+      diff_days = div(diff_hours, 24)
+      
+      cond do
+        diff_seconds < 60 -> "just now"
+        diff_minutes < 60 -> "#{diff_minutes} minute#{if diff_minutes != 1, do: "s"} ago"
+        diff_hours < 24 -> "#{diff_hours} hour#{if diff_hours != 1, do: "s"} ago"
+        diff_days < 7 -> "#{diff_days} day#{if diff_days != 1, do: "s"} ago"
+        true -> Calendar.strftime(datetime, "%b %d, %Y")
+      end
     end
   end
   

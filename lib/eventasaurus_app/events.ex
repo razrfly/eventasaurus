@@ -342,8 +342,12 @@ defmodule EventasaurusApp.Events do
         # Sync existing participants if event is added to a group
         if event.group_id do
           Task.start(fn ->
-            group = EventasaurusApp.Groups.get_group!(event.group_id)
-            EventasaurusApp.Groups.sync_event_participants_to_group(group, event)
+            case EventasaurusApp.Groups.get_group(event.group_id) do
+              nil ->
+                Logger.warning("Failed to sync participants: Group #{event.group_id} not found for event #{event.id}")
+              group ->
+                EventasaurusApp.Groups.sync_event_participants_to_group(group, event)
+            end
           end)
         end
         
@@ -373,8 +377,12 @@ defmodule EventasaurusApp.Events do
         # Sync participants if event is newly added to a group
         if updated_event.group_id && event.group_id != updated_event.group_id do
           Task.start(fn ->
-            group = EventasaurusApp.Groups.get_group!(updated_event.group_id)
-            EventasaurusApp.Groups.sync_event_participants_to_group(group, updated_event)
+            case EventasaurusApp.Groups.get_group(updated_event.group_id) do
+              nil ->
+                Logger.warning("Failed to sync participants: Group #{updated_event.group_id} not found for event #{updated_event.id}")
+              group ->
+                EventasaurusApp.Groups.sync_event_participants_to_group(group, updated_event)
+            end
           end)
         end
         
@@ -797,11 +805,20 @@ defmodule EventasaurusApp.Events do
         
         if event_id && user_id do
           Task.start(fn ->
-            event = get_event!(event_id)
-            if event.group_id do
-              group = EventasaurusApp.Groups.get_group!(event.group_id)
-              user = EventasaurusApp.Accounts.get_user!(user_id)
-              EventasaurusApp.Groups.add_user_to_group(group, user, "member")
+            case get_event(event_id) do
+              nil ->
+                Logger.warning("Failed to sync participant to group: Event #{event_id} not found")
+              event ->
+                if event.group_id do
+                  case {EventasaurusApp.Groups.get_group(event.group_id), EventasaurusApp.Accounts.get_user(user_id)} do
+                    {nil, _} ->
+                      Logger.warning("Failed to sync participant to group: Group #{event.group_id} not found")
+                    {_, nil} ->
+                      Logger.warning("Failed to sync participant to group: User #{user_id} not found")
+                    {group, user} ->
+                      EventasaurusApp.Groups.add_user_to_group(group, user, "member")
+                  end
+                end
             end
           end)
         end
@@ -862,11 +879,20 @@ defmodule EventasaurusApp.Events do
     case result do
       {:ok, _participant} ->
         Task.start(fn ->
-          event = get_event!(event_id)
-          if event.group_id do
-            group = EventasaurusApp.Groups.get_group!(event.group_id)
-            user = EventasaurusApp.Accounts.get_user!(user_id)
-            EventasaurusApp.Groups.add_user_to_group(group, user, "member")
+          case get_event(event_id) do
+            nil ->
+              Logger.warning("Failed to sync participant to group: Event #{event_id} not found")
+            event ->
+              if event.group_id do
+                case {EventasaurusApp.Groups.get_group(event.group_id), EventasaurusApp.Accounts.get_user(user_id)} do
+                  {nil, _} ->
+                    Logger.warning("Failed to sync participant to group: Group #{event.group_id} not found")
+                  {_, nil} ->
+                    Logger.warning("Failed to sync participant to group: User #{user_id} not found")
+                  {group, user} ->
+                    EventasaurusApp.Groups.add_user_to_group(group, user, "member")
+                end
+              end
           end
         end)
         result

@@ -13,18 +13,14 @@
       <!-- Avatar -->
       <div class="absolute -top-12 left-6">
         <div class="h-24 w-24 rounded-full border-4 border-white dark:border-gray-800 bg-white dark:bg-gray-700 overflow-hidden">
-          <%= if false do %>
-            <!-- Avatar removed - field doesn't exist -->
-          <% else %>
-            <div class="h-full w-full flex items-center justify-center bg-gray-200 dark:bg-gray-600">
-              <span class="text-3xl font-semibold text-gray-600 dark:text-gray-300">
-                <%= case String.first(@group.name || "") do
-                  nil -> "G"
-                  letter -> String.upcase(letter)
-                end %>
-              </span>
-            </div>
-          <% end %>
+          <div class="h-full w-full flex items-center justify-center bg-gray-200 dark:bg-gray-600">
+            <span class="text-3xl font-semibold text-gray-600 dark:text-gray-300">
+              <%= case String.first(@group.name || "") do
+                nil -> "G"
+                letter -> String.upcase(letter)
+              end %>
+            </span>
+          </div>
         </div>
       </div>
       
@@ -285,7 +281,7 @@
                 <div class="flex-1 max-w-md">
                   <input
                     type="search"
-                    name="search_query"
+                    name="query"
                     value={@search_query}
                     placeholder="Search by name or email..."
                     phx-change="search_members"

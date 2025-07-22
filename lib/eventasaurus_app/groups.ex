@@ -163,6 +163,28 @@ defmodule EventasaurusApp.Groups do
   @doc """
   Gets a single group.
 
+  Returns the group or `nil` if the Group does not exist.
+
+  ## Examples
+
+      iex> get_group(123)
+      %Group{}
+
+      iex> get_group(456)
+      nil
+
+  """
+  def get_group(id) do
+    case Group
+         |> Repo.get(id) do
+      nil -> nil
+      group -> Repo.preload(group, [:venue, :users, :created_by])
+    end
+  end
+
+  @doc """
+  Gets a single group.
+
   Raises `Ecto.NoResultsError` if the Group does not exist.
 
   ## Examples
@@ -960,16 +982,16 @@ defmodule EventasaurusApp.Groups do
     ) |> Repo.all()
     
     # Query for potential members
-    base_query = from(o in EventasaurusApp.Events.Order,
-      join: e in EventasaurusApp.Events.Event, on: o.event_id == e.id,
-      join: u in User, on: o.user_id == u.id,
-      where: e.group_id == ^group.id and o.status == "confirmed",
-      where: o.user_id not in ^existing_member_ids,
+    base_query = from(ep in EventasaurusApp.Events.EventParticipant,
+      join: e in EventasaurusApp.Events.Event, on: ep.event_id == e.id,
+      join: u in User, on: ep.user_id == u.id,
+      where: e.group_id == ^group.id and is_nil(ep.deleted_at),
+      where: ep.user_id not in ^existing_member_ids,
       group_by: [u.id, u.name, u.email],
       select: %{
         user: u,
         event_count: count(e.id, :distinct),
-        most_recent_date: max(o.confirmed_at),
+        most_recent_date: max(ep.inserted_at),
         # We'll need a subquery for the most recent event title
         user_id: u.id
       }
@@ -977,8 +999,8 @@ defmodule EventasaurusApp.Groups do
     
     # Apply ordering
     query = case order_by do
-      :recent_event -> order_by(base_query, [o, e, u], desc: max(o.confirmed_at))
-      _ -> order_by(base_query, [o, e, u], desc: count(e.id, :distinct))
+      :recent_event -> order_by(base_query, [ep, e, u], desc: max(ep.inserted_at))
+      _ -> order_by(base_query, [ep, e, u], desc: count(e.id, :distinct))
     end
     
     query = limit(query, ^limit)
@@ -991,12 +1013,12 @@ defmodule EventasaurusApp.Groups do
     recent_events = if Enum.empty?(user_ids) do
       %{}
     else
-      from(o in EventasaurusApp.Events.Order,
-        join: e in EventasaurusApp.Events.Event, on: o.event_id == e.id,
-        where: o.user_id in ^user_ids and e.group_id == ^group.id and o.status == "confirmed",
-        distinct: [o.user_id],
-        order_by: [asc: o.user_id, desc: o.confirmed_at],
-        select: {o.user_id, e.title}
+      from(ep in EventasaurusApp.Events.EventParticipant,
+        join: e in EventasaurusApp.Events.Event, on: ep.event_id == e.id,
+        where: ep.user_id in ^user_ids and e.group_id == ^group.id and is_nil(ep.deleted_at),
+        distinct: [ep.user_id],
+        order_by: [asc: ep.user_id, desc: ep.inserted_at],
+        select: {ep.user_id, e.title}
       )
       |> Repo.all()
       |> Map.new()
