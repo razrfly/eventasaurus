@@ -89,7 +89,7 @@ defmodule EventasaurusWeb.EventTimelineComponent do
       </div>
 
       <!-- Filters -->
-      <%= if @context == :user_dashboard and not Enum.empty?(@filters) do %>
+      <%= if (@context == :user_dashboard or @context == :group_events) and not Enum.empty?(@filters) do %>
         <.live_component 
           module={TimelineFilters}
           id="timeline-filters"

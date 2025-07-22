@@ -163,8 +163,8 @@
             events={@events}
             context={:group_events}
             loading={false}
-            filters={%{}}
-            filter_counts={%{}}
+            filters={%{time_filter: @time_filter}}
+            filter_counts={@filter_counts}
             config={%{
               title: "Group Events",
               subtitle: "Events for #{@group.name}",
