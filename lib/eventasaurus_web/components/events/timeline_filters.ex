@@ -4,22 +4,23 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
   attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
   attr :filters, :map, required: true
   attr :filter_counts, :map, default: %{}
+  attr :config, :map, default: %{}
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="mb-8 bg-white rounded-lg shadow-sm border p-4" role="region" aria-label="Event filters">
-      <div class="flex flex-col sm:flex-row gap-4">
+    <div class="mb-4" role="region" aria-label="Event filters">
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
         <!-- Time Period Filter -->
         <fieldset class="flex-1">
           <legend class="sr-only">Time period filter</legend>
-          <div class="flex rounded-lg border overflow-hidden" role="group" aria-label="Time period options">
+          <div class="flex rounded border overflow-hidden bg-gray-50" role="group" aria-label="Time period options">
             <button
               phx-click="filter_time"
               phx-value-filter="upcoming"
               phx-target={@myself}
               class={[
-                "flex-1 px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500",
+                "flex-1 px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none",
                 time_filter_class(@filters.time_filter, :upcoming)
               ]}
               aria-pressed={if @filters.time_filter == :upcoming, do: "true", else: "false"}
@@ -28,7 +29,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
               Upcoming
               <%= if count = @filter_counts[:upcoming] do %>
                 <%= if count > 0 do %>
-                  <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" aria-hidden="true">
+                  <span class="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" aria-hidden="true">
                     <%= count %>
                   </span>
                 <% end %>
@@ -40,14 +41,14 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
               phx-value-filter="past"
               phx-target={@myself}
               class={[
-                "flex-1 px-4 py-2 text-sm font-medium transition-colors border-l",
+                "flex-1 px-3 py-1.5 text-sm font-medium transition-colors border-l",
                 time_filter_class(@filters.time_filter, :past)
               ]}
             >
               Past
               <%= if count = @filter_counts[:past] do %>
                 <%= if count > 0 do %>
-                  <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                  <span class="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                     <%= count %>
                   </span>
                 <% end %>
@@ -61,14 +62,14 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
                 phx-value-filter="archived"
                 phx-target={@myself}
                 class={[
-                  "flex-1 px-4 py-2 text-sm font-medium transition-colors border-l",
+                  "flex-1 px-3 py-1.5 text-sm font-medium transition-colors border-l",
                   time_filter_class(@filters.time_filter, :archived)
                 ]}
               >
                 Archived
                 <%= if count = @filter_counts[:archived] do %>
                   <%= if count > 0 do %>
-                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    <span class="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                       <%= count %>
                     </span>
                   <% end %>
@@ -111,6 +112,21 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
             </select>
           </div>
         <% end %>
+        
+        <!-- Create Event Button - Group Events Only -->
+        <%= if @context == :group_events and Map.get(@config, :show_create_button, false) do %>
+          <div class="flex-shrink-0">
+            <a 
+              href={Map.get(@config, :create_button_url, "/events/new")} 
+              class="inline-flex items-center px-3 py-1.5 border border-transparent rounded text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none"
+            >
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <%= Map.get(@config, :create_button_text, "Create Event") %>
+            </a>
+          </div>
+        <% end %>
       </div>
     </div>
     """
@@ -118,7 +134,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
 
   @impl true
   def handle_event("filter_time", %{"filter" => filter}, socket) do
-    filter_atom = String.to_existing_atom(filter)
+    filter_atom = safe_to_atom(filter, [:upcoming, :past, :archived])
     
     # Send the event to the parent LiveView
     send(self(), {:filter_time, filter_atom})
@@ -128,7 +144,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
 
   @impl true
   def handle_event("filter_ownership", %{"filter" => filter}, socket) do
-    filter_atom = String.to_existing_atom(filter)
+    filter_atom = safe_to_atom(filter, [:all, :created, :participating])
     
     # Send the event to the parent LiveView
     send(self(), {:filter_ownership, filter_atom})
@@ -137,6 +153,13 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
   end
 
   # Helper functions
+
+  defp safe_to_atom(value, allowed_atoms) do
+    atom = String.to_existing_atom(value)
+    if atom in allowed_atoms, do: atom, else: hd(allowed_atoms)
+  rescue
+    ArgumentError -> hd(allowed_atoms)
+  end
 
   defp time_filter_class(current_filter, target_filter) do
     if current_filter == target_filter do
