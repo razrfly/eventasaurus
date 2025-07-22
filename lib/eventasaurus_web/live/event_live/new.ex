@@ -79,13 +79,16 @@ defmodule EventasaurusWeb.EventLive.New do
         # Check if group_id was provided in params
         selected_group_id = Map.get(params, "group_id")
         
-        # Update changeset with selected group if provided and user is a member
-        changeset = with group_id_str when is_binary(group_id_str) <- selected_group_id,
-                         {group_id_int, ""} <- Integer.parse(group_id_str),
-                         true <- Enum.any?(user_groups, & &1.id == group_id_int) do
-          Events.change_event(%Event{group_id: group_id_int})
+        # Update form_data and changeset with selected group if provided and user is a member
+        {final_form_data, changeset} = with group_id_str when is_binary(group_id_str) <- selected_group_id,
+                                            {group_id_int, ""} <- Integer.parse(group_id_str),
+                                            true <- Enum.any?(user_groups, & &1.id == group_id_int) do
+          # Update both form_data and changeset
+          updated_form_data = Map.put(form_data_with_image, "group_id", group_id_str)
+          updated_changeset = Events.change_event(%Event{group_id: group_id_int})
+          {updated_form_data, updated_changeset}
         else
-          _ -> changeset
+          _ -> {form_data_with_image, changeset}
         end
 
         socket =
@@ -95,7 +98,7 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:user_groups, user_groups)
           |> assign(:user, user)
           |> assign(:changeset, changeset)
-          |> assign(:form_data, form_data_with_image)
+          |> assign(:form_data, final_form_data)
           |> assign(:is_virtual, false)
           |> assign(:selected_venue_name, nil)
           |> assign(:selected_venue_address, nil)
