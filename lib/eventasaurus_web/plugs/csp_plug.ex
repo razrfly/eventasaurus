@@ -16,11 +16,11 @@ defmodule EventasaurusWeb.Plugs.CSPPlug do
     # Base CSP directives
     directives = %{
       "default-src" => "'self'",
-      "script-src" => "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://js.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://maps.gstatic.com",
-      "style-src" => "'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src" => "'self' https://fonts.gstatic.com data:",
+      "script-src" => "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://js.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://maps.gstatic.com https://eu-assets.i.posthog.com https://esm.sh blob:",
+      "style-src" => "'self' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me",
+      "font-src" => "'self' https://fonts.gstatic.com https://rsms.me data:",
       "img-src" => "'self' data: blob: https: http:",
-      "connect-src" => "'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://eu.i.posthog.com",
+      "connect-src" => "'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://challenges.cloudflare.com https://maps.googleapis.com https://eu.i.posthog.com https://eu-assets.i.posthog.com http://localhost:5746 http://localhost:5747",
       "frame-src" => "'self' https://js.stripe.com https://challenges.cloudflare.com",
       "frame-ancestors" => "'none'",
       "object-src" => "'none'",
