@@ -335,10 +335,19 @@ defmodule EventasaurusApp.Events do
 
     case result do
       {:ok, event} ->
-        event
+        event = event
         |> Repo.preload([:venue, :users])
         |> Event.with_computed_fields()
-        |> then(&{:ok, &1})
+        
+        # Sync existing participants if event is added to a group
+        if event.group_id do
+          Task.start(fn ->
+            group = EventasaurusApp.Groups.get_group!(event.group_id)
+            EventasaurusApp.Groups.sync_event_participants_to_group(group, event)
+          end)
+        end
+        
+        {:ok, event}
       error -> error
     end
   end
@@ -357,10 +366,19 @@ defmodule EventasaurusApp.Events do
 
     case result do
       {:ok, updated_event} ->
-        updated_event
+        updated_event = updated_event
         |> Repo.preload([:venue, :users])
         |> Event.with_computed_fields()
-        |> then(&{:ok, &1})
+        
+        # Sync participants if event is newly added to a group
+        if updated_event.group_id && event.group_id != updated_event.group_id do
+          Task.start(fn ->
+            group = EventasaurusApp.Groups.get_group!(updated_event.group_id)
+            EventasaurusApp.Groups.sync_event_participants_to_group(group, updated_event)
+          end)
+        end
+        
+        {:ok, updated_event}
       error -> error
     end
   end
@@ -767,9 +785,29 @@ defmodule EventasaurusApp.Events do
   Creates an event participant.
   """
   def create_event_participant(attrs \\ %{}) do
-    %EventParticipant{}
+    result = %EventParticipant{}
     |> EventParticipant.changeset(attrs)
     |> Repo.insert()
+    
+    case result do
+      {:ok, participant} ->
+        # Sync participant to group if event belongs to a group
+        event_id = Map.get(attrs, :event_id) || Map.get(attrs, "event_id")
+        user_id = Map.get(attrs, :user_id) || Map.get(attrs, "user_id")
+        
+        if event_id && user_id do
+          Task.start(fn ->
+            event = get_event!(event_id)
+            if event.group_id do
+              group = EventasaurusApp.Groups.get_group!(event.group_id)
+              user = EventasaurusApp.Accounts.get_user!(user_id)
+              EventasaurusApp.Groups.add_user_to_group(group, user, "member")
+            end
+          end)
+        end
+        {:ok, participant}
+      error -> error
+    end
   end
 
       @doc """
@@ -784,7 +822,7 @@ defmodule EventasaurusApp.Events do
   def create_or_upgrade_participant_for_order(%{event_id: event_id, user_id: user_id} = attrs) do
     # For upsert, we need to handle metadata merging at the database level
     # Since PostgreSQL doesn't have easy metadata merging in upsert, we'll use a transaction
-    Repo.transaction(fn ->
+    result = Repo.transaction(fn ->
       case Repo.get_by(EventParticipant, event_id: event_id, user_id: user_id) do
         nil ->
           # No existing participant, create new one
@@ -819,6 +857,21 @@ defmodule EventasaurusApp.Events do
           end
       end
     end)
+    
+    # After successful transaction, sync to group if needed
+    case result do
+      {:ok, _participant} ->
+        Task.start(fn ->
+          event = get_event!(event_id)
+          if event.group_id do
+            group = EventasaurusApp.Groups.get_group!(event.group_id)
+            user = EventasaurusApp.Accounts.get_user!(user_id)
+            EventasaurusApp.Groups.add_user_to_group(group, user, "member")
+          end
+        end)
+        result
+      error -> error
+    end
   end
 
   @doc """
