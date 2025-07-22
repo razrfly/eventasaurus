@@ -796,7 +796,7 @@ defmodule EventasaurusWeb.EventComponents do
               >
                 <option value="">No group - personal event</option>
                 <%= for group <- @user_groups do %>
-                  <option value={group.id} selected={group.id == @form_data["group_id"]}>
+                  <option value={group.id} selected={to_string(group.id) == to_string(@form_data["group_id"] || "")}>
                     <%= group.name %>
                   </option>
                 <% end %>
