@@ -84,12 +84,7 @@ defmodule EventasaurusWeb.Components.Events.ParticipantAvatars do
   end
 
   defp generate_avatar_url(user) do
-    # Use existing avatar generation logic from the app
-    if function_exported?(EventasaurusApp.Accounts.User, :avatar_url, 2) do
-      EventasaurusApp.Accounts.User.avatar_url(user, %{size: 40})
-    else
-      # Fallback to a simple default avatar
-      "/images/default-avatar.png"
-    end
+    # Use the existing avatar generation system from the app
+    EventasaurusApp.Avatars.generate_user_avatar(user, size: 40)
   end
 end
