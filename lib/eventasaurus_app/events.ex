@@ -1007,6 +1007,7 @@ defmodule EventasaurusApp.Events do
           status: e.status,
           taxation_type: e.taxation_type,
           venue_id: e.venue_id,
+          group_id: e.group_id,
           cover_image_url: e.cover_image_url,
           inserted_at: e.inserted_at,
           updated_at: e.updated_at,
@@ -1030,6 +1031,7 @@ defmodule EventasaurusApp.Events do
           status: e.status,
           taxation_type: e.taxation_type,
           venue_id: e.venue_id,
+          group_id: e.group_id,
           cover_image_url: e.cover_image_url,
           inserted_at: e.inserted_at,
           updated_at: e.updated_at,
@@ -1056,6 +1058,7 @@ defmodule EventasaurusApp.Events do
             status: e.status,
             taxation_type: e.taxation_type,
             venue_id: e.venue_id,
+            group_id: e.group_id,
             cover_image_url: e.cover_image_url,
             inserted_at: e.inserted_at,
             updated_at: e.updated_at,
@@ -1080,6 +1083,7 @@ defmodule EventasaurusApp.Events do
             status: e.status,
             taxation_type: e.taxation_type,
             venue_id: e.venue_id,
+            group_id: e.group_id,
             cover_image_url: e.cover_image_url,
             inserted_at: e.inserted_at,
             updated_at: e.updated_at,
@@ -1131,16 +1135,34 @@ defmodule EventasaurusApp.Events do
     event_ids = Enum.map(events, & &1.id)
     venues = get_venues_for_events(event_ids)
     participants = get_participants_for_events(event_ids)
+    
+    # Load groups
+    group_ids = events 
+      |> Enum.map(& &1.group_id)
+      |> Enum.filter(&(&1))
+      |> Enum.uniq()
+    
+    groups = if length(group_ids) > 0 do
+      from(g in EventasaurusApp.Groups.Group,
+        where: g.id in ^group_ids,
+        select: %{id: g.id, name: g.name, slug: g.slug}
+      )
+      |> Repo.all()
+    else
+      []
+    end
 
     events
     |> Enum.map(fn event ->
       venue = Enum.find(venues, &(&1.id == event.venue_id))
       event_participants = Enum.filter(participants, &(&1.event_id == event.id))
+      group = if event.group_id, do: Enum.find(groups, &(&1.id == event.group_id)), else: nil
       
       event
       |> Map.put(:venue, venue)
       |> Map.put(:participants, event_participants)
       |> Map.put(:participant_count, length(event_participants))
+      |> Map.put(:group, group)
     end)
   end
 
@@ -1174,6 +1196,7 @@ defmodule EventasaurusApp.Events do
           status: e.status,
           taxation_type: e.taxation_type,
           venue_id: e.venue_id,
+          group_id: e.group_id,
           cover_image_url: e.cover_image_url,
           inserted_at: e.inserted_at,
           updated_at: e.updated_at,
@@ -1262,16 +1285,46 @@ defmodule EventasaurusApp.Events do
       %{}
     end
 
+    # Load groups for events that have them
+    groups_by_id = if length(event_ids) > 0 do
+      group_ids = results 
+        |> Enum.map(& &1.group_id)
+        |> Enum.filter(&(&1))
+        |> Enum.uniq()
+      
+      if length(group_ids) > 0 do
+        from(g in EventasaurusApp.Groups.Group,
+          where: g.id in ^group_ids,
+          select: %{id: g.id, name: g.name, slug: g.slug}
+        )
+        |> Repo.all()
+        |> Enum.map(fn group -> {group.id, group} end)
+        |> Enum.into(%{})
+      else
+        %{}
+      end
+    else
+      %{}
+    end
+
     # Transform results to match expected format
     results
     |> Enum.map(fn result ->
       # Get participants for this event (first 4 only)
       event_participants = Map.get(participants_by_event, result.id, [])
+      
+      # Get group if event has one
+      group = if result.group_id do
+        Map.get(groups_by_id, result.group_id)
+      else
+        nil
+      end
 
       result
       |> Map.put(:participants, event_participants)
       # Keep the participant_count from DB query, don't override it
       |> Map.put(:venue, if(result.venue.id, do: result.venue, else: nil))
+      |> Map.put(:group, group)
     end)
   end
 
