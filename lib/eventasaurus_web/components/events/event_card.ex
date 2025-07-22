@@ -17,13 +17,13 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     assigns = assign(assigns, :unique_id, unique_id)
     
     ~H"""
-    <article class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer" role="article" aria-labelledby={"event-title-#{@unique_id}"}>
-      <div class={card_padding(@layout)}>
-        <!-- Event Header with Image -->
-        <div class={card_layout(@layout)}>
-          <!-- Left Content -->
-          <div class="flex-1">
-            <a href={get_event_url(@event, @context)} class="block" aria-label={"View #{@event.title}"}>
+    <article class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow" role="article" aria-labelledby={"event-title-#{@unique_id}"}>
+      <a href={get_event_url(@event, @context)} class="block" aria-label={"View #{@event.title}"}>
+        <div class={card_padding(@layout)}>
+          <!-- Event Header with Image -->
+          <div class={card_layout(@layout)}>
+            <!-- Left Content -->
+            <div class="flex-1">
               <h4 id={"event-title-#{@unique_id}"} class={title_size(@layout)}>
                 <%= @event.title %>
               </h4>
@@ -34,19 +34,17 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
                   <%= @event.description %>
                 </p>
               <% end %>
-            </a>
-            
-            <!-- Badges -->
-            <div class="flex flex-wrap gap-2 mb-2">
-              <.live_component
-                module={EventCardBadges}
-                id={"badges-#{@layout}-#{@event.id}"}
-                event={@event}
-                context={@context}
-              />
-            </div>
+              
+              <!-- Badges -->
+              <div class="flex flex-wrap gap-2 mb-2">
+                <.live_component
+                  module={EventCardBadges}
+                  id={"badges-#{@layout}-#{@event.id}"}
+                  event={@event}
+                  context={@context}
+                />
+              </div>
 
-            <a href={get_event_url(@event, @context)} class="block" aria-label={"View #{@event.title}"}>
               <!-- Event Details -->
               <div class="space-y-1.5 text-sm text-gray-600">
                 <!-- Time and Location -->
@@ -80,11 +78,9 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
                   event={@event}
                 />
               </div>
-            </a>
-          </div>
-          
-          <!-- Event Image -->
-          <a href={get_event_url(@event, @context)} class="block" aria-label={"View #{@event.title}"}>
+            </div>
+            
+            <!-- Event Image -->
             <div class={image_container_class(@layout)}>
               <%= if @event.cover_image_url do %>
                 <img src={@event.cover_image_url} alt={"Cover image for #{@event.title}"} class="w-full h-full object-cover" loading="lazy">
@@ -96,12 +92,12 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
                 </div>
               <% end %>
             </div>
-          </a>
+          </div>
         </div>
-      </div>
+      </a>
 
       <!-- Actions -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-2 px-3 pb-3 border-t border-gray-100 gap-2 sm:gap-0">
+      <div class={action_padding(@layout) <> " flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-gray-100 gap-2 sm:gap-0"}>
           <div class="flex items-center flex-wrap gap-2">
             <%= render_action_button(@event, @context) %>
           </div>
@@ -146,6 +142,9 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   defp card_padding(:desktop), do: "p-3"
   defp card_padding(:mobile), do: "p-4"
+  
+  defp action_padding(:desktop), do: "pt-2 px-3 pb-3"
+  defp action_padding(:mobile), do: "pt-2 px-4 pb-3"
 
   defp card_layout(:desktop), do: "flex flex-col sm:flex-row gap-3"
   defp card_layout(:mobile), do: "flex justify-between items-start mb-3"
