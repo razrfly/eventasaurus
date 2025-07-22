@@ -444,6 +444,9 @@ defmodule EventasaurusWeb.GroupLive.Show do
   # Handle time filter changes from EventTimelineComponent
   @impl true
   def handle_info({:filter_time, time_filter}, socket) do
+    # Validate time_filter for group events (only upcoming and past are supported)
+    time_filter = if time_filter in [:upcoming, :past], do: time_filter, else: :upcoming
+    
     group = socket.assigns.group
     all_events = Events.list_events_for_group(group)
     events = filter_events_by_time(all_events, time_filter)
@@ -481,6 +484,9 @@ defmodule EventasaurusWeb.GroupLive.Show do
     end)
     |> Enum.sort_by(& &1.start_at, :desc)
   end
+
+  # Fallback for any unhandled time filters - default to upcoming
+  defp filter_events_by_time(events, _), do: filter_events_by_time(events, :upcoming)
 
   defp calculate_filter_counts(events) do
     now = DateTime.utc_now()

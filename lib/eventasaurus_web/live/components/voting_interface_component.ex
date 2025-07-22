@@ -157,7 +157,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         
         Eventasaurus.Services.PollAnalyticsService.track_poll_viewed(
           user_identifier,
-          poll.id,
+          to_string(poll.id),
           metadata
         )
       end
