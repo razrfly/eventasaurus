@@ -1040,12 +1040,6 @@ defmodule EventasaurusApp.Events do
   @doc """
   Optimized version of list_unified_events_for_user that uses a single query with LEFT JOINs
   instead of UNION to improve performance. This reduces database round trips from 3+ to 1.
-  
-  Performance improvements:
-  - Single query execution (no UNION)
-  - Participant count calculated in database (no separate query)
-  - Venues loaded in same query
-  - Better index utilization
   """
   def list_unified_events_for_user_optimized(%User{} = user, opts \\ []) do
     time_filter = Keyword.get(opts, :time_filter, :all)
@@ -1053,7 +1047,7 @@ defmodule EventasaurusApp.Events do
     limit = Keyword.get(opts, :limit, 50)
     now = DateTime.utc_now()
 
-    # Build the base query with LEFT JOINs and participant count subquery
+    # Build the base query with LEFT JOINs
     base_query = 
       from e in Event,
         left_join: eu in EventUser, on: e.id == eu.event_id and eu.user_id == ^user.id,
@@ -1137,14 +1131,43 @@ defmodule EventasaurusApp.Events do
         order_by: [desc: coalesce(e.start_at, e.inserted_at)],
         limit: ^limit
 
-    # Execute the single query - now truly a single database round trip!
+    # Execute the single query
     results = Repo.all(final_query, with_deleted: true)
+
+    # Get event IDs for participant loading
+    event_ids = results |> Enum.map(& &1.id) |> Enum.uniq()
+    
+    # Load first 4 participants for each event in a single query
+    participants_by_event = if length(event_ids) > 0 do
+      from(ep in EventParticipant,
+        join: u in assoc(ep, :user),
+        where: ep.event_id in ^event_ids,
+        where: is_nil(ep.deleted_at),
+        where: ep.status in [:accepted, :confirmed_with_order],
+        order_by: [asc: ep.event_id, desc: ep.inserted_at],
+        preload: [user: u],
+        select: {ep.event_id, ep}
+      )
+      |> Repo.all()
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      |> Enum.map(fn {event_id, participants} ->
+        # Take only first 4 participants per event for avatar display
+        {event_id, Enum.take(participants, 4)}
+      end)
+      |> Enum.into(%{})
+    else
+      %{}
+    end
 
     # Transform results to match expected format
     results
     |> Enum.map(fn result ->
+      # Get participants for this event (first 4 only)
+      event_participants = Map.get(participants_by_event, result.id, [])
+
       result
-      |> Map.put(:participants, [])  # Dashboard doesn't display participant details
+      |> Map.put(:participants, event_participants)
+      # Keep the participant_count from DB query, don't override it
       |> Map.put(:venue, if(result.venue.id, do: result.venue, else: nil))
     end)
   end
