@@ -267,11 +267,27 @@
                             </div>
                             
                             <!-- Participants with Avatars -->
-                            <%= if (event.participant_count && event.participant_count > 0) do %>
+                            <% 
+                              # Calculate the actual participant count from available data
+                              actual_count = cond do
+                                # If we have participant_count, use it as the source of truth
+                                is_integer(event.participant_count) && event.participant_count >= 0 -> event.participant_count
+                                # If we have participants array, use its length as fallback
+                                is_list(event.participants) -> length(event.participants)
+                                # Otherwise default to 0
+                                true -> 0
+                              end
+                              
+                              # Determine how many more participants there are beyond what's shown
+                              participants_list = event.participants || []
+                              shown_count = min(length(participants_list), 3)
+                              more_count = max(actual_count - shown_count, 0)
+                            %>
+                            <%= if actual_count > 0 || length(participants_list) > 0 do %>
                               <div class="flex items-center">
-                                <%= if event.participants && length(event.participants) > 0 do %>
+                                <%= if length(participants_list) > 0 do %>
                                   <div class="flex -space-x-1.5 mr-2">
-                                    <%= for {participant, _index} <- Enum.with_index(Enum.take(event.participants, 3)) do %>
+                                    <%= for {participant, _index} <- Enum.with_index(Enum.take(participants_list, 3)) do %>
                                       <%= if participant.user do %>
                                         <div class="relative group">
                                           <img 
@@ -287,14 +303,14 @@
                                         </div>
                                       <% end %>
                                     <% end %>
-                                    <%= if length(event.participants) > 3 do %>
+                                    <%= if more_count > 0 do %>
                                       <div class="relative group">
                                         <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white hover:z-20 hover:scale-110 transition-transform cursor-pointer">
-                                          +<%= length(event.participants) - 3 %>
+                                          +<%= more_count %>
                                         </div>
                                         <!-- Tooltip -->
                                         <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                                          <%= length(event.participants) - 3 %> more participants
+                                          <%= more_count %> more participants
                                           <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                                         </div>
                                       </div>
@@ -302,7 +318,7 @@
                                   </div>
                                 <% end %>
                                 <span class="text-sm text-gray-600">
-                                  <%= event.participant_count || 0 %> attending
+                                  <%= actual_count %> attending
                                 </span>
                               </div>
                             <% else %>
@@ -488,11 +504,27 @@
                         </div>
                         
                         <!-- Participants with Avatars -->
-                        <%= if (event.participant_count && event.participant_count > 0) do %>
+                        <% 
+                          # Calculate the actual participant count from available data
+                          actual_count = cond do
+                            # If we have participant_count, use it as the source of truth
+                            is_integer(event.participant_count) && event.participant_count >= 0 -> event.participant_count
+                            # If we have participants array, use its length as fallback
+                            is_list(event.participants) -> length(event.participants)
+                            # Otherwise default to 0
+                            true -> 0
+                          end
+                          
+                          # Determine how many more participants there are beyond what's shown
+                          participants_list = event.participants || []
+                          shown_count = min(length(participants_list), 3)
+                          more_count = max(actual_count - shown_count, 0)
+                        %>
+                        <%= if actual_count > 0 || length(participants_list) > 0 do %>
                           <div class="flex items-center">
-                            <%= if event.participants && length(event.participants) > 0 do %>
+                            <%= if length(participants_list) > 0 do %>
                               <div class="flex -space-x-1.5 mr-2">
-                                <%= for participant <- Enum.take(event.participants, 3) do %>
+                                <%= for participant <- Enum.take(participants_list, 3) do %>
                                   <%= if participant.user do %>
                                     <img 
                                       src={EventasaurusApp.Accounts.User.avatar_url(participant.user, %{size: 40})}
@@ -502,15 +534,15 @@
                                     >
                                   <% end %>
                                 <% end %>
-                                <%= if length(event.participants) > 3 do %>
-                                  <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white hover:z-10 hover:scale-110 transition-transform cursor-pointer" title={"#{length(event.participants) - 3} more participants"}>
-                                    +<%= length(event.participants) - 3 %>
+                                <%= if more_count > 0 do %>
+                                  <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white hover:z-10 hover:scale-110 transition-transform cursor-pointer" title={"#{more_count} more participants"}>
+                                    +<%= more_count %>
                                   </div>
                                 <% end %>
                               </div>
                             <% end %>
                             <span class="text-sm text-gray-600">
-                              <%= event.participant_count || 0 %> attending
+                              <%= actual_count %> attending
                             </span>
                           </div>
                         <% else %>
