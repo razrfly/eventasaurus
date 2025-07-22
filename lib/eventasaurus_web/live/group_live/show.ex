@@ -40,7 +40,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
                |> assign(:active_tab, "events")}
             else
               # Load full group data for members
-              members = Groups.list_group_members(group)
+              members = Groups.list_group_members_with_roles(group)
               member_count = length(members)
               
               # Load group events
@@ -68,7 +68,8 @@ defmodule EventasaurusWeb.GroupLive.Show do
                |> assign(:show_add_modal, false)
                |> assign(:potential_members, [])
                |> assign(:add_member_search, "")
-               |> assign(:selected_user_id, nil)}
+               |> assign(:selected_user_id, nil)
+               |> assign(:open_member_menu, nil)}
             end
         end
     end
@@ -82,7 +83,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
     case Groups.add_user_to_group(group, user) do
       {:ok, _} ->
         # Reload group data after joining
-        members = Groups.list_group_members(group)
+        members = Groups.list_group_members_with_roles(group)
         member_count = length(members)
         
         events = Events.list_events_for_group(group)
@@ -106,7 +107,8 @@ defmodule EventasaurusWeb.GroupLive.Show do
          |> assign(:show_add_modal, false)
          |> assign(:potential_members, [])
          |> assign(:add_member_search, "")
-         |> assign(:selected_user_id, nil)}
+         |> assign(:selected_user_id, nil)
+         |> assign(:open_member_menu, nil)}
       
       {:error, _} ->
         {:noreply,
@@ -198,6 +200,27 @@ defmodule EventasaurusWeb.GroupLive.Show do
   end
   
   @impl true
+  def handle_event("filter_members", %{"role_filter" => role}, socket) do
+    socket = socket
+             |> assign(:role_filter, role)
+             |> assign(:current_page, 1)
+    
+    socket = load_members_page(socket, 1)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("clear_member_filters", _params, socket) do
+    socket = socket
+             |> assign(:role_filter, "all")
+             |> assign(:search_query, "")
+             |> assign(:current_page, 1)
+    
+    socket = load_members_page(socket, 1)
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("paginate", %{"page" => page}, socket) do
     page_num = String.to_integer(page)
     socket = load_members_page(socket, page_num)
@@ -280,6 +303,21 @@ defmodule EventasaurusWeb.GroupLive.Show do
   end
   
   @impl true
+  def handle_event("toggle_member_menu", %{"user_id" => user_id}, socket) do
+    user_id = String.to_integer(user_id)
+    
+    # Toggle menu - if same user clicked, close it; otherwise open new one
+    open_menu = if socket.assigns.open_member_menu == user_id, do: nil, else: user_id
+    
+    {:noreply, assign(socket, :open_member_menu, open_menu)}
+  end
+  
+  @impl true
+  def handle_event("close_member_menu", _params, socket) do
+    {:noreply, assign(socket, :open_member_menu, nil)}
+  end
+
+  @impl true
   def handle_event("remove_member", %{"user_id" => user_id}, socket) do
     user_id = String.to_integer(user_id)
     
@@ -314,6 +352,33 @@ defmodule EventasaurusWeb.GroupLive.Show do
   
   # Helper functions
   
+  def format_relative_time(datetime) do
+    # Convert to DateTime if it's a NaiveDateTime
+    datetime = case datetime do
+      %NaiveDateTime{} = ndt -> 
+        DateTime.from_naive!(ndt, "Etc/UTC")
+      %DateTime{} = dt -> 
+        dt
+      _ -> 
+        # Fallback for other types
+        DateTime.from_naive!(datetime, "Etc/UTC")
+    end
+    
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(now, datetime)
+    diff_minutes = div(diff_seconds, 60)
+    diff_hours = div(diff_minutes, 60)
+    diff_days = div(diff_hours, 24)
+    
+    cond do
+      diff_seconds < 60 -> "just now"
+      diff_minutes < 60 -> "#{diff_minutes} minute#{if diff_minutes != 1, do: "s"} ago"
+      diff_hours < 24 -> "#{diff_hours} hour#{if diff_hours != 1, do: "s"} ago"
+      diff_days < 7 -> "#{diff_days} day#{if diff_days != 1, do: "s"} ago"
+      true -> Calendar.strftime(datetime, "%b %d, %Y")
+    end
+  end
+  
   def role_badge_class(role) do
     base = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
     
@@ -328,12 +393,13 @@ defmodule EventasaurusWeb.GroupLive.Show do
     opts = [
       page: page,
       per_page: 20,
-      search: socket.assigns.search_query
+      search: socket.assigns[:search_query] || ""
     ]
     
     # Add role filter if not "all"
-    opts = if socket.assigns.role_filter != "all" do
-      Keyword.put(opts, :role, socket.assigns.role_filter)
+    role_filter = socket.assigns[:role_filter] || "all"
+    opts = if role_filter != "all" do
+      Keyword.put(opts, :role, role_filter)
     else
       opts
     end
