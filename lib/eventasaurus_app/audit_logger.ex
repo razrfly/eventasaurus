@@ -206,6 +206,25 @@ defmodule EventasaurusApp.AuditLogger do
       Map.merge(metadata, %{from_role: from_role, to_role: to_role}))
   end
 
+  def log_group_sync(group_id, acting_user_id, results, metadata \\ %{}) do
+    log_group_event("group_sync_completed", group_id, acting_user_id,
+      Map.merge(metadata, %{
+        sync_results: results,
+        added_count: results[:added],
+        already_members_count: results[:already_members]
+      }))
+  end
+
+  def log_event_sync(group_id, event_id, acting_user_id, results, metadata \\ %{}) do
+    log_group_event("event_sync_completed", group_id, acting_user_id,
+      Map.merge(metadata, %{
+        event_id: event_id,
+        sync_results: results,
+        added_count: results[:added],
+        already_members_count: results[:already_members]
+      }))
+  end
+
   # Private functions
 
   defp get_client_ip(metadata) do
