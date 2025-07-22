@@ -1140,16 +1140,11 @@ defmodule EventasaurusApp.Events do
     # Load first 4 participants for each event in a single query
     participants_by_event = if length(event_ids) > 0 do
       from(ep in EventParticipant,
-        join: u in assoc(ep, :user),
-        where: ep.event_id in ^event_ids,
-        where: is_nil(ep.deleted_at),
-        where: ep.status in [:accepted, :confirmed_with_order],
-        order_by: [asc: ep.event_id, desc: ep.inserted_at],
-        preload: [user: u],
-        select: {ep.event_id, ep}
+        where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
+        preload: [:user]
       )
       |> Repo.all()
-      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      |> Enum.group_by(& &1.event_id)
       |> Enum.map(fn {event_id, participants} ->
         # Take only first 4 participants per event for avatar display
         {event_id, Enum.take(participants, 4)}
