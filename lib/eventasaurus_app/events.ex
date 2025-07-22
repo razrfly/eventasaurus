@@ -220,8 +220,36 @@ defmodule EventasaurusApp.Events do
 
     query = apply_soft_delete_filter(query, opts)
 
-    Repo.all(query)
+    results = Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
+    
+    # Get event IDs for participant loading
+    event_ids = results |> Enum.map(& &1.id) |> Enum.uniq()
+    
+    # Load participants for each event in a single query
+    participants_by_event = if length(event_ids) > 0 do
+      from(ep in EventParticipant,
+        where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
+        order_by: [asc: ep.event_id, desc: ep.inserted_at],
+        preload: [:user]
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.event_id)
+    else
+      %{}
+    end
+
+    # Add participant data to results
+    results
+    |> Enum.map(fn event ->
+      participants = Map.get(participants_by_event, event.id, [])
+      participant_count = length(participants)
+      
+      Map.merge(event, %{
+        participants: participants,
+        participant_count: participant_count
+      })
+    end)
   end
 
   @doc """
