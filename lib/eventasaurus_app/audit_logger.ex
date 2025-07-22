@@ -207,21 +207,33 @@ defmodule EventasaurusApp.AuditLogger do
   end
 
   def log_group_sync(group_id, acting_user_id, results, metadata \\ %{}) do
+    # Ensure results has required keys with defaults
+    safe_results = %{
+      added: results[:added] || 0,
+      already_members: results[:already_members] || 0
+    }
+    
     log_group_event("group_sync_completed", group_id, acting_user_id,
       Map.merge(metadata, %{
-        sync_results: results,
-        added_count: results[:added],
-        already_members_count: results[:already_members]
+        sync_results: safe_results,
+        added_count: safe_results[:added],
+        already_members_count: safe_results[:already_members]
       }))
   end
 
   def log_event_sync(group_id, event_id, acting_user_id, results, metadata \\ %{}) do
+    # Ensure results has required keys with defaults
+    safe_results = %{
+      added: results[:added] || 0,
+      already_members: results[:already_members] || 0
+    }
+    
     log_group_event("event_sync_completed", group_id, acting_user_id,
       Map.merge(metadata, %{
         event_id: event_id,
-        sync_results: results,
-        added_count: results[:added],
-        already_members_count: results[:already_members]
+        sync_results: safe_results,
+        added_count: safe_results[:added],
+        already_members_count: safe_results[:already_members]
       }))
   end
 
