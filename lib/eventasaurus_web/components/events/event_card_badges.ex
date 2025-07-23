@@ -30,7 +30,7 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
         </span>
       <% end %>
 
-      <%= if @context == :user_dashboard && @event.group && @event.group.slug do %>
+      <%= if @context == :user_dashboard && group_loaded?(@event) && @event.group do %>
         <a 
           href={"/groups/#{@event.group.slug}"} 
           class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors relative z-10" 
@@ -47,6 +47,13 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
   end
 
   # Helper functions
+
+  defp group_loaded?(event) do
+    case event.group do
+      %Ecto.Association.NotLoaded{} -> false
+      _ -> true
+    end
+  end
 
   defp role_badge_class("organizer"), do: "bg-green-100 text-green-800"
   defp role_badge_class("participant"), do: "bg-blue-100 text-blue-800"
