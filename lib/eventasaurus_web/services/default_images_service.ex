@@ -17,8 +17,15 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
 
   @doc """
   Get all images for a specific category.
+  Maintains backward compatibility by converting atoms to strings.
   Delegates to ImageManifest for proper Phoenix asset handling.
   """
+  def get_images_for_category(category) when is_atom(category) do
+    category
+    |> to_string()
+    |> ImageManifest.get_images_for_category()
+  end
+  
   def get_images_for_category(category) do
     ImageManifest.get_images_for_category(category)
   end
