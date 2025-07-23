@@ -18,7 +18,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     
     ~H"""
     <article class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow" role="article" aria-labelledby={"event-title-#{@unique_id}"}>
-      <a href={get_event_url(@event, @context)} class="block" aria-label={"View #{@event.title}"}>
+      <a href={~p"/#{@event.slug}"} class="block" aria-label={"View #{@event.title}"}>
         <div class={card_padding(@layout)}>
           <!-- Event Header with Image -->
           <div class={card_layout(@layout)}>
@@ -99,7 +99,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
       <!-- Actions -->
       <div class={action_padding(@layout) <> " flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-gray-100 gap-2 sm:gap-0"}>
           <div class="flex items-center flex-wrap gap-2">
-            <%= render_action_button(@event, @context) %>
+            <%= render_action_button(@event) %>
           </div>
           
           <!-- Participant Status Update (for non-organizers in user context) -->
@@ -129,16 +129,6 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   end
 
   # Helper functions
-  
-  defp get_event_url(event, :user_dashboard) do
-    if Map.get(event, :can_manage, false) do
-      "/events/#{event.slug}"
-    else
-      "/#{event.slug}"
-    end
-  end
-  
-  defp get_event_url(event, _), do: "/#{event.slug}"
 
   defp card_padding(:desktop), do: "p-3"
   defp card_padding(:mobile), do: "p-4"
@@ -155,34 +145,31 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   defp image_container_class(:desktop), do: "w-full sm:w-64 h-44 sm:h-44 rounded-lg overflow-hidden flex-shrink-0"
   defp image_container_class(:mobile), do: "w-16 h-16 rounded-lg overflow-hidden flex-shrink-0"
 
-  defp render_action_button(event, context) do
-    case {context, Map.get(event, :can_manage, false)} do
-      {:user_dashboard, true} ->
-        assigns = %{event: event}
-        ~H"""
-        <a 
-          href={~p"/events/#{@event.slug}"}
-          class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
-          aria-label={"Manage #{@event.title}"}
-          onclick="event.stopPropagation()"
-        >
-          Manage
-        </a>
-        """
-      
-      {_, _} ->
-        assigns = %{event: event}
-        ~H"""
-        <a 
-          href={~p"/#{@event.slug}"}
-          class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
-          aria-label={"View #{@event.title}"}
-          onclick="event.stopPropagation()"
-        >
-          View
-        </a>
-        """
-    end
+  defp render_action_button(event) do
+    can_manage = Map.get(event, :can_manage, false)
+    assigns = %{event: event, can_manage: can_manage}
+    
+    ~H"""
+    <%= if @can_manage do %>
+      <a 
+        href={~p"/events/#{@event.slug}"}
+        class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
+        aria-label={"Manage #{@event.title}"}
+        onclick="event.stopPropagation()"
+      >
+        Manage
+      </a>
+    <% end %>
+    
+    <a 
+      href={~p"/#{@event.slug}"}
+      class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
+      aria-label={"View #{@event.title}"}
+      onclick="event.stopPropagation()"
+    >
+      View
+    </a>
+    """
   end
 
   defp format_time(nil, _timezone), do: "Time TBD"
