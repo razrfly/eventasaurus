@@ -250,6 +250,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
     require Logger
     Logger.info("=== SUBMIT EVENT HANDLER CALLED ===")
     Logger.info("Event params keys: #{inspect(Map.keys(event_params))}")
+    Logger.info("Submitted cover_image_url: #{inspect(Map.get(event_params, "cover_image_url"))}")
+    Logger.info("Socket assigns cover_image_url: #{inspect(socket.assigns.cover_image_url)}")
+    Logger.info("Event struct cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
 
     # Apply taxation consistency logic before further processing
     event_params = apply_taxation_consistency(event_params)
@@ -1137,6 +1140,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
   def handle_event("image_uploaded", %{"path" => path, "publicUrl" => public_url}, socket) do
     require Logger
     Logger.info("Image uploaded successfully: #{path}")
+    Logger.info("New public URL: #{public_url}")
+    Logger.info("Old cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
     
     # Create external image data for the uploaded image
     external_image_data = %{
@@ -1167,6 +1172,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
       }))
       |> assign(:show_image_picker, false)
       |> put_flash(:info, "Cover image uploaded successfully!")
+    
+    # Log the final changeset state
+    final_changeset = socket.assigns.changeset
+    Logger.info("Updated changeset data: #{inspect(final_changeset.data.cover_image_url)}")
+    Logger.info("Updated changeset changes: #{inspect(final_changeset.changes)}")
+    Logger.info("Final event cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
     
     {:noreply, socket}
   end
