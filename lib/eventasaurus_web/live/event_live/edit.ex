@@ -247,16 +247,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
   @impl true
   def handle_event("submit", %{"event" => event_params}, socket) do
-    require Logger
-    Logger.info("=== SUBMIT EVENT HANDLER CALLED ===")
-    Logger.info("Event params keys: #{inspect(Map.keys(event_params))}")
-    Logger.info("Submitted cover_image_url: #{inspect(Map.get(event_params, "cover_image_url"))}")
-    Logger.info("Socket assigns cover_image_url: #{inspect(socket.assigns.cover_image_url)}")
-    Logger.info("Event struct cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
 
     # Apply taxation consistency logic before further processing
     event_params = apply_taxation_consistency(event_params)
-    Logger.info("Taxation consistency applied: #{inspect(Map.take(event_params, ["taxation_type", "is_ticketed"]))}")
 
     # Decode external_image_data if it's a JSON string
     event_params =
@@ -343,6 +336,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> Map.drop(["venue_name", "venue_address", "venue_city", "venue_state",
                  "venue_country", "venue_latitude", "venue_longitude", "venue_type", "is_virtual",
                  "start_date", "start_time", "ends_date", "ends_time"])
+    
 
     # Legacy status transition based on date polling removed - using generic polling system
 
@@ -356,18 +350,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
           |> Map.put(:action, :validate)
           # Legacy date polling validation removed
 
-        Logger.info("=== VALIDATION STEP ===")
-        Logger.info("Validation changeset valid?: #{validation_changeset.valid?}")
-        Logger.info("Validation errors: #{inspect(validation_changeset.errors)}")
 
         if validation_changeset.valid? do
-          Logger.info("Validation passed, calling Events.update_event")
-
           # Legacy date polling updates removed - continue with event update
-          Logger.info("Event before update - cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
-          Logger.info("Params being sent to update_event: #{inspect(authorized_params)}")
-          Logger.info("Specific cover_image_url in params: #{inspect(Map.get(authorized_params, "cover_image_url"))}")
-          
           case Events.update_event(socket.assigns.event, authorized_params) do
             {:ok, event} ->
               {:noreply,
@@ -379,7 +364,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
               {:noreply, assign(socket, form: to_form(changeset))}
           end
         else
-          Logger.info("Validation failed, not calling Events.update_event")
           {:noreply, assign(socket,
             form: to_form(validation_changeset),
             changeset: validation_changeset
@@ -1156,16 +1140,13 @@ defmodule EventasaurusWeb.EventLive.Edit do
       "title" => "Uploaded Image"
     }
     
-    # Update the event struct with the new cover image URL
-    updated_event = %{socket.assigns.event | cover_image_url: public_url}
+    # DON'T update the event struct directly - this causes the changeset to not detect the change!
+    # Instead, create the changeset with the original event
+    changeset = Events.change_event(socket.assigns.event, %{"cover_image_url" => public_url})
     
-    # Update the changeset to reflect the new image URL
-    changeset = Events.change_event(updated_event, %{"cover_image_url" => public_url})
-    
-    # Update the socket with the new event, changeset, and form
+    # Update the socket with the changeset and form, but keep the original event struct
     socket =
       socket
-      |> assign(:event, updated_event)
       |> assign(:changeset, changeset)
       |> assign(:form, to_form(changeset))
       |> assign(:cover_image_url, public_url)
@@ -1176,12 +1157,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
       }))
       |> assign(:show_image_picker, false)
       |> put_flash(:info, "Cover image uploaded successfully!")
-    
-    # Log the final changeset state
-    final_changeset = socket.assigns.changeset
-    Logger.info("Updated changeset data: #{inspect(final_changeset.data.cover_image_url)}")
-    Logger.info("Updated changeset changes: #{inspect(final_changeset.changes)}")
-    Logger.info("Final event cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
     
     {:noreply, socket}
   end
