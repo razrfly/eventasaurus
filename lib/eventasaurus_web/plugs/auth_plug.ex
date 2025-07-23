@@ -43,6 +43,10 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       plug :fetch_auth_user
   """
   def fetch_auth_user(conn, _opts) do
+    # First check if we need to refresh the token
+    conn = maybe_refresh_token_if_needed(conn)
+    
+    # Then get the current user
     user = Auth.get_current_user(conn)
     assign(conn, :auth_user, user)
   end
@@ -304,6 +308,47 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       maybe_refresh_token(conn)
     else
       conn
+    end
+  end
+  
+  # Helper function for fetch_auth_user to refresh tokens if needed
+  defp maybe_refresh_token_if_needed(conn) do
+    token_expires_at = get_session(conn, :token_expires_at)
+    refresh_token = get_session(conn, :refresh_token)
+    
+    cond do
+      # No tokens at all
+      is_nil(get_session(conn, :access_token)) ->
+        conn
+        
+      # We have tokens and should check expiry
+      token_expires_at && refresh_token && should_refresh_token?(token_expires_at) ->
+        case Client.refresh_token(refresh_token) do
+          {:ok, auth_data} ->
+            # Extract the tokens from the response
+            access_token = get_token_value(auth_data, "access_token")
+            new_refresh_token = get_token_value(auth_data, "refresh_token")
+            expires_at = get_token_expiry(auth_data)
+            
+            if access_token && new_refresh_token do
+              # Update the session with the new tokens
+              conn
+              |> put_session(:access_token, access_token)
+              |> put_session(:refresh_token, new_refresh_token)
+              |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
+              |> configure_session(renew: true)
+            else
+              conn
+            end
+            
+          {:error, _reason} ->
+            # If refresh fails, return conn as-is and let the auth check handle it
+            conn
+        end
+        
+      # Token not near expiry or no refresh token
+      true ->
+        conn
     end
   end
   
