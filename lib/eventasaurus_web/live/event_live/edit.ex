@@ -23,7 +23,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   @valid_setup_paths ~w[polling confirmed threshold]
 
   @impl true
-  def mount(%{"slug" => slug}, _session, socket) do
+  def mount(%{"slug" => slug}, session, socket) do
     event = Events.get_event_by_slug(slug)
 
     if event do
@@ -148,7 +148,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
-              |> assign(:supabase_access_token, "edit_token_#{user.id}")
+              |> assign(:supabase_access_token, get_current_valid_token(session))
               # Ticketing assigns
               |> assign(:tickets, existing_tickets)
               |> assign(:show_ticket_modal, false)
@@ -1054,6 +1054,111 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:rich_external_data, %{})
       |> put_flash(:info, "Rich data has been removed from your event.")
 
+    {:noreply, socket}
+  end
+
+  # ========== Helper Functions ==========
+  
+  # Get the current valid access token, handling token refresh scenarios
+  defp get_current_valid_token(session) do
+    token = session["access_token"]
+    refresh_token = session["refresh_token"] 
+    token_expires_at = session["token_expires_at"]
+    
+    # Check if we need to refresh the token
+    if token && refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
+      case EventasaurusApp.Auth.Client.refresh_token(refresh_token) do
+        {:ok, auth_data} ->
+          # Extract the new access token
+          new_token = get_token_value(auth_data, "access_token")
+          new_token || token  # Fall back to old token if extraction fails
+        {:error, _reason} ->
+          # Refresh failed, use original token
+          token
+      end
+    else
+      # Token is still valid or no refresh available
+      token
+    end
+  end
+  
+  defp should_refresh_token?(expires_at_iso) when is_binary(expires_at_iso) do
+    case DateTime.from_iso8601(expires_at_iso) do
+      {:ok, expires_at, _} ->
+        # Refresh if token expires in next 10 minutes
+        refresh_threshold = DateTime.utc_now() |> DateTime.add(600, :second)
+        DateTime.compare(refresh_threshold, expires_at) == :gt
+      _ ->
+        false
+    end
+  end
+  defp should_refresh_token?(_), do: false
+  
+  # Helper to extract token value from various response formats
+  defp get_token_value(auth_data, key) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, key) ->
+        Map.get(auth_data, key)
+      is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
+        Map.get(auth_data, String.to_atom(key))
+      is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
+        Map.get(auth_data, "token")
+      true ->
+        nil
+    end
+  end
+
+  @impl true
+  def handle_event("image_upload_error", %{"error" => error_message} = params, socket) do
+    require Logger
+    Logger.error("Image upload error: #{error_message}")
+    
+    # Log additional details if available
+    if details = Map.get(params, "details") do
+      Logger.error("Upload error details: #{inspect(details)}")
+    end
+    
+    # Check for specific error types and provide user-friendly messages
+    user_message = cond do
+      error_message == "Invalid Compact JWS" ->
+        "Your session has expired. Please refresh the page and try again."
+      String.contains?(error_message, "Authentication") ->
+        "Authentication failed. Please refresh the page and try again."
+      String.contains?(error_message, "File size too large") ->
+        error_message
+      true ->
+        "Failed to upload image. Please try again or choose a different image."
+    end
+    
+    {:noreply, put_flash(socket, :error, user_message)}
+  end
+
+  @impl true
+  def handle_event("image_uploaded", %{"path" => path, "publicUrl" => public_url}, socket) do
+    require Logger
+    Logger.info("Image uploaded successfully: #{path}")
+    
+    # Create external image data for the uploaded image
+    external_image_data = %{
+      "id" => path,
+      "url" => public_url,
+      "source" => "upload",
+      "filename" => Path.basename(path),
+      "title" => "Uploaded Image"
+    }
+    
+    # Update the event with the new image
+    socket =
+      socket
+      |> assign(:cover_image_url, public_url)
+      |> assign(:external_image_data, external_image_data)
+      |> assign(:form_data, Map.merge(socket.assigns.form_data, %{
+        "cover_image_url" => public_url,
+        "external_image_data" => external_image_data
+      }))
+      |> assign(:show_image_picker, false)
+      |> put_flash(:info, "Image uploaded successfully!")
+    
     {:noreply, socket}
   end
 
