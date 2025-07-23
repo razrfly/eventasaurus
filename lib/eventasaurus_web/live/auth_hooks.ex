@@ -121,9 +121,12 @@ defmodule EventasaurusWeb.Live.AuthHooks do
               # For now, try to use the current token
               get_user_with_token(token)
               
-            {:error, _reason} ->
-              # Refresh failed, try with current token anyway
-              get_user_with_token(token)
+            {:error, reason} ->
+              # Refresh failed, token is likely expired or invalid
+              Logger.warning("Token refresh failed in LiveView: #{inspect(reason)}")
+              # Return nil to treat user as unauthenticated
+              # The next HTTP request will clear the session properly
+              nil
           end
         else
           # Token not near expiry or no refresh token
