@@ -475,10 +475,17 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
   defp calculate_token_expiry(expires_at) when is_integer(expires_at) and expires_at > 1_000_000_000 do
     # Unix timestamp
-    {:ok, datetime} = DateTime.from_unix(expires_at)
-    DateTime.to_iso8601(datetime)
+    case DateTime.from_unix(expires_at) do
+      {:ok, datetime} ->
+        DateTime.to_iso8601(datetime)
+      {:error, _} ->
+        # Fall back to 1 hour if invalid timestamp
+        DateTime.utc_now()
+        |> DateTime.add(3600, :second)
+        |> DateTime.to_iso8601()
+    end
   end
-  defp calculate_token_expiry(expires_in) when is_integer(expires_in) and expires_in < 100_000 do
+  defp calculate_token_expiry(expires_in) when is_integer(expires_in) and expires_in > 0 and expires_in < 100_000 do
     # Seconds until expiry
     DateTime.utc_now()
     |> DateTime.add(expires_in, :second)

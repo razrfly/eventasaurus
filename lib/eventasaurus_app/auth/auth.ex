@@ -262,10 +262,20 @@ defmodule EventasaurusApp.Auth do
         auth_data["expires_at"]
       is_map(auth_data) && Map.has_key?(auth_data, :expires_in) ->
         # Calculate expires_at from expires_in (seconds from now)
-        DateTime.utc_now() |> DateTime.add(auth_data.expires_in, :second) |> DateTime.to_unix()
+        expires_in = auth_data.expires_in
+        if is_integer(expires_in) and expires_in > 0 and expires_in < 86400 * 365 do
+          DateTime.utc_now() |> DateTime.add(expires_in, :second) |> DateTime.to_unix()
+        else
+          nil
+        end
       is_map(auth_data) && Map.has_key?(auth_data, "expires_in") ->
         # Calculate expires_at from expires_in (seconds from now)
-        DateTime.utc_now() |> DateTime.add(auth_data["expires_in"], :second) |> DateTime.to_unix()
+        expires_in = auth_data["expires_in"]
+        if is_integer(expires_in) and expires_in > 0 and expires_in < 86400 * 365 do
+          DateTime.utc_now() |> DateTime.add(expires_in, :second) |> DateTime.to_unix()
+        else
+          nil
+        end
       true ->
         nil
     end
@@ -285,8 +295,14 @@ defmodule EventasaurusApp.Auth do
   end
   defp maybe_put_token_expiry(conn, expires_at) when is_integer(expires_at) do
     # Unix timestamp
-    {:ok, datetime} = DateTime.from_unix(expires_at)
-    put_session(conn, :token_expires_at, DateTime.to_iso8601(datetime))
+    case DateTime.from_unix(expires_at) do
+      {:ok, datetime} ->
+        put_session(conn, :token_expires_at, DateTime.to_iso8601(datetime))
+      {:error, _} ->
+        # Fall back to default 1 hour expiry if invalid timestamp
+        expires_at = DateTime.utc_now() |> DateTime.add(3600, :second)
+        put_session(conn, :token_expires_at, DateTime.to_iso8601(expires_at))
+    end
   end
   defp maybe_put_token_expiry(conn, expires_at) when is_binary(expires_at) do
     # ISO8601 string
