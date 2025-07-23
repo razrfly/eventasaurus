@@ -392,9 +392,8 @@ defmodule EventasaurusApp.Events do
   in the returned event.
   """
   def update_event(%Event{} = event, attrs) do
-    result = event
-    |> Event.changeset_with_inferred_status(attrs)
-    |> Repo.update()
+    changeset = Event.changeset_with_inferred_status(event, attrs)
+    result = Repo.update(changeset)
 
     case result do
       {:ok, updated_event} ->
