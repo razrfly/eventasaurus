@@ -28,6 +28,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     statics: EventasaurusWeb.static_paths()
 
   alias EventasaurusApp.Auth
+  alias EventasaurusApp.Auth.Client
   alias EventasaurusApp.Accounts
 
   require Logger
@@ -107,19 +108,54 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     assign_new(socket, :auth_user, fn ->
       # Get the token from the session
       token = session["access_token"]
+      refresh_token = session["refresh_token"]
+      token_expires_at = session["token_expires_at"]
 
       if token do
-        # Use the AuthHelper for all tokens (both test and real)
-        # The AuthHelper will delegate to TestClient in test environment
-        case Auth.AuthHelper.get_current_user(token) do
-          {:ok, user} -> user
-          _ -> nil
+        # Check if we need to refresh the token
+        if refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
+          case Auth.Client.refresh_token(refresh_token) do
+            {:ok, auth_data} ->
+              # Token refreshed successfully, but we can't update the session from LiveView
+              # The next regular HTTP request will handle the session update
+              # For now, try to use the current token
+              get_user_with_token(token)
+              
+            {:error, _reason} ->
+              # Refresh failed, try with current token anyway
+              get_user_with_token(token)
+          end
+        else
+          # Token not near expiry or no refresh token
+          get_user_with_token(token)
         end
       else
         nil
       end
     end)
   end
+  
+  defp get_user_with_token(token) do
+    # Use the AuthHelper for all tokens (both test and real)
+    # The AuthHelper will delegate to TestClient in test environment
+    case Auth.AuthHelper.get_current_user(token) do
+      {:ok, user} -> user
+      _ -> nil
+    end
+  end
+  
+  defp should_refresh_token?(expires_at_iso) when is_binary(expires_at_iso) do
+    case DateTime.from_iso8601(expires_at_iso) do
+      {:ok, expires_at, _} ->
+        # Refresh if token expires in next 10 minutes
+        refresh_threshold = DateTime.utc_now() |> DateTime.add(600, :second)
+        DateTime.compare(refresh_threshold, expires_at) == :gt
+      _ ->
+        # If we can't parse the expiry, don't try to refresh
+        false
+    end
+  end
+  defp should_refresh_token?(_), do: false
 
   # Helper function to ensure we have a proper User struct
   # This handles the conversion from Supabase auth data to local User struct
