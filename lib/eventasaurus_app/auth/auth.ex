@@ -7,6 +7,8 @@ defmodule EventasaurusApp.Auth do
 
   import Plug.Conn
   alias EventasaurusApp.Auth.{AuthHelper, Client}
+  
+  require Logger
 
   @doc """
   Registers a new user with email, password, and name.
