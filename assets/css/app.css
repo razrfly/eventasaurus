@@ -1,177 +1,179 @@
-@import "tailwindcss/base";
-@import "tailwindcss/components";
-@import "tailwindcss/utilities";
+/* Google Fonts for all themes */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
 
-/* Import Google Fonts for Themes - Must be before other CSS rules */
-@import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Creepster&family=Bangers&family=Press+Start+2P&family=Caveat:wght@400;700&family=Righteous&family=Bungee&family=Fascinate&family=Orbitron:wght@400;700;900&family=Bebas+Neue&family=Permanent+Marker&family=Indie+Flower&family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Zilla+Slab:wght@400;700&family=Fredoka:wght@400;700&family=Lobster&family=Amatic+SC:wght@400;700&family=Comic+Neue:wght@400;700&family=Kalam:wght@400;700&family=Patrick+Hand&family=Homemade+Apple&family=Rock+Salt&family=Reenie+Beanie&family=Just+Another+Hand&display=swap');
 
-/* This file is for your main application CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* =============================================================================
-  MODAL STRUCTURE & ALIGNMENT (Base Setup First)
-  ============================================================================= */
-
-/* Base modal wrapper and positioning setup */
-.modal {
-  @apply fixed inset-0 z-[50] overflow-y-auto;
+/* Drag and drop specific styles */
+.touch-dragging {
+  @apply transform transition-transform duration-150 ease-out;
+  position: relative !important;
+  z-index: 50 !important;
 }
 
-/* Modal overlay background */
-.modal-overlay {
-  @apply fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity;
-  z-index: 50;
+.drag-handle {
+  @apply cursor-move text-gray-400 hover:text-gray-600 transition-colors duration-150;
+  touch-action: none;
 }
 
-/* Modal container that handles responsive centering */
-.modal-container {
-  @apply flex items-center justify-center min-h-screen text-center p-0;
-  position: relative;
-  z-index: 51;
+.drag-handle:hover {
+  @apply text-gray-600;
 }
 
-/* Invisible element to help with modal alignment */
-.modal-container::before {
-  content: '';
-  display: inline-block;
-  height: 100vh;
-  vertical-align: middle;
+.dragging {
+  @apply opacity-50 scale-95 transform transition-all duration-150;
 }
 
-/* Modal content box - responsive sizing and proper shadows */
-.modal-content {
-  @apply bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full;
-  display: inline-block;
-  vertical-align: middle;
-  position: relative;
-  max-height: calc(100vh - 2rem);
-  margin: 1rem;
+.drop-zone {
+  @apply bg-blue-50 border-blue-200 border-2 border-dashed transition-all duration-150;
 }
 
-/* Maximum width variations for different modal sizes */
-/* Only apply max-width constraints on larger screens (640px and up) */
-@media (min-width: 640px) {
-  .modal-content.max-w-md {
-    max-width: 28rem; /* 448px */
+/* Visual feedback for draggable items */
+[data-draggable="true"] {
+  @apply transition-all duration-150 ease-out;
+}
+
+[data-draggable="true"]:hover .drag-handle {
+  @apply text-gray-600;
+}
+
+/* Mobile touch feedback */
+@media (hover: none) and (pointer: coarse) {
+  .drag-handle {
+    @apply text-gray-500;
+    padding: 0.75rem;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   
-  .modal-content.max-w-xl {
-    max-width: 36rem; /* 576px */
+  /* Larger touch targets for mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem;
   }
-  
-  .modal-content.max-w-2xl {
-    max-width: 42rem; /* 672px */
-  }
-  
-  .modal-content.max-w-4xl {
-    max-width: 56rem; /* 896px */
-  }
-}
-
-/* Modal header with title */
-.modal-header {
-  @apply px-6 py-4 bg-gray-50 border-b border-gray-200;
-}
-
-.modal-title {
-  @apply text-lg font-medium text-gray-900;
-}
-
-/* Modal body content area - ensure scrollability */
-.modal-body {
-  @apply px-6 py-4;
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
-}
-
-/* Modal footer with action buttons */
-.modal-footer {
-  @apply px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3;
-}
-
-/* Close button positioning */
-.modal-close {
-  @apply absolute top-0 right-0 pt-4 pr-4;
-}
-
-.modal-close button {
-  @apply bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
-}
-
-/* Mobile responsive adjustments */
-@media (max-width: 640px) {
-  .modal-container {
-    @apply p-4;
-  }
-
-  .modal-content {
-    @apply w-full;
-    margin: 0;
-    max-height: calc(100vh - 2rem);
-  }
-
-  .modal-body {
-    max-height: calc(100vh - 160px);
-  }
-}
-
-/* =============================================================================
-  GOOGLE FONTS & THEME-SPECIFIC TYPOGRAPHY
-  ============================================================================= */
-
-/* Google Fonts import moved to top of file to ensure proper loading */
-
-/* =============================================================================
-  THEME CSS VARIABLES
-  ============================================================================= */
-
-:root {
-  /* Default theme variables (no theme) */
-  --font-family-body: inherit;
-  --font-family-heading: inherit;
-  --font-weight-heading: 600;
-}
-
-/* Summer Theme */
-body.theme-summer {
-  --font-family-body: 'Pacifico', cursive;
-  --font-family-heading: 'Pacifico', cursive;
-  --font-weight-heading: 400;
-}
-
-/* Halloween Theme */
-body.theme-halloween {
-  --font-family-body: 'Creepster', cursive;
-  --font-family-heading: 'Creepster', cursive;
-  --font-weight-heading: 400;
-}
-
-/* Fun Theme */
-body.theme-fun {
-  --font-family-body: 'Bangers', cursive;
-  --font-family-heading: 'Bangers', cursive;
-  --font-weight-heading: 400;
-}
-
-/* Retro Theme */
-body.theme-retro {
-  --font-family-body: 'Press Start 2P', cursive;
-  --font-family-heading: 'Press Start 2P', cursive;
-  --font-weight-heading: 400;
 }
 
 /* ============================================================================
-   THEME TYPOGRAPHY APPLICATION
+   EVENTASAURUS THEME SYSTEM - SELECTIVE STYLING ARCHITECTURE
+   
+   This CSS implements a theme system that:
+   - Applies backgrounds universally (entire page)
+   - Applies fonts selectively (content areas only)
+   - Protects UI elements (navbar, footer, notifications)
+   
+   Architecture Documentation: docs/CSS_ARCHITECTURE_SPECIFICATION.md
    ============================================================================ */
 
-/* Apply theme fonts to user content areas and auth pages */
-body[class*="theme-"] .user-content,
-body[class*="theme-"] .user-content *:not(.eventasaurus-protected-flash):not(.eventasaurus-protected-flash *),
-body[class*="theme-"] .auth-content,
-body[class*="theme-"] .auth-content * {
-  font-family: var(--font-family-body);
+/* ============================================================================
+   BASE THEME FOUNDATION
+   ============================================================================ */
+
+/* Default Inter font applied universally via Tailwind's base layer */
+/* This ensures all UI elements have Inter by default */
+
+/* CSS Variables for theme customization */
+:root {
+  /* UI Font Variables - for protected elements */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --color-text-ui: #1f2937;
+  
+  /* Default theme variables (minimal/fallback theme) */
+  --color-primary: #000000;
+  --color-secondary: #333333;
+  --color-accent: #0066cc;
+  --color-background: #ffffff;
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+  --color-border: #e5e7eb;
+  
+  /* Default typography (for content areas when no theme applied) */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-weight-heading: 600;
+  --body-size: 16px;
+  --body-weight: 400;
+  
+  /* Layout variables */
+  --border-radius: 8px;
+  --border-radius-large: 12px;
+  --shadow-style: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-style-large: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  /* Component specific */
+  --button-border-radius: 8px;
+  --card-border-radius: 12px;
+  --input-border-radius: 6px;
 }
 
-/* Apply heading styles within user content and auth areas */
+/* ============================================================================
+   UNIVERSAL THEME APPLICATION (Backgrounds, Variables, Animations)
+   ============================================================================ */
+
+/* Base theme styling - applies to any themed body */
+/* This sets up universal properties that apply to the entire page */
+body[class*="theme-"] {
+  /* Universal background and visual properties */
+  position: relative;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  
+  /* Smooth transitions for theme changes */
+  transition: background-color 0.3s ease, color 0.3s ease;
+  
+  /* Font smoothing for all text */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================================
+   SELECTIVE FONT APPLICATION (Content Areas Only)
+   ============================================================================ */
+
+/* Content areas that receive theme fonts */
+/* These are the ONLY elements that get theme-specific fonts */
+body[class*="theme-"] .main-content,
+body[class*="theme-"] .event-content,
+body[class*="theme-"] .dashboard-content,
+body[class*="theme-"] .user-content,
+body[class*="theme-"] .auth-content {
+  font-family: var(--font-family);
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  line-height: 1.5;
+}
+
+/* Headings within content areas get theme heading fonts */
+body[class*="theme-"] .main-content h1,
+body[class*="theme-"] .main-content h2,
+body[class*="theme-"] .main-content h3,
+body[class*="theme-"] .main-content h4,
+body[class*="theme-"] .main-content h5,
+body[class*="theme-"] .main-content h6,
+body[class*="theme-"] .event-content h1,
+body[class*="theme-"] .event-content h2,
+body[class*="theme-"] .event-content h3,
+body[class*="theme-"] .event-content h4,
+body[class*="theme-"] .event-content h5,
+body[class*="theme-"] .event-content h6,
+body[class*="theme-"] .dashboard-content h1,
+body[class*="theme-"] .dashboard-content h2,
+body[class*="theme-"] .dashboard-content h3,
+body[class*="theme-"] .dashboard-content h4,
+body[class*="theme-"] .dashboard-content h5,
+body[class*="theme-"] .dashboard-content h6,
 body[class*="theme-"] .user-content h1,
 body[class*="theme-"] .user-content h2,
 body[class*="theme-"] .user-content h3,
@@ -225,228 +227,334 @@ body[class*="theme-"] .auth-content h6 {
   top: 1rem !important;
   right: 1rem !important;
   z-index: 9999 !important;
-}
-
-/* Flash message styles (recreate after reset) */
-.eventasaurus-protected-flash > div {
-  display: flex !important;
-  align-items: flex-start !important;
-  padding: 1rem !important;
-  border-radius: 0.375rem !important;
+  max-width: 24rem !important;
+  width: 100% !important;
+  background-color: #ffffff !important;
+  border-radius: 0.5rem !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
-  background-color: white !important;
-  border: 1px solid #e5e7eb !important;
-  margin-bottom: 0.75rem !important;
-  min-width: 300px !important;
-  max-width: 420px !important;
-}
-
-/* Flash message text */
-.eventasaurus-protected-flash p {
-  margin: 0 !important;
-  padding: 0 !important;
-  flex: 1 !important;
-  margin-right: 0.75rem !important;
-}
-
-/* Flash close button */
-.eventasaurus-protected-flash button {
-  display: inline-flex !important;
-  padding: 0 !important;
-  cursor: pointer !important;
-  background-color: transparent !important;
   border: none !important;
-  margin-left: auto !important;
-  flex-shrink: 0 !important;
+  outline: none !important;
+  pointer-events: auto !important;
+  padding: 1rem !important;
+  display: block !important;
 }
 
-.eventasaurus-protected-flash button:hover {
-  opacity: 0.7 !important;
+/* ULTRA HIGH SPECIFICITY - Force override ANY possible interference */
+html body .eventasaurus-protected-flash,
+html body main .eventasaurus-protected-flash,
+html body div .eventasaurus-protected-flash,
+body[class*="theme-"] .eventasaurus-protected-flash,
+body[class*="theme-"] main .eventasaurus-protected-flash,
+body[class*="theme-"] div .eventasaurus-protected-flash,
+body[class*="theme-"] .eventasaurus-protected-flash *,
+body[class*="theme-"] .eventasaurus-protected-flash div,
+body[class*="theme-"] .eventasaurus-protected-flash p,
+body[class*="theme-"] .eventasaurus-protected-flash button,
+body[class*="theme-"] .eventasaurus-protected-flash span,
+main .eventasaurus-protected-flash,
+main .eventasaurus-protected-flash *,
+div .eventasaurus-protected-flash,
+div .eventasaurus-protected-flash *,
+.bg-white .eventasaurus-protected-flash,
+.backdrop-blur-sm .eventasaurus-protected-flash,
+.rounded-2xl .eventasaurus-protected-flash {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background-image: none !important;
+  text-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  -moz-box-shadow: none !important;
+  -webkit-border-radius: unset !important;
+  -moz-border-radius: unset !important;
+  backdrop-filter: none !important;
+  filter: none !important;
 }
 
-/* Flash success styles */
-.eventasaurus-protected-flash[data-kind="info"] > div {
-  background-color: #dbeafe !important;
-  border-color: #60a5fa !important;
+/* ULTRA HIGH SPECIFICITY - Specifically for the container */
+html body .eventasaurus-protected-flash,
+html body main .eventasaurus-protected-flash,
+html body div .eventasaurus-protected-flash,
+body[class*="theme-"] .eventasaurus-protected-flash,
+body[class*="theme-"] main .eventasaurus-protected-flash,
+body[class*="theme-"] div .eventasaurus-protected-flash,
+main .eventasaurus-protected-flash,
+div .eventasaurus-protected-flash,
+.bg-white .eventasaurus-protected-flash,
+.backdrop-blur-sm .eventasaurus-protected-flash,
+.rounded-2xl .eventasaurus-protected-flash {
+  background-color: #ffffff !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  border: none !important;
+  outline: none !important;
+  position: fixed !important;
+  top: 1rem !important;
+  right: 1rem !important;
+  z-index: 9999 !important;
+  max-width: 24rem !important;
+  width: 100% !important;
+  border-radius: 0.5rem !important;
+  pointer-events: auto !important;
+  padding: 1rem !important;
+  display: block !important;
+  backdrop-filter: none !important;
+  filter: none !important;
 }
 
-.eventasaurus-protected-flash[data-kind="info"] p {
-  color: #1e40af !important;
+/* Navbar - always uses Inter font */
+.navbar,
+.navbar *,
+header[class*="nav"],
+header[class*="nav"] * {
+  font-family: var(--font-ui) !important;
 }
 
-/* Flash error styles */
-.eventasaurus-protected-flash[data-kind="error"] > div {
-  background-color: #fee2e2 !important;
-  border-color: #f87171 !important;
+/* Exception: Allow logo font in navbar */
+.navbar .font-knewave,
+header[class*="nav"] .font-knewave {
+  font-family: 'Knewave', cursive !important;
 }
 
-.eventasaurus-protected-flash[data-kind="error"] p {
-  color: #991b1b !important;
+/* Footer - always uses Inter font */
+.footer,
+.footer *,
+footer,
+footer * {
+  font-family: var(--font-ui) !important;
 }
 
-/* Navigation and Manager UI - Always Protected */
-nav,
-nav *,
-.manager-controls,
-.manager-controls *,
-.protected-ui,
-.protected-ui * {
-  font-family: inherit !important;
+/* Toast notifications - always use Inter font */
+.toast,
+.toast *,
+.toast-container,
+.toast-container *,
+[class*="toast"],
+[class*="toast"] *,
+/* Phoenix LiveView flash messages */
+[role="alert"],
+[role="alert"] *,
+[role="alert"] p,
+[role="alert"] button,
+.fixed.top-2,
+.fixed.top-2 *,
+.fixed.top-2 p,
+.fixed.top-2 button,
+/* Additional toast selectors for better protection */
+.flash,
+.flash *,
+[data-phx-component*="flash"],
+[data-phx-component*="flash"] *,
+.alert,
+.alert *,
+.notification,
+.notification * {
+  font-family: var(--font-ui) !important;
+  background-color: white !important;
+  color: #1f2937 !important;
+  border: 1px solid #e5e7eb !important;
 }
 
-/* Retro theme specific adjustments */
-body.theme-retro .user-content {
-  letter-spacing: 0.05em;
-  line-height: 1.8;
+/* Modal headers and system UI - always use Inter font */
+.modal-header,
+.modal-header *,
+.system-ui,
+.system-ui *,
+[role="dialog"] [class*="header"],
+[role="dialog"] [class*="header"] * {
+  font-family: var(--font-ui) !important;
 }
 
-body.theme-retro .user-content h1,
-body.theme-retro .user-content h2,
-body.theme-retro .user-content h3 {
-  letter-spacing: 0.1em;
-  line-height: 1.4;
+/* Form elements maintain Inter font for consistency */
+input,
+textarea,
+select,
+button:not(.theme-button-primary):not(.theme-button-secondary),
+.form-input,
+.form-textarea,
+.form-select {
+  font-family: var(--font-ui) !important;
 }
 
-/* Fun theme specific adjustments */
-body.theme-fun .user-content h1,
-body.theme-fun .user-content h2 {
-  text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+/* ============================================================================
+   THEME COMPONENT SYSTEM
+   ============================================================================ */
+
+/* Theme buttons that can be used across all themes */
+body[class*="theme-"] .theme-button-primary {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--button-border-radius);
+  box-shadow: var(--shadow-style);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 10;
+  font-family: var(--font-family); /* Inherits theme font if in content area */
 }
 
-/* =============================================================================
-  LOCATION SUGGESTIONS DROPDOWN
-  ============================================================================= */
-
-.location-suggestions {
-  @apply absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto;
-  border: 1px solid #e5e7eb;
+body[class*="theme-"] .theme-button-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-style-large);
 }
 
-.location-suggestion-item {
-  @apply px-4 py-2 hover:bg-gray-100 cursor-pointer text-gray-700;
+body[class*="theme-"] .theme-button-secondary {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 2px solid var(--color-border);
+  padding: 10px 22px;
+  border-radius: var(--button-border-radius);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 10;
+  font-family: var(--font-family); /* Inherits theme font if in content area */
 }
 
-.location-suggestion-item.selected {
-  @apply bg-gray-100;
+body[class*="theme-"] .theme-button-secondary:hover {
+  background-color: var(--color-border);
 }
 
-.location-suggestion-item:first-child {
-  @apply rounded-t-md;
+/* Theme cards */
+body[class*="theme-"] .theme-card {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-border-radius);
+  box-shadow: var(--shadow-style);
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 5;
 }
 
-.location-suggestion-item:last-child {
-  @apply rounded-b-md;
+body[class*="theme-"] .theme-card:hover {
+  box-shadow: var(--shadow-style-large);
 }
 
-/* =============================================================================
-  AUTOCOMPLETE AND DROPDOWN STYLES
-  ============================================================================= */
+/* ============================================================================
+   MINIMAL THEME (Default/Fallback)
+   ============================================================================ */
 
-.autocomplete-dropdown,
-.places-dropdown,
-.time-selector-dropdown {
-  @apply absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg overflow-auto;
-  border: 1px solid #e5e7eb;
-  max-height: 16rem;
+.theme-minimal {
+  /* Minimal theme uses default values - essentially no styling changes */
+  --theme-applied: true;
+  
+  /* Override to ensure minimal theme uses Inter everywhere */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.autocomplete-item,
-.place-suggestion-item,
-.time-option-item {
-  @apply px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 flex items-center;
-  transition: background-color 0.15s ease;
+/* ============================================================================
+   UTILITY CLASSES FOR THEME OVERRIDES
+   ============================================================================ */
+
+/* Force Inter font when needed */
+.font-ui,
+.font-inter {
+  font-family: var(--font-ui) !important;
 }
 
-.autocomplete-item.selected,
-.place-suggestion-item.selected,
-.time-option-item.selected {
-  @apply bg-blue-50 text-blue-700;
+/* Force theme font when needed (within content areas) */
+.font-theme {
+  font-family: var(--font-family) !important;
 }
 
-.autocomplete-item .primary-text,
-.place-suggestion-item .primary-text {
-  @apply font-medium text-gray-900;
+/* Debug class to identify content areas */
+.debug-content-area {
+  outline: 2px dashed rgba(255, 0, 0, 0.3);
+  outline-offset: 2px;
 }
 
-.autocomplete-item .secondary-text,
-.place-suggestion-item .secondary-text {
-  @apply text-sm text-gray-500;
+/* Debug class to identify protected areas */
+.debug-protected-area {
+  outline: 2px dashed rgba(0, 255, 0, 0.3);
+  outline-offset: 2px;
 }
 
-/* Google logo attribution */
-.powered-by-google {
-  @apply px-4 py-2 text-xs text-gray-500 border-t border-gray-200 bg-gray-50;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+/* ============================================================================
+   THEME TRANSITION ANIMATIONS
+   ============================================================================ */
+
+/* Smooth transitions when switching themes */
+* {
+  transition-property: background-color, color, border-color;
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
 }
 
-/* =============================================================================
-  FORM ERROR STATES
-  ============================================================================= */
-
-.field-error {
-  @apply mt-1 text-sm text-red-600;
+/* Disable transitions on theme buttons during hover for better UX */
+.theme-button-primary,
+.theme-button-secondary {
+  transition-property: transform, box-shadow, background-color;
+  transition-duration: 0.2s;
 }
 
-.input-error {
-  @apply border-red-300 focus:border-red-500 focus:ring-red-500;
+/* ============================================================================
+   UNIVERSAL LOGO FONT PROTECTION
+   ============================================================================ */
+
+/* Ensure logo font always works regardless of theme */
+.font-knewave {
+  font-family: 'Knewave', cursive !important;
 }
 
-/* =============================================================================
-  LOADING STATES
-  ============================================================================= */
+/* ============================================================================
+   THEME BASE ARCHITECTURE
+   ============================================================================ */
 
-.spinner {
-  @apply inline-flex;
-  animation: spin 1s linear infinite;
-}
+/* ============================================================================
+   MOBILE SECONDARY ACTIONS TOGGLE
+   ============================================================================ */
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.skeleton {
-  @apply bg-gray-200 animate-pulse rounded;
-}
-
-/* =============================================================================
-  TRANSITIONS AND ANIMATIONS
-  ============================================================================= */
-
-.fade-in {
-  animation: fadeIn 0.3s ease-in;
-}
-
-.fade-out {
-  animation: fadeOut 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
+/* Mobile secondary actions visibility control */
+@media (max-width: 1023px) {
+  .mobile-secondary-actions {
     opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease, max-height 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
   }
-  to {
+  
+  .mobile-secondary-actions.show {
     opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+    pointer-events: auto;
   }
 }
 
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
+/* Custom CSS can go here */
+
+/* ============================================================================
+   VENUE SEARCH COMPONENT ENHANCEMENTS
+   ============================================================================ */
+
+/* Enhanced venue search container */
+.venue-search-container {
+  position: relative;
 }
 
-.slide-down {
-  animation: slideDown 0.3s ease-out;
+/* Recent locations dropdown enhancements */
+.recent-locations-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  max-height: 12rem;
+  overflow-y: auto;
+  animation: slideDown 0.2s ease-out;
 }
 
 @keyframes slideDown {
@@ -460,437 +568,342 @@ body.theme-fun .user-content h2 {
   }
 }
 
-/* =============================================================================
-  RECENT LOCATIONS DROPDOWN
-  ============================================================================= */
-
-.recent-locations-dropdown {
-  @apply absolute z-50 w-full bg-white shadow-lg overflow-hidden;
-  max-height: 20rem;
-  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
-  border: 1px solid #e5e7eb;
-  border-top: none;
-  border-radius: 0 0 0.375rem 0.375rem;
-}
-
-.recent-locations-dropdown.closing {
-  max-height: 0;
-  opacity: 0;
-  transition: max-height 0.2s ease-in, opacity 0.2s ease-in;
-}
-
+/* Recent location item hover enhancement */
 .recent-location-item {
-  @apply px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-start border-b border-gray-100 last:border-b-0;
-  transition: background-color 0.15s ease;
+  transition: all 0.15s ease-in-out;
+  border-radius: 0.25rem;
+  margin: 0.125rem;
 }
 
 .recent-location-item:hover {
-  @apply bg-blue-50;
+  background-color: #f8fafc;
+  transform: translateX(2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.recent-location-item .location-icon {
-  @apply w-5 h-5 text-gray-400 mr-3 flex-shrink-0 mt-0.5;
+/* Virtual meeting buttons enhancement */
+.virtual-meeting-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.recent-location-item .location-details {
-  @apply flex-1;
-}
-
-.recent-location-item .location-name {
-  @apply font-medium text-gray-900 text-sm;
-}
-
-.recent-location-item .location-address {
-  @apply text-xs text-gray-500 mt-0.5;
-}
-
-.recent-location-item .location-used {
-  @apply text-xs text-gray-400 mt-1;
-}
-
-.recent-location-item.virtual-meeting-item {
-  @apply bg-blue-50 hover:bg-blue-100;
-}
-
-.recent-location-item.virtual-meeting-item .location-icon {
-  @apply text-blue-600;
-}
-
-.recent-location-item.virtual-meeting-item .location-name {
-  @apply text-blue-900;
-}
-
-/* Empty state */
-.recent-locations-empty {
-  @apply px-4 py-6 text-center text-sm text-gray-500;
-}
-
-/* Toggle button */
-.recent-locations-toggle {
-  @apply absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600;
-  transition: color 0.15s ease, transform 0.2s ease;
-}
-
-.recent-locations-toggle.open {
-  transform: translateY(-50%) rotate(180deg);
-}
-
-/* Virtual meeting button */
 .virtual-meeting-button {
-  @apply flex items-center justify-center px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium border-t border-gray-200;
-  transition: background-color 0.15s ease;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease-in-out;
+  transform: translateY(0);
 }
 
-.virtual-meeting-button svg {
-  @apply w-5 h-5 mr-2;
+.virtual-meeting-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Mobile responsiveness */
+.virtual-meeting-button:active {
+  transform: translateY(0);
+}
+
+/* Zoom button specific styling */
+.zoom-button {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border: none;
+}
+
+.zoom-button:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+}
+
+/* Google Meet button specific styling */
+.google-meet-button {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  border: none;
+}
+
+.google-meet-button:hover {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+}
+
+/* Enhanced search input focus state */
+.venue-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+/* Recent locations toggle button enhancement */
+.recent-locations-toggle {
+  transition: all 0.2s ease-in-out;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.recent-locations-toggle:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+/* Places search toggle button enhancement */
+.places-search-toggle {
+  transition: all 0.2s ease-in-out;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.places-search-toggle:hover {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Selected venue display enhancement */
+.selected-venue-display {
+  position: relative;
+  overflow: hidden;
+}
+
+.selected-venue-display::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to bottom, #3b82f6, #1e40af);
+  border-radius: 0 0.25rem 0.25rem 0;
+}
+
+/* Usage count badge enhancement */
+.usage-count-badge {
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile responsive enhancements */
 @media (max-width: 768px) {
   .recent-locations-dropdown {
     max-height: 10rem;
     border-radius: 0 0 0.375rem 0.375rem;
   }
   
+  .virtual-meeting-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  
+  .virtual-meeting-button {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+  
   .recent-location-item {
-    @apply py-2;
+    padding: 0.75rem;
   }
 }
 
-/* Accessibility */
+/* Focus indicators for accessibility */
+.venue-search-container button:focus,
+.venue-search-container input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Loading state for search */
+.venue-search-loading {
+  position: relative;
+}
+
+.venue-search-loading::after {
+  content: '';
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Enhanced dropdown scrollbar */
+.recent-locations-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.recent-locations-dropdown::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.recent-locations-dropdown::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.recent-locations-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* No results state styling */
+.no-results-message {
+  padding: 1.5rem;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Location icon enhancement */
+.location-icon {
+  flex-shrink: 0;
+  transition: color 0.2s ease-in-out;
+}
+
+.recent-location-item:hover .location-icon {
+  color: #3b82f6;
+}
+
+/* Button icon spacing */
+.button-icon {
+  margin-right: 0.375rem;
+  flex-shrink: 0;
+}
+
+/* Enhanced border radius for consistency */
+.venue-search-input {
+  border-radius: 0.5rem;
+}
+
+.venue-search-input:focus + .recent-locations-dropdown {
+  border-top: 1px solid #3b82f6;
+}
+
+/* High contrast mode support */
 @media (prefers-contrast: high) {
   .recent-locations-dropdown {
     border-width: 2px;
   }
   
   .recent-location-item:hover {
-    @apply bg-gray-100;
-    outline: 2px solid #2563eb;
+    background-color: #000;
+    color: #fff;
+  }
+  
+  .usage-count-badge {
+    background: #000;
+    color: #fff;
   }
 }
 
-/* Reduced motion */
+/* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   .recent-locations-dropdown,
   .recent-location-item,
   .virtual-meeting-button,
   .recent-locations-toggle,
   .places-search-toggle {
+    animation: none;
     transition: none;
   }
 }
 
-/* =============================================================================
-  MOBILE TOUCH TARGETS (44x44 minimum)
-  ============================================================================= */
+/* ============================================================================
+   CAST CAROUSEL UTILITIES
+   ============================================================================ */
 
-/* Ensure all interactive elements meet minimum touch target size on mobile */
-@media (hover: none) and (pointer: coarse) {
-  .drag-handle {
-    @apply text-gray-500;
-    padding: 0.75rem;
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-/* =============================================================================
-  MOVIE SUGGESTION DROPDOWNS
-  ============================================================================= */
-
-.movie-suggestions-dropdown {
-  @apply absolute z-50 w-full mt-1 bg-white rounded-lg shadow-xl overflow-hidden;
-  max-height: 400px;
-  border: 1px solid #e5e7eb;
-}
-
-.movie-suggestion-item {
-  @apply flex items-start p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0;
-  transition: background-color 0.15s ease;
-}
-
-.movie-suggestion-item.selected {
-  @apply bg-blue-50;
-}
-
-.movie-suggestion-poster {
-  @apply w-12 h-[4.5rem] object-cover rounded flex-shrink-0 mr-3;
-}
-
-.movie-suggestion-details {
-  @apply flex-1 min-w-0;
-}
-
-.movie-suggestion-title {
-  @apply font-medium text-gray-900 text-sm truncate;
-}
-
-.movie-suggestion-year {
-  @apply text-xs text-gray-500;
-}
-
-.movie-suggestion-overview {
-  @apply text-xs text-gray-600 mt-1 line-clamp-2;
-}
-
-/* Movie search loading state */
-.movie-search-loading {
-  @apply flex items-center justify-center py-8 text-gray-500;
-}
-
-/* Movie search empty state */
-.movie-search-empty {
-  @apply text-center py-8 text-gray-500;
-}
-
-/* Movie search error state */
-.movie-search-error {
-  @apply text-center py-4 text-red-600 text-sm;
-}
-
-/* =============================================================================
-  POLL RESULT VISUALIZATIONS
-  ============================================================================= */
-
-/* Binary voting result bars */
-.binary-vote-bar {
-  @apply relative h-8 bg-gray-100 rounded-md overflow-hidden;
-}
-
-.binary-vote-fill {
-  @apply absolute inset-y-0 left-0 flex items-center justify-center text-white text-sm font-medium;
-  transition: width 0.5s ease-out;
-}
-
-.binary-vote-fill.yes {
-  @apply bg-green-500;
-}
-
-.binary-vote-fill.no {
-  @apply bg-red-500;
-}
-
-.binary-vote-fill.maybe {
-  @apply bg-yellow-500;
-}
-
-/* Star rating display */
-.star-rating-display {
-  @apply flex items-center space-x-1;
-}
-
-.star-rating-display .star {
-  @apply w-5 h-5;
-}
-
-.star-rating-display .star.filled {
-  @apply text-yellow-400;
-}
-
-.star-rating-display .star.empty {
-  @apply text-gray-300;
-}
-
-/* Ranked choice result display */
-.ranked-result-item {
-  @apply flex items-center space-x-3 py-2;
-}
-
-.ranked-result-position {
-  @apply w-8 h-8 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold text-sm;
-}
-
-.ranked-result-bar {
-  @apply flex-1 h-6 bg-gray-100 rounded-md overflow-hidden relative;
-}
-
-.ranked-result-fill {
-  @apply absolute inset-y-0 left-0 bg-indigo-500;
-  transition: width 0.5s ease-out;
-}
-
-.ranked-result-label {
-  @apply absolute inset-0 flex items-center px-2 text-xs font-medium;
-}
-
-/* =============================================================================
-  IMAGE GALLERY AND LIGHTBOX
-  ============================================================================= */
-
-.image-gallery-grid {
-  @apply grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
-}
-
-.image-gallery-item {
-  @apply relative aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-pointer;
-  transition: transform 0.2s ease;
-}
-
-.image-gallery-item:hover {
-  @apply transform scale-105;
-}
-
-.image-gallery-item img {
-  @apply w-full h-full object-cover;
-}
-
-/* Lightbox styles */
-.lightbox {
-  @apply fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center;
-}
-
-.lightbox-image {
-  @apply max-w-full max-h-full object-contain;
-}
-
-.lightbox-close {
-  @apply absolute top-4 right-4 text-white text-4xl cursor-pointer hover:text-gray-300;
-}
-
-.lightbox-nav {
-  @apply absolute top-1/2 transform -translate-y-1/2 text-white text-4xl cursor-pointer hover:text-gray-300 px-4;
-}
-
-.lightbox-nav.prev {
-  @apply left-0;
-}
-
-.lightbox-nav.next {
-  @apply right-0;
-}
-
-/* =============================================================================
-  MOVIE HERO SECTION
-  ============================================================================= */
-
-.movie-hero {
-  @apply relative h-64 md:h-96 overflow-hidden rounded-lg;
-}
-
-.movie-hero-backdrop {
-  @apply absolute inset-0 w-full h-full object-cover;
-  filter: brightness(0.4);
-}
-
-.movie-hero-gradient {
-  @apply absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent;
-}
-
-.movie-hero-content {
-  @apply absolute inset-0 flex items-end p-6 md:p-8;
-}
-
-.movie-hero-title {
-  @apply text-3xl md:text-5xl font-bold text-white mb-2;
-}
-
-.movie-hero-meta {
-  @apply flex items-center space-x-4 text-white/80 text-sm;
-}
-
-/* Movie poster hover effects */
-.movie-poster-container {
-  @apply relative overflow-hidden rounded-lg shadow-lg transition-transform duration-300 hover:scale-105;
-}
-
-.movie-poster-overlay {
-  @apply absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end p-4;
-}
-
-/* =============================================================================
-  RESPONSIVE UTILITIES
-  ============================================================================= */
-
-/* Hide scrollbar but keep functionality */
+/* Scrollbar hiding utility for cast carousel */
 .scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;     /* Firefox */
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;
+  display: none;             /* Safari and Chrome */
 }
 
-/* Custom scrollbar styles */
-.scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: #CBD5E0 #F7FAFC;
+/* Line clamp utilities for cast member names */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
-.scrollbar-thin::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
-  @apply bg-gray-100 rounded;
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  @apply bg-gray-400 rounded;
-}
+/* ============================================================================
+   PERFORMANCE OPTIMIZATIONS FOR ENHANCED PUBLIC EVENTS
+   ============================================================================ */
 
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-500;
-}
-
-/* =============================================================================
-  LAZY LOADING AND PERFORMANCE
-  ============================================================================= */
-
+/* Lazy loading placeholders */
 .lazy-image {
-  @apply bg-gray-200;
-  transition: opacity 0.3s ease-in-out;
+  transition: opacity 0.3s ease;
 }
 
-.lazy-image.loaded {
-  @apply bg-transparent;
-}
-
-/* Skeleton loading animation */
-.shimmer {
-  background: linear-gradient(
-    90deg,
-    #f0f0f0 25%,
-    #e0e0e0 50%,
-    #f0f0f0 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+.lazy-image[data-loading="true"] {
+  opacity: 0.5;
+  background: linear-gradient(90deg, #f0f0f0 25%, transparent 37%, #f0f0f0 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.5s ease infinite;
 }
 
 @keyframes shimmer {
   0% {
-    background-position: 200% 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: -200% 0;
+    background-position: -100% 0;
   }
 }
 
-/* =============================================================================
-  MOBILE-SPECIFIC OPTIMIZATIONS
-  ============================================================================= */
+/* Movie Hero Background Performance Optimizations */
+.movie-hero-backdrop {
+  will-change: transform;
+  backface-visibility: hidden;
+  /* Smooth backdrop images */
+  image-rendering: optimizeQuality;
+}
 
+/* Image optimization for different screen sizes */
 @media (max-width: 768px) {
   .movie-hero-backdrop {
     background-size: cover;
     background-position: center;
   }
   
-  /* Touch-friendly spacing */
-  .movie-suggestion-item {
-    @apply py-4;
-  }
-  
-  /* Improved tap targets */
-  button, a, .clickable {
-    min-height: 44px;
-    min-width: 44px;
+  /* Mobile-specific image loading optimizations */
+  .cast-carousel-mobile img {
+    will-change: auto;
   }
 }
 
-/* Reduce animations on low-power devices */
+/* Touch-friendly interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Accessibility: Reduce motion when requested */
 @media (prefers-reduced-motion: reduce) {
   .lazy-image,
   .movie-hero-backdrop,
@@ -898,13 +911,17 @@ body.theme-fun .user-content h2 {
     animation: none !important;
     transition: none !important;
   }
+  
+  .scrollbar-hide {
+    scroll-behavior: auto !important;
+  }
 }
 
-/* =============================================================================
-  PUBLIC POLL MOBILE OPTIMIZATIONS  
-  ============================================================================= */
+/* ============================================================================
+   MOBILE POLLING INTERFACE OPTIMIZATIONS
+   ============================================================================ */
 
-/* Search dropdown mobile fullscreen overlay */
+/* Mobile-optimized search dropdown */
 @media (max-width: 768px) {
   .search-dropdown {
     position: fixed !important;
@@ -912,75 +929,163 @@ body.theme-fun .user-content h2 {
     left: 50% !important;
     transform: translate(-50%, -50%) !important;
     width: 90vw !important;
-    max-width: 400px !important;
-    max-height: 80vh !important;
-    z-index: 9999 !important;
-    border-radius: 0.5rem !important;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    max-width: none !important;
+    max-height: 70vh !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+    z-index: 1000 !important;
   }
   
-  /* Add dark overlay behind dropdown */
-  .search-dropdown::before {
-    content: '';
+  .search-dropdown-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 999 !important;
+  }
+  
+  .search-result-item {
+    padding: 1rem !important;
+    min-height: 60px !important;
+    border-bottom: 1px solid #e5e7eb !important;
+  }
+  
+  .search-result-item:last-child {
+    border-bottom: none !important;
+  }
+  
+  /* Touch-friendly form elements */
+  .suggestion-form input,
+  .suggestion-form textarea,
+  .suggestion-form button {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    min-height: 44px !important;
+    padding: 0.75rem !important;
+  }
+  
+  .suggestion-form button {
+    padding: 0.875rem 1.5rem !important;
+    font-weight: 600 !important;
+  }
+  
+  /* Mobile option cards */
+  .option-card {
+    padding: 1rem !important;
+    margin-bottom: 0.5rem !important;
+    border-radius: 8px !important;
+  }
+  
+  .option-card-actions {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    margin-top: 0.75rem !important;
+  }
+  
+  .option-card-actions button {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+  }
+  
+  /* Mobile drag and drop improvements */
+  .mobile-drag-indicator {
     position: fixed;
-    inset: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: -1;
-  }
-}
-
-/* Mobile secondary actions (starts hidden, shows on toggle) */
-@media (max-width: 1023px) {
-  .mobile-secondary-actions {
-    opacity: 0;
-    max-height: 0;
-    overflow: hidden;
-    transform: translateY(-10px);
-    transition: all 0.3s ease-out;
-    margin-top: 0;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    z-index: 1000;
+    pointer-events: none;
   }
   
-  .mobile-secondary-actions.show {
-    opacity: 1;
-    max-height: 500px; /* Adjust based on content */
-    transform: translateY(0);
-    margin-top: 1rem;
+  /* Better touch feedback */
+  .touch-active:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+  
+  /* Mobile-optimized loading states */
+  .mobile-loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+  }
+  
+  .mobile-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e5e7eb;
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  /* Mobile keyboard handling */
+  .keyboard-adjust {
+    padding-bottom: env(keyboard-inset-height, 0);
+    transition: padding-bottom 0.3s ease;
+  }
+  
+  .form-container-mobile {
+    position: relative;
+    z-index: 100;
+  }
+  
+  .form-container-mobile.keyboard-visible {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 1.5rem;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
   }
 }
 
-/* Touch-optimized interactive elements */
+/* Enhanced touch states */
 @media (hover: none) and (pointer: coarse) {
   .interactive-element:active {
     background-color: rgba(59, 130, 246, 0.1);
     transform: scale(0.98);
     transition: all 0.1s ease;
   }
+  
+  .suggestion-button:active {
+    background-color: #2563eb !important;
+    transform: scale(0.98);
+  }
+  
+  .cancel-button:active {
+    background-color: #f3f4f6 !important;
+    transform: scale(0.98);
+  }
 }
 
-/* Improved mobile performance */
+/* Mobile-specific performance optimizations */
 @media (max-width: 768px) {
   /* Use transform instead of changing position for better performance */
   .mobile-optimized-animation {
     will-change: transform, opacity;
   }
   
-  /* Reduce visual complexity on mobile */
-  .complex-shadow {
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  }
-  
-  /* Optimize images for mobile */
-  .responsive-image {
-    image-rendering: -webkit-optimize-contrast;
-  }
-  
-  /* Ensure smooth scrolling */
-  .mobile-scroll-container {
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
-  }
-}
-
+  /* Reduce motion for users who prefer it */
   @media (prefers-reduced-motion: reduce) {
     .mobile-optimized-animation {
       will-change: auto;
@@ -988,38 +1093,367 @@ body.theme-fun .user-content h2 {
       animation: none !important;
     }
   }
+  
+  /* Optimize scrolling performance */
+  .mobile-scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
 
+  /* Date Selection Poll Component Responsiveness */
+  .date-selection-poll-component .calendar-container {
+    @apply w-full overflow-hidden;
+  }
+
+  .date-selection-poll-component .vote-buttons {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .date-selection-poll-component .vote-buttons > * + * {
+    margin-top: 0.5rem;
+  }
+
+  .date-selection-poll-component .vote-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .date-selection-poll-component .anonymous-vote-actions {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .date-selection-poll-component .anonymous-vote-actions > * + * {
+    margin-top: 0.5rem;
+  }
+
+  .date-selection-poll-component .anonymous-vote-actions button {
+    @apply w-full justify-center;
+  }
+
+  /* ============================================================================
+     PUBLIC EVENT PAGE MOBILE OPTIMIZATIONS
+     ============================================================================ */
+  
+  /* Container and layout optimizations */
+  .event-page-grid {
+    gap: 1rem; /* gap-4 equivalent */
+  }
+  
+  .main-content {
+    @apply space-y-6;
+  }
+  
+  .sidebar-content {
+    @apply space-y-4;
+  }
+  
+  /* Event header optimizations */
+  .event-page-grid .main-content h1 {
+    @apply text-2xl leading-tight mb-4;
+  }
+  
+  /* Event detail cards mobile optimization */
+  .event-page-grid .main-content .flex.items-start.gap-3 {
+    margin-bottom: 1rem; /* mb-4 equivalent */
+  }
+  
+  .event-page-grid .main-content .flex-shrink-0.w-8.h-8 {
+    @apply w-10 h-10 min-w-10;
+  }
+  
+  /* Movie suggestion cards mobile optimization */
+  .event-page-grid .main-content .option-card {
+    @apply p-4 mb-4 border border-gray-200 rounded-lg bg-white shadow-sm;
+  }
+  
+  .event-page-grid .main-content .option-card img {
+    @apply w-full max-w-20 h-auto rounded-md;
+  }
+  
+  .event-page-grid .main-content .option-card h4 {
+    @apply text-lg font-semibold mb-2 line-clamp-2;
+  }
+  
+  .event-page-grid .main-content .option-card p {
+    @apply text-sm text-gray-600 mb-2 line-clamp-3;
+  }
+  
+  /* Voting buttons mobile optimization */
+  .event-page-grid .main-content .option-card button {
+    @apply min-h-11 px-4 py-2 text-sm font-medium rounded-md;
+  }
+  
+  .event-page-grid .main-content .option-card .flex.gap-2 {
+    flex-direction: column;
+    margin-top: 0.75rem;
+  }
+  
+  .event-page-grid .main-content .option-card .flex.gap-2 button {
+    @apply w-full justify-center;
+  }
+  
+  /* Sidebar mobile optimization */
+  .sidebar-content > div {
+    @apply p-4 border border-gray-200 rounded-lg bg-white shadow-sm;
+  }
+  
+  .sidebar-content button {
+    @apply min-h-12 px-4 py-3 text-base font-medium rounded-lg transition-colors duration-200;
+  }
+  
+  .sidebar-content .bg-blue-600:hover {
+    background-color: rgb(29 78 216);
+  }
+  
+  .sidebar-content .bg-blue-600:active {
+    background-color: rgb(30 58 138);
+  }
+  
+  .sidebar-content .bg-gray-100:hover {
+    background-color: rgb(229 231 235);
+  }
+  
+  .sidebar-content .bg-gray-100:active {
+    background-color: rgb(209 213 219);
+  }
+  
+  /* Host section mobile optimization */
+  .event-page-grid .main-content .flex.items-center.gap-3 img {
+    width: 3rem; /* w-12 equivalent */
+    height: 3rem; /* h-12 equivalent */
+    border-radius: 9999px; /* rounded-full equivalent */
+  }
+  
+  /* Attendee avatars mobile optimization */
+  .event-page-grid .main-content .flex.gap-2 img {
+    @apply w-10 h-10 rounded-full;
+  }
+  
+  /* Typography improvements */
+  .event-page-grid .main-content h2 {
+    @apply text-xl font-semibold mb-3;
+  }
+  
+  .event-page-grid .main-content h3 {
+    @apply text-lg font-medium mb-2;
+  }
+  
+  .event-page-grid .main-content p {
+    @apply text-base leading-relaxed;
+  }
+  
+  /* Cover image mobile optimization */
+  .event-page-grid .main-content img[alt*="Cover"] {
+    @apply w-full h-auto rounded-lg mb-4;
+  }
+  
+  /* Share buttons mobile optimization */
+  .mobile-secondary-actions .flex.gap-2 {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  
+  .mobile-secondary-actions .flex.gap-2 a,
+  .mobile-secondary-actions .flex.gap-2 button {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    background-color: rgb(243 244 246);
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .mobile-secondary-actions .flex.gap-2 a:hover,
+  .mobile-secondary-actions .flex.gap-2 button:hover {
+    background-color: rgb(229 231 235);
+  }
+  
+  /* Calendar links mobile optimization */
+  .mobile-secondary-actions .flex.flex-col.space-y-2 a {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    background-color: rgb(249 250 251);
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .mobile-secondary-actions .flex.flex-col.space-y-2 a:hover {
+    background-color: rgb(243 244 246);
+  }
+  
+  /* Footer mobile optimization */
+  .event-page-grid + footer {
+    @apply mt-8 pt-8 border-t border-gray-200;
+  }
+}
+
+/* ============================================================================
+   MOBILE POLLING INTERFACE FIXES
+   ============================================================================ */
+  
+  /* Mobile-first approach - styles for screens smaller than 640px */
   @media (max-width: 639px) {
     /* Movie suggestion cards mobile optimization */
   .event-page-grid .main-content .option-card {
     padding: 1rem;
     margin-bottom: 1rem;
     border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    background-color: #ffffff;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
   }
-
-  /* Ensure vote buttons stack on mobile */
-  .event-page-grid .vote-buttons {
+  
+  /* Movie poster and content layout */
+  .event-page-grid .main-content .option-card > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .event-page-grid .main-content .option-card img {
+    width: 100%;
+    max-width: 80px;
+    height: auto;
+    border-radius: 0.5rem;
+    flex-shrink: 0;
+    align-self: flex-start;
+  }
+  
+  /* Movie title mobile optimization */
+  .event-page-grid .main-content .option-card h4 {
+    font-size: 1.125rem;
+    line-height: 1.375;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #1f2937;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    hyphens: auto;
+  }
+  
+  /* Movie description mobile optimization */
+  .event-page-grid .main-content .option-card p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  /* Vote summary mobile optimization */
+  .event-page-grid .main-content .option-card .vote-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    color: #6b7280;
+  }
+  
+  /* Voting buttons mobile optimization - CRITICAL FIX */
+  .event-page-grid .main-content .option-card .voting-buttons,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] {
     display: flex !important;
     flex-direction: column !important;
     gap: 0.5rem !important;
     width: 100% !important;
+    margin-top: 0.75rem !important;
   }
-
-  .event-page-grid .vote-buttons button {
+  
+  .event-page-grid .main-content .option-card .voting-buttons button,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button {
     width: 100% !important;
-    min-height: 44px !important; /* Touch target */
+    min-height: 2.75rem !important; /* 44px minimum touch target */
+    padding: 0.75rem 1rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #d1d5db !important;
+    background: #ffffff !important;
+    color: #374151 !important;
+    display: flex !important;
+    align-items: center !important;
     justify-content: center !important;
+    gap: 0.5rem !important;
+    transition: all 0.2s ease !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+    margin-left: 0 !important; /* Override space-x utilities - scoped to mobile breakpoint */
+  }
+  
+  /* Button states */
+  .event-page-grid .main-content .option-card .voting-buttons button:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button:hover {
+    background: #f9fafb !important;
+    border-color: #9ca3af !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button:active,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button:active {
+    background: #f3f4f6 !important;
+    transform: translateY(1px) !important;
+  }
+  
+  /* Yes button styling */
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="green"],
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="green"] {
+    background: #10b981 !important;
+    color: #ffffff !important;
+    border-color: #10b981 !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="green"]:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="green"]:hover {
+    background: #059669 !important;
+    border-color: #059669 !important;
+  }
+  
+  /* Maybe button styling */
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="yellow"],
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="yellow"] {
+    background: #f59e0b !important;
+    color: #ffffff !important;
+    border-color: #f59e0b !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="yellow"]:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="yellow"]:hover {
+    background: #d97706 !important;
+    border-color: #d97706 !important;
+  }
+  
+  /* No button styling */
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="red"],
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="red"] {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+  }
+  
+  .event-page-grid .main-content .option-card .voting-buttons button[class*="red"]:hover,
+  .event-page-grid .main-content .option-card .flex[class*="space-x"] button[class*="red"]:hover {
+    background: #dc2626 !important;
+    border-color: #dc2626 !important;
+  }
   }
 
-  /* Optimize movie poster layouts */
-  .event-page-grid .movie-poster {
-    max-width: 100px !important;
-    height: auto !important;
-  }
-}
-
+/* Mobile layout improvements */
 @media (max-width: 639px) {
   /* Content area with minimal padding on mobile - scoped to event pages */
   /* Includes safe area support for devices with notches */
@@ -1028,100 +1462,39 @@ body.theme-fun .user-content h2 {
     padding-left: max(0.1875rem, env(safe-area-inset-left)) !important; /* 3px or safe area */
     padding-right: max(0.1875rem, env(safe-area-inset-right)) !important; /* 3px or safe area */
   }
-
-  /* Main content area takes full width */
-  .public-event-page .main-content,
-  .event-page-grid .main-content {
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  /* Poll cards with appropriate spacing */
-  .public-event-page .poll-card,
-  .event-page-grid .poll-card {
-    margin-left: 0.25rem !important; /* 4px */
-    margin-right: 0.25rem !important; /* 4px */
-    margin-bottom: 0.5rem !important;
-    border-radius: 0.375rem !important;
-  }
-
-  /* Voting interface adjustments */
-  .public-event-page .voting-interface,
-  .event-page-grid .voting-interface {
-    padding: 0.75rem !important;
-  }
-
-  /* Vote buttons layout */
-  .public-event-page .vote-button-group,
-  .event-page-grid .vote-button-group {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 0.5rem !important;
-  }
-
-  .public-event-page .vote-button,
-  .event-page-grid .vote-button {
-    width: 100% !important;
-    min-height: 44px !important;
-    justify-content: center !important;
-  }
-
-  /* Movie poll specific - smaller images on mobile */
-  .public-movie-poll .movie-option-image {
-    width: 80px !important;
-    height: 120px !important;
-  }
-
-  /* Ensure proper text wrapping */
-  .public-event-page .option-title,
-  .event-page-grid .option-title {
-    word-break: break-word !important;
-    hyphens: auto !important;
-  }
-}
-
-/* Enhanced mobile optimization for generic polls (non-movie) */
-@media (max-width: 639px) {
-  /* Generic poll option cards */
-  .public-generic-poll .bg-white.border.border-gray-200 {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    border-radius: 0.5rem !important;
-    padding: 0.75rem !important;
-  }
-
-  /* Movie poll option cards get a different treatment */
-  .public-movie-poll .bg-white.border.border-gray-200 {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    border-radius: 0.5rem !important;
-    overflow: hidden !important;
-  }
-
-  /* Movie poll images and content */
-  .public-movie-poll .bg-white.border.border-gray-200 > div:first-child {
+  
+  /* Stack voting section header on mobile - more specific selector */
+  .public-movie-poll .space-y-6 > div > div:first-child {
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
+    gap: 0.5rem !important;
   }
-
-  /* Movie poster on mobile - make it prominent at top */
+  
+  /* Stack movie posters ABOVE content on mobile */
+  .public-movie-poll .bg-white.border.border-gray-200 > div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 1rem !important;
+  }
+  
+  /* Movie poster styling on mobile */
   .public-movie-poll img[alt*="poster"] {
     width: 100% !important;
-    height: 200px !important;
-    object-fit: cover !important;
-    border-radius: 0 !important;
-    margin: -0.75rem -0.75rem 0.75rem -0.75rem !important; /* Negative margins to fill card */
+    max-width: 8rem !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    display: block !important;
   }
-
-  /* Movie content section */
-  .public-movie-poll .bg-white.border.border-gray-200 > div:first-child > div:last-child {
+  
+  /* Ensure the text content takes full width below the image */
+  .public-movie-poll .flex-1 {
     width: 100% !important;
-    padding: 0.75rem !important;
+    text-align: left !important;
   }
-
-  /* Voting buttons for polls - stack vertically on mobile */
-  /* This targets the specific structure used in voting interfaces */
+  
+  /* Ensure movie poll voting buttons are properly styled */
   .public-movie-poll .flex[class*="space-x"] {
     display: flex !important;
     flex-direction: column !important;
@@ -1129,85 +1502,38 @@ body.theme-fun .user-content h2 {
     width: 100% !important;
     margin-top: 0.75rem !important;
   }
-
+  
   .public-movie-poll .flex[class*="space-x"] button {
     width: 100% !important;
-    min-height: 44px !important; /* Ensure touch target size */
-    justify-content: center !important;
-  }
-
-  /* Generic poll options with horizontal buttons */
-  .public-generic-poll .option-card {
-    display: flex !important;
-    flex-direction: column !important;
-  }
-
-  /* Ensure voting buttons are properly sized */
-  .public-generic-poll button[phx-click*="vote"] {
-    min-height: 44px !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-  }
-
-  /* Time slot badges */
-  .public-generic-poll .inline-flex.items-center.px-2.py-1 {
-    font-size: 0.75rem !important;
-    padding: 0.25rem 0.5rem !important;
-  }
-
-  /* Option titles */
-  .public-generic-poll h4,
-  .public-movie-poll h4 {
-    font-size: 0.875rem !important;
-    line-height: 1.25 !important;
-  }
-
-  /* Option descriptions */
-  .public-generic-poll .text-sm.text-gray-500,
-  .public-movie-poll .text-sm.text-gray-500 {
-    font-size: 0.75rem !important;
-    line-height: 1.125 !important;
-  }
-
-  /* Progress bars */
-  .poll-progress-bar {
-    height: 0.5rem !important;
-  }
-
-  /* Vote count badges */
-  .vote-count-badge {
-    font-size: 0.625rem !important;
-    padding: 0.125rem 0.375rem !important;
+    min-height: 2.75rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 }
 
-/* Fix for voting button text alignment on desktop */
+/* Desktop layout improvements - restore horizontal layouts */
 @media (min-width: 640px) {
   /* Reset mobile-only styles for desktop */
   .public-movie-poll .bg-white.border.border-gray-200 > div:first-child {
     display: flex !important;
     flex-direction: row !important;
     align-items: flex-start !important;
+    gap: 1rem !important;
   }
-
-  /* Reset movie poster to original size */
+  
+  /* Movie poster styling on desktop */
   .public-movie-poll img[alt*="poster"] {
-    width: 80px !important;
-    height: 120px !important;
-    object-fit: cover !important;
-    border-radius: 0.375rem !important;
+    width: 64px !important;
+    height: 96px !important;
+    max-width: none !important;
     margin: 0 !important;
+    display: block !important;
+    flex-shrink: 0 !important;
   }
-
-  /* Reset content padding */
-  .public-movie-poll .bg-white.border.border-gray-200 > div:first-child > div:last-child {
+  
+  /* Ensure the text content flows beside the image */
+  .public-movie-poll .flex-1 {
     width: auto !important;
-    padding: 0 !important;
-  }
-
-  /* Button text alignment fix */
-  .public-generic-poll button[phx-click*="vote"] span,
-  .public-movie-poll button[phx-click*="vote"] span {
     text-align: left !important;
   }
   
@@ -1228,20 +1554,3 @@ body.theme-fun .user-content h2 {
   }
 }
 
-/* Touch target optimization for mobile */
-.touch-target {
-  position: relative;
-}
-
-@media (max-width: 640px) {
-  .touch-target:after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    min-height: 44px;
-    min-width: 44px;
-    transform: translate(-50%, -50%);
-    pointer-events: none; /* Prevent pseudo-element from blocking clicks */
-  }
-}
