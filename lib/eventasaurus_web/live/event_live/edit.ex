@@ -1153,11 +1153,12 @@ defmodule EventasaurusWeb.EventLive.Edit do
     # Update the changeset to reflect the new image URL
     changeset = Events.change_event(updated_event, %{"cover_image_url" => public_url})
     
-    # Update the socket with the new event and changeset
+    # Update the socket with the new event, changeset, and form
     socket =
       socket
       |> assign(:event, updated_event)
       |> assign(:changeset, changeset)
+      |> assign(:form, to_form(changeset))
       |> assign(:cover_image_url, public_url)
       |> assign(:external_image_data, external_image_data)
       |> assign(:form_data, Map.merge(socket.assigns.form_data, %{
