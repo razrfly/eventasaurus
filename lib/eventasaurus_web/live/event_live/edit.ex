@@ -293,7 +293,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     venue_address = Map.get(event_params, "venue_address")
     is_virtual = Map.get(event_params, "is_virtual") == "true"
 
-    final_event_params = if !is_virtual and venue_name && venue_name != "" do
+    params_with_venue = if !is_virtual and venue_name && venue_name != "" do
       # Try to find existing venue or create new one
       venue_attrs = %{
         "name" => venue_name,
@@ -339,7 +339,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     # Clean up venue-related fields that the Event changeset doesn't expect
     # Keep date polling fields for our custom logic
-    final_event_params = final_event_params
+    final_event_params = params_with_venue
     |> Map.drop(["venue_name", "venue_address", "venue_city", "venue_state",
                  "venue_country", "venue_latitude", "venue_longitude", "venue_type", "is_virtual",
                  "start_date", "start_time", "ends_date", "ends_time"])
@@ -364,6 +364,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
           Logger.info("Validation passed, calling Events.update_event")
 
           # Legacy date polling updates removed - continue with event update
+          Logger.info("Event before update - cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
+          Logger.info("Params being sent to update_event: #{inspect(authorized_params)}")
+          Logger.info("Specific cover_image_url in params: #{inspect(Map.get(authorized_params, "cover_image_url"))}")
+          
           case Events.update_event(socket.assigns.event, authorized_params) do
             {:ok, event} ->
               {:noreply,
