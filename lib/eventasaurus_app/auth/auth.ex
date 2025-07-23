@@ -255,14 +255,17 @@ defmodule EventasaurusApp.Auth do
 
   # Helper function to extract token expiry from auth data
   defp extract_token_expiry(auth_data) do
-    cond do
+    result = cond do
       is_map(auth_data) && Map.has_key?(auth_data, :expires_at) ->
+        Logger.debug("Found expires_at (atom key): #{inspect(auth_data.expires_at)}")
         auth_data.expires_at
       is_map(auth_data) && Map.has_key?(auth_data, "expires_at") ->
+        Logger.debug("Found expires_at (string key): #{inspect(auth_data["expires_at"])}")
         auth_data["expires_at"]
       is_map(auth_data) && Map.has_key?(auth_data, :expires_in) ->
         # Calculate expires_at from expires_in (seconds from now)
         expires_in = auth_data.expires_in
+        Logger.debug("Found expires_in (atom key): #{inspect(expires_in)}")
         if is_integer(expires_in) and expires_in > 0 and expires_in < 86400 * 365 do
           DateTime.utc_now() |> DateTime.add(expires_in, :second) |> DateTime.to_unix()
         else
@@ -271,14 +274,19 @@ defmodule EventasaurusApp.Auth do
       is_map(auth_data) && Map.has_key?(auth_data, "expires_in") ->
         # Calculate expires_at from expires_in (seconds from now)
         expires_in = auth_data["expires_in"]
+        Logger.debug("Found expires_in (string key): #{inspect(expires_in)}")
         if is_integer(expires_in) and expires_in > 0 and expires_in < 86400 * 365 do
           DateTime.utc_now() |> DateTime.add(expires_in, :second) |> DateTime.to_unix()
         else
           nil
         end
       true ->
+        Logger.debug("No expiry found in auth data. Keys: #{inspect(Map.keys(auth_data))}")
         nil
     end
+    
+    Logger.debug("Extracted token expiry: #{inspect(result)}")
+    result
   end
 
   # Helper function to store refresh token if available
@@ -291,6 +299,7 @@ defmodule EventasaurusApp.Auth do
   defp maybe_put_token_expiry(conn, nil) do
     # If no expires_at provided, calculate based on standard JWT expiry (1 hour)
     expires_at = DateTime.utc_now() |> DateTime.add(3600, :second)
+    Logger.debug("No token expiry provided, defaulting to 1 hour: #{DateTime.to_iso8601(expires_at)}")
     put_session(conn, :token_expires_at, DateTime.to_iso8601(expires_at))
   end
   defp maybe_put_token_expiry(conn, expires_at) when is_integer(expires_at) do
@@ -314,9 +323,11 @@ defmodule EventasaurusApp.Auth do
     if remember_me do
       # Remember me: persistent session for 30 days
       max_age = 30 * 24 * 60 * 60  # 30 days in seconds
+      Logger.debug("Configuring session with remember_me=true, max_age=#{max_age} seconds (30 days)")
       configure_session(conn, max_age: max_age, renew: true)
     else
       # Don't remember: session cookie (expires when browser closes)
+      Logger.debug("Configuring session with remember_me=false, session cookie only")
       configure_session(conn, max_age: nil, renew: true)
     end
   end

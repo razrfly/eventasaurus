@@ -200,6 +200,7 @@ defmodule EventasaurusApp.Auth.Client do
   """
   def refresh_token(refresh_token) do
     url = "#{get_auth_url()}/token?grant_type=refresh_token"
+    Logger.debug("Refreshing token with URL: #{url}")
 
     body = Jason.encode!(%{
       refresh_token: refresh_token
@@ -207,13 +208,17 @@ defmodule EventasaurusApp.Auth.Client do
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: 200, body: response_body}} ->
-        {:ok, Jason.decode!(response_body)}
+        response = Jason.decode!(response_body)
+        Logger.debug("Token refresh successful. Response keys: #{inspect(Map.keys(response))}")
+        {:ok, response}
 
       {:ok, %{status_code: code, body: response_body}} ->
         error = Jason.decode!(response_body)
+        Logger.error("Token refresh failed with status #{code}: #{inspect(error)}")
         {:error, %{status: code, message: error["message"] || "Token refresh failed"}}
 
       {:error, error} ->
+        Logger.error("Token refresh request failed: #{inspect(error)}")
         {:error, error}
     end
   end
