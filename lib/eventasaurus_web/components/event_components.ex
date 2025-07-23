@@ -659,7 +659,7 @@ defmodule EventasaurusWeb.EventComponents do
               <.image_attribution external_image_data={@external_image_data} />
 
               <!-- Hidden fields for image data -->
-              <%= hidden_input f, :cover_image_url %>
+              <%= hidden_input f, :cover_image_url, value: Phoenix.HTML.Form.input_value(f, :cover_image_url) || @cover_image_url %>
               <%= if @external_image_data || Phoenix.HTML.Form.input_value(f, :external_image_data) do %>
                 <% encoded_data = case Phoenix.HTML.Form.input_value(f, :external_image_data) do
                   nil -> if is_map(@external_image_data), do: safe_json_encode(@external_image_data), else: ""
