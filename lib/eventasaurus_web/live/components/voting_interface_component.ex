@@ -185,16 +185,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     <div class={if @show_header, do: "bg-white shadow rounded-lg", else: ""}>
       <!-- Header (optional) -->
       <%= if @show_header do %>
-        <div class="px-6 py-4 border-b border-gray-200">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="flex items-center justify-between">
-                <h3 class="text-lg font-medium text-gray-900">
+        <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div class="flex-1">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <h3 class="text-base sm:text-lg font-medium text-gray-900">
                   <%= get_voting_title(@poll.voting_system) %>
                 </h3>
-                <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="ml-4" />
+                <.voter_count poll_stats={@poll_stats} poll_phase={@poll.phase} class="sm:ml-4" />
               </div>
-              <p class="text-sm text-gray-500">
+              <p class="text-xs sm:text-sm text-gray-500">
                 <%= get_voting_instructions(@poll.voting_system) %>
               </p>
               <%= if @anonymous_mode and has_temp_votes?(@temp_votes, @poll.voting_system) do %>
@@ -234,16 +234,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       </div>
 
       <!-- Vote Summary -->
-      <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+      <div class="px-4 sm:px-6 py-4 bg-gray-50 border-t border-gray-200">
         <%= render_vote_summary(assigns) %>
       </div>
 
       <!-- Anonymous Voting Call-to-Action -->
       <%= if @anonymous_mode and has_temp_votes?(@temp_votes, @poll.voting_system) do %>
-        <div class="px-6 py-4 bg-blue-50 border-t border-blue-200">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center">
-              <svg class="h-5 w-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="px-4 sm:px-6 py-4 bg-blue-50 border-t border-blue-200">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-start sm:items-center">
+              <svg class="h-5 w-5 text-blue-400 mr-2 flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p class="text-sm text-blue-800">
@@ -254,7 +254,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               type="button"
               phx-click="show_save_votes_modal"
               phx-target={@myself}
-              class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 w-full sm:w-auto"
             >
               Save My Votes
             </button>
@@ -269,11 +269,11 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp render_binary_voting(assigns) do
     ~H"""
     <%= for option <- @poll.poll_options do %>
-      <div class="px-6 py-4">
-        <div class="flex items-center justify-between">
+      <div class="px-4 sm:px-6 py-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-2">
-              <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+              <h4 class="text-sm font-medium text-gray-900 break-words"><%= option.title %></h4>
               <%= if has_time_slots?(option) do %>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,7 +337,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
           </div>
 
-          <div class="ml-4 flex space-x-2">
+          <div class="w-full sm:w-auto sm:ml-4 flex flex-row gap-2 sm:gap-1 sm:space-x-2">
             <button
               type="button"
               phx-click="cast_binary_vote"
@@ -345,12 +345,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               phx-value-vote="yes"
               phx-target={@myself}
               disabled={@loading}
-              class={binary_button_class(@vote_state[option.id], "yes", @anonymous_mode)}
+              class={binary_button_class(@vote_state[option.id], "yes", @anonymous_mode) <> " flex-1 sm:flex-initial min-h-[44px] sm:min-h-[36px] touch-target"}
             >
-              <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="h-5 w-5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              Yes
+              <span class="sr-only sm:not-sr-only">Yes</span>
             </button>
 
             <button
@@ -360,12 +360,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               phx-value-vote="maybe"
               phx-target={@myself}
               disabled={@loading}
-              class={binary_button_class(@vote_state[option.id], "maybe", @anonymous_mode)}
+              class={binary_button_class(@vote_state[option.id], "maybe", @anonymous_mode) <> " flex-1 sm:flex-initial min-h-[44px] sm:min-h-[36px] touch-target"}
             >
-              <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="h-5 w-5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Maybe
+              <span class="sr-only sm:not-sr-only">Maybe</span>
             </button>
 
             <button
@@ -375,12 +375,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               phx-value-vote="no"
               phx-target={@myself}
               disabled={@loading}
-              class={binary_button_class(@vote_state[option.id], "no", @anonymous_mode)}
+              class={binary_button_class(@vote_state[option.id], "no", @anonymous_mode) <> " flex-1 sm:flex-initial min-h-[44px] sm:min-h-[36px] touch-target"}
             >
-              <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="h-5 w-5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
-              No
+              <span class="sr-only sm:not-sr-only">No</span>
             </button>
           </div>
         </div>
@@ -393,8 +393,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp render_approval_voting(assigns) do
     ~H"""
     <%= for option <- @poll.poll_options do %>
-      <div class="px-6 py-4">
-        <label class="flex items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-2 rounded">
+      <div class="px-4 sm:px-6 py-4">
+        <label class="flex items-start sm:items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-3 sm:py-2 rounded touch-target min-h-[60px] sm:min-h-[auto]">
           <input
             type="checkbox"
             phx-click="toggle_approval_vote"
@@ -402,11 +402,11 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             phx-target={@myself}
             checked={@vote_state[option.id] == "approved"}
             disabled={@loading}
-            class={approval_checkbox_class(@vote_state[option.id], @anonymous_mode)}
+            class={approval_checkbox_class(@vote_state[option.id], @anonymous_mode) <> " w-5 h-5 sm:w-4 sm:h-4 mt-0.5 sm:mt-0"}
           />
           <div class="ml-3 flex-1 min-w-0">
-            <div class="flex items-center space-x-2">
-              <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+            <div class="flex items-start sm:items-center space-x-2">
+              <h4 class="text-sm font-medium text-gray-900 break-words"><%= option.title %></h4>
               <%= if has_time_slots?(option) do %>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -478,16 +478,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   # Ranked Choice Voting (Drag and drop)
   defp render_ranked_voting(assigns) do
     ~H"""
-    <div class="px-6 py-4">
+    <div class="px-4 sm:px-6 py-4">
       <div class="space-y-4">
         <!-- Instructions -->
-        <div class={"border rounded-md p-4 " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-blue-50 border-blue-200")}>
+        <div class={"border rounded-md p-3 sm:p-4 " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-blue-50 border-blue-200")}>
           <div class="flex">
-            <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+            <svg class="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
             </svg>
             <div class="ml-3">
-              <p class="text-sm text-blue-800">
+              <p class="text-xs sm:text-sm text-blue-800">
                 Use the up/down arrows to rank options in order of preference (1st choice at top). Unranked options won't receive votes.
                 <%= if @anonymous_mode do %>
                   <span class="font-medium">Rankings are temporarily stored.</span>
@@ -500,12 +500,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         <!-- Ranked Options -->
         <div class="space-y-2">
           <%= for {option, index} <- Enum.with_index(@ranked_options) do %>
-            <div class={"flex items-center p-3 border rounded-lg shadow-sm " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-white border-gray-200")}>
-              <div class={"flex items-center justify-center w-8 h-8 text-sm font-medium rounded-full mr-3 " <> if(@anonymous_mode, do: "bg-blue-200 text-blue-800", else: "bg-indigo-100 text-indigo-800")}>
+            <div class={"flex items-start sm:items-center p-3 border rounded-lg shadow-sm " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-white border-gray-200")}>
+              <div class={"flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 text-xs sm:text-sm font-medium rounded-full mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0 " <> if(@anonymous_mode, do: "bg-blue-200 text-blue-800", else: "bg-indigo-100 text-indigo-800")}>
                 <%= index + 1 %>
               </div>
               <div class="flex-1 min-w-0">
-                <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+                <h4 class="text-sm font-medium text-gray-900 break-words"><%= option.title %></h4>
                 <%= if option.description do %>
                   <p class="text-xs text-gray-500 mt-1"><%= option.description %></p>
                 <% end %>
@@ -525,44 +525,46 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                   />
                 </div>
               </div>
-              <div class="ml-3 flex items-center space-x-2">
-                <%= if index > 0 do %>
-                  <button
-                    type="button"
-                    phx-click="move_option_up"
-                    phx-value-option-id={option.id}
-                    phx-target={@myself}
-                    class="text-gray-400 hover:text-gray-600"
-                    title="Move up"
-                  >
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-                    </svg>
-                  </button>
-                <% end %>
-                <%= if index < length(@ranked_options) - 1 do %>
-                  <button
-                    type="button"
-                    phx-click="move_option_down"
-                    phx-value-option-id={option.id}
-                    phx-target={@myself}
-                    class="text-gray-400 hover:text-gray-600"
-                    title="Move down"
-                  >
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                <% end %>
+              <div class="ml-2 sm:ml-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-0 sm:space-x-2">
+                <div class="flex items-center space-x-1 sm:space-x-2">
+                  <%= if index > 0 do %>
+                    <button
+                      type="button"
+                      phx-click="move_option_up"
+                      phx-value-option-id={option.id}
+                      phx-target={@myself}
+                      class="text-gray-400 hover:text-gray-600 p-1 sm:p-0 touch-target"
+                      title="Move up"
+                    >
+                      <svg class="h-5 w-5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                  <% end %>
+                  <%= if index < length(@ranked_options) - 1 do %>
+                    <button
+                      type="button"
+                      phx-click="move_option_down"
+                      phx-value-option-id={option.id}
+                      phx-target={@myself}
+                      class="text-gray-400 hover:text-gray-600 p-1 sm:p-0 touch-target"
+                      title="Move down"
+                    >
+                      <svg class="h-5 w-5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  <% end %>
+                </div>
                 <button
                   type="button"
                   phx-click="remove_from_ranking"
                   phx-value-option-id={option.id}
                   phx-target={@myself}
-                  class="text-red-400 hover:text-red-600"
+                  class="text-red-400 hover:text-red-600 p-1 sm:p-0 touch-target"
                   title="Remove from ranking"
                 >
-                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="h-5 w-5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -577,7 +579,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <h4 class="text-sm font-medium text-gray-900 mb-3">Available Options</h4>
             <div class="space-y-2">
               <%= for option <- get_unranked_options(@poll.poll_options, @ranked_options) do %>
-                <div class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <div class="flex flex-col sm:flex-row sm:items-center p-3 bg-gray-50 border border-gray-200 rounded-lg gap-2">
                   <div class="flex-1 min-w-0">
                     <h5 class="text-sm font-medium text-gray-900"><%= option.title %></h5>
                     <%= if option.description do %>
@@ -626,7 +628,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     phx-click="add_to_ranking"
                     phx-value-option-id={option.id}
                     phx-target={@myself}
-                    class="ml-3 text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                    class="sm:ml-3 text-indigo-600 hover:text-indigo-900 text-sm font-medium whitespace-nowrap self-end sm:self-auto"
                   >
                     Add to Ranking
                   </button>
@@ -644,8 +646,8 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp render_star_voting(assigns) do
     ~H"""
     <%= for option <- @poll.poll_options do %>
-      <div class="px-6 py-4">
-        <div class="flex items-center justify-between">
+      <div class="px-4 sm:px-6 py-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div class="flex-1 min-w-0">
             <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
             <%= if option.description do %>
@@ -690,22 +692,24 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
           </div>
 
-          <div class="ml-4 flex items-center space-x-1">
-            <%= for star <- 1..5 do %>
-              <button
-                type="button"
-                phx-click="cast_star_vote"
-                phx-value-option-id={option.id}
-                phx-value-rating={star}
-                phx-target={@myself}
-                disabled={@loading}
-                class={star_class(@vote_state[option.id], star, @anonymous_mode)}
-              >
-                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              </button>
-            <% end %>
+          <div class="sm:ml-4 flex items-center justify-between sm:justify-start space-x-1">
+            <div class="flex items-center space-x-1">
+              <%= for star <- 1..5 do %>
+                <button
+                  type="button"
+                  phx-click="cast_star_vote"
+                  phx-value-option-id={option.id}
+                  phx-value-rating={star}
+                  phx-target={@myself}
+                  disabled={@loading}
+                  class={star_class(@vote_state[option.id], star, @anonymous_mode) <> " p-1 sm:p-0 touch-target"}
+                >
+                  <svg class="h-6 w-6 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                </button>
+              <% end %>
+            </div>
             <%= if @vote_state[option.id] do %>
               <button
                 type="button"

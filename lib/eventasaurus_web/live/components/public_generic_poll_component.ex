@@ -299,20 +299,20 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
               <!-- List Building Phase - Show Options Without Voting -->
               <div class="space-y-3">
                 <%= for option <- sort_options_by_time(@poll_options, @poll.poll_type) do %>
-                <div class="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
-                  <div class="flex">
+                <div class="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 hover:border-gray-300 transition-colors">
+                  <div class="flex flex-col sm:flex-row">
                     <!-- Option Image (same as manager area) -->
                     <%= if option.image_url do %>
                       <img
                         src={option.image_url}
                         alt={"#{option.title} image"}
-                        class="w-16 h-24 object-cover rounded-md shadow-sm mr-4 flex-shrink-0"
+                        class="w-full sm:w-16 h-32 sm:h-24 object-cover rounded-md shadow-sm mb-3 sm:mb-0 sm:mr-4 flex-shrink-0"
                         loading="lazy"
                       />
                     <% end %>
 
                     <div class="flex-1 min-w-0">
-                      <h4 class="font-medium text-gray-900 mb-1">
+                      <h4 class="font-medium text-gray-900 mb-1 break-words">
                         <%= if @poll.poll_type == "time" do %>
                           <%= format_time_for_display(option.title) %>
                         <% else %>
@@ -321,13 +321,13 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                       </h4>
 
                       <%= if option.description && String.length(option.description) > 0 do %>
-                        <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= option.description %></p>
+                        <p class="text-sm text-gray-600 line-clamp-3 mb-2 break-words"><%= option.description %></p>
                       <% end %>
 
                       <!-- Show who suggested this option -->
                       <%= if option.suggested_by do %>
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs text-gray-500 mb-2">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <p class="text-xs text-gray-500">
                             Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
                           </p>
                           <!-- Delete button for own suggestions within 5 minutes -->
@@ -339,7 +339,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                                 phx-value-option-id={option.id}
                                 phx-target={@myself}
                                 data-confirm="Are you sure you want to remove this option? This action cannot be undone."
-                                class="text-red-600 hover:text-red-900 text-sm font-medium"
+                                class="text-red-600 hover:text-red-900 text-xs sm:text-sm font-medium touch-target"
                               >
                                 Remove
                               </button>
@@ -383,7 +383,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                      data-event-venue-name={@event && @event.venue && @event.venue.name}
                      data-poll-options-data={Jason.encode!(extract_poll_options_coordinates(@poll_options))}>
                   <div class="mb-4">
-                    <h4 class="text-md font-medium text-gray-900 mb-2">Add <%= get_suggestion_title(@poll.poll_type) %></h4>
+                    <h4 class="text-base sm:text-md font-medium text-gray-900 mb-2">Add <%= get_suggestion_title(@poll.poll_type) %></h4>
                     <p class="text-sm text-gray-600">Share your suggestion with the group</p>
                   </div>
 
@@ -459,19 +459,19 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                       <% end %>
                     </div>
 
-                    <div class="flex justify-end space-x-3 mt-4">
+                    <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-4">
                       <button
                         type="button"
                         phx-click="hide_add_form"
                         phx-target={@myself}
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        class="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 touch-target"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={@adding_option || String.trim(@option_title) == ""}
-                        class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed touch-target"
                       >
                         <%= if @adding_option do %>
                           <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" fill="none" viewBox="0 0 24 24">
@@ -492,7 +492,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                   <button
                     phx-click="show_add_form"
                     phx-target={@myself}
-                    class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 border-dashed rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors"
+                    class="w-full flex items-center justify-center px-4 py-4 sm:py-3 border border-gray-300 border-dashed rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors touch-target"
                   >
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
