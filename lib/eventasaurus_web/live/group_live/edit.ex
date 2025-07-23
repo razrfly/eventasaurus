@@ -81,7 +81,7 @@ defmodule EventasaurusWeb.GroupLive.Edit do
                |> assign(:selected_category, "general")
                |> assign(:default_categories, EventasaurusWeb.Services.DefaultImagesService.get_categories())
                |> assign(:default_images, EventasaurusWeb.Services.DefaultImagesService.get_images_for_category("general"))
-               |> assign(:supabase_access_token, session["access_token"])
+               |> assign(:supabase_access_token, get_current_valid_token(session))
                |> allow_upload(:cover_image, accept: ~w(.jpg .jpeg .png .gif), max_entries: 1)
                |> allow_upload(:avatar, accept: ~w(.jpg .jpeg .png .gif), max_entries: 1)}
             end
@@ -324,6 +324,72 @@ defmodule EventasaurusWeb.GroupLive.Edit do
      |> assign(:is_virtual, false)}
   end
 
+  # ========== Supabase Image Upload Event Handlers ==========
+
+  @impl true
+  def handle_event("image_upload_error", %{"error" => error_message} = params, socket) do
+    # Log the error details for debugging
+    error_code = Map.get(params, "code", "")
+    details = Map.get(params, "details", %{})
+    timestamp = Map.get(params, "timestamp", "")
+    
+    # Log structured error data
+    require Logger
+    Logger.error("Image upload failed in GroupLive.Edit", 
+      error: error_message, 
+      code: error_code,
+      details: details,
+      timestamp: timestamp,
+      group_id: socket.assigns.group.id
+    )
+    
+    # Provide user-friendly error message based on error type
+    user_message = case error_code do
+      "AUTH_ERROR" -> "Your session has expired. Please refresh the page and try again."
+      "FILE_TOO_LARGE" -> "The selected file is too large. Please choose a file smaller than 5MB."
+      "BUCKET_NOT_FOUND" -> "Image storage is currently unavailable. Please try again later."
+      "" ->
+        cond do
+          String.contains?(error_message, "Invalid Compact JWS") ->
+            "Your session has expired. Please refresh the page and try again."
+          String.contains?(error_message, "401") ->
+            "Authentication failed. Please refresh the page and try again."
+          String.contains?(error_message, "413") ->
+            "The selected file is too large. Please choose a smaller file."
+          true -> error_message
+        end
+      _ -> error_message
+    end
+    
+    {:noreply, put_flash(socket, :error, "Image upload failed: #{user_message}")}
+  end
+
+  @impl true
+  def handle_event("image_uploaded", %{"path" => path, "publicUrl" => public_url}, socket) do
+    # Update the group with the new cover image URL
+    updated_group = %{socket.assigns.group | cover_image_url: public_url}
+    
+    # Update the changeset to reflect the new image URL
+    changeset = Groups.change_group(updated_group, %{"cover_image_url" => public_url})
+    
+    # Log successful upload
+    require Logger
+    Logger.info("Image uploaded successfully in GroupLive.Edit", 
+      path: path, 
+      public_url: public_url,
+      group_id: socket.assigns.group.id
+    )
+    
+    socket =
+      socket
+      |> assign(:group, updated_group)
+      |> assign(:changeset, changeset)
+      |> assign(:show_image_picker, false)
+      |> put_flash(:info, "Cover image uploaded successfully!")
+    
+    {:noreply, socket}
+  end
+
   # ========== Handle Info Implementations ==========
   
   @impl true
@@ -339,6 +405,57 @@ defmodule EventasaurusWeb.GroupLive.Edit do
     {:noreply, socket}
   end
   
+  # ========== Helper Functions ==========
+  
+  # Get the current valid access token, handling token refresh scenarios
+  defp get_current_valid_token(session) do
+    token = session["access_token"]
+    refresh_token = session["refresh_token"] 
+    token_expires_at = session["token_expires_at"]
+    
+    # Check if we need to refresh the token
+    if token && refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
+      case EventasaurusApp.Auth.Client.refresh_token(refresh_token) do
+        {:ok, auth_data} ->
+          # Extract the new access token
+          new_token = get_token_value(auth_data, "access_token")
+          new_token || token  # Fall back to old token if extraction fails
+        {:error, _reason} ->
+          # Refresh failed, use original token
+          token
+      end
+    else
+      # Token is still valid or no refresh available
+      token
+    end
+  end
+  
+  defp should_refresh_token?(expires_at_iso) when is_binary(expires_at_iso) do
+    case DateTime.from_iso8601(expires_at_iso) do
+      {:ok, expires_at, _} ->
+        # Refresh if token expires in next 10 minutes
+        refresh_threshold = DateTime.utc_now() |> DateTime.add(600, :second)
+        DateTime.compare(refresh_threshold, expires_at) == :gt
+      _ ->
+        false
+    end
+  end
+  defp should_refresh_token?(_), do: false
+  
+  # Helper to extract token value from various response formats
+  defp get_token_value(auth_data, key) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, key) ->
+        Map.get(auth_data, key)
+      is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
+        Map.get(auth_data, String.to_atom(key))
+      is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
+        Map.get(auth_data, "token")
+      true ->
+        nil
+    end
+  end
+
   # ========== File Upload Handlers ==========
   
   defp handle_cover_image_upload(socket, access_token, group) do

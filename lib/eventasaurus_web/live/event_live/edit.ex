@@ -23,7 +23,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   @valid_setup_paths ~w[polling confirmed threshold]
 
   @impl true
-  def mount(%{"slug" => slug}, _session, socket) do
+  def mount(%{"slug" => slug}, session, socket) do
     event = Events.get_event_by_slug(slug)
 
     if event do
@@ -148,7 +148,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
               |> assign(:selected_category, "general")
               |> assign(:default_categories, DefaultImagesService.get_categories())
               |> assign(:default_images, DefaultImagesService.get_images_for_category("general"))
-              |> assign(:supabase_access_token, "edit_token_#{user.id}")
+              |> assign(:supabase_access_token, get_current_valid_token(session))
               # Ticketing assigns
               |> assign(:tickets, existing_tickets)
               |> assign(:show_ticket_modal, false)
@@ -250,6 +250,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
     require Logger
     Logger.info("=== SUBMIT EVENT HANDLER CALLED ===")
     Logger.info("Event params keys: #{inspect(Map.keys(event_params))}")
+    Logger.info("Submitted cover_image_url: #{inspect(Map.get(event_params, "cover_image_url"))}")
+    Logger.info("Socket assigns cover_image_url: #{inspect(socket.assigns.cover_image_url)}")
+    Logger.info("Event struct cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
 
     # Apply taxation consistency logic before further processing
     event_params = apply_taxation_consistency(event_params)
@@ -290,7 +293,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
     venue_address = Map.get(event_params, "venue_address")
     is_virtual = Map.get(event_params, "is_virtual") == "true"
 
-    final_event_params = if !is_virtual and venue_name && venue_name != "" do
+    params_with_venue = if !is_virtual and venue_name && venue_name != "" do
       # Try to find existing venue or create new one
       venue_attrs = %{
         "name" => venue_name,
@@ -336,7 +339,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
     # Clean up venue-related fields that the Event changeset doesn't expect
     # Keep date polling fields for our custom logic
-    final_event_params = final_event_params
+    final_event_params = params_with_venue
     |> Map.drop(["venue_name", "venue_address", "venue_city", "venue_state",
                  "venue_country", "venue_latitude", "venue_longitude", "venue_type", "is_virtual",
                  "start_date", "start_time", "ends_date", "ends_time"])
@@ -361,6 +364,10 @@ defmodule EventasaurusWeb.EventLive.Edit do
           Logger.info("Validation passed, calling Events.update_event")
 
           # Legacy date polling updates removed - continue with event update
+          Logger.info("Event before update - cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
+          Logger.info("Params being sent to update_event: #{inspect(authorized_params)}")
+          Logger.info("Specific cover_image_url in params: #{inspect(Map.get(authorized_params, "cover_image_url"))}")
+          
           case Events.update_event(socket.assigns.event, authorized_params) do
             {:ok, event} ->
               {:noreply,
@@ -1054,6 +1061,128 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> assign(:rich_external_data, %{})
       |> put_flash(:info, "Rich data has been removed from your event.")
 
+    {:noreply, socket}
+  end
+
+  # ========== Helper Functions ==========
+  
+  # Get the current valid access token, handling token refresh scenarios
+  defp get_current_valid_token(session) do
+    token = session["access_token"]
+    refresh_token = session["refresh_token"] 
+    token_expires_at = session["token_expires_at"]
+    
+    # Check if we need to refresh the token
+    if token && refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
+      case EventasaurusApp.Auth.Client.refresh_token(refresh_token) do
+        {:ok, auth_data} ->
+          # Extract the new access token
+          new_token = get_token_value(auth_data, "access_token")
+          new_token || token  # Fall back to old token if extraction fails
+        {:error, _reason} ->
+          # Refresh failed, use original token
+          token
+      end
+    else
+      # Token is still valid or no refresh available
+      token
+    end
+  end
+  
+  defp should_refresh_token?(expires_at_iso) when is_binary(expires_at_iso) do
+    case DateTime.from_iso8601(expires_at_iso) do
+      {:ok, expires_at, _} ->
+        # Refresh if token expires in next 10 minutes
+        refresh_threshold = DateTime.utc_now() |> DateTime.add(600, :second)
+        DateTime.compare(refresh_threshold, expires_at) == :gt
+      _ ->
+        false
+    end
+  end
+  defp should_refresh_token?(_), do: false
+  
+  # Helper to extract token value from various response formats
+  defp get_token_value(auth_data, key) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, key) ->
+        Map.get(auth_data, key)
+      is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
+        Map.get(auth_data, String.to_atom(key))
+      is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
+        Map.get(auth_data, "token")
+      true ->
+        nil
+    end
+  end
+
+  @impl true
+  def handle_event("image_upload_error", %{"error" => error_message} = params, socket) do
+    require Logger
+    Logger.error("Image upload error: #{error_message}")
+    
+    # Log additional details if available
+    if details = Map.get(params, "details") do
+      Logger.error("Upload error details: #{inspect(details)}")
+    end
+    
+    # Check for specific error types and provide user-friendly messages
+    user_message = cond do
+      error_message == "Invalid Compact JWS" ->
+        "Your session has expired. Please refresh the page and try again."
+      String.contains?(error_message, "Authentication") ->
+        "Authentication failed. Please refresh the page and try again."
+      String.contains?(error_message, "File size too large") ->
+        error_message
+      true ->
+        "Failed to upload image. Please try again or choose a different image."
+    end
+    
+    {:noreply, put_flash(socket, :error, user_message)}
+  end
+
+  @impl true
+  def handle_event("image_uploaded", %{"path" => path, "publicUrl" => public_url}, socket) do
+    require Logger
+    Logger.info("Image uploaded successfully: #{path}")
+    Logger.info("New public URL: #{public_url}")
+    Logger.info("Old cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
+    
+    # Create external image data for the uploaded image
+    external_image_data = %{
+      "id" => path,
+      "url" => public_url,
+      "source" => "upload",
+      "filename" => Path.basename(path),
+      "title" => "Uploaded Image"
+    }
+    
+    # Update the event struct with the new cover image URL
+    updated_event = %{socket.assigns.event | cover_image_url: public_url}
+    
+    # Update the changeset to reflect the new image URL
+    changeset = Events.change_event(updated_event, %{"cover_image_url" => public_url})
+    
+    # Update the socket with the new event, changeset, and form
+    socket =
+      socket
+      |> assign(:event, updated_event)
+      |> assign(:changeset, changeset)
+      |> assign(:form, to_form(changeset))
+      |> assign(:cover_image_url, public_url)
+      |> assign(:external_image_data, external_image_data)
+      |> assign(:form_data, Map.merge(socket.assigns.form_data, %{
+        "cover_image_url" => public_url,
+        "external_image_data" => external_image_data
+      }))
+      |> assign(:show_image_picker, false)
+      |> put_flash(:info, "Cover image uploaded successfully!")
+    
+    # Log the final changeset state
+    final_changeset = socket.assigns.changeset
+    Logger.info("Updated changeset data: #{inspect(final_changeset.data.cover_image_url)}")
+    Logger.info("Updated changeset changes: #{inspect(final_changeset.changes)}")
+    Logger.info("Final event cover_image_url: #{inspect(socket.assigns.event.cover_image_url)}")
+    
     {:noreply, socket}
   end
 
