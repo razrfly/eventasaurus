@@ -468,7 +468,11 @@ defmodule EventasaurusWeb.GroupLive.Show do
   defp add_user_context_to_events(events, user) do
     Enum.map(events, fn event ->
       # Check if user is an organizer of this event
-      is_organizer = event.users && Enum.any?(event.users, &(&1.id == user.id))
+      is_organizer = case event.users do
+        %Ecto.Association.NotLoaded{} -> false
+        users when is_list(users) -> Enum.any?(users, &(&1.id == user.id))
+        _ -> false
+      end
       
       event
       |> Map.put(:can_manage, is_organizer)
