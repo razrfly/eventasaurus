@@ -30,7 +30,7 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
         </span>
       <% end %>
 
-      <%= if @context == :user_dashboard && group_loaded?(@event) && @event.group do %>
+      <%= if @context == :user_dashboard && group_loaded?(@event) && @event.group && @event.group.slug do %>
         <a 
           href={"/groups/#{@event.group.slug}"} 
           class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors relative z-10" 
