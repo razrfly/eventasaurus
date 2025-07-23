@@ -38,11 +38,13 @@ defmodule EventasaurusApp.Auth do
     # Extract token from auth_data, handling potential formats
     token = extract_token(auth_data)
     refresh_token = extract_refresh_token(auth_data)
+    expires_at = extract_token_expiry(auth_data)
 
     if token do
       conn = conn
       |> put_session(:access_token, token)
       |> maybe_put_refresh_token(refresh_token)
+      |> maybe_put_token_expiry(expires_at)
       |> configure_session_duration(remember_me)
 
       {:ok, conn}
@@ -251,10 +253,44 @@ defmodule EventasaurusApp.Auth do
     end
   end
 
+  # Helper function to extract token expiry from auth data
+  defp extract_token_expiry(auth_data) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, :expires_at) ->
+        auth_data.expires_at
+      is_map(auth_data) && Map.has_key?(auth_data, "expires_at") ->
+        auth_data["expires_at"]
+      is_map(auth_data) && Map.has_key?(auth_data, :expires_in) ->
+        # Calculate expires_at from expires_in (seconds from now)
+        DateTime.utc_now() |> DateTime.add(auth_data.expires_in, :second) |> DateTime.to_unix()
+      is_map(auth_data) && Map.has_key?(auth_data, "expires_in") ->
+        # Calculate expires_at from expires_in (seconds from now)
+        DateTime.utc_now() |> DateTime.add(auth_data["expires_in"], :second) |> DateTime.to_unix()
+      true ->
+        nil
+    end
+  end
+
   # Helper function to store refresh token if available
   defp maybe_put_refresh_token(conn, nil), do: conn
   defp maybe_put_refresh_token(conn, refresh_token) do
     put_session(conn, :refresh_token, refresh_token)
+  end
+
+  # Helper function to store token expiry if available
+  defp maybe_put_token_expiry(conn, nil) do
+    # If no expires_at provided, calculate based on standard JWT expiry (1 hour)
+    expires_at = DateTime.utc_now() |> DateTime.add(3600, :second)
+    put_session(conn, :token_expires_at, DateTime.to_iso8601(expires_at))
+  end
+  defp maybe_put_token_expiry(conn, expires_at) when is_integer(expires_at) do
+    # Unix timestamp
+    {:ok, datetime} = DateTime.from_unix(expires_at)
+    put_session(conn, :token_expires_at, DateTime.to_iso8601(datetime))
+  end
+  defp maybe_put_token_expiry(conn, expires_at) when is_binary(expires_at) do
+    # ISO8601 string
+    put_session(conn, :token_expires_at, expires_at)
   end
 
   # Helper function to configure session duration based on remember_me preference

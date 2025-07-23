@@ -77,7 +77,7 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_user(conn, _opts) do
     if conn.assigns[:auth_user] do
-      conn = maybe_refresh_token(conn)
+      conn = maybe_proactive_refresh_token(conn)
       conn
     else
       conn
@@ -108,8 +108,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   """
   def require_authenticated_api_user(conn, _opts) do
     if conn.assigns[:auth_user] do
-      conn = maybe_refresh_token_api(conn)
-      # Check if connection was halted by maybe_refresh_token_api
+      conn = maybe_proactive_refresh_token_api(conn)
+      # Check if connection was halted by refresh
       if conn.halted do
         conn
       else
@@ -290,6 +290,55 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
   end
 
   @doc """
+  Proactively refreshes the access token if it's near expiration.
+  
+  Refreshes the token if it expires within the next 10 minutes.
+  Returns the updated connection with new tokens if refreshed.
+  """
+  def maybe_proactive_refresh_token(conn) do
+    # Check if we have a token expiry time stored
+    token_expires_at = get_session(conn, :token_expires_at)
+    refresh_token = get_session(conn, :refresh_token)
+    
+    if token_expires_at && refresh_token && should_refresh_token?(token_expires_at) do
+      maybe_refresh_token(conn)
+    else
+      conn
+    end
+  end
+  
+  # Helper to determine if token should be refreshed
+  defp should_refresh_token?(expires_at_iso) when is_binary(expires_at_iso) do
+    case DateTime.from_iso8601(expires_at_iso) do
+      {:ok, expires_at, _} ->
+        # Refresh if token expires in next 10 minutes
+        refresh_threshold = DateTime.utc_now() |> DateTime.add(600, :second)
+        DateTime.compare(refresh_threshold, expires_at) == :gt
+      _ ->
+        # If we can't parse the expiry, assume it needs refresh
+        true
+    end
+  end
+  defp should_refresh_token?(_), do: true
+
+  @doc """
+  Proactively refreshes the access token if it's near expiration for API requests.
+  
+  Returns the updated connection with new tokens if refreshed.
+  """
+  def maybe_proactive_refresh_token_api(conn) do
+    # Check if we have a token expiry time stored
+    token_expires_at = get_session(conn, :token_expires_at)
+    refresh_token = get_session(conn, :refresh_token)
+    
+    if token_expires_at && refresh_token && should_refresh_token?(token_expires_at) do
+      maybe_refresh_token_api(conn)
+    else
+      conn
+    end
+  end
+
+  @doc """
   Attempts to refresh the access token if it's near expiration.
 
   Returns the updated connection with new tokens if refreshed,
@@ -305,12 +354,14 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
           # Extract the tokens from the response
           access_token = get_token_value(auth_data, "access_token")
           new_refresh_token = get_token_value(auth_data, "refresh_token")
+          expires_at = get_token_expiry(auth_data)
 
           if access_token && new_refresh_token do
             # Update the session with the new tokens
             conn
             |> put_session(:access_token, access_token)
             |> put_session(:refresh_token, new_refresh_token)
+            |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
             |> configure_session(renew: true)
           else
             # If tokens couldn't be extracted, clear the session and redirect
@@ -348,12 +399,14 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
           # Extract the tokens from the response
           access_token = get_token_value(auth_data, "access_token")
           new_refresh_token = get_token_value(auth_data, "refresh_token")
+          expires_at = get_token_expiry(auth_data)
 
           if access_token && new_refresh_token do
             # Update the session with the new tokens
             conn
             |> put_session(:access_token, access_token)
             |> put_session(:refresh_token, new_refresh_token)
+            |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
             |> configure_session(renew: true)
           else
             # If tokens couldn't be extracted, return JSON error
@@ -395,6 +448,51 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       true ->
         nil
     end
+  end
+
+  # Helper to get token expiry from auth response
+  defp get_token_expiry(auth_data) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, "expires_at") ->
+        auth_data["expires_at"]
+      is_map(auth_data) && Map.has_key?(auth_data, :expires_at) ->
+        auth_data.expires_at
+      is_map(auth_data) && Map.has_key?(auth_data, "expires_in") ->
+        auth_data["expires_in"]
+      is_map(auth_data) && Map.has_key?(auth_data, :expires_in) ->
+        auth_data.expires_in
+      true ->
+        nil
+    end
+  end
+
+  # Helper to calculate token expiry as ISO8601 string
+  defp calculate_token_expiry(nil) do
+    # Default to 1 hour if no expiry provided
+    DateTime.utc_now()
+    |> DateTime.add(3600, :second)
+    |> DateTime.to_iso8601()
+  end
+  defp calculate_token_expiry(expires_at) when is_integer(expires_at) and expires_at > 1_000_000_000 do
+    # Unix timestamp
+    {:ok, datetime} = DateTime.from_unix(expires_at)
+    DateTime.to_iso8601(datetime)
+  end
+  defp calculate_token_expiry(expires_in) when is_integer(expires_in) and expires_in < 100_000 do
+    # Seconds until expiry
+    DateTime.utc_now()
+    |> DateTime.add(expires_in, :second)
+    |> DateTime.to_iso8601()
+  end
+  defp calculate_token_expiry(expires_at) when is_binary(expires_at) do
+    # Already ISO8601 string
+    expires_at
+  end
+  defp calculate_token_expiry(_) do
+    # Fallback to 1 hour
+    DateTime.utc_now()
+    |> DateTime.add(3600, :second)
+    |> DateTime.to_iso8601()
   end
 
   # Helper function to ensure we have a proper User struct

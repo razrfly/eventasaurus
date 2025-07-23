@@ -274,14 +274,19 @@ defmodule EventasaurusWeb.Auth.AuthController do
       %{"code" => code} when not is_nil(code) ->
         handle_facebook_oauth_callback(conn, code, params)
 
-      %{"access_token" => access_token, "refresh_token" => refresh_token, "type" => "recovery"} ->
+      %{"access_token" => _access_token, "refresh_token" => _refresh_token, "type" => "recovery"} = auth_data ->
         Logger.info("Password recovery callback with tokens - setting recovery session")
-        conn
-        |> put_session(:access_token, access_token)
-        |> put_session(:refresh_token, refresh_token)
-        |> put_session(:password_recovery, true)
-        |> put_flash(:info, "Please set your new password below.")
-        |> redirect(to: ~p"/auth/reset-password")
+        case Auth.store_session(conn, auth_data, true) do
+          {:ok, conn} ->
+            conn
+            |> put_session(:password_recovery, true)
+            |> put_flash(:info, "Please set your new password below.")
+            |> redirect(to: ~p"/auth/reset-password")
+          {:error, _} ->
+            conn
+            |> put_flash(:error, "Session error. Please try again.")
+            |> redirect(to: ~p"/auth/login")
+        end
 
       %{"access_token" => access_token, "type" => "recovery"} ->
         Logger.info("Password recovery callback with access token - setting recovery session")
@@ -291,13 +296,18 @@ defmodule EventasaurusWeb.Auth.AuthController do
         |> put_flash(:info, "Please set your new password below.")
         |> redirect(to: ~p"/auth/reset-password")
 
-      %{"access_token" => access_token, "refresh_token" => refresh_token} ->
+      %{"access_token" => access_token, "refresh_token" => _refresh_token} = auth_data ->
         Logger.info("Callback with tokens - storing session")
-        conn
-        |> put_session(:access_token, access_token)
-        |> put_session(:refresh_token, refresh_token)
-        |> handle_post_auth_actions(access_token)
-        |> handle_auth_redirect()
+        case Auth.store_session(conn, auth_data, true) do
+          {:ok, conn} ->
+            conn
+            |> handle_post_auth_actions(access_token)
+            |> handle_auth_redirect()
+          {:error, _} ->
+            conn
+            |> put_flash(:error, "Session error. Please try again.")
+            |> redirect(to: ~p"/auth/login")
+        end
 
       %{"access_token" => access_token} ->
         Logger.info("Callback with access token only - storing session")
@@ -499,7 +509,6 @@ defmodule EventasaurusWeb.Auth.AuthController do
     # Safely extract required data with fallbacks
     user_data = Map.get(auth_data, "user")
     access_token = Map.get(auth_data, "access_token")
-    refresh_token = Map.get(auth_data, "refresh_token")
 
     if user_data && access_token do
       # Sync user with local database (using existing pattern)
@@ -508,13 +517,18 @@ defmodule EventasaurusWeb.Auth.AuthController do
           # Check for stored return URL using the standard session key
           return_to = get_session(conn, :user_return_to)
           
-          conn
-          |> put_session(:access_token, access_token)
-          |> put_session(:refresh_token, refresh_token)
-          |> put_session(:current_user_id, user.id)
-          |> put_flash(:info, "Successfully signed in with Facebook!")
-          |> delete_session(:user_return_to)
-          |> redirect(to: return_to || ~p"/dashboard")
+          case Auth.store_session(conn, auth_data, true) do
+            {:ok, conn} ->
+              conn
+              |> put_session(:current_user_id, user.id)
+              |> put_flash(:info, "Successfully signed in with Facebook!")
+              |> delete_session(:user_return_to)
+              |> redirect(to: return_to || ~p"/dashboard")
+            {:error, _} ->
+              conn
+              |> put_flash(:error, "Session error. Please try again.")
+              |> redirect(to: ~p"/auth/login")
+          end
 
         {:error, reason} ->
           Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
