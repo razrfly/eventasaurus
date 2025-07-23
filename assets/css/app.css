@@ -48,23 +48,7 @@
 }
 
 /* Maximum width variations for different modal sizes */
-.modal-content.max-w-md {
-  max-width: 28rem; /* 448px */
-}
-
-.modal-content.max-w-xl {
-  max-width: 36rem; /* 576px */
-}
-
-.modal-content.max-w-2xl {
-  max-width: 42rem; /* 672px */
-}
-
-.modal-content.max-w-4xl {
-  max-width: 56rem; /* 896px */
-}
-
-/* Apply responsive max-widths for larger screens */
+/* Only apply max-width constraints on larger screens (640px and up) */
 @media (min-width: 640px) {
   .modal-content.max-w-md {
     max-width: 28rem; /* 448px */
