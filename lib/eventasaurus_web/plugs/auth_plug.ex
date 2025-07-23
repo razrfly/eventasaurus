@@ -338,12 +338,15 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
               |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
               |> configure_session(renew: true)
             else
-              conn
+              # Failed to extract tokens from response - clear stale tokens
+              Logger.warning("Failed to extract tokens from refresh response. Clearing session.")
+              Auth.clear_session(conn)
             end
             
-          {:error, _reason} ->
-            # If refresh fails, return conn as-is and let the auth check handle it
-            conn
+          {:error, reason} ->
+            # If refresh fails, clear the stale tokens to prevent repeated failures
+            Logger.warning("Token refresh failed: #{inspect(reason)}. Clearing session.")
+            Auth.clear_session(conn)
         end
         
       # Token not near expiry or no refresh token
@@ -454,8 +457,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
             |> put_session(:token_expires_at, calculate_token_expiry(expires_at))
             |> configure_session(renew: true)
           else
-            # If tokens couldn't be extracted, return JSON error
-            conn
+            # If tokens couldn't be extracted, clear session and return JSON error
+            Auth.clear_session(conn)
             |> put_status(:unauthorized)
             |> Phoenix.Controller.json(%{
               success: false,
@@ -466,8 +469,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
           end
 
         {:error, _reason} ->
-          # If refresh fails, return JSON error
-          conn
+          # If refresh fails, clear session and return JSON error
+          Auth.clear_session(conn)
           |> put_status(:unauthorized)
           |> Phoenix.Controller.json(%{
             success: false,
