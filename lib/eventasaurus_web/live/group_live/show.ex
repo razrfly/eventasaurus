@@ -46,6 +46,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
               # Load group events with time filtering
               time_filter = :upcoming  # Default to upcoming events
               all_events = Events.list_events_for_group(group)
+              all_events = add_user_context_to_events(all_events, user)
               events = filter_events_by_time(all_events, time_filter)
               filter_counts = calculate_filter_counts(all_events)
               event_count = length(events)
@@ -93,6 +94,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
         # Load group events with time filtering
         time_filter = :upcoming
         all_events = Events.list_events_for_group(group)
+        all_events = add_user_context_to_events(all_events, user)
         events = filter_events_by_time(all_events, time_filter)
         filter_counts = calculate_filter_counts(all_events)
         event_count = length(events)
@@ -448,7 +450,9 @@ defmodule EventasaurusWeb.GroupLive.Show do
     time_filter = if time_filter in [:upcoming, :past], do: time_filter, else: :upcoming
     
     group = socket.assigns.group
+    user = socket.assigns.user
     all_events = Events.list_events_for_group(group)
+    all_events = add_user_context_to_events(all_events, user)
     events = filter_events_by_time(all_events, time_filter)
     filter_counts = calculate_filter_counts(all_events)
     
@@ -460,6 +464,17 @@ defmodule EventasaurusWeb.GroupLive.Show do
   end
 
   # Helper functions
+
+  defp add_user_context_to_events(events, user) do
+    Enum.map(events, fn event ->
+      # Check if user is an organizer of this event
+      is_organizer = event.users && Enum.any?(event.users, &(&1.id == user.id))
+      
+      event
+      |> Map.put(:can_manage, is_organizer)
+      |> Map.put(:user_role, if(is_organizer, do: "organizer", else: "participant"))
+    end)
+  end
 
   defp filter_events_by_time(events, :upcoming) do
     now = DateTime.utc_now()
