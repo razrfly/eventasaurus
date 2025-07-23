@@ -114,7 +114,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       if token do
         # Check if we need to refresh the token
         if refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
-          case Auth.Client.refresh_token(refresh_token) do
+          case Client.refresh_token(refresh_token) do
             {:ok, auth_data} ->
               # Token refreshed successfully, extract and use the new token
               new_access_token = get_token_value(auth_data, "access_token")
