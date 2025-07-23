@@ -26,6 +26,8 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
 
   alias EventasaurusApp.Auth
   alias EventasaurusApp.Auth.Client
+  
+  require Logger
 
   # We'll use this in a future implementation for token expiry checks
   # For now we can just remove it since it's not being used
@@ -779,7 +781,6 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
     remote_ip = get_remote_ip(conn)
     user_agent = get_req_header(conn, "user-agent") |> List.first() || "unknown"
 
-    require Logger
     Logger.warning("Security Event: #{event_type}", [
       event_type: event_type,
       user_id: user_id,

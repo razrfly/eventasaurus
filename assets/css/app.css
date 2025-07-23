@@ -49,19 +49,38 @@
 
 /* Maximum width variations for different modal sizes */
 .modal-content.max-w-md {
-  @apply sm:max-w-md;
+  max-width: 28rem; /* 448px */
 }
 
 .modal-content.max-w-xl {
-  @apply sm:max-w-xl;
+  max-width: 36rem; /* 576px */
 }
 
 .modal-content.max-w-2xl {
-  @apply sm:max-w-2xl;
+  max-width: 42rem; /* 672px */
 }
 
 .modal-content.max-w-4xl {
-  @apply sm:max-w-4xl;
+  max-width: 56rem; /* 896px */
+}
+
+/* Apply responsive max-widths for larger screens */
+@media (min-width: 640px) {
+  .modal-content.max-w-md {
+    max-width: 28rem; /* 448px */
+  }
+  
+  .modal-content.max-w-xl {
+    max-width: 36rem; /* 576px */
+  }
+  
+  .modal-content.max-w-2xl {
+    max-width: 42rem; /* 672px */
+  }
+  
+  .modal-content.max-w-4xl {
+    max-width: 56rem; /* 896px */
+  }
 }
 
 /* Modal header with title */
@@ -611,7 +630,7 @@ body.theme-fun .user-content h2 {
 }
 
 .movie-suggestion-poster {
-  @apply w-12 h-18 object-cover rounded flex-shrink-0 mr-3;
+  @apply w-12 h-[4.5rem] object-cover rounded flex-shrink-0 mr-3;
 }
 
 .movie-suggestion-details {
