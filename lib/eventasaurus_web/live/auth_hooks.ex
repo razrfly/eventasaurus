@@ -116,10 +116,18 @@ defmodule EventasaurusWeb.Live.AuthHooks do
         if refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
           case Auth.Client.refresh_token(refresh_token) do
             {:ok, auth_data} ->
-              # Token refreshed successfully, but we can't update the session from LiveView
-              # The next regular HTTP request will handle the session update
-              # For now, try to use the current token
-              get_user_with_token(token)
+              # Token refreshed successfully, extract and use the new token
+              new_access_token = get_token_value(auth_data, "access_token")
+              
+              if new_access_token do
+                # Use the NEW token to get user data
+                Logger.debug("Token refreshed successfully in LiveView, using new token")
+                get_user_with_token(new_access_token)
+              else
+                # Couldn't extract new token, fall back to old token
+                Logger.warning("Failed to extract new access token from refresh response")
+                get_user_with_token(token)
+              end
               
             {:error, reason} ->
               # Refresh failed, token is likely expired or invalid
@@ -159,6 +167,20 @@ defmodule EventasaurusWeb.Live.AuthHooks do
     end
   end
   defp should_refresh_token?(_), do: false
+  
+  # Helper to extract token value from various response formats
+  defp get_token_value(auth_data, key) do
+    cond do
+      is_map(auth_data) && Map.has_key?(auth_data, key) ->
+        Map.get(auth_data, key)
+      is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
+        Map.get(auth_data, String.to_atom(key))
+      is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
+        Map.get(auth_data, "token")
+      true ->
+        nil
+    end
+  end
 
   # Helper function to ensure we have a proper User struct
   # This handles the conversion from Supabase auth data to local User struct
