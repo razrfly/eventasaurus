@@ -369,6 +369,9 @@ defmodule EventasaurusWeb.GroupLive.Edit do
     # Update the group with the new cover image URL
     updated_group = %{socket.assigns.group | cover_image_url: public_url}
     
+    # Update the changeset to reflect the new image URL
+    changeset = Groups.change_group(updated_group, %{"cover_image_url" => public_url})
+    
     # Log successful upload
     require Logger
     Logger.info("Image uploaded successfully in GroupLive.Edit", 
@@ -380,6 +383,7 @@ defmodule EventasaurusWeb.GroupLive.Edit do
     socket =
       socket
       |> assign(:group, updated_group)
+      |> assign(:changeset, changeset)
       |> assign(:show_image_picker, false)
       |> put_flash(:info, "Cover image uploaded successfully!")
     

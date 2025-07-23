@@ -1147,9 +1147,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
       "title" => "Uploaded Image"
     }
     
-    # Update the event with the new image
+    # Update the event struct with the new cover image URL
+    updated_event = %{socket.assigns.event | cover_image_url: public_url}
+    
+    # Update the changeset to reflect the new image URL
+    changeset = Events.change_event(updated_event, %{"cover_image_url" => public_url})
+    
+    # Update the socket with the new event and changeset
     socket =
       socket
+      |> assign(:event, updated_event)
+      |> assign(:changeset, changeset)
       |> assign(:cover_image_url, public_url)
       |> assign(:external_image_data, external_image_data)
       |> assign(:form_data, Map.merge(socket.assigns.form_data, %{
@@ -1157,7 +1165,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         "external_image_data" => external_image_data
       }))
       |> assign(:show_image_picker, false)
-      |> put_flash(:info, "Image uploaded successfully!")
+      |> put_flash(:info, "Cover image uploaded successfully!")
     
     {:noreply, socket}
   end
