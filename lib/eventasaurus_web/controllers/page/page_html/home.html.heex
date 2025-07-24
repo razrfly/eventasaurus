@@ -1,53 +1,318 @@
-<!-- Gradient Background positioned as ambient lighting blob -->
-<div class="absolute inset-0 -z-10 overflow-hidden">
-  <.gradient_background theme="default" />
-</div>
+<div class="overflow-hidden">
+  <main>
+    <%!-- Combined Hero & Event Types Section --%>
+    <.hero_section class="pb-12 pt-8 sm:pb-16 sm:pt-16">
+      <div class="pt-8 pb-8 sm:pt-16 sm:pb-12 text-center">
+        <.subheading class="mb-4 text-blue-600">Meaningful Coordination</.subheading>
+        <.heading as="h1" class="font-display text-5xl/[0.9] font-medium tracking-tight text-balance text-gray-950 sm:text-6xl/[0.8] lg:text-7xl/[0.8] mb-8">
+          Transform Digital Planning Into Physical Presence
+        </.heading>
+        <p class="text-xl sm:text-2xl text-gray-950/75 max-w-4xl mx-auto leading-relaxed mb-4">
+          By 2025, social media has fractured attention spans, deepened loneliness, and taught a generation to perform rather than live.
+        </p>
+        <p class="text-lg sm:text-xl text-gray-950/60 max-w-3xl mx-auto leading-relaxed mb-16">
+          We're building coordination tools for post-social-media life. Real gatherings. Real conversations. Real connections—without the algorithms, ads, or endless scrolling.
+        </p>
+        <%!-- Event Types Grid --%>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 mb-16 max-w-7xl mx-auto">
+        <%!-- Movie Nights --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🍿</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Movie Nights</h3>
+          <p class="text-gray-600 leading-relaxed">Shared cinematic experiences, discussion, debate</p>
+        </div>
 
-<div class="relative mx-auto max-w-4xl pt-16">
-  <div class="text-center mb-16">
-    <h1 class="text-5xl font-extrabold tracking-tight text-gray-900 mb-4">
-      Create and share events easily
-    </h1>
-    <p class="text-xl text-gray-700 max-w-2xl mx-auto">
-      Eventasaurus is a modern platform for creating, managing, and sharing events with your audience.
-    </p>
-    <div class="mt-8">
-      <a
-        href="/register"
-        class="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-      >
-        Get started
-      </a>
-      <a
-        href="/events"
-        class="ml-4 rounded-md bg-gray-100 px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-200"
-      >
-        Browse events
-      </a>
-    </div>
-  </div>
+        <%!-- Game Nights --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🎲</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Game Nights</h3>
+          <p class="text-gray-600 leading-relaxed">Face-to-face competition, laughter, strategic thinking</p>
+        </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
-    <div class="bg-white/60 backdrop-blur-sm p-6 rounded-lg shadow-sm border border-white/20">
-      <div class="text-2xl font-bold mb-2">🔒</div>
-      <h3 class="text-lg font-semibold mb-2">Secure Authentication</h3>
-      <p class="text-gray-700">
-        Sign up and log in securely using our Supabase authentication system.
-      </p>
-    </div>
-    <div class="bg-white/60 backdrop-blur-sm p-6 rounded-lg shadow-sm border border-white/20">
-      <div class="text-2xl font-bold mb-2">📅</div>
-      <h3 class="text-lg font-semibold mb-2">Create Events</h3>
-      <p class="text-gray-700">
-        Easily create events with titles, descriptions, times, and locations.
-      </p>
-    </div>
-    <div class="bg-white/60 backdrop-blur-sm p-6 rounded-lg shadow-sm border border-white/20">
-      <div class="text-2xl font-bold mb-2">🔗</div>
-      <h3 class="text-lg font-semibold mb-2">Share Events</h3>
-      <p class="text-gray-700">
-        Get a unique URL to share your event with attendees.
-      </p>
-    </div>
-  </div>
+        <%!-- Barbecues --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🍖</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Barbecues</h3>
+          <p class="text-gray-600 leading-relaxed">Community building through shared meals</p>
+        </div>
+
+        <%!-- Potluck Dinners --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🥘</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Potluck Dinners</h3>
+          <p class="text-gray-600 leading-relaxed">Collaborative cooking, cultural exchange</p>
+        </div>
+
+        <%!-- Birthday Celebrations --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🎂</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Birthday Celebrations</h3>
+          <p class="text-gray-600 leading-relaxed">Milestone marking with loved ones</p>
+        </div>
+
+        <%!-- Fundraising Events --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">💰</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Fundraising Events</h3>
+          <p class="text-gray-600 leading-relaxed">Organizing around shared causes</p>
+        </div>
+
+        <%!-- Book Clubs --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">📚</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Book Clubs</h3>
+          <p class="text-gray-600 leading-relaxed">Intellectual discourse and idea sharing</p>
+        </div>
+
+        <%!-- Housewarming Parties --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🏠</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Housewarming Parties</h3>
+          <p class="text-gray-600 leading-relaxed">Community integration and support</p>
+        </div>
+
+        <%!-- Holiday Celebrations --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🎊</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Holiday Celebrations</h3>
+          <p class="text-gray-600 leading-relaxed">Tradition maintenance and cultural continuity</p>
+        </div>
+
+        <%!-- Wine Tastings --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="text-4xl mb-4">🍷</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Wine Tastings</h3>
+          <p class="text-gray-600 leading-relaxed">Sophisticated social learning experiences</p>
+        </div>
+        </div>
+
+        <%!-- CTA Buttons --%>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mt-12">
+          <.radiant_button href="/register" class="text-lg px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+            Start Coordinating
+          </.radiant_button>
+          <.radiant_button href="/events" variant="outline" class="text-lg px-8 py-4">
+            Explore Real Events
+          </.radiant_button>
+        </div>
+      </div>
+    </.hero_section>
+
+    <%!-- Core Features Section --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-4 text-blue-600">Unique Tools</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl sm:text-4xl">
+          Real Coordination Tools That Actually Work
+        </.heading>
+        <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+          Sophisticated planning features that solve real problems—from group decisions to conditional events to pooling money. No other platform comes close.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+        <%!-- Threshold Events --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🎯</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Threshold Events</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Set minimum attendees or funding goals before your event goes live. Perfect for concerts, workshops, or group trips that need critical mass.
+          </p>
+        </div>
+
+        <%!-- Democratic Planning --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🗳️</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Democratic Planning</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Multi-phase polling for dates, venues, movies, or anything else. Let your group decide together with approval voting, ranked choice, or star ratings.
+          </p>
+        </div>
+
+        <%!-- Group Funding --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full mb-6">
+            <span class="text-3xl text-white">💰</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Group Funding</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Pool money for birthday parties, group vacations, or venue rentals. Set revenue thresholds and watch contributions roll in.
+          </p>
+        </div>
+
+        <%!-- Smart Ticketing --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🎟️</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Smart Ticketing</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Built-in pre-sales with flexible pricing, tipping options, and automatic payouts. No third-party fees eating into your event.
+          </p>
+        </div>
+
+        <%!-- Real-time Consensus --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-full mb-6">
+            <span class="text-3xl text-white">📊</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Real-time Consensus</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Watch votes come in live. See which dates work for everyone, which venues are preferred, which movies get the most stars.
+          </p>
+        </div>
+
+        <%!-- Rich Event Data --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🎬</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Rich Event Data</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Planning movie night? Get cast info, trailers, and posters. Choosing restaurants? See reviews, photos, and ratings. All integrated.
+          </p>
+        </div>
+
+        <%!-- Group Memory --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full mb-6">
+            <span class="text-3xl text-white">👥</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Group Memory</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Your regular crew remembered. Past attendees suggested automatically. Favorite venues saved. Less setup, more gathering.
+          </p>
+        </div>
+
+        <%!-- Conditional Confirmation --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🔄</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Conditional Confirmation</h3>
+          <p class="text-gray-600 leading-relaxed">
+            Events that only happen if enough people commit. No more "maybe" RSVPs killing your plans.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Our Mission Section --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-4 text-blue-600">Our Mission</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl sm:text-4xl">
+          Building Tools for Real Human Connection
+        </.heading>
+        <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+          We believe the best conversations happen face-to-face, and the best memories are made in person. 
+          Our tools help real people meet in real places for real experiences.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+        <%!-- What We Build (Left Side - Positive) --%>
+        <div class="space-y-6">
+          <h3 class="text-2xl font-bold text-green-700 mb-6 text-center lg:text-left">What We Build</h3>
+          
+          <%!-- Real World Coordination --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-green-600 text-sm font-bold">✓</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">Real-world coordination tools</h4>
+              <p class="text-gray-600">Simple planning that leads to actual gatherings and genuine experiences.</p>
+            </div>
+          </div>
+
+          <%!-- Quick Decision Making --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-green-600 text-sm font-bold">✓</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">Quick decision-making features</h4>
+              <p class="text-gray-600">Spend less time planning online, more time enjoying offline.</p>
+            </div>
+          </div>
+
+          <%!-- Privacy First --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-green-600 text-sm font-bold">✓</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">Privacy-first architecture</h4>
+              <p class="text-gray-600">Your data belongs to you. No tracking, no profiling, no surveillance.</p>
+            </div>
+          </div>
+
+          <%!-- Meaningful Metrics --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-green-600 text-sm font-bold">✓</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">Meaningful success metrics</h4>
+              <p class="text-gray-600">We measure smiles at events, not screen time in apps.</p>
+            </div>
+          </div>
+        </div>
+
+        <%!-- What We Don't Build (Right Side - Negative) --%>
+        <div class="space-y-6">
+          <h3 class="text-2xl font-bold text-red-700 mb-6 text-center lg:text-left">What We Don't Build</h3>
+          
+          <%!-- Not Another Social Network --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-red-600 text-sm font-bold">✗</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">We're not another social network</h4>
+              <p class="text-gray-600">No feeds to scroll. No posts to like. No digital personas to maintain.</p>
+            </div>
+          </div>
+
+          <%!-- Not Capturing Attention --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-red-600 text-sm font-bold">✗</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">We're not here to capture your attention</h4>
+              <p class="text-gray-600">Our success is when you close the app and go to your event.</p>
+            </div>
+          </div>
+
+          <%!-- Not Monetizing Relationships --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-red-600 text-sm font-bold">✗</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">We're not monetizing your relationships</h4>
+              <p class="text-gray-600">No ads. No data mining. No algorithmic manipulation of your social life.</p>
+            </div>
+          </div>
+
+          <%!-- Not Building Another Feed --%>
+          <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+              <span class="text-red-600 text-sm font-bold">✗</span>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900 mb-1">We're not building another feed to scroll</h4>
+              <p class="text-gray-600">Every feature leads to one outcome: real people meeting in real places.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </.section>
+  </main>
 </div> 
