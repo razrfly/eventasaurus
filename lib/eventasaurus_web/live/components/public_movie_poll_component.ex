@@ -100,19 +100,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   # Note: Voting events are now handled by VotingInterfaceComponent
   # We only need to handle save_votes and clear_all_votes for anonymous users
 
-  # Note: clear_all_votes is now handled by VotingInterfaceComponent
-
-  @impl true
-  def handle_event("save_votes", _params, socket) do
-    %{movie_poll: poll, temp_votes: temp_votes} = socket.assigns
-
-    if map_size(temp_votes) > 0 do
-      # Send save request to parent LiveView
-      send(self(), {:show_anonymous_voter_modal, poll.id, temp_votes})
-    end
-
-    {:noreply, socket}
-  end
+  # Note: Voting events including save_votes and clear_all_votes are now handled by VotingInterfaceComponent
 
   def handle_event("show_add_form", _params, socket) do
     if socket.assigns.current_user do
@@ -425,45 +413,6 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                 <p class="text-sm"><%= subtitle %></p>
               </div>
             <% end %>
-          <% end %>
-
-          <!-- Anonymous Voting Status and Save Button -->
-          <%= if !@current_user && @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] && map_size(@temp_votes) > 0 do %>
-            <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div class="flex items-start">
-                <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div class="ml-3 flex-1">
-                  <p class="text-sm text-blue-700">
-                    Your votes are temporarily stored. Save them to participate!
-                  </p>
-                </div>
-              </div>
-              <div class="mt-4 flex space-x-3">
-                <button
-                  type="button"
-                  phx-click="save_votes"
-                  phx-target={@myself}
-                  class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                  </svg>
-                  Save My Votes
-                </button>
-                <.clear_votes_button
-                  id={"clear-temp-votes-movie-#{@movie_poll.id}"}
-                  target={@myself}
-                  has_votes={map_size(@temp_votes) > 0}
-                  loading={false}
-                  anonymous_mode={true}
-                  variant="button"
-                />
-              </div>
-            </div>
           <% end %>
 
           <!-- Add Movie Button/Form -->
