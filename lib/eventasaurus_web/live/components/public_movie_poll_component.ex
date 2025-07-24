@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusWeb.Services.RichDataManager
   alias EventasaurusWeb.Services.MovieDataService
   alias EventasaurusWeb.Utils.MovieUtils
-  alias EventasaurusWeb.EmbeddedProgressBarComponent
+  # alias EventasaurusWeb.EmbeddedProgressBarComponent - now handled by VotingInterfaceComponent
   alias EventasaurusWeb.Utils.PollPhaseUtils
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
@@ -97,75 +97,12 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
      |> assign(:adding_movie, false)}
   end
 
+  # Note: Voting events are now handled by VotingInterfaceComponent
+  # We only need to handle save_votes and clear_all_votes for anonymous users
+
+  # Note: clear_all_votes is now handled by VotingInterfaceComponent
+
   @impl true
-  def handle_event("cast_binary_vote", %{"option-id" => option_id, "vote" => vote_value}, socket) do
-    %{current_user: user, movie_poll: poll} = socket.assigns
-
-    if user do
-      # Authenticated user - handle normal vote
-      # Validate option_id is a valid integer
-      case Integer.parse(option_id) do
-        {parsed_option_id, ""} ->
-          # Get the PollOption struct first
-          case Events.get_poll_option(parsed_option_id) do
-            nil ->
-              {:noreply, socket}
-
-            poll_option ->
-              case Events.cast_binary_vote(poll, poll_option, user, vote_value) do
-                {:ok, _vote} ->
-                  # Reload user votes to update the UI
-                  user_votes = Events.list_user_poll_votes(poll, user)
-
-                  # Send update to parent component (format: {:vote_cast, option_id, vote_value})
-                  send(self(), {:vote_cast, parsed_option_id, vote_value})
-
-                  {:noreply, assign(socket, :user_votes, user_votes)}
-
-                {:error, _changeset} ->
-                  {:noreply, socket}
-              end
-          end
-
-        _ ->
-          # Invalid option_id format, ignore the vote
-          {:noreply, socket}
-      end
-    else
-      # Anonymous user - handle temp vote
-      case Integer.parse(option_id) do
-        {parsed_option_id, ""} ->
-          # Update temp votes for this option
-          updated_temp_votes = Map.put(socket.assigns.temp_votes, parsed_option_id, vote_value)
-
-          # Send update to parent LiveView
-          send(self(), {:temp_votes_updated, poll.id, updated_temp_votes})
-
-          {:noreply, assign(socket, :temp_votes, updated_temp_votes)}
-
-        _ ->
-          {:noreply, socket}
-      end
-    end
-  end
-
-  def handle_event("clear_all_votes", _params, socket) do
-    %{movie_poll: poll, current_user: user} = socket.assigns
-
-    if user do
-      # Clear all votes for authenticated user
-      {:ok, _} = Events.clear_user_poll_votes(poll, user)
-      
-      # Reload user votes to update the UI
-      user_votes = Events.list_user_poll_votes(poll, user)
-      {:noreply, assign(socket, :user_votes, user_votes)}
-    else
-      # Clear temp votes for anonymous user
-      send(self(), {:temp_votes_updated, poll.id, %{}})
-      {:noreply, assign(socket, :temp_votes, %{})}
-    end
-  end
-
   def handle_event("save_votes", _params, socket) do
     %{movie_poll: poll, temp_votes: temp_votes} = socket.assigns
 
@@ -357,32 +294,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     |> Enum.find(&(&1.poll_type == "movie"))
   end
 
-  # Helper function to get user's vote for a specific option
-  defp get_user_vote(option_id, user_votes) do
-    case Enum.find(user_votes, fn vote -> vote.poll_option_id == option_id end) do
-      %{vote_value: vote_value} -> vote_value
-      _ -> nil
-    end
-  end
-
-  # Helper function to generate button classes based on vote state
-  defp binary_button_class(current_vote, button_vote) do
-    base_classes = "inline-flex items-center px-3 py-1 text-xs font-medium rounded-full transition-colors"
-
-    if current_vote == button_vote do
-      case button_vote do
-        "yes" -> "#{base_classes} bg-green-100 text-green-800 border border-green-300"
-        "maybe" -> "#{base_classes} bg-yellow-100 text-yellow-800 border border-yellow-300"
-        "no" -> "#{base_classes} bg-red-100 text-red-800 border border-red-300"
-      end
-    else
-      case button_vote do
-        "yes" -> "#{base_classes} bg-white text-green-700 border border-green-300 hover:bg-green-50"
-        "maybe" -> "#{base_classes} bg-white text-yellow-700 border border-yellow-300 hover:bg-yellow-50"
-        "no" -> "#{base_classes} bg-white text-red-700 border border-red-300 hover:bg-red-50"
-      end
-    end
-  end
+  # Note: Voting helper functions have been removed as voting is now handled by VotingInterfaceComponent
 
   # Helper function to parse enhanced description into details line and main description
   defp parse_enhanced_description(description) do
@@ -414,166 +326,105 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                   <%= PollPhaseUtils.get_phase_description(@movie_poll.phase, "movie") %>
                 </p>
               </div>
-              
-              <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
-                <.clear_votes_button
-                  id={"clear-all-votes-movie-#{@movie_poll.id}"}
-                  target={@myself}
-                  has_votes={@current_user && length(@user_votes) > 0 || !@current_user && map_size(@temp_votes) > 0}
-                  loading={false}
-                  anonymous_mode={!@current_user}
-                  variant="text"
-                />
-              <% end %>
             </div>
           </div>
 
-          <!-- Movie Options List -->
-          <%= if length(@movie_options) > 0 do %>
-            <div class="space-y-3">
-              <%= for option <- @movie_options do %>
-                <div class="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
-                  <div class="flex">
-                    <% image_url = MovieUtils.get_image_url(option) %>
-                    <%= if image_url do %>
-                      <img
-                        src={image_url}
-                        alt={"#{option.title} poster"}
-                        class="w-16 h-24 object-cover rounded-lg mr-4 flex-shrink-0"
-                        loading="lazy"
-                      />
-                    <% else %>
-                      <div class="w-16 h-24 bg-gray-200 rounded-lg mr-4 flex-shrink-0 flex items-center justify-center">
-                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2m0 0V3a1 1 0 011 1v4a1 1 0 01-1-1h-2m-6 0h8m-8 0V8a1 1 0 01-1-1V3a1 1 0 011-1h2"/>
-                        </svg>
-                      </div>
-                    <% end %>
-
-                    <div class="flex-1 min-w-0">
-                      <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
-
-                      <!-- Movie Details (Year, Director, Genre) -->
-                      <%= if option.description do %>
-                        <% {details_line, main_description} = parse_enhanced_description(option.description) %>
-                        <%= if details_line do %>
-                          <p class="text-sm text-gray-600 font-medium mb-2"><%= details_line %></p>
-                        <% end %>
-                        <%= if main_description && String.length(main_description) > 0 do %>
-                          <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= main_description %></p>
-                        <% end %>
-                      <% end %>
-
-                      <!-- Show who suggested this movie -->
-                      <%= if option.suggested_by do %>
-                        <div class="flex items-center justify-between mb-2">
-                          <p class="text-xs text-gray-500">
-                            Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
-                          </p>
-                          <!-- Delete button for user's own suggestions -->
-                          <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>
-                            <div class="flex items-center space-x-2">
-                              <button
-                                type="button"
-                                phx-click="delete_option"
-                                phx-value-option-id={option.id}
-                                phx-target={@myself}
-                                data-confirm="Are you sure you want to remove this option? This action cannot be undone."
-                                class="text-red-600 hover:text-red-900 text-xs font-medium"
-                              >
-                                Remove my suggestion
-                              </button>
-                              <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
-                              <%= if time_remaining > 0 do %>
-                                <span class="text-xs text-gray-500">
-                                  (<%= format_deletion_time_remaining(time_remaining) %> left)
-                                </span>
-                              <% end %>
-                            </div>
-                          <% end %>
-                        </div>
-                      <% end %>
-
-                      <!-- Embedded Progress Bar -->
-                      <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
-                        <div class="mt-2">
-                          <.live_component
-                            module={EmbeddedProgressBarComponent}
-                            id={"progress-#{option.id}"}
-                            poll_stats={@poll_stats}
-                            option_id={option.id}
-                            voting_system={@movie_poll.voting_system}
-                            compact={true}
-                            show_labels={false}
-                            show_counts={true}
-                            anonymous_mode={!@current_user}
-                          />
-                        </div>
-                      <% end %>
-
-                      <!-- Voting buttons for movie polls in voting phase -->
-                      <%= if @movie_poll.phase in ["voting", "voting_with_suggestions", "voting_only"] do %>
-                        <div class="flex space-x-2 mt-3">
-                          <% current_vote = if @current_user, do: get_user_vote(option.id, @user_votes), else: Map.get(@temp_votes, option.id) %>
-                          <% temp_vote_badge = if !@current_user && Map.get(@temp_votes, option.id), do: "📝", else: "" %>
-
-                          <button
-                            type="button"
-                            phx-click="cast_binary_vote"
-                            phx-value-option-id={option.id}
-                            phx-value-vote="yes"
-                            phx-target={@myself}
-                            class={binary_button_class(current_vote, "yes")}
-                          >
-                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            </svg>
-                            Yes <%= if current_vote == "yes" && !@current_user, do: temp_vote_badge %>
-                          </button>
-
-                          <button
-                            type="button"
-                            phx-click="cast_binary_vote"
-                            phx-value-option-id={option.id}
-                            phx-value-vote="maybe"
-                            phx-target={@myself}
-                            class={binary_button_class(current_vote, "maybe")}
-                          >
-                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Maybe <%= if current_vote == "maybe" && !@current_user, do: temp_vote_badge %>
-                          </button>
-
-                          <button
-                            type="button"
-                            phx-click="cast_binary_vote"
-                            phx-value-option-id={option.id}
-                            phx-value-vote="no"
-                            phx-target={@myself}
-                            class={binary_button_class(current_vote, "no")}
-                          >
-                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                            No <%= if current_vote == "no" && !@current_user, do: temp_vote_badge %>
-                          </button>
-                        </div>
-                      <% end %>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
+          <!-- Voting Interface for movie polls -->
+          <%= if PollPhaseUtils.voting_allowed?(@movie_poll.phase) do %>
+            <div class="mb-6">
+              <.live_component
+                module={EventasaurusWeb.VotingInterfaceComponent}
+                id={"voting-interface-movie-#{@movie_poll.id}"}
+                poll={@movie_poll}
+                user={@current_user}
+                user_votes={@user_votes}
+                loading={false}
+                temp_votes={@temp_votes}
+                anonymous_mode={is_nil(@current_user)}
+                show_header={false}
+              />
             </div>
           <% else %>
-            <div class="text-center py-8 text-gray-500">
-              <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2m0 0V3a1 1 0 011 1v4a1 1 0 01-1-1h-2m-6 0h8m-8 0V8a1 1 0 01-1-1V3a1 1 0 011-1h2"/>
-              </svg>
-              <% {title, subtitle} = PollPhaseUtils.get_empty_state_message("movie") %>
-              <p class="font-medium"><%= title %></p>
-              <p class="text-sm"><%= subtitle %></p>
-            </div>
+            <!-- List Building Phase - Show Movie Options Without Voting -->
+            <%= if length(@movie_options) > 0 do %>
+              <div class="space-y-3">
+                <%= for option <- @movie_options do %>
+                  <div class="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
+                    <div class="flex">
+                      <% image_url = MovieUtils.get_image_url(option) %>
+                      <%= if image_url do %>
+                        <img
+                          src={image_url}
+                          alt={"#{option.title} poster"}
+                          class="w-16 h-24 object-cover rounded-lg mr-4 flex-shrink-0"
+                          loading="lazy"
+                        />
+                      <% else %>
+                        <div class="w-16 h-24 bg-gray-200 rounded-lg mr-4 flex-shrink-0 flex items-center justify-center">
+                          <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2m0 0V3a1 1 0 011 1v4a1 1 0 01-1-1h-2m-6 0h8m-8 0V8a1 1 0 01-1-1V3a1 1 0 011-1h2"/>
+                          </svg>
+                        </div>
+                      <% end %>
+
+                      <div class="flex-1 min-w-0">
+                        <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
+
+                        <!-- Movie Details (Year, Director, Genre) -->
+                        <%= if option.description do %>
+                          <% {details_line, main_description} = parse_enhanced_description(option.description) %>
+                          <%= if details_line do %>
+                            <p class="text-sm text-gray-600 font-medium mb-2"><%= details_line %></p>
+                          <% end %>
+                          <%= if main_description && String.length(main_description) > 0 do %>
+                            <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= main_description %></p>
+                          <% end %>
+                        <% end %>
+
+                        <!-- Show who suggested this movie -->
+                        <%= if option.suggested_by do %>
+                          <div class="flex items-center justify-between">
+                            <p class="text-xs text-gray-500">
+                              Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
+                            </p>
+                            <!-- Delete button for user's own suggestions -->
+                            <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>
+                              <div class="flex items-center space-x-2">
+                                <button
+                                  type="button"
+                                  phx-click="delete_option"
+                                  phx-value-option-id={option.id}
+                                  phx-target={@myself}
+                                  data-confirm="Are you sure you want to remove this option? This action cannot be undone."
+                                  class="text-red-600 hover:text-red-900 text-xs font-medium"
+                                >
+                                  Remove my suggestion
+                                </button>
+                                <% time_remaining = get_deletion_time_remaining(option.inserted_at) %>
+                                <%= if time_remaining > 0 do %>
+                                  <span class="text-xs text-gray-500">
+                                    (<%= format_deletion_time_remaining(time_remaining) %> left)
+                                  </span>
+                                <% end %>
+                              </div>
+                            <% end %>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% else %>
+              <div class="text-center py-8 text-gray-500">
+                <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2m0 0V3a1 1 0 011 1v4a1 1 0 01-1-1h-2m-6 0h8m-8 0V8a1 1 0 01-1-1V3a1 1 0 011-1h2"/>
+                </svg>
+                <% {title, subtitle} = PollPhaseUtils.get_empty_state_message("movie") %>
+                <p class="font-medium"><%= title %></p>
+                <p class="text-sm"><%= subtitle %></p>
+              </div>
+            <% end %>
           <% end %>
 
           <!-- Anonymous Voting Status and Save Button -->
