@@ -501,7 +501,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         <div class="space-y-2">
           <%= for {option, index} <- Enum.with_index(@ranked_options) do %>
             <div class={"flex items-start sm:items-center p-3 border rounded-lg shadow-sm " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-white border-gray-200")}>
-              <div class={"flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 text-xs sm:text-sm font-medium rounded-full mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0 " <> if(@anonymous_mode, do: "bg-blue-200 text-blue-800", else: "bg-indigo-100 text-indigo-800")}>
+              <div class={"flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 text-xs sm:text-sm font-semibold rounded-full mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0 " <> if(@anonymous_mode, do: "bg-blue-200 text-blue-800", else: "bg-indigo-100 text-indigo-800")}>
                 <%= index + 1 %>
               </div>
               <div class="flex-1 min-w-0">
