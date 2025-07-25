@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intent-Based Event Creation (Dropdown) - Eventasaurus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .dropdown-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            opacity: 0;
+        }
+        .dropdown-content.open {
+            max-height: 600px;
+            opacity: 1;
+        }
+        .intent-option {
+            transition: all 0.2s ease;
+        }
+        .intent-option:hover {
+            background-color: #f8fafc;
+            transform: translateX(4px);
+        }
+        .intent-option.selected {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+        }
+        .chevron {
+            transition: transform 0.3s ease;
+        }
+        .chevron.rotated {
+            transform: rotate(180deg);
+        }
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .smart-config {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Current Event Creation Form -->
+    <div class="max-w-4xl mx-auto p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Column - Event Image and Theme -->
+            <div class="space-y-6">
+                <!-- Event Image -->
+                <div class="bg-gradient-to-br from-purple-500 via-pink-500 to-red-500 rounded-lg h-64 flex items-center justify-center">
+                    <div class="text-white text-center">
+                        <div class="text-4xl mb-2">🎉</div>
+                        <div class="text-xl font-semibold">Your Event</div>
+                    </div>
+                </div>
+
+                <!-- Event Theme -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Theme</label>
+                    <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option>Minimal - Clean and simple</option>
+                        <option>Vibrant - Colorful and energetic</option>
+                        <option>Professional - Clean corporate style</option>
+                    </select>
+                    <p class="text-sm text-gray-500 mt-1">Customize your event page appearance</p>
+                </div>
+
+                <!-- Rich Data -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Rich Data</label>
+                    <button class="w-full border border-gray-300 rounded-lg p-4 text-gray-600 hover:bg-gray-50 transition-colors">
+                        <div class="text-center">
+                            <span class="text-lg">+</span>
+                            <div class="font-medium">Import Rich Data</div>
+                            <div class="text-sm">Import comprehensive details from movies, TV shows, music, and more</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column - Event Details -->
+            <div class="space-y-6">
+                <!-- NEW: Intent-Based Event Type Dropdown -->
+                <div class="border-b pb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">What kind of event are you planning?</label>
+                    
+                    <!-- Intent Dropdown -->
+                    <div class="relative">
+                        <button id="intent-dropdown-btn" onclick="toggleIntentDropdown()" class="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-50 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <span id="selected-intent-icon" class="text-xl">🤔</span>
+                                    <div>
+                                        <div id="selected-intent-title" class="font-medium text-gray-900">Choose your event type...</div>
+                                        <div id="selected-intent-description" class="text-sm text-gray-500">Tell us your goal and we'll configure everything</div>
+                                    </div>
+                                </div>
+                                <svg id="intent-chevron" class="chevron w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </button>
+
+                        <!-- Intent Dropdown Content -->
+                        <div id="intent-dropdown-content" class="dropdown-content absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-20">
+                            <div class="py-2">
+                                <!-- Sell Tickets -->
+                                <div class="intent-option px-4 py-3 cursor-pointer" onclick="selectIntent('sell-tickets', '🎟️', 'I want to sell tickets', 'Set a price and manage paid registrations')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🎟️</div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="font-semibold text-gray-900">I want to sell tickets</h3>
+                                            <p class="text-sm text-gray-600">Set a price and manage paid registrations</p>
+                                            <p class="text-xs text-gray-500 mt-1">Examples: Concerts, workshops, conferences</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Gather People -->
+                                <div class="intent-option px-4 py-3 cursor-pointer" onclick="selectIntent('gather-people', '🤝', 'I want to gather people', 'Free event with simple RSVPs')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🤝</div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="font-semibold text-gray-900">I want to gather people</h3>
+                                            <p class="text-sm text-gray-600">Free event with simple RSVPs</p>
+                                            <p class="text-xs text-gray-500 mt-1">Examples: Meetups, parties, study groups</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Need Funding -->
+                                <div class="intent-option px-4 py-3 cursor-pointer" onclick="selectIntent('need-funding', '💰', 'I need funding first', 'Collect money before confirming the event')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">💰</div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="font-semibold text-gray-900">I need funding first</h3>
+                                            <p class="text-sm text-gray-600">Collect money before confirming the event</p>
+                                            <p class="text-xs text-gray-500 mt-1">Examples: Group trips, venue bookings, product launches</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Accept Donations -->
+                                <div class="intent-option px-4 py-3 cursor-pointer" onclick="selectIntent('accept-donations', '🎁', 'I want to accept donations', 'Free to attend with optional support')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🎁</div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="font-semibold text-gray-900">I want to accept donations</h3>
+                                            <p class="text-sm text-gray-600">Free to attend with optional support</p>
+                                            <p class="text-xs text-gray-500 mt-1">Examples: Charity events, community workshops</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Test Interest -->
+                                <div class="intent-option px-4 py-3 cursor-pointer" onclick="selectIntent('test-interest', '📊', 'I want to test interest', 'See if enough people want to join')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">📊</div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="font-semibold text-gray-900">I want to test interest</h3>
+                                            <p class="text-sm text-gray-600">See if enough people want to join</p>
+                                            <p class="text-xs text-gray-500 mt-1">Examples: Minimum attendee events, pre-launch validation</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Not Sure -->
+                                <div class="intent-option px-4 py-3 cursor-pointer" onclick="selectIntent('not-sure', '🗳️', 'I'm not sure yet', 'Let attendees help decide')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🗳️</div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="font-semibold text-gray-900">I'm not sure yet</h3>
+                                            <p class="text-sm text-gray-600">Let attendees help decide with polls</p>
+                                            <p class="text-xs text-gray-500 mt-1">Examples: Planning stage events, collaborative decisions</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Smart Configuration Section (appears after intent selection) -->
+                    <div id="smart-config" class="hidden mt-4 p-4 bg-gray-50 rounded-lg border slide-down">
+                        <!-- This will be populated based on intent -->
+                    </div>
+                </div>
+
+                <!-- Event Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Name</label>
+                    <input type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter event name">
+                </div>
+
+                <!-- Date Status Dropdown -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">When is your event?</label>
+                    <select id="date-status" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" onchange="toggleDateFields()">
+                        <option value="">Choose date status...</option>
+                        <option value="confirmed">✓ Date is confirmed</option>
+                        <option value="planning">📅 Still planning - let attendees vote</option>
+                    </select>
+                </div>
+
+                <!-- Date and Time (shown when confirmed) -->
+                <div id="date-fields" class="hidden grid grid-cols-2 gap-4 slide-down">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                        <input type="date" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                        <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option>12:00 PM</option>
+                            <option>1:00 PM</option>
+                            <option>2:00 PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Location -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Where</label>
+                    <input type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Search for venue or address...">
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <textarea class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" rows="4" placeholder="Tell people about your event..."></textarea>
+                </div>
+
+                <!-- Capacity -->
+                <div>
+                    <div class="flex items-center justify-between">
+                        <label class="block text-sm font-medium text-gray-700">Capacity</label>
+                        <button class="text-blue-600 text-sm font-medium">Unlimited</button>
+                    </div>
+                </div>
+
+                <!-- Create Event Button -->
+                <button class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                    Create Event
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let intentDropdownOpen = false;
+        let selectedIntent = null;
+
+        function toggleIntentDropdown() {
+            const content = document.getElementById('intent-dropdown-content');
+            const chevron = document.getElementById('intent-chevron');
+            
+            intentDropdownOpen = !intentDropdownOpen;
+            
+            if (intentDropdownOpen) {
+                content.classList.add('open');
+                chevron.classList.add('rotated');
+            } else {
+                content.classList.remove('open');
+                chevron.classList.remove('rotated');
+            }
+        }
+
+        function selectIntent(intent, icon, title, description) {
+            selectedIntent = intent;
+            
+            // Update the dropdown button display
+            document.getElementById('selected-intent-icon').textContent = icon;
+            document.getElementById('selected-intent-title').textContent = title;
+            document.getElementById('selected-intent-description').textContent = description;
+            
+            // Update visual selection in dropdown
+            document.querySelectorAll('.intent-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+            
+            // Close dropdown
+            toggleIntentDropdown();
+            
+            // Show smart configuration
+            showSmartConfig(intent);
+        }
+
+        function showSmartConfig(intent) {
+            const smartConfig = document.getElementById('smart-config');
+            smartConfig.classList.remove('hidden');
+            
+            switch(intent) {
+                case 'sell-tickets':
+                    smartConfig.innerHTML = `
+                        <div class="space-y-4">
+                            <h4 class="font-medium text-gray-900">Quick Ticket Setup</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-sm text-gray-600">Base Price</label>
+                                    <div class="flex items-center space-x-2 mt-1">
+                                        <input type="number" class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="25">
+                                        <select class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                            <option>USD</option>
+                                            <option>EUR</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-sm text-gray-600">Available Tickets</label>
+                                    <input type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1" placeholder="100">
+                                </div>
+                            </div>
+                            <p class="text-xs text-blue-600">💡 You can add early bird pricing and VIP tickets after creating the event</p>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'gather-people':
+                    smartConfig.innerHTML = `
+                        <div class="space-y-4">
+                            <h4 class="font-medium text-gray-900">RSVP Settings</h4>
+                            <div class="space-y-3">
+                                <label class="flex items-center space-x-3">
+                                    <input type="checkbox" class="rounded">
+                                    <span class="text-sm text-gray-700">Require approval for RSVPs</span>
+                                </label>
+                                <label class="flex items-center space-x-3">
+                                    <input type="checkbox" class="rounded">
+                                    <span class="text-sm text-gray-700">Ask attendees for +1s</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-green-600">✨ Free event - attendees just need to RSVP!</p>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'need-funding':
+                    smartConfig.innerHTML = `
+                        <div class="space-y-4">
+                            <h4 class="font-medium text-gray-900">Funding Goal</h4>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-sm text-gray-600">Minimum needed</label>
+                                    <div class="flex items-center space-x-2 mt-1">
+                                        <span class="text-gray-500">$</span>
+                                        <input type="number" class="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="5,000">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-sm text-gray-600">Campaign ends</label>
+                                    <input type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1">
+                                </div>
+                            </div>
+                            <p class="text-xs text-purple-600">🎯 Event only happens if you reach your goal!</p>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'accept-donations':
+                    smartConfig.innerHTML = `
+                        <div class="space-y-4">
+                            <h4 class="font-medium text-gray-900">Contribution Options</h4>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-sm text-gray-600">Suggested amounts</label>
+                                    <div class="grid grid-cols-4 gap-2 mt-1">
+                                        <input type="number" class="px-2 py-1 border border-gray-300 rounded text-sm text-center" value="10">
+                                        <input type="number" class="px-2 py-1 border border-gray-300 rounded text-sm text-center" value="25">
+                                        <input type="number" class="px-2 py-1 border border-gray-300 rounded text-sm text-center" value="50">
+                                        <input type="number" class="px-2 py-1 border border-gray-300 rounded text-sm text-center" value="100">
+                                    </div>
+                                </div>
+                                <label class="flex items-center space-x-3">
+                                    <input type="checkbox" class="rounded" checked>
+                                    <span class="text-sm text-gray-700">Show recent contributors</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-red-600">❤️ Free to attend with optional contributions</p>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'test-interest':
+                    smartConfig.innerHTML = `
+                        <div class="space-y-4">
+                            <h4 class="font-medium text-gray-900">Interest Validation</h4>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-sm text-gray-600">Minimum needed</label>
+                                    <select class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1">
+                                        <option>At least 20 people interested</option>
+                                        <option>At least $1,000 in pre-sales</option>
+                                        <option>Custom requirement</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm text-gray-600">Decision by</label>
+                                    <input type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1">
+                                </div>
+                            </div>
+                            <p class="text-xs text-orange-600">📊 Shows "15 more needed" to encourage sign-ups</p>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'not-sure':
+                    smartConfig.innerHTML = `
+                        <div class="space-y-4">
+                            <h4 class="font-medium text-gray-900">Planning Tools</h4>
+                            <div class="space-y-3">
+                                <p class="text-sm text-gray-600">Let attendees vote on:</p>
+                                <div class="space-y-2">
+                                    <label class="flex items-center space-x-3">
+                                        <input type="checkbox" class="rounded" checked>
+                                        <span class="text-sm text-gray-700">Best date/time</span>
+                                    </label>
+                                    <label class="flex items-center space-x-3">
+                                        <input type="checkbox" class="rounded">
+                                        <span class="text-sm text-gray-700">Location options</span>
+                                    </label>
+                                    <label class="flex items-center space-x-3">
+                                        <input type="checkbox" class="rounded">
+                                        <span class="text-sm text-gray-700">Ticket price</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-600">🗳️ Polls appear on your event page</p>
+                        </div>
+                    `;
+                    break;
+            }
+        }
+
+        function toggleDateFields() {
+            const status = document.getElementById('date-status').value;
+            const dateFields = document.getElementById('date-fields');
+            
+            if (status === 'confirmed') {
+                dateFields.classList.remove('hidden');
+            } else {
+                dateFields.classList.add('hidden');
+            }
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            const intentDropdown = document.getElementById('intent-dropdown-btn');
+            const intentContent = document.getElementById('intent-dropdown-content');
+            
+            if (!intentDropdown.contains(event.target) && !intentContent.contains(event.target)) {
+                if (intentDropdownOpen) {
+                    toggleIntentDropdown();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

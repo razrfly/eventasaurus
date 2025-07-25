@@ -51,6 +51,7 @@ defmodule EventasaurusApp.Events.Event do
     field :canceled_at, :utc_datetime
     field :is_ticketed, :boolean, default: false
     field :taxation_type, :string, default: "ticketless"
+    field :is_virtual, :boolean, default: false
     field :virtual_venue_url, :string # for virtual meeting URLs
 
     # Theme fields for the theming system
@@ -100,7 +101,7 @@ defmodule EventasaurusApp.Events.Event do
                    :visibility, :slug, :cover_image_url, :venue_id, :group_id, :external_image_data,
                    :rich_external_data, :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
-                   :virtual_venue_url, :is_ticketed, :taxation_type])
+                   :virtual_venue_url, :is_ticketed, :taxation_type, :is_virtual])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
     |> maybe_validate_start_at()
@@ -116,6 +117,8 @@ defmodule EventasaurusApp.Events.Event do
     |> validate_threshold_consistency()
     |> validate_taxation_type()
     |> validate_taxation_consistency()
+    |> validate_free_event_revenue()
+    |> validate_virtual_event_venue()
     |> validate_canceled_at()
     |> validate_status_consistency()
     |> foreign_key_constraint(:venue_id)
@@ -189,6 +192,39 @@ defmodule EventasaurusApp.Events.Event do
       # Contribution collections cannot have ticketing enabled
       {"contribution_collection", true} ->
         add_error(changeset, :is_ticketed, "must be false for contribution collection events")
+      # All other combinations are valid
+      _ ->
+        changeset
+    end
+  end
+
+  defp validate_free_event_revenue(changeset) do
+    taxation_type = get_field(changeset, :taxation_type)
+    threshold_type = get_field(changeset, :threshold_type)
+    threshold_revenue_cents = get_field(changeset, :threshold_revenue_cents)
+
+    case {taxation_type, threshold_type, threshold_revenue_cents} do
+      # Free events (ticketless) cannot have revenue thresholds
+      {"ticketless", "revenue", _} ->
+        add_error(changeset, :threshold_type, "cannot be set to revenue for free events. Use attendee_count instead.")
+      {"ticketless", "both", _} ->
+        add_error(changeset, :threshold_type, "cannot be set to both for free events. Use attendee_count instead.")
+      {"ticketless", _, revenue} when not is_nil(revenue) and revenue > 0 ->
+        add_error(changeset, :threshold_revenue_cents, "cannot be set for free events")
+      # All other combinations are valid
+      _ ->
+        changeset
+    end
+  end
+
+  defp validate_virtual_event_venue(changeset) do
+    is_virtual = get_field(changeset, :is_virtual)
+    venue_id = get_field(changeset, :venue_id)
+
+    case {is_virtual, venue_id} do
+      # Virtual events cannot have a physical venue
+      {true, venue_id} when not is_nil(venue_id) ->
+        add_error(changeset, :venue_id, "must be nil for virtual events")
       # All other combinations are valid
       _ ->
         changeset
