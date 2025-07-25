@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intent-Based Event Creation (Modal) - Eventasaurus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .intent-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .intent-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+        .intent-card.selected {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .config-section {
+            transition: all 0.3s ease;
+        }
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .date-option {
+            transition: all 0.2s ease;
+        }
+        .date-option:hover {
+            transform: scale(1.02);
+        }
+        input[type="radio"]:checked ~ .date-option {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+        @media (max-width: 768px) {
+            .modal-content {
+                max-height: 85vh;
+            }
+        }
+        .mobile-card {
+            scroll-snap-align: start;
+        }
+        .fancy-input {
+            transition: all 0.2s ease;
+        }
+        .fancy-input:focus {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Current Event Creation Form -->
+    <div class="max-w-4xl mx-auto p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Column - Event Image and Theme -->
+            <div class="space-y-6">
+                <!-- Event Image -->
+                <div class="bg-gradient-to-br from-purple-500 via-pink-500 to-red-500 rounded-lg h-64 flex items-center justify-center">
+                    <div class="text-white text-center">
+                        <div class="text-4xl mb-2">🎉</div>
+                        <div class="text-xl font-semibold">Your Event</div>
+                    </div>
+                </div>
+
+                <!-- Event Theme -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Theme</label>
+                    <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option>Minimal - Clean and simple</option>
+                        <option>Vibrant - Colorful and energetic</option>
+                        <option>Professional - Clean corporate style</option>
+                    </select>
+                    <p class="text-sm text-gray-500 mt-1">Customize your event page appearance</p>
+                </div>
+
+                <!-- Rich Data -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Rich Data</label>
+                    <button class="w-full border border-gray-300 rounded-lg p-4 text-gray-600 hover:bg-gray-50 transition-colors">
+                        <div class="text-center">
+                            <span class="text-lg">+</span>
+                            <div class="font-medium">Import Rich Data</div>
+                            <div class="text-sm">Import comprehensive details from movies, TV shows, music, and more</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column - Event Details -->
+            <div class="space-y-6">
+                <!-- Event Type Section -->
+                <div class="border-b pb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Type & Payment</label>
+                    
+                    <!-- Event Type Button -->
+                    <div id="event-type-button">
+                        <button onclick="openIntentModal()" class="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-all">
+                            <div class="text-center">
+                                <div class="text-2xl mb-2">🎯</div>
+                                <div class="font-semibold text-lg mb-1">Choose Event Type</div>
+                                <div class="text-sm">Tell us your goal and we'll configure everything</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Selected Type Display (Hidden initially) -->
+                    <div id="event-type-display" class="hidden">
+                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <span id="type-icon" class="text-2xl"></span>
+                                    <div>
+                                        <div id="type-title" class="font-semibold text-gray-900"></div>
+                                        <div id="type-description" class="text-sm text-gray-600"></div>
+                                    </div>
+                                </div>
+                                <button onclick="openIntentModal()" class="text-blue-600 text-sm font-medium hover:text-blue-700">
+                                    Change
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Smart Configuration (shown after type selection) -->
+                        <div id="smart-config" class="mt-4 config-section slide-down">
+                            <!-- Dynamic content based on selected type -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Event Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Name</label>
+                    <input type="text" id="event-name" class="fancy-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter event name">
+                </div>
+
+                <!-- Date Configuration -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Schedule</label>
+                    <button onclick="openDateModal()" class="w-full border border-gray-300 rounded-lg p-4 text-left hover:bg-gray-50 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div id="date-display" class="font-medium text-gray-900">Set date and time</div>
+                                <div id="date-status" class="text-sm text-gray-500">Click to configure</div>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Location -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Where</label>
+                    <input type="text" class="fancy-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Search for venue or address...">
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <textarea class="fancy-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" rows="4" placeholder="Tell people about your event..."></textarea>
+                </div>
+
+                <!-- Capacity -->
+                <div>
+                    <div class="flex items-center justify-between">
+                        <label class="block text-sm font-medium text-gray-700">Capacity</label>
+                        <button class="text-blue-600 text-sm font-medium">Unlimited</button>
+                    </div>
+                </div>
+
+                <!-- Create Event Button -->
+                <button class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                    Create Event
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Intent Selection Modal -->
+    <div id="intent-modal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-backdrop absolute inset-0" onclick="closeIntentModal()"></div>
+        <div class="relative flex items-center justify-center min-h-screen p-4">
+            <div class="slide-up bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                <!-- Modal Header -->
+                <div class="sticky top-0 bg-white border-b px-6 py-4 rounded-t-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-900">What kind of event are you planning?</h2>
+                            <p class="text-gray-600">Tell us your goal and we'll configure everything perfectly</p>
+                        </div>
+                        <button onclick="closeIntentModal()" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Modal Content -->
+                <div class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto sm:overflow-visible -mx-2 px-2 sm:mx-0 sm:px-0">
+                        <!-- Sell Tickets -->
+                        <div class="intent-card mobile-card border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-blue-400 min-w-[280px] sm:min-w-0" onclick="selectIntentType('sell-tickets', '🎟️', 'I want to sell tickets', 'Set a price and manage paid registrations')">
+                            <div class="text-center">
+                                <div class="text-3xl mb-3">🎟️</div>
+                                <h3 class="font-semibold text-gray-900 mb-2">I want to sell tickets</h3>
+                                <p class="text-sm text-gray-600 mb-3">Set a price and manage paid registrations</p>
+                                <p class="text-xs text-gray-500">Examples: Concerts, workshops, conferences</p>
+                            </div>
+                        </div>
+
+                        <!-- Gather People -->
+                        <div class="intent-card mobile-card border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-green-400 min-w-[280px] sm:min-w-0" onclick="selectIntentType('gather-people', '🤝', 'I want to gather people', 'Free event with simple RSVPs')">
+                            <div class="text-center">
+                                <div class="text-3xl mb-3">🤝</div>
+                                <h3 class="font-semibold text-gray-900 mb-2">I want to gather people</h3>
+                                <p class="text-sm text-gray-600 mb-3">Free event with simple RSVPs</p>
+                                <p class="text-xs text-gray-500">Examples: Meetups, parties, study groups</p>
+                            </div>
+                        </div>
+
+                        <!-- Need Funding -->
+                        <div class="intent-card mobile-card border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-purple-400 min-w-[280px] sm:min-w-0" onclick="selectIntentType('need-funding', '💰', 'I need funding first', 'Collect money before confirming')">
+                            <div class="text-center">
+                                <div class="text-3xl mb-3">💰</div>
+                                <h3 class="font-semibold text-gray-900 mb-2">I need funding first</h3>
+                                <p class="text-sm text-gray-600 mb-3">Collect money before confirming the event</p>
+                                <p class="text-xs text-gray-500">Examples: Group trips, venue bookings</p>
+                            </div>
+                        </div>
+
+                        <!-- Accept Donations -->
+                        <div class="intent-card mobile-card border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-red-400 min-w-[280px] sm:min-w-0" onclick="selectIntentType('accept-donations', '🎁', 'I want to accept donations', 'Free with optional support')">
+                            <div class="text-center">
+                                <div class="text-3xl mb-3">🎁</div>
+                                <h3 class="font-semibold text-gray-900 mb-2">I want to accept donations</h3>
+                                <p class="text-sm text-gray-600 mb-3">Free to attend with optional support</p>
+                                <p class="text-xs text-gray-500">Examples: Charity events, workshops</p>
+                            </div>
+                        </div>
+
+                        <!-- Test Interest -->
+                        <div class="intent-card mobile-card border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-orange-400 min-w-[280px] sm:min-w-0" onclick="selectIntentType('test-interest', '📊', 'I want to test interest', 'Validate before confirming')">
+                            <div class="text-center">
+                                <div class="text-3xl mb-3">📊</div>
+                                <h3 class="font-semibold text-gray-900 mb-2">I want to test interest</h3>
+                                <p class="text-sm text-gray-600 mb-3">See if enough people want to join</p>
+                                <p class="text-xs text-gray-500">Examples: Minimum attendee events</p>
+                            </div>
+                        </div>
+
+                        <!-- Not Sure -->
+                        <div class="intent-card mobile-card border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-gray-400 min-w-[280px] sm:min-w-0" onclick="selectIntentType('not-sure', '🗳️', 'I'm not sure yet', 'Let attendees help decide')">
+                            <div class="text-center">
+                                <div class="text-3xl mb-3">🗳️</div>
+                                <h3 class="font-semibold text-gray-900 mb-2">I'm not sure yet</h3>
+                                <p class="text-sm text-gray-600 mb-3">Let attendees help decide with polls</p>
+                                <p class="text-xs text-gray-500">Examples: Planning stage events</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Configuration Preview -->
+                    <div id="config-preview" class="hidden mt-6 p-6 bg-gray-50 rounded-lg slide-down">
+                        <!-- This will be populated when a type is selected -->
+                    </div>
+
+                    <!-- Modal Actions -->
+                    <div class="flex justify-between items-center mt-6 pt-4 border-t">
+                        <button onclick="closeIntentModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                            Cancel
+                        </button>
+                        <button id="confirm-intent" onclick="confirmIntentSelection()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            Apply Configuration
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Configuration Modal -->
+    <div id="date-modal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-backdrop absolute inset-0" onclick="closeDateModal()"></div>
+        <div class="relative flex items-center justify-center min-h-screen p-4">
+            <div class="slide-up bg-white rounded-lg shadow-xl max-w-lg w-full">
+                <div class="px-6 py-4 border-b">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-xl font-semibold text-gray-900">When is your event?</h2>
+                        <button onclick="closeDateModal()" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="p-6 space-y-6">
+                    <!-- Date Status Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-3">Date Status</label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <label class="block">
+                                <input type="radio" name="date-status-modal" value="confirmed" class="sr-only" onchange="updateDateModalStatus('confirmed')">
+                                <div class="date-option border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-green-400 transition-all">
+                                    <div class="text-center">
+                                        <div class="text-green-500 text-xl mb-2">✓</div>
+                                        <div class="font-medium text-gray-900">Date is confirmed</div>
+                                        <div class="text-sm text-gray-600">I know exactly when</div>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="block">
+                                <input type="radio" name="date-status-modal" value="planning" class="sr-only" onchange="updateDateModalStatus('planning')">
+                                <div class="date-option border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:border-orange-400 transition-all">
+                                    <div class="text-center">
+                                        <div class="text-orange-500 text-xl mb-2">📅</div>
+                                        <div class="font-medium text-gray-900">Still planning</div>
+                                        <div class="text-sm text-gray-600">Let attendees vote</div>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Date Fields (shown when confirmed) -->
+                    <div id="date-modal-fields" class="hidden space-y-4 slide-down">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                                <input type="date" class="w-full px-4 py-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                                <input type="time" class="w-full px-4 py-3 border border-gray-300 rounded-lg">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                                <input type="date" class="w-full px-4 py-3 border border-gray-300 rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                                <input type="time" class="w-full px-4 py-3 border border-gray-300 rounded-lg">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Poll Options (shown when planning) -->
+                    <div id="poll-options" class="hidden space-y-4 slide-down">
+                        <p class="text-sm text-gray-600">Attendees will be able to vote on their preferred dates</p>
+                        <div class="p-4 bg-orange-50 rounded-lg">
+                            <p class="text-sm text-orange-800">💡 You can add specific date options after creating the event</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 border-t flex justify-end space-x-3">
+                    <button onclick="closeDateModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                        Cancel
+                    </button>
+                    <button onclick="saveDateConfig()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedIntent = null;
+        let tempSelectedIntent = null;
+        let dateConfig = {
+            status: null,
+            startDate: null,
+            startTime: null
+        };
+
+        function openIntentModal() {
+            document.getElementById('intent-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeIntentModal() {
+            document.getElementById('intent-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            tempSelectedIntent = null;
+            document.getElementById('config-preview').classList.add('hidden');
+            document.getElementById('confirm-intent').disabled = true;
+        }
+
+        function selectIntentType(intent, icon, title, description) {
+            tempSelectedIntent = { intent, icon, title, description };
+            
+            // Update visual selection
+            document.querySelectorAll('.intent-card').forEach(card => {
+                card.classList.remove('selected', 'border-blue-500');
+                card.classList.add('border-gray-200');
+            });
+            event.currentTarget.classList.add('selected', 'border-blue-500');
+            event.currentTarget.classList.remove('border-gray-200');
+            
+            // Show configuration preview
+            showConfigPreview(intent);
+            
+            // Enable confirm button
+            document.getElementById('confirm-intent').disabled = false;
+        }
+
+        function showConfigPreview(intent) {
+            const preview = document.getElementById('config-preview');
+            preview.classList.remove('hidden');
+            
+            const configs = {
+                'sell-tickets': {
+                    title: 'Ticketed Event Configuration',
+                    content: `
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Payment Type:</span>
+                                <span class="text-sm">Traditional Ticketed</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Quick Settings:</span>
+                                <span class="text-sm">Price, ticket types, capacity</span>
+                            </div>
+                            <div class="text-xs text-blue-600">Configure early bird pricing, VIP tiers, and more after creation</div>
+                        </div>
+                    `
+                },
+                'gather-people': {
+                    title: 'Free Event Configuration',
+                    content: `
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Payment Type:</span>
+                                <span class="text-sm">Free RSVP</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Quick Settings:</span>
+                                <span class="text-sm">RSVP approval, capacity limits</span>
+                            </div>
+                            <div class="text-xs text-green-600">Perfect for casual gatherings and community events</div>
+                        </div>
+                    `
+                },
+                'need-funding': {
+                    title: 'Crowdfunding Configuration',
+                    content: `
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Payment Type:</span>
+                                <span class="text-sm">Goal-Based Funding</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Quick Settings:</span>
+                                <span class="text-sm">Funding goal, deadline, reward tiers</span>
+                            </div>
+                            <div class="text-xs text-purple-600">Event only proceeds if funding goal is reached</div>
+                        </div>
+                    `
+                },
+                'accept-donations': {
+                    title: 'Contribution Event Configuration',
+                    content: `
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Payment Type:</span>
+                                <span class="text-sm">Optional Contributions</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Quick Settings:</span>
+                                <span class="text-sm">Suggested amounts, social proof</span>
+                            </div>
+                            <div class="text-xs text-red-600">Free to attend with voluntary support options</div>
+                        </div>
+                    `
+                },
+                'test-interest': {
+                    title: 'Validation Event Configuration',
+                    content: `
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Payment Type:</span>
+                                <span class="text-sm">Threshold-Based</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Quick Settings:</span>
+                                <span class="text-sm">Minimum requirements, deadline</span>
+                            </div>
+                            <div class="text-xs text-orange-600">Shows progress to encourage sign-ups</div>
+                        </div>
+                    `
+                },
+                'not-sure': {
+                    title: 'Planning Stage Configuration',
+                    content: `
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Payment Type:</span>
+                                <span class="text-sm">To Be Determined</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Quick Settings:</span>
+                                <span class="text-sm">Polls for dates, location, pricing</span>
+                            </div>
+                            <div class="text-xs text-gray-600">Let attendees help shape the event</div>
+                        </div>
+                    `
+                }
+            };
+            
+            const config = configs[intent];
+            preview.innerHTML = `
+                <h3 class="font-medium text-gray-900 mb-3">${config.title}</h3>
+                ${config.content}
+            `;
+        }
+
+        function confirmIntentSelection() {
+            if (!tempSelectedIntent) return;
+            
+            selectedIntent = tempSelectedIntent;
+            
+            // Hide button, show display
+            document.getElementById('event-type-button').classList.add('hidden');
+            document.getElementById('event-type-display').classList.remove('hidden');
+            
+            // Update display
+            document.getElementById('type-icon').textContent = selectedIntent.icon;
+            document.getElementById('type-title').textContent = selectedIntent.title;
+            document.getElementById('type-description').textContent = selectedIntent.description;
+            
+            // Show configuration
+            updateSmartConfig(selectedIntent.intent);
+            
+            // Close modal
+            closeIntentModal();
+        }
+
+        function updateSmartConfig(intent) {
+            const configHtml = {
+                'sell-tickets': `
+                    <div class="bg-white rounded-lg border p-4 space-y-4">
+                        <h4 class="font-medium text-gray-900">Ticket Configuration</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Base Price</label>
+                                <div class="flex items-center space-x-2 mt-1">
+                                    <input type="number" class="w-20 px-3 py-2 border border-gray-300 rounded-lg" placeholder="25">
+                                    <select class="px-3 py-2 border border-gray-300 rounded-lg">
+                                        <option>USD</option>
+                                        <option>EUR</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Tickets Available</label>
+                                <input type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg mt-1" placeholder="100">
+                            </div>
+                        </div>
+                        <button class="text-blue-600 text-sm font-medium">+ Add ticket types</button>
+                    </div>
+                `,
+                'gather-people': `
+                    <div class="bg-white rounded-lg border p-4 space-y-4">
+                        <h4 class="font-medium text-gray-900">RSVP Settings</h4>
+                        <div class="space-y-3">
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="rounded">
+                                <span class="text-sm text-gray-700">Require approval for RSVPs</span>
+                            </label>
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="rounded">
+                                <span class="text-sm text-gray-700">Ask for dietary preferences</span>
+                            </label>
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="rounded">
+                                <span class="text-sm text-gray-700">Allow +1s</span>
+                            </label>
+                        </div>
+                    </div>
+                `,
+                'need-funding': `
+                    <div class="bg-white rounded-lg border p-4 space-y-4">
+                        <h4 class="font-medium text-gray-900">Crowdfunding Setup</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Funding Goal</label>
+                                <div class="flex items-center space-x-2 mt-1">
+                                    <span class="text-gray-500">$</span>
+                                    <input type="number" class="w-32 px-3 py-2 border border-gray-300 rounded-lg" placeholder="5,000">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Campaign Ends</label>
+                                <input type="date" class="px-3 py-2 border border-gray-300 rounded-lg mt-1">
+                            </div>
+                        </div>
+                        <button class="text-purple-600 text-sm font-medium">+ Add reward tiers</button>
+                    </div>
+                `,
+                'accept-donations': `
+                    <div class="bg-white rounded-lg border p-4 space-y-4">
+                        <h4 class="font-medium text-gray-900">Contribution Settings</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Suggested Amounts</label>
+                                <div class="grid grid-cols-4 gap-2 mt-1">
+                                    <input type="number" class="px-2 py-1 border border-gray-300 rounded text-center" value="10">
+                                    <input type="number" class="px-2 py-1 border border-gray-300 rounded text-center" value="25">
+                                    <input type="number" class="px-2 py-1 border border-gray-300 rounded text-center" value="50">
+                                    <input type="number" class="px-2 py-1 border border-gray-300 rounded text-center" value="100">
+                                </div>
+                            </div>
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="rounded" checked>
+                                <span class="text-sm text-gray-700">Show recent contributors</span>
+                            </label>
+                        </div>
+                    </div>
+                `,
+                'test-interest': `
+                    <div class="bg-white rounded-lg border p-4 space-y-4">
+                        <h4 class="font-medium text-gray-900">Validation Requirements</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Minimum Needed</label>
+                                <select class="w-full px-3 py-2 border border-gray-300 rounded-lg mt-1">
+                                    <option>At least 20 people interested</option>
+                                    <option>At least $1,000 in pre-sales</option>
+                                    <option>Custom requirement</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Decision Deadline</label>
+                                <input type="date" class="px-3 py-2 border border-gray-300 rounded-lg mt-1">
+                            </div>
+                        </div>
+                    </div>
+                `,
+                'not-sure': `
+                    <div class="bg-white rounded-lg border p-4 space-y-4">
+                        <h4 class="font-medium text-gray-900">Planning Tools</h4>
+                        <p class="text-sm text-gray-600">Let attendees vote on:</p>
+                        <div class="space-y-2">
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="rounded" checked>
+                                <span class="text-sm text-gray-700">Best date/time</span>
+                            </label>
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="rounded">
+                                <span class="text-sm text-gray-700">Location preference</span>
+                            </label>
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" class="rounded">
+                                <span class="text-sm text-gray-700">Ticket pricing</span>
+                            </label>
+                        </div>
+                    </div>
+                `
+            };
+            
+            document.getElementById('smart-config').innerHTML = configHtml[intent];
+        }
+
+        function openDateModal() {
+            document.getElementById('date-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeDateModal() {
+            document.getElementById('date-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        function updateDateModalStatus(status) {
+            dateConfig.status = status;
+            
+            // Update visual selection
+            document.querySelectorAll('.date-option').forEach(option => {
+                option.classList.remove('border-green-500', 'border-orange-500', 'bg-green-50', 'bg-orange-50');
+                option.classList.add('border-gray-200');
+            });
+            
+            if (status === 'confirmed') {
+                event.currentTarget.querySelector('.date-option').classList.add('border-green-500', 'bg-green-50');
+                document.getElementById('date-modal-fields').classList.remove('hidden');
+                document.getElementById('poll-options').classList.add('hidden');
+            } else {
+                event.currentTarget.querySelector('.date-option').classList.add('border-orange-500', 'bg-orange-50');
+                document.getElementById('date-modal-fields').classList.add('hidden');
+                document.getElementById('poll-options').classList.remove('hidden');
+            }
+        }
+
+        function saveDateConfig() {
+            // Update the display
+            if (dateConfig.status === 'confirmed') {
+                document.getElementById('date-display').textContent = 'Date will be set';
+                document.getElementById('date-status').textContent = '✓ Date confirmed';
+            } else {
+                document.getElementById('date-display').textContent = 'Planning stage';
+                document.getElementById('date-status').textContent = '📅 Attendees will vote on dates';
+            }
+            
+            closeDateModal();
+        }
+
+        // Close modals on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeIntentModal();
+                closeDateModal();
+            }
+        });
+    </script>
+</body>
+</html>

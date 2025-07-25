@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donation Event - Eventasaurus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes progressFill {
+            from { width: 0%; }
+            to { width: 73%; }
+        }
+        .progress-bar {
+            animation: progressFill 2s ease-out 0.5s both;
+        }
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        .slide-in:nth-child(2) { animation-delay: 0.1s; }
+        .slide-in:nth-child(3) { animation-delay: 0.2s; }
+        .slide-in:nth-child(4) { animation-delay: 0.3s; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">🦖</span>
+                    <span class="text-xl font-bold text-gray-800">Eventasaurus</span>
+                </div>
+                <div class="space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">Sign In</button>
+                    <button class="bg-black text-white px-4 py-2 rounded-lg">Get Started</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Left Column - Event Details -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Event Header -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div>
+                            <div class="text-sm text-gray-500 mb-2">SEP 20</div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-4">Clean Water for Rural Communities</h1>
+                        </div>
+                        <span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium">
+                            ❤️ Donation Drive
+                        </span>
+                    </div>
+
+                    <!-- Event Details Grid -->
+                    <div class="grid md:grid-cols-3 gap-6 mb-6">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-blue-500">📅</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">When</h3>
+                                <p class="text-gray-600">Wed, Sep 20 · 6:00 PM - 8:00 PM</p>
+                                <p class="text-sm text-gray-500">Fundraiser Dinner</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-green-500">📍</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Where</h3>
+                                <p class="text-gray-600">Grand Ballroom</p>
+                                <p class="text-sm text-gray-500">Hilton Downtown, Chicago</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-red-500">🎫</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Cause</h3>
+                                <p class="text-gray-600">Water Access Initiative</p>
+                                <p class="text-sm text-gray-500">Building wells in East Africa</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Event Image -->
+                    <div class="w-full h-64 bg-gradient-to-br from-blue-400 via-teal-500 to-green-500 rounded-lg mb-6 flex items-center justify-center">
+                        <div class="text-white text-center">
+                            <div class="text-6xl mb-2">💧</div>
+                            <div class="text-xl font-bold">Clean Water Mission</div>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="space-y-4">
+                        <h2 class="text-xl font-semibold text-gray-900">About This Cause</h2>
+                        <p class="text-gray-600 leading-relaxed">
+                            Join us for an elegant evening dedicated to bringing clean, safe drinking water to rural communities 
+                            in East Africa. Your donation will directly fund the construction of water wells, providing sustainable 
+                            access to clean water for thousands of families. Every dollar makes a difference in transforming lives 
+                            and building healthier communities.
+                        </p>
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex items-start space-x-3">
+                                <span class="text-blue-600">💡</span>
+                                <div>
+                                    <div class="font-medium text-blue-800 mb-1">Impact: $100 provides clean water for 5 people for a year</div>
+                                    <div class="text-sm text-blue-600">Every contribution directly funds well construction and maintenance</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Impact Stats -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Our Impact So Far</h3>
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-blue-600">12</div>
+                            <div class="text-sm text-gray-500">Wells Built</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-green-600">8,400</div>
+                            <div class="text-sm text-gray-500">People Served</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-purple-600">95%</div>
+                            <div class="text-sm text-gray-500">Goes to Projects</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Organization Info -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">About Water for All</h3>
+                    <div class="flex items-start space-x-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-teal-500 rounded-full flex items-center justify-center text-white font-semibold">
+                            WA
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900">Water for All Foundation</h4>
+                            <p class="text-gray-600 text-sm mb-2">501(c)(3) non-profit organization</p>
+                            <div class="flex items-center space-x-4 text-sm text-gray-500">
+                                <span>⭐ 4.8/5 Charity Navigator</span>
+                                <span>🏆 Platinum GuideStar Seal</span>
+                                <span>💧 15 years of impact</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Donation Section -->
+            <div class="space-y-6">
+                <!-- Main Donation Card -->
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="bg-gradient-to-r from-blue-50 to-teal-50 p-6">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <span class="text-red-500 text-xl">❤️</span>
+                            <h3 class="text-lg font-semibold text-gray-900">Support Clean Water</h3>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">Help us reach our goal</p>
+                        
+                        <!-- Progress Section -->
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span class="text-2xl font-bold text-blue-600">$36,500</span>
+                                <span class="text-gray-600">of $50,000 goal</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="progress-bar bg-gradient-to-r from-blue-500 to-teal-500 h-3 rounded-full"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>73% funded</span>
+                                <span>324 donors</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-6">
+                        <!-- Quick Donation Amounts -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Quick Donate</label>
+                            <div class="grid grid-cols-2 gap-3 mb-4">
+                                <button class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                                    <div class="font-semibold">$25</div>
+                                    <div class="text-xs text-gray-500">Clean water for 1</div>
+                                </button>
+                                <button class="p-3 border-2 border-blue-500 bg-blue-50 rounded-lg text-center">
+                                    <div class="font-semibold text-blue-700">$50</div>
+                                    <div class="text-xs text-blue-600">Clean water for 2</div>
+                                </button>
+                                <button class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                                    <div class="font-semibold">$100</div>
+                                    <div class="text-xs text-gray-500">Clean water for 5</div>
+                                </button>
+                                <button class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                                    <div class="font-semibold">$250</div>
+                                    <div class="text-xs text-gray-500">Clean water for 12</div>
+                                </button>
+                            </div>
+                            <div class="relative">
+                                <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                                <input type="number" placeholder="Enter custom amount" class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+
+                        <!-- Payment Methods -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Payment Method</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button class="p-3 border-2 border-blue-500 bg-blue-50 rounded-lg flex items-center justify-center space-x-2">
+                                    <span>💳</span>
+                                    <span class="font-medium text-blue-700 text-sm">Credit Card</span>
+                                </button>
+                                <button class="p-3 border-2 border-gray-200 rounded-lg flex items-center justify-center space-x-2 hover:border-blue-300">
+                                    <span>📱</span>
+                                    <span class="font-medium text-sm">Apple Pay</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Donation Button -->
+                        <button class="w-full bg-gradient-to-r from-blue-500 to-teal-500 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-teal-600 transition-all">
+                            Donate $50
+                        </button>
+
+                        <!-- Tax Deductible Notice -->
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                            <div class="text-sm font-medium text-green-800">Tax Deductible</div>
+                            <div class="text-xs text-green-600">You'll receive a receipt for tax purposes</div>
+                        </div>
+
+                        <!-- Trust Indicators -->
+                        <div class="border-t pt-4">
+                            <div class="grid grid-cols-3 gap-2 text-xs text-gray-500 text-center">
+                                <div class="flex flex-col items-center space-y-1">
+                                    <span>🔒</span>
+                                    <span>Secure Payment</span>
+                                </div>
+                                <div class="flex flex-col items-center space-y-1">
+                                    <span>✅</span>
+                                    <span>100% to Cause</span>
+                                </div>
+                                <div class="flex flex-col items-center space-y-1">
+                                    <span>⭐</span>
+                                    <span>4.8/5 Rating</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Donors -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <span class="text-blue-500">💙</span>
+                        <h3 class="text-lg font-semibold text-gray-900">Recent Donors</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-teal-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                S
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Sarah M.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$100</span>
+                                </div>
+                                <div class="text-xs text-gray-500">2 minutes ago</div>
+                                <div class="text-xs text-gray-600 italic">"Great cause!"</div>
+                            </div>
+                        </div>
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                J
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">John D.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$50</span>
+                                </div>
+                                <div class="text-xs text-gray-500">5 minutes ago</div>
+                            </div>
+                        </div>
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-purple-400 to-pink-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                A
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Anonymous</span>
+                                    <span class="text-green-600 font-semibold text-sm">$25</span>
+                                </div>
+                                <div class="text-xs text-gray-500">8 minutes ago</div>
+                            </div>
+                        </div>
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                M
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Maria L.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$200</span>
+                                </div>
+                                <div class="text-xs text-gray-500">12 minutes ago</div>
+                                <div class="text-xs text-gray-600 italic">"Keep up the good work"</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transparency -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Transparency</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Program expenses</span>
+                            <span class="font-semibold text-green-600">85%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Fundraising costs</span>
+                            <span class="font-semibold">10%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Administrative</span>
+                            <span class="font-semibold">5%</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                        <div class="text-sm font-medium text-blue-800">GuideStar Platinum Seal</div>
+                        <div class="text-xs text-blue-600">Highest level of transparency and accountability</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

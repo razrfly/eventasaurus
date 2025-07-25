@@ -236,6 +236,68 @@ defmodule EventasaurusWeb.EventLive.Edit do
     do: {:noreply, socket}  # ignore unknown values
 
   @impl true
+  def handle_event("update_date_certainty", %{"event" => %{"date_certainty" => date_certainty}}, socket) do
+    current_event = socket.assigns.event
+    
+    # Validate transition is allowed
+    case validate_date_certainty_transition(current_event, date_certainty) do
+      :ok ->
+        form_data = socket.assigns.form_data |> Map.put("date_certainty", date_certainty)
+        changeset = Events.change_event(current_event, form_data) |> Map.put(:action, :validate)
+        
+        {:noreply, assign(socket, 
+          form_data: form_data, 
+          form: to_form(changeset)
+        )}
+      
+      {:error, message} ->
+        changeset = Events.change_event(current_event, socket.assigns.form_data)
+        |> Ecto.Changeset.add_error(:date_certainty, message)
+        |> Map.put(:action, :validate)
+        
+        socket = socket
+        |> assign(form: to_form(changeset))
+        |> put_flash(:error, message)
+        
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("update_venue_certainty", %{"event" => %{"venue_certainty" => venue_certainty}}, socket) do
+    current_event = socket.assigns.event
+    
+    # Validate transition is allowed
+    case validate_venue_certainty_transition(current_event, venue_certainty) do
+      :ok ->
+        # Set is_virtual based on venue_certainty selection
+        is_virtual = venue_certainty == "virtual"
+        
+        form_data = socket.assigns.form_data 
+                    |> Map.put("venue_certainty", venue_certainty)
+                    |> Map.put("is_virtual", is_virtual)
+        changeset = Events.change_event(current_event, form_data) |> Map.put(:action, :validate)
+        
+        {:noreply, assign(socket, 
+          form_data: form_data, 
+          form: to_form(changeset),
+          is_virtual: is_virtual
+        )}
+      
+      {:error, message} ->
+        changeset = Events.change_event(current_event, socket.assigns.form_data)
+        |> Ecto.Changeset.add_error(:venue_certainty, message)
+        |> Map.put(:action, :validate)
+        
+        socket = socket
+        |> assign(form: to_form(changeset))
+        |> put_flash(:error, message)
+        
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
     changeset =
       socket.assigns.event
@@ -1737,6 +1799,57 @@ defmodule EventasaurusWeb.EventLive.Edit do
           false -> {:error, "You can only assign events to groups you are a member of"}
         end
       _ -> {:ok, event_params}
+    end
+  end
+
+  # ========== Validation Helpers ==========
+
+  defp validate_date_certainty_transition(event, new_date_certainty) do
+    case {event.status, event.start_at, new_date_certainty} do
+      # Allow all transitions for draft/polling/threshold events
+      {:draft, _, _} -> :ok
+      {:polling, _, _} -> :ok
+      {:threshold, _, _} -> :ok
+      
+      # For confirmed events with a set date, don't allow going backwards
+      {:confirmed, start_at, "polling"} when not is_nil(start_at) ->
+        {:error, "Cannot change to polling - event date is already confirmed"}
+      {:confirmed, start_at, "planning"} when not is_nil(start_at) ->
+        {:error, "Cannot change to planning - event date is already confirmed"}
+      
+      # Allow confirmed events to stay confirmed or change to other confirmed options
+      {:confirmed, _, "confirmed"} -> :ok
+      
+      # Allow any other transitions (canceled events, etc.)
+      _ -> :ok
+    end
+  end
+
+  defp validate_venue_certainty_transition(event, new_venue_certainty) do
+    case {event.status, event.venue_id, event.is_virtual, new_venue_certainty} do
+      # Allow all transitions for draft/polling/threshold events
+      {:draft, _, _, _} -> :ok
+      {:polling, _, _, _} -> :ok
+      {:threshold, _, _, _} -> :ok
+      
+      # For confirmed events with a set venue, don't allow going backwards
+      {:confirmed, venue_id, false, "polling"} when not is_nil(venue_id) ->
+        {:error, "Cannot change to polling - event venue is already confirmed"}
+      {:confirmed, venue_id, false, "tbd"} when not is_nil(venue_id) ->
+        {:error, "Cannot change to TBD - event venue is already confirmed"}
+      
+      # For confirmed virtual events, don't allow going backwards
+      {:confirmed, nil, true, "polling"} ->
+        {:error, "Cannot change to polling - event is already confirmed as virtual"}
+      {:confirmed, nil, true, "tbd"} ->
+        {:error, "Cannot change to TBD - event is already confirmed as virtual"}
+      
+      # Allow confirmed events to stay in confirmed states
+      {:confirmed, _, _, "confirmed"} -> :ok
+      {:confirmed, _, _, "virtual"} -> :ok
+      
+      # Allow any other transitions (canceled events, etc.)
+      _ -> :ok
     end
   end
 
