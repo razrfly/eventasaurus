@@ -12,7 +12,7 @@ defmodule EventasaurusWeb.RadiantComponents do
 
   def container(assigns) do
     ~H"""
-    <div class={["px-6 lg:px-8", @class]}>
+    <div class={["px-4 sm:px-6 lg:px-8", @class]}>
       <div class="mx-auto max-w-2xl lg:max-w-7xl">
         <%= render_slot(@inner_block) %>
       </div>
