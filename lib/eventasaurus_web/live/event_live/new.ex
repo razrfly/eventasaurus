@@ -290,6 +290,49 @@ defmodule EventasaurusWeb.EventLive.New do
 
   # ========== Private Helper Functions ==========
 
+  # Automatically fetch rich data when a TMDB image is selected
+  defp auto_fetch_tmdb_rich_data(socket, tmdb_data) do
+    # Extract TMDB ID and type from the image data
+    tmdb_id = Map.get(tmdb_data, "id") || Map.get(tmdb_data, :id)
+    tmdb_type = determine_tmdb_type(tmdb_data)
+    
+    if tmdb_id && tmdb_type do
+      # Fetch rich data in the background 
+      case EventasaurusWeb.Services.RichDataManager.get_details(:tmdb, tmdb_id, tmdb_type, %{}) do
+        {:ok, rich_data} ->
+          socket
+          |> assign(:rich_external_data, rich_data)
+          |> put_flash(:info, "Movie data imported automatically with image!")
+        {:error, reason} ->
+          require Logger
+          Logger.warning("Failed to auto-fetch TMDB rich data: #{inspect(reason)}")
+          # Graceful degradation - just proceed without rich data
+          socket
+      end
+    else
+      # Missing required data, proceed without rich data
+      socket
+    end
+  end
+  
+  # Determine TMDB content type from the image data
+  defp determine_tmdb_type(tmdb_data) do
+    # Check explicit type field first
+    case Map.get(tmdb_data, "type") || Map.get(tmdb_data, :type) do
+      "movie" -> :movie
+      "tv" -> :tv
+      :movie -> :movie
+      :tv -> :tv
+      _ ->
+        # Fallback: check for movie-specific fields vs TV-specific fields
+        cond do
+          Map.has_key?(tmdb_data, "release_date") || Map.has_key?(tmdb_data, :release_date) -> :movie
+          Map.has_key?(tmdb_data, "first_air_date") || Map.has_key?(tmdb_data, :first_air_date) -> :tv
+          true -> :movie # Default to movie if uncertain
+        end
+    end
+  end
+
   defp perform_rich_data_search(query, provider_atom, socket) do
     case RichDataManager.search(query, %{providers: [provider_atom]}) do
       {:ok, results} ->
@@ -1004,6 +1047,13 @@ defmodule EventasaurusWeb.EventLive.New do
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
       |> assign(:show_image_picker, false)
+
+    # NEW: Automatically fetch rich data for TMDB images
+    socket = if source == "tmdb" do
+      auto_fetch_tmdb_rich_data(socket, image_data)
+    else
+      socket
+    end
 
     {:noreply, socket}
   end
