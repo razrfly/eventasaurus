@@ -323,9 +323,21 @@ defmodule EventasaurusWeb.Helpers.EventStatusHelpers do
     Map.get(event, :available_tickets, 0)
   end
 
-  defp format_currency(amount_cents) when is_integer(amount_cents) do
+  defp format_currency(amount_cents) when is_integer(amount_cents) and amount_cents >= 0 do
     dollars = div(amount_cents, 100)
     "$#{dollars}"
+  end
+
+  defp format_currency(amount_cents) when is_integer(amount_cents) and amount_cents < 0 do
+    dollars = div(-amount_cents, 100)
+    "-$#{dollars}"
+  end
+
+  defp format_currency(amount) when is_binary(amount) do
+    case Integer.parse(amount) do
+      {cents, ""} -> format_currency(cents)
+      _ -> "$0"
+    end
   end
 
   defp format_currency(_), do: "$0"

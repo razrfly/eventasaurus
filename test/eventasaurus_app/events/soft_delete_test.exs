@@ -142,7 +142,7 @@ defmodule EventasaurusApp.Events.SoftDeleteTest do
       poll = poll_fixture(%{event: fresh_event, user: user})
       
       # Now soft delete the event and its records
-      {:ok, deleted_event} = SoftDelete.soft_delete_event(fresh_event.id, "Test deletion", user.id)
+      {:ok, _deleted_event} = SoftDelete.soft_delete_event(fresh_event.id, "Test deletion", user.id)
       
       # Restore the event
       assert {:ok, restored_event} = SoftDelete.restore_event(fresh_event.id, user.id)
