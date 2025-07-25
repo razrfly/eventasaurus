@@ -6,7 +6,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponentTest do
   import EventasaurusApp.AccountsFixtures
 
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.{Poll, PollOption}
   alias EventasaurusWeb.VotingInterfaceComponent
 
   # Test setup

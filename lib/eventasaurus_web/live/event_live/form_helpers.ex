@@ -155,22 +155,24 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
     |> map_date_certainty_to_status(date_certainty)
     |> map_venue_certainty_to_fields(venue_certainty)
     |> map_participation_type_to_fields(participation_type)
-    |> resolve_status_conflicts()
+    |> resolve_status_conflicts(date_certainty, venue_certainty, participation_type)
     |> set_defaults()
   end
 
   # Private helper to resolve conflicts when multiple factors affect status
-  defp resolve_status_conflicts(attrs) do
-    # Priority order: threshold > polling > draft > confirmed
-    # This ensures threshold requirements take precedence over polling
-    current_status = Map.get(attrs, :status, :confirmed)
-    
-    # If we have threshold requirements, status should be threshold
+  defp resolve_status_conflicts(attrs, date_certainty, venue_certainty, _participation_type) do
+    # Explicit priority resolution - highest priority status wins
     threshold_type = Map.get(attrs, :threshold_type)
-    if threshold_type in ["revenue", "attendee_count"] and current_status != :threshold do
-      Map.put(attrs, :status, :threshold)
-    else
-      attrs
+    
+    cond do
+      threshold_type in ["revenue", "attendee_count"] -> 
+        Map.put(attrs, :status, :threshold)
+      date_certainty == "polling" or venue_certainty == "polling" ->
+        Map.put(attrs, :status, :polling)  
+      date_certainty == "planning" ->
+        Map.put(attrs, :status, :draft)
+      true ->
+        Map.put(attrs, :status, :confirmed)
     end
   end
 

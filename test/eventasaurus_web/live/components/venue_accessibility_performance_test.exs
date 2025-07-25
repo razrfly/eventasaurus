@@ -372,10 +372,10 @@ defmodule EventasaurusWeb.Live.Components.VenueAccessibilityPerformanceTest do
       assert html =~ "Central Park"
 
       # Should implement pagination/limiting
-      photo_count = html |> String.split("phx-click=\"show_photo\"") |> length() - 1
+      photo_count = (html |> String.split("phx-click=\"show_photo\"") |> length()) - 1
       assert photo_count <= 12  # Should limit photos
 
-      review_count = html |> String.split("Review by") |> length() - 1
+      review_count = (html |> String.split("Review by") |> length()) - 1
       assert review_count <= 5  # Should limit reviews
     end
 
