@@ -121,7 +121,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
     test "displays order details correctly", %{conn: conn, user: user, order: order, event: event, ticket: ticket} do
       conn = log_in_user(conn, user)
 
-      {:ok, view, html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_12345&client_secret=pi_test_secret_123")
+      {:ok, _view, html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_12345&client_secret=pi_test_secret_123")
 
       # Order summary
       assert html =~ event.title
@@ -144,7 +144,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
     end
 
     @tag :skip
-    test "handles successful payment confirmation", %{conn: conn, user: user, order: order, event: event} do
+    test "handles successful payment confirmation", %{conn: conn, user: user, order: order} do
       conn = log_in_user(conn, user)
 
       {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_test_payment_12345&client_secret=pi_test_secret_123")
@@ -215,7 +215,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
         stripe_session_id: "pi_expired_order"
       )
 
-      {:ok, _view, html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_expired_order&client_secret=pi_test_secret_123")
+      {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_expired_order&client_secret=pi_test_secret_123")
 
       # Should show expiration message or handle gracefully
       # The actual expiration logic may be implemented differently
@@ -292,7 +292,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
         stripe_session_id: "pi_cancelled_event"
       )
 
-      {:ok, _view, html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_cancelled_event&client_secret=pi_test_secret_123")
+      {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_cancelled_event&client_secret=pi_test_secret_123")
 
       # Should show cancellation notice or handle gracefully
       # The actual cancellation handling may be implemented differently
@@ -339,7 +339,7 @@ defmodule EventasaurusWeb.CheckoutPaymentLiveTest do
     test "includes proper ARIA labels and accessibility attributes", %{conn: conn, user: user, order: order} do
       conn = log_in_user(conn, user)
 
-      {:ok, view, html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_accessibility_test&client_secret=pi_test_secret_123")
+      {:ok, _view, _html} = live(conn, ~p"/checkout/payment?order_id=#{order.id}&payment_intent=pi_accessibility_test&client_secret=pi_test_secret_123")
 
       # Check for accessibility attributes
       assert html =~ "Complete Payment" or html =~ "Payment"

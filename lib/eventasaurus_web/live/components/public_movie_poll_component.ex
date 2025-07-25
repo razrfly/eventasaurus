@@ -20,7 +20,6 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
-  import EventasaurusWeb.ClearVotesButton
 
   @impl true
   def mount(socket) do
@@ -102,6 +101,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   # Note: Voting events including save_votes and clear_all_votes are now handled by VotingInterfaceComponent
 
+  @impl true
   def handle_event("show_add_form", _params, socket) do
     if socket.assigns.current_user do
       {:noreply, assign(socket, :showing_add_form, true)}
@@ -110,6 +110,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
+  @impl true
   def handle_event("hide_add_form", _params, socket) do
     {:noreply,
      socket
@@ -118,6 +119,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
      |> assign(:search_results, [])}
   end
 
+  @impl true
   def handle_event("search_movies", %{"value" => query}, socket) do
     if socket.assigns.current_user do
     if String.length(query) >= 2 do
@@ -159,6 +161,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
+  @impl true
   def handle_event("add_movie", %{"movie" => movie_id}, socket) do
     if socket.assigns.adding_movie do
       {:noreply, socket}
@@ -245,6 +248,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     end
   end
 
+  @impl true
   def handle_event("delete_option", %{"option-id" => option_id}, socket) do
     with {option_id_int, _} <- Integer.parse(option_id),
          option when not is_nil(option) <- Enum.find(socket.assigns.movie_options, &(&1.id == option_id_int)),

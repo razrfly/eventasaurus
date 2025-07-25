@@ -142,7 +142,7 @@ defmodule EventasaurusWeb.UsernameControllerTest do
   end
 
   # Helper function to create users for testing
-  defp user_fixture(attrs \\ %{}) do
+  defp user_fixture(attrs) do
     default_attrs = %{
       email: "test#{System.unique_integer()}@example.com",
       name: "Test User",

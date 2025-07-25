@@ -1,12 +1,10 @@
 defmodule EventasaurusWeb.PollingSystemE2ETest do
   use EventasaurusWeb.ConnCase, async: false
 
-  import Phoenix.LiveViewTest
   import EventasaurusApp.EventsFixtures
   import EventasaurusApp.AccountsFixtures
 
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.{Poll, PollOption}
 
   @binary_poll_attrs %{
     title: "Should we have pizza?",
@@ -294,12 +292,12 @@ defmodule EventasaurusWeb.PollingSystemE2ETest do
 
     test "poll analytics and statistics", %{user: user, event: event} do
       # Create multiple polls for comprehensive stats
-      {:ok, binary_poll} = Events.create_poll(Map.merge(@binary_poll_attrs, %{
+      {:ok, _binary_poll} = Events.create_poll(Map.merge(@binary_poll_attrs, %{
         event_id: event.id,
         created_by_id: user.id
       }))
 
-      {:ok, approval_poll} = Events.create_poll(Map.merge(@approval_poll_attrs, %{
+      {:ok, _approval_poll} = Events.create_poll(Map.merge(@approval_poll_attrs, %{
         event_id: event.id,
         created_by_id: user.id
       }))
