@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mobile Movie Poll Layout Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-sm mx-auto p-4">
+    <h1 class="text-xl font-bold mb-4">Mobile Movie Poll Test</h1>
+    
+    <!-- Movie Poll Container -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="flex items-center mb-4">
+        <span class="text-2xl mr-2">🎬</span>
+        <h2 class="text-lg font-semibold">What movie?</h2>
+        <span class="ml-auto text-sm bg-green-100 text-green-800 px-2 py-1 rounded">Voting Open</span>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="font-medium flex items-center mb-2">
+          <span class="text-2xl mr-2">🎬</span> Movie Suggestions
+          <span class="ml-auto text-sm text-gray-600">3 voters</span>
+        </h3>
+        <p class="text-sm text-gray-600">Vote on your favorite movies and add new suggestions.</p>
+      </div>
+      
+      <!-- Instructions -->
+      <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+        <div class="flex">
+          <svg class="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>
+          <div class="ml-3">
+            <p class="text-xs text-blue-800">
+              Use the up/down arrows to rank options in order of preference (1st choice at top). Unranked options won't receive votes.
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Current Issue: Ranked Option -->
+      <div class="mb-4">
+        <div class="flex items-start p-3 border border-gray-200 rounded-lg bg-white">
+          <div class="flex items-center justify-center w-5 h-5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800 mr-2 flex-shrink-0">
+            1
+          </div>
+          <!-- Movie content without image - THIS IS THE PROBLEM -->
+          <div class="flex-1 min-w-0">
+            <h4 class="text-sm font-medium text-gray-900">The Goonies</h4>
+            <p class="text-xs text-gray-500 mt-1">Adventure, Comedy, Family • Directed by Richard Donner • 1985</p>
+          </div>
+          <div class="ml-2 flex flex-col gap-1">
+            <button class="text-gray-400 hover:text-gray-600 p-1">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <button class="text-red-400 hover:text-red-600 p-1">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Available Options -->
+      <div class="border-t pt-4">
+        <h4 class="text-sm font-medium text-gray-900 mb-3">Available Options</h4>
+        
+        <!-- Current Issue: Unranked Option -->
+        <div class="space-y-2">
+          <div class="flex flex-col p-3 bg-gray-50 border border-gray-200 rounded-lg gap-2">
+            <!-- Movie content without image - THIS IS THE PROBLEM -->
+            <div class="flex-1 min-w-0">
+              <h5 class="text-sm font-medium text-gray-900">Armageddon</h5>
+              <p class="text-xs text-gray-500 mt-1">Action, Thriller, Science Fiction, Adventure • Directed by Michael Bay • 1998</p>
+            </div>
+            <button class="flex items-center justify-center px-3 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">
+              <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add to Ranking
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Improved Version -->
+    <h2 class="text-lg font-bold mt-8 mb-4">Improved Mobile Layout</h2>
+    
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="flex items-center mb-4">
+        <span class="text-2xl mr-2">🎬</span>
+        <h2 class="text-lg font-semibold">What movie?</h2>
+        <span class="ml-auto text-sm bg-green-100 text-green-800 px-2 py-1 rounded">Voting Open</span>
+      </div>
+      
+      <!-- Instructions -->
+      <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+        <div class="flex">
+          <svg class="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>
+          <div class="ml-3">
+            <p class="text-xs text-blue-800">
+              Use the up/down arrows to rank options in order of preference (1st choice at top).
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Improved: Ranked Option with Image -->
+      <div class="mb-4">
+        <div class="flex items-start p-2 border border-gray-200 rounded-lg bg-white">
+          <div class="flex items-center justify-center w-5 h-5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800 mr-2 flex-shrink-0 mt-1">
+            1
+          </div>
+          <!-- Movie poster image -->
+          <img src="https://image.tmdb.org/t/p/w92/eBU7gCjTCj9n2LTxvCSIXXOvHkD.jpg" 
+               alt="The Goonies poster" 
+               class="w-12 h-18 object-cover mr-2 flex-shrink-0" />
+          <!-- Movie content -->
+          <div class="flex-1 min-w-0">
+            <h4 class="text-sm font-medium text-gray-900 line-clamp-1">The Goonies</h4>
+            <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">Adventure, Comedy • 1985</p>
+          </div>
+          <div class="ml-2 flex items-center gap-1">
+            <button class="text-gray-400 hover:text-gray-600 p-0.5">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <button class="text-red-400 hover:text-red-600 p-0.5">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Available Options -->
+      <div class="border-t pt-4">
+        <h4 class="text-sm font-medium text-gray-900 mb-3">Available Options</h4>
+        
+        <!-- Improved: Unranked Option with Image -->
+        <div class="space-y-2">
+          <div class="flex items-center p-2 bg-gray-50 border border-gray-200 rounded-lg">
+            <!-- Movie poster image -->
+            <img src="https://image.tmdb.org/t/p/w92/eTM3qtGhDU8cvjpoa6KEt5E2auU.jpg" 
+                 alt="Armageddon poster" 
+                 class="w-12 h-18 object-cover mr-2 flex-shrink-0" />
+            <!-- Movie content -->
+            <div class="flex-1 min-w-0">
+              <h5 class="text-sm font-medium text-gray-900 line-clamp-1">Armageddon</h5>
+              <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">Action, Thriller • 1998</p>
+            </div>
+            <button class="flex items-center px-2 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 ml-2">
+              <svg class="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add
+            </button>
+          </div>
+          
+          <div class="flex items-center p-2 bg-gray-50 border border-gray-200 rounded-lg">
+            <img src="https://image.tmdb.org/t/p/w92/an0nD6uq6byfxXCfk6lQBzdL2J1.jpg" 
+                 alt="E.T. poster" 
+                 class="w-12 h-18 object-cover mr-2 flex-shrink-0" />
+            <div class="flex-1 min-w-0">
+              <h5 class="text-sm font-medium text-gray-900 line-clamp-1">E.T. the Extra-Terrestrial</h5>
+              <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">Sci-Fi, Adventure • 1982</p>
+            </div>
+            <button class="flex items-center px-2 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 ml-2">
+              <svg class="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

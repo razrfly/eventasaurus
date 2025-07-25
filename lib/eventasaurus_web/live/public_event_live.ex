@@ -1229,7 +1229,7 @@ defmodule EventasaurusWeb.PublicEventLive do
       <% end %>
     <% end %>
 
-    <div class="container mx-auto px-4 sm:px-6 py-3 sm:py-6 max-w-7xl">
+    <div class="container mx-auto py-3 sm:py-6 max-w-7xl">
       <div class="event-page-grid grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-12">
         <div class="main-content lg:col-span-2">
 
@@ -1331,14 +1331,14 @@ defmodule EventasaurusWeb.PublicEventLive do
 
           <!-- Description -->
           <%= if @event.description && @event.description != "" do %>
-            <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mb-8 shadow-sm">
               <h2 class="text-xl font-semibold mb-4 text-gray-900">About This Event</h2>
               <div class="prose max-w-none text-gray-700">
                 <%= Phoenix.HTML.raw(Earmark.as_html!(@event.description)) %>
               </div>
             </div>
           <% else %>
-            <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mb-8 shadow-sm">
               <h2 class="text-xl font-semibold mb-4 text-gray-900">About This Event</h2>
               <p class="text-gray-500">No description provided for this event.</p>
             </div>
@@ -1436,14 +1436,12 @@ defmodule EventasaurusWeb.PublicEventLive do
           <%= if length(@event_polls || []) > 0 do %>
             <div class="space-y-6 mt-12">
               <%= for poll <- @event_polls do %>
-                <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
-                  <div class="flex items-center gap-3 mb-4">
+                <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mb-8 shadow-sm">
+                  <div class="flex flex-wrap items-center gap-3 mb-4">
                     <div class="text-2xl">
                       <%= poll_emoji(poll.poll_type) %>
                     </div>
-                    <div class="flex-1">
-                      <h2 class="text-xl font-semibold text-gray-900"><%= poll.title %></h2>
-                    </div>
+                    <h2 class="text-xl font-semibold text-gray-900"><%= poll.title %></h2>
                     <div class={"px-3 py-1 rounded-full text-sm font-medium #{poll_phase_class(poll.phase)}"}>
                       <%= case poll.phase do %>
                         <% "list_building" -> %>Building Options
