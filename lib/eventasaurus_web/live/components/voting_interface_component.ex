@@ -42,6 +42,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Utils.TimeUtils
+  alias EventasaurusWeb.Utils.MovieUtils
   alias EventasaurusWeb.EmbeddedProgressBarComponent
   import EventasaurusWeb.VoterCountDisplay
   import EventasaurusWeb.ClearVotesButton
@@ -188,7 +189,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div class="flex-1">
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h3 class="text-base sm:text-lg font-medium text-gray-900">
                   <%= get_voting_title(@poll.voting_system) %>
                 </h3>
@@ -271,9 +272,32 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     <%= for option <- @poll.poll_options do %>
       <div class="px-4 sm:px-6 py-4">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <!-- Movie Image for movie polls -->
+          <%= if @poll.poll_type == "movie" do %>
+            <div class="flex sm:block">
+              <div class="w-12 h-18 sm:w-16 sm:h-24 mr-3 flex-shrink-0 overflow-hidden rounded">
+                <% image_url = MovieUtils.get_image_url(option) %>
+                <%= if image_url do %>
+                  <img
+                    src={image_url}
+                    alt={"#{option.title} poster"}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                <% else %>
+                  <div class="w-full h-full bg-gray-200 flex items-center justify-center">
+                    <svg class="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                    </svg>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+          
           <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-2">
-              <h4 class="text-sm font-medium text-gray-900 break-words"><%= option.title %></h4>
+              <h4 class={"text-sm font-medium text-gray-900 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}><%= option.title %></h4>
               <%= if has_time_slots?(option) do %>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -394,7 +418,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     ~H"""
     <%= for option <- @poll.poll_options do %>
       <div class="px-4 sm:px-6 py-4">
-        <label class="flex items-start sm:items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-3 sm:py-2 rounded touch-target min-h-[60px] sm:min-h-[auto]">
+        <label class="flex items-start cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-3 sm:py-2 rounded touch-target min-h-[60px] sm:min-h-[auto]">
           <input
             type="checkbox"
             phx-click="toggle_approval_vote"
@@ -402,11 +426,35 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             phx-target={@myself}
             checked={@vote_state[option.id] == "approved"}
             disabled={@loading}
-            class={approval_checkbox_class(@vote_state[option.id], @anonymous_mode) <> " w-5 h-5 sm:w-4 sm:h-4 mt-0.5 sm:mt-0"}
+            class={approval_checkbox_class(@vote_state[option.id], @anonymous_mode) <> " w-5 h-5 sm:w-4 sm:h-4 mt-0.5 sm:mt-0 flex-shrink-0"}
           />
-          <div class="ml-3 flex-1 min-w-0">
+          
+          <!-- Movie Image for movie polls -->
+          <%= if @poll.poll_type == "movie" do %>
+            <div class="w-12 h-18 sm:w-16 sm:h-24 ml-2 mr-2 sm:ml-3 sm:mr-3 flex-shrink-0 overflow-hidden rounded">
+              <% image_url = MovieUtils.get_image_url(option) %>
+              <%= if image_url do %>
+                <img
+                  src={image_url}
+                  alt={"#{option.title} poster"}
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              <% else %>
+                <div class="w-full h-full bg-gray-200 flex items-center justify-center">
+                  <svg class="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                  </svg>
+                </div>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="ml-3"></div>
+          <% end %>
+          
+          <div class="flex-1 min-w-0">
             <div class="flex items-start sm:items-center space-x-2">
-              <h4 class="text-sm font-medium text-gray-900 break-words"><%= option.title %></h4>
+              <h4 class={"text-sm font-medium text-gray-900 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}><%= option.title %></h4>
               <%= if has_time_slots?(option) do %>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -481,7 +529,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     <div class="px-4 sm:px-6 py-4">
       <div class="space-y-4">
         <!-- Instructions -->
-        <div class={"border rounded-md p-3 sm:p-4 " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-blue-50 border-blue-200")}>
+        <div class={"hidden sm:block border rounded-md p-3 sm:p-4 " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-blue-50 border-blue-200")}>
           <div class="flex">
             <svg class="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
@@ -500,14 +548,36 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         <!-- Ranked Options -->
         <div class="space-y-2">
           <%= for {option, index} <- Enum.with_index(@ranked_options) do %>
-            <div class={"flex items-start sm:items-center p-3 border rounded-lg shadow-sm " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-white border-gray-200")}>
-              <div class={"flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 text-xs sm:text-sm font-semibold rounded-full mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0 " <> if(@anonymous_mode, do: "bg-blue-200 text-blue-800", else: "bg-indigo-100 text-indigo-800")}>
+            <div class={"flex items-start p-2 sm:p-3 border rounded-lg shadow-sm " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-white border-gray-200")}>
+              <div class={"flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 text-xs sm:text-sm font-semibold rounded-full mr-2 flex-shrink-0 mt-1 sm:mt-0 " <> if(@anonymous_mode, do: "bg-blue-200 text-blue-800", else: "bg-indigo-100 text-indigo-800")}>
                 <%= index + 1 %>
               </div>
+              
+              <!-- Movie Image for movie polls -->
+              <%= if @poll.poll_type == "movie" do %>
+                <div class="w-12 h-18 sm:w-16 sm:h-24 mr-2 sm:mr-3 flex-shrink-0 overflow-hidden rounded">
+                  <% image_url = MovieUtils.get_image_url(option) %>
+                  <%= if image_url do %>
+                    <img
+                      src={image_url}
+                      alt={"#{option.title} poster"}
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  <% else %>
+                    <div class="w-full h-full bg-gray-200 flex items-center justify-center">
+                      <svg class="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                      </svg>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+              
               <div class="flex-1 min-w-0">
-                <h4 class="text-sm font-medium text-gray-900 break-words"><%= option.title %></h4>
+                <h4 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h4>
                 <%= if option.description do %>
-                  <p class="text-xs text-gray-500 mt-1"><%= option.description %></p>
+                  <p class={"text-xs text-gray-500 mt-0.5 sm:mt-1 " <> if(@poll.poll_type == "movie", do: "line-clamp-2", else: "")}><%= option.description %></p>
                 <% end %>
 
                 <!-- Embedded Progress Bar -->
@@ -525,46 +595,44 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                   />
                 </div>
               </div>
-              <div class="ml-2 sm:ml-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-0 sm:space-x-2">
-                <div class="flex items-center space-x-1 sm:space-x-2">
-                  <%= if index > 0 do %>
-                    <button
-                      type="button"
-                      phx-click="move_option_up"
-                      phx-value-option-id={option.id}
-                      phx-target={@myself}
-                      class="text-gray-400 hover:text-gray-600 p-1 sm:p-0 touch-target"
-                      title="Move up"
-                    >
-                      <svg class="h-5 w-5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-                      </svg>
-                    </button>
-                  <% end %>
-                  <%= if index < length(@ranked_options) - 1 do %>
-                    <button
-                      type="button"
-                      phx-click="move_option_down"
-                      phx-value-option-id={option.id}
-                      phx-target={@myself}
-                      class="text-gray-400 hover:text-gray-600 p-1 sm:p-0 touch-target"
-                      title="Move down"
-                    >
-                      <svg class="h-5 w-5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  <% end %>
-                </div>
+              <div class="ml-2 flex items-center gap-1">
+                <%= if index > 0 do %>
+                  <button
+                    type="button"
+                    phx-click="move_option_up"
+                    phx-value-option-id={option.id}
+                    phx-target={@myself}
+                    class="text-gray-400 hover:text-gray-600 p-0.5 sm:p-1"
+                    title="Move up"
+                  >
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                <% end %>
+                <%= if index < length(@ranked_options) - 1 do %>
+                  <button
+                    type="button"
+                    phx-click="move_option_down"
+                    phx-value-option-id={option.id}
+                    phx-target={@myself}
+                    class="text-gray-400 hover:text-gray-600 p-0.5 sm:p-1"
+                    title="Move down"
+                  >
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                <% end %>
                 <button
                   type="button"
                   phx-click="remove_from_ranking"
                   phx-value-option-id={option.id}
                   phx-target={@myself}
-                  class="text-red-400 hover:text-red-600 p-1 sm:p-0 touch-target"
+                  class="text-red-400 hover:text-red-600 p-0.5 sm:p-1"
                   title="Remove from ranking"
                 >
-                  <svg class="h-5 w-5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -579,11 +647,32 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <h4 class="text-sm font-medium text-gray-900 mb-3">Available Options</h4>
             <div class="space-y-2">
               <%= for option <- get_unranked_options(@poll.poll_options, @ranked_options) do %>
-                <div class="flex flex-col sm:flex-row sm:items-center p-3 bg-gray-50 border border-gray-200 rounded-lg gap-2">
+                <div class="flex items-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <!-- Movie Image for movie polls -->
+                  <%= if @poll.poll_type == "movie" do %>
+                    <div class="w-12 h-18 sm:w-16 sm:h-24 mr-2 sm:mr-3 flex-shrink-0 overflow-hidden rounded">
+                      <% image_url = MovieUtils.get_image_url(option) %>
+                      <%= if image_url do %>
+                        <img
+                          src={image_url}
+                          alt={"#{option.title} poster"}
+                          class="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      <% else %>
+                        <div class="w-full h-full bg-gray-200 flex items-center justify-center">
+                          <svg class="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                          </svg>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+                  
                   <div class="flex-1 min-w-0">
-                    <h5 class="text-sm font-medium text-gray-900"><%= option.title %></h5>
+                    <h5 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h5>
                     <%= if option.description do %>
-                      <p class="text-xs text-gray-500 mt-1"><%= option.description %></p>
+                      <p class={"text-xs text-gray-500 mt-0.5 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-2", else: "mt-1")}><%= option.description %></p>
                     <% end %>
                     
                     <!-- Delete button for user's own suggestions -->
@@ -628,9 +717,13 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     phx-click="add_to_ranking"
                     phx-value-option-id={option.id}
                     phx-target={@myself}
-                    class="sm:ml-3 text-indigo-600 hover:text-indigo-900 text-sm font-medium whitespace-nowrap self-end sm:self-auto"
+                    class="flex items-center px-2 py-1.5 sm:px-3 sm:py-2 ml-2 text-xs sm:text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 whitespace-nowrap"
                   >
-                    Add to Ranking
+                    <svg class="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span class="hidden sm:inline">Add to Ranking</span>
+                    <span class="sm:hidden">Add</span>
                   </button>
                 </div>
               <% end %>
