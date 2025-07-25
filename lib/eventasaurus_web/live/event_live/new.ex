@@ -10,7 +10,7 @@ defmodule EventasaurusWeb.EventLive.New do
 
   alias EventasaurusWeb.Components.RichDataImportModal
   alias EventasaurusWeb.Services.RichDataManager
-
+  alias EventasaurusWeb.EventLive.FormHelpers
 
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Event
@@ -115,6 +115,10 @@ defmodule EventasaurusWeb.EventLive.New do
           |> assign(:image_tab, "search") # Changed from "unsplash" to unified search
           |> assign(:enable_date_polling, false)  # Legacy date polling disabled
           |> assign(:setup_path, "confirmed") # default to confirmed for new events
+          # New three-question dropdown assigns
+          |> assign(:date_certainty, "confirmed")
+          |> assign(:venue_certainty, "confirmed") 
+          |> assign(:participation_type, "free")
           # New unified picker assigns
           |> assign(:selected_category, "general")
           |> assign(:default_categories, EventasaurusWeb.Services.DefaultImagesService.get_categories())
@@ -432,6 +436,16 @@ defmodule EventasaurusWeb.EventLive.New do
       Logger.debug("[submit] taxation consistency applied: #{inspect(event_params)}")
     end
 
+    # Resolve intent-based answers to event attributes
+    resolved_attributes = FormHelpers.resolve_event_attributes(event_params)
+    event_params = Map.merge(event_params, resolved_attributes)
+
+    if Application.get_env(:eventasaurus, :env) == :dev do
+      require Logger
+      Logger.debug("[submit] resolved attributes: #{inspect(resolved_attributes)}")
+      Logger.debug("[submit] final event_params after resolution: #{inspect(event_params)}")
+    end
+
     # Decode external_image_data if it's a JSON string
     event_params =
       case Map.get(event_params, "external_image_data") do
@@ -632,6 +646,52 @@ defmodule EventasaurusWeb.EventLive.New do
 
   def handle_event("select_setup_path", _params, socket),
     do: {:noreply, socket}  # ignore unknown values
+
+  # New handlers for unified dropdown-based event creation
+  @impl true
+  def handle_event("update_date_certainty", %{"event" => %{"date_certainty" => date_certainty}}, socket) do
+    form_data = socket.assigns.form_data |> Map.put("date_certainty", date_certainty)
+    changeset = Events.change_event(%Event{}, form_data)
+    
+    {:noreply, 
+     assign(socket, 
+       form_data: form_data, 
+       changeset: changeset,
+       date_certainty: date_certainty
+     )}
+  end
+
+  @impl true
+  def handle_event("update_venue_certainty", %{"event" => %{"venue_certainty" => venue_certainty}}, socket) do
+    # Set is_virtual based on venue_certainty selection
+    is_virtual = venue_certainty == "virtual"
+    
+    form_data = socket.assigns.form_data 
+                |> Map.put("venue_certainty", venue_certainty)
+                |> Map.put("is_virtual", is_virtual)
+    changeset = Events.change_event(%Event{}, form_data)
+    
+    {:noreply, 
+     assign(socket, 
+       form_data: form_data, 
+       changeset: changeset,
+       venue_certainty: venue_certainty,
+       is_virtual: is_virtual
+     )}
+  end
+
+  @impl true
+  def handle_event("update_participation_type", %{"event" => %{"participation_type" => participation_type}}, socket) do
+    form_data = socket.assigns.form_data |> Map.put("participation_type", participation_type)
+    changeset = Events.change_event(%Event{}, form_data)
+    
+    {:noreply, 
+     assign(socket, 
+       form_data: form_data, 
+       changeset: changeset,
+       participation_type: participation_type
+     )}
+  end
 
   # Legacy toggle_date_polling handler removed - using generic polling system
 

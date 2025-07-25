@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crowdfunding Event - Eventasaurus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes progressFill {
+            from { width: 0%; }
+            to { width: 65%; }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        @keyframes flipNumber {
+            0% { transform: rotateX(0deg); }
+            50% { transform: rotateX(-90deg); }
+            100% { transform: rotateX(0deg); }
+        }
+        .progress-bar {
+            animation: progressFill 2s ease-out 0.5s both;
+        }
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        .slide-in:nth-child(2) { animation-delay: 0.1s; }
+        .slide-in:nth-child(3) { animation-delay: 0.2s; }
+        .slide-in:nth-child(4) { animation-delay: 0.3s; }
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        .flip-number {
+            animation: flipNumber 1s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">🦖</span>
+                    <span class="text-xl font-bold text-gray-800">Eventasaurus</span>
+                </div>
+                <div class="space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">Sign In</button>
+                    <button class="bg-black text-white px-4 py-2 rounded-lg">Get Started</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Left Column - Event Details -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Event Header -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div>
+                            <div class="text-sm text-gray-500 mb-2">AUG 15</div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-4">Revolutionary Smart Garden System</h1>
+                        </div>
+                        <span class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-medium">
+                            🚀 Crowdfunding Campaign
+                        </span>
+                    </div>
+
+                    <!-- Event Details Grid -->
+                    <div class="grid md:grid-cols-3 gap-6 mb-6">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-blue-500">📅</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">When</h3>
+                                <p class="text-gray-600">Tue, Aug 15 · 7:00 PM - 9:00 PM</p>
+                                <p class="text-sm text-gray-500">Launch Event</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-green-500">📍</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Where</h3>
+                                <p class="text-gray-600">Innovation Hub</p>
+                                <p class="text-sm text-gray-500">Tech District, San Francisco</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-purple-500">🎫</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Campaign</h3>
+                                <p class="text-gray-600">Product Pre-Launch</p>
+                                <p class="text-sm text-gray-500">Exclusive backer rewards</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Event Image -->
+                    <div class="w-full h-64 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 rounded-lg mb-6 flex items-center justify-center">
+                        <div class="text-white text-center">
+                            <div class="text-6xl mb-2">🌱</div>
+                            <div class="text-xl font-bold">Smart Garden Demo</div>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="space-y-4">
+                        <h2 class="text-xl font-semibold text-gray-900">About This Campaign</h2>
+                        <p class="text-gray-600 leading-relaxed">
+                            Transform your home into a sustainable oasis with our AI-powered smart garden that grows fresh produce 
+                            year-round. Join us at the launch event to see live demonstrations, meet the team, and get exclusive 
+                            access to early-bird pricing. Our smart garden automatically manages nutrients, lighting, and watering 
+                            using advanced sensors and machine learning.
+                        </p>
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-yellow-600">⚡</span>
+                                <span class="font-medium text-yellow-800">Limited Time: Campaign ends in 23 days!</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaign Stats -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Campaign Progress</h3>
+                    <div class="grid md:grid-cols-4 gap-6">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-green-600">$32,750</div>
+                            <div class="text-sm text-gray-500">raised</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-blue-600">847</div>
+                            <div class="text-sm text-gray-500">backers</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-purple-600">65%</div>
+                            <div class="text-sm text-gray-500">funded</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-orange-600 flip-number">23</div>
+                            <div class="text-sm text-gray-500">days left</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Team Info -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Project Team</h3>
+                    <div class="flex items-start space-x-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
+                            HT
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900">Holden Thomas & Team</h4>
+                            <p class="text-gray-600 text-sm mb-2">Agricultural tech entrepreneurs</p>
+                            <div class="flex items-center space-x-4 text-sm text-gray-500">
+                                <span>🏆 3 successful campaigns</span>
+                                <span>💰 $250K+ raised</span>
+                                <span>⭐ 4.9/5 delivery rating</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Crowdfunding Section -->
+            <div class="space-y-6">
+                <!-- Main Campaign Card -->
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="bg-gradient-to-r from-purple-50 to-blue-50 p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Back This Project</h3>
+                        <p class="text-gray-600 text-sm mb-4">Choose your reward tier</p>
+                        
+                        <!-- Progress Section -->
+                        <div class="space-y-3">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-2xl font-bold text-green-600">$32,750</span>
+                                <span class="text-gray-600">of $50,000 goal</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="progress-bar bg-gradient-to-r from-purple-500 to-blue-500 h-3 rounded-full"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>65% funded</span>
+                                <span>847 backers</span>
+                            </div>
+                        </div>
+
+                        <!-- Urgency Banner -->
+                        <div class="pulse-animation mt-4 bg-orange-100 border border-orange-200 rounded-lg p-3 flex items-center space-x-2">
+                            <span class="text-orange-600">🕒</span>
+                            <div class="text-sm">
+                                <div class="font-semibold text-orange-800">Limited Time!</div>
+                                <div class="text-orange-600">Campaign ends in 23 days</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-4">
+                        <!-- Reward Tiers -->
+                        <div class="space-y-3">
+                            <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-500 cursor-pointer transition-all">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="text-lg font-bold text-green-600">$199</div>
+                                    <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs">Popular</span>
+                                </div>
+                                <h4 class="font-semibold text-gray-900 mb-1">Early Bird Special</h4>
+                                <p class="text-sm text-gray-600 mb-2">Complete Smart Garden System with 6 growing pods, LED lighting, and mobile app control.</p>
+                                <div class="flex items-center space-x-4 text-xs text-gray-500">
+                                    <span>👥 234 backers</span>
+                                    <span>📅 Est. March 2024</span>
+                                </div>
+                            </div>
+
+                            <div class="border-2 border-blue-500 bg-blue-50 rounded-lg p-4 cursor-pointer">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="text-lg font-bold text-green-600">$299</div>
+                                    <span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">Selected</span>
+                                </div>
+                                <h4 class="font-semibold text-gray-900 mb-1">Garden Pro</h4>
+                                <p class="text-sm text-gray-600 mb-2">Smart Garden System + Premium seed starter kit + Nutrient solution for 6 months.</p>
+                                <div class="flex items-center space-x-4 text-xs text-gray-500">
+                                    <span>👥 156 backers</span>
+                                    <span>📅 Est. March 2024</span>
+                                </div>
+                            </div>
+
+                            <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-500 cursor-pointer transition-all">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="text-lg font-bold text-green-600">$499</div>
+                                    <span class="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs">Premium</span>
+                                </div>
+                                <h4 class="font-semibold text-gray-900 mb-1">Ultimate Grower</h4>
+                                <p class="text-sm text-gray-600 mb-2">2x Smart Garden Systems + Premium accessories + Lifetime app premium + Personal consultation.</p>
+                                <div class="flex items-center space-x-4 text-xs text-gray-500">
+                                    <span>👥 89 backers</span>
+                                    <span>📅 Est. April 2024</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        <button class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all">
+                            Back for $299
+                        </button>
+
+                        <!-- Trust Indicators -->
+                        <div class="border-t pt-4">
+                            <div class="flex items-center space-x-4 text-xs text-gray-500">
+                                <span class="flex items-center space-x-1">
+                                    <span>🔒</span>
+                                    <span>Secure</span>
+                                </span>
+                                <span class="flex items-center space-x-1">
+                                    <span>📦</span>
+                                    <span>Fulfillment guaranteed</span>
+                                </span>
+                                <span class="flex items-center space-x-1">
+                                    <span>↩️</span>
+                                    <span>30-day returns</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Backers -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <span class="text-blue-500">🚀</span>
+                        <h3 class="text-lg font-semibold text-gray-900">Recent Backers</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                A
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Alex K.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$299</span>
+                                </div>
+                                <div class="text-xs text-gray-500">2 minutes ago</div>
+                                <div class="text-xs text-gray-600 italic">"Can't wait for my garden!"</div>
+                            </div>
+                        </div>
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                M
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Maria L.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$499</span>
+                                </div>
+                                <div class="text-xs text-gray-500">5 minutes ago</div>
+                                <div class="text-xs text-gray-600 italic">"Perfect for my apartment!"</div>
+                            </div>
+                        </div>
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                J
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Jake R.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$199</span>
+                                </div>
+                                <div class="text-xs text-gray-500">8 minutes ago</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaign Milestones -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Funding Milestones</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-4 h-4 bg-green-500 rounded-full"></div>
+                            <div class="text-sm">
+                                <div class="font-medium text-green-700">$25K - Base Production ✓</div>
+                                <div class="text-gray-500">Manufacturing partnership secured</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-4 h-4 bg-blue-500 rounded-full"></div>
+                            <div class="text-sm">
+                                <div class="font-medium text-blue-700">$50K - Enhanced Features ✓</div>
+                                <div class="text-gray-500">Advanced AI capabilities</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
+                            <div class="text-sm">
+                                <div class="font-medium text-gray-600">$75K - Premium Accessories</div>
+                                <div class="text-gray-500">Automated harvesting system</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
+                            <div class="text-sm">
+                                <div class="font-medium text-gray-600">$100K - Global Shipping</div>
+                                <div class="text-gray-500">Worldwide delivery included</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

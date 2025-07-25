@@ -351,6 +351,9 @@ defmodule EventasaurusWeb.EventComponents do
   attr :selected_path, :string, default: "confirmed", doc: "the currently selected setup path"
   attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
   attr :show_stage_transitions, :boolean, default: false, values: [true, false], doc: "whether to show full selector in edit mode"
+  attr :date_certainty, :string, default: "confirmed", doc: "date selection status"
+  attr :venue_certainty, :string, default: "confirmed", doc: "venue selection status"
+  attr :participation_type, :string, default: "free", doc: "participation type"
 
   def event_setup_path_selector(assigns) do
     ~H"""
@@ -370,22 +373,37 @@ defmodule EventasaurusWeb.EventComponents do
             </div>
           </div>
 
-          <!-- Transition button if transitions are available -->
-          <%= if has_valid_transitions?(@selected_path) do %>
-            <button
-              type="button"
-              phx-click="show_stage_transitions"
-              class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-              Change Stage
-            </button>
-          <% else %>
-            <div class="text-xs text-gray-400 font-medium">
-              <%= lock_reason(@selected_path) %>
-            </div>
+          <!-- Status display for confirmed events, transition button for others -->
+          <%= case @selected_path do %>
+            <% "confirmed" -> %>
+              <div class="inline-flex items-center px-3 py-1.5 bg-green-100 border border-green-300 text-xs font-medium rounded-md text-green-800">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Event Confirmed
+              </div>
+            <% "threshold" -> %>
+              <div class="inline-flex items-center px-3 py-1.5 bg-purple-100 border border-purple-300 text-xs font-medium rounded-md text-purple-800">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Validating Interest
+              </div>
+            <% path when path in ["polling", "draft"] -> %>
+              <button
+                type="button"
+                phx-click="show_stage_transitions"
+                class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Change Stage
+              </button>
+            <% _ -> %>
+              <div class="text-xs text-gray-400 font-medium">
+                <%= lock_reason(@selected_path) %>
+              </div>
           <% end %>
         </div>
 
@@ -410,146 +428,6 @@ defmodule EventasaurusWeb.EventComponents do
               <%= progress_text(@selected_path) %>
             </div>
           </div>
-        </div>
-      </div>
-    <% else %>
-      <!-- Full version for new events or expanded edit mode -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-        <div class="mb-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-xl font-semibold text-gray-900 mb-2">
-                <%= if @mode == "compact" do %>
-                  Change Event Type
-                <% else %>
-                  What type of event are you creating?
-                <% end %>
-              </h2>
-              <p class="text-gray-600">Choose the setup that best matches your event planning needs.</p>
-            </div>
-            <%= if @mode == "compact" do %>
-              <button
-                type="button"
-                phx-click="hide_stage_transitions"
-                class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-              >
-                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Close
-              </button>
-            <% end %>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4" id="setup-path-selector" phx-hook="SetupPathSelector" data-selected-path={@selected_path}>
-          <!-- Confirmed Event (Default) - Now First -->
-          <label class="relative cursor-pointer group" title="Date is set, just collect RSVPs - ticketing available as free by default">
-            <input
-              type="radio"
-              id="setup_path_confirmed"
-              name="setup_path"
-              value="confirmed"
-              checked={@selected_path == "confirmed"}
-              phx-click="select_setup_path"
-              phx-value-path="confirmed"
-              class="sr-only peer"
-            />
-            <div class={[
-              "p-4 border-2 rounded-lg transition-all duration-300 hover:shadow-sm group-hover:scale-[1.01] min-h-[120px] flex flex-col",
-              if(@selected_path == "confirmed", do: "border-green-500 bg-green-50 shadow-md", else: "border-gray-200 hover:border-gray-300")
-            ]}>
-              <div class="flex items-start space-x-3 flex-1">
-                <div class="flex-shrink-0">
-                  <div class={[
-                    "w-10 h-10 rounded-lg flex items-center justify-center",
-                    if(@selected_path == "confirmed", do: "bg-green-200", else: "bg-green-100")
-                  ]}>
-                    <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-base font-semibold text-gray-900 mb-1">✅ Confirmed Event</h3>
-                  <p class="text-sm text-gray-600 mb-2">Date is set, just collect RSVPs</p>
-                  <p class="text-xs text-gray-500">Free tickets by default. Add paid tickets if needed.</p>
-                </div>
-              </div>
-            </div>
-          </label>
-
-          <!-- Planning Stage (Polling) -->
-          <label class="relative cursor-pointer group" title="Let attendees vote on multiple date options">
-            <input
-              type="radio"
-              id="setup_path_polling"
-              name="setup_path"
-              value="polling"
-              checked={@selected_path == "polling"}
-              phx-click="select_setup_path"
-              phx-value-path="polling"
-              class="sr-only peer"
-            />
-            <div class={[
-              "p-4 border-2 rounded-lg transition-all duration-300 hover:shadow-sm group-hover:scale-[1.01] min-h-[120px] flex flex-col",
-              if(@selected_path == "polling", do: "border-blue-500 bg-blue-50 shadow-md", else: "border-gray-200 hover:border-gray-300")
-            ]}>
-              <div class="flex items-start space-x-3 flex-1">
-                <div class="flex-shrink-0">
-                  <div class={[
-                    "w-10 h-10 rounded-lg flex items-center justify-center",
-                    if(@selected_path == "polling", do: "bg-blue-200", else: "bg-blue-100")
-                  ]}>
-                    <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-base font-semibold text-gray-900 mb-1">✨ Planning Stage</h3>
-                  <p class="text-sm text-gray-600 mb-2">Let attendees vote on dates</p>
-                  <p class="text-xs text-gray-500">Perfect when you have multiple date options and want community input.</p>
-                </div>
-              </div>
-            </div>
-          </label>
-
-          <!-- Threshold Pre-Sale -->
-          <label class="relative cursor-pointer group" title="Event only happens if enough people sign up - great for testing ideas">
-            <input
-              type="radio"
-              id="setup_path_threshold"
-              name="setup_path"
-              value="threshold"
-              checked={@selected_path == "threshold"}
-              phx-click="select_setup_path"
-              phx-value-path="threshold"
-              class="sr-only peer"
-            />
-            <div class={[
-              "p-4 border-2 rounded-lg transition-all duration-300 hover:shadow-sm group-hover:scale-[1.01] min-h-[120px] flex flex-col",
-              if(@selected_path == "threshold", do: "border-orange-500 bg-orange-50 shadow-md", else: "border-gray-200 hover:border-gray-300")
-            ]}>
-              <div class="flex items-start space-x-3 flex-1">
-                <div class="flex-shrink-0">
-                  <div class={[
-                    "w-10 h-10 rounded-lg flex items-center justify-center",
-                    if(@selected_path == "threshold", do: "bg-orange-200", else: "bg-orange-100")
-                  ]}>
-                    <svg class="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-base font-semibold text-gray-900 mb-1">🚦 Threshold Pre-Sale</h3>
-                  <p class="text-sm text-gray-600 mb-2">Validate demand before committing</p>
-                  <p class="text-xs text-gray-500">Event only happens if minimum signups reached.</p>
-                </div>
-              </div>
-            </div>
-          </label>
         </div>
       </div>
     <% end %>
@@ -599,6 +477,9 @@ defmodule EventasaurusWeb.EventComponents do
   attr :filtered_recent_locations, :list, default: [], doc: "filtered list of recent locations based on search"
   attr :rich_external_data, :map, default: %{}, doc: "rich data imported from external APIs (TMDB, Spotify, etc.)"
   attr :user_groups, :list, default: [], doc: "list of groups the user can assign the event to"
+  attr :date_certainty, :string, default: "confirmed", doc: "date selection status"
+  attr :venue_certainty, :string, default: "confirmed", doc: "venue selection status"
+  attr :participation_type, :string, default: "free", doc: "participation type"
 
   def event_form(assigns) do
     assigns = assign_new(assigns, :id, fn ->
@@ -616,6 +497,9 @@ defmodule EventasaurusWeb.EventComponents do
           selected_path={Map.get(assigns, :setup_path, "confirmed")}
           mode={Map.get(assigns, :mode, "full")}
           show_stage_transitions={Map.get(assigns, :show_stage_transitions, false)}
+          date_certainty={Map.get(assigns, :date_certainty, "confirmed")}
+          venue_certainty={Map.get(assigns, :venue_certainty, "confirmed")}
+          participation_type={Map.get(assigns, :participation_type, "free")}
         />
 
     <.form :let={f} for={@for} id={@id} phx-change="validate" phx-submit="submit" data-test-id="event-form">
@@ -807,12 +691,45 @@ defmodule EventasaurusWeb.EventComponents do
               <p class="mt-1 text-xs text-gray-500">Events assigned to groups will appear on the group's calendar and be visible to all members.</p>
             </div>
 
-            <!-- Date & Time (compact) -->
+            <!-- Date & Time -->
             <div class="mb-4">
-              <h3 class="text-sm font-semibold text-gray-700 mb-2">When</h3>
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">When is your event?</label>
+                <select 
+                  id="date-certainty-select" 
+                  name="event[date_certainty]" 
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  phx-change="update_date_certainty"
+                >
+                  <option value="confirmed" selected={Map.get(assigns, :date_certainty, "confirmed") == "confirmed"}>✓ I have a specific date</option>
+                  <option value="polling" selected={Map.get(assigns, :date_certainty, "confirmed") == "polling"}>? Not sure - let attendees vote</option>
+                  <option value="planning" selected={Map.get(assigns, :date_certainty, "confirmed") == "planning"}>○ Still planning - date TBD</option>
+                </select>
+                
+                <!-- Error display for date certainty -->
+                <% date_certainty_errors = if assigns[:for], do: Keyword.get(assigns.for.errors, :date_certainty, []), else: [] %>
+                <%= if length(date_certainty_errors) > 0 do %>
+                  <div class="mt-2 text-sm text-red-600">
+                    <%= for {msg, _} <- date_certainty_errors do %>
+                      <div><%= msg %></div>
+                    <% end %>
+                  </div>
+                <% end %>
+                
+                <!-- Conditional: Polling Fields -->
+                <%= if Map.get(assigns, :date_certainty, "confirmed") == "polling" do %>
+                  <div class="mt-4 p-4 bg-blue-50 rounded-lg space-y-4">
+                    <div>
+                      <label class="text-sm font-medium text-gray-700">When should voting end?</label>
+                      <input type="datetime-local" name="event[polling_deadline]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                      <p class="text-xs text-gray-500 mt-1">Attendees can vote on dates until this deadline</p>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
 
-              <!-- Legacy date polling UI removed - using generic polling system -->
-              <!-- Traditional date range selection -->
+              <!-- Date/Time Pickers - Only show if user has confirmed date -->
+              <%= if Map.get(assigns, :date_certainty, "confirmed") == "confirmed" do %>
                 <div phx-hook="DateTimeSync" id="date-time-sync-hook">
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                     <div>
@@ -878,27 +795,47 @@ defmodule EventasaurusWeb.EventComponents do
               <!-- Hidden fields for combined datetime values -->
               <input type="hidden" name="event[start_at]" id={"#{@id}-start_at"} value={format_datetime_for_input(@event, :start_at)} />
               <input type="hidden" name="event[ends_at]" id={"#{@id}-ends_at"} value={format_datetime_for_input(@event, :ends_at)} />
+              <% end %>
             </div>
 
             <!-- Location -->
             <div class="mb-4 venue-search-container">
-              <h3 class="text-sm font-semibold text-gray-700 mb-2">Where</h3>
-
-              <div class="flex items-center mb-2">
-                <label class="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="event[is_virtual]"
-                    value="true"
-                    checked={Map.get(@form_data, "is_virtual") in [true, "true"]}
-                    phx-click="toggle_virtual"
-                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span class="ml-2 text-sm">Virtual/online event</span>
-                </label>
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Where is your event?</label>
+                <select 
+                  id="venue-certainty-select" 
+                  name="event[venue_certainty]" 
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  phx-change="update_venue_certainty"
+                >
+                  <option value="confirmed" selected={Map.get(assigns, :venue_certainty, "confirmed") == "confirmed"}>✓ I have a venue</option>
+                  <option value="polling" selected={Map.get(assigns, :venue_certainty, "confirmed") == "polling"}>? Let attendees vote on location</option>
+                  <option value="virtual" selected={Map.get(assigns, :venue_certainty, "confirmed") == "virtual"}>💻 Virtual event</option>
+                  <option value="tbd" selected={Map.get(assigns, :venue_certainty, "confirmed") == "tbd"}>○ Location TBD</option>
+                </select>
+                
+                <!-- Error display for venue certainty -->
+                <% venue_certainty_errors = if assigns[:for], do: Keyword.get(assigns.for.errors, :venue_certainty, []), else: [] %>
+                <%= if length(venue_certainty_errors) > 0 do %>
+                  <div class="mt-2 text-sm text-red-600">
+                    <%= for {msg, _} <- venue_certainty_errors do %>
+                      <div><%= msg %></div>
+                    <% end %>
+                  </div>
+                <% end %>
               </div>
 
-              <%= if !@is_virtual do %>
+              <!-- Virtual Event Fields -->
+              <%= if Map.get(assigns, :venue_certainty, "confirmed") == "virtual" do %>
+                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <label class="text-sm font-medium text-gray-700">Meeting Link</label>
+                  <input type="url" name="event[virtual_link]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Zoom, Google Meet, etc.">
+                  <p class="text-xs text-gray-500 mt-1">This will be shared with registered attendees</p>
+                </div>
+              <% end %>
+
+              <!-- Physical Venue Fields -->
+              <%= if Map.get(assigns, :venue_certainty, "confirmed") == "confirmed" do %>
                 <div>
                   <!-- Recent Locations Section -->
                   <%= if assigns[:recent_locations] && length(@recent_locations) > 0 do %>
@@ -999,39 +936,6 @@ defmodule EventasaurusWeb.EventComponents do
                     <div class="text-blue-600 text-xs"><%= @selected_venue_address %></div>
                   </div>
                 <% end %>
-              <% else %>
-                <div>
-                  <.input field={f[:virtual_venue_url]} type="text" label="Meeting URL" placeholder="https://..." class="text-sm" />
-
-                  <!-- Quick Create Virtual Meeting Options -->
-                  <div class="mt-3 virtual-meeting-buttons">
-                    <button
-                      type="button"
-                      phx-click="create_zoom_meeting"
-                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white virtual-meeting-button zoom-button focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      <svg class="w-4 h-4 button-icon" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M1.5 6A1.5 1.5 0 0 1 3 4.5h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H21a1.5 1.5 0 0 1 1.5 1.5v10.5A1.5 1.5 0 0 1 21 21H3a1.5 1.5 0 0 1-1.5-1.5V6z"/>
-                      </svg>
-                      Create Zoom Meeting
-                    </button>
-
-                    <button
-                      type="button"
-                      phx-click="create_google_meet"
-                      class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white virtual-meeting-button google-meet-button focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    >
-                      <svg class="w-4 h-4 button-icon" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/>
-                      </svg>
-                      Create Google Meet
-                    </button>
-                  </div>
-
-                  <p class="text-xs text-gray-500 mt-2">
-                    Or enter a custom virtual meeting URL above
-                  </p>
-                </div>
               <% end %>
             </div>
 
@@ -1056,10 +960,26 @@ defmodule EventasaurusWeb.EventComponents do
               </details>
             </div>
 
-            <!-- Ticketing Section - Only show for confirmed and threshold events -->
-            <%= if Map.get(@form_data, "setup_path", "confirmed") != "polling" do %>
+            <!-- Participation Method -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">How will people join your event?</label>
+              <select 
+                id="participation-type-select" 
+                name="event[participation_type]" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                phx-change="update_participation_type"
+              >
+                <option value="free" selected={Map.get(assigns, :participation_type, "free") == "free"}>🤝 Free event - just RSVPs</option>
+                <option value="ticketed" selected={Map.get(assigns, :participation_type, "free") == "ticketed"}>🎟️ Paid tickets</option>
+                <option value="contribution" selected={Map.get(assigns, :participation_type, "free") == "contribution"}>🎁 Free with optional donations</option>
+                <option value="crowdfunding" selected={Map.get(assigns, :participation_type, "free") == "crowdfunding"}>💰 Needs funding to happen</option>
+                <option value="interest" selected={Map.get(assigns, :participation_type, "free") == "interest"}>📊 Testing interest first</option>
+              </select>
+            </div>
+
+            <!-- Ticketing Section - Only show for ticketed events -->
+            <%= if Map.get(assigns, :participation_type, "free") == "ticketed" do %>
               <div class="mb-4">
-                <h3 class="text-sm font-semibold text-gray-700 mb-3">Ticketing</h3>
 
                 <!-- Hidden input for ticketing - controlled by setup path selector -->
                 <input type="hidden" name="event[is_ticketed]" value={if Map.get(@form_data, "is_ticketed", false) in [true, "true"], do: "true", else: "false"} />
@@ -1187,7 +1107,7 @@ defmodule EventasaurusWeb.EventComponents do
                   <input type="hidden" name="event[requires_threshold]" value="false" />
                 <% end %>
 
-                <%= if @setup_path in ["confirmed", "threshold"] do %>
+                <%= if Map.get(assigns, :participation_type, "free") == "ticketed" do %>
                 <!-- Tickets Management Section -->
                 <div class="space-y-4" id="tickets-section">
                   <div class="flex items-center justify-between">
@@ -1330,6 +1250,45 @@ defmodule EventasaurusWeb.EventComponents do
               </div>
             <% end %>
 
+            <!-- Crowdfunding Configuration -->
+            <%= if Map.get(assigns, :participation_type, "free") == "crowdfunding" do %>
+            <div class="space-y-4 mt-6">
+              <h4 class="text-sm font-medium text-gray-700">Crowdfunding Settings</h4>
+              <div class="p-4 bg-purple-50 rounded-lg space-y-4">
+                <div>
+                  <label class="text-sm text-gray-700">Minimum funding goal</label>
+                  <div class="mt-1 relative">
+                    <span class="absolute left-3 top-2 text-gray-500">$</span>
+                    <input type="number" name="event[funding_goal]" class="pl-8 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="5,000">
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Event will only happen if this goal is reached</p>
+                </div>
+                <div>
+                  <label class="text-sm text-gray-700">Campaign deadline</label>
+                  <input type="date" name="event[funding_deadline]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+              </div>
+            </div>
+            <% end %>
+
+            <!-- Interest Validation Configuration -->
+            <%= if Map.get(assigns, :participation_type, "free") == "interest" do %>
+            <div class="space-y-4 mt-6">
+              <h4 class="text-sm font-medium text-gray-700">Interest Validation Settings</h4>
+              <div class="p-4 bg-orange-50 rounded-lg space-y-4">
+                <div>
+                  <label class="text-sm text-gray-700">Minimum attendees needed</label>
+                  <input type="number" name="event[minimum_attendees]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="20">
+                </div>
+                <div>
+                  <label class="text-sm text-gray-700">Decision deadline</label>
+                  <input type="date" name="event[decision_deadline]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <p class="text-xs text-gray-500 mt-1">You'll decide by this date whether to proceed</p>
+                </div>
+              </div>
+            </div>
+            <% end %>
+
             <!-- Hidden field to ensure taxation_type is submitted for ticketless events -->
             <%= unless length(@tickets || []) > 0 do %>
               <input type="hidden" name="event[taxation_type]" value="ticketless" />
@@ -1431,14 +1390,6 @@ defmodule EventasaurusWeb.EventComponents do
     end
   end
 
-  defp has_valid_transitions?(path) do
-    case path do
-      "polling" -> true  # Can go to confirmed or threshold
-      "confirmed" -> true  # Can go to threshold
-      "threshold" -> false  # No further transitions (managed by system)
-      _ -> false
-    end
-  end
 
   defp lock_reason(path) do
     case path do

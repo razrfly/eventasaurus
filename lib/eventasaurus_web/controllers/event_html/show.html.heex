@@ -92,12 +92,14 @@
               <div>
                 <h3 class="font-semibold text-gray-900 mb-1">When</h3>
                 <%= if @event.status == :polling do %>
-                  <div class="inline-flex items-center px-3 py-1 text-sm font-medium bg-yellow-100 text-yellow-800 rounded-full mb-2">
-                    📊 Date Polling Active
+                  <div class={"inline-flex items-center px-3 py-1 text-sm font-medium rounded-full mb-2 #{EventasaurusWeb.Helpers.EventStatusHelpers.status_css_class(@event)}"}>
+                    <%= EventasaurusWeb.Helpers.EventStatusHelpers.status_icon(@event) %> <%= EventasaurusWeb.Helpers.EventStatusHelpers.friendly_status_message(@event, :compact) %>
                   </div>
-                  <p class="text-gray-700">
-                    Attendees are voting on the best date for this event
-                  </p>
+                  <%= if EventasaurusWeb.Helpers.EventStatusHelpers.contextual_info(@event) do %>
+                    <p class="text-gray-700">
+                      <%= EventasaurusWeb.Helpers.EventStatusHelpers.contextual_info(@event) %>
+                    </p>
+                  <% end %>
                   <!-- Legacy date options reference removed -->
                 <% else %>
                   <%= format_event_datetime(@event) %>
@@ -342,7 +344,13 @@
             <span class="font-medium">-</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-600">Status</span>
+            <span class="text-gray-600">Event Status</span>
+            <span class={"inline-flex px-2 py-1 text-xs font-medium rounded-full #{EventasaurusWeb.Helpers.EventStatusHelpers.status_css_class(@event)}"}>
+              <%= EventasaurusWeb.Helpers.EventStatusHelpers.status_icon(@event) %> <%= EventasaurusWeb.Helpers.EventStatusHelpers.friendly_status_message(@event, :badge) %>
+            </span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Visibility</span>
             <span class={"inline-flex px-2 py-1 text-xs font-medium rounded-full #{if @event.visibility == "public", do: "bg-green-100 text-green-800", else: "bg-gray-100 text-gray-800"}"}>
               <%= String.capitalize(to_string(@event.visibility || "draft")) %>
             </span>
