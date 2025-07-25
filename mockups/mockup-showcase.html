@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eventasaurus - Payment Features Mockup Showcase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .mockup-card {
+            transition: all 0.3s ease;
+        }
+        .mockup-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .status-badge {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+        .category-badge {
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold gradient-text">Eventasaurus Payment Features</h1>
+                    <span class="status-badge bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">
+                        Mockup Preview
+                    </span>
+                </div>
+                <div class="flex items-center space-x-3 text-sm text-gray-600">
+                    <span>GitHub Issue:</span>
+                    <a href="https://github.com/razrfly/eventasaurus/issues/678" class="text-blue-600 hover:text-blue-700 font-medium">#678</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 text-white py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-4xl md:text-5xl font-bold mb-4">Next-Gen Event Payment System</h2>
+            <p class="text-xl opacity-90 max-w-3xl mx-auto">
+                Explore our new payment features designed to give event organizers maximum flexibility
+            </p>
+            <div class="mt-8 flex flex-wrap justify-center gap-4">
+                <div class="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+                    <span class="text-3xl">🎟️</span>
+                    <span class="ml-2">Traditional Tickets</span>
+                </div>
+                <div class="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+                    <span class="text-3xl">💰</span>
+                    <span class="ml-2">Crowdfunding</span>
+                </div>
+                <div class="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+                    <span class="text-3xl">🎁</span>
+                    <span class="ml-2">Contributions</span>
+                </div>
+                <div class="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+                    <span class="text-3xl">❤️</span>
+                    <span class="ml-2">Donations</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <!-- Event Page Mockups -->
+        <section class="mb-16">
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Event Page Mockups</h2>
+            <p class="text-gray-600 mb-8">How different payment types look on actual event pages</p>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Contribution Mockup -->
+                <a href="contribution-mockup.html" class="mockup-card block bg-white rounded-lg shadow-md overflow-hidden group">
+                    <div class="h-48 bg-gradient-to-br from-red-400 to-pink-500 flex items-center justify-center">
+                        <span class="text-6xl">🎁</span>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-semibold text-gray-900">Contribution Collection</h3>
+                            <span class="category-badge bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full">
+                                Free + Tips
+                            </span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Free events with optional contributions. Perfect for community events and workshops.
+                        </p>
+                        <div class="flex items-center text-blue-600 text-sm font-medium group-hover:text-blue-700">
+                            View Mockup
+                            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Crowdfunding Mockup -->
+                <a href="crowdfunding-mockup.html" class="mockup-card block bg-white rounded-lg shadow-md overflow-hidden group">
+                    <div class="h-48 bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center">
+                        <span class="text-6xl">💰</span>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-semibold text-gray-900">Crowdfunding Campaign</h3>
+                            <span class="category-badge bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded-full">
+                                Goal-Based
+                            </span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Kickstarter-style funding with goals and rewards. Event happens only if funded.
+                        </p>
+                        <div class="flex items-center text-blue-600 text-sm font-medium group-hover:text-blue-700">
+                            View Mockup
+                            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Donation Mockup -->
+                <a href="donation-mockup.html" class="mockup-card block bg-white rounded-lg shadow-md overflow-hidden group">
+                    <div class="h-48 bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center">
+                        <span class="text-6xl">❤️</span>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-semibold text-gray-900">Donation Drive</h3>
+                            <span class="category-badge bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
+                                Charitable
+                            </span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Simple donation interface for charitable causes with transparency metrics.
+                        </p>
+                        <div class="flex items-center text-blue-600 text-sm font-medium group-hover:text-blue-700">
+                            View Mockup
+                            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </section>
+
+        <!-- Event Creation Mockups -->
+        <section class="mb-16">
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Event Creation Flow Mockups</h2>
+            <p class="text-gray-600 mb-8">Different approaches to integrating payment selection into event creation</p>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Dropdown Version -->
+                <a href="intent-dropdown-version.html" class="mockup-card block bg-white rounded-lg shadow-md overflow-hidden group">
+                    <div class="h-48 bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center">
+                        <div class="text-center">
+                            <span class="text-6xl">📋</span>
+                            <div class="mt-2 text-white font-medium">Dropdown Style</div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-semibold text-gray-900">Intent-Based with Dropdowns</h3>
+                            <span class="category-badge bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
+                                Recommended
+                            </span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Single-page flow with dropdown selection and inline configuration. Clean and compact.
+                        </p>
+                        <ul class="text-sm text-gray-500 space-y-1 mb-4">
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Progressive disclosure
+                            </li>
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Mobile-friendly
+                            </li>
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                No popups
+                            </li>
+                        </ul>
+                        <div class="flex items-center text-blue-600 text-sm font-medium group-hover:text-blue-700">
+                            View Mockup
+                            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Modal Version -->
+                <a href="intent-modal-version.html" class="mockup-card block bg-white rounded-lg shadow-md overflow-hidden group">
+                    <div class="h-48 bg-gradient-to-br from-orange-400 to-yellow-500 flex items-center justify-center">
+                        <div class="text-center">
+                            <span class="text-6xl">🎯</span>
+                            <div class="mt-2 text-white font-medium">Modal Style</div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-semibold text-gray-900">Intent-Based with Modals</h3>
+                            <span class="category-badge bg-orange-100 text-orange-700 text-xs px-2 py-1 rounded-full">
+                                Alternative
+                            </span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Single-page flow with modal selection. More visual space for options.
+                        </p>
+                        <ul class="text-sm text-gray-500 space-y-1 mb-4">
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Visual selection
+                            </li>
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Clear options
+                            </li>
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Uses overlays
+                            </li>
+                        </ul>
+                        <div class="flex items-center text-blue-600 text-sm font-medium group-hover:text-blue-700">
+                            View Mockup
+                            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </section>
+
+        <!-- Legacy Mockups -->
+        <section>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Previous Iterations</h2>
+            <p class="text-gray-600 mb-8">Earlier design explorations (for reference)</p>
+            
+            <div class="bg-gray-100 rounded-lg p-6">
+                <div class="grid md:grid-cols-3 gap-4">
+                    <a href="event-creation-mockup.html" class="flex items-center space-x-3 text-gray-600 hover:text-gray-900">
+                        <span class="text-2xl">📝</span>
+                        <span class="text-sm">Initial wizard approach</span>
+                    </a>
+                    <a href="integrated-creation-flow.html" class="flex items-center space-x-3 text-gray-600 hover:text-gray-900">
+                        <span class="text-2xl">🔧</span>
+                        <span class="text-sm">First integrated flow</span>
+                    </a>
+                    <a href="dropdown-payment-selection.html" class="flex items-center space-x-3 text-gray-600 hover:text-gray-900">
+                        <span class="text-2xl">⚡</span>
+                        <span class="text-sm">Early dropdown concept</span>
+                    </a>
+                    <a href="intent-based-creation.html" class="flex items-center space-x-3 text-gray-600 hover:text-gray-900">
+                        <span class="text-2xl">🎯</span>
+                        <span class="text-sm">Intent wizard (rejected)</span>
+                    </a>
+                    <a href="index.html" class="flex items-center space-x-3 text-gray-600 hover:text-gray-900">
+                        <span class="text-2xl">📚</span>
+                        <span class="text-sm">Original index</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Implementation Notes -->
+        <section class="mt-16 bg-blue-50 rounded-lg p-8">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Implementation Notes</h2>
+            <div class="prose prose-sm max-w-none text-gray-700">
+                <ul class="space-y-2">
+                    <li><strong>Payment Types:</strong> System supports traditional tickets, contributions, crowdfunding, and donations</li>
+                    <li><strong>User Experience:</strong> Intent-based approach translates user goals into technical configurations</li>
+                    <li><strong>Mobile First:</strong> All mockups are responsive and optimized for mobile devices</li>
+                    <li><strong>Progressive Disclosure:</strong> Complex options are revealed only when needed</li>
+                    <li><strong>Single Page:</strong> Event creation stays on one page as requested (no wizards)</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-400 py-8 mt-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p class="text-sm">Eventasaurus Payment Features Mockup - December 2024</p>
+        </div>
+    </footer>
+</body>
+</html>

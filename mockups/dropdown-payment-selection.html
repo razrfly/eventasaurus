@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dropdown Payment Selection - Eventasaurus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .dropdown-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            opacity: 0;
+        }
+        .dropdown-content.open {
+            max-height: 500px;
+            opacity: 1;
+        }
+        .payment-option {
+            transition: all 0.2s ease-in-out;
+        }
+        .payment-option:hover {
+            transform: translateX(4px);
+            background-color: #f8fafc;
+        }
+        .payment-option.selected {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+        }
+        .chevron {
+            transition: transform 0.3s ease;
+        }
+        .chevron.rotated {
+            transform: rotate(180deg);
+        }
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Current Event Creation Form -->
+    <div class="max-w-4xl mx-auto p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Column - Event Image and Theme -->
+            <div class="space-y-6">
+                <!-- Event Image -->
+                <div class="bg-gradient-to-br from-purple-500 via-pink-500 to-red-500 rounded-lg h-64 flex items-center justify-center">
+                    <div class="text-white text-center">
+                        <div class="text-4xl mb-2">🎬</div>
+                        <div class="text-xl font-semibold">Movie Night</div>
+                    </div>
+                </div>
+
+                <!-- Event Theme -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Theme</label>
+                    <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option>Minimal - Clean and simple</option>
+                        <option>Vibrant - Colorful and energetic</option>
+                        <option>Professional - Clean corporate style</option>
+                    </select>
+                    <p class="text-sm text-gray-500 mt-1">Customize your event page appearance</p>
+                </div>
+
+                <!-- Rich Data -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Rich Data</label>
+                    <button class="w-full border border-gray-300 rounded-lg p-4 text-gray-600 hover:bg-gray-50 transition-colors">
+                        <div class="text-center">
+                            <span class="text-lg">+</span>
+                            <div class="font-medium">Import Rich Data</div>
+                            <div class="text-sm">Import comprehensive details from movies, TV shows, music, and more</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column - Event Details -->
+            <div class="space-y-6">
+                <!-- Event Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Name</label>
+                    <input type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" value="Movie Night" placeholder="Enter event name">
+                </div>
+
+                <!-- Date and Time -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                        <input type="date" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" value="2025-07-25">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                        <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option>12:00 PM</option>
+                            <option>1:00 PM</option>
+                            <option>2:00 PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Location -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Where</label>
+                    <input type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Search for venue or address...">
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <textarea class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" rows="4" placeholder="Tell people about your event..."></textarea>
+                </div>
+
+                <!-- NEW: Payment & Access Dropdown Section -->
+                <div class="border-t pt-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Payment & Access</label>
+                    
+                    <!-- Custom Dropdown -->
+                    <div class="relative">
+                        <!-- Dropdown Button -->
+                        <button id="payment-dropdown-btn" onclick="toggleDropdown()" class="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-50 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <span id="selected-icon" class="text-xl">🆓</span>
+                                    <div>
+                                        <div id="selected-title" class="font-medium text-gray-900">Free Event</div>
+                                        <div id="selected-description" class="text-sm text-gray-500">No payment required, just RSVP</div>
+                                    </div>
+                                </div>
+                                <svg id="chevron" class="chevron w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </button>
+
+                        <!-- Dropdown Content -->
+                        <div id="payment-dropdown-content" class="dropdown-content absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-10">
+                            <div class="py-2">
+                                <!-- Free Event (Default Selected) -->
+                                <div class="payment-option selected px-4 py-3 cursor-pointer" onclick="selectPaymentType('free', '🆓', 'Free Event', 'No payment required, just RSVP', 'Classic')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🆓</div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center space-x-2 mb-1">
+                                                <h3 class="font-semibold text-gray-900">Free Event</h3>
+                                                <span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs">Classic</span>
+                                            </div>
+                                            <p class="text-sm text-gray-600">No payment required, attendees just need to RSVP. Perfect for casual gatherings.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Separator -->
+                                <div class="border-t border-gray-100 my-2"></div>
+
+                                <!-- Traditional Ticketed -->
+                                <div class="payment-option px-4 py-3 cursor-pointer" onclick="selectPaymentType('ticketed', '🎫', 'Traditional Ticketed', 'Standard paid tickets with fixed pricing', 'Current System')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🎫</div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center space-x-2 mb-1">
+                                                <h3 class="font-semibold text-gray-900">Traditional Ticketed</h3>
+                                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">Current System</span>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Standard paid tickets with fixed pricing. Users must purchase tickets to attend.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Contribution Collection -->
+                                <div class="payment-option px-4 py-3 cursor-pointer" onclick="selectPaymentType('contribution', '💝', 'Contribution Collection', 'Free event with optional contributions', 'New')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">💝</div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center space-x-2 mb-1">
+                                                <h3 class="font-semibold text-gray-900">Contribution Collection</h3>
+                                                <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs">New</span>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Free event with optional contributions. Great for community events and workshops.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Crowdfunding Campaign -->
+                                <div class="payment-option px-4 py-3 cursor-pointer" onclick="selectPaymentType('crowdfunding', '🚀', 'Crowdfunding Campaign', 'Goal-based funding with reward tiers', 'New')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🚀</div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center space-x-2 mb-1">
+                                                <h3 class="font-semibold text-gray-900">Crowdfunding Campaign</h3>
+                                                <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs">New</span>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Goal-based funding with reward tiers. Perfect for product launches and projects.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Donation Drive -->
+                                <div class="payment-option px-4 py-3 cursor-pointer" onclick="selectPaymentType('donation', '❤️', 'Donation Drive', 'Simple charitable donation collection', 'New')">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">❤️</div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center space-x-2 mb-1">
+                                                <h3 class="font-semibold text-gray-900">Donation Drive</h3>
+                                                <span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs">New</span>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Simple donation collection for charitable causes. Includes tax receipt support.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Separator -->
+                                <div class="border-t border-gray-100 my-2"></div>
+
+                                <!-- Coming Soon Options -->
+                                <div class="px-4 py-2">
+                                    <div class="text-xs font-medium text-gray-500 mb-2">COMING SOON</div>
+                                </div>
+
+                                <!-- Pay-It-Forward (Disabled) -->
+                                <div class="payment-option px-4 py-3 opacity-50 cursor-not-allowed">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🔄</div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center space-x-2 mb-1">
+                                                <h3 class="font-semibold text-gray-500">Pay-It-Forward Events</h3>
+                                                <span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-xs">Coming Soon</span>
+                                            </div>
+                                            <p class="text-sm text-gray-400">Attendees sponsor future participants to build community access.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Barter/Skill-Swap (Disabled) -->
+                                <div class="payment-option px-4 py-3 opacity-50 cursor-not-allowed">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="text-2xl flex-shrink-0">🤝</div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center space-x-2 mb-1">
+                                                <h3 class="font-semibold text-gray-500">Barter/Skill-Swap</h3>
+                                                <span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-xs">Coming Soon</span>
+                                            </div>
+                                            <p class="text-sm text-gray-400">Exchange skills and services instead of traditional payment methods.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Settings (shown after non-free selection) -->
+                    <div id="quick-settings" class="hidden mt-4 p-4 bg-gray-50 rounded-lg border slide-down">
+                        <!-- These will be populated based on payment type -->
+                    </div>
+                </div>
+
+                <!-- Capacity -->
+                <div>
+                    <div class="flex items-center justify-between">
+                        <label class="block text-sm font-medium text-gray-700">Capacity</label>
+                        <button class="text-blue-600 text-sm font-medium">Unlimited</button>
+                    </div>
+                </div>
+
+                <!-- Create Event Button -->
+                <button class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                    Create Event
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dropdownOpen = false;
+        let selectedPaymentType = 'free'; // Default to free
+
+        function toggleDropdown() {
+            const content = document.getElementById('payment-dropdown-content');
+            const chevron = document.getElementById('chevron');
+            
+            dropdownOpen = !dropdownOpen;
+            
+            if (dropdownOpen) {
+                content.classList.add('open');
+                chevron.classList.add('rotated');
+            } else {
+                content.classList.remove('open');
+                chevron.classList.remove('rotated');
+            }
+        }
+
+        function selectPaymentType(type, icon, title, description, badge) {
+            selectedPaymentType = type;
+            
+            // Update the dropdown button display
+            document.getElementById('selected-icon').textContent = icon;
+            document.getElementById('selected-title').textContent = title;
+            document.getElementById('selected-description').textContent = description;
+            
+            // Update visual selection in dropdown
+            document.querySelectorAll('.payment-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+            
+            // Close dropdown
+            toggleDropdown();
+            
+            // Show quick settings for non-free events
+            showQuickSettings(type);
+        }
+
+        function showQuickSettings(type) {
+            const quickSettings = document.getElementById('quick-settings');
+            
+            if (type === 'free') {
+                quickSettings.classList.add('hidden');
+                return;
+            }
+            
+            quickSettings.classList.remove('hidden');
+            
+            switch(type) {
+                case 'ticketed':
+                    quickSettings.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Ticket Price</label>
+                                    <p class="text-xs text-gray-500">Set your base ticket price</p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" class="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="25">
+                                    <select class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                        <option>USD</option>
+                                        <option>EUR</option>
+                                        <option>PLN</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-gray-200">
+                                <button class="text-blue-600 text-sm font-medium hover:text-blue-700">
+                                    → Configure multiple ticket types
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'contribution':
+                    quickSettings.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Funding Goal</label>
+                                    <p class="text-xs text-gray-500">Optional target amount</p>
+                                    <input type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1" placeholder="5,000">
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Suggested Amounts</label>
+                                    <p class="text-xs text-gray-500">Quick contribution options</p>
+                                    <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1" value="$10, $25, $50, $100">
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-gray-200">
+                                <button class="text-blue-600 text-sm font-medium hover:text-blue-700">
+                                    → Configure social proof & payment settings
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'crowdfunding':
+                    quickSettings.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Campaign Goal</label>
+                                    <p class="text-xs text-gray-500">Required funding target</p>
+                                    <input type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1" placeholder="50,000" required>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Duration</label>
+                                    <p class="text-xs text-gray-500">Campaign length</p>
+                                    <select class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1">
+                                        <option>30 days</option>
+                                        <option>45 days</option>
+                                        <option>60 days</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-gray-200">
+                                <button class="text-blue-600 text-sm font-medium hover:text-blue-700">
+                                    → Set up reward tiers & campaign details
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'donation':
+                    quickSettings.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Organization</label>
+                                    <p class="text-xs text-gray-500">Non-profit name</p>
+                                    <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1" placeholder="Foundation name">
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Goal Amount</label>
+                                    <p class="text-xs text-gray-500">Fundraising target</p>
+                                    <input type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-1" placeholder="25,000">
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-gray-200">
+                                <button class="text-blue-600 text-sm font-medium hover:text-blue-700">
+                                    → Configure tax settings & transparency
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('payment-dropdown-btn');
+            const content = document.getElementById('payment-dropdown-content');
+            
+            if (!dropdown.contains(event.target) && !content.contains(event.target)) {
+                if (dropdownOpen) {
+                    toggleDropdown();
+                }
+            }
+        });
+
+        // Close dropdown on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && dropdownOpen) {
+                toggleDropdown();
+            }
+        });
+    </script>
+</body>
+</html>

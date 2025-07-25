@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contribution Event - Eventasaurus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes progressFill {
+            from { width: 0%; }
+            to { width: 57%; }
+        }
+        .progress-bar {
+            animation: progressFill 2s ease-out 0.5s both;
+        }
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        .slide-in:nth-child(2) { animation-delay: 0.1s; }
+        .slide-in:nth-child(3) { animation-delay: 0.2s; }
+        .slide-in:nth-child(4) { animation-delay: 0.3s; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">🦖</span>
+                    <span class="text-xl font-bold text-gray-800">Eventasaurus</span>
+                </div>
+                <div class="space-x-4">
+                    <button class="text-gray-600 hover:text-gray-800">Sign In</button>
+                    <button class="bg-black text-white px-4 py-2 rounded-lg">Get Started</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Left Column - Event Details -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Event Header -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div>
+                            <div class="text-sm text-gray-500 mb-2">JUL 26</div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-4">Community Garden Workshop</h1>
+                        </div>
+                        <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
+                            Contribution Collection
+                        </span>
+                    </div>
+
+                    <!-- Event Details Grid -->
+                    <div class="grid md:grid-cols-3 gap-6 mb-6">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-blue-500">📅</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">When</h3>
+                                <p class="text-gray-600">Sat, Jul 26 · 3:30 PM - 4:30 PM</p>
+                                <p class="text-sm text-gray-500">Europe/Warsaw</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-green-500">📍</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Where</h3>
+                                <p class="text-gray-600">Community Center</p>
+                                <p class="text-sm text-gray-500">Orawska 14, Kraków, Poland</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-6 h-6 text-purple-500">🎫</div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Event</h3>
+                                <p class="text-gray-600">Contribution Collection</p>
+                                <p class="text-sm text-gray-500">Free with optional contributions</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Event Image -->
+                    <div class="w-full h-64 bg-gradient-to-br from-green-400 to-blue-500 rounded-lg mb-6"></div>
+
+                    <!-- Description -->
+                    <div class="space-y-4">
+                        <h2 class="text-xl font-semibold text-gray-900">About This Event</h2>
+                        <p class="text-gray-600 leading-relaxed">
+                            Join us for a hands-on community garden workshop where we'll learn sustainable gardening practices, 
+                            plant seasonal vegetables, and build connections with fellow garden enthusiasts. This event is free 
+                            to attend, with optional contributions to help cover materials and support future workshops.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Host Info -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Hosted by</h3>
+                    <div class="flex items-start space-x-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
+                            HT
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900">Holden Thomas</h4>
+                            <p class="text-gray-600 text-sm mb-2">Community organizer & sustainability advocate</p>
+                            <div class="flex items-center space-x-4 text-sm text-gray-500">
+                                <span>⭐ 4.9/5 rating</span>
+                                <span>🎯 15 events hosted</span>
+                                <span>💚 $12K+ raised for causes</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Payment Section -->
+            <div class="space-y-6">
+                <!-- Contribution Card -->
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="bg-gradient-to-r from-green-50 to-blue-50 p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Support This Event</h3>
+                        <p class="text-gray-600 text-sm mb-4">Free attendance with optional contributions</p>
+                        
+                        <!-- Progress Section -->
+                        <div class="space-y-3">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">$2,847 raised</span>
+                                <span class="font-medium">$5,000 goal</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="progress-bar bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>57% funded</span>
+                                <span>127 contributors</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-6">
+                        <!-- Amount Selection -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Choose Amount</label>
+                            <div class="grid grid-cols-2 gap-3 mb-4">
+                                <button class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                                    <div class="font-semibold">$10</div>
+                                </button>
+                                <button class="p-3 border-2 border-blue-500 bg-blue-50 rounded-lg text-center">
+                                    <div class="font-semibold text-blue-700">$25</div>
+                                </button>
+                                <button class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                                    <div class="font-semibold">$50</div>
+                                </button>
+                                <button class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                                    <div class="font-semibold">$100</div>
+                                </button>
+                            </div>
+                            <div class="relative">
+                                <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                                <input type="number" placeholder="Custom amount" class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+
+                        <!-- Payment Methods -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Payment Method</label>
+                            <div class="space-y-2">
+                                <button class="w-full p-3 border-2 border-blue-500 bg-blue-50 rounded-lg flex items-center space-x-3">
+                                    <span>💳</span>
+                                    <span class="font-medium text-blue-700">Credit Card</span>
+                                    <span class="ml-auto bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">Popular</span>
+                                </button>
+                                <button class="w-full p-3 border-2 border-gray-200 rounded-lg flex items-center space-x-3 hover:border-blue-300">
+                                    <span>📱</span>
+                                    <span class="font-medium">Apple Pay</span>
+                                </button>
+                                <button class="w-full p-3 border-2 border-gray-200 rounded-lg flex items-center space-x-3 hover:border-blue-300">
+                                    <span>💰</span>
+                                    <span class="font-medium">PayPal</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="space-y-3">
+                            <button class="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all">
+                                Contribute $25
+                            </button>
+                            <button class="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-all">
+                                Attend for Free
+                            </button>
+                        </div>
+
+                        <!-- Trust Indicators -->
+                        <div class="border-t pt-4">
+                            <div class="flex items-center space-x-4 text-xs text-gray-500">
+                                <span class="flex items-center space-x-1">
+                                    <span>🔒</span>
+                                    <span>Secure</span>
+                                </span>
+                                <span class="flex items-center space-x-1">
+                                    <span>✅</span>
+                                    <span>100% to event</span>
+                                </span>
+                                <span class="flex items-center space-x-1">
+                                    <span>📄</span>
+                                    <span>Receipt provided</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Contributors -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <span class="text-red-500">❤️</span>
+                        <h3 class="text-lg font-semibold text-gray-900">Recent Support</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                S
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Sarah M.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$50</span>
+                                </div>
+                                <div class="text-xs text-gray-500">2 minutes ago</div>
+                                <div class="text-xs text-gray-600 italic">"Great cause!"</div>
+                            </div>
+                        </div>
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-purple-400 to-pink-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                A
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Alex K.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$25</span>
+                                </div>
+                                <div class="text-xs text-gray-500">5 minutes ago</div>
+                            </div>
+                        </div>
+                        <div class="slide-in flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                                M
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-sm">Mike R.</span>
+                                    <span class="text-green-600 font-semibold text-sm">$100</span>
+                                </div>
+                                <div class="text-xs text-gray-500">8 minutes ago</div>
+                                <div class="text-xs text-gray-600 italic">"Supporting the community!"</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Community Impact -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Community Impact</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Contributors today</span>
+                            <span class="font-semibold">23</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Average contribution</span>
+                            <span class="font-semibold">$42</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Expected attendance</span>
+                            <span class="font-semibold">85 people</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
