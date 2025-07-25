@@ -704,14 +704,18 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> Events.change_event(form_data)
       |> Map.put(:action, :validate)
 
-    {:noreply,
+    socket = 
       socket
       |> assign(:form_data, form_data)
       |> assign(:changeset, changeset)
       |> assign(:cover_image_url, cover_image_url)
       |> assign(:external_image_data, external_image_data)
       |> assign(:show_image_picker, false)
-    }
+
+    # NEW: Automatically fetch rich data for TMDB images
+    socket = auto_fetch_tmdb_rich_data(socket, tmdb_data)
+
+    {:noreply, socket}
   end
 
   # ============================================================================
@@ -1174,6 +1178,58 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
 
   # ========== Helper Functions ==========
+
+  # Automatically fetch rich data when a TMDB image is selected
+  defp auto_fetch_tmdb_rich_data(socket, tmdb_data) do
+    # Extract TMDB ID and type from the image data
+    tmdb_id = Map.get(tmdb_data, "id") || Map.get(tmdb_data, :id)
+    tmdb_type = determine_tmdb_type(tmdb_data)
+    
+    if tmdb_id && tmdb_type do
+      # Fetch rich data in the background 
+      case EventasaurusWeb.Services.RichDataManager.get_details(:tmdb, tmdb_id, tmdb_type, %{}) do
+        {:ok, rich_data} ->
+          # Update both assigns and form_data for edit page
+          updated_form_data = Map.put(socket.assigns.form_data, "rich_external_data", rich_data)
+          changeset =
+            socket.assigns.event
+            |> EventasaurusApp.Events.change_event(updated_form_data)
+            |> Map.put(:action, :validate)
+          
+          socket
+          |> assign(:rich_external_data, rich_data)
+          |> assign(:form_data, updated_form_data)
+          |> assign(:changeset, changeset)
+          |> put_flash(:info, "Movie data imported automatically with image!")
+        {:error, reason} ->
+          require Logger
+          Logger.warning("Failed to auto-fetch TMDB rich data: #{inspect(reason)}")
+          # Graceful degradation - just proceed without rich data
+          socket
+      end
+    else
+      # Missing required data, proceed without rich data
+      socket
+    end
+  end
+  
+  # Determine TMDB content type from the image data
+  defp determine_tmdb_type(tmdb_data) do
+    # Check explicit type field first
+    case Map.get(tmdb_data, "type") || Map.get(tmdb_data, :type) do
+      "movie" -> :movie
+      "tv" -> :tv
+      :movie -> :movie
+      :tv -> :tv
+      _ ->
+        # Fallback: check for movie-specific fields vs TV-specific fields
+        cond do
+          Map.has_key?(tmdb_data, "release_date") || Map.has_key?(tmdb_data, :release_date) -> :movie
+          Map.has_key?(tmdb_data, "first_air_date") || Map.has_key?(tmdb_data, :first_air_date) -> :tv
+          true -> :movie # Default to movie if uncertain
+        end
+    end
+  end
 
   defp create_virtual_meeting(socket, meeting_type) do
     {url, label} = case meeting_type do
