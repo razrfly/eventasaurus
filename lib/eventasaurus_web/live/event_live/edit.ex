@@ -1180,41 +1180,27 @@ defmodule EventasaurusWeb.EventLive.Edit do
   # ========== Helper Functions ==========
 
   # Automatically fetch rich data when a TMDB image is selected
-  defp auto_fetch_tmdb_rich_data(socket, tmdb_data) do
+  defp auto_fetch_tmdb_rich_data(socket, tmdb_data) when is_map(tmdb_data) do
     # Extract TMDB ID and type from the image data
     tmdb_id = Map.get(tmdb_data, "id") || Map.get(tmdb_data, :id)
     tmdb_type = determine_tmdb_type(tmdb_data)
     
     if tmdb_id && tmdb_type do
-      # Fetch rich data in the background 
-      case EventasaurusWeb.Services.RichDataManager.get_details(:tmdb, tmdb_id, tmdb_type, %{}) do
-        {:ok, rich_data} ->
-          # Update both assigns and form_data for edit page
-          updated_form_data = Map.put(socket.assigns.form_data, "rich_external_data", rich_data)
-          changeset =
-            socket.assigns.event
-            |> EventasaurusApp.Events.change_event(updated_form_data)
-            |> Map.put(:action, :validate)
-          
-          socket
-          |> assign(:rich_external_data, rich_data)
-          |> assign(:form_data, updated_form_data)
-          |> assign(:changeset, changeset)
-          |> put_flash(:info, "Movie data imported automatically with image!")
-        {:error, reason} ->
-          require Logger
-          Logger.warning("Failed to auto-fetch TMDB rich data: #{inspect(reason)}")
-          # Graceful degradation - just proceed without rich data
-          socket
-      end
+      # Start async fetch to avoid blocking
+      send(self(), {:auto_fetch_tmdb_rich_data, tmdb_id, tmdb_type})
+      socket
     else
       # Missing required data, proceed without rich data
       socket
     end
   end
   
+  # Handle nil or invalid tmdb_data
+  defp auto_fetch_tmdb_rich_data(socket, _), do: socket
+  
   # Determine TMDB content type from the image data
-  defp determine_tmdb_type(tmdb_data) do
+  defp determine_tmdb_type(nil), do: nil
+  defp determine_tmdb_type(tmdb_data) when is_map(tmdb_data) do
     # Check explicit type field first
     case Map.get(tmdb_data, "type") || Map.get(tmdb_data, :type) do
       "movie" -> :movie
@@ -1230,6 +1216,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
         end
     end
   end
+  defp determine_tmdb_type(_), do: nil
 
   defp create_virtual_meeting(socket, meeting_type) do
     {url, label} = case meeting_type do
@@ -1389,6 +1376,34 @@ defmodule EventasaurusWeb.EventLive.Edit do
       |> put_flash(:info, "Rich data imported successfully! '#{data["metadata"]["title"] || "Content"}' has been added to your event.")
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:auto_fetch_tmdb_rich_data, tmdb_id, tmdb_type}, socket) do
+    case EventasaurusWeb.Services.RichDataManager.get_details(:tmdb, tmdb_id, tmdb_type, %{}) do
+      {:ok, rich_data} ->
+        # Update both assigns and form_data for edit page
+        updated_form_data = Map.put(socket.assigns.form_data, "rich_external_data", rich_data)
+        changeset =
+          socket.assigns.event
+          |> EventasaurusApp.Events.change_event(updated_form_data)
+          |> Map.put(:action, :validate)
+        
+        content_type = if tmdb_type == :movie, do: "Movie", else: "TV show"
+        
+        socket =
+          socket
+          |> assign(:rich_external_data, rich_data)
+          |> assign(:form_data, updated_form_data)
+          |> assign(:changeset, changeset)
+          |> put_flash(:info, "#{content_type} data imported automatically with image!")
+        
+        {:noreply, socket}
+      {:error, reason} ->
+        require Logger
+        Logger.warning("Failed to auto-fetch TMDB rich data: #{inspect(reason)}")
+        {:noreply, socket}
+    end
   end
 
   @impl true
