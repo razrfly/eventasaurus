@@ -4,6 +4,9 @@ defmodule EventasaurusApp.Events.Order do
   import Ecto.SoftDelete.Schema
 
   @valid_statuses ~w(pending confirmed refunded canceled)
+  @valid_order_types ~w(ticket contribution)
+  @valid_payment_methods ~w(stripe manual)
+  @valid_manual_payment_methods ~w(cash check bank_transfer venmo paypal other)
 
   schema "orders" do
     field :quantity, :integer
@@ -21,11 +24,25 @@ defmodule EventasaurusApp.Events.Order do
 
     # Minimal Stripe Connect fields
     field :application_fee_amount, :integer, default: 0
+    
+    # Manual payment tracking fields
+    field :order_type, :string, default: "ticket"
+    field :payment_method, :string, default: "stripe"
+    field :manual_payment_method, :string
+    field :manual_payment_reference, :string
+    field :manual_payment_received_at, :utc_datetime
+    field :manual_payment_notes, :string
+    field :payment_history, :map, default: %{}
+    
+    # Contribution fields
+    field :contribution_amount_cents, :integer
+    field :is_anonymous, :boolean, default: false
 
     belongs_to :user, EventasaurusApp.Accounts.User
     belongs_to :event, EventasaurusApp.Events.Event
     belongs_to :ticket, EventasaurusApp.Events.Ticket
     belongs_to :stripe_connect_account, EventasaurusApp.Stripe.StripeConnectAccount
+    belongs_to :payment_marked_by, EventasaurusApp.Accounts.User
 
     # Deletion metadata fields
     field :deletion_reason, :string
@@ -41,22 +58,32 @@ defmodule EventasaurusApp.Events.Order do
     |> cast(attrs, [
       :quantity, :subtotal_cents, :tax_cents, :total_cents, :currency, :status,
       :stripe_session_id, :payment_reference, :confirmed_at, :user_id, :event_id,
-      :ticket_id, :stripe_connect_account_id, :application_fee_amount, :pricing_snapshot
+      :ticket_id, :stripe_connect_account_id, :application_fee_amount, :pricing_snapshot,
+      :order_type, :payment_method, :manual_payment_method, :manual_payment_reference,
+      :manual_payment_received_at, :manual_payment_notes, :payment_marked_by_id,
+      :contribution_amount_cents, :is_anonymous, :payment_history
     ])
-    |> validate_required([:quantity, :subtotal_cents, :total_cents, :currency, :status, :user_id, :event_id, :ticket_id])
+    |> validate_required([:quantity, :subtotal_cents, :total_cents, :currency, :status, :user_id, :event_id, :order_type, :payment_method])
     |> validate_number(:quantity, greater_than: 0, message: "must be greater than 0")
     |> validate_number(:subtotal_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_number(:tax_cents, greater_than_or_equal_to: 0, message: "cannot be negative")
     |> validate_number(:total_cents, greater_than: 0, message: "must be greater than 0")
     |> validate_number(:application_fee_amount, greater_than_or_equal_to: 0, message: "cannot be negative")
+    |> validate_number(:contribution_amount_cents, greater_than: 0, message: "must be greater than 0")
     |> validate_application_fee_amount()
     |> validate_inclusion(:currency, EventasaurusWeb.Helpers.CurrencyHelpers.supported_currency_codes(), message: "must be a supported currency")
     |> validate_inclusion(:status, @valid_statuses, message: "must be a valid status")
+    |> validate_inclusion(:order_type, @valid_order_types, message: "must be a valid order type")
+    |> validate_inclusion(:payment_method, @valid_payment_methods, message: "must be a valid payment method")
+    |> validate_inclusion(:manual_payment_method, @valid_manual_payment_methods, message: "must be a valid manual payment method")
+    |> validate_order_type_fields()
+    |> validate_manual_payment_fields()
     |> validate_total_calculation()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:ticket_id)
     |> foreign_key_constraint(:stripe_connect_account_id)
+    |> foreign_key_constraint(:payment_marked_by_id)
   end
 
   defp validate_application_fee_amount(changeset) do
@@ -83,6 +110,42 @@ defmodule EventasaurusApp.Events.Order do
       add_error(changeset, :total_cents, "must equal subtotal when tax is not yet calculated")
     else
       # For orders with tax > 0, trust Stripe's calculations
+      changeset
+    end
+  end
+  
+  defp validate_order_type_fields(changeset) do
+    order_type = get_field(changeset, :order_type)
+    
+    case order_type do
+      "ticket" ->
+        # For ticket orders, ticket_id is required
+        if is_nil(get_field(changeset, :ticket_id)) do
+          add_error(changeset, :ticket_id, "is required for ticket orders")
+        else
+          changeset
+        end
+        
+      "contribution" ->
+        # For contribution orders, contribution_amount_cents is required
+        if is_nil(get_field(changeset, :contribution_amount_cents)) do
+          add_error(changeset, :contribution_amount_cents, "is required for contribution orders")
+        else
+          changeset
+        end
+        
+      _ ->
+        changeset
+    end
+  end
+  
+  defp validate_manual_payment_fields(changeset) do
+    payment_method = get_field(changeset, :payment_method)
+    
+    if payment_method == "manual" do
+      changeset
+      |> validate_required([:manual_payment_method], message: "is required for manual payments")
+    else
       changeset
     end
   end
@@ -175,4 +238,74 @@ defmodule EventasaurusApp.Events.Order do
   def has_tip?(%__MODULE__{} = order) do
     get_tip_from_snapshot(order) > 0
   end
+  
+  @doc """
+  Check if this order uses manual payment.
+  """
+  def manual_payment?(%__MODULE__{payment_method: "manual"}), do: true
+  def manual_payment?(_), do: false
+  
+  @doc """
+  Check if manual payment has been received.
+  """
+  def manual_payment_received?(%__MODULE__{payment_method: "manual", manual_payment_received_at: nil}), do: false
+  def manual_payment_received?(%__MODULE__{payment_method: "manual", manual_payment_received_at: _}), do: true
+  def manual_payment_received?(_), do: false
+  
+  @doc """
+  Mark manual payment as received.
+  """
+  def mark_payment_received_changeset(order, attrs, marked_by_user_id) do
+    order
+    |> changeset(attrs)
+    |> put_change(:status, "confirmed")
+    |> put_change(:confirmed_at, DateTime.utc_now())
+    |> put_change(:manual_payment_received_at, DateTime.utc_now())
+    |> put_change(:payment_marked_by_id, marked_by_user_id)
+    |> add_payment_history_entry("payment_received", marked_by_user_id)
+  end
+  
+  @doc """
+  Mark manual payment as refunded.
+  """
+  def mark_payment_refunded_changeset(order, attrs, marked_by_user_id) do
+    order
+    |> changeset(attrs)
+    |> put_change(:status, "refunded")
+    |> put_change(:payment_marked_by_id, marked_by_user_id)
+    |> add_payment_history_entry("payment_refunded", marked_by_user_id)
+  end
+  
+  # Add an entry to the payment history
+  defp add_payment_history_entry(changeset, action, user_id) do
+    current_history = get_field(changeset, :payment_history) || %{}
+    timestamp = DateTime.utc_now() |> DateTime.to_iso8601()
+    
+    new_entry = %{
+      "action" => action,
+      "user_id" => user_id,
+      "timestamp" => timestamp,
+      "details" => %{
+        "status" => get_field(changeset, :status),
+        "manual_payment_method" => get_field(changeset, :manual_payment_method),
+        "manual_payment_reference" => get_field(changeset, :manual_payment_reference),
+        "manual_payment_notes" => get_field(changeset, :manual_payment_notes)
+      }
+    }
+    
+    # Add entry with timestamp as key
+    updated_history = Map.put(current_history, timestamp, new_entry)
+    put_change(changeset, :payment_history, updated_history)
+  end
+  
+  @doc """
+  Get display name for payment method.
+  """
+  def payment_method_display_name("cash"), do: "Cash"
+  def payment_method_display_name("check"), do: "Check"
+  def payment_method_display_name("bank_transfer"), do: "Bank Transfer"
+  def payment_method_display_name("venmo"), do: "Venmo"
+  def payment_method_display_name("paypal"), do: "PayPal"
+  def payment_method_display_name("other"), do: "Other"
+  def payment_method_display_name(_), do: "Unknown"
 end
