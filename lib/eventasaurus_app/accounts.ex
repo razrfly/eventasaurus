@@ -30,10 +30,12 @@ defmodule EventasaurusApp.Accounts do
 
   @doc """
   Gets a user by email (case-insensitive).
+  Returns nil if email is invalid or user not found.
   """
   def get_user_by_email(email) when is_binary(email) do
     case EventasaurusApp.Sanitizer.sanitize_email(email) do
-      {:error, _} ->
+      {:error, _reason} ->
+        # Invalid email format, return nil
         nil
       nil ->
         nil
@@ -127,19 +129,22 @@ defmodule EventasaurusApp.Accounts do
         {:ok, user}
       nil ->
         # Normalize email to ensure consistency
-        normalized_email = case EventasaurusApp.Sanitizer.sanitize_email(email) do
-          {:error, _} -> email  # Fallback to original if sanitization fails
-          nil -> email  # Fallback if nil
-          clean_email when is_binary(clean_email) -> clean_email
+        # Supabase should always provide valid emails, but we validate anyway
+        case EventasaurusApp.Sanitizer.sanitize_email(email) do
+          {:error, reason} ->
+            # This shouldn't happen with Supabase, but handle it gracefully
+            {:error, {:invalid_email, reason}}
+          nil ->
+            {:error, {:invalid_email, "Email is nil"}}
+          normalized_email when is_binary(normalized_email) ->
+            name = user_metadata["name"] || extract_name_from_email(normalized_email)
+            user_params = %{
+              email: normalized_email,
+              name: name,
+              supabase_id: supabase_id
+            }
+            create_user(user_params)
         end
-        
-        name = user_metadata["name"] || extract_name_from_email(normalized_email)
-        user_params = %{
-          email: normalized_email,
-          name: name,
-          supabase_id: supabase_id
-        }
-        create_user(user_params)
     end
   end
 
@@ -148,17 +153,16 @@ defmodule EventasaurusApp.Accounts do
   @doc """
   Finds or creates a user by email for guest invitations.
   If the user doesn't exist, creates a minimal user record with the email.
-  Returns {:ok, user} or {:error, changeset}.
+  Returns {:ok, user} or {:error, reason}.
   """
   def find_or_create_guest_user(email) when is_binary(email) do
-    # Normalize the email first
-    normalized_result = EventasaurusApp.Sanitizer.sanitize_email(email)
-    
-    case normalized_result do
+    # Normalize and validate the email first
+    case EventasaurusApp.Sanitizer.sanitize_email(email) do
       {:error, reason} ->
-        {:error, reason}
+        # Invalid email format
+        {:error, {:invalid_email, reason}}
       nil ->
-        {:error, :invalid_email}
+        {:error, {:invalid_email, "Email cannot be nil"}}
       normalized_email when is_binary(normalized_email) ->
         case get_user_by_email(normalized_email) do
           %User{} = user ->
@@ -178,7 +182,7 @@ defmodule EventasaurusApp.Accounts do
     end
   end
 
-  def find_or_create_guest_user(_), do: {:error, :invalid_email}
+  def find_or_create_guest_user(_), do: {:error, {:invalid_email, "Email must be a string"}}
 
   @doc """
   Searches for users that can be added as event organizers.
