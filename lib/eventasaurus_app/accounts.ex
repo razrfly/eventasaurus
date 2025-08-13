@@ -137,7 +137,13 @@ defmodule EventasaurusApp.Accounts do
           nil ->
             {:error, {:invalid_email, "Email is nil"}}
           normalized_email when is_binary(normalized_email) ->
-            name = user_metadata["name"] || extract_name_from_email(normalized_email)
+            # Safely extract name from user_metadata
+            name = 
+              case user_metadata do
+                m when is_map(m) -> Map.get(m, "name") || extract_name_from_email(normalized_email)
+                _ -> extract_name_from_email(normalized_email)
+              end
+            
             user_params = %{
               email: normalized_email,
               name: name,
