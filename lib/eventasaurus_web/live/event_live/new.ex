@@ -498,7 +498,12 @@ defmodule EventasaurusWeb.EventLive.New do
       Logger.debug("[submit] processed params: #{inspect(event_params)}")
     end
 
-    # Apply taxation consistency logic before further processing
+    # Resolve intent-based answers to event attributes FIRST
+    # This ensures participation_type is properly mapped to taxation_type
+    resolved_attributes = FormHelpers.resolve_event_attributes(event_params)
+    event_params = Map.merge(event_params, resolved_attributes)
+
+    # Apply taxation consistency logic AFTER resolution
     event_params = apply_taxation_consistency(event_params)
     
     # Process donation fields if needed
@@ -506,17 +511,8 @@ defmodule EventasaurusWeb.EventLive.New do
 
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("[submit] taxation consistency applied: #{inspect(event_params)}")
-    end
-
-    # Resolve intent-based answers to event attributes
-    resolved_attributes = FormHelpers.resolve_event_attributes(event_params)
-    event_params = Map.merge(event_params, resolved_attributes)
-
-    if Application.get_env(:eventasaurus, :env) == :dev do
-      require Logger
       Logger.debug("[submit] resolved attributes: #{inspect(resolved_attributes)}")
-      Logger.debug("[submit] final event_params after resolution: #{inspect(event_params)}")
+      Logger.debug("[submit] final event_params after resolution and consistency: #{inspect(event_params)}")
     end
 
     # Decode external_image_data if it's a JSON string
@@ -1763,6 +1759,9 @@ defmodule EventasaurusWeb.EventLive.New do
     # Ensure the status is correctly set in the event params
     final_event_params_with_status = Map.put(final_event_params, "status", final_status)
 
+    # Convert donation amounts from dollars to cents before saving
+    final_event_params_with_status = convert_donation_amounts_to_cents(final_event_params_with_status)
+
     case Events.create_event_with_organizer(final_event_params_with_status, socket.assigns.user) do
       {:ok, event} ->
         # Legacy date polling creation removed - using generic polling system
@@ -1980,6 +1979,7 @@ defmodule EventasaurusWeb.EventLive.New do
       params
       |> process_suggested_amounts()
       |> process_donation_amounts()
+      |> process_privacy_settings()
     else
       params
     end
@@ -1990,13 +1990,19 @@ defmodule EventasaurusWeb.EventLive.New do
       nil -> 
         params
       amounts when is_list(amounts) ->
-        # Convert dollar strings to cents
-        converted_amounts = amounts
-          |> Enum.map(&parse_currency/1)
-          |> Enum.reject(&is_nil/1)
-          |> Enum.filter(&(&1 > 0))
+        # For validation, keep amounts as strings (dollars) to match the form display
+        # Only convert to cents when actually saving to the database
+        filtered_amounts = amounts
+          |> Enum.map(&String.trim(to_string(&1)))
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.filter(fn amount_str ->
+            case Float.parse(amount_str) do
+              {val, _} when val > 0 -> true
+              _ -> false
+            end
+          end)
         
-        Map.put(params, "suggested_amounts", converted_amounts)
+        Map.put(params, "suggested_amounts", filtered_amounts)
       _ ->
         params
     end
@@ -2008,20 +2014,90 @@ defmodule EventasaurusWeb.EventLive.New do
     |> process_amount_field("maximum_donation_amount")
   end
 
-  defp process_amount_field(params, field_name) do
+  defp convert_donation_amounts_to_cents(params) do
+    params
+    |> convert_suggested_amounts_to_cents()
+    |> convert_amount_field_to_cents("minimum_donation_amount")
+    |> convert_amount_field_to_cents("maximum_donation_amount")
+  end
+
+  defp convert_suggested_amounts_to_cents(params) do
+    case Map.get(params, "suggested_amounts") do
+      nil -> params
+      amounts when is_list(amounts) ->
+        converted_amounts = amounts
+          |> Enum.map(fn amount_str ->
+            parse_currency("$" <> to_string(amount_str))
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.filter(&(&1 > 0))
+        
+        Map.put(params, "suggested_amounts", converted_amounts)
+      _ -> params
+    end
+  end
+
+  defp convert_amount_field_to_cents(params, field_name) do
     case Map.get(params, field_name) do
       nil -> params
-      "" -> Map.put(params, field_name, nil)
+      amount when is_integer(amount) -> params  # Already in cents
       amount_str when is_binary(amount_str) ->
         case parse_currency("$" <> amount_str) do
           nil -> Map.put(params, field_name, nil)
           cents -> Map.put(params, field_name, cents)
         end
-      amount when is_integer(amount) -> 
-        # Already in cents
-        params
+      _ -> params
+    end
+  end
+
+  defp process_amount_field(params, field_name) do
+    case Map.get(params, field_name) do
+      nil -> params
+      "" -> Map.put(params, field_name, nil)
+      amount_str when is_binary(amount_str) ->
+        # Keep as dollar string during validation, only convert to cents when saving
+        trimmed = String.trim(amount_str)
+        if trimmed == "" do
+          Map.put(params, field_name, nil)
+        else
+          # Validate it's a valid number but keep as string
+          case Float.parse(trimmed) do
+            {val, _} when val >= 0 -> Map.put(params, field_name, trimmed)
+            _ -> Map.put(params, field_name, nil)
+          end
+        end
       _ -> 
         Map.put(params, field_name, nil)
+    end
+  end
+
+  defp process_privacy_settings(params) do
+    case Map.get(params, "privacy_settings") do
+      nil -> 
+        # Set default privacy settings if not present
+        default_settings = %{
+          "contributor_name_visibility" => "full",
+          "amount_visibility" => "visible",
+          "total_visibility" => "exact",
+          "recent_contributions_enabled" => true,
+          "allow_contributor_override" => true
+        }
+        Map.put(params, "privacy_settings", default_settings)
+        
+      settings when is_map(settings) ->
+        # Process checkbox values (they come as "true"/"false" strings)
+        processed_settings = settings
+        |> Map.update("recent_contributions_enabled", true, fn val ->
+          val == "true" or val == true
+        end)
+        |> Map.update("allow_contributor_override", true, fn val ->
+          val == "true" or val == true
+        end)
+        
+        Map.put(params, "privacy_settings", processed_settings)
+        
+      _ -> 
+        params
     end
   end
 

@@ -431,6 +431,9 @@ defmodule EventasaurusWeb.EventLive.Edit do
 
         if validation_changeset.valid? do
           # Legacy date polling updates removed - continue with event update
+          # Convert donation amounts from dollars to cents before saving
+          authorized_params = convert_donation_amounts_to_cents(authorized_params)
+          
           case Events.update_event(socket.assigns.event, authorized_params) do
             {:ok, event} ->
               {:noreply,
@@ -1870,13 +1873,19 @@ defmodule EventasaurusWeb.EventLive.Edit do
       nil -> 
         params
       amounts when is_list(amounts) ->
-        # Convert dollar strings to cents
-        converted_amounts = amounts
-          |> Enum.map(&parse_currency/1)
-          |> Enum.reject(&is_nil/1)
-          |> Enum.filter(&(&1 > 0))
+        # For validation, keep amounts as strings (dollars) to match the form display
+        # Only convert to cents when actually saving to the database
+        filtered_amounts = amounts
+          |> Enum.map(&String.trim(to_string(&1)))
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.filter(fn amount_str ->
+            case Float.parse(amount_str) do
+              {val, _} when val > 0 -> true
+              _ -> false
+            end
+          end)
         
-        Map.put(params, "suggested_amounts", converted_amounts)
+        Map.put(params, "suggested_amounts", filtered_amounts)
       _ ->
         params
     end
@@ -1888,18 +1897,58 @@ defmodule EventasaurusWeb.EventLive.Edit do
     |> process_amount_field("maximum_donation_amount")
   end
 
-  defp process_amount_field(params, field_name) do
+  defp convert_donation_amounts_to_cents(params) do
+    params
+    |> convert_suggested_amounts_to_cents()
+    |> convert_amount_field_to_cents("minimum_donation_amount")
+    |> convert_amount_field_to_cents("maximum_donation_amount")
+  end
+
+  defp convert_suggested_amounts_to_cents(params) do
+    case Map.get(params, "suggested_amounts") do
+      nil -> params
+      amounts when is_list(amounts) ->
+        converted_amounts = amounts
+          |> Enum.map(fn amount_str ->
+            parse_currency("$" <> to_string(amount_str))
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.filter(&(&1 > 0))
+        
+        Map.put(params, "suggested_amounts", converted_amounts)
+      _ -> params
+    end
+  end
+
+  defp convert_amount_field_to_cents(params, field_name) do
     case Map.get(params, field_name) do
       nil -> params
-      "" -> Map.put(params, field_name, nil)
+      amount when is_integer(amount) -> params  # Already in cents
       amount_str when is_binary(amount_str) ->
         case parse_currency("$" <> amount_str) do
           nil -> Map.put(params, field_name, nil)
           cents -> Map.put(params, field_name, cents)
         end
-      amount when is_integer(amount) -> 
-        # Already in cents
-        params
+      _ -> params
+    end
+  end
+
+  defp process_amount_field(params, field_name) do
+    case Map.get(params, field_name) do
+      nil -> params
+      "" -> Map.put(params, field_name, nil)
+      amount_str when is_binary(amount_str) ->
+        # Keep as dollar string during validation, only convert to cents when saving
+        trimmed = String.trim(amount_str)
+        if trimmed == "" do
+          Map.put(params, field_name, nil)
+        else
+          # Validate it's a valid number but keep as string
+          case Float.parse(trimmed) do
+            {val, _} when val >= 0 -> Map.put(params, field_name, trimmed)
+            _ -> Map.put(params, field_name, nil)
+          end
+        end
       _ -> 
         Map.put(params, field_name, nil)
     end

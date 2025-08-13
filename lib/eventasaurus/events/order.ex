@@ -37,6 +37,7 @@ defmodule EventasaurusApp.Events.Order do
     # Contribution fields
     field :contribution_amount_cents, :integer
     field :is_anonymous, :boolean, default: false
+    field :privacy_preference, :string, default: "default"
 
     belongs_to :user, EventasaurusApp.Accounts.User
     belongs_to :event, EventasaurusApp.Events.Event
