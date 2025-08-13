@@ -2146,6 +2146,28 @@ window.addEventListener("phx:track_event", (e) => {
   }
 });
 
+// File download handler for CSV exports
+window.addEventListener("phx:download", (e) => {
+  const { filename, content, mime_type } = e.detail;
+  
+  // Create a Blob from the content
+  const blob = new Blob([content], { type: mime_type || "application/octet-stream" });
+  
+  // Create a temporary download link
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  
+  // Trigger the download
+  document.body.appendChild(link);
+  link.click();
+  
+  // Clean up
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+});
+
 // Expose PostHog manager for debugging and external use
 window.posthogManager = posthogManager;
 

@@ -46,8 +46,10 @@ defmodule EventasaurusWeb.CheckoutLive do
                |> assign(:errors, [])
                |> assign(:user, user)
                |> assign(:is_guest, is_guest)
-               |> assign(:guest_form, %{"name" => "", "email" => ""})
-               |> assign(:show_guest_form, is_guest)}
+               |> assign(:guest_form, %{"name" => "", "email" => "", "privacy_preference" => "default", "contribution_message" => ""})
+               |> assign(:show_guest_form, is_guest)
+               |> assign(:privacy_preference, "default")
+               |> assign(:contribution_message, "")}
 
             {:error, message} ->
               {:ok,
@@ -167,6 +169,16 @@ defmodule EventasaurusWeb.CheckoutLive do
   @impl true
   def handle_event("show_guest_form", _params, socket) do
     {:noreply, assign(socket, :show_guest_form, true)}
+  end
+
+  @impl true
+  def handle_event("update_privacy_preference", %{"privacy_preference" => preference}, socket) do
+    {:noreply, assign(socket, :privacy_preference, preference)}
+  end
+
+  @impl true
+  def handle_event("update_contribution_message", %{"contribution_message" => message}, socket) do
+    {:noreply, assign(socket, :contribution_message, message)}
   end
 
   @impl true
@@ -953,6 +965,65 @@ defmodule EventasaurusWeb.CheckoutLive do
                       </div>
                     </form>
 
+                    <!-- Privacy Preferences for Contribution Collection Events -->
+                    <%= if @event.taxation_type == "contribution_collection" && EventasaurusWeb.Helpers.PrivacyHelpers.allow_contributor_override?(@event.privacy_settings) do %>
+                      <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                        <h3 class="text-sm font-semibold text-gray-900 mb-3">Privacy Preferences</h3>
+                        <div class="space-y-3">
+                          <label class="flex items-start">
+                            <input
+                              type="radio"
+                              name="privacy_preference"
+                              value="default"
+                              checked={Map.get(@guest_form, "privacy_preference", "default") == "default"}
+                              phx-click="update_guest_form"
+                              phx-value-guest_form-privacy_preference="default"
+                              class="mt-1 mr-3"
+                              disabled={@processing}
+                            />
+                            <div>
+                              <div class="font-medium text-sm text-gray-900">Use event default settings</div>
+                              <div class="text-xs text-gray-600">Your name and contribution will be displayed according to the event's privacy settings</div>
+                            </div>
+                          </label>
+                          
+                          <label class="flex items-start">
+                            <input
+                              type="radio"
+                              name="privacy_preference"
+                              value="anonymous"
+                              checked={Map.get(@guest_form, "privacy_preference", "default") == "anonymous"}
+                              phx-click="update_guest_form"
+                              phx-value-guest_form-privacy_preference="anonymous"
+                              class="mt-1 mr-3"
+                              disabled={@processing}
+                            />
+                            <div>
+                              <div class="font-medium text-sm text-gray-900">Contribute anonymously</div>
+                              <div class="text-xs text-gray-600">Your name won't be shown publicly, even if the event displays contributor names</div>
+                            </div>
+                          </label>
+                        </div>
+                        
+                        <!-- Optional contribution message -->
+                        <div class="mt-4">
+                          <label for="contribution_message" class="block text-sm font-medium text-gray-700 mb-1">
+                            Add a message (optional)
+                          </label>
+                          <textarea
+                            id="contribution_message"
+                            name="contribution_message"
+                            rows="2"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            placeholder="Share why you're supporting this event..."
+                            phx-blur="update_guest_form"
+                            value={Map.get(@guest_form, "contribution_message", "")}
+                            disabled={@processing}
+                          ><%= Map.get(@guest_form, "contribution_message", "") %></textarea>
+                        </div>
+                      </div>
+                    <% end %>
+
                     <div class="max-w-md mx-auto space-y-6">
                       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <p class="text-sm text-blue-800">
@@ -1064,6 +1135,65 @@ defmodule EventasaurusWeb.CheckoutLive do
                 <div class="bg-white border border-gray-200 rounded-xl p-8 shadow-sm text-center">
                   <h2 class="text-2xl font-bold text-gray-900 mb-4">Ready to Complete Your Purchase</h2>
                   <p class="text-gray-600 mb-6">Signed in as <%= @user.email %></p>
+
+                  <!-- Privacy Preferences for Contribution Collection Events (Authenticated Users) -->
+                  <%= if @event.taxation_type == "contribution_collection" && EventasaurusWeb.Helpers.PrivacyHelpers.allow_contributor_override?(@event.privacy_settings) do %>
+                    <div class="mt-6 mb-6 p-4 bg-gray-50 rounded-lg text-left max-w-md mx-auto">
+                      <h3 class="text-sm font-semibold text-gray-900 mb-3">Privacy Preferences</h3>
+                      <div class="space-y-3">
+                        <label class="flex items-start">
+                          <input
+                            type="radio"
+                            name="privacy_preference_auth"
+                            value="default"
+                            checked={Map.get(assigns, :privacy_preference, "default") == "default"}
+                            phx-click="update_privacy_preference"
+                            phx-value-privacy_preference="default"
+                            class="mt-1 mr-3"
+                            disabled={@processing}
+                          />
+                          <div>
+                            <div class="font-medium text-sm text-gray-900">Use event default settings</div>
+                            <div class="text-xs text-gray-600">Your name and contribution will be displayed according to the event's privacy settings</div>
+                          </div>
+                        </label>
+                        
+                        <label class="flex items-start">
+                          <input
+                            type="radio"
+                            name="privacy_preference_auth"
+                            value="anonymous"
+                            checked={Map.get(assigns, :privacy_preference, "default") == "anonymous"}
+                            phx-click="update_privacy_preference"
+                            phx-value-privacy_preference="anonymous"
+                            class="mt-1 mr-3"
+                            disabled={@processing}
+                          />
+                          <div>
+                            <div class="font-medium text-sm text-gray-900">Contribute anonymously</div>
+                            <div class="text-xs text-gray-600">Your name won't be shown publicly, even if the event displays contributor names</div>
+                          </div>
+                        </label>
+                      </div>
+                      
+                      <!-- Optional contribution message -->
+                      <div class="mt-4">
+                        <label for="contribution_message_auth" class="block text-sm font-medium text-gray-700 mb-1">
+                          Add a message (optional)
+                        </label>
+                        <textarea
+                          id="contribution_message_auth"
+                          name="contribution_message"
+                          rows="2"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="Share why you're supporting this event..."
+                          phx-blur="update_contribution_message"
+                          value={Map.get(assigns, :contribution_message, "")}
+                          disabled={@processing}
+                        ><%= Map.get(assigns, :contribution_message, "") %></textarea>
+                      </div>
+                    </div>
+                  <% end %>
 
                   <button
                     type="button"

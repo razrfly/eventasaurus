@@ -66,6 +66,15 @@ defmodule EventasaurusApp.Events.Event do
     # Payment method fields
     field :payment_method_type, :string, default: "stripe_only"
     field :payment_instructions, :string
+    
+    # Privacy and social proof settings
+    field :privacy_settings, :map, default: %{
+      "contributor_name_visibility" => "full",
+      "amount_visibility" => "visible",
+      "total_visibility" => "exact",
+      "recent_contributions_enabled" => true,
+      "allow_contributor_override" => true
+    }
 
     # Theme fields for the theming system
     field :theme, Ecto.Enum,
@@ -117,7 +126,7 @@ defmodule EventasaurusApp.Events.Event do
                    :virtual_venue_url, :is_ticketed, :taxation_type, :is_virtual,
                    :suggested_amounts, :allow_custom_amount, :minimum_donation_amount, 
                    :maximum_donation_amount, :donation_message,
-                   :payment_method_type, :payment_instructions])
+                   :payment_method_type, :payment_instructions, :privacy_settings])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
     |> maybe_validate_start_at()

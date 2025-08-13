@@ -1344,6 +1344,87 @@ defmodule EventasaurusWeb.PublicEventLive do
             </div>
           <% end %>
 
+          <!-- Social Proof & Contribution Display for Contribution Collection Events -->
+          <%= if @event.taxation_type == "contribution_collection" do %>
+            <div class="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mb-8 shadow-sm">
+              <h2 class="text-xl font-semibold mb-4 text-gray-900">Support This Event</h2>
+              
+              <!-- Total Raised Display -->
+              <%= if @event.privacy_settings["total_visibility"] != "hidden" do %>
+                <div class="mb-6">
+                  <% total_raised = calculate_total_raised(@event.orders) %>
+                  <% formatted_total = EventasaurusWeb.Helpers.PrivacyHelpers.format_total_raised(
+                    total_raised,
+                    nil,
+                    @event.privacy_settings,
+                    "usd"
+                  ) %>
+                  
+                  <%= if formatted_total do %>
+                    <div class="text-center p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
+                      <div class="text-3xl font-bold text-purple-600 mb-2">
+                        <%= formatted_total %>
+                      </div>
+                      <div class="text-gray-600">
+                        raised from <%= count_contributors(@event.orders) %> contributors
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+              
+              <!-- Recent Contributors -->
+              <%= if EventasaurusWeb.Helpers.PrivacyHelpers.show_recent_contributions?(@event.privacy_settings) do %>
+                <% recent_contributions = EventasaurusWeb.Helpers.PrivacyHelpers.get_filtered_recent_contributions(
+                  @event.orders,
+                  @event.privacy_settings,
+                  5
+                ) %>
+                
+                <%= if length(recent_contributions) > 0 do %>
+                  <div class="mt-6">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-900">Recent Contributors</h3>
+                    <div class="space-y-3">
+                      <%= for contribution <- recent_contributions do %>
+                        <div class="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                          <div class="flex-1">
+                            <div class="font-medium text-gray-900">
+                              <%= contribution.name %>
+                            </div>
+                            <%= if contribution.message do %>
+                              <div class="text-sm text-gray-600 mt-1">
+                                "<%= contribution.message %>"
+                              </div>
+                            <% end %>
+                            <%= if contribution.timestamp do %>
+                              <div class="text-xs text-gray-500 mt-1">
+                                <%= format_relative_time(contribution.timestamp) %>
+                              </div>
+                            <% end %>
+                          </div>
+                          <%= if contribution.amount do %>
+                            <div class="text-lg font-semibold text-purple-600 ml-4">
+                              <%= EventasaurusWeb.Helpers.CurrencyHelpers.format_currency(contribution.amount, "usd") %>
+                            </div>
+                          <% end %>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              <% end %>
+              
+              <!-- Contribution Message -->
+              <%= if @event.donation_message && @event.donation_message != "" do %>
+                <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                  <p class="text-gray-700">
+                    <%= @event.donation_message %>
+                  </p>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+
           <% end %>
 
           <!-- About section (shared for all events) -->
@@ -2100,6 +2181,38 @@ defmodule EventasaurusWeb.PublicEventLive do
         socket
         |> assign(:event_polls, [])
         |> assign(:poll_user_votes, %{})
+    end
+  end
+
+  # Helper functions for social proof display
+  defp calculate_total_raised(orders) when is_list(orders) do
+    orders
+    |> Enum.filter(&(&1.status == "confirmed"))
+    |> Enum.reduce(0, fn order, acc ->
+      amount = order.contribution_amount_cents || order.total_cents || 0
+      acc + amount
+    end)
+  end
+  defp calculate_total_raised(_), do: 0
+
+  defp count_contributors(orders) when is_list(orders) do
+    orders
+    |> Enum.filter(&(&1.status == "confirmed"))
+    |> length()
+  end
+  defp count_contributors(_), do: 0
+
+  defp format_relative_time(nil), do: ""
+  defp format_relative_time(datetime) do
+    now = DateTime.utc_now()
+    diff = DateTime.diff(now, datetime, :second)
+    
+    cond do
+      diff < 60 -> "just now"
+      diff < 3600 -> "#{div(diff, 60)} minutes ago"
+      diff < 86400 -> "#{div(diff, 3600)} hours ago"
+      diff < 604800 -> "#{div(diff, 86400)} days ago"
+      true -> "#{div(diff, 604800)} weeks ago"
     end
   end
 

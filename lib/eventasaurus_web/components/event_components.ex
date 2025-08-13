@@ -1466,6 +1466,118 @@ defmodule EventasaurusWeb.EventComponents do
             </div>
             <% end %>
 
+            <!-- Privacy & Social Proof Settings -->
+            <%= if Map.get(assigns, :participation_type, "free") == "contribution" or Map.get(assigns[:form_data] || %{}, "taxation_type") == "contribution_collection" do %>
+            <div class="space-y-4 mt-6">
+              <h4 class="text-sm font-medium text-gray-700">Privacy & Social Proof</h4>
+              <div class="p-4 bg-purple-50 rounded-lg space-y-4">
+                <% privacy_settings = Map.get(assigns[:form_data] || %{}, "privacy_settings", %{
+                  "contributor_name_visibility" => "full",
+                  "amount_visibility" => "visible",
+                  "total_visibility" => "exact",
+                  "recent_contributions_enabled" => true,
+                  "allow_contributor_override" => true
+                }) %>
+                
+                <!-- Contributor Name Visibility -->
+                <div>
+                  <label class="text-sm font-medium text-gray-700 mb-2 block">Contributor name display</label>
+                  <select 
+                    name="event[privacy_settings][contributor_name_visibility]" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="full" selected={Map.get(privacy_settings, "contributor_name_visibility") == "full"}>
+                      Show full names
+                    </option>
+                    <option value="first_name" selected={Map.get(privacy_settings, "contributor_name_visibility") == "first_name"}>
+                      Show first names only
+                    </option>
+                    <option value="anonymous" selected={Map.get(privacy_settings, "contributor_name_visibility") == "anonymous"}>
+                      Anonymous by default
+                    </option>
+                    <option value="organizer_only" selected={Map.get(privacy_settings, "contributor_name_visibility") == "organizer_only"}>
+                      Hidden (organizer only)
+                    </option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">How contributor names appear on the event page</p>
+                </div>
+                
+                <!-- Contribution Amount Visibility -->
+                <div>
+                  <label class="text-sm font-medium text-gray-700 mb-2 block">Contribution amounts</label>
+                  <select 
+                    name="event[privacy_settings][amount_visibility]" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="visible" selected={Map.get(privacy_settings, "amount_visibility") == "visible"}>
+                      Show amounts publicly
+                    </option>
+                    <option value="organizer_only" selected={Map.get(privacy_settings, "amount_visibility") == "organizer_only"}>
+                      Hidden (organizer only)
+                    </option>
+                    <option value="hidden" selected={Map.get(privacy_settings, "amount_visibility") == "hidden"}>
+                      Never show amounts
+                    </option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">Whether individual contribution amounts are visible</p>
+                </div>
+                
+                <!-- Running Total Visibility -->
+                <div>
+                  <label class="text-sm font-medium text-gray-700 mb-2 block">Total raised display</label>
+                  <select 
+                    name="event[privacy_settings][total_visibility]" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="exact" selected={Map.get(privacy_settings, "total_visibility") == "exact"}>
+                      Show exact amount
+                    </option>
+                    <option value="percentage" selected={Map.get(privacy_settings, "total_visibility") == "percentage"}>
+                      Show percentage of goal
+                    </option>
+                    <option value="milestones" selected={Map.get(privacy_settings, "total_visibility") == "milestones"}>
+                      Show milestones only
+                    </option>
+                    <option value="hidden" selected={Map.get(privacy_settings, "total_visibility") == "hidden"}>
+                      Hide total
+                    </option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">How the total contribution amount is displayed</p>
+                </div>
+                
+                <!-- Recent Contributions Feed -->
+                <div class="mt-3">
+                  <label class="inline-flex items-center">
+                    <input 
+                      type="checkbox" 
+                      name="event[privacy_settings][recent_contributions_enabled]" 
+                      value="true" 
+                      checked={Map.get(privacy_settings, "recent_contributions_enabled", true) == true}
+                      class="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    >
+                    <span class="ml-2 text-sm text-gray-700">Show recent contributions feed</span>
+                  </label>
+                  <p class="text-xs text-gray-500 mt-1 ml-6">Display a live feed of recent contributions on the event page</p>
+                </div>
+                
+                <!-- Allow Contributor Override -->
+                <div class="mt-3">
+                  <label class="inline-flex items-center">
+                    <input 
+                      type="checkbox" 
+                      name="event[privacy_settings][allow_contributor_override]" 
+                      value="true" 
+                      checked={Map.get(privacy_settings, "allow_contributor_override", true) == true}
+                      class="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    >
+                    <span class="ml-2 text-sm text-gray-700">Let contributors choose their privacy</span>
+                  </label>
+                  <p class="text-xs text-gray-500 mt-1 ml-6">Contributors can override default privacy settings during checkout</p>
+                </div>
+              </div>
+            </div>
+            <% end %>
+
             <!-- Hidden field to ensure taxation_type is submitted for ticketless events -->
             <%= unless length(@tickets || []) > 0 do %>
               <input type="hidden" name="event[taxation_type]" value="ticketless" />

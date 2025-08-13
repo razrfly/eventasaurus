@@ -991,6 +991,37 @@ defmodule EventasaurusWeb.EventManageLive do
   end
   
   @impl true
+  def handle_event("export_payments_csv", _params, socket) do
+    event = socket.assigns.event
+    
+    # Get filtered orders if filters are applied, otherwise get all
+    orders = if socket.assigns[:payment_status_filter] || socket.assigns[:payment_method_filter] do
+      get_filtered_payment_orders(
+        socket.assigns.payment_orders, 
+        socket.assigns.payment_status_filter, 
+        socket.assigns.payment_method_filter
+      )
+    else
+      # Get all manual payment orders for export
+      Ticketing.list_all_manual_payment_orders(event.id)
+    end
+    
+    # Generate CSV content
+    csv_content = generate_payment_csv(orders)
+    
+    # Send file download
+    socket = socket
+    |> push_event("download", %{
+      filename: "payment_tracking_#{event.slug}_#{Date.utc_today()}.csv",
+      content: csv_content,
+      mime_type: "text/csv"
+    })
+    |> put_flash(:info, "Exporting #{length(orders)} payment records")
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
   def handle_event("load_more_payment_orders", _params, socket) do
     if socket.assigns.payment_orders_loaded < socket.assigns.payment_orders_count do
       socket = assign(socket, :payment_orders_loading, true)
@@ -1919,6 +1950,62 @@ defmodule EventasaurusWeb.EventManageLive do
     pending_ids = Enum.map(pending_orders, & &1.id)
     
     length(pending_orders) > 0 && MapSet.subset?(MapSet.new(pending_ids), MapSet.new(selected_ids))
+  end
+  
+  defp generate_payment_csv(orders) do
+    headers = [
+      "Order ID",
+      "Name",
+      "Email",
+      "Order Type",
+      "Amount",
+      "Currency",
+      "Payment Method",
+      "Status",
+      "Reference",
+      "Notes",
+      "Date Received",
+      "Created At"
+    ]
+    
+    rows = Enum.map(orders, fn order ->
+      [
+        order.id,
+        order.user.name || "",
+        order.user.email,
+        String.capitalize(order.order_type || "ticket"),
+        Float.to_string(order.total_cents / 100),
+        String.upcase(order.currency || "usd"),
+        EventasaurusApp.Events.Order.payment_method_display_name(order.manual_payment_method),
+        String.capitalize(order.status),
+        order.manual_payment_reference || "",
+        order.manual_payment_notes || "",
+        format_datetime_for_csv(order.manual_payment_received_at),
+        format_datetime_for_csv(order.inserted_at)
+      ]
+    end)
+    
+    # Convert to CSV format
+    [headers | rows]
+    |> Enum.map(fn row ->
+      row
+      |> Enum.map(fn field ->
+        # Escape fields containing commas, quotes, or newlines
+        field_str = to_string(field)
+        if String.contains?(field_str, [",", "\"", "\n"]) do
+          "\"#{String.replace(field_str, "\"", "\"\"")}\""
+        else
+          field_str
+        end
+      end)
+      |> Enum.join(",")
+    end)
+    |> Enum.join("\n")
+  end
+  
+  defp format_datetime_for_csv(nil), do: ""
+  defp format_datetime_for_csv(datetime) do
+    Calendar.strftime(datetime, "%Y-%m-%d %H:%M:%S")
   end
 
 end

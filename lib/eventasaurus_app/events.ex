@@ -281,7 +281,7 @@ defmodule EventasaurusApp.Events do
   end
 
   defp maybe_preload(nil), do: nil
-  defp maybe_preload(event), do: Repo.preload(event, [:venue, :users]) |> Event.with_computed_fields()
+  defp maybe_preload(event), do: Repo.preload(event, [:venue, :users, :orders]) |> Event.with_computed_fields()
 
   @doc """
   Gets a single event by slug, excluding soft-deleted ones by default.
