@@ -583,10 +583,11 @@ defmodule EventasaurusApp.Auth.Client do
         case response["users"] do
           users when is_list(users) ->
             Logger.debug("admin_get_user_by_email: Got #{length(users)} users, manually filtering")
-            # Manually filter by exact email match
+            # Manually filter by case-insensitive email match
             matching_user = Enum.find(users, fn user ->
               Logger.debug("admin_get_user_by_email: Comparing #{user["email"]} with #{email}")
-              user["email"] == email
+              # Case-insensitive comparison
+              String.downcase(user["email"] || "") == String.downcase(email || "")
             end)
 
             if matching_user do

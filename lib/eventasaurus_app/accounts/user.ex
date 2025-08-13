@@ -48,6 +48,7 @@ defmodule EventasaurusApp.Accounts.User do
       :default_currency, :timezone
     ])
     |> validate_required([:email, :name, :supabase_id])
+    |> normalize_email()
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_length(:email, max: 160)
     |> validate_username()
@@ -80,6 +81,25 @@ defmodule EventasaurusApp.Accounts.User do
   end
 
   # Private validation functions
+
+  defp normalize_email(changeset) do
+    case get_change(changeset, :email) do
+      nil -> 
+        changeset
+      email when is_binary(email) ->
+        # Use the existing sanitize_email function which trims and downcases
+        case EventasaurusApp.Sanitizer.sanitize_email(email) do
+          {:error, _reason} ->
+            add_error(changeset, :email, "is invalid")
+          nil ->
+            add_error(changeset, :email, "is invalid")
+          normalized_email when is_binary(normalized_email) ->
+            put_change(changeset, :email, normalized_email)
+        end
+      _ ->
+        changeset
+    end
+  end
 
   defp validate_username(changeset) do
     changeset
