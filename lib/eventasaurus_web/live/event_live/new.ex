@@ -459,6 +459,9 @@ defmodule EventasaurusWeb.EventLive.New do
       Logger.debug("[validate] final is_virtual in params: #{inspect(event_params["is_virtual"])}")
     end
 
+    # Process donation fields if participation type is contribution
+    event_params = process_donation_fields(event_params)
+
     # Merge all params with current form_data, preserving existing values
     form_data = Map.merge(socket.assigns.form_data, event_params)
 
@@ -497,6 +500,9 @@ defmodule EventasaurusWeb.EventLive.New do
 
     # Apply taxation consistency logic before further processing
     event_params = apply_taxation_consistency(event_params)
+    
+    # Process donation fields if needed
+    event_params = process_donation_fields(event_params)
 
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
@@ -1345,6 +1351,19 @@ defmodule EventasaurusWeb.EventLive.New do
   end
 
   @impl true
+  def handle_event("payment_method_changed", %{"method" => method}, socket) do
+    form_data = Map.put(socket.assigns.form_data, "payment_method_type", method)
+    changeset = Events.change_event(%Event{}, form_data)
+    
+    socket =
+      socket
+      |> assign(:form_data, form_data)
+      |> assign(:changeset, changeset)
+    
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("validate_ticket", %{"ticket" => ticket_params}, socket) do
     # Update the ticket form data, preserving existing values
     current_data = socket.assigns.ticket_form_data || %{}
@@ -1951,6 +1970,58 @@ defmodule EventasaurusWeb.EventLive.New do
       _ ->
         Map.put(form_data, "taxation_type_reasoning",
           get_taxation_reasoning(current_taxation, true))
+    end
+  end
+
+  defp process_donation_fields(params) do
+    taxation_type = Map.get(params, "taxation_type") || Map.get(params, "participation_type")
+    
+    if taxation_type == "contribution_collection" or Map.get(params, "participation_type") == "contribution" do
+      params
+      |> process_suggested_amounts()
+      |> process_donation_amounts()
+    else
+      params
+    end
+  end
+
+  defp process_suggested_amounts(params) do
+    case Map.get(params, "suggested_amounts") do
+      nil -> 
+        params
+      amounts when is_list(amounts) ->
+        # Convert dollar strings to cents
+        converted_amounts = amounts
+          |> Enum.map(&parse_currency/1)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.filter(&(&1 > 0))
+        
+        Map.put(params, "suggested_amounts", converted_amounts)
+      _ ->
+        params
+    end
+  end
+
+  defp process_donation_amounts(params) do
+    params
+    |> process_amount_field("minimum_donation_amount")
+    |> process_amount_field("maximum_donation_amount")
+  end
+
+  defp process_amount_field(params, field_name) do
+    case Map.get(params, field_name) do
+      nil -> params
+      "" -> Map.put(params, field_name, nil)
+      amount_str when is_binary(amount_str) ->
+        case parse_currency("$" <> amount_str) do
+          nil -> Map.put(params, field_name, nil)
+          cents -> Map.put(params, field_name, cents)
+        end
+      amount when is_integer(amount) -> 
+        # Already in cents
+        params
+      _ -> 
+        Map.put(params, field_name, nil)
     end
   end
 

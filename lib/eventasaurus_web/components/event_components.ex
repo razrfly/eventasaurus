@@ -1271,6 +1271,78 @@ defmodule EventasaurusWeb.EventComponents do
             </div>
             <% end %>
 
+            <!-- Contribution/Donation Configuration -->
+            <%= if Map.get(assigns, :participation_type, "free") == "contribution" do %>
+            <div class="space-y-4 mt-6">
+              <h4 class="text-sm font-medium text-gray-700">Donation Settings</h4>
+              <div class="p-4 bg-green-50 rounded-lg space-y-4">
+                <!-- Suggested Donation Amounts -->
+                <div>
+                  <label class="text-sm font-medium text-gray-700 mb-2 block">Suggested donation amounts</label>
+                  <div class="space-y-2" id="suggested-amounts-container">
+                    <div class="flex gap-2">
+                      <% suggested_amounts = Map.get(assigns[:form_data] || %{}, "suggested_amounts", ["10", "25", "50", "100"]) %>
+                      <%= for {amount, index} <- Enum.with_index(suggested_amounts) do %>
+                      <div class="relative flex-1">
+                        <span class="absolute left-3 top-2 text-gray-500">$</span>
+                        <input type="number" name="event[suggested_amounts][]" class="pl-8 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder={Enum.at(["10", "25", "50", "100"], index)} value={amount}>
+                      </div>
+                      <% end %>
+                    </div>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">These amounts will be shown as quick-select options</p>
+                  
+                  <!-- Allow Custom Amount Toggle -->
+                  <div class="mt-3">
+                    <label class="inline-flex items-center">
+                      <input type="checkbox" name="event[allow_custom_amount]" value="true" checked={Map.get(assigns[:form_data] || %{}, "allow_custom_amount", "true") == "true"} class="rounded border-gray-300 text-green-600 focus:ring-green-500">
+                      <span class="ml-2 text-sm text-gray-700">Allow custom donation amounts</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Donation Limits -->
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="text-sm text-gray-700">Minimum donation</label>
+                    <div class="mt-1 relative">
+                      <span class="absolute left-3 top-2 text-gray-500">$</span>
+                      <input type="number" name="event[minimum_donation_amount]" id="min-donation" class="pl-8 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="0" min="0" value={Map.get(assigns[:form_data] || %{}, "minimum_donation_amount", "")}>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="text-sm text-gray-700">Maximum donation</label>
+                    <div class="mt-1 relative">
+                      <span class="absolute left-3 top-2 text-gray-500">$</span>
+                      <input type="number" name="event[maximum_donation_amount]" id="max-donation" class="pl-8 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="No limit" value={Map.get(assigns[:form_data] || %{}, "maximum_donation_amount", "")}>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Donation Message -->
+                <div>
+                  <label for="donation_message" class="text-sm font-medium text-gray-700 mb-2 block">
+                    Donation appeal message
+                  </label>
+                  <div class="relative">
+                    <textarea 
+                      id="donation_message"
+                      name="event[donation_message]" 
+                      rows="3" 
+                      maxlength="500"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                      placeholder="Help us make this event amazing! Your contribution helps cover venue costs, materials, and ensures we can continue hosting community events."
+                    ><%= Map.get(assigns[:form_data] || %{}, "donation_message", "") %></textarea>
+                    <div class="absolute bottom-2 right-2 text-xs text-gray-400">
+                      <%= String.length(Map.get(assigns[:form_data] || %{}, "donation_message", "")) %>/500
+                    </div>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">This message will be shown on the donation form</p>
+                </div>
+              </div>
+            </div>
+            <% end %>
+
             <!-- Interest Validation Configuration -->
             <%= if Map.get(assigns, :participation_type, "free") == "interest" do %>
             <div class="space-y-4 mt-6">
@@ -1285,6 +1357,111 @@ defmodule EventasaurusWeb.EventComponents do
                   <input type="date" name="event[decision_deadline]" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                   <p class="text-xs text-gray-500 mt-1">You'll decide by this date whether to proceed</p>
                 </div>
+              </div>
+            </div>
+            <% end %>
+
+            <!-- Payment Processing Configuration -->
+            <%= if Map.get(assigns, :participation_type, "free") in ["paid", "contribution"] or Map.get(assigns[:form_data] || %{}, "threshold_type") == "revenue" do %>
+            <div class="space-y-4 mt-6">
+              <h4 class="text-sm font-medium text-gray-700">Payment Processing</h4>
+              <div class="p-4 bg-indigo-50 rounded-lg space-y-4">
+                <!-- Payment Method Selection -->
+                <div>
+                  <label class="text-sm font-medium text-gray-700 mb-2 block">Accepted payment methods</label>
+                  <% current_payment_method = Map.get(assigns[:form_data] || %{}, "payment_method_type", "stripe_only") %>
+                  <div class="space-y-2">
+                    <label class="flex items-start cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="event[payment_method_type]" 
+                        value="stripe_only" 
+                        class="mt-1 text-indigo-600 focus:ring-indigo-500"
+                        checked={current_payment_method == "stripe_only"}
+                        phx-click="payment_method_changed"
+                        phx-value-method="stripe_only"
+                      />
+                      <div class="ml-3">
+                        <span class="block text-sm font-medium text-gray-900">Online payments only (Stripe)</span>
+                        <span class="block text-xs text-gray-500">Accept credit/debit cards and digital wallets. Automatic processing.</span>
+                      </div>
+                    </label>
+                    
+                    <label class="flex items-start cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="event[payment_method_type]" 
+                        value="manual_only" 
+                        class="mt-1 text-indigo-600 focus:ring-indigo-500"
+                        checked={current_payment_method == "manual_only"}
+                        disabled={Map.get(assigns[:form_data] || %{}, "threshold_type") in ["revenue", "both"]}
+                        phx-click="payment_method_changed"
+                        phx-value-method="manual_only"
+                      />
+                      <div class="ml-3">
+                        <span class={"block text-sm font-medium text-gray-900 #{if Map.get(assigns[:form_data] || %{}, "threshold_type") in ["revenue", "both"], do: "text-gray-400"}"}>Manual payments only</span>
+                        <span class="block text-xs text-gray-500">Accept cash, check, Venmo, etc. You'll track payments manually.</span>
+                        <%= if Map.get(assigns[:form_data] || %{}, "threshold_type") in ["revenue", "both"] do %>
+                        <span class="block text-xs text-red-500 mt-1">Not available for revenue threshold events</span>
+                        <% end %>
+                      </div>
+                    </label>
+                    
+                    <label class="flex items-start cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="event[payment_method_type]" 
+                        value="hybrid" 
+                        class="mt-1 text-indigo-600 focus:ring-indigo-500"
+                        checked={current_payment_method == "hybrid"}
+                        phx-click="payment_method_changed"
+                        phx-value-method="hybrid"
+                      />
+                      <div class="ml-3">
+                        <span class="block text-sm font-medium text-gray-900">Both online and manual payments</span>
+                        <span class="block text-xs text-gray-500">Give attendees the choice between online and manual payment options.</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                
+                <!-- Payment Instructions (shown for manual_only and hybrid) -->
+                <%= if current_payment_method in ["manual_only", "hybrid"] do %>
+                <div>
+                  <label class="text-sm font-medium text-gray-700 mb-2 block">
+                    Payment instructions
+                    <span class="text-xs text-gray-500 font-normal ml-1">(required)</span>
+                  </label>
+                  <textarea 
+                    name="event[payment_instructions]" 
+                    rows="3" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Example: Please send payment via Venmo to @username or bring cash to the event. Include your name and email with payment."
+                    required
+                  ><%= Map.get(assigns[:form_data] || %{}, "payment_instructions", "") %></textarea>
+                  <p class="text-xs text-gray-500 mt-1">
+                    These instructions will be shown to attendees who choose manual payment.
+                  </p>
+                </div>
+                <% end %>
+                
+                <!-- Revenue threshold warning -->
+                <%= if Map.get(assigns[:form_data] || %{}, "threshold_type") in ["revenue", "both"] do %>
+                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <div class="flex">
+                    <div class="flex-shrink-0">
+                      <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                      </svg>
+                    </div>
+                    <div class="ml-3">
+                      <p class="text-sm text-yellow-700">
+                        Revenue thresholds require online payment processing to automatically track progress.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <% end %>
               </div>
             </div>
             <% end %>

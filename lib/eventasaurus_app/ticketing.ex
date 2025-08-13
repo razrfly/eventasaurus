@@ -17,6 +17,93 @@ defmodule EventasaurusApp.Ticketing do
 
   # PubSub topic for real-time updates
   @pubsub_topic "ticketing_updates"
+  
+  ## Manual Payment Order Management
+  
+  @doc """
+  Lists manual payment orders for an event with pagination.
+  """
+  def list_manual_payment_orders(event_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
+    
+    Order
+    |> where([o], o.event_id == ^event_id)
+    |> where([o], o.payment_method == "manual")
+    |> where([o], is_nil(o.deleted_at))
+    |> order_by([o], desc: o.inserted_at)
+    |> limit(^limit)
+    |> offset(^offset)
+    |> preload([:user, :ticket])
+    |> Repo.all()
+  end
+  
+  @doc """
+  Counts manual payment orders for an event.
+  """
+  def count_manual_payment_orders(event_id) do
+    Order
+    |> where([o], o.event_id == ^event_id)
+    |> where([o], o.payment_method == "manual")
+    |> where([o], is_nil(o.deleted_at))
+    |> Repo.aggregate(:count, :id)
+  end
+  
+  @doc """
+  Lists all manual payment orders for an event (no pagination, for stats).
+  """
+  def list_all_manual_payment_orders(event_id) do
+    Order
+    |> where([o], o.event_id == ^event_id)
+    |> where([o], o.payment_method == "manual")
+    |> where([o], is_nil(o.deleted_at))
+    |> preload([:user])
+    |> Repo.all()
+  end
+  
+  @doc """
+  Marks batch of payments as received.
+  """
+  def mark_batch_payments_received(order_ids, user_id) when is_list(order_ids) do
+    Repo.transaction(fn ->
+      count = Enum.reduce(order_ids, 0, fn order_id, acc ->
+        case mark_payment_received(order_id, user_id) do
+          {:ok, _} -> acc + 1
+          {:error, _} -> acc
+        end
+      end)
+      
+      if count == length(order_ids) do
+        {:ok, count}
+      else
+        Repo.rollback("Failed to mark all payments as received")
+      end
+    end)
+  end
+  
+  @doc """
+  Marks a single manual payment as received.
+  """
+  def mark_payment_received(order_id, marked_by_user_id, attrs \\ %{}) do
+    order = Repo.get(Order, order_id)
+    
+    if order && order.payment_method == "manual" && order.status == "pending" do
+      changeset = Order.mark_payment_received_changeset(order, attrs, marked_by_user_id)
+      
+      case Repo.update(changeset) do
+        {:ok, updated_order} ->
+          # Create event participant for confirmed manual payment
+          create_event_participant(updated_order)
+          
+          {:ok, updated_order}
+          
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    else
+      {:error, :invalid_order}
+    end
+  end
 
   ## Ticket Management
 
@@ -1849,6 +1936,37 @@ defmodule EventasaurusApp.Ticketing do
   # This is more accurate than applying fee to the total amount including tax
   defp calculate_application_fee(base_amount_cents, fee_percentage \\ 0.05) do
     round(base_amount_cents * fee_percentage)
+  end
+  
+  @doc """
+  Get an order with user preloaded.
+  """
+  def get_order_with_user(order_id) do
+    Order
+    |> Repo.get(order_id)
+    |> Repo.preload(:user)
+  end
+  
+  @doc """
+  Mark a manual payment as refunded.
+  """
+  def mark_payment_refunded(order_id, marked_by_user_id, attrs \\ %{}) do
+    order = Repo.get(Order, order_id)
+    
+    if order && order.payment_method == "manual" && order.status == "confirmed" do
+      changeset = Order.mark_payment_refunded_changeset(order, attrs, marked_by_user_id)
+      
+      case Repo.update(changeset) do
+        {:ok, updated_order} ->
+          # Handle any refund-related side effects
+          {:ok, updated_order}
+          
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    else
+      {:error, :invalid_order_state}
+    end
   end
 
 end

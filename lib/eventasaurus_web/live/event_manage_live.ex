@@ -105,7 +105,24 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:show_delete_modal, false)
                |> assign(:deletion_reason, "")
                |> assign(:can_hard_delete, false)
-               |> assign(:deletion_ineligibility_reason, nil)}
+               |> assign(:deletion_ineligibility_reason, nil)
+               # Payment tracking state
+               |> assign(:payment_orders, [])
+               |> assign(:payment_orders_count, 0)
+               |> assign(:payment_orders_loaded, 0)
+               |> assign(:payment_orders_loading, false)
+               |> assign(:payment_tracking_stats, %{})
+               |> assign(:pending_payments_count, 0)
+               |> assign(:selected_payment_orders, [])
+               |> assign(:all_payments_selected, false)
+               |> assign(:payment_status_filter, nil)
+               |> assign(:payment_method_filter, nil)
+               # Payment modal state
+               |> assign(:show_payment_modal, false)
+               |> assign(:payment_modal_order, nil)
+               |> assign(:payment_modal_form, %{})
+               |> assign(:payment_modal_processing, false)
+               |> load_payment_tracking_data()}
             end
         end
     end
@@ -119,6 +136,11 @@ defmodule EventasaurusWeb.EventManageLive do
         socket
         |> assign(:polls_loading, true)
         |> load_poll_data()
+        
+      "payment_tracking" ->
+        # Load payment tracking data when switching to the tab
+        socket
+        |> load_payment_tracking_data()
 
       _ ->
         socket
@@ -766,6 +788,230 @@ defmodule EventasaurusWeb.EventManageLive do
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, "Failed to delete event: #{reason}")}
         end
+    end
+  end
+  
+  # Payment Tracking Event Handlers
+  
+  @impl true
+  def handle_event("filter_payments", params, socket) do
+    payment_status = case Map.get(params, "payment_status_filter") do
+      "" -> nil
+      status -> status
+    end
+    
+    payment_method = case Map.get(params, "payment_method_filter") do
+      "" -> nil
+      method -> method
+    end
+    
+    {:noreply,
+     socket
+     |> assign(:payment_status_filter, payment_status)
+     |> assign(:payment_method_filter, payment_method)}
+  end
+  
+  @impl true
+  def handle_event("clear_payment_filters", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:payment_status_filter, nil)
+     |> assign(:payment_method_filter, nil)}
+  end
+  
+  @impl true
+  def handle_event("toggle_payment_selection", %{"order_id" => order_id}, socket) do
+    order_id_int = String.to_integer(order_id)
+    current_selections = socket.assigns.selected_payment_orders
+    
+    updated_selections = if order_id_int in current_selections do
+      List.delete(current_selections, order_id_int)
+    else
+      [order_id_int | current_selections]
+    end
+    
+    all_selected = check_if_all_payments_selected(socket.assigns.payment_orders, updated_selections)
+    
+    {:noreply,
+     socket
+     |> assign(:selected_payment_orders, updated_selections)
+     |> assign(:all_payments_selected, all_selected)}
+  end
+  
+  @impl true
+  def handle_event("toggle_all_payments", _params, socket) do
+    if socket.assigns.all_payments_selected do
+      {:noreply,
+       socket
+       |> assign(:selected_payment_orders, [])
+       |> assign(:all_payments_selected, false)}
+    else
+      # Select all pending orders
+      pending_order_ids = socket.assigns.payment_orders
+                         |> Enum.filter(&(&1.status == "pending"))
+                         |> Enum.map(& &1.id)
+      
+      {:noreply,
+       socket
+       |> assign(:selected_payment_orders, pending_order_ids)
+       |> assign(:all_payments_selected, true)}
+    end
+  end
+  
+  @impl true
+  def handle_event("mark_batch_payments", _params, socket) do
+    selected_order_ids = socket.assigns.selected_payment_orders
+    
+    if length(selected_order_ids) > 0 do
+      case Ticketing.mark_batch_payments_received(selected_order_ids, socket.assigns.user.id) do
+        {:ok, count} ->
+          {:noreply,
+           socket
+           |> load_payment_tracking_data()
+           |> assign(:selected_payment_orders, [])
+           |> assign(:all_payments_selected, false)
+           |> put_flash(:info, "Successfully marked #{count} payment(s) as received")}
+           
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Failed to mark payments: #{reason}")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Please select at least one payment to mark as received")}
+    end
+  end
+  
+  @impl true
+  def handle_event("edit_payment", %{"order_id" => order_id}, socket) do
+    case Ticketing.get_order_with_user(order_id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Order not found")}
+        
+      order ->
+        # Initialize the modal with the order data
+        socket = socket
+        |> assign(:payment_modal_order, order)
+        |> assign(:payment_modal_form, %{
+          "manual_payment_method" => order.manual_payment_method || "",
+          "manual_payment_reference" => order.manual_payment_reference || "",
+          "manual_payment_notes" => order.manual_payment_notes || ""
+        })
+        |> assign(:show_payment_modal, true)
+        |> assign(:payment_modal_processing, false)
+        
+        {:noreply, socket}
+    end
+  end
+  
+  @impl true
+  def handle_event("close_payment_modal", _params, socket) do
+    socket = socket
+    |> assign(:show_payment_modal, false)
+    |> assign(:payment_modal_order, nil)
+    |> assign(:payment_modal_form, %{})
+    |> assign(:payment_modal_processing, false)
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_event("update_payment_modal_field", %{"_target" => [field], "value" => value}, socket) do
+    form = Map.put(socket.assigns.payment_modal_form, field, value)
+    {:noreply, assign(socket, :payment_modal_form, form)}
+  end
+  
+  @impl true
+  def handle_event("save_payment_changes", _params, socket) do
+    order = socket.assigns.payment_modal_order
+    form = socket.assigns.payment_modal_form
+    current_user = socket.assigns.user
+    
+    # Validate required fields
+    if form["manual_payment_method"] == "" do
+      {:noreply, put_flash(socket, :error, "Payment method is required")}
+    else
+      socket = assign(socket, :payment_modal_processing, true)
+      
+      # Prepare attributes for update
+      attrs = %{
+        manual_payment_method: form["manual_payment_method"],
+        manual_payment_reference: form["manual_payment_reference"],
+        manual_payment_notes: form["manual_payment_notes"]
+      }
+      
+      # If order is pending, mark it as received
+      result = if order.status == "pending" do
+        Ticketing.mark_payment_received(order.id, current_user.id, attrs)
+      else
+        # Otherwise just update the payment details
+        order
+        |> EventasaurusApp.Events.Order.changeset(attrs)
+        |> EventasaurusApp.Repo.update()
+      end
+      
+      case result do
+        {:ok, _updated_order} ->
+          socket = socket
+          |> assign(:show_payment_modal, false)
+          |> assign(:payment_modal_order, nil)
+          |> assign(:payment_modal_form, %{})
+          |> assign(:payment_modal_processing, false)
+          |> put_flash(:info, "Payment updated successfully")
+          |> load_payment_tracking_data()
+          
+          {:noreply, socket}
+          
+        {:error, _changeset} ->
+          socket = socket
+          |> assign(:payment_modal_processing, false)
+          |> put_flash(:error, "Failed to update payment")
+          
+          {:noreply, socket}
+      end
+    end
+  end
+  
+  @impl true
+  def handle_event("refund_payment", %{"order_id" => order_id}, socket) do
+    current_user = socket.assigns.user
+    
+    case Ticketing.mark_payment_refunded(order_id, current_user.id) do
+      {:ok, _updated_order} ->
+        socket = socket
+        |> assign(:show_payment_modal, false)
+        |> assign(:payment_modal_order, nil)
+        |> assign(:payment_modal_form, %{})
+        |> put_flash(:info, "Payment marked as refunded")
+        |> load_payment_tracking_data()
+        
+        {:noreply, socket}
+        
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to refund payment")}
+    end
+  end
+  
+  @impl true
+  def handle_event("load_more_payment_orders", _params, socket) do
+    if socket.assigns.payment_orders_loaded < socket.assigns.payment_orders_count do
+      socket = assign(socket, :payment_orders_loading, true)
+      
+      # Load next batch of payment orders
+      next_batch = Ticketing.list_manual_payment_orders(
+        socket.assigns.event.id,
+        limit: 20,
+        offset: socket.assigns.payment_orders_loaded
+      )
+      
+      # Combine with existing orders
+      updated_orders = socket.assigns.payment_orders ++ next_batch
+      
+      {:noreply,
+       socket
+       |> assign(:payment_orders, updated_orders)
+       |> assign(:payment_orders_loaded, socket.assigns.payment_orders_loaded + length(next_batch))
+       |> assign(:payment_orders_loading, false)}
+    else
+      {:noreply, socket}
     end
   end
 
@@ -1598,6 +1844,81 @@ defmodule EventasaurusWeb.EventManageLive do
   defp handle_specific_message({:search_users_for_organizers, query, :load_more}, socket) do
     # Load more results for organizer search
     handle_organizer_search(query, socket, :load_more)
+  end
+  
+  # Payment tracking helper functions
+  
+  defp load_payment_tracking_data(socket) do
+    event = socket.assigns.event
+    
+    # Only load if event supports manual payments
+    if event.payment_method_type in ["manual_only", "hybrid"] do
+      # Get initial batch of manual payment orders
+      orders = Ticketing.list_manual_payment_orders(event.id, limit: 20, offset: 0)
+      total_count = Ticketing.count_manual_payment_orders(event.id)
+      
+      # Calculate statistics
+      stats = calculate_payment_tracking_stats(event.id)
+      
+      socket
+      |> assign(:payment_orders, orders)
+      |> assign(:payment_orders_count, total_count)
+      |> assign(:payment_orders_loaded, length(orders))
+      |> assign(:payment_tracking_stats, stats)
+      |> assign(:pending_payments_count, stats.pending_payments)
+    else
+      socket
+    end
+  end
+  
+  defp calculate_payment_tracking_stats(event_id) do
+    # Get all manual payment orders for statistics
+    all_orders = Ticketing.list_all_manual_payment_orders(event_id)
+    
+    total_orders = length(all_orders)
+    pending_orders = Enum.filter(all_orders, &(&1.status == "pending"))
+    confirmed_orders = Enum.filter(all_orders, &(&1.status == "confirmed"))
+    
+    pending_amount = Enum.reduce(pending_orders, 0, fn order, acc -> acc + order.total_cents end)
+    received_amount = Enum.reduce(confirmed_orders, 0, fn order, acc -> acc + order.total_cents end)
+    
+    collection_rate = if total_orders > 0 do
+      (length(confirmed_orders) / total_orders) * 100
+    else
+      0.0
+    end
+    
+    %{
+      total_orders: total_orders,
+      pending_payments: length(pending_orders),
+      received_payments: length(confirmed_orders),
+      pending_amount: pending_amount,
+      received_amount: received_amount,
+      collection_rate: collection_rate
+    }
+  end
+  
+  defp get_filtered_payment_orders(orders, status_filter, method_filter) do
+    orders
+    |> filter_by_payment_status(status_filter)
+    |> filter_by_payment_method(method_filter)
+  end
+  
+  defp filter_by_payment_status(orders, nil), do: orders
+  defp filter_by_payment_status(orders, status) do
+    Enum.filter(orders, &(&1.status == status))
+  end
+  
+  defp filter_by_payment_method(orders, nil), do: orders
+  defp filter_by_payment_method(orders, method) do
+    Enum.filter(orders, &(&1.manual_payment_method == method))
+  end
+  
+  defp check_if_all_payments_selected(orders, selected_ids) do
+    pending_orders = Enum.filter(orders, &(&1.status == "pending"))
+    pending_ids = Enum.map(pending_orders, & &1.id)
+    
+    length(pending_orders) > 0 && MapSet.subset?(MapSet.new(pending_ids), MapSet.new(selected_ids))
   end
 
 end

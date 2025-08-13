@@ -26,10 +26,12 @@ defmodule EventasaurusApp.Events.Event do
   @valid_statuses [:draft, :polling, :threshold, :confirmed, :canceled]
   @valid_threshold_types ["attendee_count", "revenue", "both"]
   @valid_taxation_types ["ticketed_event", "contribution_collection", "ticketless"]
+  @valid_payment_method_types ["stripe_only", "manual_only", "hybrid"]
 
   def valid_statuses, do: @valid_statuses
   def valid_threshold_types, do: @valid_threshold_types
   def valid_taxation_types, do: @valid_taxation_types
+  def valid_payment_method_types, do: @valid_payment_method_types
 
   schema "events" do
     field :title, :string
@@ -53,6 +55,17 @@ defmodule EventasaurusApp.Events.Event do
     field :taxation_type, :string, default: "ticketless"
     field :is_virtual, :boolean, default: false
     field :virtual_venue_url, :string # for virtual meeting URLs
+    
+    # Donation/contribution fields
+    field :suggested_amounts, {:array, :integer}, default: [1000, 2500, 5000, 10000] # in cents
+    field :allow_custom_amount, :boolean, default: true
+    field :minimum_donation_amount, :integer # in cents
+    field :maximum_donation_amount, :integer # in cents
+    field :donation_message, :string
+    
+    # Payment method fields
+    field :payment_method_type, :string, default: "stripe_only"
+    field :payment_instructions, :string
 
     # Theme fields for the theming system
     field :theme, Ecto.Enum,
@@ -101,7 +114,10 @@ defmodule EventasaurusApp.Events.Event do
                    :visibility, :slug, :cover_image_url, :venue_id, :group_id, :external_image_data,
                    :rich_external_data, :theme, :theme_customizations, :status, :polling_deadline, :threshold_count,
                    :threshold_type, :threshold_revenue_cents, :canceled_at, :selected_poll_dates,
-                   :virtual_venue_url, :is_ticketed, :taxation_type, :is_virtual])
+                   :virtual_venue_url, :is_ticketed, :taxation_type, :is_virtual,
+                   :suggested_amounts, :allow_custom_amount, :minimum_donation_amount, 
+                   :maximum_donation_amount, :donation_message,
+                   :payment_method_type, :payment_instructions])
     |> validate_required([:title, :timezone, :visibility])
     |> validate_virtual_venue_url()
     |> maybe_validate_start_at()
@@ -121,6 +137,8 @@ defmodule EventasaurusApp.Events.Event do
     |> validate_virtual_event_venue()
     |> validate_canceled_at()
     |> validate_status_consistency()
+    |> validate_donation_fields()
+    |> validate_payment_method_fields()
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:group_id)
     |> unique_constraint(:slug)
@@ -336,6 +354,106 @@ defmodule EventasaurusApp.Events.Event do
     # Simplified validation - just ensure status is valid
     # Status inference and auto-correction happens at the context level
     changeset
+  end
+
+  defp validate_donation_fields(changeset) do
+    taxation_type = get_field(changeset, :taxation_type)
+    
+    if taxation_type == "contribution_collection" do
+      changeset
+      |> validate_donation_amounts()
+      |> validate_donation_message()
+      |> validate_suggested_amounts()
+    else
+      changeset
+    end
+  end
+
+  defp validate_donation_amounts(changeset) do
+    min_amount = get_field(changeset, :minimum_donation_amount)
+    max_amount = get_field(changeset, :maximum_donation_amount)
+    
+    changeset
+    |> validate_number(:minimum_donation_amount, greater_than_or_equal_to: 0)
+    |> validate_number(:maximum_donation_amount, greater_than_or_equal_to: 0)
+    |> then(fn cs ->
+      case {min_amount, max_amount} do
+        {min, max} when is_integer(min) and is_integer(max) and min > max ->
+          add_error(cs, :maximum_donation_amount, "must be greater than or equal to minimum donation amount")
+        _ ->
+          cs
+      end
+    end)
+  end
+
+  defp validate_donation_message(changeset) do
+    validate_length(changeset, :donation_message, max: 500)
+  end
+
+  defp validate_suggested_amounts(changeset) do
+    case get_field(changeset, :suggested_amounts) do
+      nil -> changeset
+      amounts when is_list(amounts) ->
+        if Enum.all?(amounts, &(is_integer(&1) and &1 > 0)) do
+          changeset
+        else
+          add_error(changeset, :suggested_amounts, "must be a list of positive integers")
+        end
+      _ ->
+        add_error(changeset, :suggested_amounts, "must be a list of amounts")
+    end
+  end
+
+  defp validate_payment_method_fields(changeset) do
+    taxation_type = get_field(changeset, :taxation_type)
+    threshold_type = get_field(changeset, :threshold_type)
+    
+    # Only validate payment method for monetized events
+    if taxation_type in ["ticketed_event", "contribution_collection"] or threshold_type == "revenue" do
+      changeset
+      |> validate_payment_method_type()
+      |> validate_payment_instructions()
+      |> validate_payment_method_consistency()
+    else
+      changeset
+    end
+  end
+
+  defp validate_payment_method_type(changeset) do
+    case get_field(changeset, :payment_method_type) do
+      nil ->
+        put_change(changeset, :payment_method_type, "stripe_only")
+      payment_method when payment_method in @valid_payment_method_types ->
+        changeset
+      _invalid_type ->
+        valid_types_str = @valid_payment_method_types |> Enum.join(", ")
+        add_error(changeset, :payment_method_type, "must be one of: #{valid_types_str}")
+    end
+  end
+
+  defp validate_payment_instructions(changeset) do
+    payment_method = get_field(changeset, :payment_method_type)
+    payment_instructions = get_field(changeset, :payment_instructions)
+    
+    case {payment_method, payment_instructions} do
+      {method, instr} when method in ["manual_only", "hybrid"] and (is_nil(instr) or instr == "") ->
+        add_error(changeset, :payment_instructions, "is required when manual payment options are enabled")
+      _ ->
+        validate_length(changeset, :payment_instructions, max: 1000)
+    end
+  end
+
+  defp validate_payment_method_consistency(changeset) do
+    threshold_type = get_field(changeset, :threshold_type)
+    payment_method = get_field(changeset, :payment_method_type)
+    status = get_field(changeset, :status)
+    
+    # Revenue thresholds require online payment capability
+    if status == :threshold and threshold_type in ["revenue", "both"] and payment_method == "manual_only" do
+      add_error(changeset, :payment_method_type, "must include online payment option for revenue threshold events")
+    else
+      changeset
+    end
   end
 
   defp maybe_validate_start_at(changeset) do
