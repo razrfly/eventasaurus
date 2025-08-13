@@ -21,9 +21,17 @@ defmodule EventasaurusApp.Repo.Migrations.AddTrigramIndexesForSearchOptimization
     """
 
     # Trigram index for usernames (supports ILIKE with wildcards)
+    # Only create if username column exists
     execute """
-    CREATE INDEX IF NOT EXISTS users_username_gin_trgm_index
-    ON users USING gin (username gin_trgm_ops)
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'users' 
+                 AND column_name = 'username') THEN
+        CREATE INDEX IF NOT EXISTS users_username_gin_trgm_index
+        ON users USING gin (username gin_trgm_ops);
+      END IF;
+    END$$;
     """
   end
 
