@@ -29,11 +29,19 @@ defmodule EventasaurusApp.Accounts do
   def get_user(id), do: Repo.get(User, id)
 
   @doc """
-  Gets a user by email.
+  Gets a user by email (case-insensitive).
   """
-  def get_user_by_email(email) do
-    Repo.get_by(User, email: email)
+  def get_user_by_email(email) when is_binary(email) do
+    case EventasaurusApp.Sanitizer.sanitize_email(email) do
+      {:error, _} ->
+        nil
+      nil ->
+        nil
+      normalized_email when is_binary(normalized_email) ->
+        Repo.get_by(User, email: normalized_email)
+    end
   end
+  def get_user_by_email(_), do: nil
 
   @doc """
   Gets a user by Supabase ID.
@@ -118,9 +126,16 @@ defmodule EventasaurusApp.Accounts do
       %User{} = user ->
         {:ok, user}
       nil ->
-        name = user_metadata["name"] || extract_name_from_email(email)
+        # Normalize email to ensure consistency
+        normalized_email = case EventasaurusApp.Sanitizer.sanitize_email(email) do
+          {:error, _} -> email  # Fallback to original if sanitization fails
+          nil -> email  # Fallback if nil
+          clean_email when is_binary(clean_email) -> clean_email
+        end
+        
+        name = user_metadata["name"] || extract_name_from_email(normalized_email)
         user_params = %{
-          email: email,
+          email: normalized_email,
           name: name,
           supabase_id: supabase_id
         }
@@ -136,20 +151,30 @@ defmodule EventasaurusApp.Accounts do
   Returns {:ok, user} or {:error, changeset}.
   """
   def find_or_create_guest_user(email) when is_binary(email) do
-    case get_user_by_email(email) do
-      %User{} = user ->
-        {:ok, user}
+    # Normalize the email first
+    normalized_result = EventasaurusApp.Sanitizer.sanitize_email(email)
+    
+    case normalized_result do
+      {:error, reason} ->
+        {:error, reason}
       nil ->
-        name = extract_name_from_email(email)
-        # Generate a temporary supabase_id for guest users
-        temp_supabase_id = "guest_#{:crypto.strong_rand_bytes(8) |> Base.encode64()}"
+        {:error, :invalid_email}
+      normalized_email when is_binary(normalized_email) ->
+        case get_user_by_email(normalized_email) do
+          %User{} = user ->
+            {:ok, user}
+          nil ->
+            name = extract_name_from_email(normalized_email)
+            # Generate a temporary supabase_id for guest users
+            temp_supabase_id = "guest_#{:crypto.strong_rand_bytes(8) |> Base.encode64()}"
 
-        user_params = %{
-          email: email,
-          name: name,
-          supabase_id: temp_supabase_id
-        }
-        create_user(user_params)
+            user_params = %{
+              email: normalized_email,
+              name: name,
+              supabase_id: temp_supabase_id
+            }
+            create_user(user_params)
+        end
     end
   end
 
