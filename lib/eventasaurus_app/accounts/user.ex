@@ -90,9 +90,9 @@ defmodule EventasaurusApp.Accounts.User do
         # Use the existing sanitize_email function which trims and downcases
         case EventasaurusApp.Sanitizer.sanitize_email(email) do
           {:error, reason} ->
-            add_error(changeset, :email, "has invalid format: #{reason}")
+            add_error(changeset, :email, "has invalid format: #{to_string(reason)}")
           nil ->
-            add_error(changeset, :email, "cannot be nil")
+            add_error(changeset, :email, "cannot be blank")
           normalized_email when is_binary(normalized_email) ->
             put_change(changeset, :email, normalized_email)
         end
