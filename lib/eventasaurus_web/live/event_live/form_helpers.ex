@@ -17,22 +17,22 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
   def map_date_certainty_to_status(base_attrs \\ %{}, date_certainty)
 
   def map_date_certainty_to_status(base_attrs, "confirmed") do
-    Map.put(base_attrs, :status, :confirmed)
+    Map.put(base_attrs, :status, "confirmed")
   end
 
   def map_date_certainty_to_status(base_attrs, "polling") do
     base_attrs
-    |> Map.put(:status, :polling)
+    |> Map.put(:status, "polling")
     # polling_deadline will be set by the specific polling fields
   end
 
   def map_date_certainty_to_status(base_attrs, "planning") do
-    Map.put(base_attrs, :status, :draft)
+    Map.put(base_attrs, :status, "draft")
   end
 
   def map_date_certainty_to_status(base_attrs, _) do
     # Default to confirmed for unknown values
-    Map.put(base_attrs, :status, :confirmed)
+    Map.put(base_attrs, :status, "confirmed")
   end
 
   @doc """
@@ -62,8 +62,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
   def map_venue_certainty_to_fields(base_attrs, "polling") do
     # Create location poll - if not already polling for date, set status to polling
     current_status = Map.get(base_attrs, :status, :confirmed)
-    if current_status != :polling do
-      Map.put(base_attrs, :status, :polling)
+    if current_status != "polling" do
+      Map.put(base_attrs, :status, "polling")
     else
       base_attrs
     end
@@ -113,7 +113,7 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
 
   def map_participation_type_to_fields(base_attrs, "crowdfunding") do
     base_attrs
-    |> Map.put(:status, :threshold)
+    |> Map.put(:status, "threshold")
     |> Map.put(:is_ticketed, true)
     |> Map.put(:taxation_type, "ticketed_event")
     |> Map.put(:threshold_type, "revenue")
@@ -122,7 +122,7 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
 
   def map_participation_type_to_fields(base_attrs, "interest") do
     base_attrs
-    |> Map.put(:status, :threshold)
+    |> Map.put(:status, "threshold")
     |> Map.put(:threshold_type, "attendee_count")
     # threshold_count will be set by specific interest validation fields
   end
@@ -171,20 +171,20 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
     
     cond do
       threshold_type in ["revenue", "attendee_count"] -> 
-        Map.put(attrs, :status, :threshold)
+        Map.put(attrs, :status, "threshold")
       date_certainty == "polling" or venue_certainty == "polling" ->
-        Map.put(attrs, :status, :polling)  
+        Map.put(attrs, :status, "polling")  
       date_certainty == "planning" ->
-        Map.put(attrs, :status, :draft)
+        Map.put(attrs, :status, "draft")
       true ->
-        Map.put(attrs, :status, :confirmed)
+        Map.put(attrs, :status, "confirmed")
     end
   end
 
   # Private helper to set sensible defaults for missing fields
   defp set_defaults(attrs) do
     attrs
-    |> Map.put_new(:status, :confirmed)
+    |> Map.put_new(:status, "confirmed")
     |> Map.put_new(:is_ticketed, false)
     |> Map.put_new(:taxation_type, "ticketless")
     |> Map.put_new(:is_virtual, false)
