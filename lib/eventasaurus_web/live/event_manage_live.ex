@@ -1451,9 +1451,8 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp load_poll_count(event) do
     try do
-      # Load polls and count them
-      polls = Events.list_polls(event)
-      length(polls)
+      # Use efficient count query instead of loading all polls
+      Events.count_polls_for_event(event)
     rescue
       _ -> 0
     end
