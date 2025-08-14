@@ -617,10 +617,14 @@ defmodule EventasaurusWeb.EventLive.New do
         else
           # Validation failed, show errors
           require Logger
-          # Sanitize sensitive fields before logging
-          sanitized_errors = validation_changeset.errors
-          Logger.error("Event validation failed", 
-            errors: inspect(sanitized_errors),
+          # Sanitize errors for logging (messages only, no raw values)
+          sanitized_errors = Ecto.Changeset.traverse_errors(validation_changeset, fn {msg, opts} ->
+            Enum.reduce(opts, msg, fn {key, value}, acc ->
+              String.replace(acc, "%{#{key}}", to_string(value))
+            end)
+          end)
+          Logger.error("Event validation failed",
+            errors: sanitized_errors,
             user_id: socket.assigns.user.id,
             action: validation_changeset.action,
             valid?: validation_changeset.valid?
