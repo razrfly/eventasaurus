@@ -151,12 +151,17 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
     participation_type = Map.get(params, "participation_type", "free")
     
     # Apply mappings in sequence, each building on the previous
-    base_attrs
+    attrs = base_attrs
     |> map_date_certainty_to_status(date_certainty)
     |> map_venue_certainty_to_fields(venue_certainty)
     |> map_participation_type_to_fields(participation_type)
     |> resolve_status_conflicts(date_certainty, venue_certainty, participation_type)
     |> set_defaults()
+    
+    # Convert all atom keys to strings to avoid mixed keys error in changeset
+    attrs
+    |> Enum.map(fn {k, v} -> {to_string(k), v} end)
+    |> Enum.into(%{})
   end
 
   # Private helper to resolve conflicts when multiple factors affect status
