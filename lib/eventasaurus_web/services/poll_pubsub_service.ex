@@ -100,6 +100,25 @@ defmodule EventasaurusWeb.Services.PollPubSubService do
   end
 
   @doc """
+  Broadcasts when polls are reordered within an event.
+  """
+  def broadcast_polls_reordered(event_id, updated_polls) do
+    message = %{
+      type: :polls_reordered,
+      event_id: event_id,
+      updated_polls: Enum.map(updated_polls, fn poll -> 
+        %{
+          id: poll.id,
+          order_index: poll.order_index
+        }
+      end),
+      timestamp: DateTime.utc_now()
+    }
+
+    broadcast_to_event_participants(event_id, message)
+  end
+
+  @doc """
   Broadcasts when an option's visibility is changed by a moderator.
   """
   def broadcast_option_visibility_changed(poll, option, action, user) when action in [:hidden, :shown] do

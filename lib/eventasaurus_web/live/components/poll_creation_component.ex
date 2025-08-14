@@ -312,6 +312,30 @@ defmodule EventasaurusWeb.PollCreationComponent do
                     </div>
                   </div>
 
+                  <!-- Privacy Settings -->
+                  <div class="bg-purple-50 p-4 rounded-lg mt-4">
+                    <h4 class="text-sm font-medium text-gray-900 mb-3">Privacy Settings</h4>
+                    
+                    <div class="space-y-3">
+                      <!-- Show Suggester Names -->
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <label for="show_suggester_names" class="text-sm font-medium text-gray-700">
+                            Show Suggester Names
+                          </label>
+                          <p class="text-xs text-gray-500">Display who suggested each option</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          name="poll[privacy_settings][show_suggester_names]"
+                          id="show_suggester_names"
+                          checked={get_privacy_setting(@changeset, "show_suggester_names", true)}
+                          class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- Deadlines -->
                   <div class="bg-blue-50 p-4 rounded-lg">
                     <h4 class="text-sm font-medium text-gray-900 mb-3">Deadlines (Optional)</h4>
@@ -450,6 +474,9 @@ defmodule EventasaurusWeb.PollCreationComponent do
   end
 
   defp save_poll(socket, poll_params) do
+    # Process privacy_settings to convert checkbox values to booleans
+    poll_params = process_privacy_settings(poll_params)
+    
     if socket.assigns.is_editing do
       Events.update_poll(socket.assigns.poll, poll_params)
     else
@@ -461,6 +488,24 @@ defmodule EventasaurusWeb.PollCreationComponent do
       })
 
       Events.create_poll(poll_params)
+    end
+  end
+  
+  defp process_privacy_settings(poll_params) do
+    case Map.get(poll_params, "privacy_settings") do
+      nil -> 
+        # No privacy settings provided, set default
+        Map.put(poll_params, "privacy_settings", %{"show_suggester_names" => true})
+      settings when is_map(settings) ->
+        # Convert checkbox values ("on" = checked, missing = unchecked) to booleans
+        # If the checkbox is unchecked, it won't be in the params at all
+        processed_settings = %{
+          "show_suggester_names" => Map.get(settings, "show_suggester_names") == "on"
+        }
+        
+        Map.put(poll_params, "privacy_settings", processed_settings)
+      _ -> 
+        poll_params
     end
   end
 
@@ -477,5 +522,13 @@ defmodule EventasaurusWeb.PollCreationComponent do
     end
   end
 
+  defp get_privacy_setting(changeset, key, default) do
+    case Ecto.Changeset.get_field(changeset, :privacy_settings) do
+      nil -> default
+      settings when is_map(settings) ->
+        Map.get(settings, key, default)
+      _ -> default
+    end
+  end
 
 end

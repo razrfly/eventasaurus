@@ -54,7 +54,9 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:poll_filter, "all")
      |> assign(:poll_sort, "newest")
      |> assign(:selected_polls, [])
-     |> assign(:open_poll_menu, nil)}
+     |> assign(:open_poll_menu, nil)
+     |> assign(:reorder_mode, false)
+     |> assign(:reordered_polls, [])}
   end
 
   @impl true
@@ -274,16 +276,34 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
               <% end %>
             </form>
             
-            <!-- Select All Checkbox -->
-            <div class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                phx-click="toggle_select_all"
-                phx-target={@myself}
-                checked={length(@selected_polls) == length(get_filtered_polls(@polls || [], @poll_filter))}
-                class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              />
-              <label class="text-sm text-gray-700">Select All</label>
+            <!-- Right side actions -->
+            <div class="flex items-center gap-3">
+              <!-- Reorder Polls Button (for organizers only) -->
+              <%= if @is_organizer && length(@polls || []) > 1 do %>
+                <button
+                  phx-click="toggle_reorder_mode"
+                  phx-target={@myself}
+                  type="button"
+                  class={"inline-flex items-center px-3 py-1 border rounded-md text-sm font-medium #{if @reorder_mode, do: "border-blue-500 text-blue-700 bg-blue-50", else: "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}"}
+                >
+                  <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  <%= if @reorder_mode, do: "Done Reordering", else: "Reorder Polls" %>
+                </button>
+              <% end %>
+              
+              <!-- Select All Checkbox -->
+              <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  phx-click="toggle_select_all"
+                  phx-target={@myself}
+                  checked={length(@selected_polls) == length(get_filtered_polls(@polls || [], @poll_filter))}
+                  class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label class="text-sm text-gray-700">Select All</label>
+              </div>
             </div>
           </div>
           
@@ -325,19 +345,54 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           
           <!-- Match the exact guests tab structure -->
           <div class="divide-y divide-gray-200">
-        <%= for poll <- get_sorted_polls(get_filtered_polls(@polls || [], @poll_filter), @poll_sort) do %>
+        <% polls_to_display = if @reorder_mode, do: @reordered_polls, else: get_sorted_polls(get_filtered_polls(@polls || [], @poll_filter), @poll_sort) %>
+        <%= for {poll, index} <- Enum.with_index(polls_to_display) do %>
           <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
             <div class="flex items-center justify-between">
-              <!-- Checkbox for batch selection -->
+              <!-- Reorder Controls or Checkbox -->
               <div class="flex items-center gap-3 mr-3">
-                <input
-                  type="checkbox"
-                  phx-click="toggle_poll_selection"
-                  phx-value-poll_id={poll.id}
-                  phx-target={@myself}
-                  checked={poll.id in Map.get(assigns, :selected_polls, [])}
-                  class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
+                <%= if @reorder_mode do %>
+                  <!-- Reorder controls -->
+                  <div class="flex flex-col gap-1">
+                    <button
+                      phx-click="move_poll_up"
+                      phx-value-poll_id={poll.id}
+                      phx-target={@myself}
+                      disabled={index == 0}
+                      class={"p-1 rounded #{if index == 0, do: "text-gray-300 cursor-not-allowed", else: "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"}"}
+                      title="Move up"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      phx-click="move_poll_down"
+                      phx-value-poll_id={poll.id}
+                      phx-target={@myself}
+                      disabled={index == length(polls_to_display) - 1}
+                      class={"p-1 rounded #{if index == length(polls_to_display) - 1, do: "text-gray-300 cursor-not-allowed", else: "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"}"}
+                      title="Move down"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="text-sm font-medium text-gray-500">
+                    #<%= index + 1 %>
+                  </div>
+                <% else %>
+                  <!-- Regular checkbox -->
+                  <input
+                    type="checkbox"
+                    phx-click="toggle_poll_selection"
+                    phx-value-poll_id={poll.id}
+                    phx-target={@myself}
+                    checked={poll.id in Map.get(assigns, :selected_polls, [])}
+                    class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                <% end %>
               </div>
               
               <!-- Poll Info (matching user info structure) -->
@@ -1272,6 +1327,70 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   end
 
   @impl true
+  def handle_event("toggle_reorder_mode", _params, socket) do
+    if socket.assigns.reorder_mode do
+      # Save the new order
+      case save_poll_order(socket) do
+        {:ok, _} ->
+          {:noreply,
+           socket
+           |> assign(:reorder_mode, false)
+           |> assign(:reordered_polls, [])
+           |> assign(:success_message, "Poll order saved successfully!")}
+        
+        {:error, _} ->
+          {:noreply,
+           socket
+           |> assign(:error_message, "Failed to save poll order. Please try again.")}
+      end
+    else
+      # Enter reorder mode
+      {:noreply,
+       socket
+       |> assign(:reorder_mode, true)
+       |> assign(:reordered_polls, socket.assigns.polls || [])}
+    end
+  end
+
+  @impl true
+  def handle_event("move_poll_up", %{"poll_id" => poll_id}, socket) do
+    poll_id = String.to_integer(poll_id)
+    polls = socket.assigns.reordered_polls || socket.assigns.polls || []
+    
+    index = Enum.find_index(polls, &(&1.id == poll_id))
+    
+    if index && index > 0 do
+      updated_polls = 
+        polls
+        |> List.delete_at(index)
+        |> List.insert_at(index - 1, Enum.at(polls, index))
+      
+      {:noreply, assign(socket, :reordered_polls, updated_polls)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("move_poll_down", %{"poll_id" => poll_id}, socket) do
+    poll_id = String.to_integer(poll_id)
+    polls = socket.assigns.reordered_polls || socket.assigns.polls || []
+    
+    index = Enum.find_index(polls, &(&1.id == poll_id))
+    
+    if index && index < length(polls) - 1 do
+      updated_polls = 
+        polls
+        |> List.delete_at(index)
+        |> List.insert_at(index + 1, Enum.at(polls, index))
+      
+      {:noreply, assign(socket, :reordered_polls, updated_polls)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("delete_poll", %{"poll_id" => poll_id}, socket) do
     poll_id = String.to_integer(poll_id)
     poll = Enum.find(socket.assigns.polls, &(&1.id == poll_id))
@@ -1517,12 +1636,17 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   end
 
   def handle_info({:poll_saved, poll, message}, socket) do
+    # Reload polls from the database to get the updated list
+    event = socket.assigns.event
+    polls = Events.list_polls(event)
+    
     # Smart redirect: After poll creation, redirect to poll details view
     # This makes option addition more discoverable
     # Only redirect for new polls (not edited polls)
     if message =~ ~r/created/i do
       {:noreply,
        socket
+       |> assign(:polls, polls)
        |> assign(:showing_creation_modal, false)
        |> assign(:editing_poll, nil)
        |> assign(:selected_poll, poll)
@@ -1532,6 +1656,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
       # For edited polls, just close the modal without redirecting
       {:noreply,
        socket
+       |> assign(:polls, polls)
        |> assign(:showing_creation_modal, false)
        |> assign(:editing_poll, nil)
        |> assign(:success_message, message)}
@@ -1549,6 +1674,25 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
      |> assign(:showing_poll_details, false)
      |> assign(:editing_poll, nil)
      |> assign(:selected_poll, nil)}
+  end
+
+  def handle_info(%{type: :polls_reordered, event_id: event_id} = _message, socket) do
+    # Reload polls when they are reordered
+    if socket.assigns.event.id == event_id do
+      # Reload polls from database to get the new order
+      polls = Events.list_polls(socket.assigns.event)
+      
+      # Recalculate stats with the new poll order - use the same pattern as other handlers
+      integration_stats = calculate_integration_stats_with_polls(polls, socket.assigns.event)
+      
+      {:noreply,
+       socket
+       |> assign(:polls, polls)
+       |> assign(:integration_stats, integration_stats)
+       |> assign(:success_message, "Poll order saved successfully!")}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_info(_msg, socket) do
@@ -1771,6 +1915,22 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     end
   end
 
+  defp save_poll_order(socket) do
+    polls = socket.assigns.reordered_polls || []
+    event_id = socket.assigns.event.id
+    
+    # Create the poll orders list with new indices
+    poll_orders = 
+      polls
+      |> Enum.with_index()
+      |> Enum.map(fn {poll, index} ->
+        %{poll_id: poll.id, order_index: index}
+      end)
+    
+    # Call the Events context function to save the new order
+    Events.reorder_polls(event_id, poll_orders)
+  end
+
   # Filtering helper functions
   defp get_filtered_polls(polls, filter) when is_list(polls) do
     case filter do
@@ -1813,10 +1973,13 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   defp get_sorted_polls(polls, sort) when is_list(polls) do
     case sort do
       "newest" ->
-        Enum.sort_by(polls, & &1.inserted_at, {:desc, NaiveDateTime})
+        # Keep the order_index ordering from the database (default ordering)
+        # Don't sort by inserted_at as that overrides the manual ordering
+        polls
 
       "oldest" ->
-        Enum.sort_by(polls, & &1.inserted_at, {:asc, NaiveDateTime})
+        # For oldest, reverse the default order
+        Enum.reverse(polls)
 
       "most_votes" ->
         Enum.sort_by(polls, &get_poll_vote_count/1, :desc)
