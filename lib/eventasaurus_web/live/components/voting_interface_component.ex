@@ -46,6 +46,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   alias EventasaurusWeb.EmbeddedProgressBarComponent
   import EventasaurusWeb.VoterCountDisplay
   import EventasaurusWeb.ClearVotesButton
+  import Phoenix.HTML.SimplifiedHelpers.Truncate
 
 
   @impl true
@@ -309,7 +310,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
 
             <%= if option.description do %>
-              <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+              <p class="text-sm text-gray-500 mt-1"><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+            <% end %>
+            
+            <!-- Show who suggested this option -->
+            <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
+              <p class="text-xs text-gray-500 mt-1">
+                Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+              </p>
             <% end %>
             
             <!-- Delete button for user's own suggestions -->
@@ -466,7 +474,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
 
             <%= if option.description do %>
-              <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+              <p class="text-sm text-gray-500 mt-1"><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+            <% end %>
+            
+            <!-- Show who suggested this option -->
+            <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
+              <p class="text-xs text-gray-500 mt-1">
+                Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+              </p>
             <% end %>
             
             <!-- Delete button for user's own suggestions -->
@@ -577,7 +592,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <div class="flex-1 min-w-0">
                 <h4 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h4>
                 <%= if option.description do %>
-                  <p class={"text-xs text-gray-500 mt-0.5 sm:mt-1 " <> if(@poll.poll_type == "movie", do: "line-clamp-2", else: "")}><%= option.description %></p>
+                  <p class={"text-xs text-gray-500 mt-0.5 sm:mt-1 " <> if(@poll.poll_type == "movie", do: "line-clamp-2", else: "")}><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+                <% end %>
+                
+                <!-- Show who suggested this option -->
+                <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
+                  <p class="text-xs text-gray-500 mt-1">
+                    Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+                  </p>
                 <% end %>
 
                 <!-- Embedded Progress Bar -->
@@ -672,7 +694,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                   <div class="flex-1 min-w-0">
                     <h5 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h5>
                     <%= if option.description do %>
-                      <p class={"text-xs text-gray-500 mt-0.5 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-2", else: "mt-1")}><%= option.description %></p>
+                      <p class={"text-xs text-gray-500 mt-0.5 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-2", else: "mt-1")}><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+                    <% end %>
+                    
+                    <!-- Show who suggested this option -->
+                    <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
+                      <p class="text-xs text-gray-500 mt-1">
+                        Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+                      </p>
                     <% end %>
                     
                     <!-- Delete button for user's own suggestions -->
@@ -744,7 +773,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
           <div class="flex-1 min-w-0">
             <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
             <%= if option.description do %>
-              <p class="text-sm text-gray-500 mt-1"><%= option.description %></p>
+              <p class="text-sm text-gray-500 mt-1"><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
+            <% end %>
+            
+            <!-- Show who suggested this option -->
+            <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
+              <p class="text-xs text-gray-500 mt-1">
+                Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+              </p>
             <% end %>
             
             <!-- Delete button for user's own suggestions -->
@@ -1689,4 +1725,5 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       true -> "#{remaining_seconds}s"
     end
   end
+
 end

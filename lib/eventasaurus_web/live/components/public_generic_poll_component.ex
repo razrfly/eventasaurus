@@ -325,10 +325,10 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                       <% end %>
 
                       <!-- Show who suggested this option -->
-                      <%= if option.suggested_by do %>
+                      <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <p class="text-xs text-gray-500">
-                            Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
+                            Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
                           </p>
                           <!-- Delete button for own suggestions within 5 minutes -->
                           <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>
