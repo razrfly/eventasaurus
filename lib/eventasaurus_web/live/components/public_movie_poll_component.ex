@@ -20,6 +20,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
+  import Phoenix.HTML.SimplifiedHelpers.Truncate
 
   @impl true
   def mount(socket) do
@@ -288,18 +289,6 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   # Note: Voting helper functions have been removed as voting is now handled by VotingInterfaceComponent
 
-  # Helper function to parse enhanced description into details line and main description
-  defp parse_enhanced_description(description) do
-    description = description || ""
-    case String.split(description, "\n\n", parts: 2) do
-      [details_line, main_description] ->
-        {details_line, main_description}
-      [details_line] ->
-        {details_line, nil}
-      _ ->
-        {nil, description}
-    end
-  end
 
   @impl true
   def render(assigns) do
@@ -362,22 +351,15 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                       <div class="flex-1 min-w-0">
                         <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
 
-                        <!-- Movie Details (Year, Director, Genre) -->
                         <%= if option.description do %>
-                          <% {details_line, main_description} = parse_enhanced_description(option.description) %>
-                          <%= if details_line do %>
-                            <p class="text-sm text-gray-600 font-medium mb-2"><%= details_line %></p>
-                          <% end %>
-                          <%= if main_description && String.length(main_description) > 0 do %>
-                            <p class="text-sm text-gray-600 line-clamp-3 mb-2"><%= main_description %></p>
-                          <% end %>
+                          <p class="text-sm text-gray-600 mb-2"><%= truncate(option.description, length: 80, separator: " ") %></p>
                         <% end %>
 
                         <!-- Show who suggested this movie -->
-                        <%= if option.suggested_by do %>
+                        <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
                           <div class="flex items-center justify-between">
                             <p class="text-xs text-gray-500">
-                              Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
+                              Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
                             </p>
                             <!-- Delete button for user's own suggestions -->
                             <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>

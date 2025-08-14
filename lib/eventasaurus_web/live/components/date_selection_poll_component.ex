@@ -582,9 +582,9 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
                                   </div>
                                 <% end %>
 
-                                <%= if option.suggested_by do %>
+                                <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
                                   <p class="text-sm text-gray-500 mt-1">
-                                    Suggested by <%= option.suggested_by.name || option.suggested_by.email %>
+                                    Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
                                   </p>
                                 <% end %>
 
