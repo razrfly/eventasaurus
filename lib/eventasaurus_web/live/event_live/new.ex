@@ -598,6 +598,8 @@ defmodule EventasaurusWeb.EventLive.New do
     # Authorize group assignment if specified
     case validate_group_assignment(final_event_params, socket.assigns.user) do
       {:ok, authorized_params} ->
+        require Logger
+        Logger.debug("Authorized params: #{inspect(authorized_params)}")
         # Validate date polling before saving
         validation_changeset =
           %Event{}
@@ -610,6 +612,9 @@ defmodule EventasaurusWeb.EventLive.New do
           create_event_with_validation(authorized_params, socket)
         else
           # Validation failed, show errors
+          require Logger
+          Logger.error("Validation failed! Changeset errors: #{inspect(validation_changeset.errors)}")
+          Logger.error("Changeset: #{inspect(validation_changeset)}")
           {:noreply, assign(socket, form: to_form(validation_changeset))}
         end
       

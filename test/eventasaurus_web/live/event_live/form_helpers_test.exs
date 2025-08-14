@@ -13,10 +13,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
 
       result = FormHelpers.resolve_event_attributes(params)
 
-      assert result.status == :confirmed
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == false
+      assert result["status"] == "confirmed"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == false
     end
 
     test "maps virtual event correctly" do
@@ -28,9 +28,9 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
 
       result = FormHelpers.resolve_event_attributes(params)
 
-      assert result.status == :confirmed
-      assert result.is_virtual == true
-      assert result.venue_id == nil
+      assert result["status"] == "confirmed"
+      assert result["is_virtual"] == true
+      assert result["venue_id"] == nil
     end
 
     test "maps crowdfunding correctly" do
@@ -42,10 +42,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
 
       result = FormHelpers.resolve_event_attributes(params)
 
-      assert result.status == :threshold
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.threshold_type == "revenue"
+      assert result["status"] == "threshold"
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["threshold_type"] == "revenue"
     end
 
     test "maps interest validation correctly" do
@@ -57,8 +57,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
 
       result = FormHelpers.resolve_event_attributes(params)
 
-      assert result.status == :threshold
-      assert result.threshold_type == "attendee_count"
+      assert result["status"] == "threshold"
+      assert result["threshold_type"] == "attendee_count"
     end
 
     test "resolves status conflicts correctly (threshold wins over polling)" do
@@ -71,8 +71,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
       result = FormHelpers.resolve_event_attributes(params)
 
       # Threshold should take precedence over polling
-      assert result.status == :threshold
-      assert result.threshold_type == "revenue"
+      assert result["status"] == "threshold"
+      assert result["threshold_type"] == "revenue"
     end
 
     test "maps polling for both date and venue" do
@@ -84,7 +84,7 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
 
       result = FormHelpers.resolve_event_attributes(params)
 
-      assert result.status == :polling
+      assert result["status"] == "polling"
     end
 
     test "handles missing parameters gracefully" do
@@ -93,19 +93,19 @@ defmodule EventasaurusWeb.EventLive.FormHelpersTest do
       result = FormHelpers.resolve_event_attributes(params)
 
       # Should use defaults
-      assert result.status == :confirmed
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == false
+      assert result["status"] == "confirmed"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == false
     end
   end
 
   describe "individual mapping functions" do
     test "map_date_certainty_to_status/2" do
-      assert FormHelpers.map_date_certainty_to_status(%{}, "confirmed").status == :confirmed
-      assert FormHelpers.map_date_certainty_to_status(%{}, "polling").status == :polling
-      assert FormHelpers.map_date_certainty_to_status(%{}, "planning").status == :draft
-      assert FormHelpers.map_date_certainty_to_status(%{}, "invalid").status == :confirmed
+      assert FormHelpers.map_date_certainty_to_status(%{}, "confirmed").status == "confirmed"
+      assert FormHelpers.map_date_certainty_to_status(%{}, "polling").status == "polling"
+      assert FormHelpers.map_date_certainty_to_status(%{}, "planning").status == "draft"
+      assert FormHelpers.map_date_certainty_to_status(%{}, "invalid").status == "confirmed"
     end
 
     test "map_venue_certainty_to_fields/2" do
