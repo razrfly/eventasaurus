@@ -356,10 +356,10 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                         <% end %>
 
                         <!-- Show who suggested this movie -->
-                        <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
+                        <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@movie_poll) and option.suggested_by do %>
                           <div class="flex items-center justify-between">
                             <p class="text-xs text-gray-500">
-                              Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+                              Suggested by <%= display_suggester_name(option.suggested_by) %>
                             </p>
                             <!-- Delete button for user's own suggestions -->
                             <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>
@@ -525,6 +525,21 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     cond do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
+    end
+  end
+
+  # Helper function to display suggester name with proper blank value handling
+  defp display_suggester_name(suggested_by) when is_nil(suggested_by), do: "Anonymous"
+  defp display_suggester_name(suggested_by) do
+    name = suggested_by.name
+    username = suggested_by.username
+    email = suggested_by.email
+    
+    cond do
+      is_binary(name) and String.trim(name) != "" -> name
+      is_binary(username) and String.trim(username) != "" -> username
+      is_binary(email) and String.trim(email) != "" -> email
+      true -> "Anonymous"
     end
   end
 
