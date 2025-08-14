@@ -328,7 +328,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                       <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <p class="text-xs text-gray-500">
-                            Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+                            Suggested by <%= display_suggester_name(option.suggested_by) %>
                           </p>
                           <!-- Delete button for own suggestions within 5 minutes -->
                           <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>
@@ -632,6 +632,21 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     cond do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
+    end
+  end
+
+  # Helper function to display suggester name with proper blank value handling
+  defp display_suggester_name(suggested_by) when is_nil(suggested_by), do: "Anonymous"
+  defp display_suggester_name(suggested_by) do
+    name = suggested_by.name
+    username = suggested_by.username
+    email = suggested_by.email
+    
+    cond do
+      is_binary(name) and String.trim(name) != "" -> name
+      is_binary(username) and String.trim(username) != "" -> username
+      is_binary(email) and String.trim(email) != "" -> email
+      true -> "Anonymous"
     end
   end
 

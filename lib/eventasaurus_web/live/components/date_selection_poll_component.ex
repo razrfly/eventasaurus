@@ -584,7 +584,7 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
                                 <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) and option.suggested_by do %>
                                   <p class="text-sm text-gray-500 mt-1">
-                                    Suggested by <%= option.suggested_by.name || option.suggested_by.username || option.suggested_by.email || "Anonymous" %>
+                                    Suggested by <%= display_suggester_name(option.suggested_by) %>
                                   </p>
                                 <% end %>
 
@@ -1350,6 +1350,21 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
     case DatePollAdapter.extract_date_from_option(option) do
       {:ok, date} -> Date.to_iso8601(date)
       _ -> nil
+    end
+  end
+
+  # Helper function to display suggester name with proper blank value handling
+  defp display_suggester_name(suggested_by) when is_nil(suggested_by), do: "Anonymous"
+  defp display_suggester_name(suggested_by) do
+    name = suggested_by.name
+    username = suggested_by.username
+    email = suggested_by.email
+    
+    cond do
+      is_binary(name) and String.trim(name) != "" -> name
+      is_binary(username) and String.trim(username) != "" -> username
+      is_binary(email) and String.trim(email) != "" -> email
+      true -> "Anonymous"
     end
   end
 end
