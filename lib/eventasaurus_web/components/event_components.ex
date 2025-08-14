@@ -728,57 +728,102 @@ defmodule EventasaurusWeb.EventComponents do
                 <% end %>
               </div>
 
-              <!-- Date/Time Pickers - Only show if user has confirmed date -->
-              <%= if Map.get(assigns, :date_certainty, "confirmed") == "confirmed" do %>
-                <div phx-hook="DateTimeSync" id="date-time-sync-hook">
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                      <.date_input
-                        id={"#{@id}-start_date"}
-                        name="event[start_date]"
-                        value={Map.get(@form_data, "start_date", "")}
-                        required
-                        data-role="start-date"
-                        class="text-sm"
-                      />
+              <!-- Date/Time Pickers - Show for confirmed dates with regular labels, for TBD dates with different labels -->
+              <%= cond do %>
+                <% Map.get(assigns, :date_certainty, "confirmed") == "confirmed" -> %>
+                  <div phx-hook="DateTimeSync" id="date-time-sync-hook">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                        <.date_input
+                          id={"#{@id}-start_date"}
+                          name="event[start_date]"
+                          value={Map.get(@form_data, "start_date", "")}
+                          required
+                          data-role="start-date"
+                          class="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                        <.time_select
+                          id={"#{@id}-start_time"}
+                          name="event[start_time]"
+                          value={Map.get(@form_data, "start_time", "")}
+                          required
+                          data-role="start-time"
+                          class="text-sm"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
-                      <.time_select
-                        id={"#{@id}-start_time"}
-                        name="event[start_time]"
-                        value={Map.get(@form_data, "start_time", "")}
-                        required
-                        data-role="start-time"
-                        class="text-sm"
-                      />
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                        <.date_input
+                          id={"#{@id}-ends_date"}
+                          name="event[ends_date]"
+                          value={Map.get(@form_data, "ends_date", "")}
+                          data-role="end-date"
+                          class="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                        <.time_select
+                          id={"#{@id}-ends_time"}
+                          name="event[ends_time]"
+                          value={Map.get(@form_data, "ends_time", "")}
+                          data-role="end-time"
+                          class="text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                      <.date_input
-                        id={"#{@id}-ends_date"}
-                        name="event[ends_date]"
-                        value={Map.get(@form_data, "ends_date", "")}
-                        data-role="end-date"
-                        class="text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                      <.time_select
-                        id={"#{@id}-ends_time"}
-                        name="event[ends_time]"
-                        value={Map.get(@form_data, "ends_time", "")}
-                        data-role="end-time"
-                        class="text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
 
+                <% Map.get(assigns, :date_certainty, "confirmed") == "planning" -> %>
+                  <!-- For TBD dates, show date fields as "Planning Deadline" -->
+                  <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-700 mb-3">When do you plan to finalize the date?</p>
+                    <div phx-hook="DateTimeSync" id="date-time-sync-hook-tbd">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label class="block text-sm font-medium text-gray-600 mb-1">Target Date</label>
+                          <.date_input
+                            id={"#{@id}-start_date"}
+                            name="event[start_date]"
+                            value={Map.get(@form_data, "start_date", Date.utc_today() |> Date.add(30) |> Date.to_iso8601())}
+                            required
+                            data-role="start-date"
+                            class="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-600 mb-1">Target Time</label>
+                          <.time_select
+                            id={"#{@id}-start_time"}
+                            name="event[start_time]"
+                            value={Map.get(@form_data, "start_time", "17:00")}
+                            required
+                            data-role="start-time"
+                            class="text-sm"
+                          />
+                        </div>
+                      </div>
+                      <p class="text-xs text-gray-500">This will be used as a planning target. You can update it later when you have a confirmed date.</p>
+                    </div>
+                  </div>
+
+                <% true -> %>
+                  <!-- For polling or other states, no date fields shown -->
+              <% end %>
+
+              <!-- Hidden fields for combined datetime values - always include for TBD and confirmed -->
+              <%= if Map.get(assigns, :date_certainty, "confirmed") in ["confirmed", "planning"] do %>
+                <input type="hidden" name="event[start_at]" id={"#{@id}-start_at"} value={format_datetime_for_input(@event, :start_at)} />
+                <input type="hidden" name="event[ends_at]" id={"#{@id}-ends_at"} value={format_datetime_for_input(@event, :ends_at)} />
+              <% end %>
+              
+              <!-- Timezone field - always show regardless of date_certainty -->
               <div>
                 <label for={f[:timezone].id} class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
                 <.timezone_select
@@ -789,13 +834,6 @@ defmodule EventasaurusWeb.EventComponents do
                 />
                 <p class="mt-1 text-xs text-gray-500">Auto-detected if available</p>
               </div>
-
-              <!-- Legacy calendar polling mode info removed - using generic polling system -->
-
-              <!-- Hidden fields for combined datetime values -->
-              <input type="hidden" name="event[start_at]" id={"#{@id}-start_at"} value={format_datetime_for_input(@event, :start_at)} />
-              <input type="hidden" name="event[ends_at]" id={"#{@id}-ends_at"} value={format_datetime_for_input(@event, :ends_at)} />
-              <% end %>
             </div>
 
             <!-- Location -->

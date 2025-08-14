@@ -34,18 +34,18 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
           "Missing is_virtual for #{inspect(params)}"
         
         # Status should be valid
-        assert result.status in [:confirmed, :polling, :draft, :threshold],
-          "Invalid status #{result.status} for #{inspect(params)}"
+        assert result["status"] in ["confirmed", "polling", "draft", "threshold"],
+          "Invalid status #{result["status"]} for #{inspect(params)}"
         
         # Boolean fields should be boolean
-        assert is_boolean(result.is_ticketed),
+        assert is_boolean(result["is_ticketed"]),
           "is_ticketed should be boolean for #{inspect(params)}"
-        assert is_boolean(result.is_virtual),
+        assert is_boolean(result["is_virtual"]),
           "is_virtual should be boolean for #{inspect(params)}"
         
         # Taxation type should be valid
-        assert result.taxation_type in ["ticketless", "ticketed_event", "contribution_collection"],
-          "Invalid taxation_type #{result.taxation_type} for #{inspect(params)}"
+        assert result["taxation_type"] in ["ticketless", "ticketed_event", "contribution_collection"],
+          "Invalid taxation_type #{result["taxation_type"]} for #{inspect(params)}"
       end
     end
 
@@ -59,10 +59,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :confirmed
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == false
+      assert result["status"] == "confirmed"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == false
     end
 
     test "combination 4: confirmed date, confirmed venue, crowdfunding (threshold override)" do
@@ -74,11 +74,11 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :threshold  # Threshold overrides confirmed
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.threshold_type == "revenue"
-      assert result.is_virtual == false
+      assert result["status"] == "threshold"  # Threshold overrides confirmed
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["threshold_type"] == "revenue"
+      assert result["is_virtual"] == false
     end
 
     test "combination 9: confirmed date, virtual venue, crowdfunding" do
@@ -90,12 +90,12 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :threshold
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.threshold_type == "revenue"
-      assert result.is_virtual == true
-      assert result.venue_id == nil
+      assert result["status"] == "threshold"
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["threshold_type"] == "revenue"
+      assert result["is_virtual"] == true
+      assert result["venue_id"] == nil
     end
 
     test "combination 14: confirmed date, venue polling, crowdfunding (threshold overrides polling)" do
@@ -107,11 +107,11 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :threshold  # Threshold overrides polling
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.threshold_type == "revenue"
-      assert result.is_virtual == false
+      assert result["status"] == "threshold"  # Threshold overrides polling
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["threshold_type"] == "revenue"
+      assert result["is_virtual"] == false
     end
 
     test "combination 31: date polling, venue polling, free (double polling edge case)" do
@@ -123,10 +123,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :polling  # Both polling should result in polling status
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == false
+      assert result["status"] == "polling"  # Both polling should result in polling status
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == false
     end
 
     test "combination 34: date polling, venue polling, crowdfunding (threshold overrides double polling)" do
@@ -138,10 +138,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :threshold  # Threshold overrides both polling
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.threshold_type == "revenue"
+      assert result["status"] == "threshold"  # Threshold overrides both polling
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["threshold_type"] == "revenue"
     end
 
     test "combination 46: planning date, virtual venue, free" do
@@ -153,11 +153,11 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :draft
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == true
-      assert result.venue_id == nil
+      assert result["status"] == "draft"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == true
+      assert result["venue_id"] == nil
     end
 
     test "combination 54: planning date, venue polling, crowdfunding (threshold overrides all)" do
@@ -169,10 +169,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       
       result = FormHelpers.resolve_event_attributes(params)
       
-      assert result.status == :threshold  # Threshold overrides draft and polling
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.threshold_type == "revenue"
+      assert result["status"] == "threshold"  # Threshold overrides draft and polling
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["threshold_type"] == "revenue"
     end
   end
 
@@ -227,7 +227,7 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "venue_certainty" => "confirmed",
         "participation_type" => "free"
       })
-      assert result.status == :draft
+      assert result["status"] == "draft"
     end
   end
 
@@ -239,8 +239,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "free"
       })
       
-      assert result.is_virtual == true
-      assert result.venue_id == nil
+      assert result["is_virtual"] == true
+      assert result["venue_id"] == nil
     end
 
     test "tbd venue clears venue_id but keeps is_virtual false" do
@@ -250,8 +250,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "free"
       })
       
-      assert result.is_virtual == false
-      assert result.venue_id == nil
+      assert result["is_virtual"] == false
+      assert result["venue_id"] == nil
     end
 
     test "confirmed venue doesn't modify venue fields" do
@@ -264,7 +264,7 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       # Should not set venue_id (that's handled by venue selection)
       # Should not set is_virtual to true
       refute Map.has_key?(result, :venue_id)
-      assert result.is_virtual == false
+      assert result["is_virtual"] == false
     end
   end
 
@@ -276,8 +276,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "free"
       })
       
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
     end
 
     test "ticketed events have correct taxation settings" do
@@ -287,8 +287,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "ticketed"
       })
       
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
     end
 
     test "contribution events have correct taxation settings" do
@@ -298,8 +298,8 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "contribution"
       })
       
-      assert result.is_ticketed == false
-      assert result.taxation_type == "contribution_collection"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "contribution_collection"
     end
 
     test "crowdfunding events have threshold and taxation settings" do
@@ -309,10 +309,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "crowdfunding"
       })
       
-      assert result.status == :threshold
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.threshold_type == "revenue"
+      assert result["status"] == "threshold"
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["threshold_type"] == "revenue"
     end
 
     test "interest events have threshold settings" do
@@ -322,10 +322,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "interest"
       })
       
-      assert result.status == :threshold
-      assert result.threshold_type == "attendee_count"
+      assert result["status"] == "threshold"
+      assert result["threshold_type"] == "attendee_count"
       # Default taxation should be ticketless for interest validation
-      assert result.taxation_type == "ticketless"
+      assert result["taxation_type"] == "ticketless"
     end
   end
 
@@ -334,10 +334,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       # Empty params
       result = FormHelpers.resolve_event_attributes(%{})
       
-      assert result.status == :confirmed
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == false
+      assert result["status"] == "confirmed"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == false
     end
 
     test "handles partial parameters with defaults" do
@@ -346,10 +346,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "date_certainty" => "polling"
       })
       
-      assert result.status == :polling
-      assert result.is_ticketed == false
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == false
+      assert result["status"] == "polling"
+      assert result["is_ticketed"] == false
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == false
     end
 
     test "handles invalid values with defaults" do
@@ -359,10 +359,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "invalid"
       })
       
-      assert result.status == :confirmed  # Default for invalid date_certainty
-      assert result.is_ticketed == false  # Default for invalid participation_type
-      assert result.taxation_type == "ticketless"
-      assert result.is_virtual == false
+      assert result["status"] == "confirmed"  # Default for invalid date_certainty
+      assert result["is_ticketed"] == false  # Default for invalid participation_type
+      assert result["taxation_type"] == "ticketless"
+      assert result["is_virtual"] == false
     end
   end
 
@@ -374,11 +374,11 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "crowdfunding"
       })
       
-      assert result.status == :threshold
-      assert result.threshold_type == "revenue"
-      assert result.is_virtual == true
-      assert result.venue_id == nil
-      assert result.is_ticketed == true
+      assert result["status"] == "threshold"
+      assert result["threshold_type"] == "revenue"
+      assert result["is_virtual"] == true
+      assert result["venue_id"] == nil
+      assert result["is_ticketed"] == true
     end
 
     test "threshold attendee type with TBD venue" do
@@ -388,10 +388,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "interest"
       })
       
-      assert result.status == :threshold
-      assert result.threshold_type == "attendee_count"
-      assert result.is_virtual == false
-      assert result.venue_id == nil
+      assert result["status"] == "threshold"
+      assert result["threshold_type"] == "attendee_count"
+      assert result["is_virtual"] == false
+      assert result["venue_id"] == nil
     end
 
     test "multiple polling sources result in single polling status" do
@@ -401,9 +401,9 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
         "participation_type" => "ticketed"
       })
       
-      assert result.status == :polling
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
+      assert result["status"] == "polling"
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
     end
   end
 
@@ -416,10 +416,10 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       })
       
       # Should generate data suitable for Event.changeset validation
-      assert result.status == :confirmed
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.is_virtual == false
+      assert result["status"] == "confirmed"
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["is_virtual"] == false
     end
 
     test "generates data that would pass Event validation - threshold event" do
@@ -430,12 +430,12 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       })
       
       # Should generate data suitable for threshold event validation
-      assert result.status == :threshold
-      assert result.threshold_type == "revenue"
-      assert result.is_ticketed == true
-      assert result.taxation_type == "ticketed_event"
-      assert result.is_virtual == true
-      assert result.venue_id == nil
+      assert result["status"] == "threshold"
+      assert result["threshold_type"] == "revenue"
+      assert result["is_ticketed"] == true
+      assert result["taxation_type"] == "ticketed_event"
+      assert result["is_virtual"] == true
+      assert result["venue_id"] == nil
     end
 
     test "generates data that would pass Event validation - virtual event" do
@@ -446,9 +446,9 @@ defmodule EventasaurusWeb.EventLive.FormHelpersComprehensiveTest do
       })
       
       # Should generate data suitable for virtual event validation
-      assert result.is_virtual == true
-      assert result.venue_id == nil
-      assert result.taxation_type == "ticketless"
+      assert result["is_virtual"] == true
+      assert result["venue_id"] == nil
+      assert result["taxation_type"] == "ticketless"
     end
   end
 end

@@ -194,16 +194,21 @@ defmodule EventasaurusWeb.Helpers.EventStatusHelpers do
 
   defp is_ticketed_event?(event) do
     # Check if event is ticketed based on taxation_type or is_ticketed field
-    Map.get(event, :is_ticketed, false) == true || 
-    Map.get(event, :taxation_type) == "ticketed_event"
+    # Handle both atom and string keys for compatibility
+    is_ticketed = Map.get(event, :is_ticketed) || Map.get(event, "is_ticketed") || false
+    taxation_type = Map.get(event, :taxation_type) || Map.get(event, "taxation_type")
+    
+    is_ticketed == true || taxation_type == "ticketed_event"
   end
 
   defp is_crowdfunding?(event) do
-    Map.get(event, :threshold_type) == "revenue" && is_ticketed_event?(event)
+    threshold_type = Map.get(event, :threshold_type) || Map.get(event, "threshold_type")
+    threshold_type == "revenue" && is_ticketed_event?(event)
   end
 
   defp is_interest_validation?(event) do
-    Map.get(event, :threshold_type) == "attendee_count"
+    threshold_type = Map.get(event, :threshold_type) || Map.get(event, "threshold_type")
+    threshold_type == "attendee_count"
   end
 
   defp has_date_polling?(_event) do
