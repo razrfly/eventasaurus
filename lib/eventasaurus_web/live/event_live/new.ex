@@ -534,9 +534,10 @@ defmodule EventasaurusWeb.EventLive.New do
       |> String.trim()
     
     # Only validate venue if it's not virtual and venue_certainty is "confirmed"
-    if !is_virtual && venue_certainty == "confirmed" && (venue_name == "" || venue_address == "") do
+    # Require at least venue_name (consistent with venue creation logic below)
+    if !is_virtual && venue_certainty == "confirmed" && venue_name == "" do
       require Logger
-      Logger.debug("[submit] Venue validation failed - 'confirmed' certainty without venue name or address")
+      Logger.debug("[submit] Venue validation failed - 'confirmed' certainty without venue name")
       
       {:noreply, 
         put_flash(socket, :error, 
