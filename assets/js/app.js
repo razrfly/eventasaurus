@@ -546,6 +546,66 @@ Hooks.InputSync = {
   }
 };
 
+// FocusTrap Hook for modal focus management
+Hooks.FocusTrap = {
+  mounted() {
+    // Store the previously focused element
+    this.previouslyFocused = document.activeElement;
+    
+    // Get all focusable elements within the modal
+    this.focusableElements = this.el.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    
+    if (this.focusableElements.length > 0) {
+      // Focus the first focusable element
+      this.focusableElements[0].focus();
+    }
+    
+    // Add keydown listener for Tab navigation
+    this.handleKeyDown = (e) => {
+      if (e.key === 'Tab') {
+        this.trapFocus(e);
+      }
+    };
+    
+    this.el.addEventListener('keydown', this.handleKeyDown);
+  },
+  
+  destroyed() {
+    // Remove event listener
+    if (this.handleKeyDown) {
+      this.el.removeEventListener('keydown', this.handleKeyDown);
+    }
+    
+    // Restore focus to the previously focused element
+    if (this.previouslyFocused && this.previouslyFocused.focus) {
+      this.previouslyFocused.focus();
+    }
+  },
+  
+  trapFocus(e) {
+    if (this.focusableElements.length === 0) return;
+    
+    const firstFocusable = this.focusableElements[0];
+    const lastFocusable = this.focusableElements[this.focusableElements.length - 1];
+    
+    if (e.shiftKey) {
+      // Shift + Tab
+      if (document.activeElement === firstFocusable) {
+        e.preventDefault();
+        lastFocusable.focus();
+      }
+    } else {
+      // Tab
+      if (document.activeElement === lastFocusable) {
+        e.preventDefault();
+        firstFocusable.focus();
+      }
+    }
+  }
+};
+
 // LazyImage Hook for performance optimization of image loading
 Hooks.LazyImage = {
   mounted() {

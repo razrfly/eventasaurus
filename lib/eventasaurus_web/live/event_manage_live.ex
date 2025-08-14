@@ -773,7 +773,6 @@ defmodule EventasaurusWeb.EventManageLive do
   def handle_info({:poll_saved, poll, %{action: action, message: message}}, socket) do
     # Reload polls data to include the new poll with consistent ordering
     polls = Events.list_polls(socket.assigns.event)
-    |> Enum.sort_by(& &1.id)
 
     # Update the poll integration component to close the modal
     send_update(EventasaurusWeb.EventPollIntegrationComponent,
@@ -1415,11 +1414,11 @@ defmodule EventasaurusWeb.EventManageLive do
     event = socket.assigns.event
 
     try do
-      # Load all polls for the event safely with consistent ordering
+      # Load all polls for the event safely with order_index ordering from database
       polls = case Events.list_polls(event) do
         polls when is_list(polls) ->
-          # Sort by ID to ensure consistent ordering across renders
-          Enum.sort_by(polls, & &1.id)
+          # Keep the order_index ordering from the database query
+          polls
         _ -> []
       end
 
@@ -1452,9 +1451,8 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp load_poll_count(event) do
     try do
-      # Load polls with consistent ordering and count them
+      # Load polls and count them
       polls = Events.list_polls(event)
-      |> Enum.sort_by(& &1.id)
       length(polls)
     rescue
       _ -> 0
@@ -1598,6 +1596,20 @@ defmodule EventasaurusWeb.EventManageLive do
   defp handle_specific_message({:search_users_for_organizers, query, :load_more}, socket) do
     # Load more results for organizer search
     handle_organizer_search(query, socket, :load_more)
+  end
+
+  defp handle_specific_message(%{type: :polls_reordered, event_id: event_id, updated_polls: _updated_polls}, socket) do
+    # Reload polls from the database to get the updated order
+    event = socket.assigns.event
+    
+    if event.id == event_id do
+      # Reload polls with the new order
+      polls = Events.list_polls(event)
+      
+      {:noreply, assign(socket, :polls, polls)}
+    else
+      {:noreply, socket}
+    end
   end
 
 end
