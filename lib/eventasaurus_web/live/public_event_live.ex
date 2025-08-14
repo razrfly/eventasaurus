@@ -1509,13 +1509,6 @@ defmodule EventasaurusWeb.PublicEventLive do
                 </div>
               <% end %>
             </div>
-          <% else %>
-            <!-- No polls available -->
-            <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm text-center">
-              <div class="text-gray-400 text-4xl mb-4">📊</div>
-              <h3 class="text-lg font-medium text-gray-900 mb-2">No Polls Yet</h3>
-              <p class="text-gray-500">Polls for this event will appear here when available.</p>
-            </div>
           <% end %>
         </div>
 

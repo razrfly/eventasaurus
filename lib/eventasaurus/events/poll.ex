@@ -74,6 +74,23 @@ defmodule EventasaurusApp.Events.Poll do
     end
   end
 
+  # Private helper to normalize privacy settings
+  defp normalize_privacy_settings(nil), do: %{"show_suggester_names" => true}
+  defp normalize_privacy_settings(settings) when is_map(settings) do
+    %{
+      "show_suggester_names" => 
+        case Map.get(settings, "show_suggester_names") do
+          nil -> true
+          "on" -> true
+          "off" -> false
+          true -> true
+          false -> false
+          _ -> true
+        end
+    }
+  end
+  defp normalize_privacy_settings(_), do: %{"show_suggester_names" => true}
+
   @doc false
   def changeset(poll, attrs) do
     # Map status to phase for backward compatibility
@@ -87,6 +104,7 @@ defmodule EventasaurusApp.Events.Poll do
       :privacy_settings, :order_index,
       :event_id, :created_by_id
     ])
+    |> update_change(:privacy_settings, &normalize_privacy_settings/1)
     |> validate_required([:title, :poll_type, :voting_system, :event_id, :created_by_id])
     |> validate_inclusion(:phase, phases())
     |> validate_inclusion(:voting_system, ~w(binary approval ranked star))
@@ -117,6 +135,7 @@ defmodule EventasaurusApp.Events.Poll do
       :auto_finalize, :privacy_settings, :order_index,
       :event_id, :created_by_id
     ])
+    |> update_change(:privacy_settings, &normalize_privacy_settings/1)
     |> validate_required([:title, :poll_type, :voting_system, :event_id, :created_by_id])
     |> validate_inclusion(:voting_system, ~w(binary approval ranked star))
     |> validate_poll_type()
@@ -459,6 +478,7 @@ defmodule EventasaurusApp.Events.Poll do
   def privacy_changeset(poll, privacy_settings) when is_map(privacy_settings) do
     poll
     |> cast(%{privacy_settings: privacy_settings}, [:privacy_settings])
+    |> update_change(:privacy_settings, &normalize_privacy_settings/1)
     |> validate_privacy_settings()
   end
 

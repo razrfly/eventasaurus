@@ -3546,6 +3546,21 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Counts the number of polls for a given event.
+  
+  This is more efficient than loading all polls just to count them.
+  
+  ## Examples
+  
+      iex> count_polls_for_event(event)
+      5
+  """
+  def count_polls_for_event(%Event{} = event) do
+    from(p in Poll, where: p.event_id == ^event.id)
+    |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
   Returns the list of active polls (not closed) for an event.
   """
   def list_active_polls(%Event{} = event) do
@@ -3721,24 +3736,30 @@ defmodule EventasaurusApp.Events do
                     where: p.event_id == ^event_id,
                     select: %{id: p.id}
       
-      valid_poll_ids = Repo.all(polls_query) |> Enum.map(& &1.id)
+      valid_poll_ids = 
+        Repo.all(polls_query)
+        |> Enum.map(& &1.id)
+        |> MapSet.new()
       
       # Validate all poll_ids in the request belong to this event
       requested_poll_ids = Enum.map(poll_orders, & &1.poll_id)
       
-      if Enum.all?(requested_poll_ids, fn id -> id in valid_poll_ids end) do
-        # Update each poll's order_index
-        updated_polls = Enum.map(poll_orders, fn %{poll_id: poll_id, order_index: new_index} ->
-          poll = get_poll!(poll_id)
-          
-          {:ok, updated_poll} = poll
-          |> Poll.order_changeset(new_index)
-          |> Repo.update()
-          
-          updated_poll
-        end)
-        
-        updated_polls
+      if Enum.all?(requested_poll_ids, fn id -> MapSet.member?(valid_poll_ids, id) end) do
+        # Update each poll's order_index and stop on first error
+        case Enum.reduce_while(poll_orders, {:ok, []}, fn %{poll_id: poll_id, order_index: new_index}, {:ok, acc} ->
+          case Repo.get_by(Poll, id: poll_id, event_id: event_id) do
+            nil ->
+              {:halt, Repo.rollback(:invalid_poll_ids)}
+            poll ->
+              case poll |> Poll.order_changeset(new_index) |> Repo.update() do
+                {:ok, updated} -> {:cont, {:ok, [updated | acc]}}
+                {:error, changeset} -> {:halt, Repo.rollback({:update_failed, changeset})}
+              end
+          end
+        end) do
+          {:ok, updated} -> Enum.reverse(updated)
+          other -> other
+        end
       else
         Repo.rollback(:invalid_poll_ids)
       end

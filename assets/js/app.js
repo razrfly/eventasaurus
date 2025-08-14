@@ -552,44 +552,52 @@ Hooks.FocusTrap = {
     // Store the previously focused element
     this.previouslyFocused = document.activeElement;
     
-    // Get all focusable elements within the modal
-    this.focusableElements = this.el.querySelectorAll(
-      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    
+    this.FOCUSABLE_SELECTOR =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    this.focusableElements = this.getFocusableElements();
+
     if (this.focusableElements.length > 0) {
-      // Focus the first focusable element
       this.focusableElements[0].focus();
+    } else {
+      // Make container focusable and focus it as a fallback
+      if (!this.el.hasAttribute('tabindex')) this.el.setAttribute('tabindex', '-1');
+      this.el.focus();
     }
-    
+
     // Add keydown listener for Tab navigation
     this.handleKeyDown = (e) => {
       if (e.key === 'Tab') {
         this.trapFocus(e);
       }
     };
-    
+
     this.el.addEventListener('keydown', this.handleKeyDown);
   },
-  
+
+  updated() {
+    // Recompute after LiveView updates modal content
+    this.focusableElements = this.getFocusableElements();
+  },
+
   destroyed() {
     // Remove event listener
     if (this.handleKeyDown) {
       this.el.removeEventListener('keydown', this.handleKeyDown);
     }
-    
+
     // Restore focus to the previously focused element
     if (this.previouslyFocused && this.previouslyFocused.focus) {
       this.previouslyFocused.focus();
     }
   },
-  
+
   trapFocus(e) {
+    this.focusableElements = this.getFocusableElements();
     if (this.focusableElements.length === 0) return;
-    
+
     const firstFocusable = this.focusableElements[0];
     const lastFocusable = this.focusableElements[this.focusableElements.length - 1];
-    
+
     if (e.shiftKey) {
       // Shift + Tab
       if (document.activeElement === firstFocusable) {
@@ -603,6 +611,19 @@ Hooks.FocusTrap = {
         firstFocusable.focus();
       }
     }
+  },
+
+  getFocusableElements() {
+    return Array.from(this.el.querySelectorAll(this.FOCUSABLE_SELECTOR))
+      // filter: visible and not inert
+      .filter(el => {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        const notHidden = style.visibility !== 'hidden' && style.display !== 'none';
+        const hasSize = rect.width > 0 && rect.height > 0;
+        const notAriaHidden = el.getAttribute('aria-hidden') !== 'true';
+        return notHidden && hasSize && notAriaHidden;
+      });
   }
 };
 
