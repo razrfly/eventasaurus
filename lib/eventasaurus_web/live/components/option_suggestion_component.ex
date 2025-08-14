@@ -890,8 +890,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           <% end %>
 
                           <div class="mt-2 flex items-center text-xs text-gray-500">
-                            <span>Suggested by <%= option.suggested_by.name || option.suggested_by.username %></span>
-                            <span class="mx-1">•</span>
+                            <%= if EventasaurusApp.Events.Poll.show_suggester_names?(@poll) do %>
+                              <span>Suggested by <%= option.suggested_by.name || option.suggested_by.username %></span>
+                              <span class="mx-1">•</span>
+                            <% end %>
                             <span><%= format_relative_time(option.inserted_at) %></span>
                             <%= if @poll.poll_type not in ["time", "date_selection"] do %>
                               <span class="mx-1">•</span>

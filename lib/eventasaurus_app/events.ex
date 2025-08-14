@@ -3539,7 +3539,7 @@ defmodule EventasaurusApp.Events do
   def list_polls(%Event{} = event) do
     query = from p in Poll,
             where: p.event_id == ^event.id,
-            order_by: [asc: p.inserted_at],
+            order_by: [asc: p.order_index, asc: p.inserted_at],
             preload: [:created_by, poll_options: [:suggested_by, :votes]]
 
     Repo.all(query)
@@ -3551,7 +3551,7 @@ defmodule EventasaurusApp.Events do
   def list_active_polls(%Event{} = event) do
     query = from p in Poll,
             where: p.event_id == ^event.id and p.phase != "closed",
-            order_by: [asc: p.inserted_at],
+            order_by: [asc: p.order_index, asc: p.inserted_at],
             preload: [:created_by]
 
     polls = Repo.all(query)
@@ -3695,6 +3695,63 @@ defmodule EventasaurusApp.Events do
     poll
     |> Poll.changeset(attrs)
     |> Repo.update()
+  end
+
+  @doc """
+  Updates the privacy settings for a poll.
+  """
+  def update_poll_privacy(%Poll{} = poll, privacy_settings) do
+    poll
+    |> Poll.privacy_changeset(privacy_settings)
+    |> Repo.update()
+  end
+
+  @doc """
+  Reorders polls within an event.
+  
+  ## Examples
+      
+      iex> reorder_polls(event_id, [%{poll_id: 1, order_index: 0}, %{poll_id: 2, order_index: 1}])
+      {:ok, [%Poll{}, %Poll{}]}
+  """
+  def reorder_polls(event_id, poll_orders) when is_list(poll_orders) do
+    result = Repo.transaction(fn ->
+      # Get all polls for the event to verify they belong to it
+      polls_query = from p in Poll,
+                    where: p.event_id == ^event_id,
+                    select: %{id: p.id}
+      
+      valid_poll_ids = Repo.all(polls_query) |> Enum.map(& &1.id)
+      
+      # Validate all poll_ids in the request belong to this event
+      requested_poll_ids = Enum.map(poll_orders, & &1.poll_id)
+      
+      if Enum.all?(requested_poll_ids, fn id -> id in valid_poll_ids end) do
+        # Update each poll's order_index
+        updated_polls = Enum.map(poll_orders, fn %{poll_id: poll_id, order_index: new_index} ->
+          poll = get_poll!(poll_id)
+          
+          {:ok, updated_poll} = poll
+          |> Poll.order_changeset(new_index)
+          |> Repo.update()
+          
+          updated_poll
+        end)
+        
+        updated_polls
+      else
+        Repo.rollback(:invalid_poll_ids)
+      end
+    end)
+    
+    # Broadcast the reordering if successful
+    case result do
+      {:ok, updated_polls} ->
+        EventasaurusWeb.Services.PollPubSubService.broadcast_polls_reordered(event_id, updated_polls)
+        {:ok, updated_polls}
+      error ->
+        error
+    end
   end
 
   @doc """
