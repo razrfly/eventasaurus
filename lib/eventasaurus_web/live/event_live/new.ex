@@ -506,6 +506,19 @@ defmodule EventasaurusWeb.EventLive.New do
     # Resolve intent-based answers to event attributes
     resolved_attributes = FormHelpers.resolve_event_attributes(event_params)
     event_params = Map.merge(event_params, resolved_attributes)
+    
+    # Validate venue requirement when venue_certainty is "confirmed"
+    venue_certainty = Map.get(event_params, "venue_certainty", "confirmed")
+    venue_name = Map.get(socket.assigns.form_data || %{}, "venue_name", "")
+    venue_address = Map.get(socket.assigns.form_data || %{}, "venue_address", "")
+    
+    if venue_certainty == "confirmed" && (venue_name == "" || venue_address == "") do
+      require Logger
+      Logger.debug("[submit] Venue validation failed - venue_certainty is 'confirmed' but venue is empty")
+      
+      socket = put_flash(socket, :error, "Please provide a venue location or select 'Still planning - venue TBD' or 'Virtual event'")
+      {:noreply, socket}
+    else
 
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
@@ -618,8 +631,15 @@ defmodule EventasaurusWeb.EventLive.New do
           # Validation failed, show errors
           require Logger
           # Sanitize errors for logging (messages only, no raw values)
+          # Whitelist safe placeholder keys to avoid leaking sensitive data
+          safe_keys = [:count, :min, :max, :validation, :constraint, :type, :limit, :kind, :field, :enum]
           sanitized_errors = Ecto.Changeset.traverse_errors(validation_changeset, fn {msg, opts} ->
-            Enum.reduce(opts, msg, fn {key, value}, acc ->
+            safe_opts =
+              opts
+              |> Enum.into(%{})
+              |> Map.take(safe_keys)
+
+            Enum.reduce(safe_opts, msg, fn {key, value}, acc ->
               String.replace(acc, "%{#{key}}", to_string(value))
             end)
           end)
@@ -636,6 +656,7 @@ defmodule EventasaurusWeb.EventLive.New do
         socket = put_flash(socket, :error, message)
         {:noreply, socket}
     end
+    end # Close the venue validation else block
   end
 
   @impl true
