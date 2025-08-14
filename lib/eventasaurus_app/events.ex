@@ -188,6 +188,57 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Returns the list of public events with optional search.
+  
+  ## Options
+    - search: Search term to filter by title or description
+    - include_ended: if true, includes events that have ended (default: false)
+    
+  ## Examples
+  
+      iex> list_public_events()
+      [%Event{}, ...]
+      
+      iex> list_public_events(search: "movie")
+      [%Event{}, ...]
+  """
+  def list_public_events(opts \\ []) do
+    search_term = Keyword.get(opts, :search, "")
+    include_ended = Keyword.get(opts, :include_ended, false)
+    current_time = DateTime.utc_now()
+    
+    query = from e in Event,
+            where: e.visibility == :public,
+            where: is_nil(e.deleted_at),
+            order_by: [asc: e.start_at],
+            preload: [:venue, :users]
+    
+    # Filter out ended events unless explicitly included
+    # An event is considered active/upcoming if:
+    # - It has no end date and hasn't started yet, OR
+    # - It has an end date that hasn't passed yet
+    query = if include_ended do
+      query
+    else
+      from e in query,
+        where: (is_nil(e.ends_at) and e.start_at > ^current_time) or 
+               (not is_nil(e.ends_at) and e.ends_at > ^current_time)
+    end
+    
+    # Apply search filter if provided
+    query = if search_term != "" do
+      search_pattern = "%#{search_term}%"
+      from e in query,
+        where: ilike(e.title, ^search_pattern) or ilike(e.description, ^search_pattern)
+    else
+      query
+    end
+    
+    Repo.all(query)
+    |> Enum.map(&Event.with_computed_fields/1)
+  end
+
+  @doc """
   Returns the list of events filtered by minimum attendee count threshold.
 
   ## Parameters
