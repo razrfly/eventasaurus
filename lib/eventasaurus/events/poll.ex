@@ -20,6 +20,10 @@ defmodule EventasaurusApp.Events.Poll do
     field :finalized_option_ids, {:array, :integer}
     field :max_options_per_user, :integer
     field :auto_finalize, :boolean, default: false
+    
+    # Privacy and ordering fields
+    field :privacy_settings, :map, default: %{}
+    field :order_index, :integer, default: 0
 
     # Virtual fields for attaching stats in queries
     field :stats, {:array, :map}, virtual: true
@@ -80,6 +84,7 @@ defmodule EventasaurusApp.Events.Poll do
       :title, :description, :poll_type, :voting_system, :phase,
       :list_building_deadline, :voting_deadline, :finalized_date,
       :finalized_option_ids, :max_options_per_user, :auto_finalize,
+      :privacy_settings, :order_index,
       :event_id, :created_by_id
     ])
     |> validate_required([:title, :poll_type, :voting_system, :event_id, :created_by_id])
@@ -88,6 +93,8 @@ defmodule EventasaurusApp.Events.Poll do
     |> validate_poll_type()
     |> validate_deadlines()
     |> validate_finalized_date()
+    |> validate_privacy_settings()
+    |> validate_number(:order_index, greater_than_or_equal_to: 0)
     |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:created_by_id)
@@ -107,12 +114,15 @@ defmodule EventasaurusApp.Events.Poll do
     |> cast(attrs, [
       :title, :description, :poll_type, :voting_system,
       :list_building_deadline, :voting_deadline, :max_options_per_user,
-      :auto_finalize, :event_id, :created_by_id
+      :auto_finalize, :privacy_settings, :order_index,
+      :event_id, :created_by_id
     ])
     |> validate_required([:title, :poll_type, :voting_system, :event_id, :created_by_id])
     |> validate_inclusion(:voting_system, ~w(binary approval ranked star))
     |> validate_poll_type()
     |> validate_deadlines()
+    |> validate_privacy_settings()
+    |> validate_number(:order_index, greater_than_or_equal_to: 0)
     |> put_change(:phase, "list_building")
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:created_by_id)
@@ -409,5 +419,54 @@ defmodule EventasaurusApp.Events.Poll do
     else
       changeset
     end
+  end
+
+  defp validate_privacy_settings(changeset) do
+    case get_field(changeset, :privacy_settings) do
+      nil -> changeset
+      settings when is_map(settings) ->
+        # Validate that privacy settings has valid boolean values
+        valid_keys = ~w(show_suggester_names)
+        
+        Enum.reduce(settings, changeset, fn {key, value}, acc ->
+          cond do
+            key not in valid_keys ->
+              add_error(acc, :privacy_settings, "invalid privacy setting: #{key}")
+            not is_boolean(value) ->
+              add_error(acc, :privacy_settings, "#{key} must be a boolean")
+            true ->
+              acc
+          end
+        end)
+      _ ->
+        add_error(changeset, :privacy_settings, "must be a map")
+    end
+  end
+
+  @doc """
+  Creates a changeset for updating only poll order.
+  """
+  def order_changeset(poll, order_index) when is_integer(order_index) do
+    poll
+    |> cast(%{order_index: order_index}, [:order_index])
+    |> validate_required([:order_index])
+    |> validate_number(:order_index, greater_than_or_equal_to: 0)
+  end
+
+  @doc """
+  Creates a changeset for updating privacy settings.
+  """
+  def privacy_changeset(poll, privacy_settings) when is_map(privacy_settings) do
+    poll
+    |> cast(%{privacy_settings: privacy_settings}, [:privacy_settings])
+    |> validate_privacy_settings()
+  end
+
+  @doc """
+  Check if suggester names should be shown for this poll.
+  """
+  def show_suggester_names?(%__MODULE__{privacy_settings: nil}), do: true  # Default to showing
+  def show_suggester_names?(%__MODULE__{privacy_settings: settings}) do
+    Map.get(settings, "show_suggester_names", true)
   end
 end
