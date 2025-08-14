@@ -3556,7 +3556,7 @@ defmodule EventasaurusApp.Events do
       5
   """
   def count_polls_for_event(%Event{} = event) do
-    from(p in Poll, where: p.event_id == ^event.id)
+    from(p in Poll, where: p.event_id == ^event.id and is_nil(p.deleted_at))
     |> Repo.aggregate(:count, :id)
   end
 
@@ -3736,32 +3736,47 @@ defmodule EventasaurusApp.Events do
                     where: p.event_id == ^event_id,
                     select: %{id: p.id}
       
-      valid_poll_ids = 
-        Repo.all(polls_query)
+      valid_poll_ids =
+        polls_query
+        |> lock("FOR UPDATE")
+        |> Repo.all()
         |> Enum.map(& &1.id)
         |> MapSet.new()
       
       # Validate all poll_ids in the request belong to this event
       requested_poll_ids = Enum.map(poll_orders, & &1.poll_id)
       
-      if Enum.all?(requested_poll_ids, fn id -> MapSet.member?(valid_poll_ids, id) end) do
-        # Update each poll's order_index and stop on first error
-        case Enum.reduce_while(poll_orders, {:ok, []}, fn %{poll_id: poll_id, order_index: new_index}, {:ok, acc} ->
-          case Repo.get_by(Poll, id: poll_id, event_id: event_id) do
-            nil ->
-              {:halt, Repo.rollback(:invalid_poll_ids)}
-            poll ->
-              case poll |> Poll.order_changeset(new_index) |> Repo.update() do
-                {:ok, updated} -> {:cont, {:ok, [updated | acc]}}
-                {:error, changeset} -> {:halt, Repo.rollback({:update_failed, changeset})}
-              end
-          end
-        end) do
-          {:ok, updated} -> Enum.reverse(updated)
-          other -> other
-        end
+      # Check for duplicates first
+      if length(Enum.uniq(requested_poll_ids)) != length(requested_poll_ids) do
+        Repo.rollback(:duplicate_poll_ids)
       else
-        Repo.rollback(:invalid_poll_ids)
+        # Validate all poll_ids belong to this event
+        if Enum.all?(requested_poll_ids, fn id -> MapSet.member?(valid_poll_ids, id) end) do
+          # Bulk-load all polls to avoid N+1 queries
+          polls_by_id =
+            from(p in Poll, where: p.event_id == ^event_id and p.id in ^requested_poll_ids)
+            |> lock("FOR UPDATE")
+            |> Repo.all()
+            |> Map.new(&{&1.id, &1})
+          
+          # Update each poll's order_index and stop on first error
+          case Enum.reduce_while(poll_orders, {:ok, []}, fn %{poll_id: poll_id, order_index: new_index}, {:ok, acc} ->
+            case Map.fetch(polls_by_id, poll_id) do
+              :error ->
+                {:halt, Repo.rollback(:invalid_poll_ids)}
+              {:ok, poll} ->
+                case poll |> Poll.order_changeset(new_index) |> Repo.update() do
+                  {:ok, updated} -> {:cont, {:ok, [updated | acc]}}
+                  {:error, changeset} -> {:halt, Repo.rollback({:update_failed, changeset})}
+                end
+            end
+          end) do
+            {:ok, updated} -> Enum.reverse(updated)
+            other -> other
+          end
+        else
+          Repo.rollback(:invalid_poll_ids)
+        end
       end
     end)
     
