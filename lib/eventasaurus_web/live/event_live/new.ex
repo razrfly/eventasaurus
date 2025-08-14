@@ -508,16 +508,40 @@ defmodule EventasaurusWeb.EventLive.New do
     event_params = Map.merge(event_params, resolved_attributes)
     
     # Validate venue requirement when venue_certainty is "confirmed"
-    venue_certainty = Map.get(event_params, "venue_certainty", "confirmed")
-    venue_name = Map.get(socket.assigns.form_data || %{}, "venue_name", "")
-    venue_address = Map.get(socket.assigns.form_data || %{}, "venue_address", "")
+    # Check event_params first, then fall back to form_data
+    venue_certainty = 
+      Map.get(event_params, "venue_certainty", 
+        Map.get(socket.assigns.form_data || %{}, "venue_certainty", "confirmed")
+      )
     
-    if venue_certainty == "confirmed" && (venue_name == "" || venue_address == "") do
+    # Check if it's a virtual event (from either event_params or form_data)
+    is_virtual = 
+      Map.get(event_params, "is_virtual",
+        Map.get(socket.assigns.form_data || %{}, "is_virtual", false)
+      ) in [true, "true"]
+    
+    # Get venue fields from event_params first, then form_data, and trim whitespace
+    venue_name = 
+      (Map.get(event_params, "venue_name",
+        Map.get(socket.assigns.form_data || %{}, "venue_name", "")
+      ) || "")
+      |> String.trim()
+    
+    venue_address = 
+      (Map.get(event_params, "venue_address",
+        Map.get(socket.assigns.form_data || %{}, "venue_address", "")
+      ) || "")
+      |> String.trim()
+    
+    # Only validate venue if it's not virtual and venue_certainty is "confirmed"
+    if !is_virtual && venue_certainty == "confirmed" && (venue_name == "" || venue_address == "") do
       require Logger
-      Logger.debug("[submit] Venue validation failed - venue_certainty is 'confirmed' but venue is empty")
+      Logger.debug("[submit] Venue validation failed - 'confirmed' certainty without venue name or address")
       
-      socket = put_flash(socket, :error, "Please provide a venue location or select 'Still planning - venue TBD' or 'Virtual event'")
-      {:noreply, socket}
+      {:noreply, 
+        put_flash(socket, :error, 
+          "Please provide a venue location or select 'Still planning - venue TBD' or 'Virtual event'"
+        )}
     else
 
     if Application.get_env(:eventasaurus, :env) == :dev do
