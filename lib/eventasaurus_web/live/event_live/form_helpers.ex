@@ -61,7 +61,7 @@ defmodule EventasaurusWeb.EventLive.FormHelpers do
 
   def map_venue_certainty_to_fields(base_attrs, "polling") do
     # Create location poll - if not already polling for date, set status to polling
-    current_status = Map.get(base_attrs, "status", "confirmed")
+    current_status = Map.get(base_attrs, "status") || Map.get(base_attrs, :status) || "confirmed"
     if to_string(current_status) != "polling" do
       Map.put(base_attrs, "status", "polling")
     else
