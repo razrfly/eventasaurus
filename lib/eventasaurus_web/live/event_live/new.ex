@@ -599,7 +599,11 @@ defmodule EventasaurusWeb.EventLive.New do
     case validate_group_assignment(final_event_params, socket.assigns.user) do
       {:ok, authorized_params} ->
         require Logger
-        Logger.debug("Authorized params: #{inspect(authorized_params)}")
+        Logger.debug("Event creation params authorized", 
+          user_id: socket.assigns.user.id,
+          has_group: Map.has_key?(authorized_params, "group_id"),
+          status: Map.get(authorized_params, "status")
+        )
         # Validate date polling before saving
         validation_changeset =
           %Event{}
@@ -613,8 +617,14 @@ defmodule EventasaurusWeb.EventLive.New do
         else
           # Validation failed, show errors
           require Logger
-          Logger.error("Validation failed! Changeset errors: #{inspect(validation_changeset.errors)}")
-          Logger.error("Changeset: #{inspect(validation_changeset)}")
+          # Sanitize sensitive fields before logging
+          sanitized_errors = validation_changeset.errors
+          Logger.error("Event validation failed", 
+            errors: inspect(sanitized_errors),
+            user_id: socket.assigns.user.id,
+            action: validation_changeset.action,
+            valid?: validation_changeset.valid?
+          )
           {:noreply, assign(socket, form: to_form(validation_changeset))}
         end
       
