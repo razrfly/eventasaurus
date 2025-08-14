@@ -1355,15 +1355,16 @@ defmodule EventasaurusWeb.DateSelectionPollComponent do
 
   # Helper function to display suggester name with proper blank value handling
   defp display_suggester_name(suggested_by) when is_nil(suggested_by), do: "Anonymous"
+  defp display_suggester_name(%Ecto.Association.NotLoaded{}), do: "Anonymous"
   defp display_suggester_name(suggested_by) do
-    name = suggested_by.name
-    username = suggested_by.username
-    email = suggested_by.email
+    name = Map.get(suggested_by, :name)
+    username = Map.get(suggested_by, :username)
+    email = Map.get(suggested_by, :email)
     
     cond do
-      is_binary(name) and String.trim(name) != "" -> name
-      is_binary(username) and String.trim(username) != "" -> username
-      is_binary(email) and String.trim(email) != "" -> email
+      is_binary(name) and String.trim(name) != "" -> String.trim(name)
+      is_binary(username) and String.trim(username) != "" -> String.trim(username)
+      is_binary(email) and String.trim(email) != "" -> String.trim(email)
       true -> "Anonymous"
     end
   end
