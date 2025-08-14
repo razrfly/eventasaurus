@@ -77,17 +77,19 @@ defmodule EventasaurusApp.Events.Poll do
   # Private helper to normalize privacy settings
   defp normalize_privacy_settings(nil), do: %{"show_suggester_names" => true}
   defp normalize_privacy_settings(settings) when is_map(settings) do
-    %{
-      "show_suggester_names" => 
-        case Map.get(settings, "show_suggester_names") do
-          nil -> true
-          "on" -> true
-          "off" -> false
-          true -> true
-          false -> false
-          _ -> true
-        end
-    }
+    value =
+      case Map.get(settings, "show_suggester_names") || Map.get(settings, :show_suggester_names) do
+        nil -> true
+        "on" -> true
+        "off" -> false
+        "true" -> true
+        "false" -> false
+        true -> true
+        false -> false
+        _ -> true
+      end
+
+    %{"show_suggester_names" => value}
   end
   defp normalize_privacy_settings(_), do: %{"show_suggester_names" => true}
 

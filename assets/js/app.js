@@ -614,16 +614,23 @@ Hooks.FocusTrap = {
   },
 
   getFocusableElements() {
-    return Array.from(this.el.querySelectorAll(this.FOCUSABLE_SELECTOR))
-      // filter: visible and not inert
-      .filter(el => {
-        const style = window.getComputedStyle(el);
-        const rect = el.getBoundingClientRect();
-        const notHidden = style.visibility !== 'hidden' && style.display !== 'none';
-        const hasSize = rect.width > 0 && rect.height > 0;
-        const notAriaHidden = el.getAttribute('aria-hidden') !== 'true';
-        return notHidden && hasSize && notAriaHidden;
-      });
+    return Array.from(
+      this.el.querySelectorAll(this.FOCUSABLE_SELECTOR + ', [contenteditable=""], [contenteditable="true"]')
+    ).filter(el => {
+      const style = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      const notHidden = style.visibility !== 'hidden' && style.display !== 'none';
+      const hasSize = rect.width > 0 && rect.height > 0;
+
+      // Element itself is not aria-hidden or hidden
+      const notAriaHiddenSelf = el.getAttribute('aria-hidden') !== 'true' && !el.hasAttribute('hidden');
+
+      // No inert or aria-hidden ancestors
+      const inertAncestor = el.closest('[inert]');
+      const ariaHiddenAncestor = el.closest('[aria-hidden="true"]');
+
+      return notHidden && hasSize && notAriaHiddenSelf && !inertAncestor && !ariaHiddenAncestor;
+    });
   }
 };
 
