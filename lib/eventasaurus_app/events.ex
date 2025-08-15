@@ -209,20 +209,26 @@ defmodule EventasaurusApp.Events do
     
     query = from e in Event,
             where: e.visibility == :public,
-            where: is_nil(e.deleted_at),
             order_by: [asc: e.start_at],
             preload: [:venue, :users]
     
-    # Filter out ended events unless explicitly included
+    # Apply soft delete filter using the helper
+    query = apply_soft_delete_filter(query, opts)
+    
+    # Filter out ended and canceled events unless explicitly included
     # An event is considered active/upcoming if:
+    # - It's not canceled, AND
     # - It has no end date and hasn't started yet, OR
     # - It has an end date that hasn't passed yet
     query = if include_ended do
-      query
+      # Even when including ended events, exclude canceled ones
+      from e in query,
+        where: e.status != ^:canceled
     else
       from e in query,
-        where: (is_nil(e.ends_at) and e.start_at > ^current_time) or 
-               (not is_nil(e.ends_at) and e.ends_at > ^current_time)
+        where: e.status != ^:canceled and
+               ((is_nil(e.ends_at) and e.start_at > ^current_time) or 
+                (not is_nil(e.ends_at) and e.ends_at > ^current_time))
     end
     
     # Apply search filter if provided
