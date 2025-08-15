@@ -93,14 +93,15 @@ defmodule EventasaurusWeb.EventsLive do
           <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <%= for event <- @events do %>
               <a
-                href={"/" <> event.slug}
+                href={~p"/#{event.slug}"}
                 class="group relative bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-200 overflow-hidden"
               >
                 <%!-- Event Image --%>
                 <div class="aspect-w-16 aspect-h-9 bg-gray-200">
-                  <%= if event.cover_image_url || event.external_image_data do %>
+                  <% image_url = event.cover_image_url || get_external_image_url(event.external_image_data) %>
+                  <%= if image_url do %>
                     <img
-                      src={event.cover_image_url || get_external_image_url(event.external_image_data)}
+                      src={image_url}
                       alt={event.title}
                       class="object-cover w-full h-48"
                     />
