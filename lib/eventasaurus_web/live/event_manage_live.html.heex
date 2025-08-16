@@ -124,6 +124,27 @@
       >
         Insights
       </button>
+      <%= if @event.payment_method_type in ["manual_only", "hybrid"] do %>
+        <button 
+          phx-click="switch_tab" 
+          phx-value-tab="payment_tracking"
+          class={[
+            "py-4 px-1 border-b-2 font-semibold whitespace-nowrap transition hover:text-blue-700",
+            if @active_tab == "payment_tracking" do
+              "border-blue-500 text-blue-600"
+            else
+              "border-transparent text-gray-700 hover:text-black hover:border-gray-300"
+            end
+          ]}
+        >
+          Payment Tracking
+          <%= if assigns[:pending_payments_count] && @pending_payments_count > 0 do %>
+            <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600">
+              <%= @pending_payments_count %>
+            </span>
+          <% end %>
+        </button>
+      <% end %>
     </nav>
   </div>
 
@@ -1113,6 +1134,344 @@
         </div>
       </div>
     <% end %>
+    
+    <!-- Payment Tracking Tab -->
+    <%= if @active_tab == "payment_tracking" do %>
+      <div class="space-y-6">
+        <!-- Payment Summary Stats -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h2 class="text-lg font-bold text-gray-900">Payment Tracking</h2>
+              <p class="text-sm text-gray-500">Track and manage manual payments for your event</p>
+            </div>
+            <div class="flex items-center gap-4">
+              <button
+                phx-click="mark_batch_payments"
+                disabled={!assigns[:selected_payment_orders] || length(@selected_payment_orders) == 0}
+                class={[
+                  "inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md shadow-sm",
+                  if assigns[:selected_payment_orders] && length(@selected_payment_orders) > 0 do
+                    "border-transparent text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  else
+                    "border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed"
+                  end
+                ]}
+              >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Mark as Received
+                <%= if assigns[:selected_payment_orders] && length(@selected_payment_orders) > 0 do %>
+                  (<%= length(@selected_payment_orders) %>)
+                <% end %>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Payment Stats Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-gray-50 rounded-lg p-4">
+              <div class="text-sm font-medium text-gray-600">Total Orders</div>
+              <div class="mt-1 flex items-baseline">
+                <div class="text-2xl font-bold text-gray-900">
+                  <%= if assigns[:payment_tracking_stats], do: @payment_tracking_stats.total_orders, else: 0 %>
+                </div>
+              </div>
+            </div>
+            
+            <div class="bg-yellow-50 rounded-lg p-4">
+              <div class="text-sm font-medium text-yellow-700">Pending Payments</div>
+              <div class="mt-1 flex items-baseline">
+                <div class="text-2xl font-bold text-yellow-600">
+                  <%= if assigns[:payment_tracking_stats], do: @payment_tracking_stats.pending_payments, else: 0 %>
+                </div>
+                <div class="ml-2 text-sm text-yellow-600">
+                  <%= if assigns[:payment_tracking_stats] && @payment_tracking_stats.pending_amount > 0 do %>
+                    <%= CurrencyHelpers.format_currency(@payment_tracking_stats.pending_amount, "usd") %>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4">
+              <div class="text-sm font-medium text-green-700">Received Payments</div>
+              <div class="mt-1 flex items-baseline">
+                <div class="text-2xl font-bold text-green-600">
+                  <%= if assigns[:payment_tracking_stats], do: @payment_tracking_stats.received_payments, else: 0 %>
+                </div>
+                <div class="ml-2 text-sm text-green-600">
+                  <%= if assigns[:payment_tracking_stats] && @payment_tracking_stats.received_amount > 0 do %>
+                    <%= CurrencyHelpers.format_currency(@payment_tracking_stats.received_amount, "usd") %>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+            
+            <div class="bg-blue-50 rounded-lg p-4">
+              <div class="text-sm font-medium text-blue-700">Collection Rate</div>
+              <div class="mt-1 flex items-baseline">
+                <div class="text-2xl font-bold text-blue-600">
+                  <%= if assigns[:payment_tracking_stats] && @payment_tracking_stats.total_orders > 0 do %>
+                    <%= Float.round(@payment_tracking_stats.collection_rate, 1) %>%
+                  <% else %>
+                    0%
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Payment Filters -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <form phx-change="filter_payments" class="flex flex-wrap items-center gap-3">
+            <div class="text-sm font-medium text-gray-700">Filter by:</div>
+            
+            <!-- Payment Status Filter -->
+            <div class="relative">
+              <select 
+                name="payment_status_filter"
+                value={assigns[:payment_status_filter] || ""}
+                class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Orders</option>
+                <option value="pending" selected={@payment_status_filter == "pending"}>Pending Payment</option>
+                <option value="confirmed" selected={@payment_status_filter == "confirmed"}>Payment Received</option>
+                <option value="refunded" selected={@payment_status_filter == "refunded"}>Refunded</option>
+              </select>
+              <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            
+            <!-- Payment Method Filter -->
+            <div class="relative">
+              <select 
+                name="payment_method_filter"
+                value={assigns[:payment_method_filter] || ""}
+                class="appearance-none bg-white border border-gray-300 rounded-md pl-3 pr-8 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Methods</option>
+                <option value="cash" selected={@payment_method_filter == "cash"}>Cash</option>
+                <option value="check" selected={@payment_method_filter == "check"}>Check</option>
+                <option value="bank_transfer" selected={@payment_method_filter == "bank_transfer"}>Bank Transfer</option>
+                <option value="venmo" selected={@payment_method_filter == "venmo"}>Venmo</option>
+                <option value="paypal" selected={@payment_method_filter == "paypal"}>PayPal</option>
+                <option value="other" selected={@payment_method_filter == "other"}>Other</option>
+              </select>
+              <svg class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            
+            <!-- Clear Filters -->
+            <%= if assigns[:payment_status_filter] || assigns[:payment_method_filter] do %>
+              <button
+                phx-click="clear_payment_filters"
+                type="button"
+                class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
+              >
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Clear
+              </button>
+            <% end %>
+          </form>
+        </div>
+        
+        <!-- Payment Orders Table -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <%= if assigns[:payment_orders] && length(@payment_orders) > 0 do %>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="w-12 px-6 py-3">
+                      <input
+                        type="checkbox"
+                        phx-click="toggle_all_payments"
+                        checked={assigns[:all_payments_selected] || false}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Attendee
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Order Type
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment Method
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Reference
+                    </th>
+                    <th class="relative px-6 py-3">
+                      <span class="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <%= for order <- get_filtered_payment_orders(@payment_orders, assigns[:payment_status_filter], assigns[:payment_method_filter]) do %>
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          phx-click="toggle_payment_selection"
+                          phx-value-order_id={order.id}
+                          checked={order.id in (assigns[:selected_payment_orders] || [])}
+                          disabled={order.status == "confirmed"}
+                          class={[
+                            "h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded",
+                            if order.status == "confirmed" do
+                              "opacity-50 cursor-not-allowed"
+                            end
+                          ]}
+                        />
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                          <img 
+                            src={EventasaurusApp.Avatars.generate_user_avatar(order.user, size: 32)}
+                            alt={"#{order.user.name || order.user.email} avatar"}
+                            class="h-8 w-8 rounded-full object-cover"
+                          />
+                          <div class="ml-3">
+                            <div class="text-sm font-medium text-gray-900">
+                              <%= order.user.name || "Unknown" %>
+                            </div>
+                            <div class="text-sm text-gray-500">
+                              <%= order.user.email %>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <span class={[
+                          "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+                          if order.order_type == "ticket" do
+                            "bg-blue-100 text-blue-800"
+                          else
+                            "bg-purple-100 text-purple-800"
+                          end
+                        ]}>
+                          <%= String.capitalize(order.order_type || "ticket") %>
+                        </span>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <%= CurrencyHelpers.format_currency(order.total_cents, order.currency) %>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <%= EventasaurusApp.Events.Order.payment_method_display_name(order.manual_payment_method) %>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <%= if order.status == "confirmed" do %>
+                          <div>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Received
+                            </span>
+                            <%= if order.manual_payment_received_at do %>
+                              <div class="text-xs text-gray-500 mt-1">
+                                <%= Calendar.strftime(order.manual_payment_received_at, "%m/%d/%Y") %>
+                              </div>
+                            <% end %>
+                          </div>
+                        <% else %>
+                          <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Pending
+                          </span>
+                        <% end %>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <%= if order.manual_payment_reference do %>
+                          <div class="font-mono text-xs">
+                            <%= order.manual_payment_reference %>
+                          </div>
+                        <% else %>
+                          <span class="text-gray-400">—</span>
+                        <% end %>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          phx-click="edit_payment"
+                          phx-value-order_id={order.id}
+                          class="text-blue-600 hover:text-blue-900"
+                        >
+                          <%= if order.status == "pending" do %>
+                            Mark Received
+                          <% else %>
+                            View Details
+                          <% end %>
+                        </button>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Load More Pagination -->
+            <%= if assigns[:payment_orders_count] && assigns[:payment_orders_loaded] < @payment_orders_count do %>
+              <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <div class="text-center">
+                  <button
+                    phx-click="load_more_payment_orders"
+                    disabled={assigns[:payment_orders_loading] || false}
+                    class={[
+                      "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-colors",
+                      if assigns[:payment_orders_loading] do
+                        "text-gray-400 bg-gray-200 cursor-not-allowed"
+                      else
+                        "text-blue-600 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      end
+                    ]}
+                  >
+                    <%= if assigns[:payment_orders_loading] do %>
+                      <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Loading...
+                    <% else %>
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                      Load More Orders
+                    <% end %>
+                  </button>
+                  <div class="mt-2 text-sm text-gray-500">
+                    Showing <%= assigns[:payment_orders_loaded] || 0 %> of <%= @payment_orders_count %> orders
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          <% else %>
+            <!-- Empty State -->
+            <div class="px-6 py-12 text-center">
+              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <h3 class="mt-2 text-sm font-medium text-gray-900">No manual payment orders</h3>
+              <p class="mt-1 text-sm text-gray-500">
+                <%= if @event.payment_method_type == "manual_only" do %>
+                  Manual payment orders will appear here when attendees register.
+                <% else %>
+                  Orders with manual payment options will appear here.
+                <% end %>
+              </p>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
   </div>
 </div>
 
@@ -1379,4 +1738,202 @@
       </div>
     </div>
   <% end %>
-</div> 
+</div>
+
+<!-- Payment Details Modal -->
+<.modal
+  id="payment-details-modal"
+  show={@show_payment_modal}
+  on_cancel={JS.push("close_payment_modal")}
+  on_confirm={JS.push("save_payment_changes")}
+  disabled={@payment_modal_processing}
+>
+  <:title>
+    <%= if @payment_modal_order && @payment_modal_order.status == "pending" do %>
+      Mark Payment as Received
+    <% else %>
+      Payment Details
+    <% end %>
+  </:title>
+
+  <%= if @payment_modal_order do %>
+    <div class="space-y-6">
+      <!-- Order Information -->
+      <div class="bg-gray-50 rounded-lg p-4">
+        <h4 class="text-sm font-medium text-gray-900 mb-3">Order Information</h4>
+        <dl class="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Order ID</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= @payment_modal_order.id %></dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Type</dt>
+            <dd class="mt-1 text-sm text-gray-900">
+              <%= String.capitalize(@payment_modal_order.order_type) %>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Customer</dt>
+            <dd class="mt-1 text-sm text-gray-900">
+              <%= @payment_modal_order.user.name || @payment_modal_order.user.email %>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Amount</dt>
+            <dd class="mt-1 text-sm font-medium text-gray-900">
+              $<%= :erlang.float_to_binary(@payment_modal_order.total_cents / 100, decimals: 2) %>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Created</dt>
+            <dd class="mt-1 text-sm text-gray-900">
+              <%= Calendar.strftime(@payment_modal_order.inserted_at, "%B %d, %Y %I:%M %p") %>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Status</dt>
+            <dd class="mt-1">
+              <span class={"inline-flex px-2 py-1 text-xs font-semibold rounded-full #{
+                case @payment_modal_order.status do
+                  "confirmed" -> "bg-green-100 text-green-800"
+                  "pending" -> "bg-yellow-100 text-yellow-800"
+                  "refunded" -> "bg-red-100 text-red-800"
+                  _ -> "bg-gray-100 text-gray-800"
+                end
+              }"}>
+                <%= String.capitalize(@payment_modal_order.status) %>
+              </span>
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Payment Method Form -->
+      <div>
+        <h4 class="text-sm font-medium text-gray-900 mb-3">Payment Method</h4>
+        
+        <div class="space-y-4">
+          <div>
+            <label for="manual_payment_method" class="block text-sm font-medium text-gray-700">
+              Payment Method <span class="text-red-500">*</span>
+            </label>
+            <select
+              id="manual_payment_method"
+              name="manual_payment_method"
+              phx-change="update_payment_modal_field"
+              value={@payment_modal_form["manual_payment_method"] || @payment_modal_order.manual_payment_method || ""}
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              required
+            >
+              <option value="">Select payment method</option>
+              <option value="cash">Cash</option>
+              <option value="check">Check</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="venmo">Venmo</option>
+              <option value="paypal">PayPal</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="manual_payment_reference" class="block text-sm font-medium text-gray-700">
+              Payment Reference
+            </label>
+            <input
+              type="text"
+              id="manual_payment_reference"
+              name="manual_payment_reference"
+              phx-change="update_payment_modal_field"
+              value={@payment_modal_form["manual_payment_reference"] || @payment_modal_order.manual_payment_reference || ""}
+              placeholder="Check #, transaction ID, etc."
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            />
+          </div>
+
+          <div>
+            <label for="manual_payment_notes" class="block text-sm font-medium text-gray-700">
+              Payment Notes
+            </label>
+            <textarea
+              id="manual_payment_notes"
+              name="manual_payment_notes"
+              rows="3"
+              phx-change="update_payment_modal_field"
+              value={@payment_modal_form["manual_payment_notes"] || @payment_modal_order.manual_payment_notes || ""}
+              placeholder="Any additional information about this payment..."
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment History -->
+      <%= if @payment_modal_order.payment_history && map_size(@payment_modal_order.payment_history) > 0 do %>
+        <div>
+          <h4 class="text-sm font-medium text-gray-900 mb-3">Payment History</h4>
+          <div class="bg-gray-50 rounded-lg p-4 space-y-3">
+            <%= for {timestamp, entry} <- @payment_modal_order.payment_history |> Enum.sort_by(fn {k, _} -> k end, :desc) do %>
+              <div class="border-l-4 border-gray-300 pl-4">
+                <p class="text-sm text-gray-900">
+                  <span class="font-medium">
+                    <%= case entry["action"] do %>
+                      <% "payment_received" -> %>
+                        Payment marked as received
+                      <% "payment_refunded" -> %>
+                        Payment refunded
+                      <% _ -> %>
+                        <%= entry["action"] %>
+                    <% end %>
+                  </span>
+                </p>
+                <p class="text-xs text-gray-500 mt-1">
+                  <%= case DateTime.from_iso8601(timestamp) do %>
+                    <% {:ok, datetime} -> %>
+                      <%= Calendar.strftime(datetime, "%B %d, %Y %I:%M %p") %>
+                    <% _ -> %>
+                      <%= timestamp %>
+                  <% end %>
+                  <%= if entry["user_id"] do %>
+                    by User #<%= entry["user_id"] %>
+                  <% end %>
+                </p>
+                <%= if entry["details"]["manual_payment_reference"] do %>
+                  <p class="text-xs text-gray-600 mt-1">
+                    Reference: <%= entry["details"]["manual_payment_reference"] %>
+                  </p>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Action Buttons for Confirmed Payments -->
+      <%= if @payment_modal_order.status == "confirmed" do %>
+        <div class="border-t pt-4">
+          <button
+            type="button"
+            phx-click="refund_payment"
+            phx-value-order_id={@payment_modal_order.id}
+            class="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            <.icon name="hero-arrow-uturn-left" class="mr-2 h-4 w-4" />
+            Refund Payment
+          </button>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <:confirm>
+    <%= if @payment_modal_order && @payment_modal_order.status == "pending" do %>
+      <span class="inline-flex items-center">
+        <.icon name="hero-check" class="mr-2 h-4 w-4" />
+        Mark as Received
+      </span>
+    <% else %>
+      Save Changes
+    <% end %>
+  </:confirm>
+  <:cancel>Close</:cancel>
+</.modal> 
