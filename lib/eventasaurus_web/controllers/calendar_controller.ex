@@ -25,6 +25,11 @@ defmodule EventasaurusWeb.CalendarController do
                 |> put_status(:bad_request)
                 |> text("Cannot export event to calendar: Event date/time is not set")
               
+              {:error, :invalid_start_at} ->
+                conn
+                |> put_status(:bad_request)
+                |> text("Cannot export event to calendar: Event date/time is invalid")
+              
               ics_content when is_binary(ics_content) ->
                 conn
                 |> put_resp_content_type("text/calendar")
@@ -45,6 +50,11 @@ defmodule EventasaurusWeb.CalendarController do
                 |> put_status(:bad_request)
                 |> text("Cannot export event to calendar: Event date/time is not set")
               
+              {:error, :invalid_start_at} ->
+                conn
+                |> put_status(:bad_request)
+                |> text("Cannot export event to calendar: Event date/time is invalid")
+              
               google_url when is_binary(google_url) ->
                 redirect(conn, external: google_url)
               
@@ -61,6 +71,11 @@ defmodule EventasaurusWeb.CalendarController do
                 conn
                 |> put_status(:bad_request)
                 |> text("Cannot export event to calendar: Event date/time is not set")
+              
+              {:error, :invalid_start_at} ->
+                conn
+                |> put_status(:bad_request)
+                |> text("Cannot export event to calendar: Event date/time is invalid")
               
               outlook_url when is_binary(outlook_url) ->
                 redirect(conn, external: outlook_url)
