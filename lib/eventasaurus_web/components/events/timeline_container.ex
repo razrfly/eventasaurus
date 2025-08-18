@@ -94,20 +94,28 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
   # Helper functions
 
   defp group_events_by_date(events) do
+    # Group events by date while preserving the order they came in
+    # The events are already sorted correctly from the database
     events
-    |> Enum.group_by(fn event ->
-      if event.start_at do
+    |> Enum.reduce([], fn event, acc ->
+      date = if event.start_at do
         event.start_at |> DateTime.to_date()
       else
         :no_date
       end
-    end)
-    |> Enum.sort_by(fn {date, _events} ->
-      case date do
-        :no_date -> ~D[9999-12-31]  # Sort no_date events last
-        date -> date
+      
+      # Find if we already have this date in our accumulator
+      case Enum.find_index(acc, fn {d, _} -> d == date end) do
+        nil ->
+          # New date, add it to the list
+          acc ++ [{date, [event]}]
+        index ->
+          # Existing date, add event to that date's list
+          List.update_at(acc, index, fn {d, events_list} ->
+            {d, events_list ++ [event]}
+          end)
       end
-    end, :desc)
+    end)
   end
 
   defp is_last_date?(date, grouped_events) do

@@ -595,10 +595,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
     |> delete_session(:oauth_provider)
 
     case oauth_action do
-      # TODO: Implement Google account linking when Settings page supports it
-      # "link" ->
-      #   # User is trying to link Google account to existing account
-      #   handle_google_account_linking(conn, code)
+      "link" ->
+        # Google account linking is not yet supported
+        Logger.warning("Google account linking requested but not supported")
+        conn
+        |> put_flash(:error, "Google account linking is temporarily disabled.")
+        |> redirect(to: ~p"/settings/account")
 
       "login" ->
         # User is trying to sign in with Google
@@ -614,20 +616,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
             |> redirect(to: ~p"/auth/login")
         end
         
-      # Handle the link case for now by treating it as login
+      # Reject any unknown oauth_action values for security
       _ ->
-        # Fallback for any future oauth_action values
-        case Auth.sign_in_with_google_oauth(code) do
-          {:ok, auth_data} ->
-            Logger.info("Google OAuth successful (action: #{oauth_action})")
-            handle_successful_google_auth(conn, auth_data)
-
-          {:error, error} ->
-            Logger.error("Google OAuth callback failed (action: #{oauth_action}): #{inspect(error)}")
-            conn
-            |> put_flash(:error, "Google authentication failed. Please try again.")
-            |> redirect(to: ~p"/auth/login")
-        end
+        Logger.warning("Unknown Google OAuth action: #{inspect(oauth_action)}")
+        conn
+        |> put_flash(:error, "Invalid authentication request.")
+        |> redirect(to: ~p"/auth/login")
     end
   end
 

@@ -8,7 +8,10 @@ defmodule EventasaurusWeb.CalendarExport do
   @doc """
   Generates an ICS file content for an event
   """
-  def generate_ics(event, venue \\ nil, event_url) do
+  def generate_ics(event, venue \\ nil, event_url)
+  def generate_ics(%{start_at: nil}, _venue, _event_url), do: {:error, :missing_start_at}
+  
+  def generate_ics(event = %{start_at: %DateTime{}}, venue, event_url) do
     lines = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
@@ -80,11 +83,20 @@ defmodule EventasaurusWeb.CalendarExport do
 
   # Private helper functions
 
-  defp format_datetime_for_ics(datetime, _timezone) do
-    # For now, we'll use UTC format for ICS files
-    # TODO: Add proper timezone support with time_zone_info or tzdata
-    Calendar.strftime(datetime, "%Y%m%dT%H%M%SZ")
+  # Convert to UTC (using the provided timezone) and format for ICS
+  defp format_datetime_for_ics(%DateTime{} = datetime, _timezone) do
+    # Shift into UTC if needed
+    dt =
+      case DateTime.shift_zone(datetime, "Etc/UTC", Tzdata.TimeZoneDatabase) do
+        {:ok, utc_dt} -> utc_dt
+        _ -> datetime  # Fallback to original if shift fails
+      end
+
+    Calendar.strftime(dt, "%Y%m%dT%H%M%SZ")
   end
+
+  # Gracefully handle nil dates
+  defp format_datetime_for_ics(nil, _timezone), do: nil
 
   defp format_datetime_utc(datetime) do
     Calendar.strftime(datetime, "%Y%m%dT%H%M%SZ")
