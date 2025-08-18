@@ -39,7 +39,10 @@ defmodule EventasaurusWeb.CalendarExport do
   @doc """
   Generates a Google Calendar URL for an event
   """
-  def google_calendar_url(event, venue \\ nil, event_url) do
+  def google_calendar_url(event, venue \\ nil, event_url)
+  def google_calendar_url(%{start_at: nil}, _venue, _event_url), do: {:error, :missing_start_at}
+  
+  def google_calendar_url(event = %{start_at: %DateTime{}}, venue, event_url) do
     base_url = "https://calendar.google.com/calendar/render"
     
     # Format dates for Google Calendar (YYYYMMDDTHHmmssZ format)
@@ -61,7 +64,10 @@ defmodule EventasaurusWeb.CalendarExport do
   @doc """
   Generates an Outlook.com Calendar URL for an event
   """
-  def outlook_calendar_url(event, venue \\ nil, event_url) do
+  def outlook_calendar_url(event, venue \\ nil, event_url)
+  def outlook_calendar_url(%{start_at: nil}, _venue, _event_url), do: {:error, :missing_start_at}
+  
+  def outlook_calendar_url(event = %{start_at: %DateTime{}}, venue, event_url) do
     base_url = "https://outlook.live.com/calendar/0/deeplink/compose"
     
     # Format dates for Outlook (ISO 8601 format)
