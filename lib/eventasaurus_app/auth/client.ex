@@ -48,6 +48,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def sign_up(email, password, name \\ nil) do
     url = "#{get_auth_url()}/signup"
 
@@ -75,6 +76,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, auth_data} with tokens on success or {:error, reason} on failure.
   """
+  @impl true
   def sign_in(email, password) do
     url = "#{get_auth_url()}/token?grant_type=password"
     Logger.debug("Authenticating user #{email} with URL: #{url}")
@@ -110,6 +112,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns :ok on success or {:error, reason} on failure.
   """
+  @impl true
   def sign_out(token) do
     url = "#{get_auth_url()}/logout"
 
@@ -131,6 +134,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, %{email: email}} on success or {:error, reason} on failure.
   """
+  @impl true
   def reset_password(email) do
     url = "#{get_auth_url()}/recover"
 
@@ -161,6 +165,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, %{}} on success or {:error, reason} on failure.
   """
+  @impl true
   def update_password(token, new_password) do
     url = "#{get_auth_url()}/user"
 
@@ -198,6 +203,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, tokens} on success or {:error, reason} on failure.
   """
+  @impl true
   def refresh_token(refresh_token) do
     url = "#{get_auth_url()}/token?grant_type=refresh_token"
     Logger.debug("Refreshing token with URL: #{url}")
@@ -259,6 +265,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def get_user(token) do
     url = "#{get_auth_url()}/user"
 
@@ -310,6 +317,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def admin_create_user(email, password, user_metadata \\ %{}) do
     url = "#{get_auth_url()}/admin/users"
 
@@ -338,6 +346,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def admin_update_user(user_id, attrs) do
     url = "#{get_auth_url()}/admin/users/#{user_id}"
 
@@ -660,6 +669,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def admin_get_user_by_email(email) do
     # Fetch all users and manually filter by email due to local Supabase bug
     # where email parameter returns admin user for any query
