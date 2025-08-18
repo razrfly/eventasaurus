@@ -62,4 +62,34 @@ defmodule EventasaurusApp.Auth.ClientBehaviour do
   Get a user by email using the admin API.
   """
   @callback admin_get_user_by_email(String.t()) :: {:ok, map()} | {:error, any()}
+
+  @doc """
+  Sign in with Facebook OAuth authorization code.
+  """
+  @callback sign_in_with_facebook_oauth(String.t()) :: {:ok, map()} | {:error, any()}
+
+  @doc """
+  Get the Facebook OAuth login URL.
+  """
+  @callback get_facebook_oauth_url() :: String.t()
+
+  @doc """
+  Link a Facebook account to an existing authenticated user.
+  """
+  @callback link_facebook_account(String.t(), String.t()) :: {:ok, map()} | {:error, any()}
+
+  @doc """
+  Sign in with Google OAuth authorization code.
+  """
+  @callback sign_in_with_google_oauth(String.t()) :: {:ok, map()} | {:error, any()}
+
+  @doc """
+  Get the Google OAuth login URL.
+  """
+  @callback get_google_oauth_url() :: String.t()
+
+  @doc """
+  Link a Google account to an existing authenticated user.
+  """
+  @callback link_google_account(String.t(), String.t()) :: {:ok, map()} | {:error, any()}
 end
