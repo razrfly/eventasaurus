@@ -1759,21 +1759,24 @@ defmodule EventasaurusWeb.PublicEventLive do
            <div class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
             <h3 class="text-base font-semibold mb-3 text-gray-900">Add to calendar</h3>
             <div class="flex flex-col space-y-2">
-              <a href="#" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <a href={~p"/events/#{@event.slug}/calendar/google"} target="_blank" rel="noopener noreferrer" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
+                <!-- Google Calendar Icon -->
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
                 </svg>
                 Google Calendar
               </a>
-              <a href="#" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <a href={~p"/events/#{@event.slug}/calendar/ics"} download={"#{@event.slug}.ics"} class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
+                <!-- Apple Calendar Icon -->
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.75 3A3.25 3.25 0 0121 6.25v11.5A3.25 3.25 0 0117.75 21H6.25A3.25 3.25 0 013 17.75V6.25A3.25 3.25 0 016.25 3h11.5zm1.75 5.5h-15v9.25c0 .966.784 1.75 1.75 1.75h11.5a1.75 1.75 0 001.75-1.75V8.5zm-11.75 6a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm-8-4a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm2-6H6.25A1.75 1.75 0 004.5 6.25V7h15v-.75a1.75 1.75 0 00-1.75-1.75z"/>
                 </svg>
                 Apple Calendar
               </a>
-              <a href="#" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <a href={~p"/events/#{@event.slug}/calendar/outlook"} target="_blank" rel="noopener noreferrer" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
+                <!-- Outlook Icon -->
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10h5v-2h-5c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8v1.43c0 .79-.71 1.57-1.5 1.57s-1.5-.78-1.5-1.57V12c0-2.76-2.24-5-5-5s-5 2.24-5 5 2.24 5 5 5c1.38 0 2.64-.56 3.54-1.47.65.89 1.77 1.47 2.96 1.47 1.97 0 3.5-1.6 3.5-3.57V12c0-5.52-4.48-10-10-10zm0 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
                 </svg>
                 Outlook
               </a>

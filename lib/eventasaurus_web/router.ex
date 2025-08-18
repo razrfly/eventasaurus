@@ -275,6 +275,14 @@ defmodule EventasaurusWeb.Router do
     end
   end
 
+  # Public calendar export routes (no auth required)
+  scope "/events", EventasaurusWeb do
+    pipe_through :browser
+
+    # Calendar export endpoint
+    get "/:slug/calendar/:format", CalendarController, :export
+  end
+
   # Public social card generation (no auth required)
   scope "/events", EventasaurusWeb do
     pipe_through :image
