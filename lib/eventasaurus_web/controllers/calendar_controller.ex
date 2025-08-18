@@ -19,12 +19,18 @@ defmodule EventasaurusWeb.CalendarController do
         case format do
           "ics" ->
             # Generate ICS file content
-            ics_content = CalendarExport.generate_ics(event, venue, event_url)
-            
-            conn
-            |> put_resp_content_type("text/calendar")
-            |> put_resp_header("content-disposition", "attachment; filename=\"#{event.slug}.ics\"")
-            |> send_resp(200, ics_content)
+            case CalendarExport.generate_ics(event, venue, event_url) do
+              {:error, :missing_start_at} ->
+                conn
+                |> put_status(:bad_request)
+                |> text("Cannot export event to calendar: Event date/time is not set")
+              
+              ics_content when is_binary(ics_content) ->
+                conn
+                |> put_resp_content_type("text/calendar")
+                |> put_resp_header("content-disposition", "attachment; filename=\"#{event.slug}.ics\"")
+                |> send_resp(200, ics_content)
+            end
           
           "google" ->
             # Redirect to Google Calendar URL
