@@ -474,6 +474,8 @@ defmodule EventasaurusWeb.Auth.AuthController do
   def facebook_callback(conn, %{"error" => error, "error_description" => description}) do
     Logger.error("Facebook OAuth error: #{error} - #{description}")
     conn
+    |> delete_session(:oauth_action)
+    |> delete_session(:oauth_provider)
     |> put_flash(:error, "Facebook authentication was cancelled or failed.")
     |> redirect(to: ~p"/auth/login")
   end
@@ -484,6 +486,8 @@ defmodule EventasaurusWeb.Auth.AuthController do
   def google_callback(conn, %{"error" => error, "error_description" => description}) do
     Logger.error("Google OAuth error: #{error} - #{description}")
     conn
+    |> delete_session(:oauth_action)
+    |> delete_session(:oauth_provider)
     |> put_flash(:error, "Google authentication was cancelled or failed.")
     |> redirect(to: ~p"/auth/login")
   end
@@ -591,9 +595,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
     |> delete_session(:oauth_provider)
 
     case oauth_action do
-      "link" ->
-        # User is trying to link Google account to existing account
-        handle_google_account_linking(conn, code)
+      # TODO: Implement Google account linking when Settings page supports it
+      # "link" ->
+      #   # User is trying to link Google account to existing account
+      #   handle_google_account_linking(conn, code)
 
       "login" ->
         # User is trying to sign in with Google
@@ -608,30 +613,46 @@ defmodule EventasaurusWeb.Auth.AuthController do
             |> put_flash(:error, "Google authentication failed. Please try again.")
             |> redirect(to: ~p"/auth/login")
         end
-    end
-  end
+        
+      # Handle the link case for now by treating it as login
+      _ ->
+        # Fallback for any future oauth_action values
+        case Auth.sign_in_with_google_oauth(code) do
+          {:ok, auth_data} ->
+            Logger.info("Google OAuth successful (action: #{oauth_action})")
+            handle_successful_google_auth(conn, auth_data)
 
-  defp handle_google_account_linking(conn, code) do
-    case Auth.link_google_account(conn, code) do
-      {:ok, _result} ->
-        Logger.info("Google account linked successfully")
-        conn
-        |> put_flash(:info, "Google account connected successfully!")
-        |> redirect(to: ~p"/settings/account")
-
-      {:error, reason} ->
-        Logger.error("Google account linking failed: #{inspect(reason)}")
-        error_message = case reason do
-          :no_authentication_token -> "Authentication session expired. Please log in again."
-          %{message: message} when is_binary(message) -> message
-          _ -> "Failed to connect Google account. Please try again."
+          {:error, error} ->
+            Logger.error("Google OAuth callback failed (action: #{oauth_action}): #{inspect(error)}")
+            conn
+            |> put_flash(:error, "Google authentication failed. Please try again.")
+            |> redirect(to: ~p"/auth/login")
         end
-
-        conn
-        |> put_flash(:error, error_message)
-        |> redirect(to: ~p"/settings/account")
     end
   end
+
+  # TODO: Uncomment when Google account linking is implemented in Settings page
+  # defp handle_google_account_linking(conn, code) do
+  #   case Auth.link_google_account(conn, code) do
+  #     {:ok, _result} ->
+  #       Logger.info("Google account linked successfully")
+  #       conn
+  #       |> put_flash(:info, "Google account connected successfully!")
+  #       |> redirect(to: ~p"/settings/account")
+
+  #     {:error, reason} ->
+  #       Logger.error("Google account linking failed: #{inspect(reason)}")
+  #       error_message = case reason do
+  #         :no_authentication_token -> "Authentication session expired. Please log in again."
+  #         %{message: message} when is_binary(message) -> message
+  #         _ -> "Failed to connect Google account. Please try again."
+  #       end
+
+  #       conn
+  #       |> put_flash(:error, error_message)
+  #       |> redirect(to: ~p"/settings/account")
+  #   end
+  # end
 
   defp handle_successful_google_auth(conn, auth_data) do
     # Safely extract required data with fallbacks

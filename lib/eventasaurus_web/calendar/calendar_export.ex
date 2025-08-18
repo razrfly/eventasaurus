@@ -9,26 +9,28 @@ defmodule EventasaurusWeb.CalendarExport do
   Generates an ICS file content for an event
   """
   def generate_ics(event, venue \\ nil, event_url) do
-    """
-    BEGIN:VCALENDAR
-    VERSION:2.0
-    PRODID:-//Eventasaurus//Event Calendar//EN
-    CALSCALE:GREGORIAN
-    METHOD:PUBLISH
-    BEGIN:VEVENT
-    UID:#{event.id}@eventasaurus.app
-    DTSTAMP:#{format_datetime_utc(DateTime.utc_now())}
-    DTSTART:#{format_datetime_for_ics(event.start_at, event.timezone)}
-    DTEND:#{format_datetime_for_ics(event.ends_at || add_default_duration(event.start_at), event.timezone)}
-    SUMMARY:#{escape_ics_text(event.title)}
-    DESCRIPTION:#{escape_ics_text(format_description(event, event_url))}
-    LOCATION:#{format_location(event, venue)}
-    URL:#{event_url}
-    STATUS:CONFIRMED
-    TRANSP:OPAQUE
-    END:VEVENT
-    END:VCALENDAR
-    """
+    lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Eventasaurus//Event Calendar//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      "UID:#{event.id}@eventasaurus.app",
+      "DTSTAMP:#{format_datetime_utc(DateTime.utc_now())}",
+      "DTSTART:#{format_datetime_for_ics(event.start_at, event.timezone)}",
+      "DTEND:#{format_datetime_for_ics(event.ends_at || add_default_duration(event.start_at), event.timezone)}",
+      "SUMMARY:#{escape_ics_text(event.title)}",
+      "DESCRIPTION:#{escape_ics_text(format_description(event, event_url))}",
+      "LOCATION:#{escape_ics_text(format_location(event, venue))}",
+      "URL:#{event_url}",
+      "STATUS:CONFIRMED",
+      "TRANSP:OPAQUE",
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ]
+
+    Enum.join(lines, "\r\n")
   end
 
   @doc """
@@ -76,29 +78,6 @@ defmodule EventasaurusWeb.CalendarExport do
     "#{base_url}?#{URI.encode_query(params)}"
   end
 
-  @doc """
-  Generates a Yahoo Calendar URL for an event
-  """
-  def yahoo_calendar_url(event, venue \\ nil, event_url) do
-    base_url = "https://calendar.yahoo.com/"
-    
-    # Format dates for Yahoo (YYYYMMDDTHHmmss format in UTC)
-    start_date = format_yahoo_datetime(event.start_at, event.timezone)
-    end_date = format_yahoo_datetime(event.ends_at || add_default_duration(event.start_at), event.timezone)
-    
-    params = %{
-      "v" => "60",
-      "title" => event.title,
-      "st" => start_date,
-      "et" => end_date,
-      "desc" => format_description(event, event_url),
-      "in_loc" => format_location(event, venue),
-      "url" => event_url
-    }
-    
-    "#{base_url}?#{URI.encode_query(params)}"
-  end
-
   # Private helper functions
 
   defp format_datetime_for_ics(datetime, _timezone) do
@@ -119,11 +98,6 @@ defmodule EventasaurusWeb.CalendarExport do
   defp format_outlook_datetime(datetime, _timezone) do
     # Outlook expects ISO 8601 format
     DateTime.to_iso8601(datetime)
-  end
-
-  defp format_yahoo_datetime(datetime, _timezone) do
-    # Yahoo expects UTC times in YYYYMMDDTHHmmss format (no Z)
-    Calendar.strftime(datetime, "%Y%m%dT%H%M%S")
   end
 
   defp add_default_duration(start_datetime) do
