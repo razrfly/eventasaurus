@@ -113,6 +113,7 @@ defmodule EventasaurusWeb.Router do
     get "/reset-password", Auth.AuthController, :reset_password
     post "/reset-password", Auth.AuthController, :update_password
     get "/facebook", Auth.AuthController, :facebook_login
+    get "/google", Auth.AuthController, :google_login
   end
 
   # Auth callback and logout routes (no redirect needed - these need to work for all users)

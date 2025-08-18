@@ -270,9 +270,17 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.info("Auth callback received: #{inspect(params)}")
 
     case params do
-      # Facebook OAuth callback
+      # OAuth callback with authorization code
       %{"code" => code} when not is_nil(code) ->
-        handle_facebook_oauth_callback(conn, code, params)
+        # Determine which provider based on session
+        provider = get_session(conn, :oauth_provider) || "facebook"  # Default to facebook for backward compatibility
+        
+        case provider do
+          "google" ->
+            handle_google_oauth_callback(conn, code, params)
+          _ ->
+            handle_facebook_oauth_callback(conn, code, params)
+        end
 
       %{"access_token" => _access_token, "refresh_token" => _refresh_token, "type" => "recovery"} = auth_data ->
         Logger.info("Password recovery callback with tokens - setting recovery session")
@@ -436,12 +444,28 @@ defmodule EventasaurusWeb.Auth.AuthController do
   Redirect user to Facebook OAuth login.
   """
   def facebook_login(conn, _params) do
-    # Store action type (let Supabase handle CSRF state)
-    conn = put_session(conn, :oauth_action, "login")
+    # Store action type and provider (let Supabase handle CSRF state)
+    conn = conn
+    |> put_session(:oauth_action, "login")
+    |> put_session(:oauth_provider, "facebook")
 
     # Get Facebook OAuth URL and redirect
     facebook_url = Auth.get_facebook_oauth_url()
     redirect(conn, external: facebook_url)
+  end
+
+  @doc """
+  Redirect user to Google OAuth login.
+  """
+  def google_login(conn, _params) do
+    # Store action type and provider (let Supabase handle CSRF state)
+    conn = conn
+    |> put_session(:oauth_action, "login")
+    |> put_session(:oauth_provider, "google")
+
+    # Get Google OAuth URL and redirect
+    google_url = Auth.get_google_oauth_url()
+    redirect(conn, external: google_url)
   end
 
   @doc """
@@ -454,13 +478,25 @@ defmodule EventasaurusWeb.Auth.AuthController do
     |> redirect(to: ~p"/auth/login")
   end
 
+  @doc """
+  Handle Google OAuth error callback.
+  """
+  def google_callback(conn, %{"error" => error, "error_description" => description}) do
+    Logger.error("Google OAuth error: #{error} - #{description}")
+    conn
+    |> put_flash(:error, "Google authentication was cancelled or failed.")
+    |> redirect(to: ~p"/auth/login")
+  end
+
   defp handle_facebook_oauth_callback(conn, code, _params) do
     oauth_action = get_session(conn, :oauth_action) || "login"
 
     Logger.info("Facebook OAuth callback - OAuth action: #{inspect(oauth_action)}")
 
-    # Clear the OAuth action from session
-    conn = delete_session(conn, :oauth_action)
+    # Clear the OAuth action and provider from session
+    conn = conn
+    |> delete_session(:oauth_action)
+    |> delete_session(:oauth_provider)
 
     case oauth_action do
       "link" ->
@@ -540,6 +576,98 @@ defmodule EventasaurusWeb.Auth.AuthController do
       Logger.error("Facebook OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
       conn
       |> put_flash(:error, "Facebook authentication failed - incomplete data received.")
+      |> redirect(to: ~p"/auth/login")
+    end
+  end
+
+  defp handle_google_oauth_callback(conn, code, _params) do
+    oauth_action = get_session(conn, :oauth_action) || "login"
+
+    Logger.info("Google OAuth callback - OAuth action: #{inspect(oauth_action)}")
+
+    # Clear the OAuth action and provider from session
+    conn = conn
+    |> delete_session(:oauth_action)
+    |> delete_session(:oauth_provider)
+
+    case oauth_action do
+      "link" ->
+        # User is trying to link Google account to existing account
+        handle_google_account_linking(conn, code)
+
+      "login" ->
+        # User is trying to sign in with Google
+        case Auth.sign_in_with_google_oauth(code) do
+          {:ok, auth_data} ->
+            Logger.info("Google OAuth successful")
+            handle_successful_google_auth(conn, auth_data)
+
+          {:error, error} ->
+            Logger.error("Google OAuth callback failed: #{inspect(error)}")
+            conn
+            |> put_flash(:error, "Google authentication failed. Please try again.")
+            |> redirect(to: ~p"/auth/login")
+        end
+    end
+  end
+
+  defp handle_google_account_linking(conn, code) do
+    case Auth.link_google_account(conn, code) do
+      {:ok, _result} ->
+        Logger.info("Google account linked successfully")
+        conn
+        |> put_flash(:info, "Google account connected successfully!")
+        |> redirect(to: ~p"/settings/account")
+
+      {:error, reason} ->
+        Logger.error("Google account linking failed: #{inspect(reason)}")
+        error_message = case reason do
+          :no_authentication_token -> "Authentication session expired. Please log in again."
+          %{message: message} when is_binary(message) -> message
+          _ -> "Failed to connect Google account. Please try again."
+        end
+
+        conn
+        |> put_flash(:error, error_message)
+        |> redirect(to: ~p"/settings/account")
+    end
+  end
+
+  defp handle_successful_google_auth(conn, auth_data) do
+    # Safely extract required data with fallbacks
+    user_data = Map.get(auth_data, "user")
+    access_token = Map.get(auth_data, "access_token")
+
+    if user_data && access_token do
+      # Sync user with local database (using existing pattern)
+      case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
+        {:ok, user} ->
+          # Check for stored return URL using the standard session key
+          return_to = get_session(conn, :user_return_to)
+          
+          case Auth.store_session(conn, auth_data, true) do
+            {:ok, conn} ->
+              conn
+              |> put_session(:current_user_id, user.id)
+              |> put_flash(:info, "Successfully signed in with Google!")
+              |> delete_session(:user_return_to)
+              |> redirect(to: return_to || ~p"/dashboard")
+            {:error, _} ->
+              conn
+              |> put_flash(:error, "Session error. Please try again.")
+              |> redirect(to: ~p"/auth/login")
+          end
+
+        {:error, reason} ->
+          Logger.error("Failed to sync Google user: #{inspect(reason)}")
+          conn
+          |> put_flash(:error, "Authentication failed - unable to create account.")
+          |> redirect(to: ~p"/auth/login")
+      end
+    else
+      Logger.error("Google OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      conn
+      |> put_flash(:error, "Google authentication failed - incomplete data received.")
       |> redirect(to: ~p"/auth/login")
     end
   end

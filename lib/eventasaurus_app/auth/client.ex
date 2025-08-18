@@ -563,6 +563,93 @@ defmodule EventasaurusApp.Auth.Client do
   end
 
   @doc """
+  Sign in with Google OAuth authorization code.
+
+  Returns {:ok, auth_data} on success or {:error, reason} on failure.
+  """
+  def sign_in_with_google_oauth(code) do
+    url = "#{get_auth_url()}/token?grant_type=authorization_code"
+
+    body = Jason.encode!(%{
+      code: code,
+      redirect_uri: get_google_redirect_uri()
+    })
+
+    case HTTPoison.post(url, body, default_headers()) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        Logger.debug("Google OAuth authentication successful")
+        {:ok, response}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        Logger.error("Google OAuth failed with status #{code}: #{inspect(error)}")
+        {:error, %{status: code, message: error["message"] || "Google authentication failed"}}
+
+      {:error, %HTTPoison.Error{reason: :nxdomain} = _error} ->
+        Logger.error("DNS resolution failed for Supabase URL: #{get_url()}")
+        {:error, %{status: 503, message: "Authentication service unavailable"}}
+
+      {:error, error} ->
+        Logger.error("Google OAuth request failed: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Generate the Google OAuth login URL for redirecting users.
+  """
+  def get_google_oauth_url do
+    base_url = "#{get_auth_url()}/authorize"
+    redirect_uri = get_google_redirect_uri()
+
+    params = [
+      {"provider", "google"},
+      {"redirect_to", redirect_uri}
+    ]
+
+    query_string = URI.encode_query(params)
+
+    "#{base_url}?#{query_string}"
+  end
+
+  @doc """
+  Link a Google account to an existing authenticated user.
+
+  Returns {:ok, user_data} on success or {:error, reason} on failure.
+  """
+  def link_google_account(access_token, google_oauth_code) do
+    url = "#{get_auth_url()}/user/identities"
+
+    body = Jason.encode!(%{
+      provider: "google",
+      code: google_oauth_code,
+      redirect_uri: get_google_redirect_uri()
+    })
+
+    case HTTPoison.post(url, body, auth_headers(access_token)) do
+      {:ok, %{status_code: 200, body: response_body}} ->
+        response = Jason.decode!(response_body)
+        Logger.debug("Google account linked successfully")
+        {:ok, response}
+
+      {:ok, %{status_code: code, body: response_body}} ->
+        error = Jason.decode!(response_body)
+        Logger.error("Google account linking failed with status #{code}: #{inspect(error)}")
+        {:error, %{status: code, message: error["message"] || "Failed to link Google account"}}
+
+      {:error, error} ->
+        Logger.error("Google account linking request failed: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  defp get_google_redirect_uri do
+    site_url = get_config()[:site_url] || "http://localhost:4000"
+    "#{site_url}/auth/callback"
+  end
+
+  @doc """
   Get a user by email using admin API.
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.

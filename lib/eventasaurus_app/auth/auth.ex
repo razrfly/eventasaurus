@@ -175,6 +175,24 @@ defmodule EventasaurusApp.Auth do
   end
 
   @doc """
+  Sign in with Google OAuth authorization code.
+
+  Returns `{:ok, auth_data}` on success or `{:error, reason}` on failure.
+  """
+  def sign_in_with_google_oauth(code) do
+    Client.sign_in_with_google_oauth(code)
+  end
+
+  @doc """
+  Get the Google OAuth login URL.
+
+  Returns the URL string to redirect users to Google authentication.
+  """
+  def get_google_oauth_url do
+    Client.get_google_oauth_url()
+  end
+
+  @doc """
   Link a Facebook account to the current authenticated user.
 
   Returns `{:ok, user_data}` on success or `{:error, reason}` on failure.
@@ -184,6 +202,21 @@ defmodule EventasaurusApp.Auth do
 
     if access_token do
       Client.link_facebook_account(access_token, facebook_oauth_code)
+    else
+      {:error, :no_authentication_token}
+    end
+  end
+
+  @doc """
+  Link a Google account to the current authenticated user.
+
+  Returns `{:ok, user_data}` on success or `{:error, reason}` on failure.
+  """
+  def link_google_account(conn, google_oauth_code) do
+    access_token = get_session(conn, :access_token)
+
+    if access_token do
+      Client.link_google_account(access_token, google_oauth_code)
     else
       {:error, :no_authentication_token}
     end
