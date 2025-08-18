@@ -30,17 +30,46 @@ defmodule EventasaurusWeb.CalendarController do
                 |> put_resp_content_type("text/calendar")
                 |> put_resp_header("content-disposition", "attachment; filename=\"#{event.slug}.ics\"")
                 |> send_resp(200, ics_content)
+              
+              {:error, reason} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> text("Cannot export event to calendar: #{inspect(reason)}")
             end
           
           "google" ->
             # Redirect to Google Calendar URL
-            google_url = CalendarExport.google_calendar_url(event, venue, event_url)
-            redirect(conn, external: google_url)
+            case CalendarExport.google_calendar_url(event, venue, event_url) do
+              {:error, :missing_start_at} ->
+                conn
+                |> put_status(:bad_request)
+                |> text("Cannot export event to calendar: Event date/time is not set")
+              
+              google_url when is_binary(google_url) ->
+                redirect(conn, external: google_url)
+              
+              {:error, reason} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> text("Cannot export event to calendar: #{inspect(reason)}")
+            end
           
           "outlook" ->
             # Redirect to Outlook Calendar URL
-            outlook_url = CalendarExport.outlook_calendar_url(event, venue, event_url)
-            redirect(conn, external: outlook_url)
+            case CalendarExport.outlook_calendar_url(event, venue, event_url) do
+              {:error, :missing_start_at} ->
+                conn
+                |> put_status(:bad_request)
+                |> text("Cannot export event to calendar: Event date/time is not set")
+              
+              outlook_url when is_binary(outlook_url) ->
+                redirect(conn, external: outlook_url)
+              
+              {:error, reason} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> text("Cannot export event to calendar: #{inspect(reason)}")
+            end
           
           _ ->
             conn
