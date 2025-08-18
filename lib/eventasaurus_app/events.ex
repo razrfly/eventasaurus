@@ -1164,7 +1164,7 @@ defmodule EventasaurusApp.Events do
         now = DateTime.utc_now()
         from e in subquery(union_query), 
           where: is_nil(e.start_at) or e.start_at > ^now,
-          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+          order_by: [asc: coalesce(e.start_at, e.inserted_at)],
           limit: ^limit
       :past ->
         now = DateTime.utc_now()
