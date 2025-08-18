@@ -416,6 +416,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, auth_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def sign_in_with_facebook_oauth(code) do
     url = "#{get_auth_url()}/token?grant_type=authorization_code"
 
@@ -448,6 +449,7 @@ defmodule EventasaurusApp.Auth.Client do
   @doc """
   Generate the Facebook OAuth login URL for redirecting users.
   """
+  @impl true
   def get_facebook_oauth_url do
     base_url = "#{get_auth_url()}/authorize"
     redirect_uri = get_facebook_redirect_uri()
@@ -467,6 +469,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def link_facebook_account(access_token, facebook_oauth_code) do
     url = "#{get_auth_url()}/user/identities"
 
@@ -567,6 +570,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, auth_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def sign_in_with_google_oauth(code) do
     url = "#{get_auth_url()}/token?grant_type=authorization_code"
 
@@ -599,6 +603,7 @@ defmodule EventasaurusApp.Auth.Client do
   @doc """
   Generate the Google OAuth login URL for redirecting users.
   """
+  @impl true
   def get_google_oauth_url do
     base_url = "#{get_auth_url()}/authorize"
     redirect_uri = get_google_redirect_uri()
@@ -618,6 +623,7 @@ defmodule EventasaurusApp.Auth.Client do
 
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
+  @impl true
   def link_google_account(access_token, google_oauth_code) do
     url = "#{get_auth_url()}/user/identities"
 
