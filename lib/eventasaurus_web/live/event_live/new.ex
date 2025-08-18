@@ -527,7 +527,7 @@ defmodule EventasaurusWeb.EventLive.New do
       ) || "")
       |> String.trim()
     
-    venue_address = 
+    _venue_address = 
       (Map.get(event_params, "venue_address",
         Map.get(socket.assigns.form_data || %{}, "venue_address", "")
       ) || "")

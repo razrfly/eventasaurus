@@ -1312,10 +1312,19 @@ defmodule EventasaurusApp.Events do
     end
 
     # Apply ordering and limit
-    final_query = 
-      from [e, eu, ep, v] in time_filtered_query,
-        order_by: [desc: coalesce(e.start_at, e.inserted_at)],
-        limit: ^limit
+    # For upcoming events: ascending (soonest first)
+    # For past events: descending (most recent first)
+    # For all: descending (most recent first)
+    final_query = case time_filter do
+      :upcoming ->
+        from [e, eu, ep, v] in time_filtered_query,
+          order_by: [asc: coalesce(e.start_at, e.inserted_at)],
+          limit: ^limit
+      _ ->
+        from [e, eu, ep, v] in time_filtered_query,
+          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+          limit: ^limit
+    end
 
     # Execute the single query
     results = Repo.all(final_query, with_deleted: true)
