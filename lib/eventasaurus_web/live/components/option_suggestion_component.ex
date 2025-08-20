@@ -28,7 +28,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   use EventasaurusWeb, :live_component
   require Logger
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.PollOption
+  alias EventasaurusApp.Events.{Poll, PollOption}
   alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService, RichDataManager}
   alias EventasaurusWeb.Services.PollPubSubService
   alias EventasaurusWeb.Utils.TimeUtils
@@ -212,7 +212,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
               <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              <%= suggest_button_text(@poll.poll_type) %>
+              <%= suggest_button_text(@poll) %>
             </button>
           <% else %>
             <div class="text-sm text-gray-500 font-medium">
@@ -240,50 +240,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           <.form for={@changeset} phx-submit="submit_suggestion" phx-target={@myself} phx-change="validate_suggestion">
             <div class="space-y-4">
 
-              <!-- City Selector (only for places poll type) -->
-              <%= if @poll.poll_type == "places" do %>
-                <div class="relative">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Search Location (optional)
-                    <span class="text-xs text-gray-500 ml-2">Choose a city to find nearby places</span>
-                  </label>
-
-                  <div class="relative">
-                    <input
-                      type="text"
-                      class="city-selector-input block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm pr-10"
-                      placeholder="Search for a city..."
-                      autocomplete="off"
-                    />
-                    <div class="absolute inset-y-0 right-0 flex items-center pr-3">
-                      <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                      </svg>
-                    </div>
-
-                    <!-- City Dropdown -->
-                    <div class="city-selector-dropdown hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
-                      <!-- Recent Cities -->
-                      <div class="px-3 py-2 bg-gray-50 border-b">
-                        <div class="text-xs font-medium text-gray-500 mb-2">RECENT CITIES</div>
-                        <div class="recent-cities-container">
-                          <!-- Recent cities will be populated by JavaScript -->
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Location Context Display -->
-                  <div class="city-display hidden mt-2 text-sm text-indigo-600 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                    <span>Searching near your location</span>
-                  </div>
-                </div>
-              <% end %>
 
               <!-- Auto-complete title input -->
               <%= if @poll.poll_type == "time" do %>
@@ -453,7 +409,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <!-- Regular option input for other poll types -->
                   <div class="relative">
                     <label for="option_title" class="block text-sm font-medium text-gray-700">
-                      <%= option_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
+                      <%= option_title_label(@poll) %> 
+                      <%= if search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll) do %>
+                        <span class="text-xs text-gray-500 font-normal">(<%= search_location %>)</span>
+                      <% end %>
+                      <span class="text-red-500">*</span>
                     </label>
                   <div class="mt-1 relative">
                     <%= if should_use_api_search?(@poll.poll_type) do %>
@@ -463,7 +423,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           name="poll_option[title]"
                           id="option_title"
                           value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                          placeholder={option_title_placeholder(@poll.poll_type)}
+                          placeholder={option_title_placeholder(@poll)}
                           phx-change="search_movies"
                           phx-target={@myself}
                           phx-debounce="300"
@@ -476,9 +436,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           name="poll_option[title]"
                           id="option_title"
                           value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                          placeholder={option_title_placeholder(@poll.poll_type)}
+                          placeholder={option_title_placeholder(@poll)}
                           phx-debounce="300"
                           phx-hook="PlacesSuggestionSearch"
+                          data-location-scope={@poll |> get_location_scope()}
+                          data-search-location={@poll |> get_search_location_json()}
                           autocomplete="off"
                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         />
@@ -2227,29 +2189,65 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # UI helper functions
 
-  defp suggest_button_text(poll_type) do
+  defp suggest_button_text(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "movie" -> "Suggest Movie"
+      "places" -> 
+        alias EventasaurusWeb.Utils.PollPhaseUtils
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "Suggest #{scope_display}"
+      "time" -> "Add Time"
+      _ -> "Add Option"
+    end
+  end
+  
+  defp suggest_button_text(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Suggest Movie"
       "places" -> "Suggest Place"
-          "time" -> "Add Time"
+      "time" -> "Add Time"
       _ -> "Add Option"
     end
   end
 
-  defp option_title_label(poll_type) do
+  defp option_title_label(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "movie" -> "Movie Title"
+      "places" -> 
+        alias EventasaurusWeb.Utils.PollPhaseUtils
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "#{scope_display} Name"
+      "time" -> "Time"
+      _ -> "Option Title"
+    end
+  end
+  
+  defp option_title_label(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Movie Title"
       "places" -> "Place Name"
-          "time" -> "Time"
+      "time" -> "Time"
       _ -> "Option Title"
     end
   end
 
-  defp option_title_placeholder(poll_type) do
+  defp option_title_placeholder(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "movie" -> "Start typing to search movies..."
+      "places" -> 
+        alias EventasaurusWeb.Utils.PollPhaseUtils
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "Start typing to search #{String.downcase(scope_display)}s..."
+      "time" -> "Select a time..."
+      _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
+    end
+  end
+  
+  defp option_title_placeholder(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Start typing to search movies..."
       "places" -> "Start typing to search places..."
-          "time" -> "Select a time..."
+      "time" -> "Select a time..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
   end
@@ -2522,6 +2520,24 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     cond do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
+    end
+  end
+
+  # Helper function to get location scope from poll settings
+  defp get_location_scope(poll) do
+    Poll.get_location_scope(poll)
+  end
+
+  # Helper function to get search location data as JSON for JavaScript
+  defp get_search_location_json(poll) do
+    if poll && poll.settings do
+      case Map.get(poll.settings, "search_location_data") do
+        data when is_map(data) -> Jason.encode!(data)
+        data when is_binary(data) -> data
+        _ -> ""
+      end
+    else
+      ""
     end
   end
 end

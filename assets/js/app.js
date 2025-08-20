@@ -2307,6 +2307,74 @@ document.addEventListener("DOMContentLoaded", function() {
   
 });
 
+// City Search Hook for Poll Creation Component
+Hooks.CitySearch = {
+  mounted() {
+    if (process.env.NODE_ENV !== 'production') console.log("CitySearch hook mounted");
+    this.inputEl = this.el;
+    this.mounted = true;
+    this.autocomplete = null;
+    this.hiddenInput = document.getElementById('poll_search_location_data');
+    
+    // Initialize Google Places autocomplete for cities
+    this.initCityAutocomplete();
+  },
+  
+  destroyed() {
+    if (this.autocomplete) {
+      google.maps.event.clearInstanceListeners(this.autocomplete);
+      this.autocomplete = null;
+    }
+    this.mounted = false;
+  },
+  
+  initCityAutocomplete() {
+    if (!this.mounted || !window.google || !window.google.maps || !window.google.maps.places) {
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps not loaded yet for CitySearch, waiting...");
+      setTimeout(() => this.initCityAutocomplete(), 100);
+      return;
+    }
+    
+    try {
+      // Create autocomplete for cities only
+      this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, {
+        types: ['(cities)'],
+        fields: ['place_id', 'name', 'formatted_address', 'geometry']
+      });
+      
+      // Listen for place selection
+      this.autocomplete.addListener('place_changed', () => {
+        const place = this.autocomplete.getPlace();
+        if (place && place.place_id) {
+          // Store the city data in the hidden input
+          const cityData = {
+            place_id: place.place_id,
+            name: place.name,
+            formatted_address: place.formatted_address,
+            geometry: {
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng()
+            }
+          };
+          
+          if (this.hiddenInput) {
+            this.hiddenInput.value = JSON.stringify(cityData);
+            // Trigger change event to update LiveView
+            this.hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          
+          // Also trigger change on the visible input
+          this.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+      
+      if (process.env.NODE_ENV !== 'production') console.log("City autocomplete initialized successfully");
+    } catch (error) {
+      console.error("Error initializing city autocomplete:", error);
+    }
+  }
+};
+
 // Google Places Autocomplete Hook for Poll Option Suggestions
 Hooks.PlacesSuggestionSearch = {
   mounted() {
@@ -2315,8 +2383,19 @@ Hooks.PlacesSuggestionSearch = {
     this.mounted = true;
     this.autocomplete = null;
     this.currentLocation = null;
-    this.selectedCity = null;
+    this.searchLocation = null;
     this.selectedPlaceData = null;
+    
+    // Get search location from data attribute if present
+    const searchLocationData = this.el.dataset.searchLocation;
+    if (searchLocationData) {
+      try {
+        this.searchLocation = JSON.parse(searchLocationData);
+        if (process.env.NODE_ENV !== 'production') console.log("Using search location from poll settings:", this.searchLocation);
+      } catch (e) {
+        console.error("Error parsing search location data:", e);
+      }
+    }
     
     // Initialize Google Places immediately
     this.initGooglePlaces();
@@ -2324,8 +2403,8 @@ Hooks.PlacesSuggestionSearch = {
     // Attempt to get user location for search biasing (privacy-first approach)
     this.initGeolocation();
     
-    // Initialize city selector functionality
-    this.initCitySelector();
+    // Initialize search location from poll settings
+    this.initSearchLocation();
     
     // Listen for form submissions to include place metadata
     this.setupFormSubmissionHandler();
@@ -2358,10 +2437,24 @@ Hooks.PlacesSuggestionSearch = {
     if (process.env.NODE_ENV !== 'production') console.log("PlacesSuggestionSearch hook destroyed");
   },
   
+  initSearchLocation() {
+    // Use search location from poll settings if available
+    if (this.searchLocation && this.searchLocation.geometry) {
+      this.currentLocation = {
+        lat: this.searchLocation.geometry.lat,
+        lng: this.searchLocation.geometry.lng
+      };
+      if (process.env.NODE_ENV !== 'production') {
+        console.log("Using search location from poll settings:", this.searchLocation.name);
+      }
+    }
+  },
+  
   initCitySelector() {
+    // This function is deprecated - city selection is now in poll settings
     if (!this.mounted) return;
     
-    // Set up city selector dropdown if it exists
+    // Set up city selector dropdown if it exists (for backward compatibility)
     this.cityDropdown = document.querySelector('.city-selector-dropdown');
     this.cityInput = document.querySelector('.city-selector-input');
     this.recentCitiesContainer = document.querySelector('.recent-cities-container');
@@ -2602,8 +2695,8 @@ Hooks.PlacesSuggestionSearch = {
         (position) => {
           if (!this.mounted) return;
           
-          // Only use geolocation if no city is manually selected
-          if (!this.selectedCity) {
+          // Only use geolocation if no search location from poll settings
+          if (!this.searchLocation) {
             this.currentLocation = {
               lat: position.coords.latitude,
               lng: position.coords.longitude
@@ -2654,7 +2747,7 @@ Hooks.PlacesSuggestionSearch = {
       // Apply location bias to autocomplete
       this.autocomplete.setBounds(circle.getBounds());
       
-      const source = this.selectedCity ? `selected city (${this.selectedCity.name})` : 'detected location';
+      const source = this.searchLocation ? `poll search location (${this.searchLocation.name})` : 'detected location';
       if (process.env.NODE_ENV !== 'production') console.log(`Applied location bias from ${source}:`, this.currentLocation);
     } catch (error) {
       if (process.env.NODE_ENV !== 'production') console.error("Error applying location bias:", error);
@@ -2701,6 +2794,24 @@ Hooks.PlacesSuggestionSearch = {
     }
   },
   
+  // Helper function to get Google Places types based on location scope
+  getPlacesTypesForScope(scope) {
+    switch (scope) {
+      case 'place':
+        return ['establishment']; // Specific businesses and venues
+      case 'city':
+        return ['(cities)']; // Cities only
+      case 'region':
+        return ['administrative_area_level_1', 'administrative_area_level_2']; // Regions/states/provinces
+      case 'country':
+        return ['country']; // Countries only
+      case 'custom':
+        return []; // All geocodable addresses - no restrictions
+      default:
+        return ['establishment']; // Default to places for backward compatibility
+    }
+  },
+
   // Google Places Autocomplete initialization for place suggestions
   initPlacesAutocomplete() {
     if (!this.mounted) return;
@@ -2714,11 +2825,17 @@ Hooks.PlacesSuggestionSearch = {
         return;
       }
       
-      // Create the autocomplete object with broader place types for "places" poll type
-      // Using 'establishment' alone to support all business types (restaurants, shops, venues, etc.)
-      // Note: 'establishment' cannot be mixed with other types per Google Maps API restrictions
+      // Get location scope from data attribute
+      const locationScope = this.inputEl.getAttribute('data-location-scope') || 'place';
+      const types = this.getPlacesTypesForScope(locationScope);
+      
+      if (process.env.NODE_ENV !== 'production') {
+        console.log("Location scope:", locationScope, "-> Google Places types:", types);
+      }
+      
+      // Create the autocomplete object with dynamic types based on location scope
       const options = {
-        types: ['establishment']
+        types: types
       };
       
       this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
