@@ -2834,8 +2834,8 @@ Hooks.PlacesSuggestionSearch = {
       }
       
       // Create the autocomplete object with dynamic types and required fields
+      // Only add types property if the array is non-empty
       const options = {
-        types: types,
         fields: [
           'place_id',
           'name',
@@ -2850,6 +2850,10 @@ Hooks.PlacesSuggestionSearch = {
           'types'
         ]
       };
+      
+      if (types.length > 0) {
+        options.types = types;
+      }
       
       this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
       
