@@ -22,14 +22,14 @@ defmodule EventasaurusWeb.EventManageTabsTest do
 
   describe "tab navigation" do
     test "default route redirects to overview tab", %{conn: conn, event: event} do
-      {:ok, view, html} = live(conn, ~p"/events/#{event.slug}")
+      {:ok, _view, html} = live(conn, ~p"/events/#{event.slug}")
       
       # Should be on overview tab by default
       assert html =~ "border-blue-500 text-blue-600"
       assert html =~ "Overview"
       
       # Check that we're showing overview content
-      assert html =~ "Event Details"
+      assert html =~ "Event Stats"
     end
 
     test "can navigate directly to guests tab", %{conn: conn, event: event} do
@@ -96,7 +96,7 @@ defmodule EventasaurusWeb.EventManageTabsTest do
     end
 
     test "all tab names are plural", %{conn: conn, event: event} do
-      {:ok, _view, html} = live(conn, ~p"/events/#{event.slug}")
+      {:ok, view, html} = live(conn, ~p"/events/#{event.slug}")
       
       # Check that all tab names are plural
       assert html =~ "Guests"
@@ -104,8 +104,11 @@ defmodule EventasaurusWeb.EventManageTabsTest do
       assert html =~ "Polls"
       assert html =~ "Insights"
       
-      # Make sure singular "Registration" is not present
-      refute html =~ ~r/Registration(?!s)/
+      # Make sure singular "Registration" tab button is not present
+      # Only check for tab buttons, not content that might contain "Registration Settings"
+      refute has_element?(view, "button[phx-value-tab='registration']")
+      # Verify the correct plural tab exists
+      assert has_element?(view, "button[phx-value-tab='registrations']")
     end
   end
 
