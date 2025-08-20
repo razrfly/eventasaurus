@@ -542,6 +542,41 @@ defmodule EventasaurusApp.Events.Poll do
       _ -> Map.put(settings, "location_scope", "place")  # Invalid type, default to place
     end
 
+    # Normalize search_location_data from JSON string to map
+    settings = case Map.get(settings, "search_location_data") do
+      nil -> settings
+      "" -> Map.delete(settings, "search_location_data")  # Remove empty strings
+      json_str when is_binary(json_str) ->
+        # Trim whitespace and check if it's actually empty
+        trimmed = String.trim(json_str)
+        if trimmed == "" do
+          Map.delete(settings, "search_location_data")
+        else
+          case Jason.decode(trimmed) do
+            {:ok, data} when is_map(data) -> 
+              # Only keep if it's a valid map with content
+              if map_size(data) > 0 do
+                Map.put(settings, "search_location_data", data)
+              else
+                Map.delete(settings, "search_location_data")
+              end
+            _ -> 
+              # Invalid JSON or not a map - remove it
+              Map.delete(settings, "search_location_data")
+          end
+        end
+      data when is_map(data) ->
+        # Already a map, keep it if it has content
+        if map_size(data) > 0 do
+          settings
+        else
+          Map.delete(settings, "search_location_data")
+        end
+      _ ->
+        # Invalid type - remove it
+        Map.delete(settings, "search_location_data")
+    end
+
     settings
   end
   defp normalize_settings(_), do: %{}

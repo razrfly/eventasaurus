@@ -2802,9 +2802,9 @@ Hooks.PlacesSuggestionSearch = {
       case 'city':
         return ['(cities)']; // Cities only
       case 'region':
-        return ['administrative_area_level_1', 'administrative_area_level_2']; // Regions/states/provinces
+        return ['(regions)']; // Regions/states/provinces - valid Google Places type
       case 'country':
-        return ['country']; // Countries only
+        return ['(regions)']; // Countries are part of regions in Google Places API
       case 'custom':
         return []; // All geocodable addresses - no restrictions
       default:
@@ -2825,18 +2825,25 @@ Hooks.PlacesSuggestionSearch = {
         return;
       }
       
-      // Get location scope from data attribute
-      const locationScope = this.inputEl.getAttribute('data-location-scope') || 'place';
-      const types = this.getPlacesTypesForScope(locationScope);
+      // Get location scope from data attribute and store on instance
+      this.locationScope = this.inputEl.getAttribute('data-location-scope') || 'place';
+      const types = this.getPlacesTypesForScope(this.locationScope);
       
       if (process.env.NODE_ENV !== 'production') {
-        console.log("Location scope:", locationScope, "-> Google Places types:", types);
+        console.log("Location scope:", this.locationScope, "-> Google Places types:", types);
       }
       
       // Create the autocomplete object with dynamic types based on location scope
+      // Only add types property if the array is non-empty
       const options = {
-        types: types
+        fields: ['place_id', 'name', 'formatted_address', 'geometry', 
+                 'address_components', 'rating', 'price_level', 
+                 'formatted_phone_number', 'website', 'photos', 'types']
       };
+      
+      if (types.length > 0) {
+        options.types = types;
+      }
       
       this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
       
