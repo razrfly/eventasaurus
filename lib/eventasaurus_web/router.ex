@@ -136,6 +136,7 @@ defmodule EventasaurusWeb.Router do
       live "/groups/new", GroupLive.New, :new
       live "/groups/:slug", GroupLive.Show, :show
       live "/groups/:slug/edit", GroupLive.Edit, :edit
+      live "/events", EventsLive
       live "/events/new", EventLive.New
       live "/events/:slug/edit", EventLive.Edit
       live "/checkout/payment", CheckoutPaymentLive
@@ -247,9 +248,6 @@ defmodule EventasaurusWeb.Router do
       get "/terms", PageController, :terms
       get "/invite-only", PageController, :invite_only
 
-      # Public events listing page
-      live "/events", EventsLive
-
       # Direct routes for common auth paths (redirect to proper auth routes)
       get "/login", PageController, :redirect_to_auth_login
       get "/register", PageController, :redirect_to_auth_register
@@ -260,6 +258,7 @@ defmodule EventasaurusWeb.Router do
   scope "/", EventasaurusWeb do
     pipe_through [:browser, :redirect_if_authenticated]
     
+    get "/signup", PageController, :redirect_to_invite_only
     get "/signup/:event_id", PageController, :redirect_to_auth_register_with_event
   end
 
