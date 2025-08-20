@@ -78,4 +78,9 @@ defmodule EventasaurusWeb.PageController do
     
     redirect(conn, to: path)
   end
+
+  def redirect_to_invite_only(conn, _params) do
+    # Direct signup attempts (without event_id) should go to invite-only page
+    redirect(conn, to: "/invite-only")
+  end
 end
