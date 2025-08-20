@@ -24,6 +24,9 @@ defmodule EventasaurusApp.Events.Poll do
     # Privacy and ordering fields
     field :privacy_settings, :map, default: %{}
     field :order_index, :integer, default: 0
+    
+    # Settings for flexible configuration (location scope, etc.)
+    field :settings, :map, default: %{}
 
     # Virtual fields for attaching stats in queries
     field :stats, {:array, :map}, virtual: true
@@ -103,10 +106,11 @@ defmodule EventasaurusApp.Events.Poll do
       :title, :description, :poll_type, :voting_system, :phase,
       :list_building_deadline, :voting_deadline, :finalized_date,
       :finalized_option_ids, :max_options_per_user, :auto_finalize,
-      :privacy_settings, :order_index,
+      :privacy_settings, :order_index, :settings,
       :event_id, :created_by_id
     ])
     |> update_change(:privacy_settings, &normalize_privacy_settings/1)
+    |> update_change(:settings, &normalize_settings/1)
     |> validate_required([:title, :poll_type, :voting_system, :event_id, :created_by_id])
     |> validate_inclusion(:phase, phases())
     |> validate_inclusion(:voting_system, ~w(binary approval ranked star))
@@ -114,6 +118,7 @@ defmodule EventasaurusApp.Events.Poll do
     |> validate_deadlines()
     |> validate_finalized_date()
     |> validate_privacy_settings()
+    |> validate_settings()
     |> validate_number(:order_index, greater_than_or_equal_to: 0)
     |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
     |> foreign_key_constraint(:event_id)
@@ -134,15 +139,17 @@ defmodule EventasaurusApp.Events.Poll do
     |> cast(attrs, [
       :title, :description, :poll_type, :voting_system,
       :list_building_deadline, :voting_deadline, :max_options_per_user,
-      :auto_finalize, :privacy_settings, :order_index,
+      :auto_finalize, :privacy_settings, :order_index, :settings,
       :event_id, :created_by_id
     ])
     |> update_change(:privacy_settings, &normalize_privacy_settings/1)
+    |> update_change(:settings, &normalize_settings/1)
     |> validate_required([:title, :poll_type, :voting_system, :event_id, :created_by_id])
     |> validate_inclusion(:voting_system, ~w(binary approval ranked star))
     |> validate_poll_type()
     |> validate_deadlines()
     |> validate_privacy_settings()
+    |> validate_settings()
     |> validate_number(:order_index, greater_than_or_equal_to: 0)
     |> put_change(:phase, "list_building")
     |> foreign_key_constraint(:event_id)
@@ -482,6 +489,7 @@ defmodule EventasaurusApp.Events.Poll do
     |> cast(%{privacy_settings: privacy_settings}, [:privacy_settings])
     |> update_change(:privacy_settings, &normalize_privacy_settings/1)
     |> validate_privacy_settings()
+    |> validate_settings()
   end
 
   @doc """
@@ -490,5 +498,63 @@ defmodule EventasaurusApp.Events.Poll do
   def show_suggester_names?(%__MODULE__{privacy_settings: nil}), do: true  # Default to showing
   def show_suggester_names?(%__MODULE__{privacy_settings: settings}) do
     Map.get(settings, "show_suggester_names", true)
+  end
+
+  @doc """
+  Get location scope for this poll.
+  """
+  def get_location_scope(%__MODULE__{settings: nil}), do: "place"  # Default to place
+  def get_location_scope(%__MODULE__{settings: settings}) do
+    Map.get(settings, "location_scope", "place")
+  end
+
+  @doc """
+  Set location scope for this poll.
+  """
+  def set_location_scope(%__MODULE__{settings: settings} = poll, scope) when scope in ["place", "city", "region", "country", "custom"] do
+    new_settings = Map.put(settings || %{}, "location_scope", scope)
+    %{poll | settings: new_settings}
+  end
+
+  @doc """
+  Get all valid location scopes.
+  """
+  def location_scopes, do: ~w(place city region country custom)
+
+  @doc """
+  Get display name for location scope.
+  """
+  def location_scope_display("place"), do: "Specific Places"
+  def location_scope_display("city"), do: "Cities"
+  def location_scope_display("region"), do: "Regions/States"
+  def location_scope_display("country"), do: "Countries"
+  def location_scope_display("custom"), do: "Custom Locations"
+  def location_scope_display(scope), do: String.capitalize(scope)
+
+  # Private helper to normalize settings
+  defp normalize_settings(nil), do: %{}
+  defp normalize_settings(settings) when is_map(settings) do
+    # Normalize location_scope if present
+    settings = case Map.get(settings, "location_scope") do
+      scope when scope in ["place", "city", "region", "country", "custom"] -> settings
+      scope when is_binary(scope) -> Map.put(settings, "location_scope", "place")  # Invalid scope, default to place
+      nil -> settings  # No scope set, leave as is
+      _ -> Map.put(settings, "location_scope", "place")  # Invalid type, default to place
+    end
+
+    settings
+  end
+  defp normalize_settings(_), do: %{}
+
+  # Add settings validation to the existing validation pipeline
+  defp validate_settings(changeset) do
+    settings = get_field(changeset, :settings) || %{}
+    
+    # Validate location scope if present
+    case Map.get(settings, "location_scope") do
+      nil -> changeset  # Optional field
+      scope when scope in ["place", "city", "region", "country", "custom"] -> changeset
+      _ -> add_error(changeset, :settings, "invalid location scope")
+    end
   end
 end
