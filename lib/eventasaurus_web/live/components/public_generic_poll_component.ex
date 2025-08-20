@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   require Logger
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.Poll
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.PollPhaseUtils
@@ -432,6 +433,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                               placeholder={get_title_placeholder(@poll.poll_type)}
                               phx-debounce="300"
                               phx-hook="PlacesSuggestionSearch"
+                              data-location-scope={@poll |> get_location_scope()}
                               autocomplete="off"
                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             />
@@ -649,6 +651,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       is_binary(email) and String.trim(email) != "" -> String.trim(email)
       true -> "Anonymous"
     end
+  end
+
+  # Helper function to get location scope from poll settings
+  defp get_location_scope(poll) do
+    Poll.get_location_scope(poll)
   end
 
 end
