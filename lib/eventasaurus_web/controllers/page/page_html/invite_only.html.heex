@@ -1,7 +1,7 @@
 <div class="overflow-hidden">
   <main>
     <%!-- Hero Section with modern background --%>
-    <.hero_section class="relative pb-16 pt-8 sm:pb-24 sm:pt-16 overflow-hidden bg-gradient-to-b from-indigo-50/50 via-white to-white">
+    <div class="relative pb-16 pt-8 sm:pb-24 sm:pt-16 overflow-hidden bg-gradient-to-b from-white/95 via-white/90 to-transparent">
       <%!-- Dot pattern background --%>
       <div class="absolute inset-0 -z-10">
         <div class="absolute inset-0 h-full w-full bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]"></div>
@@ -12,7 +12,7 @@
       <div class="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
       <div class="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
       
-      <div class="relative pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
+      <div class="relative pt-8 pb-16 sm:pt-16 sm:pb-24 text-center px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-4xl">
           <%!-- Decorative element --%>
           <div class="mb-8 flex justify-center">
@@ -62,42 +62,44 @@
           animation-delay: 4s;
         }
       </style>
-    </.hero_section>
+    </div>
 
     <%!-- How to Get Invited Section --%>
-    <.section background="white" class="py-24">
-      <div class="text-center mb-12">
-        <.subheading class="mb-4">Getting Access</.subheading>
-        <.heading as="h2" class="mb-6">
-          How to Get Invited
-        </.heading>
-        <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-          There are two main ways to join our community and get access to Eventasaurus.
-        </p>
+    <div class="py-24 px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="text-center mb-12">
+          <.subheading class="mb-4">Getting Access</.subheading>
+          <.heading as="h2" class="mb-6">
+            How to Get Invited
+          </.heading>
+          <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+            There are two main ways to join our community and get access to Eventasaurus.
+          </p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <.feature_card 
+            title="Attend an Event"
+            description="Event organizers can invite you to join by sharing a special signup link when you attend their events."
+            icon="🎉"
+          />
+          <.feature_card 
+            title="Get Referred"
+            description="Know someone who uses Eventasaurus? Ask them for an invitation link to their next event."
+            icon="🤝"
+          />
+        </div>
       </div>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-        <.feature_card 
-          title="Attend an Event"
-          description="Event organizers can invite you to join by sharing a special signup link when you attend their events."
-          icon="🎉"
-        />
-        <.feature_card 
-          title="Get Referred"
-          description="Know someone who uses Eventasaurus? Ask them for an invitation link to their next event."
-          icon="🤝"
-        />
-      </div>
-    </.section>
+    </div>
 
     <%!-- Interest Form Section (Phase II) --%>
-    <.section background="gradient" class="py-24">
-      <div class="max-w-2xl mx-auto text-center">
-        <.subheading class="mb-4" dark>Coming Soon</.subheading>
-        <.heading as="h2" class="mb-6" dark>
+    <div class="py-24 px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-2xl text-center">
+        <.subheading class="mb-4">Coming Soon</.subheading>
+        <.heading as="h2" class="mb-6">
           Join Our Interest List
         </.heading>
-        <p class="text-xl text-gray-400 mb-8">
+        <p class="text-xl text-gray-600 mb-8">
           Want to be notified when we open up registration? We'll let you know!
         </p>
         
@@ -114,11 +116,11 @@
           </p>
         </div>
       </div>
-    </.section>
+    </div>
 
     <%!-- Contact Section --%>
-    <.section background="white" class="py-16">
-      <div class="max-w-2xl mx-auto text-center">
+    <div class="py-16 px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-2xl text-center">
         <.subheading class="mb-4">Need Help?</.subheading>
         <.heading as="h2" class="mb-6 text-3xl">
           Questions?
@@ -132,6 +134,6 @@
           </.radiant_button>
         </div>
       </div>
-    </.section>
+    </div>
   </main>
 </div>
