@@ -26,7 +26,7 @@ defmodule EventasaurusWeb.EventLive.New do
     case ensure_user_struct(socket.assigns.auth_user) do
       {:ok, user} ->
         changeset = Events.change_event(%Event{})
-        today = Date.utc_today() |> Date.to_iso8601()
+        default_date = Date.utc_today() |> Date.add(5) |> Date.to_iso8601()
         venues = Venues.list_venues()
         # Load groups that the user is a member of or created
         user_groups = Groups.list_user_groups(user)
@@ -60,8 +60,8 @@ defmodule EventasaurusWeb.EventLive.New do
 
         # Update form_data with the random image and smart defaults
         initial_form_data = %{
-          "start_date" => today,
-          "ends_date" => today,
+          "start_date" => default_date,
+          "ends_date" => default_date,
           # Legacy date polling field removed
           "slug" => Nanoid.generate(10),
           "taxation_type" => default_taxation_type,
