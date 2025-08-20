@@ -156,4 +156,16 @@ defmodule EventasaurusWeb.Utils.PollPhaseUtils do
       _ -> "Place"
     end
   end
+  
+  @doc """
+  Returns the search location for a places poll if it's scoped to places.
+  Returns nil if there's no search location or it's not a places poll.
+  """
+  def get_poll_search_location(%{poll_type: "places", settings: settings}) when is_map(settings) do
+    if Map.get(settings, "location_scope") == "place" do
+      Map.get(settings, "search_location")
+    end
+  end
+  
+  def get_poll_search_location(_), do: nil
 end

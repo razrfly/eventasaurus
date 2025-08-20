@@ -272,7 +272,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
         <div class="mb-6">
           <div class="mb-4">
             <h3 class="text-lg font-semibold text-gray-900">
-              <%= poll_emoji(@poll.poll_type) %> <%= get_poll_title(@poll) %>
+              <%= poll_emoji(@poll.poll_type) %> 
+              <%= get_poll_title_base(@poll) %>
+              <%= if search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll) do %>
+                <span class="text-sm text-gray-500 font-normal">(<%= search_location %>)</span>
+              <% end %>
             </h3>
             <p class="text-sm text-gray-600">
               <%= PollPhaseUtils.get_phase_description(@poll.phase, @poll.poll_type) %>
@@ -525,7 +529,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   # Helper functions for poll type customization
 
-  defp get_poll_title(%{poll_type: poll_type} = poll) do
+  defp get_poll_title_base(%{poll_type: poll_type} = poll) do
     case poll_type do
       "places" -> 
         # Get the location scope for places polls
@@ -538,7 +542,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     end
   end
   
-  defp get_poll_title(poll_type) when is_binary(poll_type) do
+  defp get_poll_title_base(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Place Suggestions"
       "time" -> "Time Suggestions"

@@ -409,7 +409,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <!-- Regular option input for other poll types -->
                   <div class="relative">
                     <label for="option_title" class="block text-sm font-medium text-gray-700">
-                      <%= option_title_label(@poll) %> <span class="text-red-500">*</span>
+                      <%= option_title_label(@poll) %> 
+                      <%= if search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll) do %>
+                        <span class="text-xs text-gray-500 font-normal">(<%= search_location %>)</span>
+                      <% end %>
+                      <span class="text-red-500">*</span>
                     </label>
                   <div class="mt-1 relative">
                     <%= if should_use_api_search?(@poll.poll_type) do %>
