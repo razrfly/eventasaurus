@@ -74,17 +74,17 @@
       </button>
       <button 
         phx-click="switch_tab" 
-        phx-value-tab="registration"
+        phx-value-tab="registrations"
         class={[
           "py-4 px-1 border-b-2 font-semibold whitespace-nowrap transition hover:text-blue-700",
-          if @active_tab == "registration" do
+          if @active_tab == "registrations" do
             "border-blue-500 text-blue-600"
           else
             "border-transparent text-gray-700 hover:text-black hover:border-gray-300"
           end
         ]}
       >
-        Registration
+        Registrations
         <%= if @tickets && length(@tickets) > 0 do %>
           <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
             <%= length(@tickets) %>
@@ -675,7 +675,7 @@
     <% end %>
 
     <!-- Registration Tab -->
-    <%= if @active_tab == "registration" do %>
+    <%= if @active_tab == "registrations" do %>
       <div class="space-y-6">
         <!-- Registration Settings -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

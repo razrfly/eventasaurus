@@ -60,7 +60,6 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:event, event)
                |> assign(:user, user)
                |> assign(:page_title, "Manage Event")
-               |> assign(:active_tab, "overview")  # Default tab
                |> assign(:venue, event.venue)  # Add missing venue assign
                |> assign_participants_with_stats(initial_participants)
                |> assign(:participants_count, total_participants)
@@ -112,19 +111,47 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    socket = case tab do
-      "polls" ->
-        # Load poll data when switching to polls tab
-        socket
-        |> assign(:polls_loading, true)
-        |> load_poll_data()
-
-      _ ->
-        socket
+  def handle_params(_params, _url, socket) do
+    # Determine active tab based on the live action
+    active_tab = case socket.assigns.live_action do
+      :overview -> "overview"
+      :guests -> "guests"
+      :registrations -> "registrations"
+      :polls -> "polls"
+      :insights -> "insights"
+      _ -> "overview"
     end
 
-    {:noreply, assign(socket, :active_tab, tab)}
+    socket = 
+      socket
+      |> assign(:active_tab, active_tab)
+      |> maybe_load_poll_data(active_tab)
+
+    {:noreply, socket}
+  end
+
+  defp maybe_load_poll_data(socket, "polls") do
+    socket
+    |> assign(:polls_loading, true)
+    |> load_poll_data()
+  end
+  defp maybe_load_poll_data(socket, _), do: socket
+
+  @impl true
+  def handle_event("switch_tab", %{"tab" => tab}, socket) do
+    # Navigate to the tab-specific URL instead of just switching state
+    event_slug = socket.assigns.event.slug
+    
+    path = case tab do
+      "overview" -> ~p"/events/#{event_slug}"
+      "guests" -> ~p"/events/#{event_slug}/guests"
+      "registrations" -> ~p"/events/#{event_slug}/registrations"
+      "polls" -> ~p"/events/#{event_slug}/polls"
+      "insights" -> ~p"/events/#{event_slug}/insights"
+      _ -> ~p"/events/#{event_slug}"
+    end
+
+    {:noreply, push_navigate(socket, to: path)}
   end
 
   @impl true
