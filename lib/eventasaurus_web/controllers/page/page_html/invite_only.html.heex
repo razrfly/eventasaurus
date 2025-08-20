@@ -1,0 +1,94 @@
+<div class="overflow-hidden">
+  <main>
+    <%!-- Hero Section --%>
+    <.hero_section class="pb-16 pt-8 sm:pb-24 sm:pt-16">
+      <div class="pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
+        <.heading as="h1" class="mb-8">
+          Eventasaurus is Invite-Only
+        </.heading>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed mb-8">
+          We're currently in invite-only mode to ensure the best experience for our community.
+        </p>
+        <div class="inline-flex items-center px-4 py-2 rounded-full bg-white/15 ring-1 ring-gray-200 text-sm font-medium text-gray-950">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Registration requires an event invitation
+        </div>
+      </div>
+    </.hero_section>
+
+    <%!-- How to Get Invited Section --%>
+    <.section background="white" class="py-24">
+      <div class="text-center mb-12">
+        <.subheading class="mb-4">Getting Access</.subheading>
+        <.heading as="h2" class="mb-6">
+          How to Get Invited
+        </.heading>
+        <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+          There are two main ways to join our community and get access to Eventasaurus.
+        </p>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <.feature_card 
+          title="Attend an Event"
+          description="Event organizers can invite you to join by sharing a special signup link when you attend their events."
+          icon="🎉"
+        />
+        <.feature_card 
+          title="Get Referred"
+          description="Know someone who uses Eventasaurus? Ask them for an invitation link to their next event."
+          icon="🤝"
+        />
+      </div>
+    </.section>
+
+    <%!-- Interest Form Section (Phase II) --%>
+    <.section background="gradient" class="py-24">
+      <div class="max-w-2xl mx-auto text-center">
+        <.subheading class="mb-4" dark>Coming Soon</.subheading>
+        <.heading as="h2" class="mb-6" dark>
+          Join Our Interest List
+        </.heading>
+        <p class="text-xl text-gray-400 mb-8">
+          Want to be notified when we open up registration? We'll let you know!
+        </p>
+        
+        <%!-- Placeholder for Phase II interest form --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full">
+            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Interest Form Coming Soon</h3>
+          <p class="text-gray-600">
+            We're working on a way for you to express interest. Check back soon or follow us for updates.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Contact Section --%>
+    <.section background="white" class="py-16">
+      <div class="max-w-2xl mx-auto text-center">
+        <.subheading class="mb-4">Need Help?</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl">
+          Questions?
+        </.heading>
+        <p class="text-lg text-gray-600 mb-8">
+          If you have questions about getting invited or need help with an existing invitation, we're here to help.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <.radiant_button href="/events" variant="secondary">
+            Browse Public Events
+          </.radiant_button>
+          <.radiant_button href="/about" variant="primary">
+            Learn More About Us
+          </.radiant_button>
+        </div>
+      </div>
+    </.section>
+  </main>
+</div>
