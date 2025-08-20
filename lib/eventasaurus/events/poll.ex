@@ -26,7 +26,8 @@ defmodule EventasaurusApp.Events.Poll do
     field :order_index, :integer, default: 0
     
     # Settings for flexible configuration (location scope, etc.)
-    field :settings, :map, default: %{}
+    # Default matches DB migration default for consistency
+    field :settings, :map, default: %{"location_scope" => "place"}
 
     # Virtual fields for attaching stats in queries
     field :stats, {:array, :map}, virtual: true
@@ -540,6 +541,29 @@ defmodule EventasaurusApp.Events.Poll do
       scope when is_binary(scope) -> Map.put(settings, "location_scope", "place")  # Invalid scope, default to place
       nil -> settings  # No scope set, leave as is
       _ -> Map.put(settings, "location_scope", "place")  # Invalid type, default to place
+    end
+    
+    # Normalize search_location_data from JSON string to map if needed
+    settings = case Map.get(settings, "search_location_data") do
+      json_str when is_binary(json_str) and json_str != "" ->
+        case Jason.decode(json_str) do
+          {:ok, data} -> Map.put(settings, "search_location_data", data)
+          _ -> 
+            # If JSON decode fails, remove the invalid data
+            Map.delete(settings, "search_location_data")
+        end
+      "" ->
+        # Empty string, remove it
+        Map.delete(settings, "search_location_data")
+      nil ->
+        # Not present, leave as is
+        settings
+      data when is_map(data) ->
+        # Already a map, keep it
+        settings
+      _ ->
+        # Invalid type, remove it
+        Map.delete(settings, "search_location_data")
     end
 
     settings

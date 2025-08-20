@@ -163,7 +163,21 @@ defmodule EventasaurusWeb.Utils.PollPhaseUtils do
   """
   def get_poll_search_location(%{poll_type: "places", settings: settings}) when is_map(settings) do
     if Map.get(settings, "location_scope") == "place" do
-      Map.get(settings, "search_location")
+      # Try to get the display name from search_location_data first
+      case Map.get(settings, "search_location_data") do
+        # If it's already a map, get the name or formatted_address
+        %{} = data -> 
+          Map.get(data, "name") || Map.get(data, "formatted_address")
+        # If it's a JSON string, parse it first
+        json_str when is_binary(json_str) and json_str != "" ->
+          case Jason.decode(json_str) do
+            {:ok, data} -> Map.get(data, "name") || Map.get(data, "formatted_address")
+            _ -> Map.get(settings, "search_location")
+          end
+        # Fall back to search_location if no data
+        _ -> 
+          Map.get(settings, "search_location")
+      end
     end
   end
   

@@ -2825,17 +2825,30 @@ Hooks.PlacesSuggestionSearch = {
         return;
       }
       
-      // Get location scope from data attribute
-      const locationScope = this.inputEl.getAttribute('data-location-scope') || 'place';
-      const types = this.getPlacesTypesForScope(locationScope);
+      // Get location scope from data attribute and store on instance
+      this.locationScope = this.inputEl.getAttribute('data-location-scope') || 'place';
+      const types = this.getPlacesTypesForScope(this.locationScope);
       
       if (process.env.NODE_ENV !== 'production') {
-        console.log("Location scope:", locationScope, "-> Google Places types:", types);
+        console.log("Location scope:", this.locationScope, "-> Google Places types:", types);
       }
       
-      // Create the autocomplete object with dynamic types based on location scope
+      // Create the autocomplete object with dynamic types and required fields
       const options = {
-        types: types
+        types: types,
+        fields: [
+          'place_id',
+          'name',
+          'formatted_address',
+          'geometry',
+          'address_components',
+          'rating',
+          'price_level',
+          'formatted_phone_number',
+          'website',
+          'photos',
+          'types'
+        ]
       };
       
       this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
