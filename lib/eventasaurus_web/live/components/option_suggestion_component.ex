@@ -212,7 +212,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
               <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              <%= suggest_button_text(@poll.poll_type) %>
+              <%= suggest_button_text(@poll) %>
             </button>
           <% else %>
             <div class="text-sm text-gray-500 font-medium">
@@ -409,7 +409,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                   <!-- Regular option input for other poll types -->
                   <div class="relative">
                     <label for="option_title" class="block text-sm font-medium text-gray-700">
-                      <%= option_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
+                      <%= option_title_label(@poll) %> <span class="text-red-500">*</span>
                     </label>
                   <div class="mt-1 relative">
                     <%= if should_use_api_search?(@poll.poll_type) do %>
@@ -419,7 +419,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           name="poll_option[title]"
                           id="option_title"
                           value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                          placeholder={option_title_placeholder(@poll.poll_type)}
+                          placeholder={option_title_placeholder(@poll)}
                           phx-change="search_movies"
                           phx-target={@myself}
                           phx-debounce="300"
@@ -432,7 +432,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           name="poll_option[title]"
                           id="option_title"
                           value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                          placeholder={option_title_placeholder(@poll.poll_type)}
+                          placeholder={option_title_placeholder(@poll)}
                           phx-debounce="300"
                           phx-hook="PlacesSuggestionSearch"
                           data-location-scope={@poll |> get_location_scope()}
@@ -2185,29 +2185,65 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # UI helper functions
 
-  defp suggest_button_text(poll_type) do
+  defp suggest_button_text(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "movie" -> "Suggest Movie"
+      "places" -> 
+        alias EventasaurusWeb.Utils.PollPhaseUtils
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "Suggest #{scope_display}"
+      "time" -> "Add Time"
+      _ -> "Add Option"
+    end
+  end
+  
+  defp suggest_button_text(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Suggest Movie"
       "places" -> "Suggest Place"
-          "time" -> "Add Time"
+      "time" -> "Add Time"
       _ -> "Add Option"
     end
   end
 
-  defp option_title_label(poll_type) do
+  defp option_title_label(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "movie" -> "Movie Title"
+      "places" -> 
+        alias EventasaurusWeb.Utils.PollPhaseUtils
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "#{scope_display} Name"
+      "time" -> "Time"
+      _ -> "Option Title"
+    end
+  end
+  
+  defp option_title_label(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Movie Title"
       "places" -> "Place Name"
-          "time" -> "Time"
+      "time" -> "Time"
       _ -> "Option Title"
     end
   end
 
-  defp option_title_placeholder(poll_type) do
+  defp option_title_placeholder(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "movie" -> "Start typing to search movies..."
+      "places" -> 
+        alias EventasaurusWeb.Utils.PollPhaseUtils
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "Start typing to search #{String.downcase(scope_display)}s..."
+      "time" -> "Select a time..."
+      _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
+    end
+  end
+  
+  defp option_title_placeholder(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Start typing to search movies..."
       "places" -> "Start typing to search places..."
-          "time" -> "Select a time..."
+      "time" -> "Select a time..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
     end
   end
