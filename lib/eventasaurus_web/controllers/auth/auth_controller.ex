@@ -530,11 +530,25 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Redirect user to Facebook OAuth login.
   """
-  def facebook_login(conn, _params) do
+  def facebook_login(conn, params) do
     # Store action type and provider (let Supabase handle CSRF state)
     conn = conn
-    |> put_session(:oauth_action, "login")
+    |> put_session(:oauth_action, Map.get(params, "action", "login"))
     |> put_session(:oauth_provider, "facebook")
+
+    # Store any auth context for unified modal flows
+    conn = if context = Map.get(params, "context") do
+      # Decode the JSON context
+      case Jason.decode(URI.decode(context)) do
+        {:ok, decoded_context} ->
+          put_session(conn, :oauth_context, decoded_context)
+        {:error, _} ->
+          Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
+          conn
+      end
+    else
+      conn
+    end
 
     # Get Facebook OAuth URL and redirect
     facebook_url = Auth.get_facebook_oauth_url()
@@ -544,11 +558,25 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Redirect user to Google OAuth login.
   """
-  def google_login(conn, _params) do
+  def google_login(conn, params) do
     # Store action type and provider (let Supabase handle CSRF state)
     conn = conn
-    |> put_session(:oauth_action, "login")
+    |> put_session(:oauth_action, Map.get(params, "action", "login"))
     |> put_session(:oauth_provider, "google")
+
+    # Store any auth context for unified modal flows
+    conn = if context = Map.get(params, "context") do
+      # Decode the JSON context
+      case Jason.decode(URI.decode(context)) do
+        {:ok, decoded_context} ->
+          put_session(conn, :oauth_context, decoded_context)
+        {:error, _} ->
+          Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
+          conn
+      end
+    else
+      conn
+    end
 
     # Get Google OAuth URL and redirect
     google_url = Auth.get_google_oauth_url()
@@ -581,13 +609,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   defp handle_facebook_oauth_callback(conn, code, _params) do
     oauth_action = get_session(conn, :oauth_action) || "login"
+    oauth_context = get_session(conn, :oauth_context)
 
-    Logger.info("Facebook OAuth callback - OAuth action: #{inspect(oauth_action)}")
+    Logger.info("Facebook OAuth callback - OAuth action: #{inspect(oauth_action)}, Context: #{inspect(oauth_context)}")
 
-    # Clear the OAuth action and provider from session
+    # Clear the OAuth action, provider, and context from session
     conn = conn
     |> delete_session(:oauth_action)
     |> delete_session(:oauth_provider)
+    |> delete_session(:oauth_context)
 
     case oauth_action do
       "link" ->
@@ -599,13 +629,27 @@ defmodule EventasaurusWeb.Auth.AuthController do
         case Auth.sign_in_with_facebook_oauth(code) do
           {:ok, auth_data} ->
             Logger.info("Facebook OAuth successful")
-            handle_successful_facebook_auth(conn, auth_data)
+            handle_successful_facebook_auth(conn, auth_data, oauth_context)
 
           {:error, error} ->
             Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
             conn
             |> put_flash(:error, "Facebook authentication failed. Please try again.")
             |> redirect(to: ~p"/auth/login")
+        end
+
+      # Handle unified modal context actions
+      context_action when context_action in ["interest", "registration", "voting"] ->
+        case Auth.sign_in_with_facebook_oauth(code) do
+          {:ok, auth_data} ->
+            Logger.info("Facebook OAuth successful for context: #{context_action}")
+            handle_context_facebook_auth(conn, auth_data, oauth_context)
+
+          {:error, error} ->
+            Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
+            conn
+            |> put_flash(:error, "Facebook authentication failed. Please try again.")
+            |> redirect(to: ~p"/")
         end
     end
   end
@@ -632,7 +676,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
     end
   end
 
-  defp handle_successful_facebook_auth(conn, auth_data) do
+  defp handle_successful_facebook_auth(conn, auth_data, oauth_context \\ nil) do
     # Safely extract required data with fallbacks
     user_data = Map.get(auth_data, "user")
     access_token = Map.get(auth_data, "access_token")
@@ -671,15 +715,50 @@ defmodule EventasaurusWeb.Auth.AuthController do
     end
   end
 
+  defp handle_context_facebook_auth(conn, auth_data, context) do
+    # Safely extract required data with fallbacks
+    user_data = Map.get(auth_data, "user")
+    access_token = Map.get(auth_data, "access_token")
+
+    if user_data && access_token do
+      # Sync user with local database
+      case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
+        {:ok, user} ->
+          case Auth.store_session(conn, auth_data, true) do
+            {:ok, conn} ->
+              conn = put_session(conn, :current_user_id, user.id)
+              handle_context_post_auth(conn, user, context)
+            {:error, _} ->
+              conn
+              |> put_flash(:error, "Session error. Please try again.")
+              |> redirect(to: ~p"/")
+          end
+
+        {:error, reason} ->
+          Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
+          conn
+          |> put_flash(:error, "Authentication failed - unable to create account.")
+          |> redirect(to: ~p"/")
+      end
+    else
+      Logger.error("Facebook OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      conn
+      |> put_flash(:error, "Facebook authentication failed - incomplete data received.")
+      |> redirect(to: ~p"/")
+    end
+  end
+
   defp handle_google_oauth_callback(conn, code, _params) do
     oauth_action = get_session(conn, :oauth_action) || "login"
+    oauth_context = get_session(conn, :oauth_context)
 
-    Logger.info("Google OAuth callback - OAuth action: #{inspect(oauth_action)}")
+    Logger.info("Google OAuth callback - OAuth action: #{inspect(oauth_action)}, Context: #{inspect(oauth_context)}")
 
-    # Clear the OAuth action and provider from session
+    # Clear the OAuth action, provider, and context from session
     conn = conn
     |> delete_session(:oauth_action)
     |> delete_session(:oauth_provider)
+    |> delete_session(:oauth_context)
 
     case oauth_action do
       "link" ->
@@ -694,13 +773,27 @@ defmodule EventasaurusWeb.Auth.AuthController do
         case Auth.sign_in_with_google_oauth(code) do
           {:ok, auth_data} ->
             Logger.info("Google OAuth successful")
-            handle_successful_google_auth(conn, auth_data)
+            handle_successful_google_auth(conn, auth_data, oauth_context)
 
           {:error, error} ->
             Logger.error("Google OAuth callback failed: #{inspect(error)}")
             conn
             |> put_flash(:error, "Google authentication failed. Please try again.")
             |> redirect(to: ~p"/auth/login")
+        end
+
+      # Handle unified modal context actions
+      context_action when context_action in ["interest", "registration", "voting"] ->
+        case Auth.sign_in_with_google_oauth(code) do
+          {:ok, auth_data} ->
+            Logger.info("Google OAuth successful for context: #{context_action}")
+            handle_context_google_auth(conn, auth_data, oauth_context)
+
+          {:error, error} ->
+            Logger.error("Google OAuth callback failed: #{inspect(error)}")
+            conn
+            |> put_flash(:error, "Google authentication failed. Please try again.")
+            |> redirect(to: ~p"/")
         end
         
       # Reject any unknown oauth_action values for security
@@ -735,7 +828,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   #   end
   # end
 
-  defp handle_successful_google_auth(conn, auth_data) do
+  defp handle_successful_google_auth(conn, auth_data, oauth_context \\ nil) do
     # Safely extract required data with fallbacks
     user_data = Map.get(auth_data, "user")
     access_token = Map.get(auth_data, "access_token")
@@ -772,6 +865,136 @@ defmodule EventasaurusWeb.Auth.AuthController do
       |> put_flash(:error, "Google authentication failed - incomplete data received.")
       |> redirect(to: ~p"/auth/login")
     end
+  end
+
+  defp handle_context_google_auth(conn, auth_data, context) do
+    # Safely extract required data with fallbacks
+    user_data = Map.get(auth_data, "user")
+    access_token = Map.get(auth_data, "access_token")
+
+    if user_data && access_token do
+      # Sync user with local database
+      case EventasaurusApp.Auth.SupabaseSync.sync_user(user_data) do
+        {:ok, user} ->
+          case Auth.store_session(conn, auth_data, true) do
+            {:ok, conn} ->
+              conn = put_session(conn, :current_user_id, user.id)
+              handle_context_post_auth(conn, user, context)
+            {:error, _} ->
+              conn
+              |> put_flash(:error, "Session error. Please try again.")
+              |> redirect(to: ~p"/")
+          end
+
+        {:error, reason} ->
+          Logger.error("Failed to sync Google user: #{inspect(reason)}")
+          conn
+          |> put_flash(:error, "Authentication failed - unable to create account.")
+          |> redirect(to: ~p"/")
+      end
+    else
+      Logger.error("Google OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      conn
+      |> put_flash(:error, "Google authentication failed - incomplete data received.")
+      |> redirect(to: ~p"/")
+    end
+  end
+
+  # Handle post-authentication actions for different contexts (interest, registration, voting)
+  defp handle_context_post_auth(conn, user, context) when is_map(context) do
+    case context do
+      %{"mode" => "interest", "event_id" => event_id} ->
+        handle_interest_context(conn, user, event_id)
+      
+      %{"mode" => "registration", "event_id" => event_id, "intended_status" => intended_status} ->
+        handle_registration_context(conn, user, event_id, intended_status)
+      
+      %{"mode" => "voting", "poll_id" => poll_id, "temp_votes" => temp_votes} ->
+        handle_voting_context(conn, user, poll_id, temp_votes)
+      
+      _ ->
+        Logger.warning("Unknown context in handle_context_post_auth: #{inspect(context)}")
+        conn
+        |> put_flash(:info, "Successfully signed in!")
+        |> redirect(to: ~p"/dashboard")
+    end
+  end
+
+  defp handle_context_post_auth(conn, _user, _context) do
+    # Fallback for invalid context
+    conn
+    |> put_flash(:info, "Successfully signed in!")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_interest_context(conn, user, event_id) do
+    case EventasaurusApp.Events.update_participant_status(user.id, event_id, :interested) do
+      {:ok, _participant} ->
+        case EventasaurusApp.Events.get_event(event_id) do
+          nil ->
+            conn
+            |> put_flash(:info, "Successfully signed in and registered interest!")
+            |> redirect(to: ~p"/dashboard")
+          event ->
+            conn
+            |> put_flash(:info, "Successfully signed in and registered interest in #{event.title}!")
+            |> redirect(to: ~p"/#{event.slug}")
+        end
+
+      {:error, reason} ->
+        Logger.error("Failed to register interest after social auth: #{inspect(reason)}")
+        conn
+        |> put_flash(:info, "Successfully signed in! Please try registering your interest again.")
+        |> redirect(to: ~p"/dashboard")
+    end
+  end
+
+  defp handle_registration_context(conn, user, event_id, intended_status) do
+    status = case intended_status do
+      "interested" -> :interested
+      _ -> :accepted
+    end
+
+    case EventasaurusApp.Events.update_participant_status(user.id, event_id, status) do
+      {:ok, _participant} ->
+        case EventasaurusApp.Events.get_event(event_id) do
+          nil ->
+            conn
+            |> put_flash(:info, "Successfully signed in and registered!")
+            |> redirect(to: ~p"/dashboard")
+          event ->
+            message = if status == :interested do
+              "Successfully signed in and registered interest in #{event.title}!"
+            else
+              "Successfully signed in and registered for #{event.title}!"
+            end
+            conn
+            |> put_flash(:info, message)
+            |> redirect(to: ~p"/#{event.slug}")
+        end
+
+      {:error, reason} ->
+        Logger.error("Failed to register after social auth: #{inspect(reason)}")
+        conn
+        |> put_flash(:info, "Successfully signed in! Please try registering again.")
+        |> redirect(to: ~p"/dashboard")
+    end
+  end
+
+  defp handle_voting_context(conn, user, poll_id, temp_votes) when is_map(temp_votes) do
+    # TODO: Implement vote saving logic here
+    # This would need to integrate with the poll voting system
+    Logger.info("Social auth voting context - Poll: #{poll_id}, User: #{user.id}, Votes: #{inspect(temp_votes)}")
+    
+    conn
+    |> put_flash(:info, "Successfully signed in! Please submit your votes again.")
+    |> redirect(to: ~p"/dashboard")
+  end
+
+  defp handle_voting_context(conn, _user, _poll_id, _temp_votes) do
+    conn
+    |> put_flash(:info, "Successfully signed in! Please submit your votes again.")
+    |> redirect(to: ~p"/dashboard")
   end
 
   # ============ PRIVATE FUNCTIONS ============
