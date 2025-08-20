@@ -15,8 +15,8 @@ defmodule EventasaurusApp.Auth do
 
   Returns `{:ok, auth_data}` on success or `{:error, reason}` on failure.
   """
-  def register(email, password, name) do
-    AuthHelper.register_user(email, password, name)
+  def register(email, password, name, metadata \\ %{}) do
+    AuthHelper.register_user(email, password, name, metadata)
   end
 
   @doc """
@@ -133,7 +133,7 @@ defmodule EventasaurusApp.Auth do
   """
   def sign_up_with_email_and_password(email, password, metadata \\ %{}) do
     name = Map.get(metadata, :name, "")
-    register(email, password, name)
+    register(email, password, name, metadata)
   end
 
   @doc """
