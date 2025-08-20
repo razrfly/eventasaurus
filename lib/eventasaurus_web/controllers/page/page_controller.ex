@@ -39,6 +39,10 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :terms)
   end
 
+  def invite_only(conn, _params) do
+    render(conn, :invite_only)
+  end
+
   def redirect_to_auth_login(conn, _params) do
     # Preserve query parameters when redirecting
     query_string = conn.query_string
@@ -58,6 +62,20 @@ defmodule EventasaurusWeb.PageController do
     else
       "/auth/register"
     end
+    redirect(conn, to: path)
+  end
+
+  def redirect_to_auth_register_with_event(conn, %{"event_id" => event_id}) do
+    # Redirect to auth register with event_id parameter
+    query_string = conn.query_string
+    event_param = "event_id=#{URI.encode_www_form(event_id)}"
+    
+    path = if query_string != "" do
+      "/auth/register?#{event_param}&#{query_string}"
+    else
+      "/auth/register?#{event_param}"
+    end
+    
     redirect(conn, to: path)
   end
 end

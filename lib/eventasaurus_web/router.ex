@@ -245,6 +245,7 @@ defmodule EventasaurusWeb.Router do
       get "/privacy", PageController, :privacy
       get "/your-data", PageController, :your_data
       get "/terms", PageController, :terms
+      get "/invite-only", PageController, :invite_only
 
       # Public events listing page
       live "/events", EventsLive
@@ -252,6 +253,7 @@ defmodule EventasaurusWeb.Router do
       # Direct routes for common auth paths (redirect to proper auth routes)
       get "/login", PageController, :redirect_to_auth_login
       get "/register", PageController, :redirect_to_auth_register
+      get "/signup/:event_id", PageController, :redirect_to_auth_register_with_event
     end
   end
 

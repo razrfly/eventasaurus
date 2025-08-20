@@ -24,6 +24,10 @@ defmodule EventasaurusApp.Accounts.User do
     field :default_currency, :string, default: "USD"
     field :timezone, :string
 
+    # Referral tracking
+    field :referral_event_id, :id
+    belongs_to :referral_event, EventasaurusApp.Events.Event, define_field: false, foreign_key: :referral_event_id
+
     many_to_many :events, EventasaurusApp.Events.Event,
       join_through: EventasaurusApp.Events.EventUser
 
@@ -45,7 +49,7 @@ defmodule EventasaurusApp.Accounts.User do
     |> cast(attrs, [
       :email, :name, :supabase_id, :username, :bio, :website_url, :profile_public,
       :instagram_handle, :x_handle, :youtube_handle, :tiktok_handle, :linkedin_handle,
-      :default_currency, :timezone
+      :default_currency, :timezone, :referral_event_id
     ])
     |> validate_required([:email, :name, :supabase_id])
     |> normalize_email()

@@ -145,8 +145,35 @@ defmodule EventasaurusWeb.Auth.AuthController do
         end
       _ -> conn
     end
+
+    # Handle event-based signup (Phase I implementation - INVITE ONLY)
+    {conn, event} = case params["event_id"] do
+      nil -> 
+        # No event_id = not invited = redirect to invite-only page
+        Logger.info("Direct signup attempt blocked - invite-only mode")
+        {redirect(conn, to: ~p"/invite-only"), nil}
+      event_id when is_binary(event_id) ->
+        case EventasaurusApp.Events.get_event(event_id) do
+          nil ->
+            Logger.warning("Signup attempted for non-existent event: #{event_id}")
+            conn = put_flash(conn, :error, "Invalid event invitation link.")
+            {conn, nil}
+          event ->
+            # Store event_id in session for form submission
+            conn = put_session(conn, :signup_event_id, event.id)
+            {conn, event}
+        end
+      _ -> {conn, nil}
+    end
     
-    render(conn, :register)
+    # If we got a redirect (no event_id), return it immediately
+    case conn do
+      %Plug.Conn{halted: true} -> conn
+      _ ->
+        conn
+        |> assign(:event, event)
+        |> render(:register)
+    end
   end
 
   @doc """
@@ -158,34 +185,61 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
     # Verify Turnstile token if enabled
     with :ok <- verify_turnstile(params) do
-      case Auth.sign_up_with_email_and_password(email, password, %{name: name}) do
+      # Check for event referral in session
+      referral_event_id = get_session(conn, :signup_event_id)
+      user_attrs = %{name: name}
+      user_attrs = if referral_event_id, do: Map.put(user_attrs, :referral_event_id, referral_event_id), else: user_attrs
+      
+      case Auth.sign_up_with_email_and_password(email, password, user_attrs) do
       {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
         Logger.info("Registration successful with tokens")
         
-        # Check for stored return URL
+        # Check for stored return URL and event referral
         return_to = get_session(conn, :user_return_to)
+        referral_event_id = get_session(conn, :signup_event_id)
+        
+        # Customize success message for event-based signups
+        success_message = if referral_event_id do
+          "Account created successfully! Welcome to the event."
+        else
+          "Account created successfully! Please check your email to verify your account."
+        end
         
         conn
         |> put_session(:access_token, access_token)
         |> put_session(:refresh_token, refresh_token)
-        |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
+        |> put_flash(:info, success_message)
         |> delete_session(:user_return_to)
+        |> delete_session(:signup_event_id)
         |> redirect(to: return_to || ~p"/dashboard")
 
       {:ok, %{user: _user, access_token: access_token}} ->
         Logger.info("Registration successful with access token")
         
-        # Check for stored return URL
+        # Check for stored return URL and event referral
         return_to = get_session(conn, :user_return_to)
+        referral_event_id = get_session(conn, :signup_event_id)
+        
+        # Customize success message for event-based signups
+        success_message = if referral_event_id do
+          "Account created successfully! Welcome to the event."
+        else
+          "Account created successfully!"
+        end
         
         conn
         |> put_session(:access_token, access_token)
-        |> put_flash(:info, "Account created successfully!")
+        |> put_flash(:info, success_message)
         |> delete_session(:user_return_to)
+        |> delete_session(:signup_event_id)
         |> redirect(to: return_to || ~p"/dashboard")
 
       {:ok, %{user: _user, confirmation_required: true}} ->
         Logger.info("Registration successful, confirmation required")
+        
+        # Cleanup event referral session
+        conn = delete_session(conn, :signup_event_id)
+        
         conn
         |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
         |> redirect(to: ~p"/login")
