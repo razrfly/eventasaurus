@@ -20,13 +20,8 @@ defmodule EventasaurusWeb.UnifiedAuthModalWrapper do
       end
 
       @impl true
-      def handle_event(event, params, socket) do
-        # Forward all events to the unified modal
-        send_update(UnifiedAuthModal, 
-          id: "#{socket.assigns.id}-unified", 
-          event: event, 
-          params: params
-        )
+      def handle_event(_event, _params, socket) do
+        # No-op: all UI events should target the inner UnifiedAuthModal directly.
         {:noreply, socket}
       end
 

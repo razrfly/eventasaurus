@@ -446,6 +446,66 @@ function initSupabaseClient() {
 import SupabaseImageUpload from "./supabase_upload";
 let Hooks = {};
 
+// ModalCleanup hook to ensure overflow-hidden is removed when modal closes
+Hooks.ModalCleanup = {
+  mounted() {
+    // Store the original overflow style
+    this.originalOverflow = document.body.style.overflow;
+    
+    // Watch for changes to the modal's visibility
+    this.observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && 
+            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+          this.checkModalState();
+        }
+      });
+    });
+    
+    // Start observing the modal element
+    this.observer.observe(this.el, { 
+      attributes: true, 
+      attributeFilter: ['class', 'style'] 
+    });
+    
+    // Initial check
+    this.checkModalState();
+  },
+  
+  checkModalState() {
+    const isHidden = this.el.classList.contains('hidden') || 
+                     this.el.style.display === 'none' ||
+                     !this.el.offsetParent;
+    
+    if (isHidden) {
+      // Modal is hidden, ensure overflow-hidden is removed
+      document.body.classList.remove('overflow-hidden');
+      document.body.style.overflow = this.originalOverflow || '';
+    }
+  },
+  
+  destroyed() {
+    // Clean up when the hook is destroyed
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+    // Ensure overflow-hidden is removed
+    document.body.classList.remove('overflow-hidden');
+    document.body.style.overflow = this.originalOverflow || '';
+  },
+  
+  reconnected() {
+    // Ensure cleanup on reconnection
+    this.checkModalState();
+  },
+  
+  disconnected() {
+    // Ensure cleanup on disconnection
+    document.body.classList.remove('overflow-hidden');
+    document.body.style.overflow = this.originalOverflow || '';
+  }
+};
+
 // TicketQR hook for generating QR codes on tickets
 Hooks.TicketQR = TicketQR;
 
