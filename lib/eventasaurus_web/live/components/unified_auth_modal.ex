@@ -138,7 +138,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class={if @show, do: "", else: "hidden"}>
+    <div class={if @show, do: "", else: "hidden"} phx-hook="ModalCleanup" id={"modal-cleanup-#{@id}"}>
       <style>
         #modal-<%= @id %> [class*="max-w-"] {
           max-width: 20rem !important; /* ~320px (85% of 24rem/384px) */
@@ -167,7 +167,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
       <.modal
         id={"modal-#{@id}"}
         show={@show}
-        on_cancel={JS.push("close", target: @myself)}
+        on_cancel={JS.push("close", target: @myself) |> hide_modal("modal-#{@id}")}
       >
         <:title>
           <%= get_modal_title(assigns) %>
@@ -607,7 +607,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
       case socket.assigns[:poll] do
         nil ->
           send(self(), {:vote_error, :no_poll})
-        %{poll_type: "date"} ->
+        %{poll_type: "date_selection"} ->
           send(self(), {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes, socket.assigns.poll_options})
         poll ->
           send(self(), {:save_all_poll_votes_for_user, poll.id, name, email, temp_votes, socket.assigns.poll_options})
