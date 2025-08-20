@@ -107,12 +107,20 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   @impl true
   def handle_event("close", _params, socket) do
-    # Send close event to parent LiveView as an atom, not tuple
-    close_event = case socket.assigns.on_close do
-      event when is_binary(event) -> String.to_atom(event)
-      event -> event
+    # Send close event to parent LiveView
+    close_event = socket.assigns.on_close
+    
+    # Use existing atoms for known events, otherwise send as string
+    message = case close_event do
+      "close_interest_modal" -> :close_interest_modal
+      "close_registration_modal" -> :close_registration_modal
+      "close_vote_modal" -> :close_vote_modal
+      event when is_atom(event) -> event
+      event when is_binary(event) -> {:close_modal, event}
+      _ -> :close_modal
     end
-    send(self(), close_event)
+    
+    send(self(), message)
     {:noreply, reset_modal_state(socket)}
   end
 
@@ -504,7 +512,8 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     errors = if params["email"] == nil or String.trim(params["email"]) == "" do
       Map.put(errors, :email, "Email is required")
     else
-      if String.match?(params["email"], ~r/^[^\s]+@[^\s]+\.[^\s]+$/) do
+      # More robust email validation pattern
+      if String.match?(params["email"], ~r/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) do
         errors
       else
         Map.put(errors, :email, "Please enter a valid email address")
@@ -595,11 +604,13 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     
     if has_temp_votes?(temp_votes) do
       # Send appropriate message based on poll type
-      case socket.assigns.poll do
+      case socket.assigns[:poll] do
+        nil ->
+          send(self(), {:vote_error, :no_poll})
         %{poll_type: "date"} ->
           send(self(), {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes, socket.assigns.poll_options})
-        _ ->
-          send(self(), {:save_all_poll_votes_for_user, socket.assigns.poll.id, name, email, temp_votes, socket.assigns.poll_options})
+        poll ->
+          send(self(), {:save_all_poll_votes_for_user, poll.id, name, email, temp_votes, socket.assigns.poll_options})
       end
       
       {:noreply, assign(socket, :loading, false)}

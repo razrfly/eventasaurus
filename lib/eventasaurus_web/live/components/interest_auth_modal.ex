@@ -20,25 +20,7 @@ defmodule EventasaurusWeb.InterestAuthModal do
       />
   """
 
-  use EventasaurusWeb, :live_component
-  alias EventasaurusWeb.UnifiedAuthModal
-
-  @impl true
-  def mount(socket) do
-    {:ok, socket}
-  end
-
-  @impl true
-  def update(assigns, socket) do
-    {:ok, assign(socket, assigns)}
-  end
-
-  @impl true
-  def handle_event(event, params, socket) do
-    # Forward all events to the unified modal
-    send_update(UnifiedAuthModal, id: "#{socket.assigns.id}-unified", event: event, params: params)
-    {:noreply, socket}
-  end
+  use EventasaurusWeb.UnifiedAuthModalWrapper
 
   @impl true
   def render(assigns) do
