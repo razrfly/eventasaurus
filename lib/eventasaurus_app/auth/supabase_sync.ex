@@ -95,7 +95,7 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
     end
   end
 
-  defp create_user_from_supabase(supabase_user, metadata \\ %{}) do
+  defp create_user_from_supabase(supabase_user, metadata) do
     user_params = %{
       email: supabase_user["email"],
       name: extract_name_from_supabase(supabase_user),

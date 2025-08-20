@@ -651,6 +651,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
             |> put_flash(:error, "Facebook authentication failed. Please try again.")
             |> redirect(to: ~p"/")
         end
+        
+      _ ->
+        Logger.warning("Unknown Facebook OAuth action: #{inspect(oauth_action)}")
+        conn
+        |> put_flash(:error, "Invalid authentication request.")
+        |> redirect(to: ~p"/auth/login")
     end
   end
 
@@ -676,7 +682,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
     end
   end
 
-  defp handle_successful_facebook_auth(conn, auth_data, oauth_context \\ nil) do
+  defp handle_successful_facebook_auth(conn, auth_data, _oauth_context) do
     # Safely extract required data with fallbacks
     user_data = Map.get(auth_data, "user")
     access_token = Map.get(auth_data, "access_token")
@@ -828,7 +834,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   #   end
   # end
 
-  defp handle_successful_google_auth(conn, auth_data, oauth_context \\ nil) do
+  defp handle_successful_google_auth(conn, auth_data, _oauth_context) do
     # Safely extract required data with fallbacks
     user_data = Map.get(auth_data, "user")
     access_token = Map.get(auth_data, "access_token")
@@ -928,24 +934,32 @@ defmodule EventasaurusWeb.Auth.AuthController do
   end
 
   defp handle_interest_context(conn, user, event_id) do
-    case EventasaurusApp.Events.update_participant_status(user.id, event_id, :interested) do
-      {:ok, _participant} ->
-        case EventasaurusApp.Events.get_event(event_id) do
-          nil ->
-            conn
-            |> put_flash(:info, "Successfully signed in and registered interest!")
-            |> redirect(to: ~p"/dashboard")
-          event ->
-            conn
-            |> put_flash(:info, "Successfully signed in and registered interest in #{event.title}!")
-            |> redirect(to: ~p"/#{event.slug}")
-        end
-
-      {:error, reason} ->
-        Logger.error("Failed to register interest after social auth: #{inspect(reason)}")
-        conn
-        |> put_flash(:info, "Successfully signed in! Please try registering your interest again.")
-        |> redirect(to: ~p"/dashboard")
+    # Parse event_id if it's a string
+    parsed_event_id = parse_event_id(event_id)
+    
+    if is_nil(parsed_event_id) do
+      conn
+      |> put_flash(:info, "Successfully signed in! Please try registering your interest again.")
+      |> redirect(to: ~p"/dashboard")
+    else
+      case EventasaurusApp.Events.get_event(parsed_event_id) do
+        nil ->
+          conn
+          |> put_flash(:info, "Successfully signed in!")
+          |> redirect(to: ~p"/dashboard")
+        event ->
+          case EventasaurusApp.Events.update_participant_status(event, user, :interested) do
+            {:ok, _participant} ->
+              conn
+              |> put_flash(:info, "Successfully signed in and registered interest in #{event.title}!")
+              |> redirect(to: ~p"/#{event.slug}")
+            {:error, reason} ->
+              Logger.error("Failed to register interest after social auth: #{inspect(reason)}")
+              conn
+              |> put_flash(:info, "Successfully signed in! Please try registering your interest again.")
+              |> redirect(to: ~p"/dashboard")
+          end
+      end
     end
   end
 
@@ -954,30 +968,38 @@ defmodule EventasaurusWeb.Auth.AuthController do
       "interested" -> :interested
       _ -> :accepted
     end
-
-    case EventasaurusApp.Events.update_participant_status(user.id, event_id, status) do
-      {:ok, _participant} ->
-        case EventasaurusApp.Events.get_event(event_id) do
-          nil ->
-            conn
-            |> put_flash(:info, "Successfully signed in and registered!")
-            |> redirect(to: ~p"/dashboard")
-          event ->
-            message = if status == :interested do
-              "Successfully signed in and registered interest in #{event.title}!"
-            else
-              "Successfully signed in and registered for #{event.title}!"
-            end
-            conn
-            |> put_flash(:info, message)
-            |> redirect(to: ~p"/#{event.slug}")
-        end
-
-      {:error, reason} ->
-        Logger.error("Failed to register after social auth: #{inspect(reason)}")
-        conn
-        |> put_flash(:info, "Successfully signed in! Please try registering again.")
-        |> redirect(to: ~p"/dashboard")
+    
+    # Parse event_id if it's a string
+    parsed_event_id = parse_event_id(event_id)
+    
+    if is_nil(parsed_event_id) do
+      conn
+      |> put_flash(:info, "Successfully signed in! Please try registering again.")
+      |> redirect(to: ~p"/dashboard")
+    else
+      case EventasaurusApp.Events.get_event(parsed_event_id) do
+        nil ->
+          conn
+          |> put_flash(:info, "Successfully signed in!")
+          |> redirect(to: ~p"/dashboard")
+        event ->
+          case EventasaurusApp.Events.update_participant_status(event, user, status) do
+            {:ok, _participant} ->
+              message = if status == :interested do
+                "Successfully signed in and registered interest in #{event.title}!"
+              else
+                "Successfully signed in and registered for #{event.title}!"
+              end
+              conn
+              |> put_flash(:info, message)
+              |> redirect(to: ~p"/#{event.slug}")
+            {:error, reason} ->
+              Logger.error("Failed to register after social auth: #{inspect(reason)}")
+              conn
+              |> put_flash(:info, "Successfully signed in! Please try registering again.")
+              |> redirect(to: ~p"/dashboard")
+          end
+      end
     end
   end
 
@@ -1156,4 +1178,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
       :ok
     end
   end
+  
+  defp parse_event_id(event_id) when is_integer(event_id), do: event_id
+  defp parse_event_id(event_id) when is_binary(event_id) do
+    case Integer.parse(event_id) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+  defp parse_event_id(_), do: nil
  end
