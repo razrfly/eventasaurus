@@ -54,7 +54,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(:show, false)
      |> assign(:poll, nil)
      |> assign(:show_advanced_options, false)
-     |> assign(:show_voting_guidelines, false)}
+     |> assign(:show_voting_guidelines, false)
+     |> assign(:current_poll_type, "custom")}
   end
 
   @impl true
@@ -72,8 +73,16 @@ defmodule EventasaurusWeb.PollCreationComponent do
         created_by_id: assigns.user.id,
         phase: "list_building",
         poll_type: "custom",
-        voting_system: "binary"
+        voting_system: "binary",
+        settings: %{"location_scope" => "place"}
       })
+    end
+
+    # Determine current poll type for UI display
+    current_poll_type = if is_editing do
+      poll.poll_type
+    else
+      Ecto.Changeset.get_field(changeset, :poll_type) || "custom"
     end
 
     {:ok,
@@ -81,6 +90,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(assigns)
      |> assign(:is_editing, is_editing)
      |> assign(:changeset, changeset)
+     |> assign(:current_poll_type, current_poll_type)
      |> assign(:poll_types, @poll_types)
      |> assign(:voting_systems, @voting_systems)
      |> assign_new(:loading, fn -> false end)
@@ -180,6 +190,80 @@ defmodule EventasaurusWeb.PollCreationComponent do
                       <p class="mt-2 text-sm text-red-600"><%= elem(error, 0) %></p>
                     <% end %>
                   </div>
+
+                  <!-- Location Scope Selection (for places polls) -->
+                  <%= if @current_poll_type == "places" do %>
+                    <div>
+                      <label for="location_scope" class="block text-sm font-medium text-gray-700 mb-2">
+                        Location Scope <span class="text-red-500">*</span>
+                      </label>
+                      <div class="relative">
+                        <select
+                          name="poll[settings][location_scope]"
+                          id="location_scope"
+                          class="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                        >
+                          <option value="" disabled selected={get_current_location_scope(@changeset, @poll) == ""}>Select location scope...</option>
+                          <%= for scope <- Poll.location_scopes() do %>
+                            <option value={scope} selected={get_current_location_scope(@changeset, @poll) == scope}><%= Poll.location_scope_display(scope) %></option>
+                          <% end %>
+                        </select>
+                        <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                          <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                          </svg>
+                        </div>
+                      </div>
+                      <p class="mt-2 text-sm text-gray-500">
+                        Choose the geographical scope for location suggestions in this poll.
+                      </p>
+                    </div>
+                    
+                    <!-- Optional Search Location (only for Specific Places) -->
+                    <%= if get_current_location_scope(@changeset, @poll) == "place" do %>
+                      <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                          Search Location (optional)
+                          <span class="text-xs text-gray-500 ml-2">Choose a city to find nearby places</span>
+                        </label>
+                        
+                        <div class="relative">
+                          <input
+                            type="text"
+                            id="poll_search_location"
+                            name="poll[settings][search_location]"
+                            value={get_search_location(@changeset, @poll)}
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm pr-10"
+                            placeholder="Search for a city..."
+                            autocomplete="off"
+                            phx-hook="CitySearch"
+                          />
+                          <input
+                            type="hidden"
+                            id="poll_search_location_data"
+                            name="poll[settings][search_location_data]"
+                            value={get_search_location_data(@changeset, @poll)}
+                          />
+                          <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                          </div>
+                        </div>
+                        
+                        <!-- Location Context Display -->
+                        <%= if get_search_location(@changeset, @poll) do %>
+                          <div class="mt-2 text-sm text-indigo-600 flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Searching near: <%= get_search_location(@changeset, @poll) %></span>
+                          </div>
+                        <% end %>
+                      </div>
+                    <% end %>
+                  <% end %>
 
                   <!-- Voting System Selection -->
                   <div>
@@ -431,7 +515,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
   @impl true
   def handle_event("validate", %{"poll" => poll_params}, socket) do
     changeset = create_changeset(socket, poll_params)
-    {:noreply, assign(socket, :changeset, changeset)}
+    current_poll_type = poll_params["poll_type"] || "custom"
+    {:noreply, assign(socket, changeset: changeset, current_poll_type: current_poll_type)}
   end
 
 
@@ -528,6 +613,52 @@ defmodule EventasaurusWeb.PollCreationComponent do
       settings when is_map(settings) ->
         Map.get(settings, key, default)
       _ -> default
+    end
+  end
+
+  # Helper function to get current location scope from changeset or poll
+  defp get_current_location_scope(changeset, poll) do
+    # Try to get from changeset first (if form has been submitted)
+    case Ecto.Changeset.get_field(changeset, :settings) do
+      %{"location_scope" => scope} when is_binary(scope) -> scope
+      _ -> 
+        # Fall back to poll's current scope (for editing) or default
+        if poll do
+          Poll.get_location_scope(poll)
+        else
+          "place"  # Default for new polls
+        end
+    end
+  end
+
+  # Helper function to get search location from changeset or poll
+  defp get_search_location(changeset, poll) do
+    case Ecto.Changeset.get_field(changeset, :settings) do
+      %{"search_location" => location} when is_binary(location) -> location
+      _ ->
+        if poll && poll.settings do
+          Map.get(poll.settings, "search_location")
+        else
+          nil
+        end
+    end
+  end
+
+  # Helper function to get search location data from changeset or poll
+  defp get_search_location_data(changeset, poll) do
+    case Ecto.Changeset.get_field(changeset, :settings) do
+      %{"search_location_data" => data} when is_binary(data) -> data
+      %{"search_location_data" => data} when is_map(data) -> Jason.encode!(data)
+      _ ->
+        if poll && poll.settings do
+          case Map.get(poll.settings, "search_location_data") do
+            data when is_map(data) -> Jason.encode!(data)
+            data when is_binary(data) -> data
+            _ -> ""
+          end
+        else
+          ""
+        end
     end
   end
 

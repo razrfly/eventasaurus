@@ -294,6 +294,20 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <% end %>
               </div>
             </div>
+          <% else %>
+            <!-- Images for non-movie polls (places, etc.) -->
+            <%= if option.image_url do %>
+              <div class="flex sm:block">
+                <div class="w-12 h-18 sm:w-16 sm:h-24 mr-3 flex-shrink-0 overflow-hidden rounded">
+                  <img
+                    src={option.image_url}
+                    alt={"#{option.title} image"}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            <% end %>
           <% end %>
           
           <div class="flex-1 min-w-0">
@@ -457,7 +471,19 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <% end %>
             </div>
           <% else %>
-            <div class="ml-3"></div>
+            <!-- Images for non-movie polls (places, etc.) -->
+            <%= if option.image_url do %>
+              <div class="w-12 h-18 sm:w-16 sm:h-24 ml-2 mr-2 sm:ml-3 sm:mr-3 flex-shrink-0 overflow-hidden rounded">
+                <img
+                  src={option.image_url}
+                  alt={"#{option.title} image"}
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            <% else %>
+              <div class="ml-3"></div>
+            <% end %>
           <% end %>
           
           <div class="flex-1 min-w-0">
@@ -587,6 +613,18 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     </div>
                   <% end %>
                 </div>
+              <% else %>
+                <!-- Images for non-movie polls (places, etc.) -->
+                <%= if option.image_url do %>
+                  <div class="w-12 h-18 sm:w-16 sm:h-24 mr-2 sm:mr-3 flex-shrink-0 overflow-hidden rounded">
+                    <img
+                      src={option.image_url}
+                      alt={"#{option.title} image"}
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                <% end %>
               <% end %>
               
               <div class="flex-1 min-w-0">
@@ -689,6 +727,18 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                         </div>
                       <% end %>
                     </div>
+                  <% else %>
+                    <!-- Images for non-movie polls (places, etc.) -->
+                    <%= if option.image_url do %>
+                      <div class="w-12 h-18 sm:w-16 sm:h-24 mr-2 sm:mr-3 flex-shrink-0 overflow-hidden rounded">
+                        <img
+                          src={option.image_url}
+                          alt={"#{option.title} image"}
+                          class="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    <% end %>
                   <% end %>
                   
                   <div class="flex-1 min-w-0">
