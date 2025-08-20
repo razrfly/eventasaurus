@@ -253,8 +253,14 @@ defmodule EventasaurusWeb.Router do
       # Direct routes for common auth paths (redirect to proper auth routes)
       get "/login", PageController, :redirect_to_auth_login
       get "/register", PageController, :redirect_to_auth_register
-      get "/signup/:event_id", PageController, :redirect_to_auth_register_with_event
     end
+  end
+
+  # Event signup routes that should redirect authenticated users
+  scope "/", EventasaurusWeb do
+    pipe_through [:browser, :redirect_if_authenticated]
+    
+    get "/signup/:event_id", PageController, :redirect_to_auth_register_with_event
   end
 
   # Public profile routes (with auth user assignment for privacy checking)
