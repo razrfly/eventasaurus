@@ -147,24 +147,51 @@ defmodule EventasaurusWeb.Auth.AuthController do
     end
 
     # Handle event-based signup (Phase I implementation - INVITE ONLY)
-    {conn, event} = case params["event_id"] do
-      nil -> 
-        # No event_id = not invited = redirect to invite-only page
-        Logger.info("Direct signup attempt blocked - invite-only mode")
-        {redirect(conn, to: ~p"/invite-only"), nil}
-      event_id when is_binary(event_id) ->
-        case EventasaurusApp.Events.get_event(event_id) do
-          nil ->
-            Logger.warning("Signup attempted for non-existent event: #{event_id}")
-            conn = put_flash(conn, :error, "Invalid event invitation link.")
-            {conn, nil}
-          event ->
-            # Store event_id in session for form submission
-            conn = put_session(conn, :signup_event_id, event.id)
-            {conn, event}
-        end
-      _ -> {conn, nil}
-    end
+    {conn, event} =
+      case params["event_id"] do
+        nil ->
+          Logger.info("Direct signup attempt blocked - invite-only mode")
+          conn =
+            conn
+            |> redirect(to: ~p"/invite-only")
+            |> Plug.Conn.halt()
+          {conn, nil}
+
+        event_id when is_binary(event_id) ->
+          case Integer.parse(event_id) do
+            {int_id, ""} ->
+              case EventasaurusApp.Events.get_event(int_id) do
+                nil ->
+                  Logger.warning("Signup attempted for non-existent event: #{event_id}")
+                  conn =
+                    conn
+                    |> put_flash(:error, "Invalid event invitation link.")
+                    |> redirect(to: ~p"/invite-only")
+                    |> Plug.Conn.halt()
+                  {conn, nil}
+
+                event ->
+                  conn = put_session(conn, :signup_event_id, event.id)
+                  {conn, event}
+              end
+
+            _ ->
+              Logger.warning("Signup attempted with invalid event_id format: #{inspect(event_id)}")
+              conn =
+                conn
+                |> put_flash(:error, "Invalid event invitation link.")
+                |> redirect(to: ~p"/invite-only")
+                |> Plug.Conn.halt()
+              {conn, nil}
+          end
+
+        _ ->
+          conn =
+            conn
+            |> redirect(to: ~p"/invite-only")
+            |> Plug.Conn.halt()
+          {conn, nil}
+      end
     
     # If we got a redirect (no event_id), return it immediately
     case conn do
@@ -185,12 +212,17 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
     # Verify Turnstile token if enabled
     with :ok <- verify_turnstile(params) do
-      # Check for event referral in session
+      # Enforce invite-only on POST as well
       referral_event_id = get_session(conn, :signup_event_id)
-      user_attrs = %{name: name}
-      user_attrs = if referral_event_id, do: Map.put(user_attrs, :referral_event_id, referral_event_id), else: user_attrs
-      
-      case Auth.sign_up_with_email_and_password(email, password, user_attrs) do
+      if is_nil(referral_event_id) do
+        Logger.info("Registration attempt without invitation blocked")
+        conn
+        |> put_flash(:error, "Registrations are currently invite-only. Please sign up via an event.")
+        |> redirect(to: ~p"/invite-only")
+        |> Plug.Conn.halt()
+      else
+        user_attrs = %{name: name, referral_event_id: referral_event_id}
+        case Auth.sign_up_with_email_and_password(email, password, user_attrs) do
       {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
         Logger.info("Registration successful with tokens")
         
@@ -255,6 +287,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
         conn
         |> put_flash(:error, "Unable to create account")
         |> render(:register)
+      end
       end
     else
       {:error, :turnstile_failed} ->

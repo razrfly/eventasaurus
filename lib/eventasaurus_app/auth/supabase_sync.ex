@@ -20,7 +20,7 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
     - {:ok, %User{}} on success
     - {:error, changeset} on failure
   """
-  def sync_user(supabase_user) do
+  def sync_user(supabase_user, metadata \\ %{}) do
     supabase_id = supabase_user["id"]
     email = supabase_user["email"]
 
@@ -42,7 +42,7 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
             nil ->
               # User doesn't exist by ID or email, create new
               Logger.info("No existing user found, creating new user")
-              result = create_user_from_supabase(supabase_user)
+              result = create_user_from_supabase(supabase_user, metadata)
 
               case result do
                 {:ok, user} ->
@@ -95,12 +95,19 @@ defmodule EventasaurusApp.Auth.SupabaseSync do
     end
   end
 
-  defp create_user_from_supabase(supabase_user) do
+  defp create_user_from_supabase(supabase_user, metadata \\ %{}) do
     user_params = %{
       email: supabase_user["email"],
       name: extract_name_from_supabase(supabase_user),
       supabase_id: supabase_user["id"]
     }
+    
+    # Add referral_event_id from metadata if present
+    user_params = if Map.has_key?(metadata, :referral_event_id) do
+      Map.put(user_params, :referral_event_id, metadata.referral_event_id)
+    else
+      user_params
+    end
 
     Accounts.create_user(user_params)
   end
