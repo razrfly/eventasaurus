@@ -185,7 +185,11 @@ defmodule EventasaurusWeb.Router do
     scope "/events", EventasaurusWeb do
       pipe_through :browser
 
-      live "/:slug", EventManageLive, :show
+      live "/:slug", EventManageLive, :overview
+      live "/:slug/guests", EventManageLive, :guests
+      live "/:slug/registrations", EventManageLive, :registrations
+      live "/:slug/polls", EventManageLive, :polls
+      live "/:slug/insights", EventManageLive, :insights
       live "/:slug/tickets", AdminTicketLive, :index
       live "/:slug/orders", AdminOrderLive, :index
     end
