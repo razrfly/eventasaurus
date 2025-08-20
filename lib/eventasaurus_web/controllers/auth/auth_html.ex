@@ -98,13 +98,25 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
     ~H"""
     <div class="mx-auto max-w-sm">
       <.header class="text-center">
-        Register for an account
+        <%= if @event do %>
+          Create account
+        <% else %>
+          Register for an account
+        <% end %>
         <:subtitle>
+          <%= if @event do %>
+            You've been invited to create an account for this event!
+            <br />
+          <% end %>
           Already have an account?
           <.link navigate={~p"/auth/login"} class="font-semibold text-brand hover:underline">
             Sign in
           </.link>
-          to your account now.
+          <%= if @event do %>
+            instead.
+          <% else %>
+            to your account now.
+          <% end %>
         </:subtitle>
       </.header>
 
@@ -130,10 +142,16 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
 
         <:actions>
           <.button phx-disable-with="Creating account..." class="w-full">
-            Create an account <span aria-hidden="true">→</span>
+            <%= if @event do %>
+              Create account <span aria-hidden="true">→</span>
+            <% else %>
+              Create an account <span aria-hidden="true">→</span>
+            <% end %>
           </.button>
         </:actions>
       </.simple_form>
+
+      <!-- Event context info -->
     </div>
     """
   end
