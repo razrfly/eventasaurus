@@ -272,7 +272,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
         <div class="mb-6">
           <div class="mb-4">
             <h3 class="text-lg font-semibold text-gray-900">
-              <%= poll_emoji(@poll.poll_type) %> <%= get_poll_title(@poll.poll_type) %>
+              <%= poll_emoji(@poll.poll_type) %> <%= get_poll_title(@poll) %>
             </h3>
             <p class="text-sm text-gray-600">
               <%= PollPhaseUtils.get_phase_description(@poll.phase, @poll.poll_type) %>
@@ -384,7 +384,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                      data-event-venue-name={@event && @event.venue && @event.venue.name}
                      data-poll-options-data={Jason.encode!(extract_poll_options_coordinates(@poll_options))}>
                   <div class="mb-4">
-                    <h4 class="text-base sm:text-md font-medium text-gray-900 mb-2">Add <%= get_suggestion_title(@poll.poll_type) %></h4>
+                    <h4 class="text-base sm:text-md font-medium text-gray-900 mb-2">Add <%= get_suggestion_title(@poll) %></h4>
                     <p class="text-sm text-gray-600">Share your suggestion with the group</p>
                   </div>
 
@@ -398,7 +398,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                     <div class="space-y-4">
                       <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">
-                          <%= get_title_label(@poll.poll_type) %> <span class="text-red-500">*</span>
+                          <%= get_title_label(@poll) %> <span class="text-red-500">*</span>
                         </label>
                         <%= if @poll.poll_type == "time" do %>
                           <!-- Use a hidden input for form submission along with the time selector -->
@@ -430,10 +430,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                               name="poll_option[title]"
                               id="option_title"
                               value={@option_title}
-                              placeholder={get_title_placeholder(@poll.poll_type)}
+                              placeholder={get_title_placeholder(@poll)}
                               phx-debounce="300"
                               phx-hook="PlacesSuggestionSearch"
                               data-location-scope={@poll |> get_location_scope()}
+                              data-search-location={@poll |> get_search_location_json()}
                               autocomplete="off"
                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             />
@@ -442,7 +443,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                               type="text"
                               id={"input-#{@poll.id}"}
                               name="poll_option[title]"
-                              placeholder={get_title_placeholder(@poll.poll_type)}
+                              placeholder={get_title_placeholder(@poll)}
                               value={@option_title}
                               phx-keyup="update_option_field"
                               phx-value-field="title"
@@ -524,7 +525,20 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   # Helper functions for poll type customization
 
-  defp get_poll_title(poll_type) do
+  defp get_poll_title(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "places" -> 
+        # Get the location scope for places polls
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "#{scope_display} Suggestions"
+      "time" -> "Time Suggestions"
+      "date_selection" -> "DateTime Selection"
+      "custom" -> "General Options"
+      _ -> "Suggestions"
+    end
+  end
+  
+  defp get_poll_title(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Place Suggestions"
       "time" -> "Time Suggestions"
@@ -535,7 +549,19 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   end
 
 
-  defp get_suggestion_title(poll_type) do
+  defp get_suggestion_title(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "places" -> 
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "#{scope_display} Suggestion"
+      "time" -> "Time"
+      "date_selection" -> "DateTime"
+      "custom" -> "Option"
+      _ -> "Suggestion"
+    end
+  end
+  
+  defp get_suggestion_title(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Place Suggestion"
       "time" -> "Time"
@@ -545,7 +571,19 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     end
   end
 
-  defp get_title_label(poll_type) do
+  defp get_title_label(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "places" -> 
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "#{scope_display} Name"
+      "time" -> "Time"
+      "date_selection" -> "DateTime"
+      "custom" -> "Option Title"
+      _ -> "Title"
+    end
+  end
+  
+  defp get_title_label(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Place Name"
       "time" -> "Time"
@@ -555,7 +593,19 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     end
   end
 
-  defp get_title_placeholder(poll_type) do
+  defp get_title_placeholder(%{poll_type: poll_type} = poll) do
+    case poll_type do
+      "places" -> 
+        scope_display = PollPhaseUtils.format_poll_type(poll)
+        "Enter #{String.downcase(scope_display)} name..."
+      "time" -> "Select a time..."
+      "date_selection" -> "Select a DateTime..."
+      "custom" -> "Enter your option..."
+      _ -> "Enter title..."
+    end
+  end
+  
+  defp get_title_placeholder(poll_type) when is_binary(poll_type) do
     case poll_type do
       "places" -> "Enter place name..."
       "time" -> "Select a time..."
@@ -656,6 +706,19 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   # Helper function to get location scope from poll settings
   defp get_location_scope(poll) do
     Poll.get_location_scope(poll)
+  end
+
+  # Helper function to get search location data as JSON for JavaScript
+  defp get_search_location_json(poll) do
+    if poll && poll.settings do
+      case Map.get(poll.settings, "search_location_data") do
+        data when is_map(data) -> Jason.encode!(data)
+        data when is_binary(data) -> data
+        _ -> ""
+      end
+    else
+      ""
+    end
   end
 
 end

@@ -117,8 +117,17 @@ defmodule EventasaurusWeb.Utils.PollPhaseUtils do
   @doc """
   Returns a user-friendly display name for the poll type.
   Centralizes poll type formatting to ensure consistency across all components.
+  Can accept either a poll type string or a poll struct.
   """
-  def format_poll_type(poll_type) do
+  def format_poll_type(%{poll_type: poll_type} = poll) do
+    # For places polls, include the location scope
+    case poll_type do
+      "places" -> format_places_poll_type(poll)
+      _ -> format_poll_type(poll_type)
+    end
+  end
+  
+  def format_poll_type(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Movie"
       "places" -> "Place"
@@ -126,6 +135,25 @@ defmodule EventasaurusWeb.Utils.PollPhaseUtils do
       "custom" -> "General"
       "date_selection" -> "DateTime"
       _ -> String.capitalize(to_string(poll_type))
+    end
+  end
+  
+  def format_poll_type(poll_type) do
+    String.capitalize(to_string(poll_type))
+  end
+  
+  # Format places poll type with location scope
+  defp format_places_poll_type(poll) do
+    alias EventasaurusApp.Events.Poll
+    
+    scope = Poll.get_location_scope(poll)
+    case scope do
+      "place" -> "Place"
+      "city" -> "City"
+      "region" -> "Region"
+      "country" -> "Country"
+      "custom" -> "Location"
+      _ -> "Place"
     end
   end
 end
