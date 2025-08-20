@@ -1,21 +1,67 @@
 <div class="overflow-hidden">
   <main>
-    <%!-- Hero Section --%>
-    <.hero_section class="pb-16 pt-8 sm:pb-24 sm:pt-16">
-      <div class="pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
-        <.heading as="h1" class="mb-8">
-          Eventasaurus is Invite-Only
-        </.heading>
-        <p class="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed mb-8">
-          We're currently in invite-only mode to ensure the best experience for our community.
-        </p>
-        <div class="inline-flex items-center px-4 py-2 rounded-full bg-white/15 ring-1 ring-gray-200 text-sm font-medium text-gray-950">
-          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          Registration requires an event invitation
+    <%!-- Hero Section with modern background --%>
+    <.hero_section class="relative pb-16 pt-8 sm:pb-24 sm:pt-16 overflow-hidden bg-gradient-to-b from-indigo-50/50 via-white to-white">
+      <%!-- Dot pattern background --%>
+      <div class="absolute inset-0 -z-10">
+        <div class="absolute inset-0 h-full w-full bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]"></div>
+      </div>
+      
+      <%!-- Floating gradient blobs --%>
+      <div class="absolute top-0 -left-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
+      <div class="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
+      <div class="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+      
+      <div class="relative pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
+        <div class="mx-auto max-w-4xl">
+          <%!-- Decorative element --%>
+          <div class="mb-8 flex justify-center">
+            <div class="relative rounded-full px-3 py-1 text-sm leading-6 text-gray-600 ring-1 ring-gray-900/10 hover:ring-gray-900/20">
+              Exclusive Access
+              <span class="absolute -top-px -left-px animate-pulse">
+                <span class="relative flex h-3 w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                </span>
+              </span>
+            </div>
+          </div>
+          
+          <.heading as="h1" class="mb-8 text-6xl font-bold tracking-tight text-gray-900 sm:text-7xl">
+            Eventasaurus is 
+            <span class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Invite-Only</span>
+          </.heading>
+          
+          <p class="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed mb-8">
+            We're currently in invite-only mode to ensure the best experience for our community.
+          </p>
+          
+          <div class="inline-flex items-center px-5 py-2.5 rounded-full bg-indigo-50 ring-1 ring-inset ring-indigo-600/20 text-sm font-medium text-indigo-600">
+            <svg class="w-5 h-5 mr-2.5 -ml-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+            Registration requires an event invitation
+          </div>
         </div>
       </div>
+      
+      <style>
+        @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+      </style>
     </.hero_section>
 
     <%!-- How to Get Invited Section --%>
