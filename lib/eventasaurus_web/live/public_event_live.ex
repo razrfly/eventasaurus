@@ -601,7 +601,10 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply,
      socket
      |> assign(:show_vote_modal, false)
+     |> assign(:show_generic_vote_modal, false)
      |> assign(:pending_vote, nil)
+     |> assign(:modal_poll, nil)
+     |> assign(:modal_temp_votes, %{})
     }
   end
 
@@ -738,7 +741,10 @@ defmodule EventasaurusWeb.PublicEventLive do
     {:noreply,
      socket
      |> assign(:show_vote_modal, false)
+     |> assign(:show_generic_vote_modal, false)
      |> assign(:pending_vote, nil)
+     |> assign(:modal_poll, nil)
+     |> assign(:modal_temp_votes, %{})
     }
   end
 
@@ -1791,6 +1797,7 @@ defmodule EventasaurusWeb.PublicEventLive do
         module={EventRegistrationComponent}
         id="registration-modal"
         event={@event}
+        show={@show_registration_modal}
         intended_status={Map.get(assigns, :intended_status, :accepted)}
       />
     <% end %>
@@ -1805,6 +1812,7 @@ defmodule EventasaurusWeb.PublicEventLive do
         poll={@modal_poll}
         poll_options={@modal_poll.poll_options}
         temp_votes={@modal_temp_votes}
+        show={@show_generic_vote_modal}
       />
     <% end %>
 
