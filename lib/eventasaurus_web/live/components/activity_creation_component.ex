@@ -40,6 +40,34 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
      |> assign(:selected_place, nil)}
   end
   
+  # Helper functions for date/time formatting
+  defp format_date(nil), do: ""
+  defp format_date(%DateTime{} = datetime) do
+    datetime
+    |> DateTime.to_date()
+    |> Date.to_iso8601()
+  end
+  defp format_date(datetime_str) when is_binary(datetime_str) do
+    case DateTime.from_iso8601(datetime_str) do
+      {:ok, datetime, _} -> format_date(datetime)
+      _ -> ""
+    end
+  end
+  
+  defp format_time(nil), do: ""
+  defp format_time(%DateTime{} = datetime) do
+    datetime
+    |> DateTime.to_time()
+    |> Time.to_iso8601()
+    |> String.slice(0..4)  # Get HH:MM format
+  end
+  defp format_time(datetime_str) when is_binary(datetime_str) do
+    case DateTime.from_iso8601(datetime_str) do
+      {:ok, datetime, _} -> format_time(datetime)
+      _ -> ""
+    end
+  end
+  
   @impl true
   def update(assigns, socket) do
     require Logger
@@ -74,27 +102,33 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         "title" => activity.metadata["title"] || "",
         "description" => activity.metadata["description"] || activity.metadata["overview"] || "",
         "notes" => activity.metadata["notes"] || "",
-        "occurred_at" => if(activity.occurred_at, do: DateTime.to_iso8601(activity.occurred_at), else: DateTime.utc_now() |> DateTime.to_iso8601()),
+        "occurred_date" => format_date(activity.occurred_at || DateTime.utc_now()),
+        "occurred_time" => format_time(activity.occurred_at || DateTime.utc_now()),
         "rating" => activity.metadata["rating"] || ""
       }
     else
-      # Only set default form_data if it doesn't exist yet for new activities
-      if socket.assigns[:form_data] do
-        socket.assigns.form_data
+      # Only set default form_data if it doesn't exist or is empty/incomplete
+      existing_form_data = socket.assigns[:form_data] || %{}
+      if Map.has_key?(existing_form_data, "occurred_date") && Map.has_key?(existing_form_data, "occurred_time") do
+        existing_form_data
       else
-        # Use event's start_at for default occurred_at if available
-        default_occurred_at = case assigns[:event] do
-          %{start_at: %DateTime{} = start_at} -> start_at |> DateTime.to_iso8601()
-          _ -> DateTime.utc_now() |> DateTime.to_iso8601()
+        # Use event's start_at for default date and time if available
+        {default_date, default_time} = case assigns[:event] do
+          %{start_at: %DateTime{} = start_at} -> 
+            {format_date(start_at), format_time(start_at)}
+          _ -> 
+            now = DateTime.utc_now()
+            {format_date(now), format_time(now)}
         end
         
-        %{
+        Map.merge(%{
           "activity_type" => "movie_watched",
           "title" => "",
           "description" => "",
           "notes" => "",
-          "occurred_at" => default_occurred_at
-        }
+          "occurred_date" => default_date,
+          "occurred_time" => default_time
+        }, existing_form_data)
       end
     end
     
@@ -132,12 +166,23 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           end
           {nil, selected_tv_show, nil}
         
+        "restaurant_visited" ->
+          selected_place = if activity.metadata["place_id"] do
+            %{
+              id: activity.metadata["place_id"],
+              title: activity.metadata["title"],
+              metadata: activity.metadata
+            }
+          else
+            nil
+          end
+          {nil, nil, selected_place}
+        
         "place_visited" ->
           selected_place = if activity.metadata["place_id"] do
             %{
               id: activity.metadata["place_id"],
-              name: activity.metadata["title"],
-              address: activity.metadata["address"],
+              title: activity.metadata["title"],
               metadata: activity.metadata
             }
           else
@@ -248,18 +293,31 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                 </div>
                 
                 <!-- When it occurred -->
-                <div>
-                  <label for="occurred_at" class="block text-sm font-medium text-gray-700">
-                    When did this happen?
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="occurred_at"
-                    id="occurred_at"
-                    value={format_datetime_local(@form_data["occurred_at"])}
-                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                  <p class="mt-1 text-xs text-gray-500">Leave blank to use the current time</p>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label for="occurred_date" class="block text-sm font-medium text-gray-700">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      name="occurred_date"
+                      id="occurred_date"
+                      value={@form_data["occurred_date"]}
+                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label for="occurred_time" class="block text-sm font-medium text-gray-700">
+                      Time
+                    </label>
+                    <input
+                      type="time"
+                      name="occurred_time"
+                      id="occurred_time"
+                      value={@form_data["occurred_time"]}
+                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -596,9 +654,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   end
   
   @impl true
-  def handle_event("validate", %{"activity_type" => activity_type} = params, socket) do
+  def handle_event("validate", params, socket) do
+    activity_type = params["activity_type"]
+    
     # Clear previous selections when changing activity type
-    socket = if activity_type != socket.assigns.form_data["activity_type"] do
+    socket = if activity_type && activity_type != socket.assigns.form_data["activity_type"] do
       socket
       |> assign(:selected_movie, nil)
       |> assign(:selected_tv_show, nil)
@@ -610,7 +670,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
     {:noreply,
      socket
      |> assign(:form_data, Map.merge(socket.assigns.form_data, params))
-     |> assign(:current_activity_type, activity_type)}
+     |> assign(:current_activity_type, activity_type || socket.assigns.current_activity_type)}
   end
   
   @impl true
@@ -637,13 +697,23 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
       metadata = build_metadata(params)
       
       # Parse occurred_at
-      occurred_at = case params["occurred_at"] do
-        "" -> DateTime.utc_now()
-        nil -> DateTime.utc_now()
-        datetime_str -> 
-          case DateTime.from_iso8601(datetime_str <> ":00Z") do
+      # Combine date and time into a DateTime
+      occurred_at = case {params["occurred_date"], params["occurred_time"]} do
+        {"", _} -> DateTime.utc_now()
+        {nil, _} -> DateTime.utc_now()
+        {_, ""} -> DateTime.utc_now()
+        {_, nil} -> DateTime.utc_now()
+        {date_str, time_str} ->
+          # Combine date and time strings
+          datetime_str = "#{date_str}T#{time_str}:00Z"
+          case DateTime.from_iso8601(datetime_str) do
             {:ok, datetime, _} -> datetime
-            _ -> DateTime.utc_now()
+            _ -> 
+              # Try without seconds
+              case DateTime.from_iso8601("#{date_str}T#{time_str}Z") do
+                {:ok, datetime, _} -> datetime
+                _ -> DateTime.utc_now()
+              end
           end
       end
       
@@ -662,6 +732,12 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             Logger.debug("ActivityCreationComponent: Activity updated successfully: #{inspect(updated_activity.id)}")
             # Notify parent component to reload activities
             send(self(), {:reload_activities})
+            
+            # Notify parent to hide the modal
+            send_update(EventasaurusWeb.EventHistoryComponent,
+              id: "event-history-#{socket.assigns.event.id}",
+              show_activity_creation: false
+            )
             
             {:noreply,
              socket
@@ -699,6 +775,12 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             # Notify parent component to reload activities
             send(self(), {:reload_activities})
             
+            # Notify parent to hide the modal
+            send_update(EventasaurusWeb.EventHistoryComponent,
+              id: "event-history-#{socket.assigns.event.id}",
+              show_activity_creation: false
+            )
+            
             {:noreply,
              socket
              |> assign(:loading, false)
@@ -721,7 +803,35 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   
   @impl true
   def handle_event("close_modal", _, socket) do
-    {:noreply, assign(socket, :show, false)}
+    # Notify parent to hide the modal
+    send_update(EventasaurusWeb.EventHistoryComponent,
+      id: "event-history-#{socket.assigns.event.id}",
+      show_activity_creation: false
+    )
+    
+    # Reset form when closing modal
+    {default_date, default_time} = case socket.assigns[:event] do
+      %{start_at: %DateTime{} = start_at} -> 
+        {format_date(start_at), format_time(start_at)}
+      _ -> 
+        now = DateTime.utc_now()
+        {format_date(now), format_time(now)}
+    end
+    
+    {:noreply, 
+     socket
+     |> assign(:show, false)
+     |> assign(:form_data, %{
+        "activity_type" => "movie_watched",
+        "title" => "",
+        "description" => "",
+        "notes" => "",
+        "occurred_date" => default_date,
+        "occurred_time" => default_time
+     })
+     |> assign(:selected_movie, nil)
+     |> assign(:selected_tv_show, nil)
+     |> assign(:selected_place, nil)}
   end
   
   @impl true
@@ -774,6 +884,9 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
       
       "restaurant_visited" ->
         metadata
+        |> maybe_put("place_id", params["place_id"])
+        |> maybe_put("address", params["address"])
+        |> maybe_put("google_rating", params["google_rating"])
         |> maybe_put("cuisine", params["cuisine"])
       
       _ ->
@@ -793,17 +906,4 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   defp activity_emoji("book_read"), do: "📚"
   defp activity_emoji(_), do: "✨"
   
-  defp format_datetime_local(nil), do: ""
-  defp format_datetime_local(datetime_str) when is_binary(datetime_str) do
-    case DateTime.from_iso8601(datetime_str) do
-      {:ok, datetime, _} -> format_datetime_local(datetime)
-      _ -> ""
-    end
-  end
-  defp format_datetime_local(%DateTime{} = datetime) do
-    datetime
-    |> DateTime.to_naive()
-    |> NaiveDateTime.to_iso8601()
-    |> String.slice(0..15)
-  end
 end
