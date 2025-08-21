@@ -100,7 +100,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
       %{
         "activity_type" => activity.activity_type,
         "title" => activity.metadata["title"] || "",
-        "description" => activity.metadata["description"] || activity.metadata["overview"] || "",
+        "description" => activity.metadata["overview"] || activity.metadata["description"] || "",
         "notes" => activity.metadata["notes"] || "",
         "occurred_date" => format_date(activity.occurred_at || DateTime.utc_now()),
         "occurred_time" => format_time(activity.occurred_at || DateTime.utc_now()),
@@ -143,7 +143,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             %{
               id: activity.metadata["tmdb_id"],
               title: activity.metadata["title"],
-              description: activity.metadata["description"] || "",
+              description: activity.metadata["overview"] || activity.metadata["description"] || "",
               image_url: activity.metadata["poster_url"],
               metadata: activity.metadata
             }
@@ -157,7 +157,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             %{
               id: activity.metadata["tmdb_id"],
               title: activity.metadata["title"],
-              description: activity.metadata["description"] || "",
+              description: activity.metadata["overview"] || activity.metadata["description"] || "",
               image_url: activity.metadata["poster_url"],
               metadata: activity.metadata
             }
@@ -366,7 +366,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                 <img 
                   src={@selected_movie.image_url} 
                   alt={@selected_movie.title}
-                  class="w-16 h-24 object-cover rounded"
+                  class="w-16 h-24 object-cover rounded flex-shrink-0"
                 />
               <% end %>
               <div class="flex-1">
@@ -376,9 +376,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                     (<%= String.slice(@selected_movie.metadata["release_date"], 0..3) %>)
                   <% end %>
                 </p>
-                <p class="text-sm text-gray-600 mt-1 line-clamp-2">
-                  <%= @selected_movie.description %>
-                </p>
+                <%= if @selected_movie.description && @selected_movie.description != "" do %>
+                  <p class="text-sm text-gray-600 mt-2">
+                    <%= @selected_movie.description %>
+                  </p>
+                <% end %>
                 <button
                   type="button"
                   phx-click="clear_movie_selection"
@@ -396,6 +398,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           <input type="hidden" name="tmdb_id" value={@selected_movie.id} />
           <input type="hidden" name="year" value={@selected_movie.metadata["release_date"] && String.slice(@selected_movie.metadata["release_date"], 0..3)} />
           <input type="hidden" name="poster_url" value={@selected_movie.image_url} />
+          <input type="hidden" name="overview" value={@selected_movie.description} />
         <% else %>
           <!-- Show search component -->
           <.live_component
@@ -434,7 +437,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                 <img 
                   src={@selected_tv_show.image_url} 
                   alt={@selected_tv_show.title}
-                  class="w-16 h-24 object-cover rounded"
+                  class="w-16 h-24 object-cover rounded flex-shrink-0"
                 />
               <% end %>
               <div class="flex-1">
@@ -444,9 +447,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                     (<%= String.slice(@selected_tv_show.metadata["first_air_date"], 0..3) %>)
                   <% end %>
                 </p>
-                <p class="text-sm text-gray-600 mt-1 line-clamp-2">
-                  <%= @selected_tv_show.description %>
-                </p>
+                <%= if @selected_tv_show.description && @selected_tv_show.description != "" do %>
+                  <p class="text-sm text-gray-600 mt-2">
+                    <%= @selected_tv_show.description %>
+                  </p>
+                <% end %>
                 <button
                   type="button"
                   phx-click="clear_tv_show_selection"
@@ -464,6 +469,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           <input type="hidden" name="tmdb_id" value={@selected_tv_show.id} />
           <input type="hidden" name="year" value={@selected_tv_show.metadata["first_air_date"] && String.slice(@selected_tv_show.metadata["first_air_date"], 0..3)} />
           <input type="hidden" name="poster_url" value={@selected_tv_show.image_url} />
+          <input type="hidden" name="overview" value={@selected_tv_show.description} />
         <% else %>
           <!-- Show search component -->
           <.live_component
@@ -733,10 +739,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             # Notify parent component to reload activities
             send(self(), {:reload_activities})
             
-            # Notify parent to hide the modal
+            # Notify parent to hide the modal and clear editing state
             send_update(EventasaurusWeb.EventHistoryComponent,
               id: "event-history-#{socket.assigns.event.id}",
-              show_activity_creation: false
+              show_activity_creation: false,
+              editing_activity: nil
             )
             
             {:noreply,
@@ -775,10 +782,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             # Notify parent component to reload activities
             send(self(), {:reload_activities})
             
-            # Notify parent to hide the modal
+            # Notify parent to hide the modal and clear editing state
             send_update(EventasaurusWeb.EventHistoryComponent,
               id: "event-history-#{socket.assigns.event.id}",
-              show_activity_creation: false
+              show_activity_creation: false,
+              editing_activity: nil
             )
             
             {:noreply,
@@ -803,10 +811,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   
   @impl true
   def handle_event("close_modal", _, socket) do
-    # Notify parent to hide the modal
+    # Notify parent to hide the modal and clear editing state
     send_update(EventasaurusWeb.EventHistoryComponent,
       id: "event-history-#{socket.assigns.event.id}",
-      show_activity_creation: false
+      show_activity_creation: false,
+      editing_activity: nil
     )
     
     # Reset form when closing modal
@@ -870,12 +879,14 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         |> maybe_put("year", params["year"])
         |> maybe_put("poster_url", params["poster_url"])
         |> maybe_put("tmdb_id", params["tmdb_id"])
+        |> maybe_put("overview", params["overview"])
       
       "tv_watched" ->
         metadata
         |> maybe_put("year", params["year"])
         |> maybe_put("poster_url", params["poster_url"])
         |> maybe_put("tmdb_id", params["tmdb_id"])
+        |> maybe_put("overview", params["overview"])
       
       "game_played" ->
         metadata
