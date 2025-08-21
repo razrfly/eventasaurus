@@ -299,7 +299,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                   type="checkbox"
                   phx-click="toggle_select_all"
                   phx-target={@myself}
-                  checked={length(@selected_polls) == length(get_filtered_polls(@polls || [], @poll_filter))}
+                  checked={length(@selected_polls || []) == length(get_filtered_polls(@polls || [], @poll_filter))}
                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                 />
                 <label class="text-sm text-gray-700">Select All</label>
@@ -308,11 +308,11 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
           </div>
           
           <!-- Batch Operations Bar -->
-          <%= if length(Map.get(assigns, :selected_polls, [])) > 0 do %>
+          <%= if length(@selected_polls || []) > 0 do %>
             <div class="px-6 py-3 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium text-indigo-900">
-                  <%= length(@selected_polls) %> poll<%= if length(@selected_polls) > 1, do: "s" %> selected
+                  <%= length(@selected_polls || []) %> poll<%= if length(@selected_polls || []) > 1, do: "s" %> selected
                 </span>
                 <button
                   phx-click="clear_selection"
@@ -326,7 +326,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                 <button
                   phx-click="batch_close_polls"
                   phx-target={@myself}
-                  data-confirm={"Are you sure you want to close #{length(@selected_polls)} poll(s)?"}
+                  data-confirm={"Are you sure you want to close #{length(@selected_polls || [])} poll(s)?"}
                   class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
                 >
                   Close Selected
@@ -334,7 +334,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                 <button
                   phx-click="batch_delete_polls"
                   phx-target={@myself}
-                  data-confirm={"Are you sure you want to delete #{length(@selected_polls)} poll(s)? This cannot be undone."}
+                  data-confirm={"Are you sure you want to delete #{length(@selected_polls || [])} poll(s)? This cannot be undone."}
                   class="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                 >
                   Delete Selected
@@ -389,7 +389,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
                     phx-click="toggle_poll_selection"
                     phx-value-poll_id={poll.id}
                     phx-target={@myself}
-                    checked={poll.id in Map.get(assigns, :selected_polls, [])}
+                    checked={poll.id in (@selected_polls || [])}
                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
                 <% end %>
