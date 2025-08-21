@@ -138,6 +138,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
       type: :movie,
       title: result.title,
       description: result.overview || "",
+      image_url: extract_poster_url(result.poster_path),
       images: build_images_list(result.poster_path, nil),
       metadata: %{
         release_date: result.release_date,
@@ -153,6 +154,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
       type: :tv,
       title: result.name,
       description: result.overview || "",
+      image_url: extract_poster_url(result.poster_path),
       images: build_images_list(result.poster_path, nil),
       metadata: %{
         first_air_date: result.first_air_date,
@@ -198,6 +200,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
       type: :movie,
       title: movie_data.title,
       description: movie_data.overview || "",
+      image_url: extract_poster_url(Map.get(movie_data, :poster_path)),
       metadata: %{
         tmdb_id: movie_data.tmdb_id,
         release_date: movie_data.release_date,
@@ -217,7 +220,6 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
         spoken_languages: Map.get(movie_data, :spoken_languages, []),
         imdb_id: Map.get(movie_data, :imdb_id)
       },
-      images: normalize_images(movie_data.images),
       external_urls: build_external_urls(movie_data),
       cast: Map.get(movie_data, :cast, []),
       crew: Map.get(movie_data, :crew, []),
@@ -240,6 +242,7 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
       type: :tv,
       title: tv_data.name,
       description: tv_data.overview || "",
+      image_url: extract_poster_url(Map.get(tv_data, :poster_path)),
       metadata: %{
         tmdb_id: tv_data.tmdb_id,
         first_air_date: Map.get(tv_data, :first_air_date),
@@ -364,6 +367,13 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   defp maybe_add_external_url(urls, _key, "", _base_url), do: urls
   defp maybe_add_external_url(urls, key, id, base_url) do
     Map.put(urls, key, "#{base_url}#{id}")
+  end
+
+  # Extract poster URL for simple image_url field (matching polling system pattern)
+  defp extract_poster_url(nil), do: nil
+  defp extract_poster_url(""), do: nil
+  defp extract_poster_url(poster_path) when is_binary(poster_path) do
+    tmdb_image_url(poster_path)
   end
 
   defp tmdb_image_url(nil), do: nil
