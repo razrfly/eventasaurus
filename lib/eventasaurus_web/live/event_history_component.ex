@@ -676,15 +676,25 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   @impl true
   def handle_event("batch_delete_activities", _params, socket) do
+    require Logger
     selected_activities = socket.assigns.selected_activities || []
 
     activities_to_delete =
       socket.assigns.activities
       |> Enum.filter(&(&1.id in selected_activities))
 
-    Enum.each(activities_to_delete, fn activity ->
-      Events.delete_event_activity(activity)
+    results = Enum.map(activities_to_delete, fn activity ->
+      case Events.delete_event_activity(activity) do
+        {:ok, _} -> :ok
+        {:error, reason} -> {:error, activity.id, reason}
+      end
     end)
+    
+    failures = Enum.filter(results, &match?({:error, _, _}, &1))
+    
+    if length(failures) > 0 do
+      Logger.warning("Failed to delete some activities: #{inspect(failures)}")
+    end
 
     # Reload activities after deletion
     socket =
