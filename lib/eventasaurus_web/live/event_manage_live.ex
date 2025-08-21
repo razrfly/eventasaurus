@@ -1651,7 +1651,8 @@ defmodule EventasaurusWeb.EventManageLive do
     send_update(EventasaurusWeb.EventHistoryComponent,
       id: "event-history-#{socket.assigns.event.id}",
       event: socket.assigns.event,
-      show_activity_creation: false  # Reset modal state
+      show_activity_creation: false,  # Reset modal state
+      editing_activity: nil  # Clear any editing state to prevent edit form from showing on next open
     )
     {:noreply, socket}
   end
