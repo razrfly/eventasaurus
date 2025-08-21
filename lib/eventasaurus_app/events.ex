@@ -3876,13 +3876,23 @@ defmodule EventasaurusApp.Events do
                                 |> Poll.finalization_changeset(option_ids, finalized_date)
                                 |> Repo.update() do
       # Create activity if this is a supported poll type and has winning options
-      if option_ids != [] && poll.poll_type in ["movie", "game", "places", "venue"] do
+      if option_ids != [] and updated_poll.poll_type in ["movie", "game", "places", "venue_selection"] do
         # Get the first winning option (for now, support single winner)
         winning_option_id = List.first(option_ids)
         if winning_option_id do
           # Use the poll's event creator as the activity creator
-          poll = Repo.preload(poll, [:event, :created_by])
-          create_activity_from_poll(poll, winning_option_id, poll.created_by_id)
+          updated_poll = Repo.preload(updated_poll, [:event, :created_by])
+          case create_activity_from_poll(updated_poll, winning_option_id, updated_poll.created_by_id) do
+            {:ok, _activity} ->
+              :ok
+            {:error, reason} ->
+              require Logger
+              Logger.warning("Failed to create activity from poll finalization",
+                poll_id: updated_poll.id,
+                option_id: winning_option_id,
+                reason: inspect(reason)
+              )
+          end
         end
       end
       
@@ -4876,23 +4886,32 @@ defmodule EventasaurusApp.Events do
   Finalizes a poll (single-argument version for LiveView component).
   """
   def finalize_poll(%Poll{} = poll) do
-    # When no options provided, try to determine winner from votes
-    poll = Repo.preload(poll, [:poll_options])
-    
-    # Get the option with most votes (simple winner determination)
-    winning_option = poll.poll_options
-                    |> Enum.max_by(fn option -> 
-                      Repo.aggregate(
-                        from(v in PollVote, where: v.poll_option_id == ^option.id),
-                        :count,
-                        :id
-                      )
-                    end, fn -> nil end)
-    
-    if winning_option do
-      finalize_poll(poll, [winning_option.id])
-    else
-      finalize_poll(poll, [])
+    # Determine winner(s) from votes via a single grouped query
+    votes_by_option =
+      from(v in PollVote,
+        join: po in PollOption, on: v.poll_option_id == po.id,
+        where: po.poll_id == ^poll.id,
+        group_by: v.poll_option_id,
+        select: {v.poll_option_id, count(v.id)}
+      )
+      |> Repo.all()
+
+    case votes_by_option do
+      [] ->
+        # No votes cast
+        finalize_poll(poll, [])
+
+      counts ->
+        # Find highest vote count
+        {_, max_votes} = Enum.max_by(counts, &elem(&1, 1))
+
+        # Collect all options tied for highest; pick first to preserve single-winner behavior
+        [winner_id | _] =
+          counts
+          |> Enum.filter(fn {_id, count} -> count == max_votes end)
+          |> Enum.map(&elem(&1, 0))
+
+        finalize_poll(poll, [winner_id])
     end
   end
 
@@ -6647,7 +6666,9 @@ defmodule EventasaurusApp.Events do
   """
   def create_event_activity(attrs \\ %{}) do
     # If event_id is provided but group_id is not, try to get group_id from event
-    attrs = case {Map.get(attrs, :event_id), Map.get(attrs, :group_id)} do
+    event_id = Map.get(attrs, :event_id) || Map.get(attrs, "event_id")
+    group_id = Map.get(attrs, :group_id) || Map.get(attrs, "group_id")
+    attrs = case {event_id, group_id} do
       {event_id, nil} when not is_nil(event_id) ->
         case get_event(event_id) do
           %Event{group_id: group_id} when not is_nil(group_id) ->
@@ -6702,7 +6723,7 @@ defmodule EventasaurusApp.Events do
   defp poll_type_to_activity_type("movie"), do: "movie_watched"
   defp poll_type_to_activity_type("game"), do: "game_played"
   defp poll_type_to_activity_type("places"), do: "place_visited"
-  defp poll_type_to_activity_type("venue"), do: "place_visited"
+  defp poll_type_to_activity_type("venue_selection"), do: "place_visited"
   defp poll_type_to_activity_type(_), do: "activity_completed"
   
   defp build_activity_metadata_from_poll_option("movie", %PollOption{} = option) do
@@ -6752,14 +6773,11 @@ defmodule EventasaurusApp.Events do
   @doc """
   Checks if an activity already exists (to avoid duplicates).
   """
-  def activity_exists?(event_id, activity_type, metadata_match) do
-    query = from a in EventActivity,
-      where: a.event_id == ^event_id and a.activity_type == ^activity_type
-    
-    # Check if any existing activity has matching metadata
-    Repo.all(query)
-    |> Enum.any?(fn activity ->
-      Map.take(activity.metadata, Map.keys(metadata_match)) == metadata_match
-    end)
+  def activity_exists?(event_id, activity_type, metadata_match) when is_map(metadata_match) do
+    from(a in EventActivity,
+      where: a.event_id == ^event_id and a.activity_type == ^activity_type,
+      where: fragment("? @> ?", a.metadata, ^metadata_match)
+    )
+    |> Repo.exists?()
   end
 end
