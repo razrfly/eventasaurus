@@ -191,6 +191,7 @@ defmodule EventasaurusWeb.Router do
       live "/:slug/registrations", EventManageLive, :registrations
       live "/:slug/polls", EventManageLive, :polls
       live "/:slug/insights", EventManageLive, :insights
+      live "/:slug/history", EventManageLive, :history
       live "/:slug/tickets", AdminTicketLive, :index
       live "/:slug/orders", AdminOrderLive, :index
     end
