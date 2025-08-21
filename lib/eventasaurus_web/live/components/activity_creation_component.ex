@@ -1,9 +1,15 @@
 defmodule EventasaurusWeb.ActivityCreationComponent do
   @moduledoc """
-  A reusable LiveView component for creating event activities.
+  A reusable LiveView component for creating and editing event activities.
   
   Follows the same design pattern as PollCreationComponent, providing
   a form for manually recording activities that happened during an event.
+  
+  ## Attributes:
+  - event: Event struct (required)
+  - user: User struct (required) 
+  - show: Boolean to show/hide the modal
+  - activity: EventActivity struct for editing (optional, nil for new activities)
   """
   
   use EventasaurusWeb, :live_component
@@ -38,6 +44,10 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   def update(assigns, socket) do
     require Logger
     
+    # Determine if we're editing or creating
+    activity = assigns[:activity]
+    is_editing = activity != nil
+    
     # Handle selection actions from RichDataSearchComponent
     socket = case assigns do
       %{action: "movie_selected", data: movie} ->
@@ -56,35 +66,120 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         socket
     end
     
-    # Only set default form_data if it doesn't exist yet
-    form_data = if socket.assigns[:form_data] do
-      socket.assigns.form_data
-    else
-      # Use event's start_at for default occurred_at if available
-      default_occurred_at = case assigns[:event] do
-        %{start_at: %DateTime{} = start_at} -> start_at |> DateTime.to_iso8601()
-        _ -> DateTime.utc_now() |> DateTime.to_iso8601()
-      end
-      
+    # Set form_data based on editing or creating
+    form_data = if is_editing do
+      # Pre-populate form with existing activity data
       %{
-        "activity_type" => "movie_watched",
-        "title" => "",
-        "description" => "",
-        "notes" => "",
-        "occurred_at" => default_occurred_at
+        "activity_type" => activity.activity_type,
+        "title" => activity.metadata["title"] || "",
+        "description" => activity.metadata["description"] || activity.metadata["overview"] || "",
+        "notes" => activity.metadata["notes"] || "",
+        "occurred_at" => if(activity.occurred_at, do: DateTime.to_iso8601(activity.occurred_at), else: DateTime.utc_now() |> DateTime.to_iso8601()),
+        "rating" => activity.metadata["rating"] || ""
       }
+    else
+      # Only set default form_data if it doesn't exist yet for new activities
+      if socket.assigns[:form_data] do
+        socket.assigns.form_data
+      else
+        # Use event's start_at for default occurred_at if available
+        default_occurred_at = case assigns[:event] do
+          %{start_at: %DateTime{} = start_at} -> start_at |> DateTime.to_iso8601()
+          _ -> DateTime.utc_now() |> DateTime.to_iso8601()
+        end
+        
+        %{
+          "activity_type" => "movie_watched",
+          "title" => "",
+          "description" => "",
+          "notes" => "",
+          "occurred_at" => default_occurred_at
+        }
+      end
     end
     
+    # Set current activity type based on form data
+    current_activity_type = form_data["activity_type"] || "movie_watched"
+    
+    # Pre-populate selected items when editing
+    {selected_movie, selected_tv_show, selected_place} = if is_editing do
+      case activity.activity_type do
+        "movie_watched" ->
+          selected_movie = if activity.metadata["tmdb_id"] do
+            %{
+              id: activity.metadata["tmdb_id"],
+              title: activity.metadata["title"],
+              description: activity.metadata["description"] || "",
+              image_url: activity.metadata["poster_url"],
+              metadata: activity.metadata
+            }
+          else
+            nil
+          end
+          {selected_movie, nil, nil}
+        
+        "tv_watched" ->
+          selected_tv_show = if activity.metadata["tmdb_id"] do
+            %{
+              id: activity.metadata["tmdb_id"],
+              title: activity.metadata["title"],
+              description: activity.metadata["description"] || "",
+              image_url: activity.metadata["poster_url"],
+              metadata: activity.metadata
+            }
+          else
+            nil
+          end
+          {nil, selected_tv_show, nil}
+        
+        "place_visited" ->
+          selected_place = if activity.metadata["place_id"] do
+            %{
+              id: activity.metadata["place_id"],
+              name: activity.metadata["title"],
+              address: activity.metadata["address"],
+              metadata: activity.metadata
+            }
+          else
+            nil
+          end
+          {nil, nil, selected_place}
+        
+        _ ->
+          {nil, nil, nil}
+      end
+    else
+      {nil, nil, nil}
+    end
+
+    # Only override selected items if we're editing or they don't exist yet
+    socket = if socket.assigns[:selected_movie] == nil && selected_movie != nil do
+      assign(socket, :selected_movie, selected_movie)
+    else
+      socket
+    end
+    
+    socket = if socket.assigns[:selected_tv_show] == nil && selected_tv_show != nil do
+      assign(socket, :selected_tv_show, selected_tv_show)
+    else
+      socket
+    end
+    
+    socket = if socket.assigns[:selected_place] == nil && selected_place != nil do
+      assign(socket, :selected_place, selected_place)
+    else
+      socket
+    end
+
     {:ok,
      socket
      |> assign(assigns)
      |> assign(:activity_types, @activity_types)
      |> assign(:form_data, form_data)
+     |> assign(:current_activity_type, current_activity_type)
+     |> assign(:is_editing, is_editing)
      |> assign_new(:loading, fn -> false end)
-     |> assign_new(:show, fn -> false end)
-     |> assign_new(:selected_movie, fn -> nil end)
-     |> assign_new(:selected_tv_show, fn -> nil end)
-     |> assign_new(:selected_place, fn -> nil end)}
+     |> assign_new(:show, fn -> false end)}
   end
   
   @impl true
@@ -105,10 +200,10 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             <div class="bg-white px-6 pt-6 pb-4">
               <div class="mb-4">
                 <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                  Record Activity
+                  <%= if @activity, do: "Edit Activity", else: "Record Activity" %>
                 </h3>
                 <p class="text-sm text-gray-500">
-                  Record an activity that happened during this event
+                  <%= if @activity, do: "Update the activity details", else: "Record an activity that happened during this event" %>
                 </p>
               </div>
               
@@ -175,7 +270,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                 disabled={@loading}
                 class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <%= if @loading, do: "Saving...", else: "Save Activity" %>
+                <%= cond do
+                  @loading -> "Saving..."
+                  @activity -> "Update Activity"
+                  true -> "Save Activity"
+                end %>
               </button>
               <button
                 type="button"
@@ -530,6 +629,10 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
        |> assign(:loading, false)
        |> assign(:errors, %{general: "User not found. Please refresh the page."})}
     else
+      # Determine if we're editing or creating
+      activity = socket.assigns[:activity]
+      is_editing = activity != nil
+      
       # Build metadata from form params
       metadata = build_metadata(params)
       
@@ -544,40 +647,74 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           end
       end
       
-      # Create the activity
-      activity_attrs = %{
-        event_id: socket.assigns.event.id,
-        group_id: socket.assigns.event.group_id,
-        activity_type: params["activity_type"],
-        metadata: metadata,
-        occurred_at: occurred_at,
-        created_by_id: socket.assigns.user.id,
-        source: "manual"
-      }
-      
-      Logger.debug("ActivityCreationComponent: Creating activity with attrs: #{inspect(activity_attrs)}")
-      
-      case Events.create_event_activity(activity_attrs) do
-        {:ok, activity} ->
-          Logger.debug("ActivityCreationComponent: Activity created successfully: #{inspect(activity.id)}")
-          # Notify parent component to reload activities
-          send(self(), {:reload_activities})
-          
-          {:noreply,
-           socket
-           |> assign(:loading, false)
-           |> assign(:show, false)
-           |> assign(:selected_movie, nil)
-           |> assign(:selected_tv_show, nil)
-           |> assign(:selected_place, nil)
-           |> put_flash(:info, "Activity recorded successfully!")}
+      if is_editing do
+        # Update existing activity
+        activity_attrs = %{
+          activity_type: params["activity_type"],
+          metadata: metadata,
+          occurred_at: occurred_at
+        }
         
-        {:error, changeset} ->
-          Logger.error("ActivityCreationComponent: Failed to create activity: #{inspect(changeset.errors)}")
-          {:noreply,
-           socket
-           |> assign(:loading, false)
-           |> assign(:errors, %{general: "Failed to save activity. Please try again."})}
+        Logger.debug("ActivityCreationComponent: Updating activity #{activity.id} with attrs: #{inspect(activity_attrs)}")
+        
+        case Events.update_event_activity(activity, activity_attrs) do
+          {:ok, updated_activity} ->
+            Logger.debug("ActivityCreationComponent: Activity updated successfully: #{inspect(updated_activity.id)}")
+            # Notify parent component to reload activities
+            send(self(), {:reload_activities})
+            
+            {:noreply,
+             socket
+             |> assign(:loading, false)
+             |> assign(:show, false)
+             |> assign(:selected_movie, nil)
+             |> assign(:selected_tv_show, nil)
+             |> assign(:selected_place, nil)
+             |> put_flash(:info, "Activity updated successfully!")}
+          
+          {:error, changeset} ->
+            Logger.error("ActivityCreationComponent: Failed to update activity: #{inspect(changeset.errors)}")
+            {:noreply,
+             socket
+             |> assign(:loading, false)
+             |> assign(:errors, %{general: "Failed to update activity. Please try again."})}
+        end
+      else
+        # Create new activity
+        activity_attrs = %{
+          event_id: socket.assigns.event.id,
+          group_id: socket.assigns.event.group_id,
+          activity_type: params["activity_type"],
+          metadata: metadata,
+          occurred_at: occurred_at,
+          created_by_id: socket.assigns.user.id,
+          source: "manual"
+        }
+        
+        Logger.debug("ActivityCreationComponent: Creating activity with attrs: #{inspect(activity_attrs)}")
+        
+        case Events.create_event_activity(activity_attrs) do
+          {:ok, activity} ->
+            Logger.debug("ActivityCreationComponent: Activity created successfully: #{inspect(activity.id)}")
+            # Notify parent component to reload activities
+            send(self(), {:reload_activities})
+            
+            {:noreply,
+             socket
+             |> assign(:loading, false)
+             |> assign(:show, false)
+             |> assign(:selected_movie, nil)
+             |> assign(:selected_tv_show, nil)
+             |> assign(:selected_place, nil)
+             |> put_flash(:info, "Activity recorded successfully!")}
+          
+          {:error, changeset} ->
+            Logger.error("ActivityCreationComponent: Failed to create activity: #{inspect(changeset.errors)}")
+            {:noreply,
+             socket
+             |> assign(:loading, false)
+             |> assign(:errors, %{general: "Failed to save activity. Please try again."})}
+        end
       end
     end
   end

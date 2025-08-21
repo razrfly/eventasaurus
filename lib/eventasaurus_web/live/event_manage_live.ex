@@ -1650,7 +1650,8 @@ defmodule EventasaurusWeb.EventManageLive do
     # Reload activities when a new activity is added
     send_update(EventasaurusWeb.EventHistoryComponent,
       id: "event-history-#{socket.assigns.event.id}",
-      event: socket.assigns.event
+      event: socket.assigns.event,
+      show_activity_creation: false  # Reset modal state
     )
     {:noreply, socket}
   end
