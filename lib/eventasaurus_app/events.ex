@@ -15,6 +15,9 @@ defmodule EventasaurusApp.Events do
 
   # Generic polling system aliases
   alias EventasaurusApp.Events.{Poll, PollOption, PollVote}
+  
+  # Event activity tracking
+  alias EventasaurusApp.Events.EventActivity
 
   alias EventasaurusApp.GuestInvitations
   require Logger
@@ -3869,9 +3872,22 @@ defmodule EventasaurusApp.Events do
   Finalizes a poll with selected options.
   """
   def finalize_poll(%Poll{} = poll, option_ids, finalized_date \\ nil) do
-    poll
-    |> Poll.finalization_changeset(option_ids, finalized_date)
-    |> Repo.update()
+    with {:ok, updated_poll} <- poll
+                                |> Poll.finalization_changeset(option_ids, finalized_date)
+                                |> Repo.update() do
+      # Create activity if this is a supported poll type and has winning options
+      if option_ids != [] && poll.poll_type in ["movie", "game", "places", "venue"] do
+        # Get the first winning option (for now, support single winner)
+        winning_option_id = List.first(option_ids)
+        if winning_option_id do
+          # Use the poll's event creator as the activity creator
+          poll = Repo.preload(poll, [:event, :created_by])
+          create_activity_from_poll(poll, winning_option_id, poll.created_by_id)
+        end
+      end
+      
+      {:ok, updated_poll}
+    end
   end
 
   @doc """
@@ -4860,7 +4876,24 @@ defmodule EventasaurusApp.Events do
   Finalizes a poll (single-argument version for LiveView component).
   """
   def finalize_poll(%Poll{} = poll) do
-    finalize_poll(poll, %{})
+    # When no options provided, try to determine winner from votes
+    poll = Repo.preload(poll, [:poll_options])
+    
+    # Get the option with most votes (simple winner determination)
+    winning_option = poll.poll_options
+                    |> Enum.max_by(fn option -> 
+                      Repo.aggregate(
+                        from(v in PollVote, where: v.poll_option_id == ^option.id),
+                        :count,
+                        :id
+                      )
+                    end, fn -> nil end)
+    
+    if winning_option do
+      finalize_poll(poll, [winning_option.id])
+    else
+      finalize_poll(poll, [])
+    end
   end
 
   # =================
@@ -6566,5 +6599,167 @@ defmodule EventasaurusApp.Events do
     EventasaurusWeb.Services.BroadcastThrottler.throttle_poll_stats_broadcast(poll.id, stats, poll.event_id)
 
     stats
+  end
+
+  # Event Activity Tracking Functions
+  
+  @doc """
+  Lists activities for an event.
+  """
+  def list_event_activities(%Event{} = event, opts \\ []) do
+    query = from a in EventActivity,
+      where: a.event_id == ^event.id,
+      order_by: [desc: a.occurred_at, desc: a.inserted_at],
+      preload: [:created_by]
+    
+    query = if limit = opts[:limit], do: limit(query, ^limit), else: query
+    
+    Repo.all(query)
+  end
+  
+  @doc """
+  Lists activities for a group.
+  """
+  def list_group_activities(group_id, opts \\ []) do
+    query = from a in EventActivity,
+      where: a.group_id == ^group_id,
+      order_by: [desc: a.occurred_at, desc: a.inserted_at],
+      preload: [:created_by, :event]
+    
+    query = if activity_type = opts[:activity_type] do
+      where(query, [a], a.activity_type == ^activity_type)
+    else
+      query
+    end
+    
+    query = if limit = opts[:limit], do: limit(query, ^limit), else: query
+    
+    Repo.all(query)
+  end
+  
+  @doc """
+  Gets a single event activity.
+  """
+  def get_event_activity!(id), do: Repo.get!(EventActivity, id) |> Repo.preload([:event, :created_by])
+  
+  @doc """
+  Creates an event activity.
+  """
+  def create_event_activity(attrs \\ %{}) do
+    # If event_id is provided but group_id is not, try to get group_id from event
+    attrs = case {Map.get(attrs, :event_id), Map.get(attrs, :group_id)} do
+      {event_id, nil} when not is_nil(event_id) ->
+        case get_event(event_id) do
+          %Event{group_id: group_id} when not is_nil(group_id) ->
+            Map.put(attrs, :group_id, group_id)
+          _ ->
+            attrs
+        end
+      _ ->
+        attrs
+    end
+    
+    %EventActivity{}
+    |> EventActivity.changeset(attrs)
+    |> Repo.insert()
+  end
+  
+  @doc """
+  Updates an event activity.
+  """
+  def update_event_activity(%EventActivity{} = activity, attrs) do
+    activity
+    |> EventActivity.changeset(attrs)
+    |> Repo.update()
+  end
+  
+  @doc """
+  Deletes an event activity.
+  """
+  def delete_event_activity(%EventActivity{} = activity) do
+    Repo.delete(activity)
+  end
+  
+  @doc """
+  Creates an activity from a poll winner.
+  Automatically called when a poll is finalized.
+  """
+  def create_activity_from_poll(%Poll{} = poll, winning_option_id, user_id) do
+    with %PollOption{} = option <- Repo.get(PollOption, winning_option_id) do
+      metadata = build_activity_metadata_from_poll_option(poll.poll_type, option)
+      
+      create_event_activity(%{
+        event_id: poll.event_id,
+        activity_type: poll_type_to_activity_type(poll.poll_type),
+        metadata: metadata,
+        occurred_at: DateTime.utc_now(),
+        created_by_id: user_id,
+        source: "poll_winner"
+      })
+    end
+  end
+  
+  defp poll_type_to_activity_type("movie"), do: "movie_watched"
+  defp poll_type_to_activity_type("game"), do: "game_played"
+  defp poll_type_to_activity_type("places"), do: "place_visited"
+  defp poll_type_to_activity_type("venue"), do: "place_visited"
+  defp poll_type_to_activity_type(_), do: "activity_completed"
+  
+  defp build_activity_metadata_from_poll_option("movie", %PollOption{} = option) do
+    # Extract movie data from external_data
+    case option.external_data do
+      %{"tmdb_id" => tmdb_id} = data ->
+        %{
+          "tmdb_id" => tmdb_id,
+          "title" => data["title"] || option.title,
+          "year" => data["year"],
+          "poster_url" => data["poster_url"],
+          "rating" => data["rating"]
+        }
+      _ ->
+        %{"title" => option.title, "description" => option.description}
+    end
+  end
+  
+  defp build_activity_metadata_from_poll_option(_, %PollOption{} = option) do
+    # Generic metadata for other poll types
+    metadata = %{
+      "title" => option.title,
+      "description" => option.description
+    }
+    
+    # Include external_data if present
+    if option.external_data && map_size(option.external_data) > 0 do
+      Map.merge(metadata, option.external_data)
+    else
+      metadata
+    end
+  end
+  
+  @doc """
+  Counts activities by type for a group.
+  """
+  def count_group_activities_by_type(group_id) do
+    from(a in EventActivity,
+      where: a.group_id == ^group_id,
+      group_by: a.activity_type,
+      select: {a.activity_type, count(a.id)}
+    )
+    |> Repo.all()
+    |> Enum.into(%{})
+  end
+  
+  @doc """
+  Checks if an activity already exists (to avoid duplicates).
+  """
+  def activity_exists?(event_id, activity_type, metadata_match) do
+    query = from a in EventActivity,
+      where: a.event_id == ^event_id and a.activity_type == ^activity_type
+    
+    # Check if any existing activity has matching metadata
+    Repo.all(query)
+    |> Enum.any?(fn activity ->
+      Map.take(activity.metadata, Map.keys(metadata_match)) == metadata_match
+    end)
   end
 end

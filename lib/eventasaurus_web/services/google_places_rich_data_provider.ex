@@ -32,7 +32,8 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
   def search(query, options \\ %{}) do
     with :ok <- check_rate_limit(),
          {:ok, results} <- search_places_api(query, options) do
-      {:ok, results}
+      normalized_results = Enum.map(results, &normalize_search_result/1)
+      {:ok, normalized_results}
     else
       {:error, :rate_limited} = error -> error
       {:error, reason} ->
@@ -515,6 +516,78 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
 
   defp get_api_key do
     Application.get_env(:eventasaurus, :google_places_api_key) ||
-    System.get_env("GOOGLE_PLACES_API_KEY")
+    System.get_env("GOOGLE_MAPS_API_KEY")
   end
+
+  # Normalize Google Places API search results to match expected format
+  defp normalize_search_result(place_data) do
+    place_id = Map.get(place_data, "place_id")
+    name = Map.get(place_data, "name", "Unknown Place")
+    description = build_description(place_data)
+    content_type = determine_content_type(place_data)
+    # Get the first image URL, matching the polling system pattern
+    image_url = extract_first_image_url(place_data)
+    
+    %{
+      id: place_id,
+      type: content_type,
+      title: name,
+      description: description,
+      image_url: image_url,
+      metadata: %{
+        place_id: place_id,
+        address: Map.get(place_data, "formatted_address"),
+        rating: Map.get(place_data, "rating"),
+        user_ratings_total: Map.get(place_data, "user_ratings_total"),
+        price_level: Map.get(place_data, "price_level"),
+        types: Map.get(place_data, "types", []),
+        vicinity: Map.get(place_data, "vicinity"),
+        geometry: Map.get(place_data, "geometry")
+      }
+    }
+  end
+
+  # Extract first image URL to match polling system pattern
+  defp extract_first_image_url(place_data) do
+    photos = Map.get(place_data, "photos", [])
+    api_key = get_api_key()
+    
+    case {photos, api_key} do
+      {[], _} -> nil
+      {_, nil} -> nil
+      {[first_photo | _], api_key} ->
+        build_photo_url_from_reference(first_photo, api_key)
+    end
+  end
+
+  # Extract images from search results (limited photo data available)
+  defp extract_search_result_images(place_data) do
+    photos = Map.get(place_data, "photos", [])
+    api_key = get_api_key()
+    
+    case {photos, api_key} do
+      {[], _} -> []
+      {_, nil} -> []
+      {[first_photo | _], api_key} ->
+        # Only process the first photo for search results to keep them fast
+        case build_photo_url_from_reference(first_photo, api_key) do
+          nil -> []
+          url -> [%{url: url, alt: Map.get(place_data, "name", "Place image")}]
+        end
+    end
+  end
+
+  # Build photo URL from photo reference (similar to polling implementation)
+  defp build_photo_url_from_reference(photo, api_key) when is_map(photo) do
+    photo_reference = Map.get(photo, "photo_reference")
+    max_width = min(Map.get(photo, "width", 400), 400)  # Smaller size for search results
+    
+    if photo_reference do
+      "https://maps.googleapis.com/maps/api/place/photo" <>
+        "?maxwidth=#{max_width}" <>
+        "&photoreference=#{photo_reference}" <>
+        "&key=#{api_key}"
+    end
+  end
+  defp build_photo_url_from_reference(_, _), do: nil
 end

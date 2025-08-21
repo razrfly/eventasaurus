@@ -119,6 +119,7 @@ defmodule EventasaurusWeb.EventManageLive do
       :registrations -> "registrations"
       :polls -> "polls"
       :insights -> "insights"
+      :history -> "history"
       _ -> "overview"
     end
 
@@ -148,6 +149,7 @@ defmodule EventasaurusWeb.EventManageLive do
       "registrations" -> ~p"/events/#{event_slug}/registrations"
       "polls" -> ~p"/events/#{event_slug}/polls"
       "insights" -> ~p"/events/#{event_slug}/insights"
+      "history" -> ~p"/events/#{event_slug}/history"
       _ -> ~p"/events/#{event_slug}"
     end
 
@@ -1050,6 +1052,21 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, socket}
   end
 
+  # Handle RichDataSearchComponent selection messages and forward to ActivityCreationComponent
+  def handle_info({EventasaurusWeb.RichDataSearchComponent, :selection_made, event_name, data}, socket) do
+    require Logger
+    Logger.debug("EventManageLive: Received selection_made event: #{event_name} for #{Map.get(data, :title, "unknown")}")
+    
+    # Forward the selection to the ActivityCreationComponent
+    send_update(EventasaurusWeb.ActivityCreationComponent,
+      id: "activity-creation-#{socket.assigns.event.id}",
+      action: event_name,
+      data: data)
+    
+    Logger.debug("EventManageLive: Forwarded to ActivityCreationComponent")
+    {:noreply, socket}
+  end
+
   @impl true
   def handle_info(:load_historical_suggestions, socket) do
     event = socket.assigns.event
@@ -1619,9 +1636,23 @@ defmodule EventasaurusWeb.EventManageLive do
     handle_organizer_search(query, socket, :new_search)
   end
 
+  defp handle_specific_message({:activity_deleted, _activity}, socket) do
+    # Activity deletion handled by the component, just acknowledge
+    {:noreply, socket}
+  end
+
   defp handle_specific_message({:search_users_for_organizers, query, :load_more}, socket) do
     # Load more results for organizer search
     handle_organizer_search(query, socket, :load_more)
+  end
+
+  defp handle_specific_message({:reload_activities}, socket) do
+    # Reload activities when a new activity is added
+    send_update(EventasaurusWeb.EventHistoryComponent,
+      id: "event-history-#{socket.assigns.event.id}",
+      event: socket.assigns.event
+    )
+    {:noreply, socket}
   end
 
   defp handle_specific_message(%{type: :polls_reordered, event_id: event_id, updated_polls: _updated_polls}, socket) do
