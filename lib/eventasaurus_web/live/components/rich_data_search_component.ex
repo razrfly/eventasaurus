@@ -58,7 +58,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
      |> assign_new(:content_type, fn -> default_content_type(assigns[:provider]) end)
      |> assign_new(:show_search, fn -> true end)
      |> assign_new(:result_limit, fn -> 10 end)
-     |> assign_new(:class, fn -> "" end)}
+     |> assign_new(:class, fn -> "" end)
+     |> assign_new(:location_scope, fn -> nil end)
+     |> assign_new(:search_location, fn -> nil end)
+     |> assign_new(:location_data, fn -> nil end)}
   end
   
   @impl true
@@ -336,7 +339,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
       search_options = %{
         providers: [socket.assigns.provider],
         limit: socket.assigns.result_limit,
-        content_type: socket.assigns.content_type
+        content_type: socket.assigns.content_type,
+        location_scope: socket.assigns.location_scope,
+        search_location: socket.assigns.search_location,
+        location_data: socket.assigns.location_data
       }
       
       Logger.error("RichDataSearchComponent: search_options=#{inspect(search_options)}")

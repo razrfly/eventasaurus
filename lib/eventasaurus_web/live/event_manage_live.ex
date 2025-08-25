@@ -1052,18 +1052,40 @@ defmodule EventasaurusWeb.EventManageLive do
     {:noreply, socket}
   end
 
-  # Handle RichDataSearchComponent selection messages and forward to ActivityCreationComponent
+  # Handle RichDataSearchComponent selection messages and forward to appropriate components
   def handle_info({EventasaurusWeb.RichDataSearchComponent, :selection_made, event_name, data}, socket) do
     require Logger
     Logger.debug("EventManageLive: Received selection_made event: #{event_name} for #{Map.get(data, :title, "unknown")}")
     
-    # Forward the selection to the ActivityCreationComponent
-    send_update(EventasaurusWeb.ActivityCreationComponent,
-      id: "activity-creation-#{socket.assigns.event.id}",
-      action: event_name,
-      data: data)
+    case event_name do
+      "place_selected" ->
+        # Forward to OptionSuggestionComponent if a poll is selected
+        # The component ID uses the poll ID pattern: "poll-options-#{poll_id}"
+        if socket.assigns[:selected_poll] do
+          poll_id = socket.assigns.selected_poll.id
+          send_update(EventasaurusWeb.OptionSuggestionComponent,
+            id: "poll-options-#{poll_id}",
+            action: event_name,
+            data: data)
+          Logger.debug("EventManageLive: Forwarded to OptionSuggestionComponent with id poll-options-#{poll_id}")
+        end
+        
+        # Also try to forward to ActivityCreationComponent if it exists
+        send_update(EventasaurusWeb.ActivityCreationComponent,
+          id: "activity-creation-#{socket.assigns.event.id}",
+          action: event_name,
+          data: data)
+        Logger.debug("EventManageLive: Forwarded to ActivityCreationComponent")
+        
+      _ ->
+        # Forward other selections to ActivityCreationComponent
+        send_update(EventasaurusWeb.ActivityCreationComponent,
+          id: "activity-creation-#{socket.assigns.event.id}",
+          action: event_name,
+          data: data)
+        Logger.debug("EventManageLive: Forwarded to ActivityCreationComponent")
+    end
     
-    Logger.debug("EventManageLive: Forwarded to ActivityCreationComponent")
     {:noreply, socket}
   end
 

@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   alias EventasaurusApp.Events
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Services.RichDataManager
-  alias EventasaurusWeb.Services.MovieDataService
+  alias EventasaurusWeb.Services.TmdbRichDataProvider
   alias EventasaurusWeb.Utils.MovieUtils
   # alias EventasaurusWeb.EmbeddedProgressBarComponent - now handled by VotingInterfaceComponent
   alias EventasaurusWeb.Utils.PollPhaseUtils
@@ -194,10 +194,8 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
           # Use the centralized RichDataManager to get detailed movie data (same as backend)
           case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
             {:ok, rich_movie_data} ->
-              # Use the shared MovieDataService to prepare movie data consistently
-              option_params = MovieDataService.prepare_movie_option_data(
-                movie_data.id,
-                rich_movie_data
+              # Use the shared TmdbRichDataProvider to prepare movie data consistently
+              option_params = TmdbRichDataProvider.prepare_poll_option_data(rich_movie_data
               )
               |> Map.merge(%{
                 "poll_id" => socket.assigns.movie_poll.id,

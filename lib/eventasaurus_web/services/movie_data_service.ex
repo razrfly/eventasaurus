@@ -1,8 +1,15 @@
 defmodule EventasaurusWeb.Services.MovieDataService do
   @moduledoc """
-  Shared service for preparing movie data consistently across all interfaces.
+  DEPRECATED: This module has been replaced by TmdbRichDataProvider.
+  Use TmdbRichDataProvider.prepare_poll_option_data/1 instead.
+  
+  This module is kept for backward compatibility only and will be removed in a future release.
+  
+  Original purpose: Shared service for preparing movie data consistently across all interfaces.
   Ensures admin and public interfaces save identical data structures.
   """
+  
+  @deprecated "Use TmdbRichDataProvider.prepare_poll_option_data/1 instead"
 
   import Phoenix.HTML.SimplifiedHelpers.Truncate
   alias EventasaurusWeb.Utils.MovieUtils
