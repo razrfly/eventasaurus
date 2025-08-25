@@ -10,10 +10,11 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
 
   require Logger
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.Poll
   alias EventasaurusApp.Repo
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.PollPhaseUtils
+  alias EventasaurusWeb.RichDataSearchComponent
+  alias EventasaurusWeb.Services.GooglePlacesRichDataProvider
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
   import EventasaurusWeb.VoterCountDisplay
@@ -23,6 +24,19 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     event = assigns.event
     user = assigns.current_user
     poll = assigns.poll
+    
+    # Handle selection actions from RichDataSearchComponent
+    socket = case assigns do
+      %{action: "place_selected", data: place} ->
+        Logger.debug("PublicGenericPollComponent: Received place_selected for #{place.title}")
+        socket
+        |> assign(:selected_place, place)
+        |> assign(:option_title, place.title)
+        |> assign(:showing_place_search, true)
+      
+      _ ->
+        socket
+    end
 
     if poll do
       # Load poll options with suggested_by user
@@ -57,7 +71,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
        |> assign(:temp_votes, temp_votes)
        |> assign(:showing_add_form, false)
        |> assign(:option_title, "")
-       |> assign(:adding_option, false)}
+       |> assign(:adding_option, false)
+       |> assign(:selected_place, nil)
+       |> assign(:showing_place_search, true)}
     else
       {:ok, assign(socket, :poll, nil)}
     end
@@ -76,7 +92,21 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     {:noreply,
      socket
      |> assign(:showing_add_form, false)
-     |> assign(:option_title, "")}
+     |> assign(:option_title, "")
+     |> assign(:selected_place, nil)
+     |> assign(:showing_place_search, true)}
+  end
+  
+  def handle_event("toggle_place_search", _params, socket) do
+    {:noreply, assign(socket, :showing_place_search, !socket.assigns.showing_place_search)}
+  end
+  
+  def handle_event("clear_place_selection", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:selected_place, nil)
+     |> assign(:option_title, "")
+     |> assign(:showing_place_search, true)}
   end
 
   def handle_event("update_option_field", %{"field" => "title", "value" => value}, socket) do
@@ -113,6 +143,23 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
          |> put_flash(:error, "You must be logged in to add suggestions.")
          |> assign(:adding_option, false)}
       else
+        # For places polls with selected place, use the rich data
+        poll_option_params = if socket.assigns.poll.poll_type == "places" && socket.assigns.selected_place do
+          selected_place = socket.assigns.selected_place
+          
+          # Prepare the external data from the selected place
+          external_data = selected_place.metadata || %{}
+          
+          Map.merge(poll_option_params, %{
+            "title" => selected_place.title,
+            "external_id" => selected_place.id,
+            "external_data" => external_data,
+            "image_url" => selected_place.image_url
+          })
+        else
+          poll_option_params
+        end
+        
         # Extract title from poll_option_params (from form) or fallback to assigns
         title = String.trim(poll_option_params["title"] || socket.assigns.option_title || "")
 
@@ -143,6 +190,8 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                |> assign(:adding_option, false)
                |> assign(:showing_add_form, false)
                |> assign(:option_title, "")
+               |> assign(:selected_place, nil)
+               |> assign(:showing_place_search, true)
                |> assign(:poll_options, updated_poll_options)}
 
             {:error, changeset} ->
@@ -202,7 +251,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   # Process poll option parameters using the SAME logic as manager area (OptionSuggestionComponent)
   defp prepare_option_params(socket, poll_option_params, title, user) do
     require Logger
-    alias EventasaurusWeb.Services.PlacesDataService
+    alias EventasaurusWeb.Services.GooglePlacesRichDataProvider
 
     # Start with base parameters
     option_params = Map.merge(poll_option_params, %{
@@ -217,7 +266,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
        Map.has_key?(option_params, "external_data") &&
        not is_nil(option_params["external_data"]) do
 
-      Logger.debug("Processing places option with PlacesDataService (public interface)")
+      Logger.debug("Processing places option with GooglePlacesRichDataProvider (public interface)")
 
       # Parse external_data if it's a JSON string (SAME AS MANAGER)
       external_data = case option_params["external_data"] do
@@ -230,26 +279,26 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       end
 
       if external_data && is_map(external_data) do
-        # Use PlacesDataService to prepare data (SAME AS MANAGER)
-        prepared_data = PlacesDataService.prepare_place_option_data(external_data)
+        # Use GooglePlacesRichDataProvider to prepare data (using new unified provider)
+        prepared_data = GooglePlacesRichDataProvider.prepare_poll_option_data(external_data)
 
         # Preserve any user-provided custom title/description over generated ones (SAME AS MANAGER)
         final_data = prepared_data
         |> maybe_preserve_user_input("title", option_params["title"])
         |> maybe_preserve_user_input("description", option_params["description"])
 
-        # CRITICAL: Ensure required fields are preserved after PlacesDataService processing
+        # CRITICAL: Ensure required fields are preserved after provider processing
         final_data = Map.merge(final_data, %{
           "poll_id" => option_params["poll_id"],
           "suggested_by_id" => option_params["suggested_by_id"],
           "status" => option_params["status"]
         })
 
-        Logger.debug("PlacesDataService applied successfully for place: #{final_data["title"]} (public interface)")
+        Logger.debug("GooglePlacesRichDataProvider applied successfully for place: #{final_data["title"]} (public interface)")
         Logger.debug("Final data poll_id: #{final_data["poll_id"]}, suggested_by_id: #{final_data["suggested_by_id"]}")
         final_data
       else
-        Logger.debug("PlacesDataService skipped - invalid external_data (public interface)")
+        Logger.debug("GooglePlacesRichDataProvider skipped - invalid external_data (public interface)")
         option_params
       end
     else
@@ -382,20 +431,10 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
             <%= if @current_user do %>
               <%= if @showing_add_form do %>
                 <!-- Inline Add Option Form -->
-                <div class="mt-4 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50"
-                     data-event-venue-lat={@event && @event.venue && @event.venue.latitude}
-                     data-event-venue-lng={@event && @event.venue && @event.venue.longitude}
-                     data-event-venue-name={@event && @event.venue && @event.venue.name}
-                     data-poll-options-data={Jason.encode!(extract_poll_options_coordinates(@poll_options))}>
+                <div class="mt-4 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
                   <div class="mb-4">
                     <h4 class="text-base sm:text-md font-medium text-gray-900 mb-2">Add <%= get_suggestion_title(@poll) %></h4>
                     <p class="text-sm text-gray-600">Share your suggestion with the group</p>
-                  </div>
-
-                  <!-- Location Context Indicator -->
-                  <div class="location-context-indicator hidden mb-3 text-xs text-gray-600 bg-blue-50 px-3 py-1 rounded-full flex items-center">
-                    <span class="location-icon mr-1">🌍</span>
-                    <span>Searching globally</span>
                   </div>
 
                   <form phx-submit="add_option" phx-change="validate" phx-target={@myself}>
@@ -429,19 +468,86 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                           </select>
                         <% else %>
                           <%= if @poll.poll_type == "places" do %>
-                            <input
-                              type="text"
-                              name="poll_option[title]"
-                              id="option_title"
-                              value={@option_title}
-                              placeholder={get_title_placeholder(@poll)}
-                              phx-debounce="300"
-                              phx-hook="PlacesSuggestionSearch"
-                              data-location-scope={@poll |> get_location_scope()}
-                              data-search-location={@poll |> get_search_location_json()}
-                              autocomplete="off"
-                              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            />
+                            <%= if @selected_place do %>
+                              <!-- Show selected place -->
+                              <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                                <div class="flex items-center justify-between">
+                                  <div class="flex items-center space-x-3">
+                                    <%= if @selected_place.image_url do %>
+                                      <img 
+                                        src={@selected_place.image_url} 
+                                        alt={@selected_place.title}
+                                        class="w-12 h-12 object-cover rounded"
+                                      />
+                                    <% end %>
+                                    <div>
+                                      <p class="font-medium text-gray-900"><%= @selected_place.title %></p>
+                                      <%= if @selected_place.metadata["address"] do %>
+                                        <p class="text-sm text-gray-500"><%= @selected_place.metadata["address"] %></p>
+                                      <% end %>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    phx-click="clear_place_selection"
+                                    phx-target={@myself}
+                                    class="text-sm text-blue-600 hover:text-blue-800"
+                                  >
+                                    Change
+                                  </button>
+                                </div>
+                              </div>
+                              <!-- Hidden input to maintain form value -->
+                              <input type="hidden" name="poll_option[title]" value={@selected_place.title} />
+                            <% else %>
+                              <!-- Show search component by default -->
+                              <%= if @showing_place_search do %>
+                                <div>
+                                  <.live_component
+                                    module={RichDataSearchComponent}
+                                    id={"place-search-#{@poll.id}"}
+                                    provider={:google_places}
+                                    content_type={:place}
+                                    search_placeholder={get_title_placeholder(@poll)}
+                                    result_limit={10}
+                                    show_search={true}
+                                    location_scope={EventasaurusApp.Events.Poll.get_location_scope(@poll)}
+                                    search_location={EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll)}
+                                    location_data={get_poll_location_data(@poll)}
+                                  />
+                                  <button
+                                    type="button"
+                                    phx-click="toggle_place_search"
+                                    phx-target={@myself}
+                                    class="mt-2 text-xs text-gray-500 hover:text-gray-700"
+                                  >
+                                    Can't find it? Enter manually
+                                  </button>
+                                </div>
+                              <% else %>
+                                <!-- Manual entry fallback -->
+                                <div class="space-y-2">
+                                  <input
+                                    type="text"
+                                    name="poll_option[title]"
+                                    value={@option_title}
+                                    placeholder="Enter place name manually..."
+                                    phx-keyup="update_option_field"
+                                    phx-value-field="title"
+                                    phx-target={@myself}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    phx-click="toggle_place_search"
+                                    phx-target={@myself}
+                                    class="text-xs text-blue-600 hover:text-blue-800"
+                                  >
+                                    Back to search
+                                  </button>
+                                </div>
+                              <% end %>
+                            <% end %>
                           <% else %>
                             <input
                               type="text"
@@ -458,12 +564,6 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                           <% end %>
                         <% end %>
                       </div>
-
-                      <!-- Hidden fields for rich data (will be populated by JavaScript hook for places) -->
-                      <%= if @poll.poll_type == "places" do %>
-                        <!-- These will be dynamically added by PlacesSuggestionSearch hook -->
-                        <div class="hidden-metadata-fields"></div>
-                      <% end %>
                     </div>
 
                     <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-4">
@@ -619,20 +719,6 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     end
   end
 
-  defp extract_poll_options_coordinates(poll_options) when is_list(poll_options) do
-    poll_options
-    |> Enum.map(fn option ->
-      case option.external_data do
-        %{"latitude" => lat, "longitude" => lng} when is_number(lat) and is_number(lng) ->
-          %{latitude: lat, longitude: lng}
-        _ ->
-          nil
-      end
-    end)
-    |> Enum.filter(& &1)
-  end
-
-  defp extract_poll_options_coordinates(_), do: []
 
   defp time_options() do
     # Start at 10:00 AM (10:00) and go through 11:30 PM (23:30)
@@ -706,23 +792,10 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       true -> "Anonymous"
     end
   end
-
-  # Helper function to get location scope from poll settings
-  defp get_location_scope(poll) do
-    Poll.get_location_scope(poll)
+  
+  defp get_poll_location_data(%{settings: settings}) when is_map(settings) do
+    Map.get(settings, "search_location_data")
   end
-
-  # Helper function to get search location data as JSON for JavaScript
-  defp get_search_location_json(poll) do
-    if poll && poll.settings do
-      case Map.get(poll.settings, "search_location_data") do
-        data when is_map(data) -> Jason.encode!(data)
-        data when is_binary(data) -> data
-        _ -> ""
-      end
-    else
-      ""
-    end
-  end
+  defp get_poll_location_data(_), do: nil
 
 end

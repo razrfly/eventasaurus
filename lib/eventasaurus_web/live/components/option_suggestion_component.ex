@@ -28,11 +28,12 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   use EventasaurusWeb, :live_component
   require Logger
   alias EventasaurusApp.Events
-  alias EventasaurusApp.Events.{Poll, PollOption}
-  alias EventasaurusWeb.Services.{MovieDataService, PlacesDataService, RichDataManager}
+  alias EventasaurusApp.Events.PollOption
+  alias EventasaurusWeb.Services.{GooglePlacesRichDataProvider, TmdbRichDataProvider, RichDataManager}
   alias EventasaurusWeb.Services.PollPubSubService
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Adapters.DatePollAdapter
+  alias EventasaurusWeb.RichDataSearchComponent
 
   @impl true
   def mount(socket) do
@@ -48,21 +49,66 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      |> assign(:existing_dates, [])  # Track existing dates for calendar display
      # NEW: Time selection state
      |> assign(:time_enabled, false)
+     # Place search with RichDataSearchComponent
+     |> assign(:selected_place, nil)
+     |> assign(:showing_place_search, true)
      |> assign(:selected_date_for_time, nil)
      |> assign(:date_time_slots, %{})}
   end
 
   @impl true
   def update(assigns, socket) do
+    # Handle selection actions from RichDataSearchComponent first
+    # These are update-only actions that don't need the full mount flow
+    case assigns do
+      %{action: "place_selected", data: place} ->
+        Logger.debug("OptionSuggestionComponent: Received place_selected for #{place.title}")
+        Logger.debug("Place data: id=#{place.id}, image_url=#{inspect(place.image_url)}")
+        Logger.debug("Place metadata: #{inspect(place.metadata)}")
+        # Only update if we have poll and user in socket assigns
+        updated_socket = if socket.assigns[:poll] && socket.assigns[:user] do
+          # Create a proper changeset with all the place data
+          changeset = %PollOption{}
+          |> PollOption.changeset(%{
+            "poll_id" => socket.assigns.poll.id,
+            "suggested_by_id" => socket.assigns.user.id,
+            "status" => "active",
+            "title" => place.title,
+            "external_id" => place.id,
+            "external_data" => place.metadata || %{},
+            "image_url" => place.image_url
+          })
+          Logger.debug("Created changeset with image_url: #{inspect(changeset.changes[:image_url])}")
+          
+          socket
+          |> assign(:selected_place, place)
+          |> assign(:changeset, changeset)
+          |> assign(:showing_place_search, false)
+        else
+          # Store the place for later use when poll is available
+          socket
+          |> assign(:selected_place, place)
+          |> assign(:showing_place_search, false)
+        end
+        
+        {:ok, updated_socket}
+      
+      _ ->
+        # Continue with normal update flow
+        handle_normal_update(assigns, socket)
+    end
+  end
+  
+  defp handle_normal_update(assigns, socket) do
     # Handle special actions first
     cond do
       assigns[:action] == :movie_rich_data_loaded ->
         # Update form with rich TMDB data using the same logic as PublicMoviePollComponent
-        movie_id = assigns.selected_result.id
+        _movie_id = assigns.selected_result.id
         rich_data = assigns.rich_data
 
-        # Use MovieDataService to prepare consistent data (same as PublicMoviePollComponent)
-        prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
+        # Use TmdbRichDataProvider to prepare consistent data (same as PublicMoviePollComponent)
+        prepared_data = TmdbRichDataProvider.prepare_poll_option_data(rich_data)
 
         changeset = create_option_changeset(socket, prepared_data)
 
@@ -185,6 +231,24 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
              socket
            end
          end)}
+    end
+  end
+  
+  # Get poll location data for search scoping
+  defp get_poll_location_data(poll) do
+    location_scope = EventasaurusApp.Events.Poll.get_location_scope(poll)
+    search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(poll)
+    
+    if location_scope && search_location do
+      # Try to get lat/lng from the location data
+      case search_location do
+        %{lat: lat, lng: lng} when not is_nil(lat) and not is_nil(lng) ->
+          %{lat: lat, lng: lng}
+        _ ->
+          nil
+      end
+    else
+      nil
     end
   end
 
@@ -431,19 +495,81 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         />
                       <% else %>
-                        <input
-                          type="text"
-                          name="poll_option[title]"
-                          id="option_title"
-                          value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                          placeholder={option_title_placeholder(@poll)}
-                          phx-debounce="300"
-                          phx-hook="PlacesSuggestionSearch"
-                          data-location-scope={@poll |> get_location_scope()}
-                          data-search-location={@poll |> get_search_location_json()}
-                          autocomplete="off"
-                          class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
+                        <%= if @selected_place do %>
+                          <!-- Show selected place -->
+                          <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <div class="flex items-center justify-between">
+                              <div class="flex items-center space-x-3">
+                                <%= if @selected_place.image_url do %>
+                                  <img 
+                                    src={@selected_place.image_url} 
+                                    alt={@selected_place.title}
+                                    class="w-12 h-12 object-cover rounded"
+                                  />
+                                <% end %>
+                                <div>
+                                  <p class="font-medium text-gray-900"><%= @selected_place.title %></p>
+                                  <%= if @selected_place.metadata["address"] do %>
+                                    <p class="text-sm text-gray-500"><%= @selected_place.metadata["address"] %></p>
+                                  <% end %>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                phx-click="clear_place_selection"
+                                phx-target={@myself}
+                                class="text-sm text-blue-600 hover:text-blue-800"
+                              >
+                                Change
+                              </button>
+                            </div>
+                          </div>
+                        <% else %>
+                          <!-- Show search component or manual input -->
+                          <%= if @showing_place_search do %>
+                            <div class="mt-2">
+                              <.live_component
+                                module={RichDataSearchComponent}
+                                id={"place-search-manager-#{@poll.id}"}
+                                provider={:google_places}
+                                content_type={:place}
+                                search_placeholder={option_title_placeholder(@poll)}
+                                result_limit={10}
+                                show_search={true}
+                                location_scope={EventasaurusApp.Events.Poll.get_location_scope(@poll)}
+                                search_location={EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll)}
+                                location_data={get_poll_location_data(@poll)}
+                              />
+                              <button
+                                type="button"
+                                phx-click="toggle_place_search"
+                                phx-target={@myself}
+                                class="mt-2 text-sm text-gray-600 hover:text-gray-800"
+                              >
+                                Can't find it? Enter manually
+                              </button>
+                            </div>
+                          <% else %>
+                            <div class="space-y-2">
+                              <input
+                                type="text"
+                                name="poll_option[title]"
+                                id="option_title"
+                                value={Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                                placeholder="Enter place name manually..."
+                                class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                              <button
+                                type="button"
+                                phx-click="toggle_place_search"
+                                phx-target={@myself}
+                                class="text-sm text-blue-600 hover:text-blue-800"
+                              >
+                                Or search for a place
+                              </button>
+                            </div>
+                          <% end %>
+                        <% end %>
                       <% end %>
                     <% else %>
                       <input
@@ -502,7 +628,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       </div>
                     <% end %>
 
-                    <%= if @changeset.errors[:title] do %>
+                    <%= if @changeset.errors[:title] && !(@poll.poll_type == "places" && @selected_place) do %>
                       <p class="mt-2 text-sm text-red-600"><%= translate_error(@changeset.errors[:title]) %></p>
                     <% end %>
                   </div>
@@ -1216,7 +1342,23 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      # Clear time selection state when toggling form
      |> assign(:time_enabled, false)
      |> assign(:selected_date_for_time, nil)
-     |> assign(:date_time_slots, %{})}
+     |> assign(:date_time_slots, %{})
+     # Clear place selection
+     |> assign(:selected_place, nil)
+     |> assign(:showing_place_search, true)}
+  end
+  
+  def handle_event("toggle_place_search", _params, socket) do
+    {:noreply, assign(socket, :showing_place_search, !socket.assigns.showing_place_search)}
+  end
+  
+  def handle_event("clear_place_selection", _params, socket) do
+    changeset = create_option_changeset(socket, %{"title" => ""})
+    {:noreply,
+     socket
+     |> assign(:selected_place, nil)
+     |> assign(:changeset, changeset)
+     |> assign(:showing_place_search, true)}
   end
 
   # NEW: Time selection event handlers
@@ -1341,11 +1483,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       # Use the centralized RichDataManager to get detailed movie data
       case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
         {:ok, rich_movie_data} ->
-          # Use the shared MovieDataService to prepare movie data consistently
-          prepared_data = MovieDataService.prepare_movie_option_data(
-            movie_data.id,
-            rich_movie_data
-          )
+          # Use the shared TmdbRichDataProvider to prepare movie data consistently
+          prepared_data = TmdbRichDataProvider.prepare_poll_option_data(rich_movie_data)
 
           # Create changeset with the rich data
           changeset = create_option_changeset(socket, prepared_data)
@@ -1381,6 +1520,25 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   @impl true
   def handle_event("validate_suggestion", %{"poll_option" => option_params}, socket) do
+    # For places polls, merge selected place data
+    option_params = if socket.assigns.poll.poll_type == "places" && socket.assigns.selected_place do
+      selected_place = socket.assigns.selected_place
+      # Ensure the image_url is included in the external_data
+      external_data = (selected_place.metadata || %{}) 
+                      |> Map.put("image_url", selected_place.image_url)
+                      |> Map.put("title", selected_place.title)
+      
+      %{
+        "title" => selected_place.title,
+        "external_id" => selected_place.id,
+        "external_data" => external_data,
+        "image_url" => selected_place.image_url,
+        "description" => Map.get(option_params, "description", "")
+      }
+    else
+      option_params
+    end
+    
     changeset = create_option_changeset(socket, option_params)
     {:noreply, assign(socket, :changeset, changeset)}
   end
@@ -1392,6 +1550,29 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     # Log submission for debugging if needed
     require Logger
     Logger.debug("Submitting suggestion for poll type: #{socket.assigns.poll.poll_type}, selected dates count: #{length(socket.assigns.selected_dates || [])}")
+    Logger.debug("Original option_params: #{inspect(option_params)}")
+    Logger.debug("Selected place: #{inspect(socket.assigns[:selected_place])}")
+    
+    # For places polls, merge selected place data
+    option_params = if socket.assigns.poll.poll_type == "places" && socket.assigns.selected_place do
+      selected_place = socket.assigns.selected_place
+      # Ensure the image_url is included in the external_data
+      external_data = (selected_place.metadata || %{}) 
+                      |> Map.put("image_url", selected_place.image_url)
+                      |> Map.put("title", selected_place.title)
+      
+      merged_params = %{
+        "title" => selected_place.title,
+        "external_id" => selected_place.id,
+        "external_data" => external_data,
+        "image_url" => selected_place.image_url,
+        "description" => Map.get(option_params, "description", "")
+      }
+      Logger.debug("Merged params for places poll: #{inspect(merged_params)}")
+      merged_params
+    else
+      option_params
+    end
 
     # Special handling for date_selection polls
     if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
@@ -1542,7 +1723,13 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       end
     else
       # Non-date polls - use original single option logic
-      enriched_params = extract_rich_data_from_changeset(socket.assigns.changeset, option_params)
+      # For places polls, option_params already contains all the merged data
+      # For other polls, extract any rich data from the changeset
+      enriched_params = if socket.assigns.poll.poll_type == "places" && Map.has_key?(option_params, "external_id") do
+        option_params
+      else
+        extract_rich_data_from_changeset(socket.assigns.changeset, option_params)
+      end
 
       case save_option(socket, enriched_params) do
         {:ok, option} ->
@@ -1577,6 +1764,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
            |> assign(:time_enabled, false)
            |> assign(:selected_date_for_time, nil)
            |> assign(:date_time_slots, %{})
+           # Clear place selection after successful submission
+           |> assign(:selected_place, nil)
+           |> assign(:showing_place_search, true)
            |> assign(:changeset, changeset)
            |> assign(:loading_rich_data, false)}
 
@@ -2056,6 +2246,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   defp save_option(socket, option_params) do
     require Logger
+    Logger.debug("save_option called with params: #{inspect(option_params)}")
 
     # Check suggestion limit for non-creators
     if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
@@ -2072,41 +2263,43 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   end
 
   defp do_save_option(socket, option_params) do
+    Logger.debug("do_save_option called with poll_type=#{socket.assigns.poll.poll_type}")
+    Logger.debug("Option params: #{inspect(option_params)}")
     # Ensure ALL movie options get consistent data structure with fallback logic
     option_params = if socket.assigns.poll.poll_type == "movie" &&
                       Map.has_key?(option_params, "external_data") &&
                       not is_nil(option_params["external_data"]) &&
                       not has_enhanced_description?(option_params["description"]) do
 
-      # Apply MovieDataService for movie options
+      # Apply TmdbRichDataProvider for movie options
       movie_id = option_params["external_id"] ||
                  get_in(option_params, ["external_data", "id"]) ||
                  get_in(option_params, ["external_data", :id])
       rich_data = option_params["external_data"]
 
-      Logger.debug("Admin interface applying MovieDataService fallback for movie_id: #{movie_id}")
+      Logger.debug("Admin interface applying TmdbRichDataProvider fallback for movie_id: #{movie_id}")
 
       if movie_id && rich_data do
-        prepared_data = MovieDataService.prepare_movie_option_data(movie_id, rich_data)
+        prepared_data = TmdbRichDataProvider.prepare_poll_option_data(rich_data)
 
         # Preserve any user-provided custom title/description over generated ones
         final_data = prepared_data
         |> maybe_preserve_user_input("title", option_params["title"])
         |> maybe_preserve_user_input("description", option_params["description"])
 
-        Logger.debug("MovieDataService fallback applied successfully")
+        Logger.debug("TmdbRichDataProvider fallback applied successfully")
         final_data
       else
-        Logger.debug("MovieDataService fallback skipped - missing movie_id or rich_data")
+        Logger.debug("TmdbRichDataProvider fallback skipped - missing movie_id or rich_data")
         option_params
       end
     else
-      # Handle places options with PlacesDataService
+      # Handle places options with GooglePlacesRichDataProvider
       if socket.assigns.poll.poll_type == "places" &&
          Map.has_key?(option_params, "external_data") &&
          not is_nil(option_params["external_data"]) do
 
-        Logger.debug("Processing places option with PlacesDataService")
+        Logger.debug("Processing places option with GooglePlacesRichDataProvider")
 
         # Parse external_data if it's a JSON string
         external_data = case option_params["external_data"] do
@@ -2119,17 +2312,17 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         end
 
         if external_data && is_map(external_data) do
-          prepared_data = PlacesDataService.prepare_place_option_data(external_data)
+          prepared_data = GooglePlacesRichDataProvider.prepare_poll_option_data(external_data)
 
           # Preserve any user-provided custom title/description over generated ones
           final_data = prepared_data
           |> maybe_preserve_user_input("title", option_params["title"])
           |> maybe_preserve_user_input("description", option_params["description"])
 
-          Logger.debug("PlacesDataService applied successfully for place: #{final_data["title"]}")
+          Logger.debug("GooglePlacesRichDataProvider applied successfully for place: #{final_data["title"]}")
           final_data
         else
-          Logger.debug("PlacesDataService skipped - invalid external_data")
+          Logger.debug("GooglePlacesRichDataProvider skipped - invalid external_data")
           option_params
         end
       else
@@ -2148,6 +2341,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     Logger.debug("Admin interface image_url: #{inspect(final_option_params["image_url"])}")
     Logger.debug("Admin interface external_id: #{inspect(final_option_params["external_id"])}")
     Logger.debug("Admin interface description preview: #{String.slice(final_option_params["description"] || "", 0, 100)}...")
+    Logger.debug("Final params being saved to DB: #{inspect(final_option_params)}")
 
     Events.create_poll_option(final_option_params, [poll_type: socket.assigns.poll.poll_type])
   end
@@ -2523,21 +2717,4 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
-  # Helper function to get location scope from poll settings
-  defp get_location_scope(poll) do
-    Poll.get_location_scope(poll)
-  end
-
-  # Helper function to get search location data as JSON for JavaScript
-  defp get_search_location_json(poll) do
-    if poll && poll.settings do
-      case Map.get(poll.settings, "search_location_data") do
-        data when is_map(data) -> Jason.encode!(data)
-        data when is_binary(data) -> data
-        _ -> ""
-      end
-    else
-      ""
-    end
-  end
 end

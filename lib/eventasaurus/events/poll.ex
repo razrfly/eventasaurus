@@ -126,7 +126,7 @@ defmodule EventasaurusApp.Events.Poll do
     |> foreign_key_constraint(:created_by_id)
     |> unique_constraint([:event_id, :poll_type],
          name: :polls_event_poll_type_unique,
-         message: "A poll of this type already exists for this event")
+         message: "An active poll of this type already exists for this event. Please close or delete the existing poll before creating a new one.")
   end
 
   @doc """
@@ -157,7 +157,7 @@ defmodule EventasaurusApp.Events.Poll do
     |> foreign_key_constraint(:created_by_id)
     |> unique_constraint([:event_id, :poll_type],
          name: :polls_event_poll_type_unique,
-         message: "A poll of this type already exists for this event")
+         message: "An active poll of this type already exists for this event. Please close or delete the existing poll before creating a new one.")
   end
 
   @doc """

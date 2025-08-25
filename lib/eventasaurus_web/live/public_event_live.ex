@@ -1185,6 +1185,34 @@ defmodule EventasaurusWeb.PublicEventLive do
     socket = load_event_polls(socket)
     {:noreply, socket}
   end
+  
+  # Handle RichDataSearchComponent selection messages and forward to poll component
+  @impl true
+  def handle_info({EventasaurusWeb.RichDataSearchComponent, :selection_made, event_name, data}, socket) do
+    require Logger
+    Logger.debug("PublicEventLive: Received selection_made event: #{event_name} for #{Map.get(data, :title, "unknown")}")
+    
+    # Find the appropriate poll component and forward the selection
+    # The poll component ID is embedded in the search component ID
+    case event_name do
+      "place_selected" ->
+        # Extract poll ID from the RichDataSearchComponent ID
+        # The component ID is "place-search-{poll_id}"
+        polls = socket.assigns.event_polls
+        Enum.each(polls, fn poll ->
+          if poll.poll_type == "places" && poll.phase in ["list_building", "voting_with_suggestions"] do
+            send_update(PublicGenericPollComponent,
+              id: "public-generic-poll-#{poll.id}",
+              action: event_name,
+              data: data)
+          end
+        end)
+      _ ->
+        Logger.debug("PublicEventLive: Unknown event type: #{event_name}")
+    end
+    
+    {:noreply, socket}
+  end
 
   @impl true
   def handle_info({:show_anonymous_voter_modal, poll_id, temp_votes}, socket) do

@@ -64,6 +64,11 @@ defmodule EventasaurusWeb.PollCreationComponent do
     poll = assigns[:poll]
     is_editing = poll != nil
 
+    # For now, we'll skip checking for existing polls since the function doesn't exist
+    # This will be handled by the database constraint error message
+    existing_polls = []
+    existing_poll_types = MapSet.new()
+
     # Create changeset
     changeset = if is_editing do
       Poll.changeset(poll, %{})
@@ -93,6 +98,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
      |> assign(:current_poll_type, current_poll_type)
      |> assign(:poll_types, @poll_types)
      |> assign(:voting_systems, @voting_systems)
+     |> assign(:existing_poll_types, existing_poll_types)
+     |> assign(:existing_polls, existing_polls)
      |> assign_new(:loading, fn -> false end)
      |> assign_new(:show, fn -> false end)
      |> assign_new(:show_voting_guidelines, fn -> false end)}
@@ -122,6 +129,37 @@ defmodule EventasaurusWeb.PollCreationComponent do
                     <%= if @is_editing, do: "Update poll details and settings", else: "Set up a new poll for your event participants" %>
                   </p>
                 </div>
+                
+                <!-- General error display for database/constraint errors -->
+                <%= if @changeset.action && !Enum.empty?(@changeset.errors) do %>
+                  <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                    <div class="flex">
+                      <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                        </svg>
+                      </div>
+                      <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">
+                          There was an error creating the poll
+                        </h3>
+                        <div class="mt-2 text-sm text-red-700">
+                          <ul class="list-disc list-inside space-y-1">
+                            <%= for {field, {message, _}} <- @changeset.errors do %>
+                              <li>
+                                <%= if field == :poll_type do %>
+                                  <%= message %>
+                                <% else %>
+                                  <%= field |> to_string() |> String.replace("_", " ") |> String.capitalize() %>: <%= message %>
+                                <% end %>
+                              </li>
+                            <% end %>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
 
                 <div class="space-y-6">
                   <!-- Poll Title -->

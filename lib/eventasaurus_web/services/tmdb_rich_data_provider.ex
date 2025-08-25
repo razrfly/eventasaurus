@@ -381,4 +381,126 @@ defmodule EventasaurusWeb.Services.TmdbRichDataProvider do
   defp tmdb_image_url(path) when is_binary(path) do
     EventasaurusWeb.Live.Components.RichDataDisplayComponent.tmdb_image_url(path, "original")
   end
+
+  # ============================================================================
+  # Polling-Specific Methods
+  # ============================================================================
+
+  @doc """
+  Prepares movie data for use as a poll option.
+  Handles both normalized (from get_cached_details) and raw TMDB data.
+  Maintains compatibility with existing polling system patterns.
+  """
+  def prepare_poll_option_data(movie_data) do
+    # Check if this is normalized data (has :metadata key with tmdb_id)
+    # or raw TMDB data (has id or tmdb_id at top level)
+    {tmdb_id, title, image_url, raw_data} = 
+      if Map.has_key?(movie_data, :metadata) || Map.has_key?(movie_data, "metadata") do
+        # Normalized data from get_cached_details
+        metadata = Map.get(movie_data, :metadata) || Map.get(movie_data, "metadata", %{})
+        id = Map.get(metadata, :tmdb_id) || Map.get(metadata, "tmdb_id") || 
+             Map.get(movie_data, :id) || Map.get(movie_data, "id")
+        title = Map.get(movie_data, :title) || Map.get(movie_data, "title", "Unknown Movie")
+        img_url = Map.get(movie_data, :image_url) || Map.get(movie_data, "image_url")
+        
+        # For external_data, use metadata which has the raw TMDB fields
+        raw = Map.merge(metadata, %{
+          "title" => title,
+          "overview" => Map.get(movie_data, :description) || Map.get(movie_data, "description", ""),
+          "poster_path" => extract_poster_path_from_url(img_url)
+        })
+        
+        {id, title, img_url, raw}
+      else
+        # Raw TMDB data
+        id = Map.get(movie_data, "id") || Map.get(movie_data, :id) || 
+             Map.get(movie_data, "tmdb_id") || Map.get(movie_data, :tmdb_id)
+        title = Map.get(movie_data, "title") || Map.get(movie_data, :title) || 
+                Map.get(movie_data, "name") || Map.get(movie_data, :name) || "Unknown Movie"
+        poster_path = Map.get(movie_data, "poster_path") || Map.get(movie_data, :poster_path)
+        img_url = if poster_path, do: tmdb_image_url(poster_path), else: nil
+        
+        {id, title, img_url, movie_data}
+      end
+    
+    # Build description with year and overview
+    description = build_poll_movie_description(raw_data)
+    
+    %{
+      "title" => title,
+      "description" => description,
+      "external_id" => "tmdb:#{tmdb_id}",
+      "external_data" => raw_data,
+      "image_url" => image_url
+    }
+  end
+  
+  # Helper to extract poster path from full URL
+  defp extract_poster_path_from_url(nil), do: nil
+  defp extract_poster_path_from_url(url) when is_binary(url) do
+    # Extract path from URLs like https://image.tmdb.org/t/p/original/path.jpg
+    case Regex.run(~r/\/([^\/]+\.(jpg|png))$/i, url) do
+      [_, path | _] -> "/#{path}"
+      _ -> nil
+    end
+  end
+  defp extract_poster_path_from_url(_), do: nil
+
+  @doc """
+  Build a rich description for movie poll options.
+  """
+  def build_poll_movie_description(movie_data) do
+    parts = []
+    
+    # Add year if available
+    parts = if release_date = (Map.get(movie_data, "release_date") || Map.get(movie_data, :release_date)) do
+      year = extract_year_from_date(release_date)
+      if year, do: ["(#{year})" | parts], else: parts
+    else
+      parts
+    end
+    
+    # Add rating if available
+    parts = if rating = (Map.get(movie_data, "vote_average") || Map.get(movie_data, :vote_average)) do
+      if rating > 0, do: ["★ #{format_rating(rating)}" | parts], else: parts
+    else
+      parts
+    end
+    
+    # Add overview (truncated)
+    overview = Map.get(movie_data, "overview") || Map.get(movie_data, :overview) || ""
+    truncated_overview = if String.length(overview) > 150 do
+      String.slice(overview, 0, 147) <> "..."
+    else
+      overview
+    end
+    
+    parts = if truncated_overview != "", do: [truncated_overview | parts], else: parts
+    
+    case parts do
+      [] -> ""
+      parts -> Enum.reverse(parts) |> Enum.join(" • ")
+    end
+  end
+
+  defp extract_year_from_date(nil), do: nil
+  defp extract_year_from_date(""), do: nil
+  defp extract_year_from_date(date) when is_binary(date) do
+    case String.split(date, "-") do
+      [year | _] when byte_size(year) == 4 -> year
+      _ -> nil
+    end
+  end
+  defp extract_year_from_date(_), do: nil
+
+  defp format_rating(rating) when is_number(rating) do
+    Float.round(rating * 1.0, 1)
+  end
+  defp format_rating(rating) when is_binary(rating) do
+    case Float.parse(rating) do
+      {float_val, _} -> Float.round(float_val, 1)
+      _ -> rating
+    end
+  end
+  defp format_rating(rating), do: rating
 end

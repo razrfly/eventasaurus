@@ -1,8 +1,15 @@
 defmodule EventasaurusWeb.Services.PlacesDataService do
   @moduledoc """
-  Shared service for preparing Google Places data consistently across all interfaces.
+  DEPRECATED: This module has been replaced by GooglePlacesRichDataProvider.
+  Use GooglePlacesRichDataProvider.prepare_poll_option_data/1 instead.
+  
+  This module is kept for backward compatibility only and will be removed in a future release.
+  
+  Original purpose: Shared service for preparing Google Places data consistently across all interfaces.
   Ensures places data follows the same external_id/external_data pattern as movies.
   """
+  
+  @deprecated "Use GooglePlacesRichDataProvider.prepare_poll_option_data/1 instead"
 
   @doc """
   Prepares place option data in a consistent format following the external API pattern.
