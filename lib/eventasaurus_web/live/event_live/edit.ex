@@ -61,18 +61,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
             # Legacy date polling data loading removed - using generic polling system
 
             # Legacy polling deadline extraction removed - using generic polling system
-            {polling_deadline_date, polling_deadline_time} =
-              if false do
-                if event.polling_deadline do
-                  DateTimeHelper.format_for_form(event.polling_deadline, event.timezone)
-                else
-                  # Default to one week from today at 22:00 in the event's timezone
-                  default_date = Date.add(Date.utc_today(), 7) |> Date.to_iso8601()
-                  {default_date, "22:00"}
-                end
-              else
-                {nil, nil}
-              end
 
             # Determine setup path based on existing event properties (legacy date polling removed)
             setup_path = cond do
@@ -121,8 +109,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "venue_longitude" => venue_longitude,
                 # Legacy date polling form data removed
                 "polling_deadline" => if(event.polling_deadline, do: DateTime.to_iso8601(event.polling_deadline), else: ""),
-                "polling_deadline_date" => polling_deadline_date,
-                "polling_deadline_time" => polling_deadline_time,
                 "is_ticketed" => actual_is_ticketed,
                 "setup_path" => setup_path,
                 "requires_threshold" => Map.get(event, :requires_threshold, false),
