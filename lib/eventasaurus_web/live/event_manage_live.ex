@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.EventManageLive do
   alias EventasaurusApp.Events.PollOption
   alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
+  alias EventasaurusWeb.DateTimeHelper
   import EventasaurusWeb.Components.GuestInvitationModal
   import EventasaurusWeb.EmailStatusComponents
   import EventasaurusWeb.EventHTML, only: [movie_rich_data_display: 1]
@@ -1209,9 +1210,12 @@ defmodule EventasaurusWeb.EventManageLive do
 
   defp format_event_datetime(event) do
     if event.start_at do
-      date = Calendar.strftime(event.start_at, "%A, %B %d, %Y")
-      time = Calendar.strftime(event.start_at, "%I:%M %p")
       timezone = event.timezone || "UTC"
+      # Convert UTC time to event's timezone for display
+      shifted_datetime = DateTimeHelper.utc_to_timezone(event.start_at, timezone)
+      
+      date = Calendar.strftime(shifted_datetime, "%A, %B %d, %Y")
+      time = Calendar.strftime(shifted_datetime, "%I:%M %p")
 
       "#{date} at #{time} #{timezone}"
     else
