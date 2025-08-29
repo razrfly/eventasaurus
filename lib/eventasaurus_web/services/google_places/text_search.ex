@@ -56,6 +56,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.TextSearch do
       |> maybe_put(:opennow, Map.get(options, :opennow))
       |> maybe_put(:minprice, Map.get(options, :minprice))
       |> maybe_put(:maxprice, Map.get(options, :maxprice))
+      |> maybe_put(:pagetoken, Map.get(options, :page_token) || Map.get(options, :pagetoken))
 
     "#{@base_url}?#{URI.encode_query(params)}"
   end
