@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.RichDataSearchComponent  # For movies/TV only - NOT for places!
+  alias EventasaurusWeb.DateTimeHelper
   
   @activity_types [
     {"movie_watched", "Movie", "Record a movie that was watched"},
@@ -40,31 +41,16 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   end
   
   # Helper functions for date/time formatting
-  defp format_date(nil), do: ""
-  defp format_date(%DateTime{} = datetime) do
-    datetime
-    |> DateTime.to_date()
-    |> Date.to_iso8601()
-  end
-  defp format_date(datetime_str) when is_binary(datetime_str) do
-    case DateTime.from_iso8601(datetime_str) do
-      {:ok, datetime, _} -> format_date(datetime)
-      _ -> ""
-    end
+  defp format_date(datetime, event) do
+    timezone = event.timezone || "UTC"
+    {date, _time} = DateTimeHelper.format_for_form(datetime, timezone)
+    date || ""
   end
   
-  defp format_time(nil), do: ""
-  defp format_time(%DateTime{} = datetime) do
-    datetime
-    |> DateTime.to_time()
-    |> Time.to_iso8601()
-    |> String.slice(0..4)  # Get HH:MM format
-  end
-  defp format_time(datetime_str) when is_binary(datetime_str) do
-    case DateTime.from_iso8601(datetime_str) do
-      {:ok, datetime, _} -> format_time(datetime)
-      _ -> ""
-    end
+  defp format_time(datetime, event) do
+    timezone = event.timezone || "UTC"
+    {_date, time} = DateTimeHelper.format_for_form(datetime, timezone)
+    time || ""
   end
   
   @impl true
@@ -101,8 +87,8 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         "title" => activity.metadata["title"] || "",
         "description" => activity.metadata["overview"] || activity.metadata["description"] || "",
         "notes" => activity.metadata["notes"] || "",
-        "occurred_date" => format_date(activity.occurred_at || DateTime.utc_now()),
-        "occurred_time" => format_time(activity.occurred_at || DateTime.utc_now()),
+        "occurred_date" => format_date(activity.occurred_at || DateTime.utc_now(), assigns.event),
+        "occurred_time" => format_time(activity.occurred_at || DateTime.utc_now(), assigns.event),
         "rating" => activity.metadata["rating"] || ""
       }
     else
@@ -112,12 +98,15 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         existing_form_data
       else
         # Use event's start_at for default date and time if available
-        {default_date, default_time} = case assigns[:event] do
+        event = assigns[:event]
+        {default_date, default_time} = case event do
           %{start_at: %DateTime{} = start_at} -> 
-            {format_date(start_at), format_time(start_at)}
+            {format_date(start_at, event), format_time(start_at, event)}
           _ -> 
             now = DateTime.utc_now()
-            {format_date(now), format_time(now)}
+            # Use a default event with UTC timezone if event is nil
+            default_event = %{timezone: "UTC"}
+            {format_date(now, default_event), format_time(now, default_event)}
         end
         
         Map.merge(%{
@@ -718,24 +707,18 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
       # Build metadata from form params
       metadata = build_metadata(params)
       
-      # Parse occurred_at
-      # Combine date and time into a DateTime
+      # Parse occurred_at using the event's timezone
+      event_timezone = socket.assigns.event.timezone || "UTC"
       occurred_at = case {params["occurred_date"], params["occurred_time"]} do
         {"", _} -> DateTime.utc_now()
         {nil, _} -> DateTime.utc_now()
         {_, ""} -> DateTime.utc_now()
         {_, nil} -> DateTime.utc_now()
         {date_str, time_str} ->
-          # Combine date and time strings
-          datetime_str = "#{date_str}T#{time_str}:00Z"
-          case DateTime.from_iso8601(datetime_str) do
-            {:ok, datetime, _} -> datetime
-            _ -> 
-              # Try without seconds
-              case DateTime.from_iso8601("#{date_str}T#{time_str}Z") do
-                {:ok, datetime, _} -> datetime
-                _ -> DateTime.utc_now()
-              end
+          # Parse using the event's timezone and convert to UTC for storage
+          case DateTimeHelper.parse_user_datetime(date_str, time_str, event_timezone) do
+            {:ok, datetime} -> datetime
+            {:error, _} -> DateTime.utc_now()
           end
       end
       
@@ -835,12 +818,15 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
     )
     
     # Reset form when closing modal
-    {default_date, default_time} = case socket.assigns[:event] do
+    event = socket.assigns[:event]
+    {default_date, default_time} = case event do
       %{start_at: %DateTime{} = start_at} -> 
-        {format_date(start_at), format_time(start_at)}
+        {format_date(start_at, event), format_time(start_at, event)}
       _ -> 
         now = DateTime.utc_now()
-        {format_date(now), format_time(now)}
+        # Use a default event with UTC timezone if event is nil
+        default_event = %{timezone: "UTC"}
+        {format_date(now, default_event), format_time(now, default_event)}
     end
     
     {:noreply, 
