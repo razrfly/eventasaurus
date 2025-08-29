@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.AdminOrderLive do
 
   alias EventasaurusApp.{Events, Ticketing}
   alias EventasaurusWeb.Helpers.CurrencyHelpers
+  alias EventasaurusWeb.DateTimeHelper
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
@@ -138,15 +139,17 @@ defmodule EventasaurusWeb.AdminOrderLive do
     CurrencyHelpers.format_currency(total_cents, order.ticket.currency)
   end
 
-  defp format_order_date(nil), do: "N/A"
-  defp format_order_date(%NaiveDateTime{} = naive_datetime) do
-    naive_datetime
-    |> Calendar.strftime("%m/%d/%Y at %I:%M %p")
+  defp format_order_date(nil, _event), do: "N/A"
+  defp format_order_date(%NaiveDateTime{} = naive_datetime, event) do
+    # Convert NaiveDateTime to DateTime assuming UTC, then convert to event timezone
+    {:ok, datetime} = DateTime.from_naive(naive_datetime, "UTC")
+    format_order_date(datetime, event)
   end
-  defp format_order_date(%DateTime{} = datetime) do
+  defp format_order_date(%DateTime{} = datetime, event) do
+    timezone = if event && event.timezone, do: event.timezone, else: "UTC"
     datetime
-    |> DateTime.shift_zone!("Etc/UTC")
-    |> Calendar.strftime("%m/%d/%Y at %I:%M %p")
+    |> DateTimeHelper.utc_to_timezone(timezone)
+    |> Calendar.strftime("%m/%d/%Y at %I:%M %p %Z")
   end
 
   defp status_badge_class("confirmed"), do: "bg-green-100 text-green-800"

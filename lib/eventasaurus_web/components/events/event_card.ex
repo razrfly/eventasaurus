@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     EventCardBadges,
     ParticipantAvatars
   }
+  alias EventasaurusWeb.DateTimeHelper
 
   attr :event, :map, required: true
   attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
@@ -174,12 +175,9 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   defp format_time(nil, _timezone), do: "Time TBD"
   defp format_time(%DateTime{} = datetime, timezone) do
-    converted_dt = if timezone do
-      EventasaurusWeb.TimezoneHelpers.convert_to_timezone(datetime, timezone)
-    else
-      datetime
-    end
-
+    timezone = timezone || "UTC"
+    converted_dt = DateTimeHelper.utc_to_timezone(datetime, timezone)
+    
     Calendar.strftime(converted_dt, "%I:%M %p")
     |> String.replace(" 0", " ")
   end

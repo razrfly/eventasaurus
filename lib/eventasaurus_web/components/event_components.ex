@@ -3,6 +3,7 @@ defmodule EventasaurusWeb.EventComponents do
   import EventasaurusWeb.CoreComponents
   import EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.TimezoneHelpers
+  alias EventasaurusWeb.DateTimeHelper
   import Phoenix.HTML.Form
   alias Phoenix.LiveView.JS
 
@@ -1194,7 +1195,7 @@ defmodule EventasaurusWeb.EventComponents do
                                     <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    Sale starts: <%= Calendar.strftime(ticket.starts_at, "%m/%d %I:%M %p") %>
+                                    Sale starts: <%= format_ticket_datetime(ticket.starts_at, @event) %>
                                   </span>
                                 <% end %>
                                 <%= if ticket.tippable do %>
@@ -1363,6 +1364,16 @@ defmodule EventasaurusWeb.EventComponents do
   end
 
   defp format_datetime_for_input(_, _), do: ""
+  
+  # Helper function to format ticket datetime with event timezone
+  defp format_ticket_datetime(nil, _event), do: ""
+  defp format_ticket_datetime(%DateTime{} = datetime, event) do
+    timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+    datetime
+    |> DateTimeHelper.utc_to_timezone(timezone)
+    |> Calendar.strftime("%m/%d %I:%M %p %Z")
+  end
+  defp format_ticket_datetime(_, _), do: ""
 
 
   # ======== STAGE INDICATOR HELPERS ========

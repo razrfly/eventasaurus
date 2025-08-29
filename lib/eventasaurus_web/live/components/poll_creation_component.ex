@@ -29,6 +29,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Poll
+  alias EventasaurusWeb.DateTimeHelper
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
   @poll_types [
@@ -434,7 +435,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                           type="datetime-local"
                           name="poll[list_building_deadline]"
                           id="list_building_deadline"
-                          value={format_datetime_local(@changeset, :list_building_deadline)}
+                          value={format_datetime_local(@changeset, :list_building_deadline, @event)}
                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         />
                         <p class="mt-1 text-xs text-gray-500">When to stop accepting new options</p>
@@ -449,7 +450,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                           type="datetime-local"
                           name="poll[voting_deadline]"
                           id="voting_deadline"
-                          value={format_datetime_local(@changeset, :voting_deadline)}
+                          value={format_datetime_local(@changeset, :voting_deadline, @event)}
                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         />
                         <p class="mt-1 text-xs text-gray-500">When to stop accepting votes</p>
@@ -562,6 +563,9 @@ defmodule EventasaurusWeb.PollCreationComponent do
     # Process privacy_settings to convert checkbox values to booleans
     poll_params = process_privacy_settings(poll_params)
     
+    # Parse datetime fields with event timezone
+    poll_params = parse_datetime_fields(poll_params, socket.assigns.event)
+    
     if socket.assigns.is_editing do
       Events.update_poll(socket.assigns.poll, poll_params)
     else
@@ -594,10 +598,37 @@ defmodule EventasaurusWeb.PollCreationComponent do
     end
   end
 
-  defp format_datetime_local(changeset, field) do
+  defp parse_datetime_fields(params, event) do
+    timezone = event.timezone || "UTC"
+    
+    params
+    |> parse_datetime_field("list_building_deadline", timezone)
+    |> parse_datetime_field("voting_deadline", timezone)
+  end
+  
+  defp parse_datetime_field(params, field, timezone) do
+    case Map.get(params, field) do
+      nil -> params
+      "" -> Map.put(params, field, nil)
+      datetime_str when is_binary(datetime_str) ->
+        # datetime-local inputs provide YYYY-MM-DDTHH:MM format without timezone
+        case DateTimeHelper.parse_datetime_local(datetime_str, timezone) do
+          {:ok, datetime} -> Map.put(params, field, datetime)
+          {:error, _} -> params  # Keep original value, let changeset handle validation
+        end
+      _ -> params
+    end
+  end
+  
+  defp format_datetime_local(changeset, field, event) do
     case Ecto.Changeset.get_field(changeset, field) do
       %DateTime{} = datetime ->
-        datetime
+        # Convert to event timezone if available
+        timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+        shifted = DateTimeHelper.utc_to_timezone(datetime, timezone)
+        
+        # Format for datetime-local input (YYYY-MM-DDTHH:MM)
+        shifted
         |> DateTime.to_naive()
         |> NaiveDateTime.to_iso8601()
         |> String.slice(0, 16)  # Remove seconds for datetime-local input
