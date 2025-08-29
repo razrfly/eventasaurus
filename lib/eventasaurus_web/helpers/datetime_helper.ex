@@ -258,26 +258,23 @@ defmodule EventasaurusWeb.DateTimeHelper do
   defp format_month(11), do: "Nov"
   defp format_month(12), do: "Dec"
   
-  defp get_timezone_abbreviation(timezone, datetime) do
-    # Get the abbreviation based on whether DST is active
-    # This is a simplified version - could be enhanced with a proper mapping
-    case timezone do
-      "America/New_York" -> if datetime.std_offset > 0, do: "EDT", else: "EST"
-      "America/Los_Angeles" -> if datetime.std_offset > 0, do: "PDT", else: "PST"
-      "America/Chicago" -> if datetime.std_offset > 0, do: "CDT", else: "CST"
-      "Europe/London" -> if datetime.std_offset > 0, do: "BST", else: "GMT"
-      "Europe/Warsaw" -> if datetime.std_offset > 0, do: "CEST", else: "CET"
-      _ -> 
-        # Fallback to UTC offset
+  defp get_timezone_abbreviation(_timezone, %DateTime{} = datetime) do
+    # Prefer the system-provided abbreviation; fallback to numeric UTC offset
+    case datetime.zone_abbr do
+      abbr when is_binary(abbr) and byte_size(abbr) in 2..5 ->
+        abbr
+      _ ->
         offset_seconds = datetime.utc_offset + datetime.std_offset
         format_utc_offset(offset_seconds)
     end
   end
   
   defp format_utc_offset(seconds) do
-    hours = div(abs(seconds), 3600)
+    total = abs(seconds)
     sign = if seconds >= 0, do: "+", else: "-"
-    "UTC#{sign}#{hours}"
+    hours = div(total, 3600)
+    minutes = div(rem(total, 3600), 60)
+    "UTC#{sign}#{String.pad_leading("#{hours}", 2, "0")}:#{String.pad_leading("#{minutes}", 2, "0")}"
   end
   
   @doc """

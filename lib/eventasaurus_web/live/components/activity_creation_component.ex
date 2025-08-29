@@ -709,20 +709,32 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
       
       # Parse occurred_at using the event's timezone
       event_timezone = socket.assigns.event.timezone || "UTC"
-      occurred_at = case {params["occurred_date"], params["occurred_time"]} do
-        {"", _} -> DateTime.utc_now()
-        {nil, _} -> DateTime.utc_now()
-        {_, ""} -> DateTime.utc_now()
-        {_, nil} -> DateTime.utc_now()
-        {date_str, time_str} ->
-          # Parse using the event's timezone and convert to UTC for storage
+      occurred_at_result = case {Map.get(params, "occurred_date"), Map.get(params, "occurred_time")} do
+        {date_str, time_str} when is_binary(date_str) and date_str != "" and is_binary(time_str) and time_str != "" ->
           case DateTimeHelper.parse_user_datetime(date_str, time_str, event_timezone) do
-            {:ok, datetime} -> datetime
-            {:error, _} -> DateTime.utc_now()
+            {:ok, datetime} -> {:ok, datetime}
+            {:error, _} -> {:error, :invalid_datetime}
           end
+        _ ->
+          {:error, :missing_input}
       end
       
-      if is_editing do
+      # Validate datetime before proceeding
+      case occurred_at_result do
+        {:error, reason} ->
+          error_msg = case reason do
+            :missing_input -> "Please enter both date and time"
+            :invalid_datetime -> "Please enter a valid date and time"
+            _ -> "Invalid date/time format"
+          end
+          
+          {:noreply,
+           socket
+           |> assign(:loading, false)
+           |> assign(:errors, Map.put(socket.assigns[:errors] || %{}, :occurred_at, error_msg))}
+           
+        {:ok, occurred_at} ->
+          if is_editing do
         # Update existing activity
         activity_attrs = %{
           activity_type: params["activity_type"],
@@ -805,6 +817,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
              |> assign(:errors, %{general: "Failed to save activity. Please try again."})}
         end
       end
+      end  # End of case occurred_at_result
     end
   end
   
