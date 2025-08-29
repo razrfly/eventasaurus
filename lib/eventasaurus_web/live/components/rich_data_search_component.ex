@@ -409,6 +409,8 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
           end
           
           Logger.debug("RichDataSearchComponent: Sending event #{event_name} with detailed item: #{detailed_item.title}")
+          
+          # Send message to parent LiveView
           send(self(), {__MODULE__, :selection_made, event_name, detailed_item})
           
           {:noreply,
@@ -429,6 +431,8 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
           end
           
           Logger.debug("RichDataSearchComponent: Sending fallback event #{event_name} with search result: #{selected.title}")
+          
+          # Send message to parent LiveView
           send(self(), {__MODULE__, :selection_made, event_name, selected})
           
           {:noreply,
