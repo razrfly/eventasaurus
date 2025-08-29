@@ -1129,366 +1129,168 @@ Hooks.TimeSync = {
   }
 };
 
-// Google Places Autocomplete Hook - Consolidated with recent locations filtering
-Hooks.VenueSearchWithFiltering = {
+// Event Location Search Hook - Native Google Places Autocomplete (modular & simplified)
+Hooks.EventLocationSearch = {
   mounted() {
-    if (process.env.NODE_ENV !== 'production') console.log("VenueSearchWithFiltering hook mounted on element:", this.el.id);
     this.inputEl = this.el;
-    this.mounted = true;
     this.debounceTimeout = null;
-    
-    // Initialize Google Places as enabled by default for better UX
-    this.googlePlacesEnabled = true;
     this.autocomplete = null;
-    this.lastPlaceSelected = '';
     
-    // Initialize Google Places immediately
-    this.initGooglePlaces();
-    
-    // Listen for enable_google_places event from LiveView (for manual re-enabling)
-    this.handleEvent("enable_google_places", () => {
-      if (process.env.NODE_ENV !== 'production') console.log("Re-enabling Google Places from LiveView event");
-      this.enableGooglePlaces();
-    });
+    // Initialize Google Places Autocomplete
+    this.initAutocomplete();
     
     // Add input listener for filtering recent locations
     this.inputEl.addEventListener('input', (e) => {
       const query = e.target.value.trim();
       
-      // Debounce the filtering to avoid too many LiveView calls
+      // Debounce the filtering
       if (this.debounceTimeout) {
         clearTimeout(this.debounceTimeout);
       }
       
       this.debounceTimeout = setTimeout(() => {
-        if (this.mounted) {
-          // Only filter recent locations if user is not using Google Places
-          if (!this.googlePlacesEnabled || query.length < 2) {
-            this.pushEvent('filter_recent_locations', { query: query });
-          }
+        // Filter recent locations for dropdown
+        if (query.length >= 2) {
+          this.pushEvent('filter_recent_locations', { query: query });
         }
-      }, 150); // 150ms debounce
+      }, 150);
     });
     
-    // Add focus event listener to show recent locations when appropriate
-    this.handleFocus = () => {
-      // Only show recent locations if Google Places is disabled or input is empty
-      if (!this.googlePlacesEnabled || this.inputEl.value.trim().length === 0) {
+    // Show recent locations on focus if input is empty
+    this.inputEl.addEventListener('focus', () => {
+      if (this.inputEl.value.trim().length === 0) {
         this.pushEvent('show_recent_locations', {});
       }
-    };
-    this.inputEl.addEventListener('focus', this.handleFocus);
+    });
     
     // Hide recent locations when clicking outside
     this.documentClickHandler = (e) => {
-      // Validate that e.target is a DOM element
-      if (e.target && typeof e.target.contains === 'function' && typeof e.target.closest === 'function') {
-        if (!this.inputEl.contains(e.target) && !e.target.closest('.recent-locations-dropdown')) {
-          this.pushEvent('hide_recent_locations', {});
-        }
+      if (e.target && !this.inputEl.contains(e.target) && !e.target.closest('.recent-locations-dropdown')) {
+        this.pushEvent('hide_recent_locations', {});
       }
     };
     document.addEventListener('click', this.documentClickHandler);
   },
   
   destroyed() {
-    this.mounted = false;
+    // Clean up autocomplete
+    if (this.autocomplete) {
+      google.maps.event.clearInstanceListeners(this.autocomplete);
+      this.autocomplete = null;
+    }
+    
+    // Clear debounce timeout
     if (this.debounceTimeout) {
       clearTimeout(this.debounceTimeout);
     }
     
-    // Remove event listeners to prevent memory leaks
-    if (this.inputEl && this.handleFocus) {
-      this.inputEl.removeEventListener('focus', this.handleFocus);
-      this.handleFocus = null;
-    }
-    
+    // Remove document click handler
     if (this.documentClickHandler) {
       document.removeEventListener('click', this.documentClickHandler);
-      this.documentClickHandler = null;
-    }
-    
-    // Remove this hook from the waiting list if it exists
-    if (window.venueSearchHooks && Array.isArray(window.venueSearchHooks)) {
-      const index = window.venueSearchHooks.indexOf(this);
-      if (index > -1) {
-        window.venueSearchHooks.splice(index, 1);
-      }
-    }
-    
-    if (process.env.NODE_ENV !== 'production') console.log("VenueSearchWithFiltering hook destroyed");
-  },
-  
-  initGooglePlaces() {
-    if (!this.mounted) return;
-    
-    // Check if Google Maps API is loaded and ready
-    if (window.google && google.maps && google.maps.places) {
-      if (process.env.NODE_ENV !== 'production') console.log("Google Maps already loaded, initializing autocomplete");
-      setTimeout(() => this.initClassicAutocomplete(), 100);
-    } else {
-      if (process.env.NODE_ENV !== 'production') console.log("Google Maps not yet loaded, will initialize when ready");
-      // Add this hook to the list of hooks waiting for Google Maps to load
-      if (!window.venueSearchHooks) {
-        window.venueSearchHooks = [];
-      }
-      
-      // Ensure this hook isn't already in the list to prevent duplicates
-      if (!window.venueSearchHooks.includes(this)) {
-        window.venueSearchHooks.push(this);
-      }
-      
-      // Set up the global callback for when Google Maps loads (only once)
-      if (!window.initGooglePlaces) {
-        window.initGooglePlaces = () => {
-          if (window.venueSearchHooks && Array.isArray(window.venueSearchHooks)) {
-            window.venueSearchHooks.forEach(hook => {
-              if (hook.mounted) {
-                try {
-                  setTimeout(() => hook.initClassicAutocomplete(), 100);
-                } catch (error) {
-                  if (process.env.NODE_ENV !== 'production') console.error("Error initializing autocomplete for hook:", error);
-                }
-              }
-            });
-            // Clear the list after initialization
-            window.venueSearchHooks = [];
-          }
-          
-          // Also initialize PlacesSuggestionSearch hooks
-          if (window.placeSuggestionHooks && Array.isArray(window.placeSuggestionHooks)) {
-            window.placeSuggestionHooks.forEach(hook => {
-              if (hook.mounted) {
-                try {
-                  setTimeout(() => hook.initPlacesAutocomplete(), 100);
-                } catch (error) {
-                  if (process.env.NODE_ENV !== 'production') console.error("Error initializing places autocomplete for hook:", error);
-                }
-              }
-            });
-            // Clear the list after initialization
-            window.placeSuggestionHooks = [];
-          }
-        };
-      }
     }
   },
   
-  // Google Places Autocomplete initialization
-  initClassicAutocomplete() {
-    if (!this.mounted) return;
+  initAutocomplete() {
+    // Wait for Google Maps to load
+    if (!window.google?.maps?.places) {
+      setTimeout(() => this.initAutocomplete(), 100);
+      return;
+    }
     
-    try {
-      if (process.env.NODE_ENV !== 'production') console.log("Initializing Google Places Autocomplete");
-      
-      // Prevent creating multiple instances
-      if (this.autocomplete) {
-        if (process.env.NODE_ENV !== 'production') console.log("Autocomplete already initialized");
-        return;
-      }
-      
-      // Create the autocomplete object with suggestions enabled by default
-      const options = {
-        types: ['establishment', 'geocode']
-      };
-      
-      this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
-      this.googlePlacesEnabled = true;
-      
-      // When a place is selected from Google Places
-      this.autocomplete.addListener('place_changed', () => {
-        if (!this.mounted) return;
-        
-        if (process.env.NODE_ENV !== 'production') console.group("Google Places selection process");
-        const place = this.autocomplete.getPlace();
-        if (process.env.NODE_ENV !== 'production') console.log("Place selected:", place);
-        
-        if (!place.geometry) {
-          if (process.env.NODE_ENV !== 'production') console.error("No place geometry received");
-          if (process.env.NODE_ENV !== 'production') console.groupEnd();
-          return;
+    // Configure autocomplete for venues and addresses
+    const options = {
+      types: ['establishment', 'geocode'],
+      fields: [
+        'place_id',
+        'name',
+        'formatted_address',
+        'geometry',
+        'address_components'
+      ]
+    };
+    
+    // Create autocomplete instance
+    this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+    
+    // Handle place selection
+    this.autocomplete.addListener('place_changed', () => {
+      this.handlePlaceSelection();
+    });
+  },
+  
+  handlePlaceSelection() {
+    const place = this.autocomplete.getPlace();
+    
+    if (!place?.geometry) {
+      return;
+    }
+    
+    // Extract venue information
+    const venueName = place.name || '';
+    const venueAddress = place.formatted_address || '';
+    
+    // Extract address components
+    let city = '', state = '', country = '';
+    
+    if (place.address_components) {
+      for (const component of place.address_components) {
+        const types = component.types;
+        if (types.includes('locality')) {
+          city = component.long_name;
+        } else if (types.includes('administrative_area_level_1')) {
+          state = component.long_name;
+        } else if (types.includes('country')) {
+          country = component.long_name;
         }
-        
-        // Get place details
-        const venueName = place.name || '';
-        const venueAddress = place.formatted_address || '';
-        let city = '', state = '', country = '';
-        
-        // Track this selection to differentiate from manual typing
-        this.lastPlaceSelected = venueAddress || venueName;
-        
-        // Get address components
-        if (place.address_components) {
-          if (process.env.NODE_ENV !== 'production') console.log("Processing address components:", place.address_components);
-          for (const component of place.address_components) {
-            if (component.types.includes('locality')) {
-              city = component.long_name;
-            } else if (component.types.includes('administrative_area_level_1')) {
-              state = component.long_name;
-            } else if (component.types.includes('country')) {
-              country = component.long_name;
-            }
-          }
-        }
-        
-        // Get coordinates
-        let lat = null, lng = null;
-        if (place.geometry && place.geometry.location) {
-          lat = place.geometry.location.lat();
-          lng = place.geometry.location.lng();
-        }
-        
-        // Map field IDs to expected form data keys
-        const fieldMappings = {
-          'venue_name': venueName,
-          'venue_address': venueAddress,
-          'venue_city': city,
-          'venue_state': state,
-          'venue_country': country,
-          'venue_latitude': lat,
-          'venue_longitude': lng
-        };
-        
-        // Direct DOM updates for each field
-        if (process.env.NODE_ENV !== 'production') console.log("Updating DOM fields...");
-        Object.entries(fieldMappings).forEach(([key, value]) => {
-          if (value !== null && value !== undefined) {
-            this.directUpdateField(key, value);
-          }
-        });
-        
-        // Prepare data for LiveView
-        const venueData = {
-          name: venueName,
-          address: venueAddress,
-          city: city,
-          state: state,
-          country: country,
-          latitude: lat,
-          longitude: lng
-        };
-        
-        // Send to LiveView
-        if (process.env.NODE_ENV !== 'production') console.log("Pushing venue data to LiveView:", venueData);
-        this.pushEvent('venue_selected', venueData);
-        
-        // Hide recent locations after selection
-        this.pushEvent('hide_recent_locations', {});
-        
-        if (process.env.NODE_ENV !== 'production') console.groupEnd();
-      });
-      
-      if (process.env.NODE_ENV !== 'production') console.log("Google Places Autocomplete initialized");
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Error in Google Places Autocomplete initialization:", error);
-    }
-  },
-  
-  // Methods to control Google Places suggestions
-  enableGooglePlaces() {
-    if (this.autocomplete) {
-      this.googlePlacesEnabled = true;
-      // Re-enable the autocomplete with proper types
-      this.autocomplete.setOptions({
-        types: ['establishment', 'geocode']
-      });
-      
-      // Hide recent locations when Google Places is enabled
-      this.pushEvent('hide_recent_locations', {});
-      
-      // Focus the input and trigger search if there's content
-      this.inputEl.focus();
-      if (this.inputEl.value.trim()) {
-        // Trigger autocomplete to show suggestions for current text using proper DOM events
-        this.inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
-        this.inputEl.dispatchEvent(new Event('focus', { bubbles: true }));
       }
     }
+    
+    // Extract coordinates
+    const lat = Math.round(place.geometry.location.lat() * 10000) / 10000;
+    const lng = Math.round(place.geometry.location.lng() * 10000) / 10000;
+    
+    // Get ID suffix from input element
+    const idSuffix = this.inputEl.id.split('-').pop(); // "new" or "edit"
+    
+    // Update hidden fields
+    this.setHiddenField(`venue-name-${idSuffix}`, venueName);
+    this.setHiddenField(`venue-address-${idSuffix}`, venueAddress);
+    this.setHiddenField(`venue-city-${idSuffix}`, city);
+    this.setHiddenField(`venue-state-${idSuffix}`, state);
+    this.setHiddenField(`venue-country-${idSuffix}`, country);
+    this.setHiddenField(`venue-lat-${idSuffix}`, lat);
+    this.setHiddenField(`venue-lng-${idSuffix}`, lng);
+    
+    // Update display
+    this.inputEl.value = venueName ? `${venueName}, ${city || venueAddress}` : venueAddress;
+    
+    // Send to LiveView
+    const venueData = {
+      name: venueName,
+      address: venueAddress,
+      city: city,
+      state: state,
+      country: country,
+      latitude: lat,
+      longitude: lng
+    };
+    
+    this.pushEvent('venue_selected', venueData);
+    this.pushEvent('hide_recent_locations', {});
   },
   
-  disableGooglePlaces() {
-    if (this.autocomplete) {
-      this.googlePlacesEnabled = false;
-      
-      // Disable the autocomplete by unbinding it
-      if (this.autocomplete.unbindAll) {
-        this.autocomplete.unbindAll();
-      } else {
-        // Fallback: set restrictive bounds to effectively disable
-        this.autocomplete.setOptions({
-          types: [],
-          bounds: new google.maps.LatLngBounds(
-            new google.maps.LatLng(0, 0),
-            new google.maps.LatLng(0, 0)
-          ),
-          strictBounds: true
-        });
-      }
-      
-      // Force hide any visible suggestions dropdown
-      const pacContainers = document.querySelectorAll('.pac-container');
-      pacContainers.forEach(container => {
-        container.style.display = 'none';
-      });
-      
-      if (process.env.NODE_ENV !== 'production') console.log("Google Places disabled and suggestions hidden");
-    }
-  },
-  
-  // Direct DOM update to ensure form fields are updated
-  directUpdateField(id, value) {
-    if (!this.mounted) return;
-    
-    if (process.env.NODE_ENV !== 'production') console.group(`Updating field ${id}`);
-    
-    // Determine form type by examining the input element's ID
-    const formType = this.inputEl.id.includes("new") ? "new" : "edit";
-    if (process.env.NODE_ENV !== 'production') console.log(`Form context detected: ${formType}`);
-    
-    // Look for the element using direct ID with suffix
-    let field = document.getElementById(`${id}-${formType}`);
-    if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${id}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
-    
-    // If not found, try without suffix
-    if (!field) {
-      field = document.getElementById(id);
-      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${id}: ${field ? 'FOUND' : 'NOT FOUND'}`);
-    }
-    
-    // If not found, try with venue_ instead of venue-
-    if (!field) {
-      const altId = id.replace('venue-', 'venue_');
-      field = document.getElementById(altId);
-      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${altId}: ${field ? 'FOUND' : 'NOT FOUND'}`);
-    }
-    
-    // If still not found, try with venue_ instead of venue- and the suffix
-    if (!field) {
-      const altId = id.replace('venue-', 'venue_');
-      field = document.getElementById(`${altId}-${formType}`);
-      if (process.env.NODE_ENV !== 'production') console.log(`Field by ID ${altId}-${formType}: ${field ? 'FOUND' : 'NOT FOUND'}`);
-    }
-    
-    // If still not found, try the event[] prefixed version (for Phoenix forms)
-    if (!field) {
-      const selector = `[name="event[${id.replace('venue-', 'venue_')}]"]`;
-      field = document.querySelector(selector);
-      if (process.env.NODE_ENV !== 'production') console.log(`Field by selector ${selector}: ${field ? 'FOUND' : 'NOT FOUND'}`);
-    }
-    
-    // Set the field value if found
+  setHiddenField(id, value) {
+    const field = document.getElementById(id);
     if (field) {
-      field.value = value;
+      field.value = value || '';
       field.dispatchEvent(new Event('input', { bubbles: true }));
       field.dispatchEvent(new Event('change', { bubbles: true }));
-      if (process.env.NODE_ENV !== 'production') console.log(`Set field ${id} to:`, value);
-    } else {
-      if (process.env.NODE_ENV !== 'production') console.warn(`Could not find field for ${id}`);
     }
-    
-    if (process.env.NODE_ENV !== 'production') console.groupEnd();
   }
 };
+
+// Backward compatibility alias for VenueSearchWithFiltering
+Hooks.VenueSearchWithFiltering = Hooks.EventLocationSearch;
 
 // Calendar Form Sync Hook - Updates hidden form field when calendar dates change
 Hooks.CalendarFormSync = {
