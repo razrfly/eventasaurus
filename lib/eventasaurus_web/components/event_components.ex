@@ -955,7 +955,7 @@ defmodule EventasaurusWeb.EventComponents do
                     type="text"
                     id={"venue-search-#{if @action == :new, do: "new", else: "edit"}"}
                     placeholder="Search for venue or address..."
-                    phx-hook="VenueSearchWithFiltering"
+                    phx-hook="EventLocationSearch"
                     class="block w-full border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm venue-search-input"
                   />
                   <!-- Hidden venue fields remain the same -->
