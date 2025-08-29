@@ -14,14 +14,13 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
-  alias EventasaurusWeb.RichDataSearchComponent
+  alias EventasaurusWeb.RichDataSearchComponent  # For movies/TV only - NOT for places!
   
   @activity_types [
     {"movie_watched", "Movie", "Record a movie that was watched"},
     {"tv_watched", "TV Show", "Record a TV show that was watched"},
     {"game_played", "Game", "Record a game that was played"},
-    {"restaurant_visited", "Restaurant", "Record a restaurant visit"},
-    {"place_visited", "Place", "Record a place that was visited"},
+    {"place_visited", "Place", "Record a place visit (restaurant, venue, etc.)"},
     {"book_read", "Book", "Record a book that was read"},
     {"activity_completed", "Other Activity", "Record any other activity"}
   ]
@@ -165,18 +164,6 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
             nil
           end
           {nil, selected_tv_show, nil}
-        
-        "restaurant_visited" ->
-          selected_place = if activity.metadata["place_id"] do
-            %{
-              id: activity.metadata["place_id"],
-              title: activity.metadata["title"],
-              metadata: activity.metadata
-            }
-          else
-            nil
-          end
-          {nil, nil, selected_place}
         
         "place_visited" ->
           selected_place = if activity.metadata["place_id"] do
@@ -548,39 +535,48 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
     """
   end
   
-  defp render_activity_fields(%{form_data: %{"activity_type" => "restaurant_visited"}} = assigns) do
+  defp render_activity_fields(%{form_data: %{"activity_type" => "place_visited"}} = assigns) do
     ~H"""
     <div class="space-y-4">
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-2">
-          Search for Restaurant <span class="text-red-500">*</span>
+          Search for Place <span class="text-red-500">*</span>
         </label>
         
         <%= if @selected_place do %>
-          <!-- Show selected restaurant -->
+          <!-- Show selected place -->
           <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
             <div class="flex items-start space-x-3">
               <div class="flex-shrink-0">
-                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
+                <%= if @selected_place["photos"] && length(@selected_place["photos"]) > 0 do %>
+                  <img 
+                    src={List.first(@selected_place["photos"])} 
+                    alt={@selected_place["title"]}
+                    class="w-16 h-16 object-cover rounded-lg"
+                  />
+                <% else %>
+                  <div class="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                <% end %>
               </div>
               <div class="flex-1">
                 <p class="font-medium text-gray-900">
-                  <%= @selected_place.title %>
+                  <%= @selected_place["title"] %>
                 </p>
                 <p class="text-sm text-gray-600 mt-1">
-                  <%= @selected_place.metadata["address"] %>
+                  <%= @selected_place["address"] %>
                 </p>
-                <%= if @selected_place.metadata["rating"] do %>
+                <% rating = @selected_place["rating"] %>
+                <%= if rating do %>
                   <div class="mt-1 flex items-center">
                     <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
-                    <span class="ml-1 text-xs text-gray-600"><%= @selected_place.metadata["rating"] %></span>
+                    <span class="ml-1 text-xs text-gray-600"><%= rating %></span>
                   </div>
                 <% end %>
                 <button
@@ -589,27 +585,47 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                   phx-target={@myself}
                   class="mt-2 text-sm text-green-600 hover:text-green-800"
                 >
-                  Remove restaurant
+                  Remove place
                 </button>
               </div>
             </div>
           </div>
           
-          <!-- Hidden fields to submit restaurant data -->
-          <input type="hidden" name="title" value={@selected_place.title} />
-          <input type="hidden" name="place_id" value={@selected_place.id} />
-          <input type="hidden" name="address" value={@selected_place.metadata["address"]} />
-          <input type="hidden" name="google_rating" value={@selected_place.metadata["rating"]} />
+          <!-- Hidden fields to submit place data (SAME structure as polling) -->
+          <input type="hidden" name="title" value={@selected_place["title"]} />
+          <input type="hidden" name="place_id" value={@selected_place["place_id"]} />
+          <input type="hidden" name="address" value={@selected_place["address"]} />
+          <input type="hidden" name="google_rating" value={@selected_place["rating"]} />
+          <input type="hidden" name="photos" value={Jason.encode!(@selected_place["photos"] || [])} />
+          <input type="hidden" name="description" value={@selected_place["address"]} />
         <% else %>
-          <!-- Show search component -->
-          <.live_component
-            module={RichDataSearchComponent}
-            id={"restaurant-search-#{@id}"}
-            provider={:google_places}
-            content_type={:place}
-            search_placeholder="Search for a restaurant..."
-            result_limit={10}
-          />
+          <!-- Native Google Places Autocomplete -->
+          <div class="relative">
+            <input
+              type="text"
+              name="title"
+              id={"place-search-#{@id}"}
+              placeholder="Search for a restaurant, venue, or any place..."
+              phx-hook="PlacesHistorySearch"
+              data-location-scope="place"
+              data-activity-type="place"
+              autocomplete="off"
+              class="w-full px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              required
+            />
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <!-- Hidden fields that will be populated by JavaScript -->
+            <input type="hidden" id={"place-id-#{@id}"} name="place_id" value="" />
+            <input type="hidden" id={"place-address-#{@id}"} name="address" value="" />
+            <input type="hidden" id={"place-rating-#{@id}"} name="google_rating" value="" />
+            <input type="hidden" id={"place-photos-#{@id}"} name="photos" value="" />
+          </div>
+          <p class="mt-1 text-xs text-gray-500">Select a place from the dropdown suggestions</p>
         <% end %>
         
         <%= if @errors[:title] do %>
@@ -858,6 +874,11 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
     {:noreply, assign(socket, :selected_place, nil)}
   end
   
+  # Handle place selection from native Google autocomplete
+  def handle_event("place_selected", %{"place" => place_data}, socket) do
+    {:noreply, assign(socket, :selected_place, place_data)}
+  end
+  
   
   defp build_metadata(params) do
     base_metadata = %{
@@ -893,12 +914,26 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         |> maybe_put("platform", params["platform"])
         |> maybe_put("winner", params["winner"])
       
-      "restaurant_visited" ->
+      "place_visited" ->
+        # Parse photos if it's a JSON string
+        photos = case params["photos"] do
+          nil -> nil
+          "" -> nil
+          photos_str when is_binary(photos_str) ->
+            case Jason.decode(photos_str) do
+              {:ok, photos_list} -> List.first(photos_list)  # Take first photo for display
+              _ -> nil
+            end
+          photos_list when is_list(photos_list) -> List.first(photos_list)
+          _ -> nil
+        end
+        
         metadata
         |> maybe_put("place_id", params["place_id"])
         |> maybe_put("address", params["address"])
         |> maybe_put("google_rating", params["google_rating"])
-        |> maybe_put("cuisine", params["cuisine"])
+        |> maybe_put("photo_url", photos)  # Store first photo as photo_url for display
+        |> maybe_put("description", params["description"])
       
       _ ->
         metadata
@@ -912,7 +947,6 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   defp activity_emoji("movie_watched"), do: "🎬"
   defp activity_emoji("tv_watched"), do: "📺"
   defp activity_emoji("game_played"), do: "🎮"
-  defp activity_emoji("restaurant_visited"), do: "🍽️"
   defp activity_emoji("place_visited"), do: "📍"
   defp activity_emoji("book_read"), do: "📚"
   defp activity_emoji(_), do: "✨"

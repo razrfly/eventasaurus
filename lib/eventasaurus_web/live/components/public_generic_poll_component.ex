@@ -57,7 +57,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
        |> assign(:temp_votes, temp_votes)
        |> assign(:showing_add_form, false)
        |> assign(:option_title, "")
-       |> assign(:adding_option, false)}
+       |> assign(:adding_option, false)
+       |> assign(:selected_place, nil)
+       |> assign(:show_place_search, false)}
     else
       {:ok, assign(socket, :poll, nil)}
     end
@@ -98,6 +100,18 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   # Handle form changes (for the new input name structure)
   def handle_event("validate", %{"poll_option" => %{"title" => title}}, socket) do
     {:noreply, assign(socket, :option_title, title)}
+  end
+
+  def handle_event("toggle_place_search", _params, socket) do
+    {:noreply, assign(socket, :show_place_search, !socket.assigns.show_place_search)}
+  end
+
+  def handle_event("clear_place", _params, socket) do
+    {:noreply, 
+     socket
+     |> assign(:selected_place, nil)
+     |> assign(:show_place_search, true)
+     |> assign(:option_title, "")}
   end
 
   def handle_event("add_option", %{"poll_option" => poll_option_params} = _params, socket) do
@@ -143,6 +157,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                |> assign(:adding_option, false)
                |> assign(:showing_add_form, false)
                |> assign(:option_title, "")
+               |> assign(:selected_place, nil)
                |> assign(:poll_options, updated_poll_options)}
 
             {:error, changeset} ->
@@ -212,10 +227,22 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
       "status" => "active"
     })
 
-    # Apply the EXACT SAME processing as the manager area for places
-    if socket.assigns.poll.poll_type == "places" &&
+    # Check if we have a selected place from native Google autocomplete
+    cond do
+      socket.assigns.poll.poll_type == "places" && socket.assigns[:selected_place] ->
+        place_data = socket.assigns.selected_place
+        
+        # Use the rich data from the selected place
+        option_params
+        |> Map.put("title", Map.get(place_data, :title, title))
+        |> Map.put("description", Map.get(place_data, :description, ""))
+        |> Map.put("external_data", Map.get(place_data, :metadata, %{}))
+        |> Map.put("image_url", Map.get(place_data, :image_url))
+      
+      # Apply the EXACT SAME processing as the manager area for places (fallback for JavaScript hook)
+      socket.assigns.poll.poll_type == "places" &&
        Map.has_key?(option_params, "external_data") &&
-       not is_nil(option_params["external_data"]) do
+       not is_nil(option_params["external_data"]) ->
 
       Logger.debug("Processing places option with PlacesDataService (public interface)")
 
@@ -252,9 +279,10 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
         Logger.debug("PlacesDataService skipped - invalid external_data (public interface)")
         option_params
       end
-    else
-      # Non-places options or manual entry
-      option_params
+      
+      true ->
+        # Non-places options or manual entry
+        option_params
     end
   end
 
@@ -263,6 +291,9 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     Map.put(prepared_data, key, user_value)
   end
   defp maybe_preserve_user_input(prepared_data, _key, _user_value), do: prepared_data
+
+  # Note: Native Google autocomplete sends place_selected events directly to this component
+  # The parent needs to handle {:place_selected, data} and forward it to this component
 
   @impl true
   def render(assigns) do
@@ -429,19 +460,44 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                           </select>
                         <% else %>
                           <%= if @poll.poll_type == "places" do %>
-                            <input
-                              type="text"
-                              name="poll_option[title]"
-                              id="option_title"
-                              value={@option_title}
-                              placeholder={get_title_placeholder(@poll)}
-                              phx-debounce="300"
-                              phx-hook="PlacesSuggestionSearch"
-                              data-location-scope={@poll |> get_location_scope()}
-                              data-search-location={@poll |> get_search_location_json()}
-                              autocomplete="off"
-                              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            />
+                            <%= if @selected_place do %>
+                              <!-- Show selected place -->
+                              <div class="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                                <div class="flex items-center justify-between">
+                                  <div class="flex-1">
+                                    <h4 class="font-medium text-gray-900"><%= @selected_place.title %></h4>
+                                    <%= if @selected_place.description do %>
+                                      <p class="text-sm text-gray-600 mt-1"><%= @selected_place.description %></p>
+                                    <% end %>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    phx-click="clear_place"
+                                    phx-target={@myself}
+                                    class="ml-3 text-gray-400 hover:text-gray-600"
+                                  >
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                              <!-- Hidden input for the title -->
+                              <input type="hidden" name="poll_option[title]" value={@selected_place.title} />
+                            <% else %>
+                              <!-- Native Google Places Autocomplete -->
+                              <input
+                                type="text"
+                                id={"place-search-#{@poll.id}"}
+                                name="poll_option[title]"
+                                placeholder={get_title_placeholder(@poll)}
+                                phx-hook="PlacesSuggestionSearch"
+                                data-location-scope={get_location_scope(@poll)}
+                                autocomplete="off"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                required
+                              />
+                            <% end %>
                           <% else %>
                             <input
                               type="text"
@@ -458,12 +514,6 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                           <% end %>
                         <% end %>
                       </div>
-
-                      <!-- Hidden fields for rich data (will be populated by JavaScript hook for places) -->
-                      <%= if @poll.poll_type == "places" do %>
-                        <!-- These will be dynamically added by PlacesSuggestionSearch hook -->
-                        <div class="hidden-metadata-fields"></div>
-                      <% end %>
                     </div>
 
                     <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-4">
