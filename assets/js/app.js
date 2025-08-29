@@ -2479,17 +2479,12 @@ Hooks.PlacesSuggestionSearch = {
   
   parseSearchLocation() {
     const data = this.el.dataset.searchLocation;
-    if (!data) {
-      console.log("PlacesSuggestionSearch: No search location data provided");
-      return null;
-    }
+    if (!data) return null;
     
     try {
-      const parsed = JSON.parse(data);
-      console.log("PlacesSuggestionSearch: Parsed search location:", parsed);
-      return parsed;
+      return JSON.parse(data);
     } catch (e) {
-      console.error("Error parsing search location:", e, "Data was:", data);
+      console.error("Error parsing search location:", e);
       return null;
     }
   },
@@ -2545,18 +2540,6 @@ Hooks.PlacesSuggestionSearch = {
       }
       const circle = new google.maps.Circle({ center, radius });
       this.autocomplete.setBounds(circle.getBounds());
-      
-      console.log("PlacesSuggestionSearch: Applied location bias", {
-        center,
-        radius,
-        locationScope: this.locationScope,
-        bounds: circle.getBounds().toString()
-      });
-    } else {
-      console.log("PlacesSuggestionSearch: No location bias applied", {
-        searchLocation: this.searchLocation,
-        hasGeometry: this.searchLocation?.geometry ? true : false
-      });
     }
     
     // Handle place selection
