@@ -38,7 +38,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
       total_activities: length(activities),
       movies_watched: Enum.count(activities, &(&1.activity_type == "movie_watched")),
       tv_shows_watched: Enum.count(activities, &(&1.activity_type == "tv_watched")),
-      places_visited: Enum.count(activities, &(&1.activity_type in ["restaurant_visited", "place_visited"]))
+      places_visited: Enum.count(activities, &(&1.activity_type == "place_visited"))
     }
     
     assign(socket, :stats, stats)
@@ -262,13 +262,13 @@ defmodule EventasaurusWeb.EventHistoryComponent do
                     </div>
                   </div>
                   
-                  <!-- Movie/TV Poster -->
-                  <%= if activity.metadata["poster_url"] do %>
+                  <!-- Activity Image (Movie/TV Poster or Place Photo) -->
+                  <%= if activity.metadata["poster_url"] || activity.metadata["photo_url"] do %>
                     <div class="flex-shrink-0 ml-4 mr-6">
                       <img 
-                        src={activity.metadata["poster_url"]} 
+                        src={activity.metadata["poster_url"] || activity.metadata["photo_url"]} 
                         alt={activity_title(activity)}
-                        class="w-12 h-16 object-cover rounded-md"
+                        class={"#{if activity.metadata["photo_url"], do: "w-16 h-16", else: "w-12 h-16"} object-cover rounded-md"}
                       />
                     </div>
                   <% end %>
@@ -480,7 +480,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     Enum.filter(activities, &(&1.activity_type == "tv_watched"))
   end
   defp filter_activities(activities, "places") do
-    Enum.filter(activities, &(&1.activity_type in ["restaurant_visited", "place_visited"]))
+    Enum.filter(activities, &(&1.activity_type == "place_visited"))
   end
   defp filter_activities(activities, "manual") do
     Enum.filter(activities, &(&1.source == "manual"))
@@ -507,7 +507,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
       "tv_watched" -> activity.metadata["title"] || "TV show watched"
       "game_played" -> activity.metadata["game_name"] || activity.metadata["title"] || "Game played"
       "book_read" -> activity.metadata["title"] || "Book read"
-      "restaurant_visited" -> activity.metadata["name"] || activity.metadata["title"] || "Restaurant visited"
       "place_visited" -> activity.metadata["name"] || activity.metadata["title"] || "Place visited"
       "activity_completed" -> activity.metadata["title"] || "Activity completed"
       _ -> activity.metadata["title"] || "Activity"
@@ -522,7 +521,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   defp format_activity_type("tv_watched"), do: "TV Show"
   defp format_activity_type("game_played"), do: "Game"
   defp format_activity_type("book_read"), do: "Book"
-  defp format_activity_type("restaurant_visited"), do: "Restaurant"
   defp format_activity_type("place_visited"), do: "Place"
   defp format_activity_type(_), do: "Activity"
 
@@ -598,15 +596,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     ~H"""
     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 011-1h1a2 2 0 100-4H7a1 1 0 01-1-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-    </svg>
-    """
-  end
-
-  defp activity_icon_svg("restaurant_visited") do
-    assigns = %{}
-    ~H"""
-    <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16l3-1m-3 1l-3-1" />
     </svg>
     """
   end
@@ -715,7 +704,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   defp activity_icon_bg_class("movie_watched"), do: "bg-purple-500"
   defp activity_icon_bg_class("tv_watched"), do: "bg-blue-500"
   defp activity_icon_bg_class("game_played"), do: "bg-green-500"
-  defp activity_icon_bg_class("restaurant_visited"), do: "bg-orange-500"
   defp activity_icon_bg_class("place_visited"), do: "bg-indigo-500"
   defp activity_icon_bg_class("book_read"), do: "bg-yellow-500"
   defp activity_icon_bg_class(_), do: "bg-gray-500"
@@ -723,7 +711,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   defp activity_type_badge_class("movie_watched"), do: "bg-purple-100 text-purple-800"
   defp activity_type_badge_class("tv_watched"), do: "bg-blue-100 text-blue-800"
   defp activity_type_badge_class("game_played"), do: "bg-green-100 text-green-800"
-  defp activity_type_badge_class("restaurant_visited"), do: "bg-orange-100 text-orange-800"
   defp activity_type_badge_class("place_visited"), do: "bg-indigo-100 text-indigo-800"
   defp activity_type_badge_class("book_read"), do: "bg-yellow-100 text-yellow-800"
   defp activity_type_badge_class(_), do: "bg-gray-100 text-gray-800"
