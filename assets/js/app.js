@@ -2541,7 +2541,7 @@ Hooks.PlacesSuggestionSearch = {
     const scopeTypes = {
       'place': ['establishment'],
       'city': ['(cities)'],
-      'region': ['administrative_area_level_1', 'administrative_area_level_2'],
+      'region': ['(regions)'],  // Fixed: Use proper collection type for regions
       'country': ['country'],
       'custom': [] // No restrictions
     };
@@ -2667,12 +2667,19 @@ Hooks.PlacesSuggestionSearch = {
           imageInput.type = 'hidden';
           imageInput.name = 'poll_option[image_url]';
           imageInput.value = this.selectedPlaceData.photos[0];
-          form.appendChild(imageInput);
+          form.appendChild(input);
         }
       }
     };
     
     form.addEventListener('submit', this.formHandler);
+    
+    // Clear selection if user edits after choosing a place
+    this.inputClearHandler = () => {
+      this.selectedPlaceData = null;
+      this.inputEl.dataset.hasPlaceData = 'false';
+    };
+    this.inputEl.addEventListener('input', this.inputClearHandler);
   }
 };
 
@@ -2686,12 +2693,32 @@ Hooks.PlacesHistorySearch = {
     
     // Initialize Google Places Autocomplete
     this.initAutocomplete();
+    
+    // Clear hidden fields if user edits after selection
+    this.inputClearHandler = () => {
+      this.selectedPlaceData = null;
+      const formId = this.el.id.replace('place-search-', '');
+      const placeIdField = document.getElementById(`place-id-${formId}`);
+      const addressField = document.getElementById(`place-address-${formId}`);
+      const ratingField = document.getElementById(`place-rating-${formId}`);
+      const photosField = document.getElementById(`place-photos-${formId}`);
+      if (placeIdField) placeIdField.value = '';
+      if (addressField) addressField.value = '';
+      if (ratingField) ratingField.value = '';
+      if (photosField) photosField.value = '[]';
+    };
+    this.inputEl.addEventListener('input', this.inputClearHandler);
   },
   
   destroyed() {
     // Clean up autocomplete instance
     if (this.autocomplete) {
       google.maps.event.clearInstanceListeners(this.autocomplete);
+    }
+    // Clean up input handler
+    if (this.inputClearHandler) {
+      this.inputEl.removeEventListener('input', this.inputClearHandler);
+      this.inputClearHandler = null;
     }
   },
   
