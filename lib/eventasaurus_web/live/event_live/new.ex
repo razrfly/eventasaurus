@@ -18,7 +18,7 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusApp.Groups
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Helpers.ImageHelpers
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
 
   @valid_setup_paths ~w[polling confirmed threshold]
 
@@ -1454,6 +1454,9 @@ defmodule EventasaurusWeb.EventLive.New do
         # Validate flexible pricing fields
         case validate_flexible_pricing(ticket_data, pricing_model, price_cents) do
           {:ok, minimum_price_cents, suggested_price_cents} ->
+            # Determine timezone for ticket date parsing from form data
+            tz = Map.get(socket.assigns.form_data || %{}, "timezone", "UTC")
+            
             # Create ticket struct
             ticket = %{
               title: Map.get(ticket_data, "title", ""),
@@ -1467,8 +1470,8 @@ defmodule EventasaurusWeb.EventLive.New do
                 {n, _} when n >= 0 -> n
                 _ -> 0
               end,
-              starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at"), socket.assigns[:timezone] || "UTC"),
-              ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at"), socket.assigns[:timezone] || "UTC"),
+              starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at"), tz),
+              ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at"), tz),
               tippable: Map.get(ticket_data, "tippable", false) == true
             }
 

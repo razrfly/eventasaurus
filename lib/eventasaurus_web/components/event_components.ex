@@ -3,7 +3,7 @@ defmodule EventasaurusWeb.EventComponents do
   import EventasaurusWeb.CoreComponents
   import EventasaurusWeb.Helpers.CurrencyHelpers
   alias EventasaurusWeb.TimezoneHelpers
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
   import Phoenix.HTML.Form
   alias Phoenix.LiveView.JS
 

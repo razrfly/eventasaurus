@@ -20,7 +20,7 @@ defmodule EventasaurusWeb.EventLive.Edit do
   alias EventasaurusWeb.Helpers.ImageHelpers
   alias EventasaurusWeb.Components.RichDataImportModal
   alias EventasaurusWeb.Services.RichDataManager
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
 
   @valid_setup_paths ~w[polling confirmed threshold]
 

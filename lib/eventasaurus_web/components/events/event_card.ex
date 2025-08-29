@@ -5,7 +5,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     EventCardBadges,
     ParticipantAvatars
   }
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
 
   attr :event, :map, required: true
   attr :context, :atom, required: true, values: [:user_dashboard, :group_events]

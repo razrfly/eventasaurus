@@ -3,7 +3,7 @@ defmodule EventasaurusWeb.AdminOrderLive do
 
   alias EventasaurusApp.{Events, Ticketing}
   alias EventasaurusWeb.Helpers.CurrencyHelpers
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
 
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do

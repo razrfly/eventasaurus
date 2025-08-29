@@ -5,7 +5,7 @@ defmodule EventasaurusWeb.EventManageLive do
   alias EventasaurusApp.Events.PollOption
   alias Eventasaurus.Services.PosthogService
   alias EventasaurusWeb.Helpers.CurrencyHelpers
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
   import EventasaurusWeb.Components.GuestInvitationModal
   import EventasaurusWeb.EmailStatusComponents
   import EventasaurusWeb.EventHTML, only: [movie_rich_data_display: 1]

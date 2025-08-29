@@ -14,7 +14,7 @@ defmodule EventasaurusApp.Ticketing do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, Ticket, Order}
   alias EventasaurusApp.Accounts.User
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
 
   # PubSub topic for real-time updates
   @pubsub_topic "ticketing_updates"
