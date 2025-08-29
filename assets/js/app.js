@@ -2377,15 +2377,32 @@ Hooks.PlacesSuggestionSearch = {
       this.autocomplete.setBounds(circle.getBounds());
     }
     
+    // Track if we're in the middle of selecting
+    let placeChanging = false;
+    let correctValue = null;
+    
+    // Monitor input changes to catch and correct Google's value setting
+    const inputMonitor = (e) => {
+      if (placeChanging && correctValue) {
+        // Immediately correct the value
+        this.inputEl.value = correctValue;
+        placeChanging = false;
+        correctValue = null;
+      }
+    };
+    this.inputEl.addEventListener('input', inputMonitor);
+    
     // Handle place selection
     this.autocomplete.addListener('place_changed', () => {
-      // Immediately update the input to prevent flicker
-      // Google has already set it to the full text, we need to change it right away
       const place = this.autocomplete.getPlace();
       if (place?.geometry && place.name) {
-        // Immediately set just the name with short address (no type suffix)
+        // Calculate what we want to show
         const shortAddress = this.getShortAddress(place);
-        this.inputEl.value = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
+        correctValue = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
+        placeChanging = true;
+        
+        // Set it immediately
+        this.inputEl.value = correctValue;
       }
       // Then handle the rest of the selection
       this.handlePlaceSelection();
@@ -2645,15 +2662,32 @@ Hooks.PlacesHistorySearch = {
       this.autocomplete.setBounds(circle.getBounds());
     }
     
+    // Track if we're in the middle of selecting
+    let placeChanging = false;
+    let correctValue = null;
+    
+    // Monitor input changes to catch and correct Google's value setting
+    const inputMonitor = (e) => {
+      if (placeChanging && correctValue) {
+        // Immediately correct the value
+        this.inputEl.value = correctValue;
+        placeChanging = false;
+        correctValue = null;
+      }
+    };
+    this.inputEl.addEventListener('input', inputMonitor);
+    
     // Handle place selection
     this.autocomplete.addListener('place_changed', () => {
-      // Immediately update the input to prevent flicker
-      // Google has already set it to the full text, we need to change it right away
       const place = this.autocomplete.getPlace();
       if (place?.geometry && place.name) {
-        // Immediately set just the name with short address (no type suffix)
+        // Calculate what we want to show
         const shortAddress = this.getShortAddress(place);
-        this.inputEl.value = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
+        correctValue = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
+        placeChanging = true;
+        
+        // Set it immediately
+        this.inputEl.value = correctValue;
       }
       // Then handle the rest of the selection
       this.handlePlaceSelection();
