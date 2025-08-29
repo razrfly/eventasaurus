@@ -42,13 +42,25 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Autocomplete do
     end
   end
 
-  defp build_url(query, api_key, _options) do
-    params = %{
-      input: query,
-      types: "(cities)",  # Filter for cities only
-      key: api_key
-    }
+  defp build_url(query, api_key, options) do
+    params = 
+      %{
+        input: query,
+        key: api_key
+      }
+      |> maybe_put(:types, Map.get(options, :types, "(cities)"))  # Default to cities
+      |> maybe_put(:language, Map.get(options, :language))
+      |> maybe_put(:components, Map.get(options, :components))
+      |> maybe_put(:location, format_location(Map.get(options, :location)))
+      |> maybe_put(:radius, Map.get(options, :radius))
+      |> maybe_put(:sessiontoken, Map.get(options, :session_token) || Map.get(options, :sessiontoken))
 
     "#{@base_url}?#{URI.encode_query(params)}"
   end
+  
+  defp maybe_put(map, _k, nil), do: map
+  defp maybe_put(map, k, v), do: Map.put(map, k, v)
+  
+  defp format_location({lat, lng}) when is_number(lat) and is_number(lng), do: "#{lat},#{lng}"
+  defp format_location(_), do: nil
 end

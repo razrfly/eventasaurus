@@ -465,6 +465,80 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     end
   end
 
+  @impl true
+  def handle_event("toggle_activity_selection", %{"activity_id" => activity_id}, socket) do
+    activity_id = String.to_integer(activity_id)
+    selected_activities = socket.assigns.selected_activities || []
+
+    updated_selected =
+      if activity_id in selected_activities do
+        Enum.reject(selected_activities, &(&1 == activity_id))
+      else
+        [activity_id | selected_activities]
+      end
+
+    {:noreply, assign(socket, :selected_activities, updated_selected)}
+  end
+
+  @impl true
+  def handle_event("toggle_select_all", _params, socket) do
+    filtered_activities = filter_and_sort_activities(socket.assigns.activities, socket.assigns.activity_filter, socket.assigns.activity_sort)
+    all_activity_ids = Enum.map(filtered_activities, & &1.id)
+
+    updated_selected =
+      if length(socket.assigns.selected_activities) == length(all_activity_ids) do
+        []
+      else
+        all_activity_ids
+      end
+
+    {:noreply, assign(socket, :selected_activities, updated_selected)}
+  end
+
+  @impl true
+  def handle_event("clear_selection", _params, socket) do
+    {:noreply, assign(socket, :selected_activities, [])}
+  end
+
+  @impl true
+  def handle_event("batch_delete_activities", _params, socket) do
+    require Logger
+    selected_activities = socket.assigns.selected_activities || []
+
+    activities_to_delete =
+      socket.assigns.activities
+      |> Enum.filter(&(&1.id in selected_activities))
+
+    results = Enum.map(activities_to_delete, fn activity ->
+      case Events.delete_event_activity(activity) do
+        {:ok, _} -> :ok
+        {:error, reason} -> {:error, activity.id, reason}
+      end
+    end)
+    
+    failures = Enum.filter(results, &match?({:error, _, _}, &1))
+    
+    if length(failures) > 0 do
+      Logger.warning("Failed to delete some activities: #{inspect(failures)}")
+    end
+
+    # Reload activities after deletion
+    socket =
+      socket
+      |> assign(:selected_activities, [])
+      |> load_activities()
+      |> calculate_stats()
+
+    message =
+      case length(activities_to_delete) do
+        1 -> "1 activity deleted successfully"
+        count -> "#{count} activities deleted successfully"
+      end
+
+    {:noreply, put_flash(socket, :info, message)}
+  end
+
+
   # Helper functions
   defp filter_and_sort_activities(activities, filter, sort) do
     activities
@@ -513,9 +587,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     end
   end
 
-  defp activity_description(activity) do
-    activity.metadata["notes"] || activity.metadata["description"] || "No description provided"
-  end
 
   defp format_activity_type("movie_watched"), do: "Movie"
   defp format_activity_type("tv_watched"), do: "TV Show"
@@ -528,15 +599,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp activity_phase_badge_class(_activity), do: "bg-green-100 text-green-800"
 
-  defp format_date(%NaiveDateTime{} = ndt) do
-    ndt
-    |> NaiveDateTime.to_date()
-    |> Calendar.strftime("%B %d, %Y")
-  end
-  defp format_date(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%B %d, %Y")
-  end
-  defp format_date(_), do: ""
 
   defp format_short_date(%NaiveDateTime{} = ndt) do
     ndt
@@ -628,79 +690,6 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     """
   end
 
-  @impl true
-  def handle_event("toggle_activity_selection", %{"activity_id" => activity_id}, socket) do
-    activity_id = String.to_integer(activity_id)
-    selected_activities = socket.assigns.selected_activities || []
-
-    updated_selected =
-      if activity_id in selected_activities do
-        Enum.reject(selected_activities, &(&1 == activity_id))
-      else
-        [activity_id | selected_activities]
-      end
-
-    {:noreply, assign(socket, :selected_activities, updated_selected)}
-  end
-
-  @impl true
-  def handle_event("toggle_select_all", _params, socket) do
-    filtered_activities = filter_and_sort_activities(socket.assigns.activities, socket.assigns.activity_filter, socket.assigns.activity_sort)
-    all_activity_ids = Enum.map(filtered_activities, & &1.id)
-
-    updated_selected =
-      if length(socket.assigns.selected_activities) == length(all_activity_ids) do
-        []
-      else
-        all_activity_ids
-      end
-
-    {:noreply, assign(socket, :selected_activities, updated_selected)}
-  end
-
-  @impl true
-  def handle_event("clear_selection", _params, socket) do
-    {:noreply, assign(socket, :selected_activities, [])}
-  end
-
-  @impl true
-  def handle_event("batch_delete_activities", _params, socket) do
-    require Logger
-    selected_activities = socket.assigns.selected_activities || []
-
-    activities_to_delete =
-      socket.assigns.activities
-      |> Enum.filter(&(&1.id in selected_activities))
-
-    results = Enum.map(activities_to_delete, fn activity ->
-      case Events.delete_event_activity(activity) do
-        {:ok, _} -> :ok
-        {:error, reason} -> {:error, activity.id, reason}
-      end
-    end)
-    
-    failures = Enum.filter(results, &match?({:error, _, _}, &1))
-    
-    if length(failures) > 0 do
-      Logger.warning("Failed to delete some activities: #{inspect(failures)}")
-    end
-
-    # Reload activities after deletion
-    socket =
-      socket
-      |> assign(:selected_activities, [])
-      |> load_activities()
-      |> calculate_stats()
-
-    message =
-      case length(activities_to_delete) do
-        1 -> "1 activity deleted successfully"
-        count -> "#{count} activities deleted successfully"
-      end
-
-    {:noreply, put_flash(socket, :info, message)}
-  end
-
   defp activity_icon_bg_class("movie_watched"), do: "bg-purple-500"
   defp activity_icon_bg_class("tv_watched"), do: "bg-blue-500"
   defp activity_icon_bg_class("game_played"), do: "bg-green-500"
@@ -715,3 +704,4 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   defp activity_type_badge_class("book_read"), do: "bg-yellow-100 text-yellow-800"
   defp activity_type_badge_class(_), do: "bg-gray-100 text-gray-800"
 end
+

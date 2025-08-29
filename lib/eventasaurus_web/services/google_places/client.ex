@@ -53,29 +53,14 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Client do
   Checks rate limiting before making API requests.
   """
   def check_rate_limit do
-    current_time = System.monotonic_time(:millisecond)
-
-    case Cachex.get(@cache_name, @rate_limit_key) do
-      {:ok, nil} ->
-        # First request in window
-        Cachex.put(@cache_name, @rate_limit_key, %{count: 1, window_start: current_time}, ttl: @rate_limit_window)
+    # Use atomic increment to avoid race conditions
+    case Cachex.incr(@cache_name, @rate_limit_key, 1, ttl: @rate_limit_window, initial: 1) do
+      {:ok, count} when count <= @rate_limit_max_requests -> 
         :ok
-
-      {:ok, %{count: count, window_start: window_start}} ->
-        if current_time - window_start > @rate_limit_window do
-          # New window, reset counter
-          Cachex.put(@cache_name, @rate_limit_key, %{count: 1, window_start: current_time}, ttl: @rate_limit_window)
-          :ok
-        else
-          if count >= @rate_limit_max_requests do
-            {:error, :rate_limited}
-          else
-            # Increment counter
-            Cachex.put(@cache_name, @rate_limit_key, %{count: count + 1, window_start: window_start}, ttl: @rate_limit_window)
-            :ok
-          end
-        end
-
+      
+      {:ok, _count} -> 
+        {:error, :rate_limited}
+      
       {:error, _} ->
         # Cache error, allow request but log warning
         Logger.warning("Rate limit cache error, allowing request")

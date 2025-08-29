@@ -43,14 +43,21 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Geocoding do
     end
   end
 
-  defp build_url(query, api_key, _options) do
-    params = %{
-      address: query,
-      key: api_key
-    }
+  defp build_url(query, api_key, options) do
+    params = 
+      %{
+        address: query,
+        key: api_key
+      }
+      |> maybe_put(:region, Map.get(options, :region))
+      |> maybe_put(:language, Map.get(options, :language))
+      |> maybe_put(:components, Map.get(options, :components))
 
     "#{@base_url}?#{URI.encode_query(params)}"
   end
+  
+  defp maybe_put(map, _k, nil), do: map
+  defp maybe_put(map, k, v), do: Map.put(map, k, v)
 
   defp filter_by_type(results, type) when type in ["region", "country"] do
     type_filters = case type do

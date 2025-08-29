@@ -42,12 +42,27 @@ defmodule EventasaurusWeb.Services.GooglePlaces.TextSearch do
     end
   end
 
-  defp build_url(query, api_key, _options) do
-    params = %{
-      query: query,
-      key: api_key
-    }
+  defp build_url(query, api_key, options) do
+    params = 
+      %{
+        query: query,
+        key: api_key
+      }
+      |> maybe_put(:location, format_location(Map.get(options, :location)))
+      |> maybe_put(:radius, Map.get(options, :radius))
+      |> maybe_put(:type, Map.get(options, :type))
+      |> maybe_put(:region, Map.get(options, :region))
+      |> maybe_put(:language, Map.get(options, :language))
+      |> maybe_put(:opennow, Map.get(options, :opennow))
+      |> maybe_put(:minprice, Map.get(options, :minprice))
+      |> maybe_put(:maxprice, Map.get(options, :maxprice))
 
     "#{@base_url}?#{URI.encode_query(params)}"
   end
+  
+  defp maybe_put(map, _k, nil), do: map
+  defp maybe_put(map, k, v), do: Map.put(map, k, v)
+  
+  defp format_location({lat, lng}) when is_number(lat) and is_number(lng), do: "#{lat},#{lng}"
+  defp format_location(_), do: nil
 end
