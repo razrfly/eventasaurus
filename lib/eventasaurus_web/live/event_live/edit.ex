@@ -941,8 +941,8 @@ defmodule EventasaurusWeb.EventLive.Edit do
                     {n, _} when n >= 0 -> n
                     _ -> 0
                   end,
-                  starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
-                  ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
+                  starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at"), socket.assigns.event.timezone || "UTC"),
+                  ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at"), socket.assigns.event.timezone || "UTC"),
                   tippable: Map.get(ticket_data, "tippable", false) == true
                 }
 
@@ -1427,18 +1427,17 @@ defmodule EventasaurusWeb.EventLive.Edit do
   end
   defp format_datetime_for_input(_), do: ""
 
-  defp parse_datetime_input(nil), do: nil
-  defp parse_datetime_input(""), do: nil
-  defp parse_datetime_input(datetime_str) when is_binary(datetime_str) do
-    # Use DateTimeHelper for consistent parsing
-    # Note: This assumes UTC for backward compatibility with ticket modals
-    # The proper timezone should be passed when available
-    case DateTimeHelper.parse_datetime_local(datetime_str, "UTC") do
+  defp parse_datetime_input(datetime_str, timezone)
+  defp parse_datetime_input(nil, _timezone), do: nil
+  defp parse_datetime_input("", _timezone), do: nil
+  defp parse_datetime_input(datetime_str, timezone) when is_binary(datetime_str) do
+    # Use DateTimeHelper for consistent parsing with event timezone
+    case DateTimeHelper.parse_datetime_local(datetime_str, timezone) do
       {:ok, datetime} -> datetime
       {:error, _} -> nil
     end
   end
-  defp parse_datetime_input(_), do: nil
+  defp parse_datetime_input(_, _), do: nil
 
   # These helper functions are now replaced by DateTimeHelper.format_for_form/2
 

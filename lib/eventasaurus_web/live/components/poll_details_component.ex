@@ -27,6 +27,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Utils.PollPhaseUtils
+  alias EventasaurusWeb.DateTimeHelper
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
@@ -81,7 +82,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
                 Created by <%= @poll.created_by.name || @poll.created_by.email %>
               </span>
               <span class="text-sm text-gray-500">
-                <%= format_relative_time(@poll.inserted_at) %>
+                <%= format_relative_time(@poll.inserted_at, @event) %>
               </span>
             </div>
           </div>
@@ -162,7 +163,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
               <div class="flex items-center justify-between">
                 <span class="text-gray-500">List Building Deadline:</span>
                 <span class={"font-medium #{get_deadline_status_class(@poll.list_building_deadline)}"}>
-                  <%= format_deadline(@poll.list_building_deadline) %>
+                  <%= format_deadline(@poll.list_building_deadline, @event) %>
                 </span>
               </div>
             <% end %>
@@ -170,7 +171,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
               <div class="flex items-center justify-between">
                 <span class="text-gray-500">Voting Deadline:</span>
                 <span class={"font-medium #{get_deadline_status_class(@poll.voting_deadline)}"}>
-                  <%= format_deadline(@poll.voting_deadline) %>
+                  <%= format_deadline(@poll.voting_deadline, @event) %>
                 </span>
               </div>
             <% end %>
@@ -218,7 +219,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
             </div>
 
             <div class="text-xs text-gray-500">
-              Last updated <%= format_relative_time(@poll.updated_at) %>
+              Last updated <%= format_relative_time(@poll.updated_at, @event) %>
             </div>
           </div>
         </div>
@@ -466,7 +467,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
 
   # Moved to PollPhaseUtils.format_poll_type/1 for centralized formatting
 
-  defp format_relative_time(datetime) do
+  defp format_relative_time(datetime, event) do
     case datetime do
       %DateTime{} = dt ->
         now = DateTime.utc_now()
@@ -478,7 +479,10 @@ defmodule EventasaurusWeb.PollDetailsComponent do
           diff < 1440 -> "#{div(diff, 60)}h ago"
           diff < 10080 -> "#{div(diff, 1440)}d ago"
           true ->
+            # For older dates, show the actual date in event timezone
+            timezone = if event && event.timezone, do: event.timezone, else: "UTC"
             dt
+            |> DateTimeHelper.utc_to_timezone(timezone)
             |> DateTime.to_date()
             |> Date.to_string()
         end
@@ -486,7 +490,10 @@ defmodule EventasaurusWeb.PollDetailsComponent do
     end
   end
 
-  defp format_deadline(deadline) do
+  # Version without event for backward compatibility
+  defp format_deadline(deadline), do: format_deadline(deadline, nil)
+  
+  defp format_deadline(deadline, event) do
     case deadline do
       %DateTime{} = dt ->
         now = DateTime.utc_now()
@@ -499,7 +506,13 @@ defmodule EventasaurusWeb.PollDetailsComponent do
             diff < 60 -> "in #{diff}m"
             diff < 1440 -> "in #{div(diff, 60)}h"
             diff < 10080 -> "in #{div(diff, 1440)}d"
-            true -> Date.to_string(DateTime.to_date(dt))
+            true -> 
+              # For farther dates, show the actual date in event timezone
+              timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+              dt
+              |> DateTimeHelper.utc_to_timezone(timezone)
+              |> DateTime.to_date()
+              |> Date.to_string()
           end
         else
           # Past deadline
@@ -509,7 +522,13 @@ defmodule EventasaurusWeb.PollDetailsComponent do
             diff < 60 -> "#{diff}m ago"
             diff < 1440 -> "#{div(diff, 60)}h ago"
             diff < 10080 -> "#{div(diff, 1440)}d ago"
-            true -> Date.to_string(DateTime.to_date(dt))
+            true -> 
+              # For older dates, show the actual date in event timezone
+              timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+              dt
+              |> DateTimeHelper.utc_to_timezone(timezone)
+              |> DateTime.to_date()
+              |> Date.to_string()
           end
         end
       _ -> "Not set"

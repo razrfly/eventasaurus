@@ -14,6 +14,7 @@ defmodule EventasaurusApp.Ticketing do
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.{Event, Ticket, Order}
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusWeb.DateTimeHelper
 
   # PubSub topic for real-time updates
   @pubsub_topic "ticketing_updates"
@@ -1660,9 +1661,12 @@ defmodule EventasaurusApp.Ticketing do
 
     # Enhanced product description with event details
     product_description = if event.description && String.trim(event.description) != "" do
-      # Include event date if available
+      # Include event date if available  
       date_info = if event.start_at do
-        formatted_date = Calendar.strftime(event.start_at, "%B %d, %Y at %I:%M %p")
+        # Convert to event timezone for display
+        timezone = event.timezone || "UTC"
+        shifted_datetime = DateTimeHelper.utc_to_timezone(event.start_at, timezone)
+        formatted_date = Calendar.strftime(shifted_datetime, "%B %d, %Y at %I:%M %p %Z")
         "Event Date: #{formatted_date}\n\n"
       else
         ""
