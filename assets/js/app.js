@@ -1135,6 +1135,8 @@ Hooks.EventLocationSearch = {
     this.inputEl = this.el;
     this.debounceTimeout = null;
     this.autocomplete = null;
+    this.hasSelectedPlace = false;
+    this.initRetryHandle = null;
     
     // Initialize Google Places Autocomplete
     this.initAutocomplete();
@@ -1152,8 +1154,17 @@ Hooks.EventLocationSearch = {
         // Filter recent locations for dropdown
         if (query.length >= 2) {
           this.pushEvent('filter_recent_locations', { query: query });
+          // Ensure dropdown is visible while filtering
+          this.pushEvent('show_recent_locations', {});
         }
       }, 150);
+      
+      // If user is editing after a selection, clear hidden fields to avoid stale data
+      if (this.hasSelectedPlace) {
+        const idSuffix = this.inputEl.id.split('-').pop();
+        this.clearHiddenVenueFields(idSuffix);
+        this.hasSelectedPlace = false;
+      }
     });
     
     // Show recent locations on focus if input is empty
@@ -1188,12 +1199,18 @@ Hooks.EventLocationSearch = {
     if (this.documentClickHandler) {
       document.removeEventListener('click', this.documentClickHandler);
     }
+    
+    // Cancel any pending init retries
+    if (this.initRetryHandle) {
+      clearTimeout(this.initRetryHandle);
+      this.initRetryHandle = null;
+    }
   },
   
   initAutocomplete() {
     // Wait for Google Maps to load
     if (!window.google?.maps?.places) {
-      setTimeout(() => this.initAutocomplete(), 100);
+      this.initRetryHandle = setTimeout(() => this.initAutocomplete(), 100);
       return;
     }
     
@@ -1224,6 +1241,9 @@ Hooks.EventLocationSearch = {
     if (!place?.geometry) {
       return;
     }
+    
+    // Mark that a place has been selected
+    this.hasSelectedPlace = true;
     
     // Extract venue information
     const venueName = place.name || '';
@@ -1286,6 +1306,19 @@ Hooks.EventLocationSearch = {
       field.dispatchEvent(new Event('input', { bubbles: true }));
       field.dispatchEvent(new Event('change', { bubbles: true }));
     }
+  },
+  
+  clearHiddenVenueFields(idSuffix) {
+    const ids = [
+      `venue-name-${idSuffix}`,
+      `venue-address-${idSuffix}`,
+      `venue-city-${idSuffix}`,
+      `venue-state-${idSuffix}`,
+      `venue-country-${idSuffix}`,
+      `venue-lat-${idSuffix}`,
+      `venue-lng-${idSuffix}`
+    ];
+    ids.forEach(id => this.setHiddenField(id, ''));
   }
 };
 

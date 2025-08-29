@@ -109,16 +109,19 @@ defmodule EventasaurusWeb.Services.PlacesDataService do
 
   # Private helper functions
 
-  defp format_rating(rating) when is_number(rating) do
-    Float.round(rating, 1)
+  defp format_rating(rating) when is_integer(rating) do
+    "#{rating}.0"
+  end
+  defp format_rating(rating) when is_float(rating) do
+    Float.round(rating, 1) |> to_string()
   end
   defp format_rating(rating) when is_binary(rating) do
     case Float.parse(rating) do
-      {float_val, _} -> Float.round(float_val, 1)
+      {float_val, _} -> Float.round(float_val, 1) |> to_string()
       _ -> rating
     end
   end
-  defp format_rating(rating), do: rating
+  defp format_rating(rating), do: to_string(rating)
 
   defp humanize_place_type(type) do
     case type do
