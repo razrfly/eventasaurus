@@ -2479,12 +2479,17 @@ Hooks.PlacesSuggestionSearch = {
   
   parseSearchLocation() {
     const data = this.el.dataset.searchLocation;
-    if (!data) return null;
+    if (!data) {
+      console.log("PlacesSuggestionSearch: No search location data provided");
+      return null;
+    }
     
     try {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      console.log("PlacesSuggestionSearch: Parsed search location:", parsed);
+      return parsed;
     } catch (e) {
-      console.error("Error parsing search location:", e);
+      console.error("Error parsing search location:", e, "Data was:", data);
       return null;
     }
   },
@@ -2530,10 +2535,28 @@ Hooks.PlacesSuggestionSearch = {
         lng: this.searchLocation.geometry.lng
       };
       
-      // Create bias circle (50km radius for cities, 200km for regions)
-      const radius = this.locationScope === 'city' ? 50000 : 200000;
+      // Create bias circle based on location scope - same as PlacesHistorySearch
+      // venue/place: 50km radius, city: 100km, region: 200km
+      let radius = 50000; // Default 50km for venues
+      if (this.locationScope === 'city') {
+        radius = 100000; // 100km for city scope
+      } else if (this.locationScope === 'region') {
+        radius = 200000; // 200km for region scope
+      }
       const circle = new google.maps.Circle({ center, radius });
       this.autocomplete.setBounds(circle.getBounds());
+      
+      console.log("PlacesSuggestionSearch: Applied location bias", {
+        center,
+        radius,
+        locationScope: this.locationScope,
+        bounds: circle.getBounds().toString()
+      });
+    } else {
+      console.log("PlacesSuggestionSearch: No location bias applied", {
+        searchLocation: this.searchLocation,
+        hasGeometry: this.searchLocation?.geometry ? true : false
+      });
     }
     
     // Handle place selection
@@ -2697,6 +2720,10 @@ Hooks.PlacesHistorySearch = {
     this.autocomplete = null;
     this.selectedPlaceData = null;
     
+    // Get configuration from data attributes (same as PlacesSuggestionSearch)
+    this.locationScope = this.el.dataset.locationScope || 'place';
+    this.searchLocation = this.parseSearchLocation();
+    
     // Initialize Google Places Autocomplete
     this.initAutocomplete();
     
@@ -2733,6 +2760,18 @@ Hooks.PlacesHistorySearch = {
     }
   },
   
+  parseSearchLocation() {
+    const data = this.el.dataset.searchLocation;
+    if (!data) return null;
+    
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error("Error parsing search location:", e);
+      return null;
+    }
+  },
+  
   initAutocomplete() {
     // Wait for Google Maps to load
     if (!window.google?.maps?.places) {
@@ -2760,6 +2799,26 @@ Hooks.PlacesHistorySearch = {
     
     // Create autocomplete instance
     this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+    
+    // Apply location bias if search location is set (same as PlacesSuggestionSearch)
+    if (this.searchLocation?.geometry) {
+      const center = {
+        lat: this.searchLocation.geometry.lat,
+        lng: this.searchLocation.geometry.lng
+      };
+      
+      // Create bias circle based on location scope
+      // venue/place: 50km radius, city: 100km, region: 200km
+      let radius = 50000; // Default 50km for venues
+      if (this.locationScope === 'city') {
+        radius = 100000; // 100km for city scope
+      } else if (this.locationScope === 'region') {
+        radius = 200000; // 200km for region scope
+      }
+      
+      const circle = new google.maps.Circle({ center, radius });
+      this.autocomplete.setBounds(circle.getBounds());
+    }
     
     // Handle place selection
     this.autocomplete.addListener('place_changed', () => {

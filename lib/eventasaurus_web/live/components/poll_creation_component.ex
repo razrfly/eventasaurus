@@ -69,14 +69,60 @@ defmodule EventasaurusWeb.PollCreationComponent do
     changeset = if is_editing do
       Poll.changeset(poll, %{})
     else
-      Poll.changeset(%Poll{}, %{
+      # Auto-populate from event venue if available
+      initial_settings = %{"location_scope" => "place"}
+      
+      # Check if venue exists on the event
+      venue = case assigns.event do
+        %{venue: %{} = v} -> v
+        _ -> nil
+      end
+      
+      initial_settings = if venue do
+        # Set location scope based on venue type - EXACTLY like ActivityCreationComponent
+        location_scope = case venue.venue_type do
+          "city" -> "city"
+          "region" -> "region"
+          _ -> "place"
+        end
+        
+        # Add venue location data if coordinates exist
+        settings_with_location = Map.put(initial_settings, "location_scope", location_scope)
+        
+        # Only provide location data for physical venues - EXACTLY like ActivityCreationComponent
+        if venue.venue_type in ["venue", "city", "region"] && venue.latitude && venue.longitude do
+          # Use venue name (or address if no name) as the search location display
+          search_location_display = venue.name || venue.address || venue.city
+          
+          settings_with_location
+          |> Map.put("search_location", search_location_display)
+          |> Map.put("search_location_data", %{
+            "geometry" => %{
+              "lat" => venue.latitude,
+              "lng" => venue.longitude
+            },
+            "city" => venue.city,
+            "name" => venue.name || venue.address
+          })
+        else
+          settings_with_location
+        end
+      else
+        initial_settings
+      end
+      
+      # Create a poll struct with the venue-enhanced settings
+      new_poll = %Poll{
         event_id: assigns.event.id,
         created_by_id: assigns.user.id,
         phase: "list_building",
         poll_type: "custom",
         voting_system: "binary",
-        settings: %{"location_scope" => "place"}
-      })
+        settings: initial_settings  # Now contains venue data if available
+      }
+      
+      # Create changeset from the populated struct
+      Poll.changeset(new_poll, %{})
     end
 
     # Determine current poll type for UI display
@@ -259,7 +305,12 @@ defmodule EventasaurusWeb.PollCreationComponent do
                             <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                               <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
                             </svg>
-                            <span>Searching near: <%= get_search_location(@changeset, @poll) %></span>
+                            <span>
+                              Searching near: <%= get_search_location(@changeset, @poll) %>
+                              <%= if is_using_event_venue(@changeset, @poll, @event) do %>
+                                <span class="text-xs text-gray-500">(event location)</span>
+                              <% end %>
+                            </span>
                           </div>
                         <% end %>
                       </div>
@@ -549,14 +600,71 @@ defmodule EventasaurusWeb.PollCreationComponent do
     poll_params = if socket.assigns.is_editing do
       poll_params
     else
-      Map.merge(%{
+      # Get venue-based settings if not already in poll_params
+      poll_params_with_defaults = Map.merge(%{
         "event_id" => socket.assigns.event.id,
         "created_by_id" => socket.assigns.user.id,
         "phase" => "list_building"
       }, poll_params)
+      
+      # If settings are not in params or are minimal, add venue-based settings
+      poll_params_with_defaults = 
+        if !Map.has_key?(poll_params_with_defaults, "settings") || 
+           !Map.has_key?(poll_params_with_defaults["settings"] || %{}, "search_location") do
+          venue_settings = get_venue_settings(socket.assigns.event)
+          
+          current_settings = Map.get(poll_params_with_defaults, "settings", %{})
+          updated_settings = Map.merge(venue_settings, current_settings)
+          
+          Map.put(poll_params_with_defaults, "settings", updated_settings)
+        else
+          poll_params_with_defaults
+        end
+      
+      poll_params_with_defaults
     end
 
     Poll.changeset(poll, poll_params)
+  end
+  
+  defp get_venue_settings(event) do
+    venue = case event do
+      %{venue: %{} = v} -> v
+      _ -> nil
+    end
+    
+    if venue do
+      # Set location scope based on venue type - EXACTLY like ActivityCreationComponent
+      location_scope = case venue.venue_type do
+        "city" -> "city"
+        "region" -> "region"
+        _ -> "place"
+      end
+      
+      # Build settings with venue data
+      settings = %{"location_scope" => location_scope}
+      
+      # Only provide location data for physical venues - EXACTLY like ActivityCreationComponent
+      if venue.venue_type in ["venue", "city", "region"] && venue.latitude && venue.longitude do
+        # Use venue name (or address if no name) as the search location display
+        search_location_display = venue.name || venue.address || venue.city
+        
+        settings
+        |> Map.put("search_location", search_location_display)
+        |> Map.put("search_location_data", %{
+          "geometry" => %{
+            "lat" => venue.latitude,
+            "lng" => venue.longitude
+          },
+          "city" => venue.city,
+          "name" => venue.name || venue.address
+        })
+      else
+        settings
+      end
+    else
+      %{"location_scope" => "place"}
+    end
   end
 
   defp save_poll(socket, poll_params) do
@@ -690,6 +798,19 @@ defmodule EventasaurusWeb.PollCreationComponent do
         else
           ""
         end
+    end
+  end
+  
+  # Helper to check if we're using the event venue location
+  defp is_using_event_venue(changeset, poll, event) do
+    # For edited polls, check if they were never manually changed
+    if poll && poll.id do
+      false  # Existing polls might have been manually changed
+    else
+      # For new polls, check if location matches venue
+      search_location = get_search_location(changeset, nil)
+      event.venue && search_location && 
+        (search_location == event.venue.city || search_location == event.venue.name)
     end
   end
 

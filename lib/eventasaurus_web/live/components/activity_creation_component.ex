@@ -591,7 +591,18 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           <input type="hidden" name="photos" value={Jason.encode!(@selected_place["photos"] || [])} />
           <input type="hidden" name="description" value={@selected_place["address"]} />
         <% else %>
-          <!-- Native Google Places Autocomplete -->
+          <!-- Native Google Places Autocomplete with venue-based location biasing -->
+          <%= if @event.venue && @event.venue.latitude && @event.venue.longitude do %>
+            <div class="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+              <div class="flex items-center text-sm text-blue-700">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Searching near: <%= @event.venue.name || @event.venue.city || "event location" %>
+              </div>
+            </div>
+          <% end %>
           <div class="relative">
             <input
               type="text"
@@ -599,7 +610,8 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
               id={"place-search-#{@id}"}
               placeholder="Search for a restaurant, venue, or any place..."
               phx-hook="PlacesHistorySearch"
-              data-location-scope="place"
+              data-location-scope={get_venue_location_scope(@event.venue)}
+              data-search-location={get_venue_search_location_json(@event.venue)}
               data-activity-type="place"
               autocomplete="off"
               class="w-full px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -954,5 +966,35 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   defp activity_emoji("place_visited"), do: "📍"
   defp activity_emoji("book_read"), do: "📚"
   defp activity_emoji(_), do: "✨"
+  
+  # Helper functions for venue-based location biasing
+  defp get_venue_location_scope(nil), do: "place"
+  defp get_venue_location_scope(venue) do
+    case venue.venue_type do
+      "venue" -> "place"
+      "city" -> "city"
+      "region" -> "region"
+      "online" -> "place"  # No biasing for online events
+      "tbd" -> "place"     # No biasing for TBD events
+      _ -> "place"
+    end
+  end
+  
+  defp get_venue_search_location_json(nil), do: ""
+  defp get_venue_search_location_json(venue) do
+    # Only provide location data for physical venues
+    if venue.venue_type in ["venue", "city", "region"] && venue.latitude && venue.longitude do
+      Jason.encode!(%{
+        geometry: %{
+          lat: venue.latitude,
+          lng: venue.longitude
+        },
+        city: venue.city,
+        name: venue.name
+      })
+    else
+      ""
+    end
+  end
   
 end
