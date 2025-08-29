@@ -15,7 +15,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.RichDataSearchComponent  # For movies/TV only - NOT for places!
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
   
   @activity_types [
     {"movie_watched", "Movie", "Record a movie that was watched"},
@@ -295,6 +295,9 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
                     />
                   </div>
                 </div>
+                <%= if @errors[:occurred_at] do %>
+                  <p class="mt-2 text-sm text-red-600"><%= @errors[:occurred_at] %></p>
+                <% end %>
               </div>
             </div>
             
@@ -713,7 +716,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         {date_str, time_str} when is_binary(date_str) and date_str != "" and is_binary(time_str) and time_str != "" ->
           case DateTimeHelper.parse_user_datetime(date_str, time_str, event_timezone) do
             {:ok, datetime} -> {:ok, datetime}
-            {:error, _} -> {:error, :invalid_datetime}
+            {:error, reason} -> {:error, reason}
           end
         _ ->
           {:error, :missing_input}
@@ -725,6 +728,8 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           error_msg = case reason do
             :missing_input -> "Please enter both date and time"
             :invalid_datetime -> "Please enter a valid date and time"
+            :nonexistent_datetime -> "This time doesn't exist due to daylight saving time. Please choose a different time."
+            :ambiguous_datetime -> "This time occurs twice due to daylight saving time. Please choose a different time to avoid confusion."
             _ -> "Invalid date/time format"
           end
           

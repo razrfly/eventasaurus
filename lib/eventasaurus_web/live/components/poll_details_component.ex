@@ -27,7 +27,7 @@ defmodule EventasaurusWeb.PollDetailsComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusWeb.Utils.PollPhaseUtils
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
