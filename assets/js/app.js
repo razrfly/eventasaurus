@@ -2379,6 +2379,15 @@ Hooks.PlacesSuggestionSearch = {
     
     // Handle place selection
     this.autocomplete.addListener('place_changed', () => {
+      // Immediately update the input to prevent flicker
+      // Google has already set it to the full text, we need to change it right away
+      const place = this.autocomplete.getPlace();
+      if (place?.geometry && place.name) {
+        // Immediately set just the name with short address (no type suffix)
+        const shortAddress = this.getShortAddress(place);
+        this.inputEl.value = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
+      }
+      // Then handle the rest of the selection
       this.handlePlaceSelection();
     });
   },
@@ -2409,10 +2418,8 @@ Hooks.PlacesSuggestionSearch = {
     // Extract place data
     this.selectedPlaceData = this.extractPlaceData(place);
     
-    // Update input with formatted display
-    const displayName = place.name || '';
-    const shortAddress = this.getShortAddress(place);
-    this.inputEl.value = shortAddress ? `${displayName}, ${shortAddress}` : displayName;
+    // Input value already set in place_changed listener to prevent flicker
+    // No need to update it again here
     
     // Store place data for form submission
     this.inputEl.dataset.hasPlaceData = 'true';
@@ -2640,6 +2647,15 @@ Hooks.PlacesHistorySearch = {
     
     // Handle place selection
     this.autocomplete.addListener('place_changed', () => {
+      // Immediately update the input to prevent flicker
+      // Google has already set it to the full text, we need to change it right away
+      const place = this.autocomplete.getPlace();
+      if (place?.geometry && place.name) {
+        // Immediately set just the name with short address (no type suffix)
+        const shortAddress = this.getShortAddress(place);
+        this.inputEl.value = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
+      }
+      // Then handle the rest of the selection
       this.handlePlaceSelection();
     });
   },
@@ -2684,10 +2700,8 @@ Hooks.PlacesHistorySearch = {
       photos: place.photos?.slice(0, 3).map(p => p.getUrl({maxWidth: 400})) || []
     };
     
-    // Update input with display name (keep it for user feedback)
-    const displayName = place.name || '';
-    const shortAddress = this.getShortAddress(place);
-    this.inputEl.value = shortAddress ? `${displayName}, ${shortAddress}` : displayName;
+    // Input value already set in place_changed listener to prevent flicker
+    // No need to update it again here
     
     // Populate hidden fields with place data (SAME approach as PlacesSuggestionSearch)
     const formId = this.el.id.replace('place-search-', '');
