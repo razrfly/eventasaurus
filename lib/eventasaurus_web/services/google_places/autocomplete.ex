@@ -53,6 +53,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Autocomplete do
       |> maybe_put(:components, Map.get(options, :components))
       |> maybe_put(:location, format_location(Map.get(options, :location)))
       |> maybe_put(:radius, Map.get(options, :radius))
+      |> maybe_put(:strictbounds, Map.get(options, :strictbounds))
       |> maybe_put(:sessiontoken, Map.get(options, :session_token) || Map.get(options, :sessiontoken))
 
     "#{@base_url}?#{URI.encode_query(params)}"
