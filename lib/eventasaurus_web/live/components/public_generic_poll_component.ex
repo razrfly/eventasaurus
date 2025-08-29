@@ -762,17 +762,4 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
     Poll.get_location_scope(poll)
   end
 
-  # Helper function to get search location data as JSON for JavaScript
-  defp get_search_location_json(poll) do
-    if poll && poll.settings do
-      case Map.get(poll.settings, "search_location_data") do
-        data when is_map(data) -> Jason.encode!(data)
-        data when is_binary(data) -> data
-        _ -> ""
-      end
-    else
-      ""
-    end
-  end
-
 end
