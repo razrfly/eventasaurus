@@ -18,6 +18,7 @@ defmodule EventasaurusWeb.EventLive.New do
   alias EventasaurusApp.Groups
   alias EventasaurusWeb.Services.SearchService
   alias EventasaurusWeb.Helpers.ImageHelpers
+  alias EventasaurusWeb.DateTimeHelper
 
   @valid_setup_paths ~w[polling confirmed threshold]
 
@@ -1466,8 +1467,8 @@ defmodule EventasaurusWeb.EventLive.New do
                 {n, _} when n >= 0 -> n
                 _ -> 0
               end,
-              starts_at: parse_datetime(Map.get(ticket_data, "starts_at")),
-              ends_at: parse_datetime(Map.get(ticket_data, "ends_at")),
+              starts_at: parse_datetime_input(Map.get(ticket_data, "starts_at")),
+              ends_at: parse_datetime_input(Map.get(ticket_data, "ends_at")),
               tippable: Map.get(ticket_data, "tippable", false) == true
             }
 
@@ -1743,7 +1744,7 @@ defmodule EventasaurusWeb.EventLive.New do
     start_time = Map.get(params, "start_time")
     timezone = Map.get(params, "timezone", "UTC")
 
-    case combine_date_time(start_date, start_time, timezone) do
+    case DateTimeHelper.parse_user_datetime(start_date, start_time, timezone) do
       {:ok, datetime} ->
         Map.put(params, "start_at", datetime)
       {:error, _} ->
@@ -1757,7 +1758,7 @@ defmodule EventasaurusWeb.EventLive.New do
     ends_time = Map.get(params, "ends_time")
     timezone = Map.get(params, "timezone", "UTC")
 
-    case combine_date_time(ends_date, ends_time, timezone) do
+    case DateTimeHelper.parse_user_datetime(ends_date, ends_time, timezone) do
       {:ok, datetime} ->
         Map.put(params, "ends_at", datetime)
       {:error, _} ->
@@ -1766,30 +1767,7 @@ defmodule EventasaurusWeb.EventLive.New do
     end
   end
 
-  defp combine_date_time(date_str, time_str, timezone) when is_binary(date_str) and is_binary(time_str) and date_str != "" and time_str != "" do
-    try do
-      # Parse the date and time
-      {:ok, date} = Date.from_iso8601(date_str)
-      {:ok, time} = Time.from_iso8601(time_str <> ":00")
-
-      # Create a naive datetime
-      naive_datetime = NaiveDateTime.new!(date, time)
-
-      # Convert to timezone-aware datetime
-      case DateTime.from_naive(naive_datetime, timezone) do
-        {:ok, datetime} ->
-          # Convert to UTC for storage
-          utc_datetime = DateTime.shift_zone!(datetime, "Etc/UTC")
-          {:ok, utc_datetime}
-        {:error, reason} ->
-          {:error, reason}
-      end
-    rescue
-      e -> {:error, e}
-    end
-  end
-
-  defp combine_date_time(_, _, _), do: {:error, :invalid_input}
+  # Helper function replaced by DateTimeHelper.parse_user_datetime/3
 
   # Legacy create_date_poll_for_event function removed - using generic polling system
 
@@ -1914,30 +1892,18 @@ defmodule EventasaurusWeb.EventLive.New do
   end
   defp format_datetime_for_input(_), do: ""
 
-  defp parse_datetime(nil), do: nil
-  defp parse_datetime(""), do: nil
-  defp parse_datetime(datetime_str) when is_binary(datetime_str) do
-    # Handle different datetime formats more carefully
-    cond do
-      # If it already looks like a complete ISO8601 string, try parsing as-is
-      String.contains?(datetime_str, "T") and (String.contains?(datetime_str, "Z") or String.contains?(datetime_str, "+")) ->
-        case DateTime.from_iso8601(datetime_str) do
-          {:ok, datetime, _} -> datetime
-          {:error, _} -> nil
-        end
-
-      # If it's a local datetime format (YYYY-MM-DDTHH:MM), add seconds and Z
-      String.contains?(datetime_str, "T") ->
-        case DateTime.from_iso8601(datetime_str <> ":00Z") do
-          {:ok, datetime, _} -> datetime
-          {:error, _} -> nil
-        end
-
-      # Otherwise, it's not a valid datetime format
-      true -> nil
+  defp parse_datetime_input(nil), do: nil
+  defp parse_datetime_input(""), do: nil
+  defp parse_datetime_input(datetime_str) when is_binary(datetime_str) do
+    # Use DateTimeHelper for consistent parsing
+    # Note: This assumes UTC for backward compatibility with ticket modals
+    # The proper timezone should be passed when available
+    case DateTimeHelper.parse_datetime_local(datetime_str, "UTC") do
+      {:ok, datetime} -> datetime
+      {:error, _} -> nil
     end
   end
-  defp parse_datetime(_), do: nil
+  defp parse_datetime_input(_), do: nil
 
   # Helper — clears ticket state unless the path is ticket-centric
   defp maybe_reset_ticketing(socket, path) when path in ["confirmed", "threshold"], do: socket
