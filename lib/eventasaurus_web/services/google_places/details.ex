@@ -14,7 +14,10 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Details do
   Fetches detailed information about a specific place.
   """
   def fetch(place_id, opts \\ []) do
-    cache_key = "place_details_#{place_id}"
+    # Include options in cache key to avoid collisions
+    photos? = Keyword.get(opts, :include_photos, true)
+    reviews? = Keyword.get(opts, :include_reviews, true)
+    cache_key = "place_details:#{place_id}:p=#{photos?}:r=#{reviews?}"
 
     Client.get_cached_or_fetch(cache_key, @details_cache_ttl, fn ->
       fetch_from_api(place_id, opts)

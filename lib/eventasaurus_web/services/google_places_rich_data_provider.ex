@@ -12,7 +12,6 @@ defmodule EventasaurusWeb.Services.GooglePlacesRichDataProvider do
     Autocomplete,
     Geocoding,
     Details,
-    Photos,
     Normalizer
   }
 
