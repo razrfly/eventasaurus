@@ -1,4 +1,4 @@
-defmodule EventasaurusWeb.DateTimeHelper do
+defmodule EventasaurusApp.DateTimeHelper do
   @moduledoc """
   Centralized helper module for all datetime operations in Eventasaurus.
   
@@ -75,10 +75,17 @@ defmodule EventasaurusWeb.DateTimeHelper do
           {:error, _} -> {:error, :invalid_format}
         end
       
-      # Local datetime format (YYYY-MM-DDTHH:MM)
+      # Local datetime format (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS)
       String.contains?(datetime_str, "T") ->
+        # Ensure we have seconds in the string
+        normalized_str = case String.split(datetime_str, ":") do
+          [_date_hour, _min] -> datetime_str <> ":00"  # Add seconds if missing
+          [_date_hour, _min, _sec] -> datetime_str      # Already has seconds
+          _ -> datetime_str  # Let it fail in parsing
+        end
+        
         # Parse as naive and convert using timezone
-        with {:ok, naive} <- NaiveDateTime.from_iso8601(datetime_str <> ":00"),
+        with {:ok, naive} <- NaiveDateTime.from_iso8601(normalized_str),
              {:ok, utc_datetime} <- naive_to_utc(naive, timezone) do
           {:ok, utc_datetime}
         else
@@ -207,13 +214,13 @@ defmodule EventasaurusWeb.DateTimeHelper do
       {:ok, datetime} ->
         DateTime.shift_zone(datetime, "UTC")
       
-      {:gap, _before, gap_after} ->
-        # For DST gaps, use the time after the gap
-        DateTime.shift_zone(gap_after, "UTC")
+      {:gap, _before, _after} ->
+        # Return specific error for nonexistent time during DST spring forward
+        {:error, :nonexistent_datetime}
       
-      {:ambiguous, first, _second} ->
-        # For ambiguous times, use the first occurrence
-        DateTime.shift_zone(first, "UTC")
+      {:ambiguous, _first, _second} ->
+        # Return specific error for ambiguous time during DST fall back
+        {:error, :ambiguous_datetime}
       
       error ->
         error

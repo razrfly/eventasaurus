@@ -29,7 +29,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.Poll
-  alias EventasaurusWeb.DateTimeHelper
+  alias EventasaurusApp.DateTimeHelper
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]
 
   @poll_types [
