@@ -503,37 +503,60 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   @impl true
   def handle_event("batch_delete_activities", _params, socket) do
     require Logger
-    selected_activities = socket.assigns.selected_activities || []
+    selected_ids = socket.assigns.selected_activities || []
+    current_user_id = socket.assigns.user.id
 
     activities_to_delete =
       socket.assigns.activities
-      |> Enum.filter(&(&1.id in selected_activities))
-
-    results = Enum.map(activities_to_delete, fn activity ->
-      case Events.delete_event_activity(activity) do
-        {:ok, _} -> :ok
-        {:error, reason} -> {:error, activity.id, reason}
-      end
-    end)
+      |> Enum.filter(&(&1.id in selected_ids))
     
-    failures = Enum.filter(results, &match?({:error, _, _}, &1))
+    # Split into authorized and unauthorized activities
+    {authorized, unauthorized} = 
+      Enum.split_with(activities_to_delete, &(&1.created_by_id == current_user_id))
     
-    if length(failures) > 0 do
-      Logger.warning("Failed to delete some activities: #{inspect(failures)}")
+    # Log unauthorized attempts
+    if unauthorized != [] do
+      unauthorized_ids = Enum.map(unauthorized, & &1.id)
+      Logger.warning("Unauthorized batch delete attempt by user #{current_user_id}: #{inspect(unauthorized_ids)}")
+    end
+    
+    # Delete only authorized activities
+    {ok_count, failures} = 
+      Enum.reduce(authorized, {0, []}, fn activity, {ok, fails} ->
+        case Events.delete_event_activity(activity) do
+          {:ok, _} -> {ok + 1, fails}
+          {:error, reason} -> {ok, [{activity.id, reason} | fails]}
+        end
+      end)
+    
+    if failures != [] do
+      Logger.warning("Failed to delete activities: #{inspect(failures)}")
     end
 
     # Reload activities after deletion
+    deleted_ids = Enum.map(authorized, & &1.id) -- Enum.map(failures, fn {id, _} -> id end)
+    remaining_selected = Enum.reject(selected_ids, &(&1 in deleted_ids))
+    
     socket =
       socket
-      |> assign(:selected_activities, [])
+      |> assign(:selected_activities, remaining_selected)
       |> load_activities()
       |> calculate_stats()
 
-    message =
-      case length(activities_to_delete) do
-        1 -> "1 activity deleted successfully"
-        count -> "#{count} activities deleted successfully"
-      end
+    # Build informative message
+    fail_count = length(failures)
+    unauthorized_count = length(unauthorized)
+    
+    message = cond do
+      ok_count == 0 and (fail_count > 0 or unauthorized_count > 0) ->
+        "No activities deleted. #{unauthorized_count} unauthorized, #{fail_count} failed"
+      unauthorized_count > 0 or fail_count > 0 ->
+        "Deleted #{ok_count} activities. #{unauthorized_count} unauthorized, #{fail_count} failed"
+      ok_count == 1 ->
+        "1 activity deleted successfully"
+      true ->
+        "#{ok_count} activities deleted successfully"
+    end
 
     {:noreply, put_flash(socket, :info, message)}
   end

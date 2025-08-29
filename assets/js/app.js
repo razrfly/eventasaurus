@@ -2469,6 +2469,12 @@ Hooks.PlacesSuggestionSearch = {
         form.removeEventListener('submit', this.formHandler);
       }
     }
+    
+    // Clean up input clear handler
+    if (this.inputClearHandler) {
+      this.inputEl.removeEventListener('input', this.inputClearHandler);
+      this.inputClearHandler = null;
+    }
   },
   
   parseSearchLocation() {
@@ -2542,7 +2548,7 @@ Hooks.PlacesSuggestionSearch = {
       'place': ['establishment'],
       'city': ['(cities)'],
       'region': ['(regions)'],  // Fixed: Use proper collection type for regions
-      'country': ['country'],
+      'country': ['(regions)'],  // Fixed: 'country' is not valid, use regions collection
       'custom': [] // No restrictions
     };
     
@@ -2697,7 +2703,12 @@ Hooks.PlacesHistorySearch = {
     // Clear hidden fields if user edits after selection
     this.inputClearHandler = () => {
       this.selectedPlaceData = null;
-      const formId = this.el.id.replace('place-search-', '');
+      const prefix = 'place-search-';
+      const formId = (this.el.id && this.el.id.startsWith(prefix))
+        ? this.el.id.slice(prefix.length)
+        : null;
+      if (!formId) return;
+      
       const placeIdField = document.getElementById(`place-id-${formId}`);
       const addressField = document.getElementById(`place-address-${formId}`);
       const ratingField = document.getElementById(`place-rating-${formId}`);
