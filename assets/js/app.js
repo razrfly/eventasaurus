@@ -2377,34 +2377,8 @@ Hooks.PlacesSuggestionSearch = {
       this.autocomplete.setBounds(circle.getBounds());
     }
     
-    // Track if we're in the middle of selecting
-    let placeChanging = false;
-    let correctValue = null;
-    
-    // Monitor input changes to catch and correct Google's value setting
-    const inputMonitor = (e) => {
-      if (placeChanging && correctValue) {
-        // Immediately correct the value
-        this.inputEl.value = correctValue;
-        placeChanging = false;
-        correctValue = null;
-      }
-    };
-    this.inputEl.addEventListener('input', inputMonitor);
-    
     // Handle place selection
     this.autocomplete.addListener('place_changed', () => {
-      const place = this.autocomplete.getPlace();
-      if (place?.geometry && place.name) {
-        // Calculate what we want to show
-        const shortAddress = this.getShortAddress(place);
-        correctValue = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
-        placeChanging = true;
-        
-        // Set it immediately
-        this.inputEl.value = correctValue;
-      }
-      // Then handle the rest of the selection
       this.handlePlaceSelection();
     });
   },
@@ -2435,11 +2409,57 @@ Hooks.PlacesSuggestionSearch = {
     // Extract place data
     this.selectedPlaceData = this.extractPlaceData(place);
     
-    // Input value already set in place_changed listener to prevent flicker
-    // No need to update it again here
+    // Clear the input field to avoid the flicker issue entirely
+    this.inputEl.value = '';
+    
+    // Create or update the persistent display element
+    this.showSelectedPlace(place);
     
     // Store place data for form submission
     this.inputEl.dataset.hasPlaceData = 'true';
+  },
+  
+  showSelectedPlace(place) {
+    // Remove any existing selection display
+    const existingDisplay = this.el.parentElement.querySelector('.selected-place-display');
+    if (existingDisplay) {
+      existingDisplay.remove();
+    }
+    
+    // Create the display element (similar to event venue display)
+    const displayEl = document.createElement('div');
+    displayEl.className = 'selected-place-display mt-2 p-3 bg-blue-50 border border-blue-300 rounded-md text-sm';
+    
+    const nameEl = document.createElement('div');
+    nameEl.className = 'font-medium text-blue-700';
+    nameEl.textContent = place.name;
+    
+    const addressEl = document.createElement('div');
+    addressEl.className = 'text-blue-600 text-xs mt-1';
+    const shortAddress = this.getShortAddress(place);
+    addressEl.textContent = shortAddress || place.formatted_address || '';
+    
+    // Add remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'text-red-500 text-xs underline mt-2';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = () => {
+      displayEl.remove();
+      this.selectedPlaceData = null;
+      this.inputEl.dataset.hasPlaceData = 'false';
+      this.inputEl.placeholder = 'Search for a place...';
+    };
+    
+    displayEl.appendChild(nameEl);
+    displayEl.appendChild(addressEl);
+    displayEl.appendChild(removeBtn);
+    
+    // Insert after the input field
+    this.el.parentElement.appendChild(displayEl);
+    
+    // Update placeholder to indicate selection
+    this.inputEl.placeholder = 'Place selected (search to change)';
   },
   
   getShortAddress(place) {
@@ -2504,7 +2524,9 @@ Hooks.PlacesSuggestionSearch = {
     
     this.formHandler = (e) => {
       // Only add place data if a place was selected
-      if (this.selectedPlaceData && this.inputEl.dataset.hasPlaceData === 'true') {
+      if (this.selectedPlaceData) {
+        // Set the input value to the place name for submission
+        this.inputEl.value = this.selectedPlaceData.title || '';
         // Create hidden fields for place metadata
         const metadata = {
           external_data: JSON.stringify(this.selectedPlaceData),
@@ -2662,34 +2684,8 @@ Hooks.PlacesHistorySearch = {
       this.autocomplete.setBounds(circle.getBounds());
     }
     
-    // Track if we're in the middle of selecting
-    let placeChanging = false;
-    let correctValue = null;
-    
-    // Monitor input changes to catch and correct Google's value setting
-    const inputMonitor = (e) => {
-      if (placeChanging && correctValue) {
-        // Immediately correct the value
-        this.inputEl.value = correctValue;
-        placeChanging = false;
-        correctValue = null;
-      }
-    };
-    this.inputEl.addEventListener('input', inputMonitor);
-    
     // Handle place selection
     this.autocomplete.addListener('place_changed', () => {
-      const place = this.autocomplete.getPlace();
-      if (place?.geometry && place.name) {
-        // Calculate what we want to show
-        const shortAddress = this.getShortAddress(place);
-        correctValue = shortAddress ? `${place.name}, ${shortAddress}` : place.name;
-        placeChanging = true;
-        
-        // Set it immediately
-        this.inputEl.value = correctValue;
-      }
-      // Then handle the rest of the selection
       this.handlePlaceSelection();
     });
   },
@@ -2734,8 +2730,11 @@ Hooks.PlacesHistorySearch = {
       photos: place.photos?.slice(0, 3).map(p => p.getUrl({maxWidth: 400})) || []
     };
     
-    // Input value already set in place_changed listener to prevent flicker
-    // No need to update it again here
+    // Clear the input field to avoid the flicker issue entirely
+    this.inputEl.value = '';
+    
+    // Create or update the persistent display element
+    this.showSelectedPlace(place);
     
     // Populate hidden fields with place data (SAME approach as PlacesSuggestionSearch)
     const formId = this.el.id.replace('place-search-', '');
@@ -2750,6 +2749,58 @@ Hooks.PlacesHistorySearch = {
     if (addressField) addressField.value = this.selectedPlaceData.address || '';
     if (ratingField) ratingField.value = this.selectedPlaceData.rating || '';
     if (photosField) photosField.value = JSON.stringify(this.selectedPlaceData.photos || []);
+  },
+  
+  showSelectedPlace(place) {
+    // Remove any existing selection display
+    const existingDisplay = this.el.parentElement.querySelector('.selected-place-display');
+    if (existingDisplay) {
+      existingDisplay.remove();
+    }
+    
+    // Create the display element (similar to event venue display)
+    const displayEl = document.createElement('div');
+    displayEl.className = 'selected-place-display mt-2 p-3 bg-blue-50 border border-blue-300 rounded-md text-sm';
+    
+    const nameEl = document.createElement('div');
+    nameEl.className = 'font-medium text-blue-700';
+    nameEl.textContent = place.name;
+    
+    const addressEl = document.createElement('div');
+    addressEl.className = 'text-blue-600 text-xs mt-1';
+    const shortAddress = this.getShortAddress(place);
+    addressEl.textContent = shortAddress || place.formatted_address || '';
+    
+    // Add remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'text-red-500 text-xs underline mt-2';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = () => {
+      displayEl.remove();
+      this.selectedPlaceData = null;
+      // Clear hidden fields
+      const formId = this.el.id.replace('place-search-', '');
+      const placeIdField = document.getElementById(`place-id-${formId}`);
+      const addressField = document.getElementById(`place-address-${formId}`);
+      const ratingField = document.getElementById(`place-rating-${formId}`);
+      const photosField = document.getElementById(`place-photos-${formId}`);
+      if (placeIdField) placeIdField.value = '';
+      if (addressField) addressField.value = '';
+      if (ratingField) ratingField.value = '';
+      if (photosField) photosField.value = '[]';
+      this.inputEl.placeholder = 'Search for a place...';
+    };
+    
+    displayEl.appendChild(nameEl);
+    displayEl.appendChild(addressEl);
+    displayEl.appendChild(removeBtn);
+    
+    // Insert after the input field
+    this.el.parentElement.appendChild(displayEl);
+    
+    // Update placeholder to indicate selection
+    this.inputEl.placeholder = 'Place selected (search to change)';
   },
   
   getShortAddress(place) {
