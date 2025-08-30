@@ -931,6 +931,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         if place_data do
           # Use complete data from external_data JSON
           metadata
+          |> Map.put("title", place_data["name"] || place_data["title"])
           |> Map.put("place_id", place_data["place_id"])
           |> Map.put("name", place_data["name"])
           |> Map.put("address", place_data["formatted_address"])
@@ -943,7 +944,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           |> Map.put("price_level", place_data["price_level"])
           |> Map.put("phone", place_data["phone"])
           |> Map.put("website", place_data["website"])
-          |> Map.put("photo_url", List.first(place_data["photos"] || []))
+          |> Map.put("photo_url", Enum.at(place_data["photos"] || [], 0))
           |> Map.put("photos", place_data["photos"] || [])
           |> Map.put("types", place_data["types"] || [])
         else
@@ -965,7 +966,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           |> maybe_put("address", params["address"])
           |> maybe_put("google_rating", params["google_rating"])
           |> maybe_put("photos", photos)
-          |> maybe_put("photo_url", List.first(photos))
+          |> maybe_put("photo_url", Enum.at(photos || [], 0))
         end
       
       _ ->

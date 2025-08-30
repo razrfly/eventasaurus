@@ -4048,16 +4048,17 @@ defmodule EventasaurusApp.Events do
       
       # Build the query based on whether we have a place_id or not
       query = if place_id do
-        # For places, check by place_id in external_data
+        # For places, check only by place_id (title-agnostic)
         from po in PollOption,
           where: po.poll_id == ^poll_id_int and 
                  po.status == "active" and
                  fragment("?->>'place_id' = ?", po.external_data, ^place_id)
       else
-        # For non-places (like movies), check by title
+        # For non-places, check by case-insensitive title
+        downcased = String.downcase(String.trim(to_string(title || "")))
         from po in PollOption,
           where: po.poll_id == ^poll_id_int and 
-                 po.title == ^title and 
+                 fragment("lower(?) = ?", po.title, ^downcased) and 
                  po.status == "active"
       end
       
