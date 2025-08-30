@@ -22,7 +22,6 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
     {"tv_watched", "TV Show", "Record a TV show that was watched"},
     {"game_played", "Game", "Record a game that was played"},
     {"place_visited", "Place", "Record a place visit (restaurant, venue, etc.)"},
-    {"book_read", "Book", "Record a book that was read"},
     {"activity_completed", "Other Activity", "Record any other activity"}
   ]
   
@@ -531,11 +530,15 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
     ~H"""
     <div class="space-y-4">
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">
-          Search for Place <span class="text-red-500">*</span>
+        <label for={"place-search-#{@id}"} class="block text-sm font-medium text-gray-700">
+          Search for Place 
+          <%= if @event.venue && (@event.venue.city || @event.venue.name) do %>
+            <span class="text-xs text-gray-500 font-normal">(<%= @event.venue.city || @event.venue.name %>)</span>
+          <% end %>
+          <span class="text-red-500">*</span>
         </label>
-        
-        <%= if @selected_place do %>
+        <div class="mt-1">
+          <%= if @selected_place do %>
           <!-- Show selected place -->
           <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
             <div class="flex items-start space-x-3">
@@ -591,46 +594,27 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           <input type="hidden" name="photos" value={Jason.encode!(@selected_place["photos"] || [])} />
           <input type="hidden" name="description" value={@selected_place["address"]} />
         <% else %>
-          <!-- Native Google Places Autocomplete with venue-based location biasing -->
-          <%= if @event.venue && @event.venue.latitude && @event.venue.longitude do %>
-            <div class="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-              <div class="flex items-center text-sm text-blue-700">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Searching near: <%= @event.venue.name || @event.venue.city || "event location" %>
-              </div>
-            </div>
-          <% end %>
-          <div class="relative">
-            <input
-              type="text"
-              name="title"
-              id={"place-search-#{@id}"}
-              placeholder="Search for a restaurant, venue, or any place..."
-              phx-hook="PlacesHistorySearch"
-              data-location-scope={get_venue_location_scope(@event.venue)}
-              data-search-location={get_venue_search_location_json(@event.venue)}
-              data-activity-type="place"
-              autocomplete="off"
-              class="w-full px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <!-- Hidden fields that will be populated by JavaScript -->
-            <input type="hidden" id={"place-id-#{@id}"} name="place_id" value="" />
-            <input type="hidden" id={"place-address-#{@id}"} name="address" value="" />
-            <input type="hidden" id={"place-rating-#{@id}"} name="google_rating" value="" />
-            <input type="hidden" id={"place-photos-#{@id}"} name="photos" value="" />
-          </div>
-          <p class="mt-1 text-xs text-gray-500">Select a place from the dropdown suggestions</p>
+          <!-- Native Google Places Autocomplete matching Poll UI exactly -->
+          <input
+            type="text"
+            name="title"
+            id={"place-search-#{@id}"}
+            placeholder="Search for a restaurant, venue, or any place..."
+            phx-hook="PlacesHistorySearch"
+            data-location-scope={get_venue_location_scope(@event.venue)}
+            data-search-location={get_venue_search_location_json(@event.venue)}
+            data-activity-type="place"
+            autocomplete="off"
+            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          />
+          <!-- Hidden fields that will be populated by JavaScript -->
+          <input type="hidden" id={"external-data-#{@id}"} name="external_data" value="" />
+          <input type="hidden" id={"place-id-#{@id}"} name="place_id" value="" />
+          <input type="hidden" id={"place-address-#{@id}"} name="address" value="" />
+          <input type="hidden" id={"place-rating-#{@id}"} name="google_rating" value="" />
+          <input type="hidden" id={"place-photos-#{@id}"} name="photos" value="" />
         <% end %>
+        </div>
         
         <%= if @errors[:title] do %>
           <p class="mt-2 text-sm text-red-600"><%= @errors[:title] %></p>
@@ -931,25 +915,58 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
         |> maybe_put("winner", params["winner"])
       
       "place_visited" ->
-        # Parse photos if it's a JSON string
-        photos = case params["photos"] do
+        # Parse external_data if present for complete place information
+        place_data = case params["external_data"] do
           nil -> nil
           "" -> nil
-          photos_str when is_binary(photos_str) ->
-            case Jason.decode(photos_str) do
-              {:ok, photos_list} -> List.first(photos_list)  # Take first photo for display
+          json_str when is_binary(json_str) ->
+            case Jason.decode(json_str) do
+              {:ok, data} -> data
               _ -> nil
             end
-          photos_list when is_list(photos_list) -> List.first(photos_list)
+          data when is_map(data) -> data
           _ -> nil
         end
         
-        metadata
-        |> maybe_put("place_id", params["place_id"])
-        |> maybe_put("address", params["address"])
-        |> maybe_put("google_rating", params["google_rating"])
-        |> maybe_put("photo_url", photos)  # Store first photo as photo_url for display
-        |> maybe_put("description", params["description"])
+        if place_data do
+          # Use complete data from external_data JSON
+          metadata
+          |> Map.put("place_id", place_data["place_id"])
+          |> Map.put("name", place_data["name"])
+          |> Map.put("address", place_data["formatted_address"])
+          |> Map.put("city", place_data["city"])
+          |> Map.put("state", place_data["state"])
+          |> Map.put("country", place_data["country"])
+          |> Map.put("latitude", place_data["latitude"])
+          |> Map.put("longitude", place_data["longitude"])
+          |> Map.put("google_rating", place_data["rating"])
+          |> Map.put("price_level", place_data["price_level"])
+          |> Map.put("phone", place_data["phone"])
+          |> Map.put("website", place_data["website"])
+          |> Map.put("photo_url", List.first(place_data["photos"] || []))
+          |> Map.put("photos", place_data["photos"] || [])
+          |> Map.put("types", place_data["types"] || [])
+        else
+          # Fallback to individual fields if no external_data
+          photos = case params["photos"] do
+            nil -> nil
+            "" -> nil
+            photos_str when is_binary(photos_str) ->
+              case Jason.decode(photos_str) do
+                {:ok, photos_list} -> photos_list
+                _ -> []
+              end
+            photos_list when is_list(photos_list) -> photos_list
+            _ -> []
+          end
+          
+          metadata
+          |> maybe_put("place_id", params["place_id"])
+          |> maybe_put("address", params["address"])
+          |> maybe_put("google_rating", params["google_rating"])
+          |> maybe_put("photos", photos)
+          |> maybe_put("photo_url", List.first(photos))
+        end
       
       _ ->
         metadata
@@ -964,7 +981,6 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
   defp activity_emoji("tv_watched"), do: "📺"
   defp activity_emoji("game_played"), do: "🎮"
   defp activity_emoji("place_visited"), do: "📍"
-  defp activity_emoji("book_read"), do: "📚"
   defp activity_emoji(_), do: "✨"
   
   # Helper functions for venue-based location biasing
