@@ -1396,7 +1396,7 @@ Hooks.UnifiedGooglePlaces = {
     
     if (this.config.mode === 'event') {
       // Event: Save both JSON and individual fields for backward compatibility
-      const idSuffix = this.inputEl.id.split('-').pop();
+      const idSuffix = this.inputEl.id.replace(/^place-search-/, '');
       
       // Save complete JSON in venue_data field
       this.setHiddenField(`venue-data-${idSuffix}`, jsonData);
@@ -1634,6 +1634,10 @@ Hooks.UnifiedGooglePlaces = {
     // Just ensure the form knows we have a selection
     if (this.config.required) {
       this.inputEl.setCustomValidity('');
+    }
+    // Keep the title populated for form submission
+    if (this.selectedPlaceData) {
+      this.inputEl.value = this.selectedPlaceData.name || this.inputEl.value;
     }
   }
 };
