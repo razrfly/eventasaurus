@@ -3975,9 +3975,15 @@ defmodule EventasaurusApp.Events do
     title = attrs["title"] || attrs[:title]
     suggested_by_id = attrs["suggested_by_id"] || attrs[:suggested_by_id]
     
-    # Check if title already exists in this poll before attempting to create
+    # Extract place_id from external_data if it's a place
+    place_id = case attrs["external_data"] || attrs[:external_data] do
+      data when is_map(data) -> data["place_id"] || data[:place_id]
+      _ -> nil
+    end
+    
+    # Check for duplicates using place_id (for places) or title (for non-places)
     if poll_id && title && suggested_by_id do
-      case check_duplicate_option_title(poll_id, title, suggested_by_id) do
+      case check_duplicate_option(poll_id, title, place_id, suggested_by_id) do
         {:ok, :unique} ->
           result = %PollOption{}
           |> PollOption.creation_changeset(attrs, opts)
@@ -4034,14 +4040,26 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  # Helper function to check for duplicate option titles
-  defp check_duplicate_option_title(poll_id, title, current_user_id) do
+  # Helper function to check for duplicate options by place_id (for places) or title (for non-places)
+  defp check_duplicate_option(poll_id, title, place_id, current_user_id) do
     # Safely convert poll_id and current_user_id to integers
     with {:ok, poll_id_int} <- safe_to_integer(poll_id, :poll_id),
          {:ok, user_id_int} <- safe_to_integer(current_user_id, :user_id) do
       
-      query = from po in PollOption,
-              where: po.poll_id == ^poll_id_int and po.title == ^title and po.status == "active"
+      # Build the query based on whether we have a place_id or not
+      query = if place_id do
+        # For places, check by place_id in external_data
+        from po in PollOption,
+          where: po.poll_id == ^poll_id_int and 
+                 po.status == "active" and
+                 fragment("?->>'place_id' = ?", po.external_data, ^place_id)
+      else
+        # For non-places (like movies), check by title
+        from po in PollOption,
+          where: po.poll_id == ^poll_id_int and 
+                 po.title == ^title and 
+                 po.status == "active"
+      end
       
       case Repo.one(query) do
         nil -> {:ok, :unique}
