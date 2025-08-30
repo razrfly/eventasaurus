@@ -958,7 +958,9 @@ defmodule EventasaurusWeb.EventComponents do
                     phx-hook="EventLocationSearch"
                     class="block w-full border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm venue-search-input"
                   />
-                  <!-- Hidden venue fields remain the same -->
+                  <!-- Complete JSON data for consistency across all place selections -->
+                  <input type="hidden" name="event[venue_data]" id={"venue-data-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_data", "")} />
+                  <!-- Hidden venue fields remain for backward compatibility -->
                   <input type="hidden" name="event[venue_name]" id={"venue-name-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_name", "")} />
                   <input type="hidden" name="event[venue_address]" id={"venue-address-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_address", "")} />
                   <input type="hidden" name="event[venue_city]" id={"venue-city-#{if @action == :new, do: "new", else: "edit"}"} value={Map.get(@form_data, "venue_city", "")} />

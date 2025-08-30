@@ -632,4 +632,103 @@ defmodule EventasaurusApp.Events.PollTest do
       assert date_poll.id != generic_poll.id
     end
   end
+
+  describe "place_id duplicate detection" do
+    setup %{user: user, event: event} do
+      {:ok, poll} = Events.create_poll(%{
+        event_id: event.id,
+        title: "Places Poll",
+        voting_system: "binary",
+        poll_type: "places",
+        created_by_id: user.id
+      })
+      {:ok, poll: poll}
+    end
+
+    test "correctly identifies duplicate place by place_id", %{user: user, poll: poll} do
+      # Create a place option with external_data containing place_id
+      starbucks_1_data = %{
+        "place_id" => "ChIJN1t_tDeuEmsRUsoyG83frY4",
+        "name" => "Starbucks",
+        "formatted_address" => "123 Main St, New York, NY 10001",
+        "rating" => 4.2,
+        "photos" => []
+      }
+
+      {:ok, option1} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: "Starbucks",
+        external_data: starbucks_1_data,
+        suggested_by_id: user.id
+      })
+
+      assert option1.title == "Starbucks"
+
+      # Try to create the same place (same place_id) - should fail
+      {:error, changeset} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: "Starbucks",
+        external_data: starbucks_1_data,
+        suggested_by_id: user.id
+      })
+
+      assert "You have already suggested this option" in errors_on(changeset).title
+
+      # Create a different Starbucks (different place_id) - should succeed
+      starbucks_2_data = %{
+        "place_id" => "ChIJa1t_sDqwFsmRUsolH35frT9",
+        "name" => "Starbucks",
+        "formatted_address" => "456 Broadway, New York, NY 10012",
+        "rating" => 4.1,
+        "photos" => []
+      }
+
+      {:ok, option2} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: "Starbucks",
+        external_data: starbucks_2_data,
+        suggested_by_id: user.id
+      })
+
+      assert option2.title == "Starbucks"
+      assert option2.id != option1.id
+    end
+
+    test "falls back to title for non-place options", %{user: user, event: event} do
+      # Create a movie poll
+      {:ok, movie_poll} = Events.create_poll(%{
+        event_id: event.id,
+        title: "Movie Poll",
+        voting_system: "binary",
+        poll_type: "movie",
+        created_by_id: user.id
+      })
+
+      # Create a movie option without place_id
+      movie_data = %{
+        "tmdb_id" => "123456",
+        "title" => "The Matrix",
+        "year" => 1999
+      }
+
+      {:ok, option1} = Events.create_poll_option(%{
+        poll_id: movie_poll.id,
+        title: "The Matrix",
+        external_data: movie_data,
+        suggested_by_id: user.id
+      })
+
+      assert option1.title == "The Matrix"
+
+      # Try to create the same movie title - should fail
+      {:error, changeset} = Events.create_poll_option(%{
+        poll_id: movie_poll.id,
+        title: "The Matrix",
+        external_data: %{"tmdb_id" => "789012"},  # Different ID but same title
+        suggested_by_id: user.id
+      })
+
+      assert "You have already suggested this option" in errors_on(changeset).title
+    end
+  end
 end

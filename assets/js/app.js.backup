@@ -1390,18 +1390,9 @@ Hooks.UnifiedGooglePlaces = {
   updateHiddenFields() {
     const data = this.selectedPlaceData;
     
-    // ALL modes now save the complete JSON data structure
-    // This ensures consistency across Event, Poll, and Activity
-    const jsonData = JSON.stringify(data);
-    
     if (this.config.mode === 'event') {
-      // Event: Save both JSON and individual fields for backward compatibility
+      // Event venue fields
       const idSuffix = this.inputEl.id.split('-').pop();
-      
-      // Save complete JSON in venue_data field
-      this.setHiddenField(`venue-data-${idSuffix}`, jsonData);
-      
-      // Also save individual fields for backward compatibility
       this.setHiddenField(`venue-name-${idSuffix}`, data.name);
       this.setHiddenField(`venue-address-${idSuffix}`, data.formatted_address);
       this.setHiddenField(`venue-city-${idSuffix}`, data.city);
@@ -1411,48 +1402,24 @@ Hooks.UnifiedGooglePlaces = {
       this.setHiddenField(`venue-lng-${idSuffix}`, data.longitude);
       
     } else if (this.config.mode === 'poll') {
-      // Poll: Save in external_data field (what backend expects)
-      const externalDataField = document.querySelector('input[name="poll_option[external_data]"]');
-      if (!externalDataField) {
-        // Create the field if it doesn't exist
-        const form = this.el.closest('form');
-        if (form) {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = 'poll_option[external_data]';
-          input.value = jsonData;
-          form.appendChild(input);
-        }
-      } else {
-        externalDataField.value = jsonData;
-      }
-      
-      // Also set place_id and external_id for backend processing
+      // Poll option fields
+      const titleField = document.querySelector('input[name="poll_option[title]"]');
+      const descField = document.querySelector('[name="poll_option[description]"]');
       const placeIdField = document.querySelector('input[name="poll_option[place_id]"]');
+      
+      if (titleField) titleField.value = data.name;
+      if (descField) descField.value = data.formatted_address;
       if (placeIdField) placeIdField.value = data.place_id;
       
-      const externalIdField = document.querySelector('input[name="poll_option[external_id]"]');
-      if (!externalIdField) {
-        const form = this.el.closest('form');
-        if (form) {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = 'poll_option[external_id]';
-          input.value = data.place_id;
-          form.appendChild(input);
-        }
-      } else {
-        externalIdField.value = data.place_id;
+      // Store full data for form submission
+      const dataField = document.querySelector('input[name="poll_option[place_data]"]');
+      if (dataField) {
+        dataField.value = JSON.stringify(data);
       }
       
     } else if (this.config.mode === 'activity') {
-      // Activity: Save complete JSON in external_data field
+      // Activity place fields
       const formId = this.el.id.replace('place-search-', '');
-      
-      // Save complete JSON
-      this.setHiddenField(`external-data-${formId}`, jsonData);
-      
-      // Also save key fields for display
       this.setHiddenField(`place-id-${formId}`, data.place_id);
       this.setHiddenField(`place-address-${formId}`, data.formatted_address);
       this.setHiddenField(`place-rating-${formId}`, data.rating || '');
@@ -1463,27 +1430,12 @@ Hooks.UnifiedGooglePlaces = {
   clearHiddenFields() {
     if (this.config.mode === 'event') {
       const idSuffix = this.inputEl.id.split('-').pop();
-      // Clear JSON field
-      this.setHiddenField(`venue-data-${idSuffix}`, '');
-      // Clear individual fields
       ['name', 'address', 'city', 'state', 'country', 'lat', 'lng'].forEach(field => {
         this.setHiddenField(`venue-${field}-${idSuffix}`, '');
       });
       
-    } else if (this.config.mode === 'poll') {
-      // Clear poll fields
-      const externalDataField = document.querySelector('input[name="poll_option[external_data]"]');
-      if (externalDataField) externalDataField.value = '';
-      const externalIdField = document.querySelector('input[name="poll_option[external_id]"]');
-      if (externalIdField) externalIdField.value = '';
-      const placeIdField = document.querySelector('input[name="poll_option[place_id]"]');
-      if (placeIdField) placeIdField.value = '';
-      
     } else if (this.config.mode === 'activity') {
       const formId = this.el.id.replace('place-search-', '');
-      // Clear JSON field
-      this.setHiddenField(`external-data-${formId}`, '');
-      // Clear individual fields
       ['id', 'address', 'rating', 'photos'].forEach(field => {
         this.setHiddenField(`place-${field}-${formId}`, '');
       });
@@ -1514,23 +1466,9 @@ Hooks.UnifiedGooglePlaces = {
     nameEl.className = 'font-medium text-blue-700';
     nameEl.textContent = place.name || 'Selected Place';
     
-    // Show FULL address for better disambiguation
     const addressEl = document.createElement('div');
     addressEl.className = 'text-blue-600 text-xs mt-1';
-    addressEl.textContent = place.formatted_address || '';
-    
-    // Add rating if available for additional context
-    if (place.rating) {
-      const ratingEl = document.createElement('div');
-      ratingEl.className = 'text-gray-500 text-xs mt-1';
-      ratingEl.textContent = `Rating: ${place.rating}★`;
-      displayEl.appendChild(nameEl);
-      displayEl.appendChild(addressEl);
-      displayEl.appendChild(ratingEl);
-    } else {
-      displayEl.appendChild(nameEl);
-      displayEl.appendChild(addressEl);
-    }
+    addressEl.textContent = this.getShortAddress(place) || place.formatted_address || '';
     
     // Add remove button
     const removeBtn = document.createElement('button');
@@ -1545,13 +1483,14 @@ Hooks.UnifiedGooglePlaces = {
       this.inputEl.placeholder = this.getPlaceholder();
     };
     
+    displayEl.appendChild(nameEl);
+    displayEl.appendChild(addressEl);
     displayEl.appendChild(removeBtn);
     
     // Insert after the input field
     this.el.parentElement.appendChild(displayEl);
     
-    // Clear and update input placeholder for all modes
-    // For poll mode, the title will be set back on form submission
+    // Clear and update input placeholder
     this.inputEl.value = '';
     this.inputEl.placeholder = 'Place selected (search to change)';
   },
@@ -1614,13 +1553,7 @@ Hooks.UnifiedGooglePlaces = {
   },
   
   handlePollSelection() {
-    // For polls, set the title field and submit the form
-    if (this.selectedPlaceData) {
-      // Set the input value to the place name for submission
-      this.inputEl.value = this.selectedPlaceData.name || '';
-    }
-    
-    // Submit the form after selection
+    // For polls, submit the form after selection
     const form = this.el.closest('form');
     if (form && this.config.required) {
       // Trigger form validation
@@ -1641,16 +1574,18 @@ Hooks.UnifiedGooglePlaces = {
 // DEPRECATED: EventLocationSearch - Now uses UnifiedGooglePlaces
 // This is kept for backward compatibility but delegates to the unified hook
 Hooks.EventLocationSearch = {
-  ...Hooks.UnifiedGooglePlaces,
-  
   mounted() {
     // Set mode for unified hook
     this.el.dataset.mode = 'event';
-    this.el.dataset.showPersistent = 'true'; // Events NOW show persistent box like others
+    this.el.dataset.showPersistent = 'false'; // Events show in input, not persistent box
     this.el.dataset.showRecent = 'true';
     
     // Delegate to unified hook
     Hooks.UnifiedGooglePlaces.mounted.call(this);
+  },
+  
+  destroyed() {
+    Hooks.UnifiedGooglePlaces.destroyed.call(this);
   }
 };
 
@@ -2609,18 +2544,20 @@ Hooks.CitySearch = {
 // DEPRECATED: PlacesSuggestionSearch - Now uses UnifiedGooglePlaces
 // This is kept for backward compatibility but delegates to the unified hook
 Hooks.PlacesSuggestionSearch = {
-  ...Hooks.UnifiedGooglePlaces,
-  
   mounted() {
     // Set mode for unified hook
     this.el.dataset.mode = 'poll';
-    this.el.dataset.showPersistent = 'true'; // Polls show persistent box like main branch
+    this.el.dataset.showPersistent = 'true'; // Polls show persistent selection box
     this.el.dataset.showRecent = 'false';
     
     // Location scope and search location are already in dataset from the template
     
     // Delegate to unified hook
     Hooks.UnifiedGooglePlaces.mounted.call(this);
+  },
+  
+  destroyed() {
+    Hooks.UnifiedGooglePlaces.destroyed.call(this);
   }
 };
 
@@ -2630,28 +2567,543 @@ Hooks.PlacesSuggestionSearch = {
 
 /* OLD PlacesSuggestionSearch CODE REMOVED - 300 lines deleted
  * The implementation now delegates to UnifiedGooglePlaces */
-
-
+  
+  parseSearchLocation() {
+    const data = this.el.dataset.searchLocation;
+    if (!data) return null;
+    
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error("Error parsing search location:", e);
+      return null;
+    }
+  },
+  
+  initAutocomplete() {
+    // Wait for Google Maps to load
+    if (!window.google?.maps?.places) {
+      // Retry in 100ms
+      setTimeout(() => this.initAutocomplete(), 100);
+      return;
+    }
+    
+    // Configure autocomplete based on location scope
+    const options = {
+      fields: [
+        'place_id',
+        'name', 
+        'formatted_address',
+        'geometry',
+        'address_components',
+        'rating',
+        'price_level',
+        'formatted_phone_number',
+        'website',
+        'photos',
+        'types'
+      ]
+    };
+    
+    // Set types based on location scope
+    const types = this.getTypesForScope(this.locationScope);
+    if (types.length > 0) {
+      options.types = types;
+    }
+    
+    // Create autocomplete instance
+    this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+    
+    // Apply location bias if search location is set
+    if (this.searchLocation?.geometry) {
+      const center = {
+        lat: this.searchLocation.geometry.lat,
+        lng: this.searchLocation.geometry.lng
+      };
+      
+      // Create bias circle based on location scope - same as PlacesHistorySearch
+      // venue/place: 50km radius, city: 100km, region: 200km
+      let radius = 50000; // Default 50km for venues
+      if (this.locationScope === 'city') {
+        radius = 100000; // 100km for city scope
+      } else if (this.locationScope === 'region') {
+        radius = 200000; // 200km for region scope
+      }
+      const circle = new google.maps.Circle({ center, radius });
+      this.autocomplete.setBounds(circle.getBounds());
+    }
+    
+    // Handle place selection
+    this.autocomplete.addListener('place_changed', () => {
+      this.handlePlaceSelection();
+    });
+  },
+  
+  getTypesForScope(scope) {
+    // Map location scopes to Google Places types
+    const scopeTypes = {
+      'place': ['establishment'],
+      'city': ['(cities)'],
+      'region': ['(regions)'],  // Fixed: Use proper collection type for regions
+      'country': ['(regions)'],  // Fixed: 'country' is not valid, use regions collection
+      'custom': [] // No restrictions
+    };
+    
+    return scopeTypes[scope] || ['establishment'];
+  },
+  
+  handlePlaceSelection() {
+    const place = this.autocomplete.getPlace();
+    
+    // Validate place data
+    if (!place?.geometry) {
+      // User entered text without selecting from dropdown
+      // Let them submit plain text if they want
+      return;
+    }
+    
+    // Extract place data
+    this.selectedPlaceData = this.extractPlaceData(place);
+    
+    // Clear the input field to avoid the flicker issue entirely
+    this.inputEl.value = '';
+    
+    // Create or update the persistent display element
+    this.showSelectedPlace(place);
+    
+    // Store place data for form submission
+    this.inputEl.dataset.hasPlaceData = 'true';
+  },
+  
+  showSelectedPlace(place) {
+    // Remove any existing selection display
+    const existingDisplay = this.el.parentElement.querySelector('.selected-place-display');
+    if (existingDisplay) {
+      existingDisplay.remove();
+    }
+    
+    // Create the display element (similar to event venue display)
+    const displayEl = document.createElement('div');
+    displayEl.className = 'selected-place-display mt-2 p-3 bg-blue-50 border border-blue-300 rounded-md text-sm';
+    
+    const nameEl = document.createElement('div');
+    nameEl.className = 'font-medium text-blue-700';
+    nameEl.textContent = place.name;
+    
+    const addressEl = document.createElement('div');
+    addressEl.className = 'text-blue-600 text-xs mt-1';
+    const shortAddress = this.getShortAddress(place);
+    addressEl.textContent = shortAddress || place.formatted_address || '';
+    
+    // Add remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'text-red-500 text-xs underline mt-2';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = () => {
+      displayEl.remove();
+      this.selectedPlaceData = null;
+      this.inputEl.dataset.hasPlaceData = 'false';
+      this.inputEl.placeholder = 'Search for a place...';
+    };
+    
+    displayEl.appendChild(nameEl);
+    displayEl.appendChild(addressEl);
+    displayEl.appendChild(removeBtn);
+    
+    // Insert after the input field
+    this.el.parentElement.appendChild(displayEl);
+    
+    // Update placeholder to indicate selection
+    this.inputEl.placeholder = 'Place selected (search to change)';
+  },
+  
+  getShortAddress(place) {
+    // Extract city/region for display
+    if (!place.address_components) return '';
+    
+    for (const component of place.address_components) {
+      if (component.types.includes('locality')) {
+        return component.short_name;
+      }
+    }
+    
+    // Fallback to administrative area
+    for (const component of place.address_components) {
+      if (component.types.includes('administrative_area_level_1')) {
+        return component.short_name;
+      }
+    }
+    
+    return '';
+  },
+  
+  extractPlaceData(place) {
+    // Extract address components
+    let city = '', state = '', country = '';
+    
+    if (place.address_components) {
+      for (const component of place.address_components) {
+        const types = component.types;
+        if (types.includes('locality')) {
+          city = component.long_name;
+        } else if (types.includes('administrative_area_level_1')) {
+          state = component.long_name;
+        } else if (types.includes('country')) {
+          country = component.long_name;
+        }
+      }
+    }
+    
+    // Build place data object
+    return {
+      title: place.name,
+      address: place.formatted_address || '',
+      city: city,
+      state: state,
+      country: country,
+      latitude: Math.round(place.geometry.location.lat() * 10000) / 10000, // Round for privacy
+      longitude: Math.round(place.geometry.location.lng() * 10000) / 10000,
+      place_id: place.place_id,
+      rating: place.rating || null,
+      price_level: place.price_level || null,
+      phone: place.formatted_phone_number || '',
+      website: place.website || '',
+      photos: place.photos?.slice(0, 3).map(p => p.getUrl({maxWidth: 400})) || []
+    };
+  },
+  
+  setupFormHandler() {
+    // Intercept form submission to include place data
+    const form = this.el.closest('form');
+    if (!form) return;
+    
+    this.formHandler = (e) => {
+      // Only add place data if a place was selected
+      if (this.selectedPlaceData) {
+        // Set the input value to the place name for submission
+        this.inputEl.value = this.selectedPlaceData.title || '';
+        // Create hidden fields for place metadata
+        const metadata = {
+          external_data: JSON.stringify(this.selectedPlaceData),
+          external_id: this.selectedPlaceData.place_id,
+          metadata: JSON.stringify({
+            city: this.selectedPlaceData.city,
+            state: this.selectedPlaceData.state,
+            country: this.selectedPlaceData.country,
+            latitude: this.selectedPlaceData.latitude,
+            longitude: this.selectedPlaceData.longitude
+          })
+        };
+        
+        // Add hidden inputs
+        Object.entries(metadata).forEach(([key, value]) => {
+          const existing = form.querySelector(`input[name="poll_option[${key}]"]`);
+          if (existing) {
+            existing.value = value;
+          } else {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = `poll_option[${key}]`;
+            input.value = value;
+            form.appendChild(input);
+          }
+        });
+        
+        // Add image URL if available
+        if (this.selectedPlaceData.photos && this.selectedPlaceData.photos.length > 0) {
+          const imageInput = document.createElement('input');
+          imageInput.type = 'hidden';
+          imageInput.name = 'poll_option[image_url]';
+          imageInput.value = this.selectedPlaceData.photos[0];
+          form.appendChild(input);
+        }
+      }
+    };
+    
+    form.addEventListener('submit', this.formHandler);
+    
+    // Clear selection if user edits after choosing a place
+    this.inputClearHandler = () => {
 // DEPRECATED: PlacesHistorySearch - Now uses UnifiedGooglePlaces
 // This is kept for backward compatibility but delegates to the unified hook
 Hooks.PlacesHistorySearch = {
-  ...Hooks.UnifiedGooglePlaces,
-  
   mounted() {
     // Set mode for unified hook
-    this.el.dataset.mode = "activity";
-    this.el.dataset.showPersistent = "true"; // Activities show persistent selection box
-    this.el.dataset.showRecent = "false";
+    this.el.dataset.mode = 'activity';
+    this.el.dataset.showPersistent = 'true'; // Activities show persistent selection box
+    this.el.dataset.showRecent = 'false';
     
     // Location scope and search location are already in dataset from the template
     
     // Delegate to unified hook
     Hooks.UnifiedGooglePlaces.mounted.call(this);
+  },
+  
+  destroyed() {
+    Hooks.UnifiedGooglePlaces.destroyed.call(this);
   }
 };
 
-// OLD IMPLEMENTATIONS REMOVED
-// Both PlacesSuggestionSearch_OLD and PlacesHistorySearch_OLD have been deleted
-// They contained about 540 lines of duplicate code (lines 2570-3109)
-// All three place selection features now use UnifiedGooglePlaces hook
+// OLD IMPLEMENTATION OF PlacesHistorySearch REMOVED
+// The old 250-line implementation has been replaced with UnifiedGooglePlaces
+// Check git history if you need the old code
+
+// Note: PlacesHistorySearch now delegates to UnifiedGooglePlaces
+// with mode='activity' configuration
+
+/*
+The following old code has been removed (lines 2892-3137):
+- PlacesHistorySearch_OLD implementation
+- Duplicate autocomplete logic
+- Duplicate place extraction
+- Duplicate display logic
+*/
+
+// Next hook starts here
+Hooks.NextHookAfterPlacesHistory = {
+  mounted() {
+    this.inputEl = this.el;
+    this.autocomplete = null;
+    this.selectedPlaceData = null;
+    
+    // Get configuration from data attributes (same as PlacesSuggestionSearch)
+    this.locationScope = this.el.dataset.locationScope || 'place';
+    this.searchLocation = this.parseSearchLocation();
+    
+    // Initialize Google Places Autocomplete
+    this.initAutocomplete();
+    
+    // Clear hidden fields if user edits after selection
+    this.inputClearHandler = () => {
+      this.selectedPlaceData = null;
+      const prefix = 'place-search-';
+      const formId = (this.el.id && this.el.id.startsWith(prefix))
+        ? this.el.id.slice(prefix.length)
+        : null;
+      if (!formId) return;
+      
+      const placeIdField = document.getElementById(`place-id-${formId}`);
+      const addressField = document.getElementById(`place-address-${formId}`);
+      const ratingField = document.getElementById(`place-rating-${formId}`);
+      const photosField = document.getElementById(`place-photos-${formId}`);
+      if (placeIdField) placeIdField.value = '';
+      if (addressField) addressField.value = '';
+      if (ratingField) ratingField.value = '';
+      if (photosField) photosField.value = '[]';
+    };
+    this.inputEl.addEventListener('input', this.inputClearHandler);
+  },
+  
+  destroyed() {
+    // Clean up autocomplete instance
+    if (this.autocomplete) {
+      google.maps.event.clearInstanceListeners(this.autocomplete);
+    }
+    // Clean up input handler
+    if (this.inputClearHandler) {
+      this.inputEl.removeEventListener('input', this.inputClearHandler);
+      this.inputClearHandler = null;
+    }
+  },
+  
+  parseSearchLocation() {
+    const data = this.el.dataset.searchLocation;
+    if (!data) return null;
+    
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error("Error parsing search location:", e);
+      return null;
+    }
+  },
+  
+  initAutocomplete() {
+    // Wait for Google Maps to load
+    if (!window.google?.maps?.places) {
+      setTimeout(() => this.initAutocomplete(), 100);
+      return;
+    }
+    
+    // Configure autocomplete for places (same as polls)
+    const options = {
+      types: ['establishment'], // Same as polls - includes restaurants, cafes, bars, venues, etc.
+      fields: [
+        'place_id',
+        'name',
+        'formatted_address',
+        'geometry',
+        'rating',
+        'price_level',
+        'website',
+        'formatted_phone_number',
+        'photos',
+        'types',
+        'address_components'
+      ]
+    };
+    
+    // Create autocomplete instance
+    this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, options);
+    
+    // Apply location bias if search location is set (same as PlacesSuggestionSearch)
+    if (this.searchLocation?.geometry) {
+      const center = {
+        lat: this.searchLocation.geometry.lat,
+        lng: this.searchLocation.geometry.lng
+      };
+      
+      // Create bias circle based on location scope
+      // venue/place: 50km radius, city: 100km, region: 200km
+      let radius = 50000; // Default 50km for venues
+      if (this.locationScope === 'city') {
+        radius = 100000; // 100km for city scope
+      } else if (this.locationScope === 'region') {
+        radius = 200000; // 200km for region scope
+      }
+      
+      const circle = new google.maps.Circle({ center, radius });
+      this.autocomplete.setBounds(circle.getBounds());
+    }
+    
+    // Handle place selection
+    this.autocomplete.addListener('place_changed', () => {
+      this.handlePlaceSelection();
+    });
+  },
+  
+  handlePlaceSelection() {
+    const place = this.autocomplete.getPlace();
+    
+    if (!place?.geometry) {
+      return;
+    }
+    
+    // Extract address components (SAME as PlacesSuggestionSearch for consistency)
+    let city = '', state = '', country = '';
+    
+    if (place.address_components) {
+      for (const component of place.address_components) {
+        const types = component.types;
+        if (types.includes('locality')) {
+          city = component.long_name;
+        } else if (types.includes('administrative_area_level_1')) {
+          state = component.long_name;
+        } else if (types.includes('country')) {
+          country = component.long_name;
+        }
+      }
+    }
+    
+    // Build place data object (SAME structure as PlacesSuggestionSearch for consistency)
+    this.selectedPlaceData = {
+      title: place.name,
+      address: place.formatted_address || '',
+      city: city,
+      state: state,
+      country: country,
+      latitude: Math.round(place.geometry.location.lat() * 10000) / 10000,
+      longitude: Math.round(place.geometry.location.lng() * 10000) / 10000,
+      place_id: place.place_id,
+      rating: place.rating || null,
+      price_level: place.price_level || null,
+      phone: place.formatted_phone_number || '',
+      website: place.website || '',
+      photos: place.photos?.slice(0, 3).map(p => p.getUrl({maxWidth: 400})) || []
+    };
+    
+    // Clear the input field to avoid the flicker issue entirely
+    this.inputEl.value = '';
+    
+    // Create or update the persistent display element
+    this.showSelectedPlace(place);
+    
+    // Populate hidden fields with place data (SAME approach as PlacesSuggestionSearch)
+    const formId = this.el.id.replace('place-search-', '');
+    
+    // Find and populate hidden fields
+    const placeIdField = document.getElementById(`place-id-${formId}`);
+    const addressField = document.getElementById(`place-address-${formId}`);
+    const ratingField = document.getElementById(`place-rating-${formId}`);
+    const photosField = document.getElementById(`place-photos-${formId}`);
+    
+    if (placeIdField) placeIdField.value = this.selectedPlaceData.place_id || '';
+    if (addressField) addressField.value = this.selectedPlaceData.address || '';
+    if (ratingField) ratingField.value = this.selectedPlaceData.rating || '';
+    if (photosField) photosField.value = JSON.stringify(this.selectedPlaceData.photos || []);
+  },
+  
+  showSelectedPlace(place) {
+    // Remove any existing selection display
+    const existingDisplay = this.el.parentElement.querySelector('.selected-place-display');
+    if (existingDisplay) {
+      existingDisplay.remove();
+    }
+    
+    // Create the display element (similar to event venue display)
+    const displayEl = document.createElement('div');
+    displayEl.className = 'selected-place-display mt-2 p-3 bg-blue-50 border border-blue-300 rounded-md text-sm';
+    
+    const nameEl = document.createElement('div');
+    nameEl.className = 'font-medium text-blue-700';
+    nameEl.textContent = place.name;
+    
+    const addressEl = document.createElement('div');
+    addressEl.className = 'text-blue-600 text-xs mt-1';
+    const shortAddress = this.getShortAddress(place);
+    addressEl.textContent = shortAddress || place.formatted_address || '';
+    
+    // Add remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'text-red-500 text-xs underline mt-2';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = () => {
+      displayEl.remove();
+      this.selectedPlaceData = null;
+      // Clear hidden fields
+      const formId = this.el.id.replace('place-search-', '');
+      const placeIdField = document.getElementById(`place-id-${formId}`);
+      const addressField = document.getElementById(`place-address-${formId}`);
+      const ratingField = document.getElementById(`place-rating-${formId}`);
+      const photosField = document.getElementById(`place-photos-${formId}`);
+      if (placeIdField) placeIdField.value = '';
+      if (addressField) addressField.value = '';
+      if (ratingField) ratingField.value = '';
+      if (photosField) photosField.value = '[]';
+      this.inputEl.placeholder = 'Search for a place...';
+    };
+    
+    displayEl.appendChild(nameEl);
+    displayEl.appendChild(addressEl);
+    displayEl.appendChild(removeBtn);
+    
+    // Insert after the input field
+    this.el.parentElement.appendChild(displayEl);
+    
+    // Update placeholder to indicate selection
+    this.inputEl.placeholder = 'Place selected (search to change)';
+  },
+  
+  getShortAddress(place) {
+    // Extract city/region for display
+    if (!place.address_components) return '';
+    
+    for (const component of place.address_components) {
+      if (component.types.includes('locality')) {
+        return component.short_name;
+      }
+    }
+    
+    // Fallback to administrative area
+    for (const component of place.address_components) {
+      if (component.types.includes('administrative_area_level_1')) {
+        return component.short_name;
+      }
+    }
+    
+    return '';
+  }
+};
 
