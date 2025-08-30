@@ -4046,20 +4046,24 @@ defmodule EventasaurusApp.Events do
     with {:ok, poll_id_int} <- safe_to_integer(poll_id, :poll_id),
          {:ok, user_id_int} <- safe_to_integer(current_user_id, :user_id) do
       
-      # Build the query based on whether we have a place_id or not
-      query = if place_id do
+      # Build the query based on whether we have a non-empty place_id
+      place_id_valid = is_binary(place_id) and byte_size(place_id) > 0
+      query = if place_id_valid do
         # For places, check only by place_id (title-agnostic)
         from po in PollOption,
           where: po.poll_id == ^poll_id_int and 
                  po.status == "active" and
+                 is_nil(po.deleted_at) and
                  fragment("?->>'place_id' = ?", po.external_data, ^place_id)
       else
-        # For non-places, check by case-insensitive title
+        # For non-places, check by case-insensitive title per user
         downcased = String.downcase(String.trim(to_string(title || "")))
         from po in PollOption,
           where: po.poll_id == ^poll_id_int and 
+                 po.suggested_by_id == ^user_id_int and
                  fragment("lower(?) = ?", po.title, ^downcased) and 
-                 po.status == "active"
+                 po.status == "active" and
+                 is_nil(po.deleted_at)
       end
       
       case Repo.one(query) do

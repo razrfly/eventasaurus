@@ -14,7 +14,7 @@ defmodule EventasaurusApp.Repo.Migrations.UpdatePollOptionsUniqueConstraintForPl
     execute """
     CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS poll_options_unique_place_per_poll
     ON poll_options (poll_id, (external_data->>'place_id'))
-    WHERE (external_data->>'place_id') IS NOT NULL
+    WHERE nullif(external_data->>'place_id', '') IS NOT NULL
       AND status = 'active'
       AND deleted_at IS NULL
     """
