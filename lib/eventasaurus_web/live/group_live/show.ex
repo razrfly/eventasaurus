@@ -43,11 +43,18 @@ defmodule EventasaurusWeb.GroupLive.Show do
               members = Groups.list_group_members_with_roles(group)
               member_count = length(members)
               
-              # Load group events with time filtering
+              # Load group events using unified function with proper ordering
               time_filter = :upcoming  # Default to upcoming events
-              all_events = Events.list_events_for_group(group)
-              all_events = add_user_context_to_events(all_events, user)
-              events = filter_events_by_time(all_events, time_filter)
+              events = Events.list_events_for_group(group, user, [
+                time_filter: time_filter,
+                limit: 100
+              ])
+              
+              # Calculate filter counts by fetching all events once
+              all_events = Events.list_events_for_group(group, user, [
+                time_filter: :all,
+                limit: 1000
+              ])
               filter_counts = calculate_filter_counts(all_events)
               event_count = length(events)
               
@@ -91,11 +98,18 @@ defmodule EventasaurusWeb.GroupLive.Show do
         members = Groups.list_group_members_with_roles(group)
         member_count = length(members)
         
-        # Load group events with time filtering
+        # Load group events using unified function with proper ordering
         time_filter = :upcoming
-        all_events = Events.list_events_for_group(group)
-        all_events = add_user_context_to_events(all_events, user)
-        events = filter_events_by_time(all_events, time_filter)
+        events = Events.list_events_for_group(group, user, [
+          time_filter: time_filter,
+          limit: 100
+        ])
+        
+        # Calculate filter counts
+        all_events = Events.list_events_for_group(group, user, [
+          time_filter: :all,
+          limit: 1000
+        ])
         filter_counts = calculate_filter_counts(all_events)
         event_count = length(events)
         
@@ -451,9 +465,18 @@ defmodule EventasaurusWeb.GroupLive.Show do
     
     group = socket.assigns.group
     user = socket.assigns.user
-    all_events = Events.list_events_for_group(group)
-    all_events = add_user_context_to_events(all_events, user)
-    events = filter_events_by_time(all_events, time_filter)
+    
+    # Use unified function for filtered events with proper ordering
+    events = Events.list_events_for_group(group, user, [
+      time_filter: time_filter,
+      limit: 100
+    ])
+    
+    # Get all events for filter counts
+    all_events = Events.list_events_for_group(group, user, [
+      time_filter: :all,
+      limit: 1000
+    ])
     filter_counts = calculate_filter_counts(all_events)
     
     {:noreply,
@@ -464,48 +487,6 @@ defmodule EventasaurusWeb.GroupLive.Show do
   end
 
   # Helper functions
-
-  defp add_user_context_to_events(events, user) do
-    Enum.map(events, fn event ->
-      # Check if user is an organizer of this event
-      is_organizer = case event.users do
-        %Ecto.Association.NotLoaded{} -> false
-        users when is_list(users) -> Enum.any?(users, &(&1.id == user.id))
-        _ -> false
-      end
-      
-      event
-      |> Map.put(:can_manage, is_organizer)
-      |> Map.put(:user_role, if(is_organizer, do: "organizer", else: "participant"))
-    end)
-  end
-
-  defp filter_events_by_time(events, :upcoming) do
-    now = DateTime.utc_now()
-    events
-    |> Enum.filter(fn event -> 
-      case event.start_at do
-        nil -> true  # Include events without dates as upcoming
-        start_at -> DateTime.compare(start_at, now) in [:gt, :eq]
-      end
-    end)
-    |> Enum.sort_by(fn event -> event.start_at || DateTime.utc_now() end, :asc)
-  end
-
-  defp filter_events_by_time(events, :past) do
-    now = DateTime.utc_now()
-    events
-    |> Enum.filter(fn event -> 
-      case event.start_at do
-        nil -> false  # Don't include no-date events in past
-        start_at -> DateTime.compare(start_at, now) == :lt
-      end
-    end)
-    |> Enum.sort_by(& &1.start_at, :desc)
-  end
-
-  # Fallback for any unhandled time filters - default to upcoming
-  defp filter_events_by_time(events, _), do: filter_events_by_time(events, :upcoming)
 
   defp calculate_filter_counts(events) do
     now = DateTime.utc_now()
