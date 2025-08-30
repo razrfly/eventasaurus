@@ -39,6 +39,14 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :terms)
   end
 
+  def pitch(conn, _params) do
+    render(conn, :pitch)
+  end
+
+  def pitch2(conn, _params) do
+    render(conn, :pitch2)
+  end
+
   def invite_only(conn, _params) do
     render(conn, :invite_only)
   end
