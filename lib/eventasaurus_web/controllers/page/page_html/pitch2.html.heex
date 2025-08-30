@@ -1,0 +1,507 @@
+<div class="overflow-hidden">
+  <main>
+    <%!-- Hero Section --%>
+    <.hero_section class="pb-16 pt-8 sm:pb-24 sm:pt-16">
+      <div class="pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
+        <.subheading class="mb-4 text-blue-600">Introducing</.subheading>
+        <.heading as="h1" class="font-display text-5xl/[0.9] font-medium tracking-tight text-balance text-gray-950 sm:text-6xl/[0.8] lg:text-7xl/[0.8] mb-8">
+          The Social Network for Showing Up
+        </.heading>
+        <p class="text-xl sm:text-2xl text-gray-950/75 max-w-4xl mx-auto leading-relaxed">
+          If Instagram is for what you wish your life looked like, 
+          <strong class="text-gray-950">Eventasaurus is for what you actually do.</strong>
+        </p>
+      </div>
+    </.hero_section>
+
+    <%!-- The Problem Space --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-red-600">🔥 The Problem Space</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          The Current Social Landscape is Broken
+        </.heading>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <%!-- Facebook Events is Dead --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">💀</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Facebook Events is Dead
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Once the de facto standard</li>
+            <li>• Abandoned by younger users</li>
+            <li>• Left a massive vacuum</li>
+          </ul>
+        </div>
+
+        <%!-- Instagram/TikTok Performative --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">🎭</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Instagram/TikTok: Performative, Not Connective
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Built for content, not coordination</li>
+            <li>• Showcases moments after they happen</li>
+            <li>• Produces FOMO, not friendships</li>
+          </ul>
+        </div>
+
+        <%!-- WhatsApp Chaos --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">🌀</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            WhatsApp: Chaotic & Temporary
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Groups pop up then die</li>
+            <li>• No persistent social graph</li>
+            <li>• Terrible discoverability</li>
+          </ul>
+        </div>
+
+        <%!-- BeReal Failed --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">📉</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            BeReal Proved Hunger... But Fizzled
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Great at diagnosing the problem</li>
+            <li>• Too shallow and novelty-driven</li>
+            <li>• Failed to tie moments to community</li>
+          </ul>
+        </div>
+
+        <%!-- Event Tools Small --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">🔧</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Event Tools: Small Wedges, Not Ecosystems
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Partiful = pretty flyers + Venmo</li>
+            <li>• Luma = checkout forms</li>
+            <li>• Neither solves daily coordination</li>
+          </ul>
+        </div>
+
+        <%!-- The Gap --%>
+        <div class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-300 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🎯</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            The Massive Gap
+          </h3>
+          <p class="text-gray-700 leading-relaxed">
+            <strong>No platform</strong> solves the daily, authentic, recurring nature of how humans actually coordinate and gather.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- The Opportunity --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-green-600">🌍 The Opportunity</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          A New Category: Not Just an Event Tool
+        </.heading>
+        <div class="max-w-3xl mx-auto">
+          <div class="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 p-8 shadow-lg">
+            <p class="text-2xl font-semibold text-gray-900 mb-4">
+              "The Social Network for Showing Up"
+            </p>
+            <p class="text-lg text-gray-700 leading-relaxed">
+              The first authentic social network — where the atomic unit isn't the photo, it's the event.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto mb-16">
+        <%!-- Events as Atomic Unit --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Events as the Atomic Unit of Social Life
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Every friendship, group, or movement is built around shared experiences. 
+            Eventasaurus makes those experiences the organizing principle of a network.
+          </p>
+          <p class="text-sm font-medium text-blue-600">
+            → The unit isn't the photo, it's the event
+          </p>
+        </div>
+
+        <%!-- Persistent Connections --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            From One-off RSVPs to Persistent Connections
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Every photo, RSVP, poll, and ticket attaches to an event timeline. 
+            Over time, this forms a social graph of your real life — not aspirational, but actual.
+          </p>
+          <p class="text-sm font-medium text-green-600">
+            → Your real social graph, not a performance
+          </p>
+        </div>
+
+        <%!-- Daily Utility --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Daily Utility, Not Just Special Occasions
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Birthdays, dinners, study groups, movie nights, festivals, activism, meetups. 
+            Habit-forming because events are constant, not rare.
+          </p>
+          <p class="text-sm font-medium text-purple-600">
+            → Part of daily life, not just big moments
+          </p>
+        </div>
+
+        <%!-- Kickstarter Model --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Kickstarter for Experiences (New Market!)
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Don't guess whether friends are interested — fund and validate events before committing. 
+            Unlocks grassroots events that never existed before.
+          </p>
+          <p class="text-sm font-medium text-orange-600">
+            → Pre-validate demand, remove risk
+          </p>
+        </div>
+      </div>
+
+      <%!-- Creator Economy --%>
+      <div class="max-w-4xl mx-auto">
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-8">
+          <h3 class="text-2xl font-semibold text-gray-900 mb-4 text-center">
+            Creator + Influencer Revenue Unlock
+          </h3>
+          <p class="text-lg text-gray-700 leading-relaxed text-center mb-6">
+            Influencers move audiences from DMs/WhatsApp chaos into structured, monetized events.
+          </p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="text-center">
+              <div class="text-3xl mb-2">🎟️</div>
+              <p class="text-sm font-medium text-gray-700">Ticket Sales</p>
+            </div>
+            <div class="text-center">
+              <div class="text-3xl mb-2">👥</div>
+              <p class="text-sm font-medium text-gray-700">Memberships</p>
+            </div>
+            <div class="text-center">
+              <div class="text-3xl mb-2">📦</div>
+              <p class="text-sm font-medium text-gray-700">Merch Bundles</p>
+            </div>
+            <div class="text-center">
+              <div class="text-3xl mb-2">🔐</div>
+              <p class="text-sm font-medium text-gray-700">Exclusive Access</p>
+            </div>
+          </div>
+          <p class="text-sm font-medium text-purple-600 text-center mt-4">
+            → Events become a new pillar of the creator economy
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Group Gatherings Section --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-4 text-blue-600">Beyond Individual Events</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl sm:text-4xl">
+          💸 Making Group Gatherings Effortless
+        </.heading>
+        <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+          Revolutionary features that make coordinating and saving for group experiences simple.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <%!-- Monthly Contributions --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full mb-6">
+            <span class="text-3xl text-white">📅</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Monthly Group Contributions
+          </h3>
+          <p class="text-gray-600 leading-relaxed">
+            Friends contribute monthly towards common goals — yearly vacations, quarterly dinners, dream concerts. 
+            Watch your shared fund grow together.
+          </p>
+        </div>
+
+        <%!-- Event Roulette --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🎲</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Event Roulette
+          </h3>
+          <p class="text-gray-600 leading-relaxed">
+            Add excitement! Friends contribute to a year-end surprise. 
+            The platform randomly selects from your wishlist — maybe skiing, maybe Vegas!
+          </p>
+        </div>
+
+        <%!-- Occasion Funds --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🎁</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Special Occasion Funds
+          </h3>
+          <p class="text-gray-600 leading-relaxed">
+            Colleagues saving for retirement parties. Friends pooling for bachelor weekends. 
+            Families contributing to reunions. Simple group coordination.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Investor Hooks --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-purple-600">🚀 Investor Hooks</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Why This Wins
+        </.heading>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Huge Whitespace</h3>
+          <p class="text-gray-600">Facebook left billions of "event-shaped" relationships stranded</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Gen Z Hunger</h3>
+          <p class="text-gray-600">They distrust curated platforms → crave authenticity + IRL connection</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Network Effect</h3>
+          <p class="text-gray-600">Every event is a new node, every attendee a potential recurring user</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Multi-sided Growth</h3>
+          <p class="text-gray-600">Users (casual), Influencers (revenue), Brands (reach)</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Scalable Data Moat</h3>
+          <p class="text-gray-600">By indexing all public events, you become the event layer of the internet</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Daily Habit Formation</h3>
+          <p class="text-gray-600">Events are constant, not rare — driving daily active use</p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Competitive Positioning --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-4 text-blue-600">📊 Market Position</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl sm:text-4xl">
+          How We Poke Holes in Competitors
+        </.heading>
+      </div>
+
+      <div class="max-w-4xl mx-auto space-y-4">
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">🎨</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">Partiful</h3>
+            <p class="text-gray-600">Pretty flyers. No network. No creator monetization.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">🛒</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">Luma</h3>
+            <p class="text-gray-600">Checkout page. No virality. No daily use.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">💬</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">WhatsApp</h3>
+            <p class="text-gray-600">Group graveyard. Great for messages, terrible for memory.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">📱</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">Instagram/TikTok</h3>
+            <p class="text-gray-600">FOMO factories. Zero IRL coordination.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">📸</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">BeReal</h3>
+            <p class="text-gray-600">Proved authenticity matters. Lacked depth.</p>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Three Circles Strategy --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-green-600">🛠 The Strategy</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Three Concentric Circles to Market Dominance
+        </.heading>
+      </div>
+
+      <div class="max-w-5xl mx-auto">
+        <div class="relative">
+          <%!-- Circle 3: Vision (Outermost) --%>
+          <div class="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full opacity-30"></div>
+          <div class="relative bg-white/90 backdrop-blur rounded-3xl border-2 border-blue-300 p-12">
+            
+            <%!-- Circle 2: Expansion (Middle) --%>
+            <div class="bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl border-2 border-green-300 p-8 mb-8">
+              
+              <%!-- Circle 1: Wedge (Core) --%>
+              <div class="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-xl border-2 border-orange-300 p-6 mb-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-3">
+                  1. The Wedge
+                </h3>
+                <p class="text-gray-700 leading-relaxed">
+                  <strong>Event invites + RSVPs</strong> — the thing people already do. 
+                  Start with the simple, familiar behavior everyone understands.
+                </p>
+              </div>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-3">
+                2. The Expansion
+              </h3>
+              <p class="text-gray-700 leading-relaxed">
+                <strong>Event kickstarting + creator monetization</strong> — unlock new behaviors and revenue streams. 
+                Enable use cases that couldn't exist before.
+              </p>
+            </div>
+
+            <h3 class="text-xl font-bold text-gray-900 mb-3">
+              3. The Vision
+            </h3>
+            <p class="text-gray-700 leading-relaxed">
+              <strong>The authentic social network</strong> — become the daily utility layer for real-world connection. 
+              The platform where online communities meet offline.
+            </p>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Pitch Lines --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-purple-600">📣 Pitch Lines</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          How We Tell Our Story
+        </.heading>
+      </div>
+
+      <div class="max-w-4xl mx-auto space-y-6">
+        <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            "If Instagram is for what you wish your life looked like, 
+            <span class="text-blue-600">Eventasaurus is for what you actually do."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            "The event platform Facebook abandoned. The social graph Instagram can't touch. 
+            <span class="text-green-600">The network WhatsApp can't organize."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            "The first authentic social network — 
+            <span class="text-purple-600">where the unit isn't the photo, it's the event."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            <span class="text-orange-600">"Kickstarter for experiences + the social network for showing up."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            <span class="text-teal-600">"Less scrolling, more showing up."</span>
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Final CTA --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center">
+        <div class="max-w-4xl mx-auto">
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl lg:text-5xl">
+            <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+              Join us in building the authentic social network
+            </span>
+          </.heading>
+          <p class="text-xl text-gray-600 mb-8 leading-relaxed">
+            We're creating the platform where online communities meet offline — 
+            the bridge between digital connection and real-world experience.
+          </p>
+          <div class="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 p-8 shadow-lg mb-8">
+            <h3 class="text-2xl font-semibold text-gray-900 mb-4">The Opportunity is Massive</h3>
+            <ul class="text-left max-w-2xl mx-auto space-y-3 text-gray-700">
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>Facebook left billions of event relationships stranded</span>
+              </li>
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>Gen Z craves authentic IRL connection over digital performance</span>
+              </li>
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>Every event creates network effects and recurring engagement</span>
+              </li>
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>Multi-sided marketplace: users, creators, brands</span>
+              </li>
+            </ul>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <.radiant_button href="/register" class="text-lg px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              Start Building Your Community
+            </.radiant_button>
+            <.radiant_button href="/events" variant="outline" class="text-lg px-8 py-4">
+              Explore Events
+            </.radiant_button>
+          </div>
+        </div>
+      </div>
+    </.section>
+  </main>
+</div>
