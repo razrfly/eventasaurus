@@ -267,11 +267,37 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
-  Returns the list of events for a specific group.
+  Returns the list of events for a specific group with proper ordering.
+  
+  This function now uses the unified event fetching logic to ensure consistent
+  ordering and filtering across the application.
 
   ## Parameters
   - group: The group to filter events by
-  - opts: Options for filtering (e.g., include_deleted)
+  - user: The user viewing the events (for role/permission context)
+  - opts: Options for filtering:
+    - :time_filter - :all, :upcoming, :past (default: :all)
+    - :limit - maximum number of results (default: 50)
+    - :include_deleted - whether to include soft-deleted events (default: false)
+  """
+  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, %User{} = user, opts) when not is_nil(group_id) and is_list(opts) do
+    # Use the unified function with group_id filter
+    list_unified_events_for_user_optimized(user, 
+      Keyword.merge(opts, [
+        group_id: group_id,
+        ownership_filter: :all  # Show all events in the group regardless of user's role
+      ])
+    )
+  end
+  
+  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = group, %User{} = user) when not is_nil(group_id) do
+    list_events_for_group(group, user, [])
+  end
+  
+  @doc """
+  Legacy version of list_events_for_group for backward compatibility.
+  
+  @deprecated Use list_events_for_group/3 with user parameter instead.
   """
   def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, opts \\ []) when not is_nil(group_id) do
     query = from e in Event,
@@ -1228,11 +1254,18 @@ defmodule EventasaurusApp.Events do
   @doc """
   Optimized version of list_unified_events_for_user that uses a single query with LEFT JOINs
   instead of UNION to improve performance. This reduces database round trips from 3+ to 1.
+  
+  Options:
+    - :time_filter - :all, :upcoming, :past, :archived (default: :all)
+    - :ownership_filter - :all, :created, :participating (default: :all)
+    - :limit - maximum number of results (default: 50)
+    - :group_id - filter by group_id (optional)
   """
   def list_unified_events_for_user_optimized(%User{} = user, opts \\ []) do
     time_filter = Keyword.get(opts, :time_filter, :all)
     ownership_filter = Keyword.get(opts, :ownership_filter, :all)
     limit = Keyword.get(opts, :limit, 50)
+    group_id = Keyword.get(opts, :group_id, nil)
     now = DateTime.utc_now()
 
     # Build the base query with LEFT JOINs
@@ -1286,16 +1319,24 @@ defmodule EventasaurusApp.Events do
           }
         }
 
+    # Apply group filter if provided
+    base_with_group = if group_id do
+      from [e, eu, ep, v] in base_query,
+        where: e.group_id == ^group_id
+    else
+      base_query
+    end
+
     # Apply ownership filter
     filtered_query = case ownership_filter do
       :created -> 
-        from [e, eu, ep, v] in base_query,
+        from [e, eu, ep, v] in base_with_group,
           where: not is_nil(eu.id)
       :participating -> 
-        from [e, eu, ep, v] in base_query,
+        from [e, eu, ep, v] in base_with_group,
           where: not is_nil(ep.id)
       :all -> 
-        base_query
+        base_with_group
     end
 
     # Apply time filter
