@@ -135,6 +135,9 @@ defmodule EventasaurusWeb.Router do
       live "/groups", GroupLive.Index, :index
       live "/groups/new", GroupLive.New, :new
       live "/groups/:slug", GroupLive.Show, :show
+      live "/groups/:slug/events", GroupLive.Show, :events
+      live "/groups/:slug/people", GroupLive.Show, :people
+      live "/groups/:slug/activities", GroupLive.Show, :activities
       live "/groups/:slug/edit", GroupLive.Edit, :edit
       live "/events", EventsLive
       live "/events/new", EventLive.New

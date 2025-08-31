@@ -37,6 +37,8 @@ defmodule EventasaurusWeb.GroupLive.Show do
                |> assign(:member_count, 0)
                |> assign(:events, [])
                |> assign(:event_count, 0)
+               |> assign(:activities, [])
+               |> assign(:activity_filter, "all")
                |> assign(:active_tab, "events")}
             else
               # Load full group data for members
@@ -71,6 +73,8 @@ defmodule EventasaurusWeb.GroupLive.Show do
                |> assign(:event_count, event_count)
                |> assign(:time_filter, time_filter)
                |> assign(:filter_counts, filter_counts)
+               |> assign(:activities, [])
+               |> assign(:activity_filter, "all")
                |> assign(:active_tab, "events")
                |> assign(:search_query, "")
                |> assign(:role_filter, "all")
@@ -85,6 +89,38 @@ defmodule EventasaurusWeb.GroupLive.Show do
             end
         end
     end
+  end
+  
+  @impl true
+  def handle_params(_params, _url, socket) do
+    # Get the action from the socket's live_action
+    action = socket.assigns.live_action
+    
+    # Set the active tab based on the action
+    active_tab = case action do
+      :events -> "events"
+      :people -> "members"
+      :activities -> "activities"
+      _ -> "events"  # Default to events
+    end
+    
+    socket = assign(socket, :active_tab, active_tab)
+    
+    # Load activities if switching to activities tab
+    socket = if active_tab == "activities" and socket.assigns[:is_member] do
+      load_activities(socket)
+    else
+      socket
+    end
+    
+    # Load members if switching to members tab
+    socket = if active_tab == "members" and socket.assigns[:is_member] do
+      load_members_page(socket, 1)
+    else
+      socket
+    end
+    
+    {:noreply, socket}
   end
   
   @impl true
@@ -192,16 +228,15 @@ defmodule EventasaurusWeb.GroupLive.Show do
   
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    socket = assign(socket, :active_tab, tab)
-    
-    # Load members data when switching to members tab
-    socket = if tab == "members" do
-      load_members_page(socket, 1)
-    else
-      socket
+    # Build the path based on the tab
+    path = case tab do
+      "events" -> "/groups/#{socket.assigns.group.slug}/events"
+      "members" -> "/groups/#{socket.assigns.group.slug}/people"
+      "activities" -> "/groups/#{socket.assigns.group.slug}/activities"
+      _ -> "/groups/#{socket.assigns.group.slug}"
     end
     
-    {:noreply, socket}
+    {:noreply, push_patch(socket, to: path)}
   end
   
   @impl true
@@ -352,6 +387,15 @@ defmodule EventasaurusWeb.GroupLive.Show do
   end
 
   @impl true
+  def handle_event("filter_activities", %{"activity_type" => activity_type}, socket) do
+    socket = socket
+             |> assign(:activity_filter, activity_type)
+             |> load_activities()
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
   def handle_event("remove_member", %{"user_id" => user_id}, socket) do
     case Integer.parse(user_id) do
       {parsed_id, _} ->
@@ -455,6 +499,25 @@ defmodule EventasaurusWeb.GroupLive.Show do
     |> assign(:paginated_members, result.entries)
     |> assign(:total_pages, result.total_pages)
     |> assign(:current_page, result.page)
+  end
+  
+  defp load_activities(socket) do
+    group = socket.assigns.group
+    activity_filter = socket.assigns[:activity_filter] || "all"
+    
+    # Build options for filtering
+    opts = []
+    opts = if activity_filter != "all" do
+      Keyword.put(opts, :activity_type, activity_filter)
+    else
+      opts
+    end
+    
+    # Fetch activities for the group
+    activities = Events.list_group_activities(group.id, opts)
+    
+    socket
+    |> assign(:activities, activities)
   end
 
   # Handle time filter changes from EventTimelineComponent
