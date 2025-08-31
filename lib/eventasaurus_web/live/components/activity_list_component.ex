@@ -52,7 +52,7 @@ defmodule EventasaurusWeb.Components.ActivityListComponent do
                   <% else %>
                     <div class="h-16 w-16 rounded-lg bg-gray-200 flex items-center justify-center">
                       <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <%= activity_icon(activity.activity_type) %>
+                        <%= Phoenix.HTML.raw(activity_icon(activity.activity_type)) %>
                       </svg>
                     </div>
                   <% end %>
@@ -127,15 +127,24 @@ defmodule EventasaurusWeb.Components.ActivityListComponent do
   # Helper functions
   
   defp get_activity_title(activity) do
-    activity.metadata["title"] || activity.metadata["name"] || "Untitled Activity"
+    case activity.metadata do
+      nil -> "Untitled Activity"
+      metadata -> metadata["title"] || metadata["name"] || "Untitled Activity"
+    end
   end
   
   defp get_activity_description(activity) do
-    activity.metadata["description"] || activity.metadata["overview"]
+    case activity.metadata do
+      nil -> nil
+      metadata -> metadata["description"] || metadata["overview"]
+    end
   end
   
   defp get_activity_image(activity) do
-    activity.metadata["image_url"] || activity.metadata["poster_url"] || activity.metadata["thumbnail_url"]
+    case activity.metadata do
+      nil -> nil
+      metadata -> metadata["image_url"] || metadata["poster_url"] || metadata["thumbnail_url"]
+    end
   end
   
   defp format_activity_date(nil), do: "Unknown date"
