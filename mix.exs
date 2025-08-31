@@ -26,6 +26,7 @@ defmodule Eventasaurus.MixProject do
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:dev), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
@@ -67,7 +68,10 @@ defmodule Eventasaurus.MixProject do
       {:dotenv, "~> 3.1", only: [:dev, :test]},
 
       # Test data factories
-      {:ex_machina, "~> 2.7.0", only: :test},
+      {:ex_machina, "~> 2.7.0", only: [:dev, :test]},
+      
+      # Fake data generation for development seeds
+      {:faker, "~> 0.18", only: [:dev, :test]},
 
       # Mocking library for external services in tests
       {:mox, "~> 1.0", only: :test},

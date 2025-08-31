@@ -45,12 +45,16 @@ defmodule EventasaurusWeb.Plugs.AuthPlug do
       plug :fetch_auth_user
   """
   def fetch_auth_user(conn, _opts) do
-    # First check if we need to refresh the token
-    conn = maybe_refresh_token_if_needed(conn)
-    
-    # Then get the current user
-    user = Auth.get_current_user(conn)
-    assign(conn, :auth_user, user)
+    # If dev auth bypass already set the user, skip everything
+    if conn.assigns[:dev_mode_auth] do
+      # Dev auth plug already handled everything
+      conn
+    else
+      # Normal production authentication flow
+      conn = maybe_refresh_token_if_needed(conn)
+      user = Auth.get_current_user(conn)
+      assign(conn, :auth_user, user)
+    end
   end
 
   @doc """
