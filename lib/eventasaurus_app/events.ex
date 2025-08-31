@@ -290,6 +290,9 @@ defmodule EventasaurusApp.Events do
     )
   end
   
+  # Header for list_events_for_group/2 with default parameter
+  def list_events_for_group(group, opts_or_user \\ [])
+  
   def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = group, %User{} = user) when not is_nil(group_id) do
     list_events_for_group(group, user, [])
   end
@@ -299,7 +302,7 @@ defmodule EventasaurusApp.Events do
   
   @deprecated Use list_events_for_group/3 with user parameter instead.
   """
-  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, opts \\ []) when not is_nil(group_id) do
+  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, opts) when not is_nil(group_id) do
     query = from e in Event,
             where: e.group_id == ^group_id,
             preload: [:venue, :users]

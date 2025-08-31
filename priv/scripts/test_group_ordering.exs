@@ -65,7 +65,7 @@ events_data = [
 
 # Create events
 created_events = Enum.map(events_data, fn event_data ->
-  {:ok, event} = Events.create_event(Map.merge(event_data, %{
+  {:ok, event} = Events.create_event_with_organizer(Map.merge(event_data, %{
     description: "Test event",
     slug: "test-event-#{System.unique_integer()}",
     status: "published",
