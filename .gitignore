@@ -36,6 +36,12 @@ cover/
 # Environment variables
 .env
 
+# Cookie files (can contain session/auth tokens)
+cookies.txt
+*.cookiejar
+*.cookies
+curl_cookies.txt
+
 # MCP configuration with API keys
 .mcp.json
 

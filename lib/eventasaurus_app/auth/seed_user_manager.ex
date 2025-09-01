@@ -85,7 +85,7 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
         
       {:error, %{message: message}} when is_binary(message) ->
         if String.contains?(message, "already been registered") do
-          Logger.warning("Auth user already exists for #{email}, creating local user only")
+          Logger.warn("Auth user already exists for #{email}, creating local user only")
           handle_existing_auth_user(attrs)
         else
           Logger.error("Supabase auth creation failed for #{email}: #{message}")
@@ -99,10 +99,10 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   end
 
   defp create_local_user(attrs) do
-    Logger.warning("Creating local user without auth for #{Map.get(attrs, :email)}")
+    Logger.warn("Creating local user without auth for #{Map.get(attrs, :email)}")
     
     user_attrs = attrs
-    |> Map.put(:supabase_id, Ecto.UUID.generate())
+    |> Map.put(:supabase_id, "pending-" <> Ecto.UUID.generate())
     |> Map.delete(:password)
     
     create_database_user(user_attrs)
@@ -154,9 +154,12 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
         end
         
       {:error, _} ->
-        # Can't fetch the auth user, create with generated ID
-        Logger.warning("Could not fetch existing auth user for #{email}, using generated ID")
-        create_local_user(attrs)
+        # Can't fetch the auth user; sync or create locally without auth
+        Logger.warn("Could not fetch existing auth user for #{email}, syncing/creating locally")
+        case Repo.get_by(Accounts.User, email: email) do
+          nil -> create_local_user(attrs)
+          existing -> update_existing_user(existing, Map.delete(attrs, :password))
+        end
     end
   end
 
