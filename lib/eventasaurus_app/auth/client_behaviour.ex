@@ -49,7 +49,7 @@ defmodule EventasaurusApp.Auth.ClientBehaviour do
   @doc """
   Create a user using admin API.
   """
-  @callback admin_create_user(String.t(), String.t(), map()) ::
+  @callback admin_create_user(String.t(), String.t(), map(), boolean()) ::
     {:ok, map()} | {:error, any()}
 
   @doc """
