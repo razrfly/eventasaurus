@@ -48,6 +48,12 @@ defmodule EventasaurusApp.Auth.ClientBehaviour do
 
   @doc """
   Create a user using admin API.
+  
+  Parameters:
+    - email :: String.t()
+    - password :: String.t()
+    - user_metadata :: map()
+    - email_confirm :: boolean() - true to auto-confirm (dev), false to require confirmation
   """
   @callback admin_create_user(String.t(), String.t(), map(), boolean()) ::
     {:ok, map()} | {:error, any()}
