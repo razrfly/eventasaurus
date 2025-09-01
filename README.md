@@ -28,7 +28,7 @@ A modern event planning and management platform built with Phoenix LiveView, des
 - Elixir 1.15 or later
 - Phoenix 1.7 or later
 - PostgreSQL 14 or later
-- Node.js 16 or later
+- Node.js 18 or later
 - Supabase CLI (for local development)
 
 ## Installation
@@ -99,6 +99,11 @@ supabase status | grep "service_role key"
 
 # Export it for the current session
 export SUPABASE_SERVICE_ROLE_KEY_LOCAL="<your-service-role-key>"
+
+# Security note:
+# - Never commit SUPABASE_SERVICE_ROLE_KEY* to the repo or share it.
+# - Store it in a local .env file and ensure .env is gitignored.
+# - Use different keys per environment.
 
 # Run the main seeds (creates holden@gmail.com account)
 mix run priv/repo/seeds.exs

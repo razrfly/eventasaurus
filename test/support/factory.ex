@@ -436,8 +436,8 @@ defmodule EventasaurusApp.Factory do
   """
   def poll_option_factory do
     %PollOption{
-      title: Faker.Lorem.sentence(2..5),
-      description: Faker.Lorem.paragraph(1..3),
+      title: Faker.Lorem.sentence(Enum.random(2..5)),
+      description: Faker.Lorem.paragraph(Enum.random(1..3)),
       poll: build(:poll),
       suggested_by: build(:user),
       image_url: "https://picsum.photos/400/300?random=#{System.unique_integer([:positive])}",
@@ -471,9 +471,9 @@ defmodule EventasaurusApp.Factory do
       activity_type: Enum.random(["movie_watched", "tv_watched", "game_played", "book_read", 
                                   "restaurant_visited", "place_visited", "activity_completed", "custom"]),
       metadata: %{
-        "title" => Faker.Lorem.sentence(2..5),
+        "title" => Faker.Lorem.sentence(Enum.random(2..5)),
         "rating" => Enum.random([1, 2, 3, 4, 5]),
-        "review" => Faker.Lorem.paragraph(2..4),
+        "review" => Faker.Lorem.paragraph(Enum.random(2..4)),
         "image_url" => Faker.Avatar.image_url(),
         "location" => Faker.Address.city()
       },
