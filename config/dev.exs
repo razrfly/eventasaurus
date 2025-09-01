@@ -3,6 +3,9 @@ import Config
 # Set environment
 config :eventasaurus, :environment, :dev
 
+# Development-only features
+config :eventasaurus, :dev_quick_login, true
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

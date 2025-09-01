@@ -318,14 +318,14 @@ defmodule EventasaurusApp.Auth.Client do
   Returns {:ok, user_data} on success or {:error, reason} on failure.
   """
   @impl true
-  def admin_create_user(email, password, user_metadata \\ %{}) do
+  def admin_create_user(email, password, user_metadata \\ %{}, email_confirm \\ true) do
     url = "#{get_auth_url()}/admin/users"
 
     body = Jason.encode!(%{
       email: email,
       password: password,
       user_metadata: user_metadata,
-      email_confirm: false  # This requires email confirmation for account access
+      email_confirm: email_confirm  # Auto-confirm email for dev environment
     })
 
     case HTTPoison.post(url, body, admin_headers()) do

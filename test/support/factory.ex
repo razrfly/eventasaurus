@@ -1,25 +1,36 @@
 defmodule EventasaurusApp.Factory do
   @moduledoc """
-  Factory for generating test data using ExMachina.
+  Factory for generating test data using ExMachina and Faker.
 
   This module provides factories for all major schemas in the application
-  to support robust integration testing.
+  to support robust integration testing and development seeding.
   """
 
   use ExMachina.Ecto, repo: EventasaurusApp.Repo
 
   alias EventasaurusApp.Events.{Event, EventUser, EventParticipant, Ticket, Order}
+  alias EventasaurusApp.Events.{Poll, PollOption, PollVote, EventActivity}
+  alias EventasaurusApp.Groups.{Group, GroupUser}
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Accounts.User
+  alias Nanoid
 
   @doc """
-  Factory for User schema
+  Factory for User schema with realistic data
   """
   def user_factory do
     %User{
-      name: sequence(:name, &"Test User #{&1}"),
-      email: sequence(:email, &"test#{&1}@example.com"),
-      supabase_id: sequence(:supabase_id, &"supabase_user_#{&1}")
+      name: Faker.Person.name(),
+      email: sequence(:email, fn n -> "#{Faker.Internet.user_name()}#{n}@#{Faker.Internet.domain_name()}" end),
+      supabase_id: Ecto.UUID.generate(),  # Use proper UUID instead of fake prefix
+      username: sequence(:username, fn n -> "#{Faker.Internet.user_name()}#{n}" end),
+      bio: Faker.Lorem.paragraph(2),
+      website_url: if(Enum.random([true, false]), do: Faker.Internet.url(), else: nil),
+      profile_public: Enum.random([true, false]),
+      instagram_handle: if(Enum.random([true, false]), do: Faker.Internet.user_name(), else: nil),
+      x_handle: if(Enum.random([true, false]), do: Faker.Internet.user_name(), else: nil),
+      timezone: Enum.random(["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Asia/Tokyo"]),
+      default_currency: Enum.random(["USD", "EUR", "GBP", "CAD"])
     }
   end
 
@@ -363,6 +374,163 @@ defmodule EventasaurusApp.Factory do
       stripe_user_id: sequence(:stripe_user_id, &"acct_test_#{&1}"),
       connected_at: DateTime.utc_now(),
       user: build(:user)
+    }
+  end
+
+  # ===== New Dev Seed Factories with Faker =====
+  
+  @doc """
+  Factory for Group schema with realistic data
+  """
+  def group_factory do
+    %Group{
+      name: sequence(:group_name, fn n -> "#{Faker.Team.name()} #{n}" end),
+      description: Faker.Lorem.paragraph(3),
+      slug: sequence(:group_slug, &"group-#{&1}"),
+      avatar_url: "https://picsum.photos/200/200?random=#{System.unique_integer([:positive])}",
+      cover_image_url: "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
+      created_by: build(:user)
+    }
+  end
+
+  @doc """
+  Factory for GroupUser schema
+  """
+  def group_user_factory do
+    %GroupUser{
+      user: build(:user),
+      group: build(:group),
+      role: Enum.random(["admin", "member"])
+    }
+  end
+
+  @doc """
+  Factory for Poll schema
+  """
+  def poll_factory do
+    %Poll{
+      title: sequence(:poll_title, fn n -> "#{Faker.Lorem.sentence(3)} Poll #{n}" end),
+      description: Faker.Lorem.paragraph(2),
+      poll_type: Enum.random(["date", "movie", "restaurant", "activity", "generic"]),
+      voting_system: Enum.random(["single_choice", "multiple_choice", "ranked"]),
+      phase: Enum.random(["list_building", "voting", "closed"]),
+      list_building_deadline: Faker.DateTime.forward(7),
+      voting_deadline: Faker.DateTime.forward(14),
+      max_options_per_user: Enum.random([1, 3, 5, nil]),
+      auto_finalize: Enum.random([true, false]),
+      privacy_settings: %{
+        "anonymous_voting" => Enum.random([true, false]),
+        "show_results_during_voting" => Enum.random([true, false])
+      },
+      settings: %{
+        "location_scope" => Enum.random(["place", "city", "region", "country"]),
+        "allow_write_ins" => Enum.random([true, false])
+      },
+      event: build(:event),
+      created_by: build(:user)
+    }
+  end
+
+  @doc """
+  Factory for PollOption schema
+  """
+  def poll_option_factory do
+    %PollOption{
+      title: Faker.Lorem.sentence(2..5),
+      description: Faker.Lorem.paragraph(1..3),
+      poll: build(:poll),
+      suggested_by: build(:user),
+      image_url: "https://picsum.photos/400/300?random=#{System.unique_integer([:positive])}",
+      external_id: "ext_#{System.unique_integer([:positive])}",
+      metadata: %{
+        "rating" => :rand.uniform() * 5
+      },
+      order_index: sequence(:order_index, & &1)
+    }
+  end
+
+  @doc """
+  Factory for PollVote schema
+  """
+  def poll_vote_factory do
+    poll_option = build(:poll_option)
+    %PollVote{
+      poll_option: poll_option,
+      poll: poll_option.poll,
+      voter: build(:user),
+      vote_rank: Enum.random([1, 2, 3, nil]),
+      voted_at: DateTime.utc_now()
+    }
+  end
+
+  @doc """
+  Factory for EventActivity schema
+  """
+  def event_activity_factory do
+    %EventActivity{
+      activity_type: Enum.random(["movie_watched", "tv_watched", "game_played", "book_read", 
+                                  "restaurant_visited", "place_visited", "activity_completed", "custom"]),
+      metadata: %{
+        "title" => Faker.Lorem.sentence(2..5),
+        "rating" => Enum.random([1, 2, 3, 4, 5]),
+        "review" => Faker.Lorem.paragraph(2..4),
+        "image_url" => Faker.Avatar.image_url(),
+        "location" => Faker.Address.city()
+      },
+      occurred_at: Faker.DateTime.backward(30),
+      source: Enum.random(["manual", "integration", "import"]),
+      event: build(:event),
+      created_by: build(:user)
+    }
+  end
+
+
+  # Enhanced factories with Faker data
+  def realistic_event_factory do
+    themes = [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
+    
+    title = Enum.random([
+      "#{Faker.Lorem.word()} Movie Night",
+      "Dinner at #{Faker.Company.name()}",
+      "#{Faker.Lorem.word()} Game Session",
+      "#{Faker.Lorem.word()} Sports Event",
+      "#{Faker.Person.name()} Concert",
+      Faker.Lorem.sentence(3)
+    ])
+    
+    %Event{
+      title: sequence(:title, fn n -> "#{title} ##{n}" end),
+      tagline: Faker.Company.catch_phrase(),
+      description: Faker.Lorem.paragraphs(3) |> Enum.join("\n\n"),
+      start_at: Faker.DateTime.forward(60),
+      ends_at: Faker.DateTime.forward(90),
+      timezone: Enum.random(["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles"]),
+      visibility: Enum.random([:public, :private]),
+      slug: sequence(:slug, &"event-#{&1}"),
+      status: Enum.random([:draft, :polling, :confirmed, :canceled]),
+      theme: Enum.random(themes),
+      is_virtual: Enum.random([true, false, false]), # Favor non-virtual
+      is_ticketed: Enum.random([true, false]),
+      taxation_type: Enum.random(["ticketed_event", "contribution_collection", "ticketless"]),
+      threshold_count: Enum.random([nil, 5, 10, 20]),
+      polling_deadline: Faker.DateTime.forward(7),
+      venue: if(Enum.random([true, false]), do: build(:realistic_venue), else: nil),
+      cover_image_url: "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
+      theme_customizations: %{},
+      rich_external_data: %{}
+    }
+  end
+
+  def realistic_venue_factory do
+    %Venue{
+      name: Faker.Company.name(),
+      address: Faker.Address.street_address(),
+      city: Faker.Address.city(),
+      state: Faker.Address.state_abbr(),
+      country: Faker.Address.country(),
+      latitude: Faker.Address.latitude(),
+      longitude: Faker.Address.longitude(),
+      venue_type: Enum.random(["venue", "city", "region", "online", "tbd"])
     }
   end
 end

@@ -68,6 +68,7 @@ defmodule EventasaurusApp.Auth do
   Returns user data or nil if not authenticated.
   """
   def get_current_user(conn) do
+    # Normal Supabase authentication flow
     case get_session(conn, :access_token) do
       nil -> nil
       token ->
