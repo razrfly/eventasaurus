@@ -3,8 +3,9 @@ defmodule EventasaurusWeb.Router do
 
   import EventasaurusWeb.Plugs.AuthPlug
 
-  # Development-only route for hot-reloading themes
+  # Development-only routes
   if Mix.env() == :dev do
+    # Hot-reloading themes
     get "/themes/:theme_name", EventasaurusWeb.ThemeController, :show
   end
 
@@ -16,6 +17,9 @@ defmodule EventasaurusWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug EventasaurusWeb.Plugs.CSPPlug
+    if Mix.env() == :dev do
+      plug EventasaurusWeb.Dev.DevAuthPlug
+    end
     plug :fetch_auth_user
     plug :assign_user_struct
   end
@@ -23,6 +27,9 @@ defmodule EventasaurusWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug :fetch_session
+    if Mix.env() == :dev do
+      plug EventasaurusWeb.Dev.DevAuthPlug
+    end
     plug :fetch_auth_user
     plug :assign_user_struct
   end
@@ -124,6 +131,15 @@ defmodule EventasaurusWeb.Router do
     post "/callback", Auth.AuthController, :callback
     get "/logout", Auth.AuthController, :logout
     post "/logout", Auth.AuthController, :logout
+  end
+
+  # Development-only quick login route
+  if Mix.env() == :dev do
+    scope "/dev", EventasaurusWeb do
+      pipe_through :browser
+      
+      post "/quick-login", Dev.DevAuthController, :quick_login
+    end
   end
 
   # LiveView session for authenticated routes

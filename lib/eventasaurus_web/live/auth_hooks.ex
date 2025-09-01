@@ -106,42 +106,53 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   # Private function to assign auth_user from session
   defp assign_auth_user(socket, session) do
     assign_new(socket, :auth_user, fn ->
-      # Get the token from the session
-      token = session["access_token"]
-      refresh_token = session["refresh_token"]
-      token_expires_at = session["token_expires_at"]
-
-      if token do
-        # Check if we need to refresh the token
-        if refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
-          case Client.refresh_token(refresh_token) do
-            {:ok, auth_data} ->
-              # Token refreshed successfully, extract and use the new token
-              new_access_token = get_token_value(auth_data, "access_token")
-              
-              if new_access_token do
-                # Use the NEW token to get user data
-                Logger.debug("Token refreshed successfully in LiveView, using new token")
-                get_user_with_token(new_access_token)
-              else
-                # Couldn't extract new token, fall back to old token
-                Logger.warning("Failed to extract new access token from refresh response")
-                get_user_with_token(token)
-              end
-              
-            {:error, reason} ->
-              # Refresh failed, token is likely expired or invalid
-              Logger.warning("Token refresh failed in LiveView: #{inspect(reason)}")
-              # Return nil to treat user as unauthenticated
-              # The next HTTP request will clear the session properly
-              nil
-          end
-        else
-          # Token not near expiry or no refresh token
-          get_user_with_token(token)
+      # Check for dev mode login FIRST (dev only)
+      if Mix.env() == :dev && session["dev_mode_login"] == true && session["current_user_id"] do
+        # Dev mode: directly load the user from database
+        user_id = session["current_user_id"]
+        case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
+          nil -> nil
+          user -> user  # Return the User struct directly for dev mode
         end
       else
-        nil
+        # Normal production authentication flow
+        # Get the token from the session
+        token = session["access_token"]
+        refresh_token = session["refresh_token"]
+        token_expires_at = session["token_expires_at"]
+
+        if token do
+          # Check if we need to refresh the token
+          if refresh_token && token_expires_at && should_refresh_token?(token_expires_at) do
+            case Client.refresh_token(refresh_token) do
+              {:ok, auth_data} ->
+                # Token refreshed successfully, extract and use the new token
+                new_access_token = get_token_value(auth_data, "access_token")
+                
+                if new_access_token do
+                  # Use the NEW token to get user data
+                  Logger.debug("Token refreshed successfully in LiveView, using new token")
+                  get_user_with_token(new_access_token)
+                else
+                  # Couldn't extract new token, fall back to old token
+                  Logger.warning("Failed to extract new access token from refresh response")
+                  get_user_with_token(token)
+                end
+                
+              {:error, reason} ->
+                # Refresh failed, token is likely expired or invalid
+                Logger.warning("Token refresh failed in LiveView: #{inspect(reason)}")
+                # Return nil to treat user as unauthenticated
+                # The next HTTP request will clear the session properly
+                nil
+            end
+          else
+            # Token not near expiry or no refresh token
+            get_user_with_token(token)
+          end
+        else
+          nil
+        end
       end
     end)
   end

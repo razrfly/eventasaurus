@@ -1,5 +1,8 @@
 defmodule EventasaurusWeb.Auth.AuthHTML do
   use EventasaurusWeb, :html
+  
+  # Import dev components - the component itself checks if dev mode
+  import EventasaurusWeb.Dev.DevAuthComponent
 
   # Note: Template files were removed as they're replaced by function components below
 
@@ -89,6 +92,8 @@ defmodule EventasaurusWeb.Auth.AuthHTML do
             </.link>
           </div>
         </div>
+        
+        <.quick_login_section users={EventasaurusWeb.Dev.DevAuth.list_quick_login_users()} />
       </div>
     </div>
     """
