@@ -193,8 +193,8 @@ defmodule DevSeeds.Events do
     # Get a random default image for the event
     image_attrs = get_random_image_attrs()
     
-    # Create the event with image
-    event = insert(:realistic_event, Map.merge(attrs, Map.merge(venue_attrs, image_attrs)))
+    # Create the event with image - ensure caller-provided attrs take precedence
+    event = insert(:realistic_event, Map.merge(Map.merge(venue_attrs, image_attrs), attrs))
     
     # Assign to group if selected
     if group do
