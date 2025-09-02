@@ -1440,6 +1440,52 @@ defmodule EventasaurusApp.Events do
     end)
   end
 
+  @doc """
+  Efficiently calculates all filter counts in a single query to avoid multiple database hits.
+  
+  Returns a map with counts for:
+  - upcoming: count of upcoming events
+  - past: count of past events  
+  - archived: count of archived events
+  - created: count of events where user is organizer
+  - participating: count of events where user is participant
+  
+  This replaces 5 separate count queries with 1 optimized query.
+  """
+  def get_dashboard_filter_counts(%User{} = user) do
+    now = DateTime.utc_now()
+    archived_cutoff = DateTime.add(now, -90, :day)  # 90 days ago
+
+    # Single query to get all counts using conditional aggregation
+    result = Repo.one(
+      from e in Event,
+        left_join: eu in EventUser, on: e.id == eu.event_id and eu.user_id == ^user.id,
+        left_join: ep in EventParticipant, on: e.id == ep.event_id and ep.user_id == ^user.id,
+        where: is_nil(e.deleted_at) and (not is_nil(eu.id) or not is_nil(ep.id)),
+        select: %{
+          # Time-based counts for active events
+          upcoming: fragment("COUNT(CASE WHEN ? IS NULL OR ? > ? THEN 1 END)", e.start_at, e.start_at, ^now),
+          past: fragment("COUNT(CASE WHEN ? IS NOT NULL AND ? <= ? THEN 1 END)", e.start_at, e.start_at, ^now),
+          
+          # Role-based counts (all active events)
+          created: fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", eu.id),
+          participating: fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", ep.id)
+        }
+    )
+
+    # Get archived count separately since it's from a different table condition
+    archived_count = Repo.one(
+      from e in Event,
+        inner_join: eu in EventUser, on: e.id == eu.event_id,
+        where: eu.user_id == ^user.id and 
+               not is_nil(e.deleted_at) and 
+               e.deleted_at > ^archived_cutoff,
+        select: count(e.id)
+    )
+
+    Map.put(result, :archived, archived_count)
+  end
+
   # Helper functions for preloading
   defp get_venues_for_events([]), do: []
   defp get_venues_for_events(event_ids) do
