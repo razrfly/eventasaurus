@@ -7,25 +7,9 @@ defmodule DevSeeds.Groups do
   import EventasaurusApp.Factory
   alias DevSeeds.Helpers
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Groups
   
-  defp slugify(name) do
-    name
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9\s-]/, "")
-    |> String.replace(~r/\s+/, "-")
-    |> String.trim("-")
-  end
-  
-  defp ensure_unique_slug(base_slug) do
-    case Repo.get_by(EventasaurusApp.Groups.Group, slug: base_slug) do
-      nil ->
-        base_slug
-      _ ->
-        # Slug exists, try with a random suffix
-        unique_suffix = System.unique_integer([:positive])
-        ensure_unique_slug("#{base_slug}-#{unique_suffix}")
-    end
-  end
+  # Removed manual slug generation functions - now using production APIs
   
   @doc """
   Seeds groups with members.
@@ -102,38 +86,27 @@ defmodule DevSeeds.Groups do
     # First user is the owner
     [owner | members] = selected_users
     
-    # Create the group
+    # Create the group using production API (handles slug generation automatically)
     group_name = generate_group_name(group_type, index)
-    unique_slug = ensure_unique_slug(slugify(group_name))
     
-    group = insert(:group, %{
-      name: group_name,
-      description: generate_group_description(group_type.type),
-      slug: unique_slug,
-      created_by: owner,
-      avatar_url: "https://picsum.photos/200/200?random=#{System.unique_integer([:positive])}",
-      cover_image_url: "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
-      venue_city: maybe_city(),
-      venue_state: maybe_state(),
-      venue_country: maybe_country()
-    })
+    {:ok, group} = Groups.create_group_with_creator(%{
+      "name" => group_name,
+      "description" => generate_group_description(group_type.type),
+      "avatar_url" => "https://picsum.photos/200/200?random=#{System.unique_integer([:positive])}",
+      "cover_image_url" => "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
+      "venue_city" => maybe_city(),
+      "venue_state" => maybe_state(),
+      "venue_country" => maybe_country()
+    }, owner)
     
-    # Add the owner
-    insert(:group_user, %{
-      group: group,
-      user: owner,
-      role: "owner"
-    })
+    # Owner was already added by create_group_with_creator
     
-    # Add other members with varying roles
+    # Add other members with varying roles using production API
     Enum.each(members, fn user ->
       role = if Enum.random(1..10) <= 2, do: "admin", else: "member"
       
-      insert(:group_user, %{
-        group: group,
-        user: user,
-        role: role
-      })
+      # Use production API for adding group members
+      Groups.add_user_to_group(group, user, role, owner)
     end)
     
     # Mark some groups as inactive
@@ -148,6 +121,14 @@ defmodule DevSeeds.Groups do
     Helpers.log("Created group: #{group.name} with #{member_count} members")
     group
   end
+
+  # Helper function to truncate microseconds from datetime values
+  # Database schema expects datetime without microseconds
+  defp truncate_datetime(datetime) when is_struct(datetime, DateTime) do
+    DateTime.truncate(datetime, :second)
+  end
+
+  defp truncate_datetime(datetime), do: datetime
   
   defp generate_group_name(group_type, index) do
     base_names = group_type.names
@@ -266,22 +247,16 @@ defmodule DevSeeds.Groups do
       selected_users = Enum.take_random(users, member_count)
       [owner | members] = selected_users
       
-      group = insert(:group, %{
-        name: theme.name,
-        description: theme.description,
-        slug: ensure_unique_slug(slugify(theme.name)),
-        created_by: owner
-      })
+      # Use production API that handles slug generation automatically
+      {:ok, group} = Groups.create_group_with_creator(%{
+        "name" => theme.name,
+        "description" => theme.description
+      }, owner)
       
-      # Add members
-      insert(:group_user, %{group: group, user: owner, role: "owner"})
-      
+      # Add members using production API (owner already added by create_group_with_creator)
       Enum.each(members, fn user ->
-        insert(:group_user, %{
-          group: group,
-          user: user,
-          role: Enum.random(["member", "member", "member", "admin"])
-        })
+        role = Enum.random(["member", "member", "member", "admin"])
+        Groups.add_user_to_group(group, user, role, owner)
       end)
       
       group

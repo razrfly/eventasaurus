@@ -1,0 +1,726 @@
+# Poll and Voting Seeding Module
+# Creates polls with votes for testing, especially RCV movie polls
+
+alias EventasaurusApp.{Repo, Events, Accounts}
+alias EventasaurusApp.Events.{Poll, PollOption}
+alias EventasaurusWeb.Services.TmdbService
+alias EventasaurusWeb.Services.MovieConfig
+import Ecto.Query
+require Logger
+
+defmodule PollSeed do
+  @moduledoc """
+  Seeds polls with comprehensive voting data for testing.
+  Priority on Ranked Choice Voting movie polls for debugging.
+  """
+
+  def run do
+    Logger.info("Starting poll seeding...")
+    
+    # Load curated data for realistic content
+    Code.require_file("curated_data.exs", __DIR__)
+    
+    # Get users and events
+    users = get_users()
+    events = get_events()
+    
+    if length(users) < 10 do
+      Logger.error("Not enough users! Need at least 10 users for realistic voting.")
+      exit(:insufficient_users)
+    end
+    
+    if length(events) == 0 do
+      Logger.error("No events found! Please run event seeding first.")
+      exit(:no_events)
+    end
+    
+    # Seed polls for events
+    Enum.each(events, fn event ->
+      seed_polls_for_event(event, users)
+    end)
+    
+    Logger.info("Poll seeding complete!")
+  end
+  
+  defp get_users do
+    Repo.all(from u in Accounts.User, limit: 50)
+  end
+  
+  defp get_events do
+    # Get a mix of events in different states
+    Repo.all(
+      from e in Events.Event,
+      where: e.status in [:draft, :confirmed, :polling],
+      limit: 20,
+      order_by: [desc: e.inserted_at]
+    )
+    |> Repo.preload(:users)
+  end
+  
+  defp seed_polls_for_event(event, all_users) do
+    Logger.info("Seeding polls for event: #{event.title}")
+    
+    # Get participants for this event (or use random users)
+    participants = get_event_participants(event, all_users)
+    
+    # Check if this event belongs to movie_buff or foodie_friend
+    event_with_users = Repo.preload(event, :users)
+    movie_buff = Accounts.get_user_by_email("movie_buff@example.com")
+    foodie_friend = Accounts.get_user_by_email("foodie_friend@example.com")
+    
+    is_movie_buff_event = movie_buff && Enum.any?(event_with_users.users, fn u -> u.id == movie_buff.id end)
+    is_foodie_event = foodie_friend && Enum.any?(event_with_users.users, fn u -> u.id == foodie_friend.id end)
+    
+    # Determine poll types based on event owner and title
+    cond do
+      # PRIORITY: Movie buff should always get movie RCV polls
+      is_movie_buff_event || String.contains?(String.downcase(event.title), "movie") ->
+        Logger.info("Creating RCV movie poll for movie event: #{event.title}")
+        create_movie_rcv_poll(event, participants)
+        
+      # PRIORITY: Foodie friend gets restaurant/food selection polls
+      is_foodie_event || String.contains?(String.downcase(event.title), "dinner") || 
+      String.contains?(String.downcase(event.title), "restaurant") ->
+        Logger.info("Creating restaurant selection poll for food event: #{event.title}")
+        create_restaurant_selection_poll(event, participants)
+        
+      String.contains?(String.downcase(event.title), "date") ->
+        create_date_selection_poll(event, participants)
+        
+      String.contains?(String.downcase(event.title), "game") ->
+        create_game_selection_poll(event, participants)
+        
+      true ->
+        # Random poll types for other events - but prefer meaningful ones
+        poll_type = Enum.random([:movie_rcv, :restaurant_selection, :game_approval, :date_selection])
+        create_poll_by_type(poll_type, event, participants)
+    end
+  end
+  
+  defp get_event_organizer(event) do
+    # The event.users association gives us User records directly
+    # For seeding, we'll just use the first user or a default
+    # In production, we'd need to check the EventUser join table for roles
+    case event.users do
+      [user | _] -> user.id
+      _ -> 1
+    end
+  end
+  
+  defp get_event_participants(event, all_users) do
+    participants = Events.list_event_participants(event)
+    
+    if length(participants) < 5 do
+      # Not enough participants, use random users
+      Enum.take_random(all_users, Enum.random(5..15))
+    else
+      # Convert participants to users
+      participant_user_ids = Enum.map(participants, & &1.user_id)
+      Enum.filter(all_users, fn user -> user.id in participant_user_ids end)
+    end
+  end
+  
+  # Priority: Movie RCV Poll with real movie data
+  defp create_movie_rcv_poll(event, participants) do
+    Logger.info("Creating RCV movie poll for event: #{event.id}")
+    
+    # Use real movies from TMDB API with fallback to curated data
+    movies = case fetch_tmdb_movies() do
+      [] -> 
+        Logger.info("No TMDB movies available, using curated data")
+        DevSeeds.CuratedData.movies() |> Enum.take_random(7)
+      tmdb_movies ->
+        Logger.info("Using #{length(tmdb_movies)} TMDB movies for poll")
+        Enum.take_random(tmdb_movies, 7)
+    end
+    
+    if length(movies) < 3 do
+      Logger.warning("Not enough movies available, skipping movie poll")
+      nil
+    else
+    
+    # Create the poll
+    organizer_id = get_event_organizer(event)
+    {:ok, poll} = Events.create_poll(%{
+      event_id: event.id,
+      title: "Movie Night Selection",
+      description: "Rank your movie preferences for our movie night!",
+      poll_type: "movie",
+      voting_system: "ranked",
+      allow_suggestions: false,
+      created_by_id: organizer_id,
+      status: "voting"
+    })
+    
+    # Use proper phase transition instead of setting phase directly
+    {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
+    
+    # Create poll options from movies with real data
+    options = Enum.map(movies, fn movie ->
+      {:ok, option} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: movie.title,
+        description: "#{movie.description} (#{movie.year}, #{movie.genre})",
+        suggested_by_id: organizer_id,
+        image_url: MovieConfig.build_image_url(movie.poster_path, "w500"),
+        metadata: %{
+          "tmdb_id" => movie.tmdb_id,
+          "year" => movie.year,
+          "genre" => movie.genre,
+          "rating" => movie.rating,
+          "poster_path" => movie.poster_path,
+          "backdrop_path" => movie.backdrop_path,
+          "is_movie" => true
+        }
+      })
+      option
+    end)
+    
+    # Seed RCV votes with specific scenarios
+    scenario = Enum.random([
+      :contested_race,      # Close competition between 2-3 movies
+      :clear_winner,        # One movie dominates
+      :multiple_rounds,     # Needs elimination rounds
+      :exhausted_ballots,   # Some incomplete rankings
+      :tied_elimination     # Test tie-breaking
+    ])
+    
+    seed_rcv_votes(poll, options, participants, scenario)
+    Logger.info("Created RCV movie poll with scenario: #{scenario}")
+    end
+  end
+  
+  defp fetch_tmdb_movies do
+    case TmdbService.get_popular_movies(1) do
+      {:ok, movies} ->
+        Logger.info("Successfully fetched #{length(movies)} popular movies from TMDB")
+        # Convert TMDB format to our expected format
+        movies
+        |> Enum.take(10) # Limit to 10 movies for seeding
+        |> Enum.map(&convert_tmdb_movie_to_seed_format/1)
+      {:error, reason} ->
+        Logger.warning("Failed to fetch TMDB movies (#{inspect(reason)}), using fallback data")
+        fallback_movies()
+    end
+  end
+
+  defp convert_tmdb_movie_to_seed_format(tmdb_movie) do
+    # Extract year from release_date
+    year = case tmdb_movie.release_date do
+      nil -> "Unknown"
+      "" -> "Unknown" 
+      date_string ->
+        case String.split(date_string, "-") do
+          [year | _] -> year
+          _ -> "Unknown"
+        end
+    end
+
+    # Get genre from genre_ids (simplified - we could fetch full genre names from TMDB)
+    genre = case tmdb_movie.genre_ids do
+      [] -> "General"
+      [genre_id | _] -> genre_id_to_name(genre_id)
+    end
+
+    %{
+      tmdb_id: tmdb_movie.tmdb_id,
+      title: tmdb_movie.title,
+      description: tmdb_movie.overview || "No description available",
+      year: year,
+      genre: genre,
+      rating: tmdb_movie.vote_average,
+      poster_path: tmdb_movie.poster_path,
+      backdrop_path: tmdb_movie.backdrop_path
+    }
+  end
+
+  # Basic genre mapping for common TMDB genre IDs
+  defp genre_id_to_name(genre_id) do
+    case genre_id do
+      28 -> "Action"
+      12 -> "Adventure" 
+      16 -> "Animation"
+      35 -> "Comedy"
+      80 -> "Crime"
+      99 -> "Documentary"
+      18 -> "Drama"
+      10751 -> "Family"
+      14 -> "Fantasy"
+      36 -> "History"
+      27 -> "Horror"
+      10402 -> "Music"
+      9648 -> "Mystery"
+      10749 -> "Romance"
+      878 -> "Sci-Fi"
+      10770 -> "TV Movie"
+      53 -> "Thriller"
+      10752 -> "War"
+      37 -> "Western"
+      _ -> "General"
+    end
+  end
+  
+  defp extract_movie_data(tmdb_movie) do
+    %{
+      tmdb_id: tmdb_movie["id"],
+      title: tmdb_movie["title"] || "Unknown Movie",
+      poster_path: tmdb_movie["poster_path"],
+      backdrop_path: tmdb_movie["backdrop_path"],
+      overview: tmdb_movie["overview"] || "No description available",
+      release_date: tmdb_movie["release_date"],
+      vote_average: tmdb_movie["vote_average"]
+    }
+  end
+  
+  defp fallback_movies do
+    # Hardcoded popular movies as fallback
+    [
+      %{
+        tmdb_id: 565770,
+        title: "Blue Beetle",
+        overview: "Recent college grad Jaime Reyes returns home full of aspirations for his future.",
+        poster_path: "/mXLOHHc1Zeuwsl4xYKjKh2280oL.jpg",
+        backdrop_path: "/H6j5smdpRqP9a8UnhWp6zfl0SC.jpg",
+        release_date: "2023-08-16",
+        vote_average: 7.0
+      },
+      %{
+        tmdb_id: 872585,
+        title: "Oppenheimer",
+        overview: "The story of J. Robert Oppenheimer's role in the development of the atomic bomb.",
+        poster_path: "/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+        backdrop_path: "/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg",
+        release_date: "2023-07-19",
+        vote_average: 8.2
+      },
+      %{
+        tmdb_id: 346698,
+        title: "Barbie",
+        overview: "Barbie and Ken are having the time of their lives in the colorful world of Barbie Land.",
+        poster_path: "/iuFNMS8U5cb6xfzi51Dbkovj7vM.jpg",
+        backdrop_path: "/nHf61UzkfFno5X1ofIhugCPus2R.jpg",
+        release_date: "2023-07-19",
+        vote_average: 7.3
+      },
+      %{
+        tmdb_id: 299054,
+        title: "The Expanse",
+        overview: "A thriller set in a future where humanity has colonized the Solar System.",
+        poster_path: "/5Ex9ZTDgerZL9oAGJwQkPjVnUqz.jpg",
+        backdrop_path: "/r21HmSn6SjOZjfYkFREWP1ydQJh.jpg",
+        release_date: "2023-06-01",
+        vote_average: 7.5
+      },
+      %{
+        tmdb_id: 667538,
+        title: "Transformers: Rise of the Beasts",
+        overview: "Optimus Prime and the Autobots face a new threat.",
+        poster_path: "/gPbM0MK8CP8A174rmUwGsADNYKD.jpg",
+        backdrop_path: "/xwA90BwZA6sTFaY96JC2HXdg1J8.jpg",
+        release_date: "2023-06-06",
+        vote_average: 7.1
+      }
+    ]
+  end
+  
+  defp create_movie_option(poll, movie_data, organizer_id) do
+    {:ok, option} = Events.create_poll_option(%{
+      poll_id: poll.id,
+      title: movie_data.title,
+      description: movie_data.overview,
+      suggested_by_id: organizer_id,
+      image_url: MovieConfig.build_image_url(movie_data.poster_path, "w500"),
+      metadata: %{
+        "tmdb_id" => movie_data.tmdb_id,
+        "poster_path" => movie_data.poster_path,
+        "backdrop_path" => movie_data.backdrop_path,
+        "release_date" => movie_data.release_date,
+        "vote_average" => movie_data.vote_average,
+        "is_movie" => true
+      }
+    })
+    option
+  end
+  
+  # Seed RCV votes with specific scenarios
+  defp seed_rcv_votes(poll, options, participants, scenario) do
+    case scenario do
+      :contested_race ->
+        seed_contested_rcv(poll, options, participants)
+      :clear_winner ->
+        seed_clear_winner_rcv(poll, options, participants)
+      :multiple_rounds ->
+        seed_multiple_rounds_rcv(poll, options, participants)
+      :exhausted_ballots ->
+        seed_exhausted_ballots_rcv(poll, options, participants)
+      :tied_elimination ->
+        seed_tied_elimination_rcv(poll, options, participants)
+      _ ->
+        seed_contested_rcv(poll, options, participants)
+    end
+  end
+  
+  defp seed_contested_rcv(poll, options, participants) do
+    # Close race between first 2 options
+    Logger.info("Seeding contested RCV race")
+    
+    option_ids = Enum.map(options, & &1.id)
+    [favorite1, favorite2 | rest] = option_ids
+    
+    Enum.with_index(participants)
+    |> Enum.each(fn {user, idx} ->
+      ranking = if rem(idx, 2) == 0 do
+        # Half prefer option 1
+        [favorite1, favorite2] ++ Enum.take_random(rest, 2)
+      else
+        # Half prefer option 2
+        [favorite2, favorite1] ++ Enum.take_random(rest, 2)
+      end
+      
+      cast_ranked_votes(poll, user, ranking)
+    end)
+  end
+  
+  defp seed_clear_winner_rcv(poll, options, participants) do
+    # One option gets >50% first choice
+    Logger.info("Seeding clear winner RCV")
+    
+    option_ids = Enum.map(options, & &1.id)
+    [winner | rest] = option_ids
+    
+    # 60% vote for winner first
+    {winner_voters, other_voters} = participants
+      |> Enum.split(round(length(participants) * 0.6))
+    
+    # Winner voters
+    Enum.each(winner_voters, fn user ->
+      ranking = [winner | Enum.take_random(rest, 3)]
+      cast_ranked_votes(poll, user, ranking)
+    end)
+    
+    # Other voters spread among rest
+    Enum.each(other_voters, fn user ->
+      ranking = Enum.shuffle(option_ids) |> Enum.take(4)
+      cast_ranked_votes(poll, user, ranking)
+    end)
+  end
+  
+  defp seed_multiple_rounds_rcv(poll, options, participants) do
+    # Ensure multiple elimination rounds needed
+    Logger.info("Seeding multiple rounds RCV")
+    
+    option_ids = Enum.map(options, & &1.id)
+    
+    # Distribute first choices evenly to force eliminations
+    groups = Enum.chunk_every(participants, div(length(participants), length(options)) + 1)
+    
+    Enum.zip(option_ids, groups)
+    |> Enum.each(fn {option_id, group} ->
+      Enum.each(group || [], fn user ->
+        # Start with their preferred option
+        rest = List.delete(option_ids, option_id)
+        ranking = [option_id | Enum.take_random(rest, 3)]
+        cast_ranked_votes(poll, user, ranking)
+      end)
+    end)
+  end
+  
+  defp seed_exhausted_ballots_rcv(poll, options, participants) do
+    # Some voters only rank 1-2 choices
+    Logger.info("Seeding exhausted ballots RCV")
+    
+    option_ids = Enum.map(options, & &1.id)
+    
+    Enum.each(participants, fn user ->
+      # Random number of rankings (some incomplete)
+      num_rankings = Enum.random([1, 2, 2, 3, 3, 4, 5])
+      ranking = Enum.take_random(option_ids, num_rankings)
+      cast_ranked_votes(poll, user, ranking)
+    end)
+  end
+  
+  defp seed_tied_elimination_rcv(poll, options, participants) do
+    # Create a tie for last place
+    Logger.info("Seeding tied elimination RCV")
+    
+    option_ids = Enum.map(options, & &1.id)
+    [opt1, opt2, opt3 | rest] = option_ids
+    
+    # Split participants into groups
+    third = div(length(participants), 3)
+    {group1, temp} = Enum.split(participants, third)
+    {group2, group3} = Enum.split(temp, third)
+    
+    # Group 1 prefers opt1
+    Enum.each(group1, fn user ->
+      cast_ranked_votes(poll, user, [opt1, opt2, opt3])
+    end)
+    
+    # Group 2 prefers opt2
+    Enum.each(group2, fn user ->
+      cast_ranked_votes(poll, user, [opt2, opt3, opt1])
+    end)
+    
+    # Group 3 splits between opt3 and rest (creates tie)
+    Enum.with_index(group3)
+    |> Enum.each(fn {user, idx} ->
+      if rem(idx, 2) == 0 && length(rest) > 0 do
+        cast_ranked_votes(poll, user, [opt3, opt1, opt2])
+      else
+        cast_ranked_votes(poll, user, [Enum.random(rest ++ [opt3]), opt1, opt2])
+      end
+    end)
+  end
+  
+  defp cast_ranked_votes(poll, user, option_ids) do
+    # Use Events.create_poll_vote/1 for each ranking instead of the convenience function
+    option_ids
+    |> Enum.with_index(1)
+    |> Enum.each(fn {option_id, rank} ->
+      # Get the poll option
+      poll_option = Events.get_poll_option!(option_id)
+      
+      case Events.create_poll_vote(poll_option, user, %{vote_rank: rank}, "ranked") do
+        {:ok, _vote} ->
+          :ok
+        {:error, reason} ->
+          Logger.warning("Failed to create ranked vote for option #{option_id}, rank #{rank}: #{inspect(reason)}")
+      end
+    end)
+  end
+  
+  defp create_restaurant_selection_poll(event, participants) do
+    Logger.info("Creating restaurant selection poll")
+    
+    organizer_id = get_event_organizer(event)
+    {:ok, poll} = Events.create_poll(%{
+      event_id: event.id,
+      title: "Restaurant Choice",
+      description: "Vote for your preferred dining options!",
+      poll_type: "places",
+      voting_system: "approval",
+      created_by_id: organizer_id
+    })
+    
+    # Use proper phase transition
+    {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
+    
+    restaurants = [
+      %{name: "Sushi Paradise", cuisine: "Japanese", price: "$$$"},
+      %{name: "La Bella Italia", cuisine: "Italian", price: "$$"},
+      %{name: "The Burger Joint", cuisine: "American", price: "$"},
+      %{name: "Spice Garden", cuisine: "Indian", price: "$$"},
+      %{name: "Le Petit Bistro", cuisine: "French", price: "$$$"},
+      %{name: "Taco Fiesta", cuisine: "Mexican", price: "$"}
+    ]
+    
+    options = Enum.map(restaurants, fn restaurant ->
+      {:ok, option} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: restaurant.name,
+        description: "#{restaurant.cuisine} cuisine - #{restaurant.price}",
+        suggested_by_id: organizer_id,
+        metadata: %{
+          "cuisine" => restaurant.cuisine,
+          "price_range" => restaurant.price
+        }
+      })
+      option
+    end)
+    
+    # Seed approval votes
+    Enum.each(participants, fn user ->
+      # Each person approves 2-4 restaurants
+      Enum.take_random(options, Enum.random(2..4))
+      |> Enum.each(fn option ->
+        case Events.create_poll_vote(option, user, %{vote_value: "selected"}, "approval") do
+          {:ok, _vote} -> :ok
+          {:error, reason} ->
+            Logger.warning("Failed to create approval vote: #{inspect(reason)}")
+        end
+      end)
+    end)
+  end
+  
+  # Other poll types
+  defp create_date_selection_poll(event, participants) do
+    Logger.info("Creating date selection poll")
+    
+    organizer_id = get_event_organizer(event)
+    {:ok, poll} = Events.create_poll(%{
+      event_id: event.id,
+      title: "Select Event Date",
+      description: "Vote for your preferred dates",
+      poll_type: "date_selection",
+      voting_system: "binary",
+      created_by_id: organizer_id
+    })
+    
+    # Use proper phase transition
+    {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
+    
+    # Create date options
+    dates = for i <- 0..4 do
+      date = Date.add(Date.utc_today(), i * 7)
+      display_date = Calendar.strftime(date, "%B %d, %Y")
+      {:ok, option} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: display_date,
+        description: "Proposed date option",
+        suggested_by_id: organizer_id,
+        metadata: %{
+          "date" => Date.to_iso8601(date),
+          "display_date" => display_date,
+          "date_type" => "single_date",
+          "time" => "19:00",
+          "display_time" => "7:00 PM"
+        }
+      })
+      option
+    end
+    
+    # Seed binary votes
+    Enum.each(participants, fn user ->
+      Enum.each(Enum.take_random(dates, 3), fn option ->
+        vote = Enum.random(["yes", "no", "maybe"])
+        case Events.create_poll_vote(option, user, %{vote_value: vote}, "binary") do
+          {:ok, _vote} -> :ok
+          {:error, reason} ->
+            Logger.warning("Failed to create binary vote: #{inspect(reason)}")
+        end
+      end)
+    end)
+  end
+  
+  defp create_game_selection_poll(event, participants) do
+    Logger.info("Creating game selection poll")
+    
+    organizer_id = get_event_organizer(event)
+    {:ok, poll} = Events.create_poll(%{
+      event_id: event.id,
+      title: "Choose Game to Play",
+      description: "Select all games you'd like to play",
+      poll_type: "general",
+      voting_system: "approval",
+      created_by_id: organizer_id
+    })
+    
+    # Use proper phase transition
+    {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
+    
+    games = ["Settlers of Catan", "Codenames", "Ticket to Ride", "Wingspan", "Azul", "Splendor"]
+    
+    options = Enum.map(games, fn game ->
+      {:ok, option} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: game,
+        description: "Board game option",
+        suggested_by_id: organizer_id
+      })
+      option
+    end)
+    
+    # Seed approval votes
+    Enum.each(participants, fn user ->
+      # Each person approves 1-4 games
+      Enum.take_random(options, Enum.random(1..4))
+      |> Enum.each(fn option ->
+        case Events.create_poll_vote(option, user, %{vote_value: "selected"}, "approval") do
+          {:ok, _vote} -> :ok
+          {:error, reason} ->
+            Logger.warning("Failed to create approval vote: #{inspect(reason)}")
+        end
+      end)
+    end)
+  end
+  
+  defp create_poll_by_type(type, event, participants) do
+    case type do
+      :movie_rcv -> create_movie_rcv_poll(event, participants)
+      :game_approval -> create_game_approval_poll(event, participants)
+      :date_selection -> create_date_selection_poll(event, participants)
+      :threshold -> create_threshold_poll(event, participants)
+      _ -> Logger.warning("Unknown poll type: #{type}")
+    end
+  end
+  
+  defp create_game_approval_poll(event, participants) do
+    Logger.info("Creating generic approval poll")
+    
+    organizer_id = get_event_organizer(event)
+    {:ok, poll} = Events.create_poll(%{
+      event_id: event.id,
+      title: "Activity Selection",
+      description: "Choose activities you're interested in",
+      poll_type: "general",
+      voting_system: "approval",
+      created_by_id: organizer_id
+    })
+    
+    # Use proper phase transition
+    {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
+    
+    activities = ["Hiking", "Museum Visit", "Escape Room", "Bowling", "Karaoke", "Mini Golf"]
+    
+    options = Enum.map(activities, fn activity ->
+      {:ok, option} = Events.create_poll_option(%{
+        poll_id: poll.id,
+        title: activity,
+        description: "Proposed activity",
+        suggested_by_id: organizer_id
+      })
+      option
+    end)
+    
+    Enum.each(participants, fn user ->
+      Enum.take_random(options, Enum.random(2..5))
+      |> Enum.each(fn option ->
+        case Events.create_poll_vote(option, user, %{vote_value: "selected"}, "approval") do
+          {:ok, _vote} -> :ok
+          {:error, reason} ->
+            Logger.warning("Failed to create approval vote: #{inspect(reason)}")
+        end
+      end)
+    end)
+  end
+  
+  defp create_threshold_poll(event, participants) do
+    Logger.info("Creating threshold interest poll")
+    
+    organizer_id = get_event_organizer(event)
+    {:ok, poll} = Events.create_poll(%{
+      event_id: event.id,
+      title: "Minimum Attendance Check",
+      description: "We need at least 5 people to proceed",
+      poll_type: "venue",
+      voting_system: "binary",
+      created_by_id: organizer_id,
+      threshold: 5
+    })
+    
+    # Use proper phase transition
+    {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
+    
+    {:ok, option} = Events.create_poll_option(%{
+      poll_id: poll.id,
+      title: "I will attend",
+      description: "Confirm your attendance",
+      suggested_by_id: organizer_id
+    })
+    
+    # Randomly have 30-90% confirm
+    attending = Enum.take_random(participants, 
+      round(length(participants) * Enum.random(30..90) / 100))
+    
+    Enum.each(attending, fn user ->
+      case Events.create_poll_vote(option, user, %{vote_value: "yes"}, "binary") do
+        {:ok, _vote} -> :ok
+        {:error, reason} ->
+          Logger.warning("Failed to create binary vote: #{inspect(reason)}")
+      end
+    end)
+  end
+end
+
+# Run the seeding
+PollSeed.run()

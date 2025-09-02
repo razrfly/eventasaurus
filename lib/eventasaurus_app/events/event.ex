@@ -327,7 +327,7 @@ defmodule EventasaurusApp.Events.Event do
     case {status, canceled_at} do
       {:canceled, nil} ->
         # Auto-set canceled_at if not provided
-        put_change(changeset, :canceled_at, DateTime.utc_now())
+        put_change(changeset, :canceled_at, DateTime.utc_now() |> DateTime.truncate(:second))
       _ -> changeset
     end
   end

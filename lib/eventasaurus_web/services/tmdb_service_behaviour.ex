@@ -27,4 +27,10 @@ defmodule EventasaurusWeb.Services.TmdbServiceBehaviour do
   """
   @callback get_cached_movie_details(integer()) ::
     {:ok, map()} | {:error, any()}
+
+  @doc """
+  Get popular movies from TMDB, optionally with a page number.
+  """
+  @callback get_popular_movies(integer()) ::
+    {:ok, list()} | {:error, any()}
 end
