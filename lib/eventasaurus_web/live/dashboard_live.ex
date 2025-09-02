@@ -245,8 +245,8 @@ defmodule EventasaurusWeb.DashboardLive do
     socket = if task_type do
       events_cache = Map.put(socket.assigns.events_cache, task_type, result)
       
-      # Calculate filter counts from cached data
-      filter_counts = calculate_filter_counts_from_cache(events_cache, socket.assigns.user)
+      # Recompute counts via single query (single source of truth)
+      filter_counts = Events.get_dashboard_filter_counts(socket.assigns.user)
       
       # If this is the current tab, update the displayed events
       socket = if socket.assigns.time_filter == task_type do
@@ -339,19 +339,6 @@ defmodule EventasaurusWeb.DashboardLive do
     |> assign(:loading, false)
   end
 
-  defp count_events_by_filter(user, time_filter, ownership_filter) do
-    Events.list_unified_events_for_user_optimized(user, [
-      time_filter: time_filter,
-      ownership_filter: ownership_filter,
-      limit: 1000
-    ])
-    |> length()
-  end
-
-  defp count_archived_events(user) do
-    Events.list_deleted_events_by_user(user)
-    |> length()
-  end
 
   defp build_dashboard_path(time_filter, ownership_filter) do
     query_params = []
@@ -394,21 +381,5 @@ defmodule EventasaurusWeb.DashboardLive do
     end
   end
 
-  defp calculate_filter_counts_from_cache(events_cache, _user) do
-    # Calculate counts from cached data
-    upcoming_events = Map.get(events_cache, :upcoming, [])
-    past_events = Map.get(events_cache, :past, [])
-    archived_events = Map.get(events_cache, :archived, [])
-    
-    all_events = upcoming_events ++ past_events
-    
-    %{
-      upcoming: length(upcoming_events),
-      past: length(past_events),
-      archived: length(archived_events),
-      created: all_events |> Enum.filter(&(&1.user_role == "organizer")) |> length(),
-      participating: all_events |> Enum.filter(&(&1.user_role == "participant")) |> length()
-    }
-  end
 
 end
