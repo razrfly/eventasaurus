@@ -139,14 +139,20 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   end
 
   defp handle_existing_auth_user(attrs) do
-    # Since the auth user exists, we just need to create/update the local database user
+    # Since the auth user exists, we need to fetch their Supabase ID and create/update the local user
     email = Map.get(attrs, :email)
     
-    # For holden@gmail.com, we know the Supabase ID from the error
-    # For now, generate a pending ID that can be updated later
-    supabase_id = case email do
-      "holden@gmail.com" -> "7c59de5b-e795-4d58-bec8-d1a9244b0579"
-      _ -> "pending-" <> Ecto.UUID.generate()
+    # Try to fetch the existing auth user from Supabase
+    supabase_id = case Client.admin_get_user_by_email(email) do
+      {:ok, auth_user} when not is_nil(auth_user) ->
+        Logger.info("Found existing Supabase user for #{email}: #{auth_user["id"]}")
+        auth_user["id"]
+      {:ok, nil} ->
+        Logger.warning("Supabase user not found for #{email}, using pending ID")
+        "pending-" <> Ecto.UUID.generate()
+      {:error, reason} ->
+        Logger.warning("Could not fetch Supabase user for #{email}: #{inspect(reason)}, using pending ID")
+        "pending-" <> Ecto.UUID.generate()
     end
     
     user_attrs = attrs
