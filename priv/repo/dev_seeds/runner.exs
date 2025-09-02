@@ -45,11 +45,13 @@ if config.clean_first do
   Repo.delete_all(EventasaurusApp.Events.EventParticipant)
   Repo.delete_all(EventasaurusApp.Events.EventUser)
   Repo.delete_all(EventasaurusApp.Groups.GroupUser)
-  Repo.delete_all(EventasaurusApp.Groups.Group)
   Repo.delete_all(EventasaurusApp.Events.Order)  # Clean orders before events
   Repo.delete_all(EventasaurusApp.Events.Ticket) # Clean tickets before events
   Repo.delete_all(EventasaurusApp.Events.Event)
   Repo.delete_all(EventasaurusApp.Venues.Venue)
+  # Delete groups before users (groups reference users via created_by_id)
+  # Force delete all groups including soft-deleted ones
+  Repo.query!("DELETE FROM groups")
   # Delete all users (we'll recreate test users)
   Repo.delete_all(EventasaurusApp.Accounts.User)
   
