@@ -4194,15 +4194,22 @@ defmodule EventasaurusApp.Events do
   Count active poll options for a specific user in a poll.
   This queries the database directly to ensure accurate counts.
   """
+  @spec count_user_poll_suggestions(integer() | String.t(), integer() | String.t()) :: non_neg_integer()
   def count_user_poll_suggestions(poll_id, user_id) do
+    {poll_id_int, user_id_int} =
+      case {safe_to_integer(poll_id, :poll_id), safe_to_integer(user_id, :user_id)} do
+        {{:ok, p}, {:ok, u}} -> {p, u}
+        {{:error, _}, _} -> raise ArgumentError, "invalid poll_id"
+        {_, {:error, _}} -> raise ArgumentError, "invalid user_id"
+      end
+
     from(po in PollOption,
-      where: po.poll_id == ^poll_id and
-             po.suggested_by_id == ^user_id and
+      where: po.poll_id == ^poll_id_int and
+             po.suggested_by_id == ^user_id_int and
              po.status == "active" and
-             is_nil(po.deleted_at),
-      select: count(po.id)
+             is_nil(po.deleted_at)
     )
-    |> Repo.one()
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
