@@ -196,8 +196,8 @@ defmodule DevSeeds.Events do
     # Create the event with image - ensure caller-provided attrs take precedence
     event = insert(:realistic_event, Map.merge(Map.merge(venue_attrs, image_attrs), attrs))
     
-    # Assign to group if selected
-    if group do
+    # Assign to group if selected AND caller didn't supply group_id
+    if group && is_nil(Map.get(attrs, :group_id)) do
       event
       |> Ecto.Changeset.change(%{group_id: group.id})
       |> Repo.update!()
