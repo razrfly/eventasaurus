@@ -16,6 +16,17 @@ defmodule DevSeeds.Groups do
     |> String.trim("-")
   end
   
+  defp ensure_unique_slug(base_slug) do
+    case Repo.get_by(EventasaurusApp.Groups.Group, slug: base_slug) do
+      nil ->
+        base_slug
+      _ ->
+        # Slug exists, try with a random suffix
+        unique_suffix = System.unique_integer([:positive])
+        ensure_unique_slug("#{base_slug}-#{unique_suffix}")
+    end
+  end
+  
   @doc """
   Seeds groups with members.
   
@@ -93,11 +104,12 @@ defmodule DevSeeds.Groups do
     
     # Create the group
     group_name = generate_group_name(group_type, index)
+    unique_slug = ensure_unique_slug(slugify(group_name))
     
     group = insert(:group, %{
       name: group_name,
       description: generate_group_description(group_type.type),
-      slug: slugify(group_name),
+      slug: unique_slug,
       created_by: owner,
       avatar_url: "https://picsum.photos/200/200?random=#{System.unique_integer([:positive])}",
       cover_image_url: "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
@@ -257,6 +269,7 @@ defmodule DevSeeds.Groups do
       group = insert(:group, %{
         name: theme.name,
         description: theme.description,
+        slug: ensure_unique_slug(slugify(theme.name)),
         created_by: owner
       })
       

@@ -204,26 +204,24 @@ defmodule EventasaurusWeb.DashboardLive do
   # Handle filter changes from EventTimelineComponent
   @impl true
   def handle_info({:filter_time, time_filter}, socket) do
-    socket = apply_time_filter_change(socket, time_filter)
-    
-    {:noreply,
-     socket
-     |> push_patch(to: build_dashboard_path(socket.assigns.time_filter, socket.assigns.ownership_filter))}
+    handle_event("filter_time", %{"filter" => Atom.to_string(time_filter)}, socket)
   end
 
   @impl true
   def handle_info({:filter_ownership, ownership_filter}, socket) do
-    socket = apply_ownership_filter_change(socket, ownership_filter)
-    
-    {:noreply,
-     socket
-     |> push_patch(to: build_dashboard_path(socket.assigns.time_filter, socket.assigns.ownership_filter))}
+    handle_event("filter_ownership", %{"filter" => Atom.to_string(ownership_filter)}, socket)
   end
 
   @impl true
   def handle_info({:order_updated, _order}, socket) do
     # Reload events to reflect any ticket changes
     {:noreply, load_unified_events(socket)}
+  end
+
+  @impl true
+  def handle_info({:update_participant_status, %{"event_id" => event_id, "status" => status}}, socket) do
+    # Forward to the existing handle_event
+    handle_event("update_participant_status", %{"event_id" => event_id, "status" => status}, socket)
   end
 
   @impl true

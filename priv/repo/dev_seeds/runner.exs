@@ -87,6 +87,10 @@ events = Events.seed(count: config.events, users: all_users, groups: all_groups)
 full_events = Events.create_full_events(all_users)
 all_events = events ++ full_events
 
+# Ensure key organizers have appropriate events (movie_buff, foodie_friend)
+Code.require_file("ensure_key_organizers.exs", __DIR__)
+DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
+
 # Create polls for events (Phase 5 - to be implemented)
 polls = []
 

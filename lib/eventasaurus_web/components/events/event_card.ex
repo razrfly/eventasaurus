@@ -108,10 +108,11 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
                    not Map.get(@event, :can_manage, false) && 
                    Map.get(@event, :user_role) == "participant" do %>
             <div class="flex items-center space-x-2">
-              <label for={"status-#{@event.id}"} class="text-sm text-gray-500">Status:</label>
+              <label for={"status-select-#{@unique_id}"} class="text-sm text-gray-500">Status:</label>
               <select 
-                id={"status-#{@event.id}"}
+                id={"status-select-#{@unique_id}"}
                 phx-change="update_participant_status"
+                phx-target={@myself}
                 phx-value-event_id={@event.id}
                 name="status"
                 class="text-sm border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500 relative z-10"
@@ -187,4 +188,11 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     |> String.replace(" 0", " ")
   end
   defp format_time(_, _), do: "Time TBD"
+
+  @impl true
+  def handle_event("update_participant_status", %{"event_id" => event_id, "status" => status}, socket) do
+    # Forward the event to the parent LiveView
+    send(self(), {:update_participant_status, %{"event_id" => event_id, "status" => status}})
+    {:noreply, socket}
+  end
 end

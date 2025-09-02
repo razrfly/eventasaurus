@@ -78,35 +78,42 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
 
         <!-- Ownership Filter - User Dashboard Only -->
         <%= if @context == :user_dashboard do %>
-          <div class="ml-auto">
-            <label for="ownership-filter" class="sr-only">Ownership filter</label>
-            <select 
-              id="ownership-filter"
-              phx-change="filter_ownership"
+          <div class="ml-auto" id={"ownership-filter-container-#{@id}"}>
+            <.form 
+              for={%{}} 
+              as={:ownership_filter}
+              phx-change="filter_ownership" 
               phx-target={@myself}
-              name="filter"
-              class="w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-              aria-label="Filter events by ownership"
+              class="inline-block"
             >
-              <option value="all" selected={@filters.ownership_filter == :all}>
-                All Events
-                <%= if count = @filter_counts[:all] do %>
-                  <%= if count > 0, do: " (#{count})" %>
-                <% end %>
-              </option>
-              <option value="created" selected={@filters.ownership_filter == :created}>
-                My Events
-                <%= if count = @filter_counts[:created] do %>
-                  <%= if count > 0, do: " (#{count})" %>
-                <% end %>
-              </option>
-              <option value="participating" selected={@filters.ownership_filter == :participating}>
-                Attending
-                <%= if count = @filter_counts[:participating] do %>
-                  <%= if count > 0, do: " (#{count})" %>
-                <% end %>
-              </option>
-            </select>
+              <label for={"ownership-filter-#{@id}"} class="sr-only">Ownership filter</label>
+              <select 
+                id={"ownership-filter-#{@id}"}
+                name="filter"
+                value={@filters.ownership_filter}
+                class="w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                aria-label="Filter events by ownership"
+              >
+                <option value="all" selected={@filters.ownership_filter == :all}>
+                  All Events
+                  <%= if count = @filter_counts[:all] do %>
+                    <%= if count > 0, do: " (#{count})" %>
+                  <% end %>
+                </option>
+                <option value="created" selected={@filters.ownership_filter == :created}>
+                  My Events
+                  <%= if count = @filter_counts[:created] do %>
+                    <%= if count > 0, do: " (#{count})" %>
+                  <% end %>
+                </option>
+                <option value="participating" selected={@filters.ownership_filter == :participating}>
+                  Attending
+                  <%= if count = @filter_counts[:participating] do %>
+                    <%= if count > 0, do: " (#{count})" %>
+                  <% end %>
+                </option>
+              </select>
+            </.form>
           </div>
         <% end %>
         
@@ -130,20 +137,14 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
   @impl true
   def handle_event("filter_time", %{"filter" => filter}, socket) do
     filter_atom = safe_to_atom(filter, [:upcoming, :past, :archived])
-    
-    # Send the event to the parent LiveView
     send(self(), {:filter_time, filter_atom})
-    
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("filter_ownership", %{"filter" => filter}, socket) do
     filter_atom = safe_to_atom(filter, [:all, :created, :participating])
-    
-    # Send the event to the parent LiveView
     send(self(), {:filter_ownership, filter_atom})
-    
     {:noreply, socket}
   end
 
@@ -155,7 +156,6 @@ defmodule EventasaurusWeb.Components.Events.TimelineFilters do
   rescue
     ArgumentError -> hd(allowed_atoms)
   end
-
 
   defp filter_button_label(filter_type, count) do
     base_label = case filter_type do
