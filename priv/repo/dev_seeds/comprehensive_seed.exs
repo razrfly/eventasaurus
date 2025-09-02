@@ -54,18 +54,12 @@ defmodule ComprehensiveSeed do
     Enum.map(group_configs, fn config ->
       creator = Enum.random(users)
       
-      slug = config.name 
-        |> String.downcase() 
-        |> String.replace(~r/[^a-z0-9]+/, "-") 
-        |> String.trim("-")
-      
-      {:ok, group} = Groups.create_group(%{
-        name: config.name,
-        description: config.description,
-        slug: slug <> "-#{:rand.uniform(999)}",
-        visibility: Enum.random(["public", "private"]),
-        created_by_id: creator.id
-      })
+      # Use production API that handles slug generation automatically
+      {:ok, group} = Groups.create_group_with_creator(%{
+        "name" => config.name,
+        "description" => config.description,
+        "visibility" => Enum.random(["public", "private"])
+      }, creator)
       
       # Add members based on size
       member_count = case config.size do
@@ -147,7 +141,7 @@ defmodule ComprehensiveSeed do
       event_params = %{
         title: "#{title_parts} ##{i}",
         description: generate_description(event_type),
-        slug: "event-#{String.downcase(event_type) |> String.replace(~r/[^a-z0-9]+/, "-")}-#{i}-#{:rand.uniform(9999)}",
+        # Remove manual slug generation - let the system handle it automatically
         start_at: Timex.shift(DateTime.utc_now(), days: template.time_offset, hours: :rand.uniform(12)),
         ends_at: if(rem(i, 3) == 0, do: Timex.shift(DateTime.utc_now(), days: template.time_offset, hours: :rand.uniform(12) + 2), else: nil),
         timezone: Enum.random(["America/Los_Angeles", "America/New_York", "Europe/London", "Asia/Tokyo"]),

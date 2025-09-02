@@ -12,6 +12,9 @@ defmodule DevSeeds.EnsureKeyOrganizers do
   def ensure_key_organizers do
     Helpers.section("Ensuring Key Organizers Have Events")
     
+    # Load curated data for realistic content
+    Code.require_file("curated_data.exs", __DIR__)
+    
     # Ensure movie_buff organizes movie events
     ensure_movie_events()
     
@@ -37,30 +40,42 @@ defmodule DevSeeds.EnsureKeyOrganizers do
         :count
       )
       
-      if existing_count < 5 do
-        Helpers.log("Creating movie events for movie_buff (currently has #{existing_count})")
-        needed = 5 - existing_count
-        movie_titles = [
-          "Friday Film Night: Inception",
-          "Classic Cinema: Casablanca",
-          "Marvel Movie Marathon",
-          "Horror Night: Halloween Special",
-          "Indie Film Screening: Moonlight"
-        ]
+      # Always check for movie-themed events specifically
+      movie_event_count = Repo.aggregate(
+        from(eu in EventUser, 
+          join: e in assoc(eu, :event),
+          where: eu.user_id == ^movie_user.id and 
+                 eu.role in ["owner", "organizer"] and 
+                 is_nil(e.deleted_at) and
+                 ilike(e.title, "%movie%")),
+        :count
+      )
+      
+      if movie_event_count < 5 do
+        Helpers.log("Creating movie events for movie_buff (currently has #{movie_event_count} movie events)")
+        needed = 5 - movie_event_count
         
-        titles_stream =
-          Stream.concat(
-            movie_titles,
-            Stream.repeatedly(fn -> "Movie Night #{System.unique_integer([:positive])}" end)
-          )
-          |> Enum.take(needed)
-
-        Enum.each(titles_stream, fn base_title ->
-          title = unique_title(base_title)
+        # Get real movies from curated data
+        movies = DevSeeds.CuratedData.movies() |> Enum.take_random(needed)
+        
+        Enum.each(movies, fn movie ->
+          title = unique_title("Movie Night: #{movie.title}")
+          
+          description = """
+          Join us for a screening of #{movie.title} (#{movie.year})!
+          
+          #{movie.description}
+          
+          Genre: #{movie.genre} | IMDB Rating: #{movie.rating}/10
+          
+          We'll have popcorn, snacks, and drinks. Feel free to bring your favorite movie snacks!
+          Discussion afterwards for those interested. This will be a ranked choice poll to select from several great movies.
+          """
+          
           event = insert(:realistic_event, %{
             title: title,
-            description: "Join us for an amazing movie experience! We'll watch the film together and discuss afterwards.",
-            tagline: "Movies & Discussion",
+            description: description,
+            tagline: "Movie Night - #{movie.genre}",
             status: :confirmed,
             visibility: :public,
             theme: :cosmic,
@@ -78,7 +93,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
         end)
       end
     else
-      Helpers.warning("movie_buff@example.com not found")
+      Helpers.log("movie_buff@example.com not found", :yellow)
     end
   end
   
@@ -95,30 +110,45 @@ defmodule DevSeeds.EnsureKeyOrganizers do
         :count
       )
       
-      if existing_count < 5 do
-        Helpers.log("Creating restaurant events for foodie_friend (currently has #{existing_count})")
-        needed = 5 - existing_count
-        restaurant_titles = [
-          "Sushi Night at Nobu",
-          "Italian Feast at Luigi's",
-          "Taco Tuesday Gathering",
-          "Wine & Cheese Pairing Evening",
-          "Brunch at The Garden Cafe"
-        ]
+      # Always check for restaurant/food-themed events specifically
+      food_event_count = Repo.aggregate(
+        from(eu in EventUser, 
+          join: e in assoc(eu, :event),
+          where: eu.user_id == ^foodie_user.id and 
+                 eu.role in ["owner", "organizer"] and 
+                 is_nil(e.deleted_at) and
+                 (ilike(e.title, "%restaurant%") or ilike(e.title, "%dinner%") or 
+                  ilike(e.title, "%food%") or ilike(e.title, "%brunch%"))),
+        :count
+      )
+      
+      if food_event_count < 5 do
+        Helpers.log("Creating restaurant events for foodie_friend (currently has #{food_event_count} food events)")
+        needed = 5 - food_event_count
         
-        titles_stream =
-          Stream.concat(
-            restaurant_titles,
-            Stream.repeatedly(fn -> "Foodie Meetup #{System.unique_integer([:positive])}" end)
-          )
-          |> Enum.take(needed)
-
-        Enum.each(titles_stream, fn base_title ->
-          title = unique_title(base_title)
+        # Get real restaurants from curated data
+        restaurants = DevSeeds.CuratedData.restaurants() |> Enum.take_random(needed)
+        
+        Enum.each(restaurants, fn restaurant ->
+          title = unique_title("Dinner at #{restaurant.name}")
+          
+          description = """
+          Let's gather for an amazing culinary experience at #{restaurant.name}!
+          
+          #{restaurant.description}
+          
+          Cuisine: #{restaurant.cuisine} | Price Range: #{restaurant.price}
+          
+          Specialties: #{Enum.join(restaurant.specialties, ", ")}
+          
+          Please RSVP so we can make reservations. We'll use ranked choice voting to select our final restaurant choice.
+          Separate checks available. Can't wait to share this meal with you all!
+          """
+          
           event = insert(:realistic_event, %{
             title: title,
-            description: "Experience amazing cuisine with fellow food lovers! Limited spots available.",
-            tagline: "Culinary Adventure",
+            description: description,
+            tagline: "#{restaurant.cuisine} Cuisine - #{restaurant.price}",
             status: :confirmed,
             visibility: :public,
             theme: :celebration,
@@ -137,7 +167,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
         end)
       end
     else
-      Helpers.warning("foodie_friend@example.com not found")
+      Helpers.log("foodie_friend@example.com not found", :yellow)
     end
   end
   
