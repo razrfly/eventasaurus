@@ -4191,6 +4191,21 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Count active poll options for a specific user in a poll.
+  This queries the database directly to ensure accurate counts.
+  """
+  def count_user_poll_suggestions(poll_id, user_id) do
+    from(po in PollOption,
+      where: po.poll_id == ^poll_id and
+             po.suggested_by_id == ^user_id and
+             po.status == "active" and
+             is_nil(po.deleted_at),
+      select: count(po.id)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
   Updates a poll option.
   """
   def update_poll_option(%PollOption{} = poll_option, attrs, opts \\ []) do

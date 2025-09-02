@@ -113,15 +113,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
           status: "active"
         })
 
-        # Calculate user's suggestion count
-        user_suggestion_count = case assigns.poll.poll_options do
-          %Ecto.Association.NotLoaded{} -> 0
-          poll_options when is_list(poll_options) ->
-            Enum.count(poll_options, fn option ->
-              option.suggested_by_id == assigns.user.id && option.status == "active"
-            end)
-          _ -> 0
-        end
+        # Calculate user's suggestion count from database to ensure accuracy
+        user_suggestion_count = Events.count_user_poll_suggestions(assigns.poll.id, assigns.user.id)
 
         # Check if user can suggest more options
         # Must be in a phase that allows suggestions AND within user limits
@@ -1397,7 +1390,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
       # Check suggestion limit BEFORE attempting to save multiple dates
       if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
-        current_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id)
+        # Query database for actual current count to avoid stale data issues
+        current_count = Events.count_user_poll_suggestions(socket.assigns.poll.id, socket.assigns.user.id)
         selected_count = length(socket.assigns.selected_dates)
         max_allowed = socket.assigns.poll.max_options_per_user
         
@@ -1927,15 +1921,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp safe_poll_options_empty?(poll_options) when is_list(poll_options), do: Enum.empty?(poll_options)
   defp safe_poll_options_empty?(_), do: true
 
-  # Helper function to calculate user's current suggestion count
-  defp calculate_user_suggestion_count(%Ecto.Association.NotLoaded{}, _user_id), do: 0
-  defp calculate_user_suggestion_count(poll_options, user_id) when is_list(poll_options) do
-    Enum.count(poll_options, fn option ->
-      option.suggested_by_id == user_id && option.status == "active"
-    end)
-  end
-  defp calculate_user_suggestion_count(_, _user_id), do: 0
-
 
 
   defp save_date_selection_options(socket, option_params) do
@@ -1947,8 +1932,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     |> Enum.reduce({[], 0}, fn selected_date, {acc_results, successful_count} ->
       # For non-creators with limits, we need to track count dynamically
       if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
-        # Get the current count (including successful saves from this batch)
-        current_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id) + successful_count
+        # Query database for actual current count to avoid stale data issues
+        # Add successful saves from this batch to the database count
+        current_count = Events.count_user_poll_suggestions(socket.assigns.poll.id, socket.assigns.user.id) + successful_count
         
         # Check if this specific save would exceed the limit (use > for consistency with pre-check)
         if current_count >= socket.assigns.poll.max_options_per_user do
@@ -2140,7 +2126,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
     # Check suggestion limit for non-creators
     if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
-      user_suggestion_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id)
+      # Query database for actual current count to avoid stale data issues
+      user_suggestion_count = Events.count_user_poll_suggestions(socket.assigns.poll.id, socket.assigns.user.id)
       if user_suggestion_count >= socket.assigns.poll.max_options_per_user do
         Logger.warning("User #{socket.assigns.user.id} attempted to exceed suggestion limit #{socket.assigns.poll.max_options_per_user}")
         {:error, %{suggestion_limit: ["You have reached your suggestion limit of #{socket.assigns.poll.max_options_per_user}"]}}
