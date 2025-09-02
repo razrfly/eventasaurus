@@ -7,7 +7,8 @@ defmodule DevSeeds.Events do
   import EventasaurusApp.Factory
   alias DevSeeds.Helpers
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
+  alias EventasaurusApp.Events.EventUser
+  alias EventasaurusWeb.Services.DefaultImagesService
   
   @doc """
   Seeds events with various states and configurations.
@@ -189,8 +190,11 @@ defmodule DevSeeds.Events do
       %{venue: build(:realistic_venue)}
     end
     
-    # Create the event
-    event = insert(:realistic_event, Map.merge(attrs, venue_attrs))
+    # Get a random default image for the event
+    image_attrs = get_random_image_attrs()
+    
+    # Create the event with image
+    event = insert(:realistic_event, Map.merge(attrs, Map.merge(venue_attrs, image_attrs)))
     
     # Assign to group if selected
     if group do
@@ -346,5 +350,18 @@ defmodule DevSeeds.Events do
       
       event
     end)
+  end
+  
+  defp get_random_image_attrs do
+    # Get a random default image from our collection
+    case DefaultImagesService.get_random_image() do
+      nil ->
+        # Fallback if no images are available
+        %{}
+      
+      image ->
+        # Use the image URL as cover_image_url
+        %{cover_image_url: image.url}
+    end
   end
 end

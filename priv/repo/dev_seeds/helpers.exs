@@ -4,9 +4,7 @@ defmodule DevSeeds.Helpers do
   """
 
   import EventasaurusApp.Factory
-  alias EventasaurusApp.Repo
   alias EventasaurusApp.Auth.{Client, ServiceRoleHelper, SeedUserManager}
-  alias EventasaurusApp.Accounts
   
   @doc """
   Print a colorful status message
