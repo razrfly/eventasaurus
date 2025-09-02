@@ -673,9 +673,14 @@ defmodule EventasaurusApp.Auth.Client do
   def admin_get_user_by_email(email) do
     # Fetch all users and manually filter by email due to local Supabase bug
     # where email parameter returns admin user for any query
-    url = "#{get_auth_url()}/admin/users"
+    # We need to fetch all pages since we might have more than 100 users
+    fetch_user_from_all_pages(email, 1)
+  end
 
-    Logger.debug("admin_get_user_by_email: Searching for email #{email}")
+  defp fetch_user_from_all_pages(email, page) do
+    url = "#{get_auth_url()}/admin/users?page=#{page}&per_page=100"
+
+    Logger.debug("admin_get_user_by_email: Searching for email #{email} on page #{page}")
     Logger.debug("admin_get_user_by_email: Using URL #{url}")
 
     case HTTPoison.get(url, admin_headers()) do
@@ -685,7 +690,7 @@ defmodule EventasaurusApp.Auth.Client do
 
         case response["users"] do
           users when is_list(users) ->
-            Logger.debug("admin_get_user_by_email: Got #{length(users)} users, manually filtering")
+            Logger.debug("admin_get_user_by_email: Got #{length(users)} users on page #{page}, manually filtering")
             # Manually filter by case-insensitive email match
             matching_user = Enum.find(users, fn user ->
               Logger.debug("admin_get_user_by_email: Comparing #{user["email"]} with #{email}")
@@ -693,13 +698,23 @@ defmodule EventasaurusApp.Auth.Client do
               String.downcase(user["email"] || "") == String.downcase(email || "")
             end)
 
-            if matching_user do
-              Logger.debug("admin_get_user_by_email: Found matching user: #{matching_user["email"]}")
-            else
-              Logger.debug("admin_get_user_by_email: No matching user found after manual filtering")
+            cond do
+              # Found the user!
+              matching_user ->
+                Logger.debug("admin_get_user_by_email: Found matching user: #{matching_user["email"]} on page #{page}")
+                {:ok, matching_user}
+              
+              # No user found and we got a full page - check next page
+              length(users) == 100 ->
+                Logger.debug("admin_get_user_by_email: No match on page #{page}, checking page #{page + 1}")
+                fetch_user_from_all_pages(email, page + 1)
+              
+              # No user found and this was a partial page - we've checked all users
+              true ->
+                Logger.debug("admin_get_user_by_email: No matching user found after checking all #{page} page(s)")
+                {:ok, nil}
             end
-
-            {:ok, matching_user}
+            
           _ ->
             Logger.debug("admin_get_user_by_email: Unexpected response format")
             {:ok, nil}            # Unexpected response format
