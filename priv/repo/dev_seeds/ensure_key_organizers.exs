@@ -34,7 +34,8 @@ defmodule DevSeeds.EnsureKeyOrganizers do
         from(eu in EventUser, 
           join: e in assoc(eu, :event),
           where: eu.user_id == ^movie_user.id and eu.role in ["owner", "organizer"] and is_nil(e.deleted_at)),
-        :count
+        :count,
+        :id
       )
       
       if existing_count < 5 do
@@ -92,7 +93,8 @@ defmodule DevSeeds.EnsureKeyOrganizers do
         from(eu in EventUser, 
           join: e in assoc(eu, :event),
           where: eu.user_id == ^foodie_user.id and eu.role in ["owner", "organizer"] and is_nil(e.deleted_at)),
-        :count
+        :count,
+        :id
       )
       
       if existing_count < 5 do
