@@ -10,7 +10,7 @@ defmodule EventasaurusWeb.Dev.DevAuthComponent do
   Renders the development quick login section.
   Only renders in development mode.
   """
-  attr :users, :list, default: []
+  attr :users, :map, default: %{}
   
   def quick_login_section(assigns) do
     if DevAuth.enabled?() do
@@ -29,10 +29,34 @@ defmodule EventasaurusWeb.Dev.DevAuthComponent do
               onchange="this.form.submit()"
             >
               <option value="" disabled selected>Quick login as test user...</option>
-              <%= for {user, label} <- @users do %>
-                <option value={user.id}>
-                  <%= label %> - <%= user.email %>
-                </option>
+              
+              <%= if @users.personal && length(@users.personal) > 0 do %>
+                <%= for {user, label} <- @users.personal do %>
+                  <option value={user.id} style="font-weight: bold;">
+                    👤 <%= label %>
+                  </option>
+                <% end %>
+                <option disabled>──────────────</option>
+              <% end %>
+              
+              <%= if @users.organizers && length(@users.organizers) > 0 do %>
+                <optgroup label="Event Organizers">
+                  <%= for {user, label} <- @users.organizers do %>
+                    <option value={user.id} title={user.email}>
+                      <%= label %>
+                    </option>
+                  <% end %>
+                </optgroup>
+              <% end %>
+              
+              <%= if @users.participants && length(@users.participants) > 0 do %>
+                <optgroup label="Event Participants">
+                  <%= for {user, label} <- @users.participants do %>
+                    <option value={user.id} title={user.email}>
+                      👥 <%= label %>
+                    </option>
+                  <% end %>
+                </optgroup>
               <% end %>
             </select>
             

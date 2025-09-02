@@ -1,21 +1,77 @@
-<!-- Use the new EventTimelineComponent -->
-<.event_timeline 
-  events={@events}
-  context={:user_dashboard}
-  loading={@loading}
-  filters={%{
-    time_filter: @time_filter,
-    ownership_filter: @ownership_filter
-  }}
-  filter_counts={@filter_counts}
-  config={%{
-    title: "Events",
-    subtitle: "Your upcoming and past events in one place",
-    create_button_url: "/events/new",
-    create_button_text: "Create Event",
-    show_create_button: true
-  }}
-/>
+<div class="max-w-6xl mx-auto px-4 py-3 sm:px-6 lg:px-8">
+  <!-- Header - Only show for user dashboard -->
+  <div class="mb-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Events</h1>
+        <p class="mt-1 text-sm text-gray-500">Your upcoming and past events in one place</p>
+      </div>
+      
+      <!-- Create Event Button -->
+      <div class="flex items-center">
+        <a 
+          href="/events/new"
+          class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Create Event
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <.live_component 
+    module={EventasaurusWeb.Components.Events.TimelineFilters}
+    id="timeline-filters"
+    context={:user_dashboard}
+    filters={%{
+      time_filter: @time_filter,
+      ownership_filter: @ownership_filter
+    }}
+    filter_counts={@filter_counts}
+    config={%{}}
+  />
+
+  <!-- Loading State -->
+  <%= if @loading do %>
+    <div class="flex justify-center items-center py-12">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <span class="ml-4 text-gray-600">Loading events...</span>
+    </div>
+  <% end %>
+
+  <!-- Events Timeline -->
+  <%= if not @loading do %>
+    <%= if Enum.empty?(@events) do %>
+      <.live_component
+        module={EventasaurusWeb.Components.Events.TimelineEmptyState}
+        id="timeline-empty-state"
+        context={:user_dashboard}
+        config={%{
+          title: "Events",
+          subtitle: "Your upcoming and past events in one place",
+          create_button_url: "/events/new",
+          create_button_text: "Create Event",
+          show_create_button: true
+        }}
+        filters={%{
+          time_filter: @time_filter,
+          ownership_filter: @ownership_filter
+        }}
+      />
+    <% else %>
+      <.live_component
+        module={EventasaurusWeb.Components.Events.TimelineContainer}
+        id="timeline-container"
+        events={@events}
+        context={:user_dashboard}
+      />
+    <% end %>
+  <% end %>
+</div>
 
 <!-- Ticket Modal (reused from original) -->
 <%= if @selected_order do %>
