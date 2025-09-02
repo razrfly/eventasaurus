@@ -33,6 +33,9 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
   require Logger
 
+  # Compile-time check for dev mode that works in production
+  defp dev_mode?, do: Application.get_env(:eventasaurus, :environment) == :dev
+
   @doc """
   Handles different authentication mount hooks.
 
@@ -107,7 +110,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
   defp assign_auth_user(socket, session) do
     assign_new(socket, :auth_user, fn ->
       # Check for dev mode login FIRST (dev only)
-      if Mix.env() == :dev && session["dev_mode_login"] == true && session["current_user_id"] do
+      if dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] do
         # Dev mode: directly load the user from database
         user_id = session["current_user_id"]
         case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
