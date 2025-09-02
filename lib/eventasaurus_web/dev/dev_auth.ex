@@ -18,47 +18,81 @@ defmodule EventasaurusWeb.Dev.DevAuth do
   end
 
   @doc """
-  Get a list of available test users for quick login.
-  Returns empty list if dev mode is disabled.
+  Get a list of available test users for quick login, organized by category.
+  Returns a map with :personal, :organizers, and :participants keys.
   """
   def list_quick_login_users do
     if enabled?() do
-      # First, try to get our known test accounts
-      known_accounts = [
-        {"holden@gmail.com", "Personal Account"},
-        {"admin@example.com", "Admin User"},
-        {"demo@example.com", "Demo User"},
-        {"organizer@example.com", "Event Organizer"},
-        {"participant@example.com", "Event Participant"}
-      ]
+      import Ecto.Query
+      alias EventasaurusApp.Repo
       
-      # Get the actual users from the database
-      users = known_accounts
-      |> Enum.map(fn {email, label} ->
-        case Accounts.get_user_by_email(email) do
-          nil -> nil
-          user -> {user, label}
-        end
+      # Get ALL users with their event management counts
+      users_with_counts = Repo.all(
+        from u in EventasaurusApp.Accounts.User,
+        left_join: eu in EventasaurusApp.Events.EventUser,
+        on: u.id == eu.user_id and eu.role in ["owner", "organizer"],
+        where: not is_nil(u.supabase_id) and not like(u.supabase_id, "pending%"),
+        group_by: u.id,
+        select: {u, count(eu.id)},
+        order_by: [desc: count(eu.id), asc: u.email]
+      )
+      
+      # Separate into categories
+      personal = users_with_counts
+      |> Enum.filter(fn {user, _} -> user.email == "holden@gmail.com" end)
+      |> Enum.map(fn {user, _} -> {user, "Personal Account"} end)
+      
+      # Organizers: anyone who manages at least 4 events
+      organizers = users_with_counts
+      |> Enum.filter(fn {user, count} -> 
+        count >= 4 && user.email != "holden@gmail.com"
       end)
-      |> Enum.filter(& &1)
+      |> Enum.map(fn {user, count} -> 
+        label = format_user_label(user, count)
+        {user, label}
+      end)
       
-      # If we have less than 3 users, add some random ones
-      if length(users) < 3 do
-        additional = Accounts.list_users()
-        |> Enum.take(10)
-        |> Enum.map(fn user ->
-          label = user.name || String.split(user.email, "@") |> List.first()
-          {user, label}
-        end)
-        
-        Enum.uniq_by(users ++ additional, fn {user, _} -> user.id end)
-        |> Enum.take(10)
-      else
-        users
-      end
+      # Participants: users who don't manage any events (limited to 5 for cleaner UI)
+      participants = users_with_counts
+      |> Enum.filter(fn {user, count} -> 
+        count == 0 && user.email != "holden@gmail.com"
+      end)
+      |> Enum.take(5) # Limit participants to 5 for cleaner dropdown
+      |> Enum.map(fn {user, _count} -> 
+        {user, user.name || String.split(user.email, "@") |> List.first()}
+      end)
+      
+      # Return as categorized structure for the component to handle
+      %{
+        personal: personal,
+        organizers: organizers,
+        participants: participants
+      }
     else
-      []
+      %{personal: [], organizers: [], participants: []}
     end
+  end
+  
+  # Format user label with emoji and event count
+  defp format_user_label(user, event_count) do
+    email_prefix = user.email |> String.split("@") |> List.first() |> String.downcase()
+    
+    emoji = cond do
+      String.contains?(email_prefix, "movie") -> "🎬"
+      String.contains?(email_prefix, "foodie") -> "🍴"
+      String.contains?(email_prefix, "sports") -> "⚽"
+      String.contains?(email_prefix, "book") -> "📚"
+      String.contains?(email_prefix, ["game", "gaming"]) -> "🎮"
+      String.contains?(email_prefix, ["outdoor", "hiking"]) -> "🥾"
+      String.contains?(email_prefix, ["music", "concert"]) -> "🎵"
+      String.contains?(email_prefix, "wine") -> "🍷"
+      String.contains?(email_prefix, "tech") -> "💻"
+      String.contains?(email_prefix, "art") -> "🎨"
+      String.contains?(email_prefix, "fitness") -> "💪"
+      true -> "📅"
+    end
+    
+    "#{emoji} #{user.name || user.email} (#{event_count} events)"
   end
 
   @doc """
