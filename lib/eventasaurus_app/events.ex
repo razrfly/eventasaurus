@@ -1469,7 +1469,7 @@ defmodule EventasaurusApp.Events do
           
           # Role-based counts (all active events)
           created: fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", eu.id),
-          participating: fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", ep.id)
+          participating: fragment("COUNT(CASE WHEN ? IS NOT NULL AND ? IS NULL THEN 1 END)", ep.id, eu.id)
         }
     )
 

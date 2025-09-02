@@ -61,9 +61,12 @@ defmodule EventasaurusWeb.FeatureCase do
     end
 
     # Start a Wallaby session for browser tests
-    metadata = Phoenix.Ecto.SQL.Sandbox.metadata_for(EventasaurusApp.Repo, self())
-    {:ok, session} = Wallaby.start_session(metadata: metadata)
-
-    %{session: session}
+    if Mix.env() == :test and Code.ensure_loaded?(Wallaby) do
+      metadata = Phoenix.Ecto.SQL.Sandbox.metadata_for(EventasaurusApp.Repo, self())
+      {:ok, session} = apply(Wallaby, :start_session, [[metadata: metadata]])
+      %{session: session}
+    else
+      %{session: nil}
+    end
   end
 end

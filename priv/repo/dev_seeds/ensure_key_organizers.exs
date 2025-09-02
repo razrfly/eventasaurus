@@ -29,10 +29,11 @@ defmodule DevSeeds.EnsureKeyOrganizers do
     movie_user = Accounts.get_user_by_email("movie_buff@example.com")
     
     if movie_user do
-      # Check how many events they organize
+      # Check how many events they organize (excluding deleted events)
       existing_count = Repo.aggregate(
         from(eu in EventUser, 
-          where: eu.user_id == ^movie_user.id and eu.role in ["owner", "organizer"]),
+          join: e in assoc(eu, :event),
+          where: eu.user_id == ^movie_user.id and eu.role in ["owner", "organizer"] and is_nil(e.deleted_at)),
         :count
       )
       
@@ -86,10 +87,11 @@ defmodule DevSeeds.EnsureKeyOrganizers do
     foodie_user = Accounts.get_user_by_email("foodie_friend@example.com")
     
     if foodie_user do
-      # Check how many events they organize
+      # Check how many events they organize (excluding deleted events)
       existing_count = Repo.aggregate(
         from(eu in EventUser, 
-          where: eu.user_id == ^foodie_user.id and eu.role in ["owner", "organizer"]),
+          join: e in assoc(eu, :event),
+          where: eu.user_id == ^foodie_user.id and eu.role in ["owner", "organizer"] and is_nil(e.deleted_at)),
         :count
       )
       
@@ -167,11 +169,24 @@ defmodule DevSeeds.EnsureKeyOrganizers do
   
   defp event_exists?(title) do
     import Ecto.Query
-    Repo.exists?(from e in EventasaurusApp.Events.Event, where: e.title == ^title)
+    Repo.exists?(from e in EventasaurusApp.Events.Event, where: e.title == ^title and is_nil(e.deleted_at))
   end
   
   defp unique_title(base, attempt \\ 0) do
-    candidate = if attempt == 0, do: base, else: "#{base} (#{attempt})"
-    if event_exists?(candidate), do: unique_title(base, attempt + 1), else: candidate
+    # Prevent unbounded recursion with a reasonable limit
+    max_attempts = 100
+    
+    if attempt >= max_attempts do
+      # If we hit the limit, use a timestamp to ensure uniqueness
+      "#{base} #{System.unique_integer([:positive])}"
+    else
+      candidate = if attempt == 0, do: base, else: "#{base} (#{attempt})"
+      if event_exists?(candidate), do: unique_title(base, attempt + 1), else: candidate
+    end
   end
+end
+
+# Allow direct execution of this script
+if __ENV__.file == Path.absname(__ENV__.file) do
+  DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
 end

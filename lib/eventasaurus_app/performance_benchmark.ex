@@ -85,15 +85,6 @@ defmodule EventasaurusApp.PerformanceBenchmark do
     }
   end
   
-  defp count_events_by_filter(user, time_filter, ownership_filter) do
-    Events.list_unified_events_for_user_optimized(user, [
-      time_filter: time_filter,
-      ownership_filter: ownership_filter,
-      limit: 1000
-    ])
-    |> length()
-  end
-  
   defp calculate_averages(results) do
     count = length(results)
     
