@@ -1395,150 +1395,34 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
     # Special handling for date_selection polls
     if socket.assigns.poll.poll_type == "date_selection" && length(socket.assigns.selected_dates) > 0 do
-      # Create multiple poll options, one for each selected date
-      results = socket.assigns.selected_dates
-      |> Enum.map(fn selected_date ->
-        # Create metadata structure for date_selection polls using proper builder
-        date_metadata_base = EventasaurusApp.Events.DateMetadata.build_date_metadata(
-          selected_date,
-          [display_date: format_date_for_display(selected_date)]
-        )
-
-        # Add time slot information if time is enabled
-        date_metadata = if socket.assigns.time_enabled do
-          date_iso = Date.to_iso8601(selected_date)
-          time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
-
-          # Only set time_enabled true if there are actually time slots
-          if length(time_slots) > 0 do
-            Map.merge(date_metadata_base, %{
-              "time_enabled" => true,
-              "time_slots" => time_slots,
-              "all_day" => false
-            })
+      # Check suggestion limit BEFORE attempting to save multiple dates
+      if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
+        current_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id)
+        selected_count = length(socket.assigns.selected_dates)
+        max_allowed = socket.assigns.poll.max_options_per_user
+        
+        # Check if adding all selected dates would exceed the limit
+        if current_count + selected_count > max_allowed do
+          remaining = max_allowed - current_count
+          error_message = if remaining > 0 do
+            "You can only add #{remaining} more suggestion(s). You have selected #{selected_count} dates."
           else
-            Map.merge(date_metadata_base, %{
-              "time_enabled" => false,
-              "all_day" => true,
-              "time_slots" => []
-            })
+            "You have reached your suggestion limit of #{max_allowed}."
           end
+          
+          Logger.warning("User #{socket.assigns.user.id} attempted to exceed suggestion limit. Current: #{current_count}, Trying to add: #{selected_count}, Max: #{max_allowed}")
+          
+          {:noreply,
+           socket
+           |> assign(:loading, false)
+           |> put_flash(:error, error_message)}
         else
-          Map.merge(date_metadata_base, %{
-            "time_enabled" => false,
-            "all_day" => true,
-            "time_slots" => []
-          })
+          # Proceed with saving all dates - they're within the limit
+          save_date_selection_options(socket, option_params)
         end
-
-        # Create params for this specific date
-        date_params = Map.merge(option_params, %{
-          "title" => format_date_for_option_title(selected_date),
-          "description" => option_params["description"] || "",
-          "metadata" => date_metadata  # Pass as map, not JSON string!
-        })
-
-        result = save_option(socket, date_params)
-        Logger.debug("Date save result: #{selected_date} -> #{inspect(result)}")
-        result
-      end)
-
-      # Log the batch save results
-      Logger.debug("Batch date save results: #{inspect(results)}")
-
-      # Check if all saves were successful
-      successful_options = results
-        |> Enum.filter(fn result ->
-          case result do
-            {:ok, _} -> true
-            _ -> false
-          end
-        end)
-        |> Enum.map(fn {:ok, option} -> option end)
-
-      failed_count = length(results) - length(successful_options)
-
-      Logger.debug("Date saves completed: #{length(successful_options)}/#{length(socket.assigns.selected_dates)} successful, #{failed_count} failed")
-
-      if length(successful_options) == length(socket.assigns.selected_dates) do
-        # All dates saved successfully
-        poll = socket.assigns.poll
-        user = socket.assigns.user
-
-        # Broadcast for each successful option
-        Enum.each(successful_options, fn option ->
-          duplicate_options = check_for_duplicates(poll, option)
-          if length(duplicate_options) > 0 do
-            PollPubSubService.broadcast_duplicate_detected(poll, option, duplicate_options, user)
-          else
-            PollPubSubService.broadcast_option_suggested(poll, option, user)
-          end
-          send(self(), {:option_suggested, option})
-        end)
-
-        # Reset form after successful submission
-        changeset = PollOption.changeset(%PollOption{}, %{
-          poll_id: socket.assigns.poll.id,
-          suggested_by_id: socket.assigns.user.id,
-          status: "active"
-        })
-
-        # Show success message
-        success_message = case length(successful_options) do
-          1 -> "Date added successfully!"
-          n -> "#{n} dates added successfully!"
-        end
-
-        {:noreply,
-         socket
-         |> assign(:loading, false)
-         |> assign(:suggestion_form_visible, false)
-         |> assign(:selected_dates, [])  # Clear selected dates after successful submission
-         # Clear time selection state after successful submission
-         |> assign(:time_enabled, false)
-         |> assign(:selected_date_for_time, nil)
-         |> assign(:date_time_slots, %{})
-         |> assign(:changeset, changeset)
-         |> assign(:loading_rich_data, false)
-         |> put_flash(:info, success_message)}
       else
-        # Handle errors - show which dates failed
-        failed_results = results
-          |> Enum.with_index()
-          |> Enum.filter(fn {result, _} ->
-            case result do
-              {:ok, _} -> false
-              _ -> true
-            end
-          end)
-          |> Enum.map(fn {result, index} ->
-            date = Enum.at(socket.assigns.selected_dates, index)
-            case result do
-              {:error, %{suggestion_limit: [message]}} -> {date, message}
-              {:error, changeset} -> {date, changeset}
-              _ -> {date, "Unknown error"}
-            end
-          end)
-
-        Logger.error("Failed to save dates: #{inspect(failed_results |> Enum.map(fn
-          {date, changeset} when is_map(changeset) and is_map_key(changeset, :errors) -> {date, changeset.errors}
-          {date, message} -> {date, message}
-        end))}")
-
-        # Check if any errors are suggestion limit errors
-        suggestion_limit_errors = failed_results
-          |> Enum.any?(fn {_, error} -> is_binary(error) && String.contains?(error, "suggestion limit") end)
-
-        error_message = if suggestion_limit_errors do
-          "You have reached your suggestion limit. Please remove some suggestions before adding new ones."
-        else
-          "Failed to save #{failed_count} date(s). Please try again."
-        end
-
-        {:noreply,
-         socket
-         |> assign(:loading, false)
-         |> put_flash(:error, error_message)}
+        # No limit enforcement needed (creator or no limit set)
+        save_date_selection_options(socket, option_params)
       end
     else
       # Non-date polls - use original single option logic
@@ -2053,6 +1937,176 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp calculate_user_suggestion_count(_, _user_id), do: 0
 
 
+
+  defp save_date_selection_options(socket, option_params) do
+    require Logger
+    
+    # Create multiple poll options, one for each selected date
+    results = socket.assigns.selected_dates
+    |> Enum.with_index()
+    |> Enum.map(fn {selected_date, index} ->
+      # For non-creators with limits, we need to track count dynamically
+      if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
+        # Get the current count (including any we've already saved in this batch)
+        current_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id) + index
+        
+        # Check if this specific save would exceed the limit
+        if current_count >= socket.assigns.poll.max_options_per_user do
+          Logger.warning("User #{socket.assigns.user.id} reached limit during batch save at index #{index}")
+          {:error, %{suggestion_limit: ["You have reached your suggestion limit of #{socket.assigns.poll.max_options_per_user}"]}}
+        else
+          save_single_date_option(socket, option_params, selected_date)
+        end
+      else
+        save_single_date_option(socket, option_params, selected_date)
+      end
+    end)
+
+    # Log the batch save results
+    Logger.debug("Batch date save results: #{inspect(results)}")
+
+    # Check if all saves were successful
+    successful_options = results
+      |> Enum.filter(fn result ->
+        case result do
+          {:ok, _} -> true
+          _ -> false
+        end
+      end)
+      |> Enum.map(fn {:ok, option} -> option end)
+
+    failed_count = length(results) - length(successful_options)
+
+    Logger.debug("Date saves completed: #{length(successful_options)}/#{length(socket.assigns.selected_dates)} successful, #{failed_count} failed")
+
+    if length(successful_options) == length(socket.assigns.selected_dates) do
+      # All dates saved successfully
+      poll = socket.assigns.poll
+      user = socket.assigns.user
+
+      # Broadcast for each successful option
+      Enum.each(successful_options, fn option ->
+        duplicate_options = check_for_duplicates(poll, option)
+        if length(duplicate_options) > 0 do
+          PollPubSubService.broadcast_duplicate_detected(poll, option, duplicate_options, user)
+        else
+          PollPubSubService.broadcast_option_suggested(poll, option, user)
+        end
+        send(self(), {:option_suggested, option})
+      end)
+
+      # Reset form after successful submission
+      changeset = PollOption.changeset(%PollOption{}, %{
+        poll_id: socket.assigns.poll.id,
+        suggested_by_id: socket.assigns.user.id,
+        status: "active"
+      })
+
+      # Show success message
+      success_message = case length(successful_options) do
+        1 -> "Date added successfully!"
+        n -> "#{n} dates added successfully!"
+      end
+
+      {:noreply,
+       socket
+       |> assign(:loading, false)
+       |> assign(:suggestion_form_visible, false)
+       |> assign(:selected_dates, [])  # Clear selected dates after successful submission
+       # Clear time selection state after successful submission
+       |> assign(:time_enabled, false)
+       |> assign(:selected_date_for_time, nil)
+       |> assign(:date_time_slots, %{})
+       |> assign(:changeset, changeset)
+       |> assign(:loading_rich_data, false)
+       |> put_flash(:info, success_message)}
+    else
+      # Handle errors - show which dates failed
+      failed_results = results
+        |> Enum.with_index()
+        |> Enum.filter(fn {result, _} ->
+          case result do
+            {:ok, _} -> false
+            _ -> true
+          end
+        end)
+        |> Enum.map(fn {result, index} ->
+          date = Enum.at(socket.assigns.selected_dates, index)
+          case result do
+            {:error, %{suggestion_limit: [message]}} -> {date, message}
+            {:error, changeset} -> {date, changeset}
+            _ -> {date, "Unknown error"}
+          end
+        end)
+
+      Logger.error("Failed to save dates: #{inspect(failed_results |> Enum.map(fn
+        {date, changeset} when is_map(changeset) and is_map_key(changeset, :errors) -> {date, changeset.errors}
+        {date, message} -> {date, message}
+      end))}")
+
+      # Check if any errors are suggestion limit errors
+      suggestion_limit_errors = failed_results
+        |> Enum.any?(fn {_, error} -> is_binary(error) && String.contains?(error, "suggestion limit") end)
+
+      error_message = if suggestion_limit_errors do
+        "You have reached your suggestion limit. Some dates were not saved."
+      else
+        "Failed to save #{failed_count} date(s). Please try again."
+      end
+
+      {:noreply,
+       socket
+       |> assign(:loading, false)
+       |> put_flash(:error, error_message)}
+    end
+  end
+
+  defp save_single_date_option(socket, option_params, selected_date) do
+    require Logger
+    
+    # Create metadata structure for date_selection polls using proper builder
+    date_metadata_base = EventasaurusApp.Events.DateMetadata.build_date_metadata(
+      selected_date,
+      [display_date: format_date_for_display(selected_date)]
+    )
+
+    # Add time slot information if time is enabled
+    date_metadata = if socket.assigns.time_enabled do
+      date_iso = Date.to_iso8601(selected_date)
+      time_slots = Map.get(socket.assigns.date_time_slots, date_iso, [])
+
+      # Only set time_enabled true if there are actually time slots
+      if length(time_slots) > 0 do
+        Map.merge(date_metadata_base, %{
+          "time_enabled" => true,
+          "time_slots" => time_slots,
+          "all_day" => false
+        })
+      else
+        Map.merge(date_metadata_base, %{
+          "time_enabled" => false,
+          "all_day" => true,
+          "time_slots" => []
+        })
+      end
+    else
+      Map.merge(date_metadata_base, %{
+        "time_enabled" => false,
+        "all_day" => true,
+        "time_slots" => []
+      })
+    end
+
+    # Create params for this specific date
+    date_params = Map.merge(option_params, %{
+      "title" => format_date_for_option_title(selected_date),
+      "description" => option_params["description"] || "",
+      "metadata" => date_metadata  # Pass as map, not JSON string!
+    })
+
+    # Bypass the limit check in save_option since we already checked
+    do_save_option(socket, date_params)
+  end
 
   defp save_option(socket, option_params) do
     require Logger
