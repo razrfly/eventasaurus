@@ -38,8 +38,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
       
       if existing_count < 5 do
         Helpers.log("Creating movie events for movie_buff (currently has #{existing_count})")
-        
-        # Create movie night events
+        needed = 5 - existing_count
         movie_titles = [
           "Friday Film Night: Inception",
           "Classic Cinema: Casablanca",
@@ -48,27 +47,33 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           "Indie Film Screening: Moonlight"
         ]
         
-        Enum.each(movie_titles, fn title ->
-          unless event_exists?(title) do
-            event = insert(:realistic_event, %{
-              title: title,
-              description: "Join us for an amazing movie experience! We'll watch the film together and discuss afterwards.",
-              tagline: "Movies & Discussion",
-              status: :confirmed,
-              visibility: :public,
-              theme: :cosmic,
-              is_virtual: Enum.random([true, false]),
-              start_at: Faker.DateTime.forward(Enum.random(1..30)),
-              ends_at: Faker.DateTime.forward(Enum.random(31..32))
-            })
-            
-            # Make movie_buff the organizer
-            insert(:event_user, %{
-              event: event,
-              user: movie_user,
-              role: "owner"
-            })
-          end
+        titles_stream =
+          Stream.concat(
+            movie_titles,
+            Stream.repeatedly(fn -> "Movie Night #{System.unique_integer([:positive])}" end)
+          )
+          |> Enum.take(needed)
+
+        Enum.each(titles_stream, fn base_title ->
+          title = unique_title(base_title)
+          event = insert(:realistic_event, %{
+            title: title,
+            description: "Join us for an amazing movie experience! We'll watch the film together and discuss afterwards.",
+            tagline: "Movies & Discussion",
+            status: :confirmed,
+            visibility: :public,
+            theme: :cosmic,
+            is_virtual: Enum.random([true, false]),
+            start_at: Faker.DateTime.forward(Enum.random(1..30)),
+            ends_at: Faker.DateTime.forward(Enum.random(31..32))
+          })
+          
+          # Make movie_buff the organizer
+          insert(:event_user, %{
+            event: event,
+            user: movie_user,
+            role: "owner"
+          })
         end)
       end
     else
@@ -90,8 +95,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
       
       if existing_count < 5 do
         Helpers.log("Creating restaurant events for foodie_friend (currently has #{existing_count})")
-        
-        # Create restaurant events
+        needed = 5 - existing_count
         restaurant_titles = [
           "Sushi Night at Nobu",
           "Italian Feast at Luigi's",
@@ -100,28 +104,34 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           "Brunch at The Garden Cafe"
         ]
         
-        Enum.each(restaurant_titles, fn title ->
-          unless event_exists?(title) do
-            event = insert(:realistic_event, %{
-              title: title,
-              description: "Experience amazing cuisine with fellow food lovers! Limited spots available.",
-              tagline: "Culinary Adventure",
-              status: :confirmed,
-              visibility: :public,
-              theme: :celebration,
-              is_virtual: false,
-              is_ticketed: true,
-              start_at: Faker.DateTime.forward(Enum.random(1..30)),
-              ends_at: Faker.DateTime.forward(Enum.random(31..32))
-            })
-            
-            # Make foodie_friend the organizer
-            insert(:event_user, %{
-              event: event,
-              user: foodie_user,
-              role: "owner"
-            })
-          end
+        titles_stream =
+          Stream.concat(
+            restaurant_titles,
+            Stream.repeatedly(fn -> "Foodie Meetup #{System.unique_integer([:positive])}" end)
+          )
+          |> Enum.take(needed)
+
+        Enum.each(titles_stream, fn base_title ->
+          title = unique_title(base_title)
+          event = insert(:realistic_event, %{
+            title: title,
+            description: "Experience amazing cuisine with fellow food lovers! Limited spots available.",
+            tagline: "Culinary Adventure",
+            status: :confirmed,
+            visibility: :public,
+            theme: :celebration,
+            is_virtual: false,
+            is_ticketed: true,
+            start_at: Faker.DateTime.forward(Enum.random(1..30)),
+            ends_at: Faker.DateTime.forward(Enum.random(31..32))
+          })
+          
+          # Make foodie_friend the organizer
+          insert(:event_user, %{
+            event: event,
+            user: foodie_user,
+            role: "owner"
+          })
         end)
       end
     else
@@ -159,10 +169,9 @@ defmodule DevSeeds.EnsureKeyOrganizers do
     import Ecto.Query
     Repo.exists?(from e in EventasaurusApp.Events.Event, where: e.title == ^title)
   end
-end
-
-# Run if called directly
-if __MODULE__ == __ENV__.module do
-  import Ecto.Query
-  DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
+  
+  defp unique_title(base, attempt \\ 0) do
+    candidate = if attempt == 0, do: base, else: "#{base} (#{attempt})"
+    if event_exists?(candidate), do: unique_title(base, attempt + 1), else: candidate
+  end
 end

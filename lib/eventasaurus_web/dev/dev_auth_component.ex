@@ -30,8 +30,9 @@ defmodule EventasaurusWeb.Dev.DevAuthComponent do
             >
               <option value="" disabled selected>Quick login as test user...</option>
               
-              <%= if @users.personal && length(@users.personal) > 0 do %>
-                <%= for {user, label} <- @users.personal do %>
+              <% personal = Map.get(@users, :personal, []) %>
+              <%= if Enum.any?(personal) do %>
+                <%= for {user, label} <- personal do %>
                   <option value={user.id} style="font-weight: bold;">
                     👤 <%= label %>
                   </option>
@@ -39,9 +40,10 @@ defmodule EventasaurusWeb.Dev.DevAuthComponent do
                 <option disabled>──────────────</option>
               <% end %>
               
-              <%= if @users.organizers && length(@users.organizers) > 0 do %>
+              <% organizers = Map.get(@users, :organizers, []) %>
+              <%= if Enum.any?(organizers) do %>
                 <optgroup label="Event Organizers">
-                  <%= for {user, label} <- @users.organizers do %>
+                  <%= for {user, label} <- organizers do %>
                     <option value={user.id} title={user.email}>
                       <%= label %>
                     </option>
@@ -49,9 +51,10 @@ defmodule EventasaurusWeb.Dev.DevAuthComponent do
                 </optgroup>
               <% end %>
               
-              <%= if @users.participants && length(@users.participants) > 0 do %>
+              <% participants = Map.get(@users, :participants, []) %>
+              <%= if Enum.any?(participants) do %>
                 <optgroup label="Event Participants">
-                  <%= for {user, label} <- @users.participants do %>
+                  <%= for {user, label} <- participants do %>
                     <option value={user.id} title={user.email}>
                       👥 <%= label %>
                     </option>
