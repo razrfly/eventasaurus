@@ -330,14 +330,8 @@ defmodule EventasaurusWeb.DashboardLive do
       ])
     end
 
-    # Calculate filter counts for badges
-    filter_counts = %{
-      upcoming: count_events_by_filter(user, :upcoming, :all),
-      past: count_events_by_filter(user, :past, :all),
-      archived: count_archived_events(user),
-      created: count_events_by_filter(user, :all, :created),
-      participating: count_events_by_filter(user, :all, :participating)
-    }
+    # Calculate filter counts for badges using optimized single query
+    filter_counts = Events.get_dashboard_filter_counts(user)
 
     socket
     |> assign(:events, events)

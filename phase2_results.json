@@ -1,0 +1,16 @@
+{
+  "iterations": 10,
+  "event_counts": {
+    "upcoming": 0,
+    "past": 0,
+    "archived": 0,
+    "created": 0,
+    "participating": 0
+  },
+  "total_events_loaded": 0,
+  "avg_total_time_ms": 3.7,
+  "avg_upcoming_query_ms": 1.2638,
+  "avg_past_query_ms": 0.8332,
+  "avg_archived_query_ms": 0.5004,
+  "avg_filter_counts_ms": 1.0889000000000002
+}
