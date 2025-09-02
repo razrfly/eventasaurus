@@ -1942,25 +1942,37 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     require Logger
     
     # Create multiple poll options, one for each selected date
-    results = socket.assigns.selected_dates
-    |> Enum.with_index()
-    |> Enum.map(fn {selected_date, index} ->
+    # Track successful saves to maintain accurate count
+    {results, _} = socket.assigns.selected_dates
+    |> Enum.reduce({[], 0}, fn selected_date, {acc_results, successful_count} ->
       # For non-creators with limits, we need to track count dynamically
       if !socket.assigns.is_creator && socket.assigns.poll.max_options_per_user do
-        # Get the current count (including any we've already saved in this batch)
-        current_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id) + index
+        # Get the current count (including successful saves from this batch)
+        current_count = calculate_user_suggestion_count(socket.assigns.poll.poll_options, socket.assigns.user.id) + successful_count
         
-        # Check if this specific save would exceed the limit
+        # Check if this specific save would exceed the limit (use > for consistency with pre-check)
         if current_count >= socket.assigns.poll.max_options_per_user do
-          Logger.warning("User #{socket.assigns.user.id} reached limit during batch save at index #{index}")
-          {:error, %{suggestion_limit: ["You have reached your suggestion limit of #{socket.assigns.poll.max_options_per_user}"]}}
+          Logger.warning("User #{socket.assigns.user.id} reached limit during batch save after #{successful_count} successful saves")
+          result = {:error, %{suggestion_limit: ["You have reached your suggestion limit of #{socket.assigns.poll.max_options_per_user}"]}}
+          {[result | acc_results], successful_count}
         else
-          save_single_date_option(socket, option_params, selected_date)
+          result = save_single_date_option(socket, option_params, selected_date)
+          case result do
+            {:ok, _} -> {[result | acc_results], successful_count + 1}
+            _ -> {[result | acc_results], successful_count}
+          end
         end
       else
-        save_single_date_option(socket, option_params, selected_date)
+        result = save_single_date_option(socket, option_params, selected_date)
+        case result do
+          {:ok, _} -> {[result | acc_results], successful_count + 1}
+          _ -> {[result | acc_results], successful_count}
+        end
       end
     end)
+    
+    # Reverse to maintain original order
+    results = Enum.reverse(results)
 
     # Log the batch save results
     Logger.debug("Batch date save results: #{inspect(results)}")
@@ -2052,6 +2064,21 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         "You have reached your suggestion limit. Some dates were not saved."
       else
         "Failed to save #{failed_count} date(s). Please try again."
+      end
+
+      # Broadcast successful saves even on partial failure
+      if length(successful_options) > 0 do
+        poll = socket.assigns.poll
+        user = socket.assigns.user
+        Enum.each(successful_options, fn option ->
+          duplicate_options = check_for_duplicates(poll, option)
+          if length(duplicate_options) > 0 do
+            PollPubSubService.broadcast_duplicate_detected(poll, option, duplicate_options, user)
+          else
+            PollPubSubService.broadcast_option_suggested(poll, option, user)
+          end
+          send(self(), {:option_suggested, option})
+        end)
       end
 
       {:noreply,
