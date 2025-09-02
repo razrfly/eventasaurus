@@ -7,7 +7,6 @@ defmodule DevSeeds.Groups do
   import EventasaurusApp.Factory
   alias DevSeeds.Helpers
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Groups.{Group, GroupUser}
   
   defp slugify(name) do
     name
