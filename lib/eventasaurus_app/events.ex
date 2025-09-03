@@ -879,7 +879,7 @@ defmodule EventasaurusApp.Events do
   def create_event_with_organizer(event_attrs, %User{} = user) do
     Repo.transaction(fn ->
       with {:ok, event} <- create_event(event_attrs),
-           {:ok, _} <- add_user_to_event(event, user) do
+           {:ok, _} <- add_user_to_event(event, user, "organizer") do
         event
         |> Repo.preload([:venue, :users])
         |> Event.with_computed_fields()

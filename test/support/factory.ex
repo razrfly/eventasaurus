@@ -62,11 +62,13 @@ defmodule EventasaurusApp.Factory do
       ends_at: DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.add(2, :hour),
       timezone: "America/Los_Angeles",
       visibility: :public,
-      slug: sequence(:slug, &"test-event-#{&1}"),
+      # Remove explicit slug to allow automatic generation
       status: :confirmed,
       theme: :minimal,
       theme_customizations: %{},
-      taxation_type: "ticketed_event",
+      # Set as free event (no ticketing) for now
+      is_ticketed: false,
+      taxation_type: "ticketless",
       venue: build(:venue)
     }
   end
@@ -491,26 +493,38 @@ defmodule EventasaurusApp.Factory do
     
     # Try to load curated data if available, otherwise use defaults
     {base_title, tagline, description} = 
-      try do
-        Code.require_file("priv/repo/dev_seeds/curated_data.exs")
-        title = DevSeeds.CuratedData.generate_realistic_event_title()
-        tag = DevSeeds.CuratedData.random_tagline()
-        desc = DevSeeds.CuratedData.generate_event_description(title)
+      if Code.ensure_loaded?(DevSeeds.CuratedData) do
+        # Module already loaded, use it
+        title = apply(DevSeeds.CuratedData, :generate_realistic_event_title, [])
+        tag = apply(DevSeeds.CuratedData, :random_tagline, [])
+        desc = apply(DevSeeds.CuratedData, :generate_event_description, [title])
         {title, tag, desc}
-      rescue
-        _ ->
-          # Fallback to realistic titles without Lorem ipsum
-          title = Enum.random([
-            "Movie Night: The Dark Knight",
-            "Dinner at Italian Kitchen",
-            "Board Game Night",
-            "Concert at the Arena",
-            "Hiking Adventure",
-            "Wine Tasting Evening"
-          ])
-          tag = Enum.random(["Join us!", "Don't miss out!", "Limited spots!", "RSVP now!"])
-          desc = "Join us for this exciting event! It's going to be a great time with friends and fun activities. Please RSVP to secure your spot."
-          {title, tag, desc}
+      else
+        try do
+          Code.require_file("priv/repo/dev_seeds/curated_data.exs")
+          if Code.ensure_loaded?(DevSeeds.CuratedData) do
+            title = apply(DevSeeds.CuratedData, :generate_realistic_event_title, [])
+            tag = apply(DevSeeds.CuratedData, :random_tagline, [])
+            desc = apply(DevSeeds.CuratedData, :generate_event_description, [title])
+            {title, tag, desc}
+          else
+            raise "Module not loaded"
+          end
+        rescue
+          _ ->
+            # Fallback to realistic titles without Lorem ipsum
+            title = Enum.random([
+              "Movie Night: The Dark Knight",
+              "Dinner at Italian Kitchen",
+              "Board Game Night",
+              "Concert at the Arena",
+              "Hiking Adventure",
+              "Wine Tasting Evening"
+            ])
+            tag = Enum.random(["Join us!", "Don't miss out!", "Limited spots!", "RSVP now!"])
+            desc = "Join us for this exciting event! It's going to be a great time with friends and fun activities. Please RSVP to secure your spot."
+            {title, tag, desc}
+        end
       end
     
     %Event{
@@ -521,12 +535,13 @@ defmodule EventasaurusApp.Factory do
       ends_at: Faker.DateTime.forward(90),
       timezone: Enum.random(["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles"]),
       visibility: Enum.random([:public, :private]),
-      slug: sequence(:slug, &"event-#{&1}-#{:rand.uniform(9999)}"),
+      # Remove explicit slug to allow automatic generation
       status: Enum.random([:draft, :polling, :confirmed, :canceled]),
       theme: Enum.random(themes),
       is_virtual: Enum.random([true, false, false]), # Favor non-virtual
-      is_ticketed: Enum.random([true, false]),
-      taxation_type: Enum.random(["ticketed_event", "contribution_collection", "ticketless"]),
+      # Set all events as free (no ticketing) for now
+      is_ticketed: false,
+      taxation_type: "ticketless",
       threshold_count: Enum.random([nil, 5, 10, 20]),
       polling_deadline: Faker.DateTime.forward(7),
       venue: if(Enum.random([true, false]), do: build(:realistic_venue), else: nil),
