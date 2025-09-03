@@ -2054,8 +2054,12 @@ defmodule EventasaurusWeb.PublicEventLive do
         []
     end
     
-    # Handle ranked voting separately (needs all votes at once)
-    if poll.voting_system == "ranked" do
+    # Short-circuit empty submissions
+    if votes_to_cast == [] do
+      [{:error, :no_votes}]
+    else
+      # Handle ranked voting separately (needs all votes at once)
+      if poll.voting_system == "ranked" do
       # For ranked voting, submit all votes at once
       # cast_ranked_votes properly clears existing votes first in a transaction
       case Events.cast_ranked_votes(poll, votes_to_cast, user) do
@@ -2075,11 +2079,17 @@ defmodule EventasaurusWeb.PublicEventLive do
               "approval" when vote_value == "selected" ->
                 Events.cast_approval_vote(poll, poll_option, user, true)
               "star" ->
-                Events.cast_star_vote(poll, poll_option, user, vote_value)
+                # Clamp star ratings to valid range (1-5)
+                clamped_rating = vote_value
+                  |> String.to_integer()
+                  |> min(5)
+                  |> max(1)
+                Events.cast_star_vote(poll, poll_option, user, clamped_rating)
               _ ->
                 {:error, :unsupported_voting_system}
             end
         end
+      end
       end
     end
   end

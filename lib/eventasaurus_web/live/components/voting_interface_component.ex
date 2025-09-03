@@ -576,6 +576,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
           poll={@poll}
         />
         
+        
         <!-- Instructions -->
         <div class={"hidden sm:block border rounded-md p-3 sm:p-4 " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-blue-50 border-blue-200")}>
           <div class="flex">
