@@ -141,7 +141,7 @@ defmodule PollSeed do
     
     # Create the poll
     organizer_id = get_event_organizer(event)
-    {:ok, poll} = Events.create_poll(%{
+    poll_result = Events.create_poll(%{
       event_id: event.id,
       title: "Movie Night Selection",
       description: "Rank your movie preferences for our movie night!",
@@ -152,41 +152,67 @@ defmodule PollSeed do
       status: "voting"
     })
     
-    # Use proper phase transition instead of setting phase directly
-    {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
+    poll = case poll_result do
+      {:ok, poll} ->
+        # Use proper phase transition instead of setting phase directly
+        case Events.transition_poll_phase(poll, "voting_only") do
+          {:ok, poll} -> poll
+          {:error, reason} ->
+            Logger.error("Failed to transition poll phase: #{inspect(reason)}")
+            poll
+        end
+      {:error, reason} ->
+        Logger.error("Failed to create movie poll: #{inspect(reason)}")
+        nil
+    end
     
-    # Create poll options from movies with real data
-    options = Enum.map(movies, fn movie ->
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: movie.title,
-        description: "#{movie.description} (#{movie.year}, #{movie.genre})",
-        suggested_by_id: organizer_id,
-        image_url: MovieConfig.build_image_url(movie.poster_path, "w500"),
-        metadata: %{
-          "tmdb_id" => movie.tmdb_id,
-          "year" => movie.year,
-          "genre" => movie.genre,
-          "rating" => movie.rating,
-          "poster_path" => movie.poster_path,
-          "backdrop_path" => movie.backdrop_path,
-          "is_movie" => true
-        }
-      })
-      option
-    end)
-    
-    # Seed RCV votes with specific scenarios
-    scenario = Enum.random([
-      :contested_race,      # Close competition between 2-3 movies
-      :clear_winner,        # One movie dominates
-      :multiple_rounds,     # Needs elimination rounds
-      :exhausted_ballots,   # Some incomplete rankings
-      :tied_elimination     # Test tie-breaking
-    ])
-    
-    seed_rcv_votes(poll, options, participants, scenario)
-    Logger.info("Created RCV movie poll with scenario: #{scenario}")
+    if is_nil(poll) do
+      nil
+    else
+      # Create poll options from movies with real data
+      options = Enum.reduce(movies, [], fn movie, acc ->
+        case Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: movie.title,
+          description: "#{movie.description} (#{movie.year}, #{movie.genre})",
+          suggested_by_id: organizer_id,
+          image_url: MovieConfig.build_image_url(movie.poster_path, "w500"),
+          metadata: %{
+            "tmdb_id" => movie.tmdb_id,
+            "year" => movie.year,
+            "genre" => movie.genre,
+            "rating" => movie.rating,
+            "poster_path" => movie.poster_path,
+            "backdrop_path" => movie.backdrop_path,
+            "is_movie" => true
+          }
+        }) do
+          {:ok, option} -> [option | acc]
+          {:error, reason} ->
+            Logger.error("Failed to create poll option for #{movie.title}: #{inspect(reason)}")
+            acc
+        end
+      end) |> Enum.reverse()
+      
+      if length(options) < 2 do
+        Logger.error("Could not create enough poll options, deleting poll")
+        Events.delete_poll(poll)
+        nil
+      else
+        # Seed RCV votes with specific scenarios
+        scenario = Enum.random([
+          :contested_race,      # Close competition between 2-3 movies
+          :clear_winner,        # One movie dominates
+          :multiple_rounds,     # Needs elimination rounds
+          :exhausted_ballots,   # Some incomplete rankings
+          :tied_elimination     # Test tie-breaking
+        ])
+        
+        seed_rcv_votes(poll, options, participants, scenario)
+        Logger.info("Created RCV movie poll with scenario: #{scenario}")
+        poll
+      end
+    end
     end
   end
   

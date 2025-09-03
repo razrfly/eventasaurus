@@ -47,7 +47,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-7a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm0-3a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd"/>
                 </svg>
                 <span class="text-yellow-800 dark:text-yellow-200">
-                  No majority winner yet (need > <%= @irv_results.majority_threshold - 1 %> votes)
+                  No majority winner yet (need <%= @irv_results.majority_threshold %> votes for majority)
                 </span>
               </div>
             </div>
