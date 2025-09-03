@@ -91,8 +91,11 @@ all_events = events ++ full_events
 Code.require_file("ensure_key_organizers.exs", __DIR__)
 DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
 
-# Create polls for events (Phase 5 - to be implemented)
-polls = []
+# Create polls for events
+Helpers.section("Creating Polls with Votes")
+Code.require_file("poll_seed.exs", __DIR__)
+# PollSeed.run() is called within the file
+polls = Repo.all(EventasaurusApp.Events.Poll)
 
 # Create activities for completed events (Phase 6 - to be implemented)
 activities = []

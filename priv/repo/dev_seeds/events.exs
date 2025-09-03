@@ -7,6 +7,7 @@ defmodule DevSeeds.Events do
   import EventasaurusApp.Factory
   alias DevSeeds.Helpers
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Events
   alias EventasaurusApp.Events.EventUser
   alias EventasaurusWeb.Services.DefaultImagesService
   
@@ -19,6 +20,9 @@ defmodule DevSeeds.Events do
     - groups: List of groups to associate with events
   """
   def seed(opts \\ []) do
+    # Load curated data for realistic content
+    Code.require_file("curated_data.exs", __DIR__)
+    
     count = Keyword.get(opts, :count, 100)
     users = Keyword.get(opts, :users, [])
     groups = Keyword.get(opts, :groups, [])
@@ -70,24 +74,24 @@ defmodule DevSeeds.Events do
     Enum.map(1..count, fn _ ->
       # Past events (1-365 days ago)
       days_ago = Enum.random(1..365)
-      start_at = Faker.DateTime.backward(days_ago)
+      start_at = Faker.DateTime.backward(days_ago) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8, 24, 48]) # Various durations
-      ends_at = DateTime.add(start_at, duration_hours * 3600, :second)
+      ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
       
-      event = create_event(%{
-        title: generate_event_title(),
-        description: Faker.Lorem.paragraphs(3) |> Enum.join("\n\n"),
-        tagline: Faker.Company.catch_phrase(),
+      title = generate_event_title()
+      taxation_attrs = random_taxation_and_ticketing()
+      event = create_event(Map.merge(%{
+        title: title,
+        description: DevSeeds.CuratedData.generate_event_description(title),
+        tagline: DevSeeds.CuratedData.random_tagline(),
         start_at: start_at,
         ends_at: ends_at,
         status: Enum.random([:confirmed, :confirmed, :canceled]), # Most are confirmed
         visibility: random_visibility(),
         theme: random_theme(),
         is_virtual: Enum.random([false, false, false, true]), # 25% virtual
-        is_ticketed: Enum.random([false, false, true]), # 33% ticketed
-        taxation_type: random_taxation_type(),
         timezone: Faker.Address.time_zone()
-      }, users, groups)
+      }, taxation_attrs), users, groups)
       
       # Mark some as soft-deleted
       if Enum.random(1..20) == 1 do # 5% deleted
@@ -109,9 +113,9 @@ defmodule DevSeeds.Events do
     Enum.map(1..count, fn _ ->
       # Upcoming events (today to 60 days)
       days_forward = Enum.random(0..60)
-      start_at = Faker.DateTime.forward(days_forward)
+      start_at = Faker.DateTime.forward(days_forward) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8])
-      ends_at = DateTime.add(start_at, duration_hours * 3600, :second)
+      ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
       
       status = Enum.random([
         :draft, 
@@ -120,15 +124,17 @@ defmodule DevSeeds.Events do
       ])
       
       polling_deadline = if status == :polling do
-        Faker.DateTime.forward(Enum.random(1..7))
+        Faker.DateTime.forward(Enum.random(1..7)) |> truncate_datetime()
       else
         nil
       end
       
-      create_event(%{
-        title: generate_event_title(),
-        description: Faker.Lorem.paragraphs(3) |> Enum.join("\n\n"),
-        tagline: Faker.Company.catch_phrase(),
+      title = generate_event_title()
+      taxation_attrs = random_taxation_and_ticketing()
+      create_event(Map.merge(%{
+        title: title,
+        description: DevSeeds.CuratedData.generate_event_description(title),
+        tagline: DevSeeds.CuratedData.random_tagline(),
         start_at: start_at,
         ends_at: ends_at,
         status: status,
@@ -136,11 +142,9 @@ defmodule DevSeeds.Events do
         visibility: random_visibility(),
         theme: random_theme(),
         is_virtual: Enum.random([false, false, false, true]),
-        is_ticketed: Enum.random([false, false, true]),
-        taxation_type: random_taxation_type(),
         threshold_count: maybe_threshold(),
         timezone: Faker.Address.time_zone()
-      }, users, groups)
+      }, taxation_attrs), users, groups)
     end)
   end
   
@@ -150,25 +154,34 @@ defmodule DevSeeds.Events do
     Enum.map(1..count, fn _ ->
       # Far future events (61-365 days)
       days_forward = Enum.random(61..365)
-      start_at = Faker.DateTime.forward(days_forward)
+      start_at = Faker.DateTime.forward(days_forward) |> truncate_datetime()
       duration_hours = Enum.random([2, 3, 4, 6, 8, 24, 48, 72]) # Can be longer
-      ends_at = DateTime.add(start_at, duration_hours * 3600, :second)
+      ends_at = DateTime.add(start_at, duration_hours * 3600, :second) |> truncate_datetime()
       
-      create_event(%{
-        title: generate_event_title(),
-        description: Faker.Lorem.paragraphs(3) |> Enum.join("\n\n"),
-        tagline: Faker.Company.catch_phrase(),
+      status = Enum.random([:draft, :draft, :polling]) # Mostly drafts
+      
+      polling_deadline = if status == :polling do
+        Faker.DateTime.forward(Enum.random(1..7)) |> truncate_datetime()
+      else
+        nil
+      end
+      
+      title = generate_event_title()
+      taxation_attrs = random_taxation_and_ticketing()
+      create_event(Map.merge(%{
+        title: title,
+        description: DevSeeds.CuratedData.generate_event_description(title),
+        tagline: DevSeeds.CuratedData.random_tagline(),
         start_at: start_at,
         ends_at: ends_at,
-        status: Enum.random([:draft, :draft, :polling]), # Mostly drafts
+        status: status,
+        polling_deadline: polling_deadline,
         visibility: random_visibility(),
         theme: random_theme(),
         is_virtual: Enum.random([false, false, true]),
-        is_ticketed: Enum.random([false, true]), # More likely to be ticketed
-        taxation_type: random_taxation_type(),
         threshold_count: maybe_threshold(),
         timezone: Faker.Address.time_zone()
-      }, users, groups)
+      }, taxation_attrs), users, groups)
     end)
   end
   
@@ -187,37 +200,39 @@ defmodule DevSeeds.Events do
     venue_attrs = if attrs.is_virtual do
       %{virtual_venue_url: Faker.Internet.url()}
     else
-      %{venue: build(:realistic_venue)}
+      # Create venue data manually to avoid datetime issues
+      %{venue: %{
+        name: Faker.Company.name(),
+        address: Faker.Address.street_address(),
+        city: Faker.Address.city(),
+        state: Faker.Address.state_abbr(),
+        country: Faker.Address.country(),
+        latitude: :rand.uniform() * 180 - 90,  # Random latitude between -90 and 90
+        longitude: :rand.uniform() * 360 - 180,  # Random longitude between -180 and 180
+        venue_type: Enum.random(["venue", "city", "region", "online", "tbd"])
+      }}
     end
     
     # Get a random default image for the event
     image_attrs = get_random_image_attrs()
     
-    # Create the event with image - ensure caller-provided attrs take precedence
-    event = insert(:realistic_event, Map.merge(Map.merge(venue_attrs, image_attrs), attrs))
+    # Use production API for event creation (handles slug generation automatically)
+    event_params = Map.merge(Map.merge(venue_attrs, image_attrs), attrs)
     
-    # Assign to group if selected AND caller didn't supply group_id
-    if group && is_nil(Map.get(attrs, :group_id)) do
-      event
-      |> Ecto.Changeset.change(%{group_id: group.id})
-      |> Repo.update!()
+    # Add group_id if selected
+    event_params = if group && is_nil(Map.get(attrs, :group_id)) do
+      Map.put(event_params, :group_id, group.id)
+    else
+      event_params
     end
     
-    # Add organizer
-    insert(:event_user, %{
-      event: event,
-      user: organizer,
-      role: "owner"
-    })
+    # Create event using production API with organizer
+    {:ok, event} = Events.create_event_with_organizer(event_params, organizer)
     
-    # Maybe add co-organizers
+    # Maybe add co-organizers using production API
     if Enum.random([true, false]) do
       co_organizer = Enum.random(users -- [organizer])
-      insert(:event_user, %{
-        event: event,
-        user: co_organizer,
-        role: "organizer"
-      })
+      Events.add_user_to_event(event, co_organizer, "organizer")
     end
     
     event
@@ -254,9 +269,10 @@ defmodule DevSeeds.Events do
           
           # Check if user is already an organizer
           unless Repo.get_by(EventUser, event_id: event.id, user_id: user.id) do
-            insert(:event_participant, %{
-              event: event,
-              user: user,
+            # Use production API for participant creation
+            Events.create_event_participant(%{
+              event_id: event.id,
+              user_id: user.id,
               status: status,
               role: :ticket_holder,
               source: Enum.random(["direct_registration", "invitation", "group_invite"])
@@ -268,26 +284,8 @@ defmodule DevSeeds.Events do
   end
   
   defp generate_event_title do
-    event_types = [
-      "#{Faker.Person.name()} Birthday Party",
-      "Movie Night: #{Faker.Lorem.word()}",
-      "Dinner at #{Faker.Company.name()}",
-      "#{Faker.Lorem.word()} Game Night",
-      "#{Faker.Team.name()} vs #{Faker.Team.name()}",
-      "#{Faker.Person.name()} Concert",
-      "Book Club: #{Faker.Lorem.word()}",
-      "Wine Tasting at #{Faker.Company.name()}",
-      "Hiking: #{Faker.Address.city()} Trail",
-      "Tech Talk: #{Faker.Company.catch_phrase()}",
-      "#{Faker.Lorem.word()} Workshop",
-      "Community Meetup",
-      "#{Faker.Address.city()} Food Festival",
-      "Board Game Tournament",
-      "Karaoke Night",
-      Faker.Lorem.sentence(3)
-    ]
-    
-    Enum.random(event_types)
+    # Use real event titles from curated data - no Lorem ipsum!
+    DevSeeds.CuratedData.generate_realistic_event_title()
   end
   
   defp random_visibility do
@@ -305,6 +303,31 @@ defmodule DevSeeds.Events do
       "ticketless", "ticketless"           # 25% ticketless
     ])
   end
+
+  # Generate consistent taxation_type and is_ticketed values
+  defp random_taxation_and_ticketing do
+    case Enum.random([
+      :ticketed_event, :ticketed_event,  # 50% ticketed
+      :contribution_collection,          # 25% contribution
+      :ticketless, :ticketless           # 25% ticketless
+    ]) do
+      :ticketed_event ->
+        %{
+          taxation_type: "ticketed_event",
+          is_ticketed: Enum.random([true, true, false])  # 67% ticketed for ticketed events
+        }
+      :contribution_collection ->
+        %{
+          taxation_type: "contribution_collection", 
+          is_ticketed: false  # Must be false for contribution collections
+        }
+      :ticketless ->
+        %{
+          taxation_type: "ticketless",
+          is_ticketed: false  # Must be false for ticketless events
+        }
+    end
+  end
   
   defp maybe_threshold do
     if Enum.random([true, false, false, false]) do # 25% have thresholds
@@ -313,6 +336,14 @@ defmodule DevSeeds.Events do
       nil
     end
   end
+
+  # Helper function to truncate microseconds from datetime values
+  # Database schema expects datetime without microseconds
+  defp truncate_datetime(datetime) when is_struct(datetime, DateTime) do
+    DateTime.truncate(datetime, :second)
+  end
+
+  defp truncate_datetime(datetime), do: datetime
   
   @doc """
   Creates events at maximum capacity for testing
@@ -321,12 +352,13 @@ defmodule DevSeeds.Events do
     Helpers.log("Creating events at maximum capacity...")
     
     Enum.map(1..5, fn _ ->
+      base_title = generate_event_title()
       event = create_event(%{
-        title: "SOLD OUT: #{generate_event_title()}",
-        description: "This event is at maximum capacity.",
-        tagline: "Fully booked event",
-        start_at: Faker.DateTime.forward(30),
-        ends_at: Faker.DateTime.forward(31),
+        title: "SOLD OUT: #{base_title}",
+        description: "This event is at maximum capacity.\n\n#{DevSeeds.CuratedData.generate_event_description(base_title)}",
+        tagline: "Fully booked!",
+        start_at: Faker.DateTime.forward(30) |> truncate_datetime(),
+        ends_at: Faker.DateTime.forward(31) |> truncate_datetime(),
         status: :confirmed,
         threshold_count: 20,
         visibility: :public,
@@ -340,9 +372,10 @@ defmodule DevSeeds.Events do
       # Add participants up to the threshold number (or available users)
       participants = Enum.take(users, min(20, length(users)))
       Enum.each(participants, fn user ->
-        insert(:event_participant, %{
-          event: event,
-          user: user,
+        # Use production API for participant creation  
+        Events.create_event_participant(%{
+          event_id: event.id,
+          user_id: user.id,
           status: :accepted,
           role: :ticket_holder
         })

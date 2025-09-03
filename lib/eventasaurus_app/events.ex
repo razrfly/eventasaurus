@@ -6737,7 +6737,15 @@ defmodule EventasaurusApp.Events do
       }
     end)
 
-    %{
+    # Add IRV results for ranked choice polls
+    irv_results = if poll.voting_system == "ranked" do
+      alias EventasaurusApp.Events.RankedChoiceVoting
+      RankedChoiceVoting.calculate_irv_winner(poll)
+    else
+      nil
+    end
+
+    base_stats = %{
       poll_id: poll.id,
       poll_title: poll.title,
       voting_system: poll.voting_system,
@@ -6745,6 +6753,13 @@ defmodule EventasaurusApp.Events do
       total_unique_voters: total_voters,
       options: options_with_stats
     }
+
+    # Add IRV results if applicable
+    if irv_results do
+      Map.put(base_stats, :irv_results, irv_results)
+    else
+      base_stats
+    end
   end
 
   @doc """
