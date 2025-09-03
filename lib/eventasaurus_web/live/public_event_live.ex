@@ -870,52 +870,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             }
           
           user ->
-            # Get the poll to determine voting system
-            poll = Events.get_poll!(poll_id)
-            
-            # Cast votes based on the voting system
-            # Handle different temp_votes structures
-            votes_to_cast = case temp_votes do
-              %{votes: votes, poll_type: :ranked} ->
-                # Convert ranked structure to expected format
-                Enum.map(votes, fn %{rank: rank, option_id: option_id} -> 
-                  {option_id, rank}
-                end)
-              map when is_map(map) ->
-                # Regular map structure
-                Enum.to_list(map)
-              _ ->
-                []
-            end
-            
-            # Handle ranked voting separately (needs all votes at once)
-            vote_results = if poll.voting_system == "ranked" do
-              # For ranked voting, submit all votes at once
-              # cast_ranked_votes properly clears existing votes first in a transaction
-              case Events.cast_ranked_votes(poll, votes_to_cast, user) do
-                {:ok, votes} -> Enum.map(votes, fn v -> {:ok, v} end)
-                {:error, reason} -> [{:error, reason}]
-              end
-            else
-              # For other voting systems, process votes individually
-              for {option_id, vote_value} <- votes_to_cast do
-                case Events.get_poll_option(option_id) do
-                  nil ->
-                    {:error, :option_not_found}
-                  poll_option ->
-                    case poll.voting_system do
-                      "binary" ->
-                        Events.cast_binary_vote(poll, poll_option, user, vote_value)
-                      "approval" when vote_value == "selected" ->
-                        Events.cast_approval_vote(poll, poll_option, user, true)
-                      "star" ->
-                        Events.cast_star_vote(poll, poll_option, user, vote_value)
-                      _ ->
-                        {:error, :unsupported_voting_system}
-                    end
-                end
-              end
-            end
+            vote_results = cast_poll_votes(poll_id, temp_votes, user)
             
             # Check if all votes were successful
             case Enum.find(vote_results, &match?({:error, _}, &1)) do
@@ -980,52 +935,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             }
           
           user ->
-            # Get the poll to determine voting system
-            poll = Events.get_poll!(poll_id)
-            
-            # Cast votes based on the voting system
-            # Handle different temp_votes structures
-            votes_to_cast = case temp_votes do
-              %{votes: votes, poll_type: :ranked} ->
-                # Convert ranked structure to expected format
-                Enum.map(votes, fn %{rank: rank, option_id: option_id} -> 
-                  {option_id, rank}
-                end)
-              map when is_map(map) ->
-                # Regular map structure
-                Enum.to_list(map)
-              _ ->
-                []
-            end
-            
-            # Handle ranked voting separately (needs all votes at once)
-            vote_results = if poll.voting_system == "ranked" do
-              # For ranked voting, submit all votes at once
-              # cast_ranked_votes properly clears existing votes first in a transaction
-              case Events.cast_ranked_votes(poll, votes_to_cast, user) do
-                {:ok, votes} -> Enum.map(votes, fn v -> {:ok, v} end)
-                {:error, reason} -> [{:error, reason}]
-              end
-            else
-              # For other voting systems, process votes individually
-              for {option_id, vote_value} <- votes_to_cast do
-                case Events.get_poll_option(option_id) do
-                  nil ->
-                    {:error, :option_not_found}
-                  poll_option ->
-                    case poll.voting_system do
-                      "binary" ->
-                        Events.cast_binary_vote(poll, poll_option, user, vote_value)
-                      "approval" when vote_value == "selected" ->
-                        Events.cast_approval_vote(poll, poll_option, user, true)
-                      "star" ->
-                        Events.cast_star_vote(poll, poll_option, user, vote_value)
-                      _ ->
-                        {:error, :unsupported_voting_system}
-                    end
-                end
-              end
-            end
+            vote_results = cast_poll_votes(poll_id, temp_votes, user)
             
             # Check if all votes were successful
             case Enum.find(vote_results, &match?({:error, _}, &1)) do
@@ -2121,6 +2031,56 @@ defmodule EventasaurusWeb.PublicEventLive do
         socket
         |> assign(:event_polls, [])
         |> assign(:poll_user_votes, %{})
+    end
+  end
+
+  # Private function to handle poll vote casting for different voting systems
+  defp cast_poll_votes(poll_id, temp_votes, user) do
+    # Get the poll to determine voting system
+    poll = Events.get_poll!(poll_id)
+    
+    # Cast votes based on the voting system
+    # Handle different temp_votes structures
+    votes_to_cast = case temp_votes do
+      %{votes: votes, poll_type: :ranked} ->
+        # Convert ranked structure to expected format
+        Enum.map(votes, fn %{rank: rank, option_id: option_id} -> 
+          {option_id, rank}
+        end)
+      map when is_map(map) ->
+        # Regular map structure
+        Enum.to_list(map)
+      _ ->
+        []
+    end
+    
+    # Handle ranked voting separately (needs all votes at once)
+    if poll.voting_system == "ranked" do
+      # For ranked voting, submit all votes at once
+      # cast_ranked_votes properly clears existing votes first in a transaction
+      case Events.cast_ranked_votes(poll, votes_to_cast, user) do
+        {:ok, votes} -> Enum.map(votes, fn v -> {:ok, v} end)
+        {:error, reason} -> [{:error, reason}]
+      end
+    else
+      # For other voting systems, process votes individually
+      for {option_id, vote_value} <- votes_to_cast do
+        case Events.get_poll_option(option_id) do
+          nil ->
+            {:error, :option_not_found}
+          poll_option ->
+            case poll.voting_system do
+              "binary" ->
+                Events.cast_binary_vote(poll, poll_option, user, vote_value)
+              "approval" when vote_value == "selected" ->
+                Events.cast_approval_vote(poll, poll_option, user, true)
+              "star" ->
+                Events.cast_star_vote(poll, poll_option, user, vote_value)
+              _ ->
+                {:error, :unsupported_voting_system}
+            end
+        end
+      end
     end
   end
 

@@ -305,28 +305,12 @@ defmodule DevSeeds.Events do
   end
 
   # Generate consistent taxation_type and is_ticketed values
+  # For now, all events are free (no ticketing) to avoid complications
   defp random_taxation_and_ticketing do
-    case Enum.random([
-      :ticketed_event, :ticketed_event,  # 50% ticketed
-      :contribution_collection,          # 25% contribution
-      :ticketless, :ticketless           # 25% ticketless
-    ]) do
-      :ticketed_event ->
-        %{
-          taxation_type: "ticketed_event",
-          is_ticketed: Enum.random([true, true, false])  # 67% ticketed for ticketed events
-        }
-      :contribution_collection ->
-        %{
-          taxation_type: "contribution_collection", 
-          is_ticketed: false  # Must be false for contribution collections
-        }
-      :ticketless ->
-        %{
-          taxation_type: "ticketless",
-          is_ticketed: false  # Must be false for ticketless events
-        }
-    end
+    %{
+      taxation_type: "ticketless",
+      is_ticketed: false
+    }
   end
   
   defp maybe_threshold do
@@ -362,10 +346,10 @@ defmodule DevSeeds.Events do
         status: :confirmed,
         threshold_count: 20,
         visibility: :public,
-        is_ticketed: true,
+        is_ticketed: false,
         is_virtual: false,
         theme: :celebration,
-        taxation_type: "ticketed_event",
+        taxation_type: "ticketless",
         timezone: Faker.Address.time_zone()
       }, users, [])
       

@@ -43,7 +43,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
       }
     else
       # Run IRV rounds
-      rounds = run_irv_rounds(votes, options, majority_threshold, [])
+      rounds = run_irv_rounds(votes, options, nil, [])
       
       # Determine winner and final state
       winner = determine_winner(rounds)
@@ -109,12 +109,12 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     |> length()
   end
 
-  defp run_irv_rounds(votes, options, majority_threshold, rounds) do
+  defp run_irv_rounds(votes, options, _majority_threshold, rounds) do
     # Group votes by voter to track their full ballot
     ballots = group_votes_by_voter(votes)
     
-    # Run elimination rounds
-    run_elimination_rounds(ballots, Map.keys(options), options, majority_threshold, rounds, 1)
+    # Run elimination rounds - majority threshold now calculated per round based on active ballots
+    run_elimination_rounds(ballots, Map.keys(options), options, nil, rounds, 1)
   end
 
   defp group_votes_by_voter(votes) do
@@ -129,12 +129,13 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     |> Map.new()
   end
 
-  defp run_elimination_rounds(ballots, active_options, all_options, majority_threshold, rounds, round_num) do
+  defp run_elimination_rounds(ballots, active_options, all_options, _majority_threshold, rounds, round_num) do
     # Count first preferences among active options
     vote_counts = count_first_preferences(ballots, active_options)
     
-    # Calculate percentages
+    # Calculate percentages and active majority threshold based on current ballots
     total_votes = Enum.sum(Map.values(vote_counts))
+    active_majority_threshold = div(total_votes, 2) + 1
     
     if total_votes == 0 do
       # No more votes, end here
@@ -158,7 +159,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
       
       cond do
         # Someone has majority
-        leading_votes >= majority_threshold ->
+        leading_votes >= active_majority_threshold ->
           [round | rounds] |> Enum.reverse()
         
         # Only one candidate left
@@ -186,7 +187,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
             ballots,
             remaining_options,
             all_options,
-            majority_threshold,
+            nil,
             [round | rounds],
             round_num + 1
           )
@@ -220,9 +221,7 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
         {winner_id, _} = Enum.max_by(counts, fn {_, v} -> v end)
         
         # Fetch the actual option
-        PollOption
-        |> where([o], o.id == ^winner_id)
-        |> Repo.one()
+        get_option_by_id(winner_id)
       _ -> nil
     end
   end
@@ -255,10 +254,13 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
       |> Enum.flat_map(& &1.active_options)
       |> Enum.uniq()
     
+    # Fetch all options in a single query to avoid N+1
+    options_map = get_options_by_ids(all_option_ids)
+    
     # Build leaderboard entries
     all_option_ids
     |> Enum.map(fn option_id ->
-      option = get_option_by_id(option_id)
+      option = Map.get(options_map, option_id)
       
       # Determine status and stats
       {status, eliminated_round, votes, percentage} = cond do
@@ -311,5 +313,12 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     PollOption
     |> where([o], o.id == ^option_id)
     |> Repo.one()
+  end
+
+  defp get_options_by_ids(option_ids) do
+    PollOption
+    |> where([o], o.id in ^option_ids)
+    |> Repo.all()
+    |> Map.new(&{&1.id, &1})
   end
 end
