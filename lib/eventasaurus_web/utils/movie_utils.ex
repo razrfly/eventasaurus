@@ -361,6 +361,70 @@ defmodule EventasaurusWeb.Utils.MovieUtils do
 
   def get_backdrop_url(_, _), do: nil
 
+  @doc """
+  Extract movie external URLs (TMDB, IMDb) from movie data.
+  
+  ## Examples
+  
+      iex> MovieUtils.get_movie_urls(%{external_data: %{external_urls: %{tmdb: "https://themoviedb.org/movie/123", imdb: "https://imdb.com/title/tt123"}}})
+      %{tmdb: "https://themoviedb.org/movie/123", imdb: "https://imdb.com/title/tt123"}
+  """
+  def get_movie_urls(%{__struct__: EventasaurusApp.Events.PollOption} = poll_option) do
+    # Handle PollOption structs specifically
+    cond do
+      # First, try to extract from external_data
+      poll_option.external_data && is_map(poll_option.external_data) ->
+        get_movie_urls(poll_option.external_data)
+      
+      true ->
+        %{}
+    end
+  end
+
+  def get_movie_urls(movie_data) when is_map(movie_data) do
+    cond do
+      # Try external_urls structure (from rich data provider)
+      is_map(movie_data) && is_map(movie_data["external_urls"]) ->
+        movie_data["external_urls"]
+        
+      # Try atom keys
+      is_map(movie_data) && is_map(movie_data[:external_urls]) ->
+        movie_data[:external_urls]
+        
+      # Fallback to empty map
+      true -> %{}
+    end
+  rescue
+    _ -> %{}
+  end
+
+  def get_movie_urls(_), do: %{}
+
+  @doc """
+  Get the primary movie URL (prefers TMDB, falls back to IMDb).
+  
+  ## Examples
+  
+      iex> MovieUtils.get_primary_movie_url(%{external_data: %{external_urls: %{tmdb: "https://themoviedb.org/movie/123"}}})
+      "https://themoviedb.org/movie/123"
+  """
+  def get_primary_movie_url(movie_data) do
+    urls = get_movie_urls(movie_data)
+    
+    cond do
+      # Prefer TMDB URL (string or atom key)
+      urls["tmdb"] && is_binary(urls["tmdb"]) -> urls["tmdb"]
+      urls[:tmdb] && is_binary(urls[:tmdb]) -> urls[:tmdb]
+      
+      # Fall back to IMDb URL (string or atom key)
+      urls["imdb"] && is_binary(urls["imdb"]) -> urls["imdb"]
+      urls[:imdb] && is_binary(urls[:imdb]) -> urls[:imdb]
+      
+      # No URL found
+      true -> nil
+    end
+  end
+
   # Private helper functions
 
   defp normalize_value(value) when is_map(value), do: normalize_movie_data(value)
