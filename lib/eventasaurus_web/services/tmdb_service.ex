@@ -97,7 +97,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
           {"Accept", "application/json"}
         ]
         require Logger
-        Logger.debug("TMDB search URL: #{url}")
+        Logger.debug("TMDB search URL: #{@base_url}/search/multi?query=#{URI.encode(query)}&page=#{page}")
         case HTTPoison.get(url, headers) do
           {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
             Logger.debug("TMDB response: #{code}")
@@ -106,7 +106,10 @@ defmodule EventasaurusWeb.Services.TmdbService do
                 case Jason.decode(body) do
                   {:ok, %{"results" => results}} ->
                     {:ok, Enum.map(results, &format_result/1)}
-                  {:error, _} ->
+                  {:ok, _invalid_format} ->
+                    {:error, "Invalid TMDb response format"}
+                  {:error, decode_error} ->
+                    Logger.error("Failed to decode TMDb response: #{inspect(decode_error)}")
                     {:error, "Failed to decode TMDb response"}
                 end
               _ ->
@@ -257,7 +260,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
     url = "#{@base_url}/movie/popular?api_key=#{api_key}&page=#{page}&language=en-US"
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("TMDB popular movies URL: #{url}")
+    Logger.debug("TMDB popular movies URL: #{@base_url}/movie/popular?page=#{page}&language=en-US")
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
@@ -305,7 +308,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("TMDB movie details URL: #{url}")
+    Logger.debug("TMDB movie details URL: #{@base_url}/movie/#{movie_id}?append_to_response=#{append_to_response}&include_image_language=en,null")
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
@@ -337,7 +340,7 @@ defmodule EventasaurusWeb.Services.TmdbService do
 
     headers = [{"Accept", "application/json"}]
 
-    Logger.debug("TMDB TV details URL: #{url}")
+    Logger.debug("TMDB TV details URL: #{@base_url}/tv/#{tv_id}?append_to_response=#{append_to_response}&include_image_language=en,null")
 
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->

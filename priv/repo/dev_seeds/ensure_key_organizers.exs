@@ -5,8 +5,11 @@ defmodule DevSeeds.EnsureKeyOrganizers do
   """
   
   import EventasaurusApp.Factory
-  alias EventasaurusApp.{Repo, Accounts}
+  alias EventasaurusApp.{Repo, Accounts, Events}
   alias EventasaurusApp.Events.EventUser
+  
+  # Load helpers
+  Code.require_file("helpers.exs", __DIR__)
   alias DevSeeds.Helpers
   
   def ensure_key_organizers do
@@ -33,7 +36,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
     
     if movie_user do
       # Check how many events they organize (excluding deleted events)
-      existing_count = Repo.aggregate(
+      _existing_count = Repo.aggregate(
         from(eu in EventUser, 
           join: e in assoc(eu, :event),
           where: eu.user_id == ^movie_user.id and eu.role in ["owner", "organizer"] and is_nil(e.deleted_at)),
@@ -72,7 +75,8 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           Discussion afterwards for those interested. This will be a ranked choice poll to select from several great movies.
           """
           
-          event = insert(:realistic_event, %{
+          # Use Events context to create event with organizer (ensures proper slug generation)
+          {:ok, _event} = Events.create_event_with_organizer(%{
             title: title,
             description: description,
             tagline: "Movie Night - #{movie.genre}",
@@ -81,15 +85,9 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             theme: :cosmic,
             is_virtual: Enum.random([true, false]),
             start_at: Faker.DateTime.forward(Enum.random(1..30)),
-            ends_at: Faker.DateTime.forward(Enum.random(31..32))
-          })
-          
-          # Make movie_buff the organizer
-          insert(:event_user, %{
-            event: event,
-            user: movie_user,
-            role: "owner"
-          })
+            ends_at: Faker.DateTime.forward(Enum.random(31..32)),
+            timezone: Faker.Address.time_zone()
+          }, movie_user)
         end)
       end
     else
@@ -103,7 +101,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
     
     if foodie_user do
       # Check how many events they organize (excluding deleted events)
-      existing_count = Repo.aggregate(
+      _existing_count = Repo.aggregate(
         from(eu in EventUser, 
           join: e in assoc(eu, :event),
           where: eu.user_id == ^foodie_user.id and eu.role in ["owner", "organizer"] and is_nil(e.deleted_at)),
@@ -145,7 +143,8 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           Separate checks available. Can't wait to share this meal with you all!
           """
           
-          event = insert(:realistic_event, %{
+          # Use Events context to create event with organizer (ensures proper slug generation)
+          {:ok, _event} = Events.create_event_with_organizer(%{
             title: title,
             description: description,
             tagline: "#{restaurant.cuisine} Cuisine - #{restaurant.price}",
@@ -153,17 +152,11 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             visibility: :public,
             theme: :celebration,
             is_virtual: false,
-            is_ticketed: true,
+            is_ticketed: false,
             start_at: Faker.DateTime.forward(Enum.random(1..30)),
-            ends_at: Faker.DateTime.forward(Enum.random(31..32))
-          })
-          
-          # Make foodie_friend the organizer
-          insert(:event_user, %{
-            event: event,
-            user: foodie_user,
-            role: "owner"
-          })
+            ends_at: Faker.DateTime.forward(Enum.random(31..32)),
+            timezone: Faker.Address.time_zone()
+          }, foodie_user)
         end)
       end
     else
