@@ -349,7 +349,16 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                       <% end %>
 
                       <div class="flex-1 min-w-0">
-                        <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
+                        <% movie_url = MovieUtils.get_primary_movie_url(option) %>
+                        <%= if movie_url do %>
+                          <h4 class="font-medium text-gray-900 mb-1">
+                            <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                              <%= option.title %>
+                            </.link>
+                          </h4>
+                        <% else %>
+                          <h4 class="font-medium text-gray-900 mb-1"><%= option.title %></h4>
+                        <% end %>
 
                         <%= if option.description do %>
                           <p class="text-sm text-gray-600 mb-2"><%= truncate(option.description, length: 80, separator: " ") %></p>
