@@ -2079,12 +2079,18 @@ defmodule EventasaurusWeb.PublicEventLive do
               "approval" when vote_value == "selected" ->
                 Events.cast_approval_vote(poll, poll_option, user, true)
               "star" ->
-                # Clamp star ratings to valid range (1-5)
-                clamped_rating = vote_value
-                  |> String.to_integer()
-                  |> min(5)
-                  |> max(1)
-                Events.cast_star_vote(poll, poll_option, user, clamped_rating)
+                # Safely parse and clamp rating to 1–5
+                case vote_value do
+                  i when is_integer(i) ->
+                    Events.cast_star_vote(poll, poll_option, user, i |> min(5) |> max(1))
+                  s when is_binary(s) ->
+                    case Integer.parse(s) do
+                      {i, ""} -> Events.cast_star_vote(poll, poll_option, user, i |> min(5) |> max(1))
+                      _ -> {:error, :invalid_rating}
+                    end
+                  _ ->
+                    {:error, :invalid_rating}
+                end
               _ ->
                 {:error, :unsupported_voting_system}
             end
