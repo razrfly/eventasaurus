@@ -485,28 +485,43 @@ defmodule EventasaurusApp.Factory do
   end
 
 
-  # Enhanced factories with Faker data
+  # Enhanced factories with real data (no Lorem ipsum!)
   def realistic_event_factory do
     themes = [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
     
-    title = Enum.random([
-      "#{Faker.Lorem.word()} Movie Night",
-      "Dinner at #{Faker.Company.name()}",
-      "#{Faker.Lorem.word()} Game Session",
-      "#{Faker.Lorem.word()} Sports Event",
-      "#{Faker.Person.name()} Concert",
-      Faker.Lorem.sentence(3)
-    ])
+    # Try to load curated data if available, otherwise use defaults
+    {base_title, tagline, description} = 
+      try do
+        Code.require_file("priv/repo/dev_seeds/curated_data.exs")
+        title = DevSeeds.CuratedData.generate_realistic_event_title()
+        tag = DevSeeds.CuratedData.random_tagline()
+        desc = DevSeeds.CuratedData.generate_event_description(title)
+        {title, tag, desc}
+      rescue
+        _ ->
+          # Fallback to realistic titles without Lorem ipsum
+          title = Enum.random([
+            "Movie Night: The Dark Knight",
+            "Dinner at Italian Kitchen",
+            "Board Game Night",
+            "Concert at the Arena",
+            "Hiking Adventure",
+            "Wine Tasting Evening"
+          ])
+          tag = Enum.random(["Join us!", "Don't miss out!", "Limited spots!", "RSVP now!"])
+          desc = "Join us for this exciting event! It's going to be a great time with friends and fun activities. Please RSVP to secure your spot."
+          {title, tag, desc}
+      end
     
     %Event{
-      title: sequence(:title, fn n -> "#{title} ##{n}" end),
-      tagline: Faker.Company.catch_phrase(),
-      description: Faker.Lorem.paragraphs(3) |> Enum.join("\n\n"),
+      title: sequence(:title, fn n -> "#{base_title} ##{n}" end),
+      tagline: tagline,
+      description: description,
       start_at: Faker.DateTime.forward(60),
       ends_at: Faker.DateTime.forward(90),
       timezone: Enum.random(["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles"]),
       visibility: Enum.random([:public, :private]),
-      slug: sequence(:slug, &"event-#{&1}"),
+      slug: sequence(:slug, &"event-#{&1}-#{:rand.uniform(9999)}"),
       status: Enum.random([:draft, :polling, :confirmed, :canceled]),
       theme: Enum.random(themes),
       is_virtual: Enum.random([true, false, false]), # Favor non-virtual

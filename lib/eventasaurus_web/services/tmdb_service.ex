@@ -65,6 +65,23 @@ defmodule EventasaurusWeb.Services.TmdbService do
     end
   end
 
+  @doc """
+  Get popular movies from TMDB API with optional page parameter.
+  Returns a list of movie maps with basic information.
+  """
+  @impl EventasaurusWeb.Services.TmdbServiceBehaviour
+  def get_popular_movies(page \\ 1) do
+    with :ok <- check_rate_limit(),
+         {:ok, api_key} <- get_api_key() do
+      fetch_popular_movies(page, api_key)
+    else
+      {:error, :rate_limited} ->
+        {:error, "Rate limit exceeded, please try again later"}
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   @impl EventasaurusWeb.Services.TmdbServiceBehaviour
   def search_multi(query, page \\ 1) do
     # Handle nil or empty queries
@@ -234,6 +251,51 @@ defmodule EventasaurusWeb.Services.TmdbService do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp fetch_popular_movies(page, api_key) do
+    url = "#{@base_url}/movie/popular?api_key=#{api_key}&page=#{page}&language=en-US"
+    headers = [{"Accept", "application/json"}]
+
+    Logger.debug("TMDB popular movies URL: #{url}")
+
+    case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"results" => movies}} ->
+            formatted_movies = Enum.map(movies, &format_popular_movie/1)
+            {:ok, formatted_movies}
+          {:error, decode_error} ->
+            Logger.error("Failed to decode TMDB popular movies response: #{inspect(decode_error)}")
+            {:error, "Failed to decode popular movies data"}
+        end
+
+      {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
+        Logger.error("TMDB popular movies error: #{code} - #{body}")
+        {:error, "TMDB API error: #{code}"}
+
+      {:error, %HTTPoison.Error{reason: reason}} ->
+        Logger.error("TMDB popular movies HTTP error: #{inspect(reason)}")
+        {:error, "Network error: #{inspect(reason)}"}
+    end
+  end
+
+  defp format_popular_movie(movie_data) do
+    %{
+      tmdb_id: movie_data["id"],
+      title: movie_data["title"],
+      overview: movie_data["overview"],
+      release_date: movie_data["release_date"],
+      poster_path: movie_data["poster_path"],
+      backdrop_path: movie_data["backdrop_path"],
+      vote_average: movie_data["vote_average"],
+      vote_count: movie_data["vote_count"],
+      popularity: movie_data["popularity"],
+      genre_ids: movie_data["genre_ids"] || [],
+      adult: movie_data["adult"],
+      original_language: movie_data["original_language"],
+      original_title: movie_data["original_title"]
+    }
   end
 
   defp fetch_movie_details(movie_id, api_key) do
