@@ -6,7 +6,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
   
   use EventasaurusWeb, :live_component
   
-  alias EventasaurusApp.Events.{RankedChoiceVoting, PollOption}
+  alias EventasaurusApp.Events.RankedChoiceVoting
   alias EventasaurusApp.Repo
   import Ecto.Query
   
@@ -113,7 +113,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
                   <div class="text-sm text-green-700"><%= @display_data.winner.votes %> votes</div>
                 </div>
                 <div class="text-right text-sm text-green-800">
-                  <div>(71.4%) in Round <%= @display_data.stats.final_round %></div>
+                  <div>(<%= @display_data.winner.percentage %>%) in Round <%= @display_data.stats.final_round %></div>
                   <div><%= @display_data.winner.votes %>/<%= @display_data.stats.voters %> votes</div>
                 </div>
               </div>
@@ -180,7 +180,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
                     <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
                       <div class="flex items-center justify-between">
                         <span class="font-medium text-gray-700"><%= contender.option.title %></span>
-                        <span class="text-sm text-gray-500">0 first-choice votes</span>
+                        <span class="text-sm text-gray-500"><%= contender.votes %> votes</span>
                       </div>
                     </div>
                   <% end %>
@@ -301,7 +301,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
                       
                       <div class="space-y-2">
                         <%= for {option_id, votes} <- Enum.sort_by(round.vote_counts, fn {_, v} -> -v end) do %>
-                          <% option = get_option_by_id(option_id) %>
+                          <% option = Map.get(@display_data.options_by_id, option_id) %>
                           <% percentage = if votes > 0, do: (votes / @irv_results.total_voters * 100) |> Float.round(1), else: 0 %>
                           <% is_winner = @irv_results.winner && @irv_results.winner.id == option_id %>
                           <% is_eliminated = round.eliminated == option_id %>
@@ -385,6 +385,9 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
 
     # Prepare participation metrics with rank distribution
     participation_metrics = prepare_participation_metrics(leaderboard, poll)
+    
+    # Build options map to avoid N+1 queries in templates
+    options_by_id = Map.new(leaderboard, &{&1.option_id, &1.option})
 
     # Determine round explanation (for single round cases)
     round_explanation = if length(irv_results.rounds) == 1 && winner do
@@ -399,6 +402,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
       other_contenders: other_contenders,
       participation_metrics: participation_metrics,
       round_explanation: round_explanation,
+      options_by_id: options_by_id,
       stats: %{
         voters: irv_results.total_voters,
         majority: irv_results.majority_threshold,
@@ -414,6 +418,12 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
       where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
       preload: :poll_option
     ) |> Repo.all()
+
+    # Calculate total unique voters once (computed once)
+    total_voters = from(v in EventasaurusApp.Events.PollVote,
+      where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
+      select: count(fragment("DISTINCT ?", v.voter_id))
+    ) |> Repo.one()
 
     # Group votes by option to calculate distributions
     votes_by_option = Enum.group_by(votes, & &1.poll_option_id)
@@ -435,13 +445,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
         0.0
       end
 
-      # Calculate participation percentage  
-      total_voters = from(v in EventasaurusApp.Events.PollVote,
-        where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
-        select: v.voter_id,
-        distinct: true
-      ) |> Repo.all() |> length()
-
+      # Calculate participation percentage using pre-computed total_voters
       participation_percentage = if total_voters > 0 do
         (total_votes / total_voters * 100) |> Float.round(0) |> trunc()
       else
@@ -463,10 +467,4 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
     |> Enum.sort_by(& -(&1.total_rankings)) # Sort by participation
   end
 
-  # Helper function to get option by ID
-  defp get_option_by_id(option_id) do
-    PollOption
-    |> where([o], o.id == ^option_id)
-    |> Repo.one()
-  end
 end
