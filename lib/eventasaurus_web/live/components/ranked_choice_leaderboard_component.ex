@@ -1,151 +1,345 @@
 defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
   @moduledoc """
-  Component for displaying ranked choice voting (IRV) results and current standings.
-  Shows a clear leaderboard with winner indication, elimination status, and voting rounds.
+  Clean, professional RCV leaderboard with simple card-based layout.
+  No complex flexbox - just clean stacked cards and simple grid.
   """
+  
   use EventasaurusWeb, :live_component
-  alias EventasaurusApp.Events.RankedChoiceVoting
+  
+  alias EventasaurusApp.Events.{RankedChoiceVoting, PollOption}
+  alias EventasaurusApp.Repo
+  import Ecto.Query
+  
+  @impl true
+  def mount(socket) do
+    {:ok, 
+     socket
+     |> assign(
+       show_participation_metrics: false,
+       show_round_breakdown: false,
+       show_other_contenders: false
+     )}
+  end
+
+  @impl true
+  def update(assigns, socket) do
+    # Get IRV results and leaderboard data
+    {irv_results, leaderboard} = if assigns[:poll] && assigns.poll.voting_system == "ranked" do
+      results = RankedChoiceVoting.calculate_irv_winner(assigns.poll)
+      board = RankedChoiceVoting.get_leaderboard(assigns.poll)
+      {results, board}
+    else
+      {nil, []}
+    end
+
+    # Prepare display data
+    display_data = if irv_results && leaderboard != [] do
+      prepare_display_data(irv_results, leaderboard, assigns.poll)
+    else
+      %{
+        winner: nil,
+        contenders: [],
+        other_contenders: [],
+        stats: %{voters: 0, majority: 0, final_round: 0}
+      }
+    end
+
+    {:ok, 
+     socket
+     |> assign(assigns)
+     |> assign(
+       irv_results: irv_results,
+       leaderboard: leaderboard,
+       display_data: display_data
+     )}
+  end
+
+  @impl true
+  def handle_event("toggle_participation_metrics", _params, socket) do
+    {:noreply, assign(socket, :show_participation_metrics, !socket.assigns.show_participation_metrics)}
+  end
+
+  def handle_event("toggle_round_breakdown", _params, socket) do
+    {:noreply, assign(socket, :show_round_breakdown, !socket.assigns.show_round_breakdown)}
+  end
+
+  def handle_event("toggle_other_contenders", _params, socket) do
+    {:noreply, assign(socket, :show_other_contenders, !socket.assigns.show_other_contenders)}
+  end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div id={@id} class="ranked-choice-leaderboard">
-      <%= if @irv_results && @irv_results.total_voters > 0 do %>
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
-          <!-- Header with Winner Indication -->
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Current Standings
-            </h3>
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-              <%= @irv_results.total_voters %> <%= if @irv_results.total_voters == 1, do: "voter", else: "voters" %>
-              • <%= length(@irv_results.rounds) %> <%= if length(@irv_results.rounds) == 1, do: "round", else: "rounds" %>
+    <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
+      <%= if @display_data.stats.voters > 0 do %>
+        <!-- Header -->
+        <div class="px-6 py-4 pb-6 border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900 mr-8">Current Standings</h3>
+            <div class="flex items-center gap-6 text-sm text-gray-600">
+              <div class="flex items-center gap-1">
+                <span>👥</span>
+                <span><%= @display_data.stats.voters %> voters</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span>✓</span>
+                <span>Majority = <%= @display_data.stats.majority %></span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span>📊</span>
+                <span>Round <%= @display_data.stats.final_round %></span>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Winner Banner (if determined) -->
-          <%= if @irv_results.winner do %>
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-4">
-              <div class="flex items-center">
-                <svg class="w-5 h-5 text-green-600 dark:text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                </svg>
-                <span class="font-semibold text-green-800 dark:text-green-200">
-                  Winner: <%= @irv_results.winner.title %>
-                </span>
-                <%= if map_size(@irv_results.final_percentages) > 0 do %>
-                  <span class="ml-2 text-sm text-green-600 dark:text-green-400">
-                    (<%= format_percentage(Map.get(@irv_results.final_percentages, @irv_results.winner.id, 0)) %>)
-                  </span>
-                <% end %>
-              </div>
-            </div>
-          <% else %>
-            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
-              <div class="flex items-center">
-                <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-7a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm0-3a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd"/>
-                </svg>
-                <span class="text-yellow-800 dark:text-yellow-200">
-                  No majority winner yet (need <%= @irv_results.majority_threshold %> votes for majority)
-                </span>
-              </div>
-            </div>
-          <% end %>
-
-          <!-- Leaderboard List -->
-          <div class="space-y-2">
-            <%= for entry <- @leaderboard do %>
-              <div class={[
-                "flex items-center justify-between p-3 rounded-lg transition-colors",
-                get_entry_bg_class(entry.status)
-              ]}>
-                <div class="flex items-center flex-1">
-                  <!-- Position Badge -->
-                  <div class={[
-                    "w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm font-bold",
-                    get_position_badge_class(entry.position, entry.status)
-                  ]}>
-                    <%= entry.position %>
+        <!-- Winner Section -->
+        <%= if @display_data.winner do %>
+          <div class="p-6 border-b border-gray-200">
+            <div class="bg-green-50 rounded-lg p-6 border border-green-200">
+              <!-- Winner Header -->
+              <div class="grid grid-cols-3 gap-4 items-center mb-4">
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl">🏆</span>
+                  <div>
+                    <h4 class="text-xl font-bold text-green-900"><%= @display_data.winner.option.title %></h4>
+                    <span class="inline-block px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+                      LEADING
+                    </span>
                   </div>
-                  
-                  <!-- Option Name and Status -->
-                  <div class="flex-1">
-                    <div class="flex items-center">
-                      <span class={[
-                        "font-medium",
-                        get_text_class(entry.status)
-                      ]}>
-                        <%= entry.option.title %>
+                </div>
+                <div class="text-center">
+                  <div class="text-2xl font-bold text-green-900"><%= @display_data.winner.percentage %>%</div>
+                  <div class="text-sm text-green-700"><%= @display_data.winner.votes %> votes</div>
+                </div>
+                <div class="text-right text-sm text-green-800">
+                  <div>(71.4%) in Round <%= @display_data.stats.final_round %></div>
+                  <div><%= @display_data.winner.votes %>/<%= @display_data.stats.voters %> votes</div>
+                </div>
+              </div>
+
+              <!-- Winner Summary -->
+              <div class="pt-4 border-t border-green-200">
+                <p class="text-sm text-green-800">
+                  <strong><%= @display_data.winner.option.title %></strong> is currently leading with a majority in Round <%= @display_data.stats.final_round %>
+                  (<%= @display_data.winner.votes %>/<%= @display_data.stats.voters %> first-choice votes = <%= @display_data.winner.percentage %>%)
+                </p>
+              </div>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Top Contenders -->
+        <%= if length(@display_data.contenders) > 0 do %>
+          <div class="p-6 border-b border-gray-200">
+            <!-- Section Header -->
+            <div class="flex items-center justify-between mb-6">
+              <h5 class="text-sm font-medium text-gray-700">📊 Top Contenders</h5>
+              <%= if length(@display_data.other_contenders) > 0 do %>
+                <button
+                  phx-click="toggle_other_contenders"
+                  phx-target={@myself}
+                  class="text-sm text-gray-600 hover:text-gray-800 hover:underline"
+                >
+                  <%= if @show_other_contenders do %>
+                    Hide other options
+                  <% else %>
+                    Show <%= length(@display_data.other_contenders) %> other options
+                  <% end %>
+                </button>
+              <% end %>
+            </div>
+
+            <!-- Contenders List -->
+            <div class="space-y-4">
+              <%= for {contender, index} <- Enum.with_index(@display_data.contenders, 2) do %>
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                  <div class="grid grid-cols-3 gap-4 items-center">
+                    <div class="flex items-center gap-3">
+                      <span class="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                        <%= index %>
                       </span>
-                      <%= if entry.status == :winner do %>
-                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
-                          WINNER
-                        </span>
-                      <% end %>
-                      <%= if entry.status == :eliminated && entry.eliminated_round do %>
-                        <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                          Eliminated round <%= entry.eliminated_round %>
-                        </span>
-                      <% end %>
+                      <span class="font-medium text-gray-900"><%= contender.option.title %></span>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-lg font-semibold text-blue-900"><%= contender.percentage %>%</div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-sm text-gray-600"><%= contender.votes %> votes</div>
                     </div>
                   </div>
                 </div>
-                
-                <!-- Vote Count and Percentage -->
-                <div class="text-right ml-4">
-                  <div class={[
-                    "font-semibold",
-                    get_text_class(entry.status)
-                  ]}>
-                    <%= entry.votes %> <%= if entry.votes == 1, do: "vote", else: "votes" %>
-                  </div>
-                  <div class="text-sm text-gray-600 dark:text-gray-400">
-                    <%= format_percentage(entry.percentage) %>
-                  </div>
+              <% end %>
+            </div>
+
+            <!-- Other Contenders (Expandable) -->
+            <%= if @show_other_contenders && length(@display_data.other_contenders) > 0 do %>
+              <div class="mt-6 pt-6 border-t border-gray-200">
+                <div class="space-y-3">
+                  <%= for contender <- @display_data.other_contenders do %>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <div class="flex items-center justify-between">
+                        <span class="font-medium text-gray-700"><%= contender.option.title %></span>
+                        <span class="text-sm text-gray-500">0 first-choice votes</span>
+                      </div>
+                    </div>
+                  <% end %>
                 </div>
               </div>
             <% end %>
           </div>
+        <% end %>
 
-          <!-- Round Details Toggle -->
-          <%= if length(@irv_results.rounds) > 1 do %>
-            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                phx-click="toggle_round_details"
-                phx-target={@myself}
-                class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-              >
-                <%= if @show_round_details do %>
-                  Hide round-by-round details ▴
-                <% else %>
-                  Show round-by-round details ▾
-                <% end %>
-              </button>
-              
-              <%= if @show_round_details do %>
-                <div class="mt-3 space-y-3">
-                  <%= for round <- @irv_results.rounds do %>
-                    <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-                      <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Round <%= round.round_number %>
-                        </span>
-                        <%= if round.eliminated do %>
-                          <span class="text-xs text-red-600 dark:text-red-400">
-                            Eliminated: <%= get_option_title(round.eliminated, @poll) %>
-                          </span>
-                        <% end %>
+        <!-- Section 2: Participation Metrics (Expandable) -->
+        <div class="border-b border-gray-200">
+          <button
+            phx-click="toggle_participation_metrics"
+            phx-target={@myself}
+            class="w-full px-6 py-4 text-left hover:bg-gray-50 flex items-center justify-between"
+          >
+            <span class="font-medium text-gray-900">📋 See how people ranked every option overall</span>
+            <svg class={[
+              "w-5 h-5 text-gray-400 transition-transform",
+              if(@show_participation_metrics, do: "rotate-180", else: "")
+            ]} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          
+          <%= if @show_participation_metrics do %>
+            <div class="px-6 pb-6">
+              <div class="space-y-3">
+                <%= for metric <- @display_data.participation_metrics do %>
+                  <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="grid grid-cols-3 gap-4 items-start">
+                      <!-- Title Column (Fixed Width) -->
+                      <div class="w-72">
+                        <div class="font-medium text-gray-900 break-words">
+                          <%= metric.option.title %>
+                        </div>
                       </div>
-                      <div class="grid grid-cols-2 gap-2 text-xs">
-                        <%= for {option_id, votes} <- round.vote_counts do %>
-                          <div class="flex justify-between">
-                            <span class="text-gray-600 dark:text-gray-400">
-                              <%= get_option_title(option_id, @poll) %>:
-                            </span>
-                            <span class="font-medium text-gray-900 dark:text-gray-100">
-                              <%= votes %> (<%= format_percentage(Map.get(round.percentages, option_id, 0)) %>)
-                            </span>
+                      
+                      <!-- Rank Distribution & Average Column -->
+                      <div class="flex items-center justify-center gap-4">
+                        <div class="flex items-center gap-2">
+                          <span class="text-sm text-gray-600">Rank distribution:</span>
+                          <div class="flex gap-1">
+                            <%= for position <- 1..5 do %>
+                              <span class={[
+                                "w-2 h-2 rounded-full",
+                                if(position <= metric.max_rank, do: 
+                                  if(Map.get(metric.rank_distribution, position, 0) > 0, 
+                                     do: "bg-blue-600", 
+                                     else: "bg-gray-300"),
+                                  else: "bg-gray-200"
+                                )
+                              ]}></span>
+                            <% end %>
+                          </div>
+                        </div>
+                        <div class="text-sm text-gray-600">
+                          Avg: <span class="font-medium"><%= metric.avg_rank %></span>
+                        </div>
+                      </div>
+                      
+                      <!-- Voters Column (Right Aligned) -->
+                      <div class="text-right">
+                        <div class="text-sm font-medium text-gray-900">
+                          <%= metric.total_rankings %> voters
+                        </div>
+                        <div class="text-sm text-gray-500">
+                          (<%= metric.participation_percentage %>%)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Section 3: Round Breakdown (Expandable) -->
+        <div>
+          <button
+            phx-click="toggle_round_breakdown"
+            phx-target={@myself}
+            class="w-full px-6 py-4 text-left hover:bg-gray-50 flex items-center justify-between"
+          >
+            <span class="font-medium text-gray-900">📊 How the rounds played out</span>
+            <svg class={[
+              "w-5 h-5 text-gray-400 transition-transform",
+              if(@show_round_breakdown, do: "rotate-180", else: "")
+            ]} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          
+          <%= if @show_round_breakdown do %>
+            <div class="px-6 pb-6">
+              <%= if @display_data.round_explanation do %>
+                <!-- Single Round Explanation -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div class="flex items-start gap-3">
+                    <span class="text-blue-600 text-lg">ℹ️</span>
+                    <div>
+                      <p class="text-blue-900"><%= @display_data.round_explanation %></p>
+                    </div>
+                  </div>
+                </div>
+              <% else %>
+                <!-- Multi-Round Breakdown -->
+                <div class="space-y-4">
+                  <%= for {round, round_index} <- Enum.with_index(@irv_results.rounds, 1) do %>
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                      <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-gray-900">Round <%= round_index %></h4>
+                        <div class="text-sm text-gray-500">
+                          Majority needed: <%= @display_data.stats.majority %>
+                        </div>
+                      </div>
+                      
+                      <div class="space-y-2">
+                        <%= for {option_id, votes} <- Enum.sort_by(round.vote_counts, fn {_, v} -> -v end) do %>
+                          <% option = get_option_by_id(option_id) %>
+                          <% percentage = if votes > 0, do: (votes / @irv_results.total_voters * 100) |> Float.round(1), else: 0 %>
+                          <% is_winner = @irv_results.winner && @irv_results.winner.id == option_id %>
+                          <% is_eliminated = round.eliminated == option_id %>
+                          <div class="flex items-center justify-between">
+                            <div class="flex items-center flex-1">
+                              <div class="w-32 text-sm font-medium truncate" title={option.title}>
+                                <%= option.title %>
+                              </div>
+                              <%= if is_winner do %>
+                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                                  LEADING
+                                </span>
+                              <% end %>
+                              <%= if is_eliminated do %>
+                                <span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                                  ELIMINATED
+                                </span>
+                              <% end %>
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <div class="w-24 bg-gray-200 rounded-full h-2">
+                                <div 
+                                  class={[
+                                    "h-2 rounded-full",
+                                    cond do
+                                      is_winner -> "bg-green-500"
+                                      is_eliminated -> "bg-red-400"
+                                      true -> "bg-blue-500"
+                                    end
+                                  ]}
+                                  style={"width: #{percentage}%"}
+                                ></div>
+                              </div>
+                              <div class="text-right min-w-[4rem]">
+                                <div class="font-semibold text-gray-900"><%= votes %></div>
+                                <div class="text-xs text-gray-500"><%= percentage %>%</div>
+                              </div>
+                            </div>
                           </div>
                         <% end %>
                       </div>
@@ -155,110 +349,124 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
               <% end %>
             </div>
           <% end %>
-
-          <!-- IRV Explanation -->
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              phx-click="toggle_irv_explanation"
-              phx-target={@myself}
-              class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            >
-              <%= if @show_irv_explanation do %>
-                ℹ Hide how ranked choice voting works
-              <% else %>
-                ℹ How does ranked choice voting work?
-              <% end %>
-            </button>
-            
-            <%= if @show_irv_explanation do %>
-              <div class="mt-2 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                <p>• Voters rank options in order of preference (1st, 2nd, 3rd, etc.)</p>
-                <p>• First choices are counted initially</p>
-                <p>• If no option has a majority (>50%), the lowest is eliminated</p>
-                <p>• Votes for eliminated options transfer to next preferences</p>
-                <p>• Process repeats until a winner emerges with majority support</p>
-              </div>
-            <% end %>
-          </div>
         </div>
+
       <% else %>
-        <!-- No votes yet -->
-        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 text-center text-gray-600 dark:text-gray-400">
-          <svg class="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-          </svg>
-          <p>No votes cast yet</p>
-          <p class="text-xs mt-1">Rankings will appear here as votes come in</p>
+        <!-- No votes state -->
+        <div class="p-8 text-center">
+          <div class="text-gray-400 mb-2 text-2xl">📊</div>
+          <p class="text-gray-600">No votes cast yet</p>
         </div>
       <% end %>
     </div>
     """
   end
 
-  @impl true
-  def mount(socket) do
-    {:ok, assign(socket, 
-      show_round_details: false,
-      show_irv_explanation: false
-    )}
-  end
+  # Prepare display data with proper structure  
+  defp prepare_display_data(irv_results, leaderboard, poll) do
+    # Sort leaderboard by status and votes
+    sorted_leaderboard = Enum.sort_by(leaderboard, fn entry ->
+      case entry.status do
+        :winner -> {0, -entry.votes}
+        :runner_up -> {1, -entry.votes}
+        :eliminated -> {2, entry.eliminated_round || 999, -entry.votes}
+      end
+    end)
 
-  @impl true
-  def update(assigns, socket) do
-    # Get IRV results and leaderboard if we have a poll
-    {irv_results, leaderboard} = if assigns[:poll] && assigns.poll.voting_system == "ranked" do
-      results = RankedChoiceVoting.calculate_irv_winner(assigns.poll)
-      board = RankedChoiceVoting.get_leaderboard(assigns.poll)
-      {results, board}
+    # Extract winner and contenders
+    winner = Enum.find(sorted_leaderboard, & &1.status == :winner)
+    non_winners = Enum.reject(sorted_leaderboard, & &1.status == :winner)
+    
+    # Split contenders by vote count
+    {contenders, other_contenders} = Enum.split_with(non_winners, & &1.votes > 0)
+    
+    # Take only top 2 contenders for clean display
+    contenders = Enum.take(contenders, 2)
+
+    # Prepare participation metrics with rank distribution
+    participation_metrics = prepare_participation_metrics(leaderboard, poll)
+
+    # Determine round explanation (for single round cases)
+    round_explanation = if length(irv_results.rounds) == 1 && winner do
+      "Only 1 round was needed because #{winner.option.title} already had a majority in Round 1 (#{winner.percentage}%). No eliminations or transfers were required."
     else
-      {nil, []}
+      nil
     end
 
-    {:ok, 
-     socket
-     |> assign(assigns)
-     |> assign(irv_results: irv_results, leaderboard: leaderboard)
+    %{
+      winner: winner,
+      contenders: contenders,
+      other_contenders: other_contenders,
+      participation_metrics: participation_metrics,
+      round_explanation: round_explanation,
+      stats: %{
+        voters: irv_results.total_voters,
+        majority: irv_results.majority_threshold,
+        final_round: length(irv_results.rounds)
+      }
     }
   end
 
-  @impl true
-  def handle_event("toggle_round_details", _, socket) do
-    {:noreply, assign(socket, show_round_details: !socket.assigns.show_round_details)}
+  # Prepare enhanced participation metrics with rank distribution
+  defp prepare_participation_metrics(leaderboard, poll) do
+    # Get all votes for this poll to calculate rank distributions
+    votes = from(v in EventasaurusApp.Events.PollVote,
+      where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
+      preload: :poll_option
+    ) |> Repo.all()
+
+    # Group votes by option to calculate distributions
+    votes_by_option = Enum.group_by(votes, & &1.poll_option_id)
+
+    Enum.map(leaderboard, fn entry ->
+      option_votes = Map.get(votes_by_option, entry.option_id, [])
+      
+      # Calculate rank distribution
+      rank_distribution = option_votes
+        |> Enum.group_by(& &1.vote_rank)
+        |> Map.new(fn {rank, votes} -> {rank, length(votes)} end)
+
+      # Calculate average rank
+      total_votes = length(option_votes)
+      avg_rank = if total_votes > 0 do
+        sum_ranks = option_votes |> Enum.map(& &1.vote_rank) |> Enum.sum()
+        (sum_ranks / total_votes) |> Float.round(1)
+      else
+        0.0
+      end
+
+      # Calculate participation percentage  
+      total_voters = from(v in EventasaurusApp.Events.PollVote,
+        where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
+        select: v.voter_id,
+        distinct: true
+      ) |> Repo.all() |> length()
+
+      participation_percentage = if total_voters > 0 do
+        (total_votes / total_voters * 100) |> Float.round(0) |> trunc()
+      else
+        0
+      end
+
+      max_rank = if option_votes != [], do: Enum.max_by(option_votes, & &1.vote_rank).vote_rank, else: 0
+
+      %{
+        option: entry.option,
+        option_id: entry.option_id,
+        rank_distribution: rank_distribution,
+        avg_rank: avg_rank,
+        total_rankings: total_votes,
+        participation_percentage: participation_percentage,
+        max_rank: max_rank
+      }
+    end)
+    |> Enum.sort_by(& -(&1.total_rankings)) # Sort by participation
   end
 
-  @impl true
-  def handle_event("toggle_irv_explanation", _, socket) do
-    {:noreply, assign(socket, show_irv_explanation: !socket.assigns.show_irv_explanation)}
-  end
-
-  # Helper functions
-
-  defp get_entry_bg_class(:winner), do: "bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800"
-  defp get_entry_bg_class(:runner_up), do: "bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900/70"
-  defp get_entry_bg_class(:eliminated), do: "bg-gray-50 dark:bg-gray-900/30 opacity-75"
-  defp get_entry_bg_class(_), do: "bg-gray-50 dark:bg-gray-900/50"
-
-  defp get_position_badge_class(1, :winner), do: "bg-green-500 text-white"
-  defp get_position_badge_class(1, _), do: "bg-blue-500 text-white"
-  defp get_position_badge_class(2, _), do: "bg-gray-400 text-white"
-  defp get_position_badge_class(3, _), do: "bg-orange-400 text-white"
-  defp get_position_badge_class(_, :eliminated), do: "bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-  defp get_position_badge_class(_, _), do: "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-
-  defp get_text_class(:winner), do: "text-green-800 dark:text-green-200"
-  defp get_text_class(:eliminated), do: "text-gray-500 dark:text-gray-400 line-through"
-  defp get_text_class(_), do: "text-gray-900 dark:text-gray-100"
-
-  defp format_percentage(percentage) when is_number(percentage) do
-    "#{Float.round(percentage, 1)}%"
-  end
-  defp format_percentage(_), do: "0%"
-
-  defp get_option_title(option_id, poll) do
-    # Find the option in the poll
-    case Enum.find(poll.poll_options, & &1.id == option_id) do
-      nil -> "Unknown"
-      option -> option.title
-    end
+  # Helper function to get option by ID
+  defp get_option_by_id(option_id) do
+    PollOption
+    |> where([o], o.id == ^option_id)
+    |> Repo.one()
   end
 end

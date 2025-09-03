@@ -72,4 +72,7 @@ curl_cookies.txt
 # tasks/
 
 # Playwright test results
-test-results/ 
+test-results/
+
+# Playwright MCP screenshots and artifacts
+.playwright-mcp/ 
