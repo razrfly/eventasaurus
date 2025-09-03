@@ -174,14 +174,20 @@ defmodule PollSeed do
         case Events.create_poll_option(%{
           poll_id: poll.id,
           title: movie.title,
-          description: "#{movie.description} (#{movie.year}, #{movie.genre})",
+          description: "#{
+            (movie.description || movie.overview || "No description available")
+          } (#{
+            (movie.year || (movie.release_date && String.split(movie.release_date, "-") |> hd()) || "Unknown")
+          }, #{
+            (movie.genre || "General")
+          })",
           suggested_by_id: organizer_id,
           image_url: MovieConfig.build_image_url(movie.poster_path, "w500"),
           metadata: %{
             "tmdb_id" => movie.tmdb_id,
-            "year" => movie.year,
-            "genre" => movie.genre,
-            "rating" => movie.rating,
+            "year" => movie.year || (movie.release_date && String.split(movie.release_date, "-") |> hd()),
+            "genre" => movie.genre || "General",
+            "rating" => movie.rating || movie.vote_average,
             "poster_path" => movie.poster_path,
             "backdrop_path" => movie.backdrop_path,
             "is_movie" => true
