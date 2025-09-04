@@ -5,6 +5,8 @@ alias EventasaurusApp.{Repo, Events, Accounts}
 alias EventasaurusApp.Events.{Poll, PollOption}
 alias EventasaurusWeb.Services.TmdbService
 alias EventasaurusWeb.Services.MovieConfig
+alias EventasaurusWeb.Services.GooglePlaces.TextSearch
+alias EventasaurusWeb.Services.GooglePlaces.Photos
 import Ecto.Query
 require Logger
 
@@ -769,6 +771,136 @@ defmodule PollSeed do
     end)
   end
 
+  defp fetch_google_places_restaurants do
+    # Search for restaurants using Google Places API with location
+    # Using Warsaw, Poland coordinates for more relevant local restaurants
+    warsaw_coordinates = {52.2297, 21.0122}
+    
+    case TextSearch.search("restaurants", %{
+      type: "restaurant", 
+      location: warsaw_coordinates,
+      radius: 5000  # 5km radius
+    }) do
+      {:ok, places} when length(places) > 0 ->
+        Logger.info("Successfully fetched #{length(places)} restaurants from Google Places")
+        # Convert Google Places format to our expected format
+        places
+        |> Enum.take(10)  # Limit to 10 restaurants for seeding
+        |> Enum.map(&convert_google_place_to_restaurant_format/1)
+
+      {:error, reason} ->
+        Logger.warning("Failed to fetch Google Places restaurants (#{inspect(reason)}), using curated data")
+        DevSeeds.CuratedData.restaurants() |> Enum.take(6)
+
+      _ ->
+        Logger.warning("Google Places API returned unexpected response, using curated data")
+        DevSeeds.CuratedData.restaurants() |> Enum.take(6)
+    end
+  rescue
+    error ->
+      Logger.error("Error fetching Google Places restaurants: #{inspect(error)}")
+      DevSeeds.CuratedData.restaurants() |> Enum.take(6)
+  end
+
+  defp convert_google_place_to_restaurant_format(place) do
+    # Extract cuisine type from types array or place description
+    cuisine = extract_cuisine_from_place(place)
+    
+    # Extract price level (Google Places returns 0-4 scale)
+    price_range = extract_price_range(place["price_level"])
+    
+    # Extract image URL from photos
+    image_url = Photos.extract_first_image_url(place)
+
+    %{
+      name: place["name"] || "Restaurant",
+      cuisine: cuisine,
+      price: price_range,
+      description: place["formatted_address"] || "No description available",
+      specialties: [],  # Google Places doesn't provide specialties directly
+      rating: place["rating"],
+      google_place_id: place["place_id"],
+      api_source: "google_places",
+      photos: extract_place_photos(place["photos"]),
+      image_url: image_url
+    }
+  end
+
+  defp extract_cuisine_from_place(place) do
+    types = place["types"] || []
+    
+    cond do
+      "restaurant" in types && "meal_takeaway" in types -> "Fast Food"
+      "bakery" in types -> "Bakery"
+      "bar" in types -> "Bar & Grill"  
+      "cafe" in types -> "Cafe"
+      "meal_delivery" in types -> "Delivery"
+      "meal_takeaway" in types -> "Takeaway"
+      "food" in types -> "Restaurant"
+      true -> "Restaurant"
+    end
+  end
+
+  defp extract_price_range(price_level) do
+    case price_level do
+      0 -> "Free"
+      1 -> "$"
+      2 -> "$$" 
+      3 -> "$$$"
+      4 -> "$$$$"
+      _ -> "$$"  # Default to moderate pricing
+    end
+  end
+
+  defp extract_place_photos(photos) when is_list(photos) do
+    photos
+    |> Enum.take(3)  # Limit to 3 photos
+    |> Enum.map(fn photo ->
+      %{
+        photo_reference: photo["photo_reference"],
+        width: photo["width"],
+        height: photo["height"]
+      }
+    end)
+  end
+
+  defp extract_place_photos(_), do: []
+
+  defp build_restaurant_description(restaurant) do
+    case Map.get(restaurant, :api_source) do
+      "google_places" ->
+        rating_text = if restaurant.rating, do: " • #{restaurant.rating}⭐", else: ""
+        "#{restaurant.cuisine} cuisine - #{restaurant.price}#{rating_text}"
+      
+      _ ->
+        # Curated data format
+        "#{restaurant.cuisine} cuisine - #{restaurant.price}"
+    end
+  end
+
+  defp build_restaurant_metadata(restaurant) do
+    base_metadata = %{
+      "cuisine" => restaurant.cuisine,
+      "price_range" => restaurant.price,
+      "api_source" => Map.get(restaurant, :api_source, "curated")
+    }
+
+    case Map.get(restaurant, :api_source) do
+      "google_places" ->
+        base_metadata
+        |> Map.put("google_place_id", restaurant.google_place_id)
+        |> Map.put("rating", restaurant.rating)
+        |> Map.put("photos", restaurant.photos)
+        |> Map.put("address", restaurant.description)
+      
+      _ ->
+        # Curated data format
+        base_metadata
+        |> Map.put("description", Map.get(restaurant, :description))
+        |> Map.put("specialties", Map.get(restaurant, :specialties, []))
+    end
+  end
+
   defp create_restaurant_selection_poll(event, participants) do
     Logger.info("Creating restaurant selection poll")
 
@@ -787,27 +919,34 @@ defmodule PollSeed do
     # Use proper phase transition
     {:ok, poll} = Events.transition_poll_phase(poll, "voting_only")
 
-    restaurants = [
-      %{name: "Sushi Paradise", cuisine: "Japanese", price: "$$$"},
-      %{name: "La Bella Italia", cuisine: "Italian", price: "$$"},
-      %{name: "The Burger Joint", cuisine: "American", price: "$"},
-      %{name: "Spice Garden", cuisine: "Indian", price: "$$"},
-      %{name: "Le Petit Bistro", cuisine: "French", price: "$$$"},
-      %{name: "Taco Fiesta", cuisine: "Mexican", price: "$"}
-    ]
+    # Use real restaurants from Google Places API with fallback to curated data
+    restaurants =
+      case fetch_google_places_restaurants() do
+        [] ->
+          Logger.info("No Google Places restaurants available, using curated data")
+          DevSeeds.CuratedData.restaurants() |> Enum.take(6)
+
+        google_restaurants ->
+          Logger.info("Using real Google Places restaurants for poll options")
+          Enum.take(google_restaurants, 6)
+      end
 
     options =
       Enum.map(restaurants, fn restaurant ->
+        # Build description based on available data
+        description = build_restaurant_description(restaurant)
+        
+        # Build comprehensive metadata
+        metadata = build_restaurant_metadata(restaurant)
+
         {:ok, option} =
           Events.create_poll_option(%{
             poll_id: poll.id,
             title: restaurant.name,
-            description: "#{restaurant.cuisine} cuisine - #{restaurant.price}",
+            description: description,
             suggested_by_id: organizer_id,
-            metadata: %{
-              "cuisine" => restaurant.cuisine,
-              "price_range" => restaurant.price
-            }
+            image_url: restaurant.image_url,
+            metadata: metadata
           })
 
         option
