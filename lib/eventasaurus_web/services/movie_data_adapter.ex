@@ -76,11 +76,15 @@ defmodule EventasaurusWeb.Services.MovieDataAdapter do
   """
   def ensure_image_url(movie_data) when is_map(movie_data) do
     case Map.get(movie_data, :image_url) do
-      url when is_binary(url) -> movie_data
+      url when is_binary(url) and url != "" -> movie_data
       _ ->
         case Map.get(movie_data, :poster_path) do
           poster_path when is_binary(poster_path) ->
-            Map.put(movie_data, :image_url, MovieConfig.build_image_url(poster_path, "w500"))
+            if String.starts_with?(poster_path, ["http://", "https://"]) do
+              Map.put(movie_data, :image_url, poster_path)
+            else
+              Map.put(movie_data, :image_url, MovieConfig.build_image_url(poster_path, "w500"))
+            end
           _ ->
             Map.put(movie_data, :image_url, nil)
         end
@@ -115,18 +119,23 @@ defmodule EventasaurusWeb.Services.MovieDataAdapter do
   Converts a poll option with movie metadata to activity metadata format.
   """
   def poll_to_activity_format(poll_option) do
+    metadata = case poll_option.metadata do
+      %{} = m -> m
+      _ -> %{}
+    end
+
     movie_data = %{
       title: poll_option.title,
-      tmdb_id: get_in(poll_option.metadata, ["tmdb_id"]),
-      poster_path: get_in(poll_option.metadata, ["poster_path"]),
-      year: get_in(poll_option.metadata, ["year"]),
-      genre: get_in(poll_option.metadata, ["genre"]),
-      rating: get_in(poll_option.metadata, ["rating"]),
+      tmdb_id: Map.get(metadata, "tmdb_id") || Map.get(metadata, :tmdb_id),
+      poster_path: Map.get(metadata, "poster_path") || Map.get(metadata, :poster_path),
+      year: Map.get(metadata, "year") || Map.get(metadata, :year),
+      genre: Map.get(metadata, "genre") || Map.get(metadata, :genre),
+      rating: Map.get(metadata, "rating") || Map.get(metadata, :rating),
       overview: poll_option.description,
       image_url: poll_option.image_url,
-      source: get_in(poll_option.metadata, ["api_source"]) || "poll_option"
+      source: Map.get(metadata, "api_source") || Map.get(metadata, :api_source) || "poll_option"
     }
-    
+
     build_activity_metadata(movie_data)
   end
 
@@ -151,7 +160,7 @@ defmodule EventasaurusWeb.Services.MovieDataAdapter do
 
   defp normalize_tmdb_movie(movie_data) do
     %{
-      tmdb_id: movie_data[:tmdb_id] || movie_data["id"],
+      tmdb_id: movie_data[:tmdb_id] || movie_data[:id] || movie_data["id"],
       title: movie_data[:title] || movie_data["title"],
       overview: movie_data[:overview] || movie_data["overview"],
       year: extract_year_from_release_date(movie_data[:release_date] || movie_data["release_date"]),
