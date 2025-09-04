@@ -222,24 +222,23 @@ defmodule PollSeed do
           Events.delete_poll(poll)
           nil
         else
-          # Seed RCV votes with specific scenarios
-          scenario =
-            Enum.random([
-              # Close competition between 2-3 movies
-              :contested_race,
-              # One movie dominates
-              :clear_winner,
-              # Needs elimination rounds
-              :multiple_rounds,
-              # Some incomplete rankings
-              :exhausted_ballots,
-              # Test tie-breaking
-              :tied_elimination,
-              # Winner emerges in second round (not first)
-              :second_round_winner,
-              # Winner emerges in third round (not first or second)
-              :third_round_winner
-            ])
+          # Seed RCV votes with scenarios valid for the number of options
+          options_count = length(options)
+          scenarios =
+            cond do
+              options_count >= 5 ->
+                [:contested_race, :clear_winner, :multiple_rounds, :exhausted_ballots,
+                 :tied_elimination, :second_round_winner, :third_round_winner]
+              options_count >= 4 ->
+                [:contested_race, :clear_winner, :multiple_rounds, :exhausted_ballots,
+                 :tied_elimination, :second_round_winner]
+              options_count >= 3 ->
+                [:contested_race, :clear_winner, :multiple_rounds, :exhausted_ballots,
+                 :tied_elimination]
+              true ->
+                [:contested_race, :clear_winner, :exhausted_ballots]
+            end
+          scenario = Enum.random(scenarios)
 
           seed_rcv_votes(poll, options, participants, scenario)
           Logger.info("Created RCV movie poll with scenario: #{scenario}")
@@ -941,6 +940,7 @@ defmodule PollSeed do
   defp create_poll_by_type(type, event, participants) do
     case type do
       :movie_rcv -> create_movie_rcv_poll(event, participants)
+      :restaurant_selection -> create_restaurant_selection_poll(event, participants)
       :game_approval -> create_game_approval_poll(event, participants)
       :date_selection -> create_date_selection_poll(event, participants)
       :threshold -> create_threshold_poll(event, participants)
