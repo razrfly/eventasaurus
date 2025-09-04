@@ -444,7 +444,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                               <%= for option <- Poll.max_rankings_options() do %>
                                 <option
                                   value={option}
-                                  selected={get_max_rankings_setting(@changeset, @poll) == option}
+                                  selected={get_max_rankings_setting(@changeset, @poll) == to_string(option)}
                                 >
                                   <%= Poll.max_rankings_display(option) %>
                                 </option>
@@ -849,17 +849,17 @@ defmodule EventasaurusWeb.PollCreationComponent do
   defp get_max_rankings_setting(changeset, poll) do
     settings = Ecto.Changeset.get_field(changeset, :settings) || %{}
     case Map.get(settings, "max_rankings") do
-      v when is_integer(v) -> v
+      v when is_integer(v) -> Integer.to_string(v)
       v when is_binary(v) ->
         case Integer.parse(v) do
-          {int, ""} when int in [3, 5, 7] -> int
+          {int, ""} when int in [3, 5, 7] -> Integer.to_string(int)
           _ -> fallback_max_rankings(poll)
         end
       _ -> fallback_max_rankings(poll)
     end
   end
 
-  defp fallback_max_rankings(nil), do: 3
-  defp fallback_max_rankings(poll), do: Poll.get_max_rankings(poll)
+  defp fallback_max_rankings(nil), do: "3"
+  defp fallback_max_rankings(poll), do: Poll.get_max_rankings(poll) |> to_string()
 
 end
