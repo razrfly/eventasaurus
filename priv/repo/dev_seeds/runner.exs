@@ -97,8 +97,11 @@ Code.require_file("poll_seed.exs", __DIR__)
 # PollSeed.run() is called within the file
 polls = Repo.all(EventasaurusApp.Events.Poll)
 
-# Create activities for completed events (Phase 6 - to be implemented)
-activities = []
+# Create activities for completed events
+Helpers.section("Creating Activities for Events")
+Code.require_file("activity_seed.exs", __DIR__)
+ActivitySeed.run()
+activities = Repo.all(EventasaurusApp.Events.EventActivity)
 
 # Summary
 elapsed_time = System.monotonic_time(:second) - start_time
