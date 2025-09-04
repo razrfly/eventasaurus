@@ -325,6 +325,17 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                 show_header={false}
               />
             </div>
+
+            <!-- Current Standings (for ranked choice voting) -->
+            <%= if @movie_poll.voting_system == "ranked" do %>
+              <div class="mb-6">
+                <.live_component
+                  module={EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent}
+                  id={"rcv-leaderboard-#{@movie_poll.id}"}
+                  poll={@movie_poll}
+                />
+              </div>
+            <% end %>
           <% else %>
             <!-- List Building Phase - Show Movie Options Without Voting -->
             <%= if length(@movie_options) > 0 do %>
