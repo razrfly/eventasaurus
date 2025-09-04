@@ -1,0 +1,565 @@
+<div class="overflow-hidden">
+  <main>
+    <%!-- Hero Section --%>
+    <.hero_section class="pb-16 pt-8 sm:pb-24 sm:pt-16">
+      <div class="pt-8 pb-16 sm:pt-16 sm:pb-24 text-center">
+        <.subheading class="mb-4 text-orange-600">Building on World Network</.subheading>
+        <.heading as="h1" class="font-display text-5xl/[0.9] font-medium tracking-tight text-balance text-gray-950 sm:text-6xl/[0.8] lg:text-7xl/[0.8] mb-8">
+          The First Crypto-Native Event Platform
+        </.heading>
+        <p class="text-xl sm:text-2xl text-gray-950/75 max-w-4xl mx-auto leading-relaxed">
+          If Luma only accepts crypto payments, 
+          <strong class="text-gray-950">Eventasaurus runs on smart contracts.</strong>
+        </p>
+        <div class="mt-8 flex flex-wrap justify-center gap-4 text-sm font-medium">
+          <span class="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-4 py-2 rounded-full">
+            🌍 World ID Verified
+          </span>
+          <span class="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-full">
+            🔗 Smart Contracts
+          </span>
+          <span class="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-2 rounded-full">
+            💎 NFT Tickets
+          </span>
+          <span class="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-full">
+            🏛️ Event DAOs
+          </span>
+        </div>
+      </div>
+    </.hero_section>
+
+    <%!-- The Crypto Problem Space --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-red-600">🔥 The Crypto Event Problem</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Web3 Events Are Still Using Web2 Tools
+        </.heading>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <%!-- Luma Limited --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">💳</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Luma: Just Payment Rails
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Basic crypto payment acceptance</li>
+            <li>• No smart contract functionality</li>
+            <li>• Zero transparency or guarantees</li>
+          </ul>
+        </div>
+
+        <%!-- Trust Issues --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">🤝</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Trust Issues with Event Organizers
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• No guarantees funds used properly</li>
+            <li>• Organizers can disappear with money</li>
+            <li>• No milestone tracking or accountability</li>
+          </ul>
+        </div>
+
+        <%!-- Sybil Attacks --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">🤖</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Fake Participants & Sybil Attacks
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Bot farms gaming event systems</li>
+            <li>• No proof of humanity verification</li>
+            <li>• Inflated participant counts</li>
+          </ul>
+        </div>
+
+        <%!-- Cross-Border Friction --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">🌐</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Cross-Border Payment Friction
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Traditional banking delays</li>
+            <li>• High international transaction fees</li>
+            <li>• Currency conversion complexity</li>
+          </ul>
+        </div>
+
+        <%!-- No Community Ownership --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-6">
+            <span class="text-3xl">👥</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            No Community Ownership or Governance
+          </h3>
+          <ul class="space-y-2 text-gray-600">
+            <li>• Participants have no voice</li>
+            <li>• Centralized decision making</li>
+            <li>• No skin in the game alignment</li>
+          </ul>
+        </div>
+
+        <%!-- The Crypto Gap --%>
+        <div class="bg-gradient-to-br from-orange-50 to-purple-50 rounded-2xl border-2 border-orange-300 p-8 shadow-sm">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full mb-6">
+            <span class="text-3xl text-white">⚡</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            The Massive Crypto Gap
+          </h3>
+          <p class="text-gray-700 leading-relaxed">
+            <strong>No platform</strong> leverages smart contracts for transparent, verifiable, community-governed event coordination.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- The Crypto-Native Opportunity --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-green-600">🚀 The Crypto-Native Opportunity</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Smart Contracts Meet Real-World Coordination
+        </.heading>
+        <div class="max-w-3xl mx-auto">
+          <div class="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 p-8 shadow-lg">
+            <p class="text-2xl font-semibold text-gray-900 mb-4">
+              "Kickstarter for Events × Verifiable Human Network"
+            </p>
+            <p class="text-lg text-gray-700 leading-relaxed">
+              The first event platform built on smart contracts with World ID verification and community governance.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto mb-16">
+        <%!-- Smart Contract Event Funding --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            🔗 Smart Contract Event Funding
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Events are funded through transparent smart contracts with milestone-based releases. 
+            Funds only unlock when community-verified conditions are met.
+          </p>
+          <p class="text-sm font-medium text-blue-600">
+            → Trustless coordination with built-in guarantees
+          </p>
+        </div>
+
+        <%!-- World ID Verification --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            🌍 World ID Verified Participants
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Every participant verified as a unique human through World ID. 
+            No bots, no fake accounts, no Sybil attacks - just real people.
+          </p>
+          <p class="text-sm font-medium text-green-600">
+            → 30M+ verified humans ready to participate
+          </p>
+        </div>
+
+        <%!-- NFT Ticketing --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            💎 NFT Tickets with Resale Markets
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Event tickets as tradeable NFTs with built-in royalties for organizers. 
+            Prevent scalping through World ID verification.
+          </p>
+          <p class="text-sm font-medium text-purple-600">
+            → Verifiable ownership with creator economics
+          </p>
+        </div>
+
+        <%!-- Event DAOs --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            🏛️ Event DAOs & Community Governance
+          </h3>
+          <p class="text-gray-600 leading-relaxed mb-4">
+            Large events governed by participant token holders. 
+            Democratic decision-making for venue changes, speakers, budget allocation.
+          </p>
+          <p class="text-sm font-medium text-orange-600">
+            → Community ownership drives better outcomes
+          </p>
+        </div>
+      </div>
+
+      <%!-- DeFi Integration --%>
+      <div class="max-w-4xl mx-auto">
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-8">
+          <h3 class="text-2xl font-semibold text-gray-900 mb-4 text-center">
+            DeFi Integration & Yield Generation
+          </h3>
+          <p class="text-lg text-gray-700 leading-relaxed text-center mb-6">
+            Event funds generate yield through DeFi protocols during planning phases, reducing costs for participants.
+          </p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="text-center">
+              <div class="text-3xl mb-2">🏦</div>
+              <p class="text-sm font-medium text-gray-700">Yield Staking</p>
+            </div>
+            <div class="text-center">
+              <div class="text-3xl mb-2">💰</div>
+              <p class="text-sm font-medium text-gray-700">Auto Compounding</p>
+            </div>
+            <div class="text-center">
+              <div class="text-3xl mb-2">📈</div>
+              <p class="text-sm font-medium text-gray-700">Price Optimization</p>
+            </div>
+            <div class="text-center">
+              <div class="text-3xl mb-2">🎁</div>
+              <p class="text-sm font-medium text-gray-700">Bonus Distribution</p>
+            </div>
+          </div>
+          <p class="text-sm font-medium text-purple-600 text-center mt-4">
+            → Make money work while you plan
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Smart Contract Features --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-4 text-blue-600">Beyond Basic Crypto Payments</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl sm:text-4xl">
+          🤖 Smart Contract Superpowers
+        </.heading>
+        <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+          Revolutionary smart contract features that make crypto event coordination transparent and trustworthy.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <%!-- Milestone Releases --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full mb-6">
+            <span class="text-3xl text-white">📋</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Milestone-Based Fund Releases
+          </h3>
+          <p class="text-gray-600 leading-relaxed">
+            Smart contracts release funds only when predefined milestones are met. 
+            Community votes on completion. Organizers can't run with the money.
+          </p>
+        </div>
+
+        <%!-- Conditional Payments --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full mb-6">
+            <span class="text-3xl text-white">🌤️</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Conditional Event Payments
+          </h3>
+          <p class="text-gray-600 leading-relaxed">
+            Weather oracles for outdoor events. Speaker confirmation oracles. 
+            Venue availability checks. Automatic refunds when conditions aren't met.
+          </p>
+        </div>
+
+        <%!-- Reputation Tracking --%>
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full mb-6">
+            <span class="text-3xl text-white">⭐</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">
+            Immutable Reputation System
+          </h3>
+          <p class="text-gray-600 leading-relaxed">
+            On-chain reputation for organizers and participants. 
+            Attendance records, quality ratings, and reliability scores that can't be faked.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- World Build Integration --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-purple-600">🌍 World Network Integration</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Built for 30M+ Verified Humans
+        </.heading>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">World App Mini-App</h3>
+          <p class="text-gray-600">Native integration with World App for seamless event discovery and participation</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Verified Human Network</h3>
+          <p class="text-gray-600">Every participant verified through World ID → no bots, no fake accounts</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Global Reach</h3>
+          <p class="text-gray-600">Cross-border events with crypto payments and no traditional banking friction</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Age Verification</h3>
+          <p class="text-gray-600">Built-in age verification for events with age requirements</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Spam Resistance</h3>
+          <p class="text-gray-600">World ID prevents spam, fake RSVPs, and event manipulation</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-900 mb-2">Privacy First</h3>
+          <p class="text-gray-600">Zero-knowledge proofs protect identity while ensuring uniqueness</p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Competitive Positioning vs Crypto Platforms --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-4 text-blue-600">⚔️ Crypto Competition</.subheading>
+        <.heading as="h2" class="mb-6 text-3xl sm:text-4xl">
+          How We Outpace the Web3 Competition
+        </.heading>
+      </div>
+
+      <div class="max-w-4xl mx-auto space-y-4">
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">💳</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">Luma (with crypto payments)</h3>
+            <p class="text-gray-600">Checkout form that accepts crypto. No smart contracts. No transparency.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">🎫</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">NFT Ticketing Platforms (GET Protocol, etc.)</h3>
+            <p class="text-gray-600">Just NFT tickets. No event funding. No community governance.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">📊</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">DAO Platforms (Snapshot, etc.)</h3>
+            <p class="text-gray-600">Governance voting. No event coordination. No real-world execution.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">💰</span>
+          <div>
+            <h3 class="font-semibold text-gray-900">Crowdfunding Platforms (Mirror, etc.)</h3>
+            <p class="text-gray-600">Fund projects. Not optimized for events. No attendance verification.</p>
+          </div>
+        </div>
+        <div class="flex items-start space-x-4 bg-white rounded-xl border border-gray-200 p-6">
+          <span class="text-2xl">🎯</span>
+          <div>
+            <h3 class="font-semibold text-gray-900 font-bold text-blue-600">Eventasaurus</h3>
+            <p class="text-gray-600 font-medium">Smart contract funding + World ID verification + Event DAOs + NFT tickets + DeFi yield = Complete crypto-native solution</p>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Technical Architecture --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-green-600">🛠 Technical Architecture</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Battle-Tested Stack Meets Bleeding Edge
+        </.heading>
+      </div>
+
+      <div class="max-w-5xl mx-auto">
+        <div class="relative">
+          <%!-- Smart Contract Layer --%>
+          <div class="bg-white/90 backdrop-blur rounded-3xl border-2 border-blue-300 p-12">
+            
+            <%!-- Backend Integration --%>
+            <div class="bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl border-2 border-green-300 p-8 mb-8">
+              
+              <%!-- Frontend Layer --%>
+              <div class="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-xl border-2 border-orange-300 p-6 mb-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-3">
+                  Frontend: Phoenix LiveView + Web3 Integration
+                </h3>
+                <p class="text-gray-700 leading-relaxed">
+                  <strong>Real-time event coordination</strong> powered by Phoenix LiveView, 
+                  with seamless Web3 wallet integration and World App mini-app support.
+                </p>
+              </div>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-3">
+                Backend: Robust Event Management + Blockchain Sync
+              </h3>
+              <p class="text-gray-700 leading-relaxed">
+                <strong>Proven Elixir/Phoenix foundation</strong> with real-time blockchain synchronization, 
+                event state management, and hybrid crypto/fiat payment processing.
+              </p>
+            </div>
+
+            <h3 class="text-xl font-bold text-gray-900 mb-3">
+              Smart Contracts: Event Funding + Governance
+            </h3>
+            <p class="text-gray-700 leading-relaxed">
+              <strong>Audited smart contracts on Polygon</strong> for gas-efficient event funding, 
+              milestone releases, NFT ticketing, and DAO governance.
+            </p>
+          </div>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Token Economics --%>
+    <.section class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-purple-600">🪙 Token Economics</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          Platform Governance & Incentive Alignment
+        </.heading>
+      </div>
+
+      <div class="max-w-4xl mx-auto space-y-6">
+        <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6">
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">EVENTASAURUS Token</h3>
+          <p class="text-gray-700 leading-relaxed">
+            Platform governance token earned through successful event organization, 
+            reliable attendance, and positive community contributions. Vote on platform fees, 
+            feature priorities, and ecosystem development.
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-xl p-6">
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Revenue Sharing</h3>
+          <p class="text-gray-700 leading-relaxed">
+            Token holders share in platform revenue from transaction fees, 
+            smart contract deployments, and NFT marketplace trades. 
+            Align incentives between platform success and community growth.
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-6">
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Reputation Mining</h3>
+          <p class="text-gray-700 leading-relaxed">
+            Earn tokens by building reputation through successful events, 
+            positive reviews, and community engagement. Higher reputation = 
+            lower platform fees and premium features access.
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-xl p-6">
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Event Staking</h3>
+          <p class="text-gray-700 leading-relaxed">
+            Organizers stake tokens as collateral for event promises. 
+            Participants can stake tokens to show commitment. 
+            Successful events return stakes with bonuses.
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Crypto Pitch Lines --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center mb-16">
+        <.subheading class="mb-6 text-purple-600">📣 Crypto Pitch Lines</.subheading>
+        <.heading as="h2" class="mb-8 text-3xl sm:text-4xl">
+          How We Tell Our Crypto Story
+        </.heading>
+      </div>
+
+      <div class="max-w-4xl mx-auto space-y-6">
+        <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            "If Luma only accepts crypto payments, 
+            <span class="text-blue-600">Eventasaurus runs on smart contracts."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            "Kickstarter for events meets verifiable human network — 
+            <span class="text-green-600">trustless coordination for the real world."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            "The first event platform where participants become stakeholders — 
+            <span class="text-purple-600">built on World's verified human network."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            <span class="text-orange-600">"Smart contracts for IRL experiences + 30M World ID verified humans."</span>
+          </p>
+        </div>
+        <div class="bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-6">
+          <p class="text-xl text-gray-800 font-medium text-center">
+            <span class="text-teal-600">"Less speculation, more participation."</span>
+          </p>
+        </div>
+      </div>
+    </.section>
+
+    <%!-- Final CTA --%>
+    <.section background="gradient" class="py-24">
+      <div class="text-center">
+        <div class="max-w-4xl mx-auto">
+          <.heading as="h2" class="mb-8 text-3xl sm:text-4xl lg:text-5xl">
+            <span class="bg-gradient-to-r from-orange-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+              Join the crypto-native event revolution
+            </span>
+          </.heading>
+          <p class="text-xl text-gray-600 mb-8 leading-relaxed">
+            We're building on World Network to create transparent, verifiable, 
+            community-governed events for the verified human network.
+          </p>
+          <div class="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 p-8 shadow-lg mb-8">
+            <h3 class="text-2xl font-semibold text-gray-900 mb-4">The Crypto Opportunity is Massive</h3>
+            <ul class="text-left max-w-2xl mx-auto space-y-3 text-gray-700">
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>30M+ World ID verified humans ready for transparent events</span>
+              </li>
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>Smart contracts enable trustless coordination at global scale</span>
+              </li>
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>DeFi integration reduces costs and creates new revenue streams</span>
+              </li>
+              <li class="flex items-start space-x-3">
+                <span class="text-green-600 mt-1">✓</span>
+                <span>Community governance aligns incentives for better events</span>
+              </li>
+            </ul>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <.radiant_button href="/register" class="text-lg px-8 py-4 bg-gradient-to-r from-orange-600 to-purple-600 hover:from-orange-700 hover:to-purple-700">
+              Start Building Crypto Events
+            </.radiant_button>
+            <.radiant_button href="https://github.com/razrfly/eventasaurus/issues/867" variant="outline" class="text-lg px-8 py-4">
+              View Technical Spec
+            </.radiant_button>
+          </div>
+        </div>
+      </div>
+    </.section>
+  </main>
+</div>

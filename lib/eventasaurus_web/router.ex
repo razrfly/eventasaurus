@@ -268,6 +268,7 @@ defmodule EventasaurusWeb.Router do
       get "/terms", PageController, :terms
       get "/pitch", PageController, :pitch
       get "/pitch2", PageController, :pitch2
+      get "/crypto-pitch", PageController, :crypto_pitch
       get "/invite-only", PageController, :invite_only
 
       # Direct routes for common auth paths (redirect to proper auth routes)
