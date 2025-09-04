@@ -5,6 +5,7 @@ alias EventasaurusApp.{Repo, Events, Accounts}
 alias EventasaurusApp.Events.{Poll, PollOption}
 alias EventasaurusWeb.Services.TmdbService
 alias EventasaurusWeb.Services.MovieConfig
+alias EventasaurusWeb.Services.MovieDataAdapter
 alias EventasaurusWeb.Services.GooglePlaces.TextSearch
 alias EventasaurusWeb.Services.GooglePlaces.Photos
 import Ecto.Query
@@ -184,28 +185,11 @@ defmodule PollSeed do
       if is_nil(poll) do
         nil
       else
-        # Create poll options from movies with real data
+        # Create poll options from movies with real data using adapter
         options =
           Enum.reduce(movies, [], fn movie, acc ->
-            case Events.create_poll_option(%{
-                   poll_id: poll.id,
-                   title: movie.title,
-                   description:
-                     "#{movie.description || movie.overview || "No description available"} (#{movie.year || (movie.release_date && String.split(movie.release_date, "-") |> hd()) || "Unknown"}, #{movie.genre || "General"})",
-                   suggested_by_id: organizer_id,
-                   image_url: MovieConfig.build_image_url(movie.poster_path, "w500"),
-                   metadata: %{
-                     "tmdb_id" => movie.tmdb_id,
-                     "year" =>
-                       movie.year ||
-                         (movie.release_date && String.split(movie.release_date, "-") |> hd()),
-                     "genre" => movie.genre || "General",
-                     "rating" => movie.rating || movie.vote_average,
-                     "poster_path" => movie.poster_path,
-                     "backdrop_path" => movie.backdrop_path,
-                     "is_movie" => true
-                   }
-                 }) do
+            case MovieDataAdapter.build_poll_option_attrs(movie, poll.id, organizer_id)
+                 |> Events.create_poll_option() do
               {:ok, option} ->
                 [option | acc]
 
@@ -254,11 +238,8 @@ defmodule PollSeed do
     case TmdbService.get_popular_movies(1) do
       {:ok, movies} ->
         Logger.info("Successfully fetched #{length(movies)} popular movies from TMDB")
-        # Convert TMDB format to our expected format
-        movies
-        # Limit to 10 movies for seeding
-        |> Enum.take(10)
-        |> Enum.map(&convert_tmdb_movie_to_seed_format/1)
+        # Limit to 10 movies for seeding - adapter handles format conversion
+        movies |> Enum.take(10)
 
       {:error, reason} ->
         Logger.warning("Failed to fetch TMDB movies (#{inspect(reason)}), using fallback data")
@@ -266,79 +247,6 @@ defmodule PollSeed do
     end
   end
 
-  defp convert_tmdb_movie_to_seed_format(tmdb_movie) do
-    # Extract year from release_date
-    year =
-      case tmdb_movie.release_date do
-        nil ->
-          "Unknown"
-
-        "" ->
-          "Unknown"
-
-        date_string ->
-          case String.split(date_string, "-") do
-            [year | _] -> year
-            _ -> "Unknown"
-          end
-      end
-
-    # Get genre from genre_ids (simplified - we could fetch full genre names from TMDB)
-    genre =
-      case tmdb_movie.genre_ids do
-        [] -> "General"
-        [genre_id | _] -> genre_id_to_name(genre_id)
-      end
-
-    %{
-      tmdb_id: tmdb_movie.tmdb_id,
-      title: tmdb_movie.title,
-      description: tmdb_movie.overview || "No description available",
-      year: year,
-      genre: genre,
-      rating: tmdb_movie.vote_average,
-      poster_path: tmdb_movie.poster_path,
-      backdrop_path: tmdb_movie.backdrop_path
-    }
-  end
-
-  # Basic genre mapping for common TMDB genre IDs
-  defp genre_id_to_name(genre_id) do
-    case genre_id do
-      28 -> "Action"
-      12 -> "Adventure"
-      16 -> "Animation"
-      35 -> "Comedy"
-      80 -> "Crime"
-      99 -> "Documentary"
-      18 -> "Drama"
-      10751 -> "Family"
-      14 -> "Fantasy"
-      36 -> "History"
-      27 -> "Horror"
-      10402 -> "Music"
-      9648 -> "Mystery"
-      10749 -> "Romance"
-      878 -> "Sci-Fi"
-      10770 -> "TV Movie"
-      53 -> "Thriller"
-      10752 -> "War"
-      37 -> "Western"
-      _ -> "General"
-    end
-  end
-
-  defp extract_movie_data(tmdb_movie) do
-    %{
-      tmdb_id: tmdb_movie["id"],
-      title: tmdb_movie["title"] || "Unknown Movie",
-      poster_path: tmdb_movie["poster_path"],
-      backdrop_path: tmdb_movie["backdrop_path"],
-      overview: tmdb_movie["overview"] || "No description available",
-      release_date: tmdb_movie["release_date"],
-      vote_average: tmdb_movie["vote_average"]
-    }
-  end
 
   defp fallback_movies do
     # Hardcoded popular movies as fallback
@@ -394,26 +302,6 @@ defmodule PollSeed do
     ]
   end
 
-  defp create_movie_option(poll, movie_data, organizer_id) do
-    {:ok, option} =
-      Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: movie_data.title,
-        description: movie_data.overview,
-        suggested_by_id: organizer_id,
-        image_url: MovieConfig.build_image_url(movie_data.poster_path, "w500"),
-        metadata: %{
-          "tmdb_id" => movie_data.tmdb_id,
-          "poster_path" => movie_data.poster_path,
-          "backdrop_path" => movie_data.backdrop_path,
-          "release_date" => movie_data.release_date,
-          "vote_average" => movie_data.vote_average,
-          "is_movie" => true
-        }
-      })
-
-    option
-  end
 
   # Seed RCV votes with specific scenarios
   defp seed_rcv_votes(poll, options, participants, scenario) do
