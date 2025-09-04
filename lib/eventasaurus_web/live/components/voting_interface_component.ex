@@ -315,7 +315,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
               <%= if movie_url do %>
                 <h4 class={"text-sm font-medium " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}>
-                  <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                  <.link
+                    href={movie_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    phx-click="stop_propagation"
+                    onclick="event.stopPropagation()"
+                    class="text-blue-600 hover:text-blue-800 hover:underline"
+                  >
                     <%= option.title %>
                   </.link>
                 </h4>
@@ -500,7 +507,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
               <%= if movie_url do %>
                 <h4 class={"text-sm font-medium " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}>
-                  <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                  <.link
+                    href={movie_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    phx-click="stop_propagation"
+                    onclick="event.stopPropagation()"
+                    class="text-blue-600 hover:text-blue-800 hover:underline"
+                  >
                     <%= option.title %>
                   </.link>
                 </h4>
@@ -657,7 +671,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
                 <%= if movie_url do %>
                   <h4 class="text-sm font-medium line-clamp-1 sm:line-clamp-none">
-                    <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                    <.link
+                      href={movie_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      phx-click="stop_propagation"
+                      onclick="event.stopPropagation()"
+                      class="text-blue-600 hover:text-blue-800 hover:underline"
+                    >
                       <%= option.title %>
                     </.link>
                   </h4>
@@ -780,7 +801,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
                     <%= if movie_url do %>
                       <h5 class="text-sm font-medium line-clamp-1 sm:line-clamp-none">
-                        <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                        <.link
+                          href={movie_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          phx-click="stop_propagation"
+                          onclick="event.stopPropagation()"
+                          class="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
                           <%= option.title %>
                         </.link>
                       </h5>
@@ -868,7 +896,14 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
             <%= if movie_url do %>
               <h4 class="text-sm font-medium">
-                <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                <.link
+                  href={movie_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  phx-click="stop_propagation"
+                  onclick="event.stopPropagation()"
+                  class="text-blue-600 hover:text-blue-800 hover:underline"
+                >
                   <%= option.title %>
                 </.link>
               </h4>
@@ -1827,6 +1862,11 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
     end
+  end
+
+  # Event handler to stop propagation for movie links in voting interfaces
+  def handle_event("stop_propagation", _params, socket) do
+    {:noreply, socket}
   end
 
 end
