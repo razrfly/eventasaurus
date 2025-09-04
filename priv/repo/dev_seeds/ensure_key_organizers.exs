@@ -76,7 +76,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           """
           
           # Use Events context to create event with organizer (ensures proper slug generation)
-          {:ok, _event} = Events.create_event_with_organizer(%{
+          event_params = Map.merge(%{
             title: title,
             description: description,
             tagline: "Movie Night - #{movie.genre}",
@@ -87,7 +87,9 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             start_at: Faker.DateTime.forward(Enum.random(1..30)),
             ends_at: Faker.DateTime.forward(Enum.random(31..32)),
             timezone: Faker.Address.time_zone()
-          }, movie_user)
+          }, Helpers.get_random_image_attrs())
+          
+          {:ok, _event} = Events.create_event_with_organizer(event_params, movie_user)
         end)
       end
     else
@@ -144,7 +146,7 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           """
           
           # Use Events context to create event with organizer (ensures proper slug generation)
-          {:ok, _event} = Events.create_event_with_organizer(%{
+          event_params = Map.merge(%{
             title: title,
             description: description,
             tagline: "#{restaurant.cuisine} Cuisine - #{restaurant.price}",
@@ -156,7 +158,9 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             start_at: Faker.DateTime.forward(Enum.random(1..30)),
             ends_at: Faker.DateTime.forward(Enum.random(31..32)),
             timezone: Faker.Address.time_zone()
-          }, foodie_user)
+          }, Helpers.get_random_image_attrs())
+          
+          {:ok, _event} = Events.create_event_with_organizer(event_params, foodie_user)
         end)
       end
     else

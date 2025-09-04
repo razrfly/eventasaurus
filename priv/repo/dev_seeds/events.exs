@@ -214,7 +214,7 @@ defmodule DevSeeds.Events do
     end
     
     # Get a random default image for the event
-    image_attrs = get_random_image_attrs()
+    image_attrs = Helpers.get_random_image_attrs()
     
     # Use production API for event creation (handles slug generation automatically)
     event_params = Map.merge(Map.merge(venue_attrs, image_attrs), attrs)
@@ -369,16 +369,4 @@ defmodule DevSeeds.Events do
     end)
   end
   
-  defp get_random_image_attrs do
-    # Get a random default image from our collection
-    case DefaultImagesService.get_random_image() do
-      nil ->
-        # Always provide a fallback image to ensure events have images
-        %{cover_image_url: "/images/events/general/default-event.jpg"}
-      
-      image ->
-        # Use the image URL as cover_image_url
-        %{cover_image_url: image.url}
-    end
-  end
 end
