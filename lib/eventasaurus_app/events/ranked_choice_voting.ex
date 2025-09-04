@@ -108,9 +108,14 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
 
   defp get_ranked_votes(poll_id) do
     PollVote
-    |> where([v], v.poll_id == ^poll_id and not is_nil(v.vote_rank))
-    |> where([v], is_nil(v.deleted_at))
-    |> preload(:poll_option)
+    |> join(:inner, [v], o in PollOption, on: v.poll_option_id == o.id)
+    |> where([v, o], o.poll_id == ^poll_id and not is_nil(v.vote_rank))
+    |> where([v, o], is_nil(v.deleted_at) and is_nil(o.deleted_at))
+    |> select([v, o], %{
+      voter_id: v.voter_id,
+      vote_rank: v.vote_rank,
+      poll_option_id: v.poll_option_id
+    })
     |> Repo.all()
   end
 
