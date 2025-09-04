@@ -138,6 +138,25 @@ defmodule DevSeeds.Helpers do
   end
 
   @doc """
+  Get random image attributes for event seeding.
+  Used by multiple seeding scripts to ensure consistent image handling.
+  """
+  def get_random_image_attrs do
+    alias EventasaurusWeb.Services.DefaultImagesService
+    
+    # Get a random default image from our collection
+    case DefaultImagesService.get_random_image() do
+      nil ->
+        # Use an existing image as fallback to ensure events have images
+        %{cover_image_url: "/images/events/general/high-five-dino.png"}
+      
+      image ->
+        # Use the image URL as cover_image_url
+        %{cover_image_url: image.url}
+    end
+  end
+
+  @doc """
   Create events with various states
   """
   def create_events_with_states(users, counts) do
