@@ -847,15 +847,19 @@ defmodule EventasaurusWeb.PollCreationComponent do
 
   # Helper function to get max rankings setting from changeset or poll
   defp get_max_rankings_setting(changeset, poll) do
-    case Ecto.Changeset.get_field(changeset, :settings) do
-      %{"max_rankings" => max_rankings} when is_integer(max_rankings) -> max_rankings
-      _ ->
-        if poll do
-          Poll.get_max_rankings(poll)
-        else
-          3  # Default for new polls
+    settings = Ecto.Changeset.get_field(changeset, :settings) || %{}
+    case Map.get(settings, "max_rankings") do
+      v when is_integer(v) -> v
+      v when is_binary(v) ->
+        case Integer.parse(v) do
+          {int, _} -> int
+          :error -> fallback_max_rankings(poll)
         end
+      _ -> fallback_max_rankings(poll)
     end
   end
+
+  defp fallback_max_rankings(nil), do: 3
+  defp fallback_max_rankings(poll), do: Poll.get_max_rankings(poll)
 
 end

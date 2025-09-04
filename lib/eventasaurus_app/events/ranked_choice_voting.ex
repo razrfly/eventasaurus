@@ -348,8 +348,9 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   Invalidate IRV cache for a specific poll when votes change.
   """
   def invalidate_cache(poll_id) do
-    cache_key = generate_cache_key(poll_id)
-    :ets.delete(@irv_cache_name, cache_key)
+    ensure_cache_table()
+    # Delete all entries for this poll (any vote/options count)
+    :ets.match_delete(@irv_cache_name, {{:irv, poll_id, :_, :_}, :_})
   end
 
   @doc """
@@ -365,15 +366,22 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   # Private cache functions
 
   defp generate_cache_key(poll_id) do
-    # Create a simple cache key that includes poll_id and vote count hash
-    vote_count = from(v in PollVote, 
-                     join: o in assoc(v, :poll_option),
-                     where: o.poll_id == ^poll_id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
-                     select: count(v.id))
-                 |> Repo.one()
-    
-    # Simple hash of poll_id + vote_count for cache invalidation
-    "irv_#{poll_id}_#{vote_count}"
+    vote_count =
+      from(v in PollVote,
+        join: o in assoc(v, :poll_option),
+        where: o.poll_id == ^poll_id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
+        select: count(v.id)
+      )
+      |> Repo.one()
+
+    options_count =
+      from(o in PollOption,
+        where: o.poll_id == ^poll_id and is_nil(o.deleted_at),
+        select: count(o.id)
+      )
+      |> Repo.one()
+
+    {:irv, poll_id, vote_count, options_count}
   end
 
   defp get_cached_result(cache_key) do
@@ -393,9 +401,12 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   defp ensure_cache_table do
     case :ets.whereis(@irv_cache_name) do
       :undefined ->
-        :ets.new(@irv_cache_name, [:set, :public, :named_table])
-      _table -> 
-        :ok
+        try do
+          :ets.new(@irv_cache_name, [:set, :public, :named_table, :read_concurrency, :write_concurrency])
+        rescue
+          ArgumentError -> :ok  # table already created by another process
+        end
+      _ -> :ok
     end
   end
 end

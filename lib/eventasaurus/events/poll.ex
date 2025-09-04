@@ -544,7 +544,7 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Set maximum rankings allowed for ranked choice polls.
   """
-  def set_max_rankings(%__MODULE__{settings: settings} = poll, max_rankings) when max_rankings in 3..7 do
+  def set_max_rankings(%__MODULE__{settings: settings} = poll, max_rankings) when max_rankings in [3, 5, 7] do
     new_settings = Map.put(settings || %{}, "max_rankings", max_rankings)
     %{poll | settings: new_settings}
   end
@@ -643,9 +643,9 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_max_rankings_setting(changeset, settings) do
     case Map.get(settings, "max_rankings") do
-      nil -> changeset  # Optional field, will use default
-      value when is_integer(value) and value in 3..7 -> changeset
-      _ -> add_error(changeset, :settings, "max_rankings must be between 3 and 7")
+      nil -> changeset
+      value when is_integer(value) and value in [3, 5, 7] -> changeset
+      _ -> add_error(changeset, :settings, "max_rankings must be one of #{Enum.join([3, 5, 7], ", ")}")
     end
   end
 end
