@@ -373,8 +373,8 @@ defmodule DevSeeds.Events do
     # Get a random default image from our collection
     case DefaultImagesService.get_random_image() do
       nil ->
-        # Fallback if no images are available
-        %{}
+        # Always provide a fallback image to ensure events have images
+        %{cover_image_url: "/images/events/general/default-event.jpg"}
       
       image ->
         # Use the image URL as cover_image_url
