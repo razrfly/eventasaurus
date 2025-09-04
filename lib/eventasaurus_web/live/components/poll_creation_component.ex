@@ -429,6 +429,37 @@ defmodule EventasaurusWeb.PollCreationComponent do
                         <p class="mt-1 text-xs text-gray-500">How many options each user can suggest</p>
                       </div>
 
+                      <!-- Max Rankings (for ranked choice polls only) -->
+                      <%= if Phoenix.HTML.Form.input_value(f, :voting_system) == "ranked" do %>
+                        <div>
+                          <label for="max_rankings" class="block text-sm font-medium text-gray-700">
+                            Max Rankings Per Voter
+                          </label>
+                          <div class="mt-1 relative">
+                            <select
+                              name="poll[settings][max_rankings]"
+                              id="max_rankings"
+                              class="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                            >
+                              <%= for option <- Poll.max_rankings_options() do %>
+                                <option
+                                  value={option}
+                                  selected={get_max_rankings_setting(@changeset, @poll) == option}
+                                >
+                                  <%= Poll.max_rankings_display(option) %>
+                                </option>
+                              <% end %>
+                            </select>
+                            <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                              <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                              </svg>
+                            </div>
+                          </div>
+                          <p class="mt-1 text-xs text-gray-500">Limit how many choices users can rank (improves performance)</p>
+                        </div>
+                      <% end %>
+
                       <!-- Auto Finalize -->
                       <div class="flex items-center justify-between">
                         <div>
@@ -811,6 +842,19 @@ defmodule EventasaurusWeb.PollCreationComponent do
       search_location = get_search_location(changeset, nil)
       event.venue && search_location && 
         (search_location == event.venue.city || search_location == event.venue.name)
+    end
+  end
+
+  # Helper function to get max rankings setting from changeset or poll
+  defp get_max_rankings_setting(changeset, poll) do
+    case Ecto.Changeset.get_field(changeset, :settings) do
+      %{"max_rankings" => max_rankings} when is_integer(max_rankings) -> max_rankings
+      _ ->
+        if poll do
+          Poll.get_max_rankings(poll)
+        else
+          3  # Default for new polls
+        end
     end
   end
 

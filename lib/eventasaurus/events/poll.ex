@@ -532,6 +532,36 @@ defmodule EventasaurusApp.Events.Poll do
   def location_scope_display("custom"), do: "Custom Locations"
   def location_scope_display(scope), do: String.capitalize(scope)
 
+  @doc """
+  Get maximum rankings allowed for ranked choice polls.
+  Returns the configured limit or default of 3 for ranked polls, nil for other voting systems.
+  """
+  def get_max_rankings(%__MODULE__{voting_system: "ranked", settings: settings}) do
+    Map.get(settings || %{}, "max_rankings", 3)
+  end
+  def get_max_rankings(%__MODULE__{}), do: nil  # Not applicable to non-ranked polls
+
+  @doc """
+  Set maximum rankings allowed for ranked choice polls.
+  """
+  def set_max_rankings(%__MODULE__{settings: settings} = poll, max_rankings) when max_rankings in 3..7 do
+    new_settings = Map.put(settings || %{}, "max_rankings", max_rankings)
+    %{poll | settings: new_settings}
+  end
+
+  @doc """
+  Get all valid max rankings options.
+  """
+  def max_rankings_options, do: [3, 5, 7]
+
+  @doc """
+  Get display text for max rankings options.
+  """
+  def max_rankings_display(3), do: "3 choices (recommended)"
+  def max_rankings_display(5), do: "5 choices"
+  def max_rankings_display(7), do: "7 choices"
+  def max_rankings_display(num), do: "#{num} choices"
+
   # Private helper to normalize settings
   defp normalize_settings(nil), do: %{}
   defp normalize_settings(settings) when is_map(settings) do
@@ -541,6 +571,18 @@ defmodule EventasaurusApp.Events.Poll do
       scope when is_binary(scope) -> Map.put(settings, "location_scope", "place")  # Invalid scope, default to place
       nil -> settings  # No scope set, leave as is
       _ -> Map.put(settings, "location_scope", "place")  # Invalid type, default to place
+    end
+    
+    # Normalize max_rankings if present
+    settings = case Map.get(settings, "max_rankings") do
+      nil -> settings  # No max_rankings set, leave as is
+      value when is_integer(value) and value in 3..7 -> settings  # Valid integer
+      value when is_binary(value) ->
+        case Integer.parse(value) do
+          {parsed, ""} when parsed in 3..7 -> Map.put(settings, "max_rankings", parsed)
+          _ -> Map.put(settings, "max_rankings", 3)  # Invalid, default to 3
+        end
+      _ -> Map.put(settings, "max_rankings", 3)  # Invalid type, default to 3
     end
     
     # Normalize search_location_data from JSON string to map
@@ -586,11 +628,24 @@ defmodule EventasaurusApp.Events.Poll do
   defp validate_settings(changeset) do
     settings = get_field(changeset, :settings) || %{}
     
-    # Validate location scope if present
+    changeset
+    |> validate_location_scope_setting(settings)
+    |> validate_max_rankings_setting(settings)
+  end
+
+  defp validate_location_scope_setting(changeset, settings) do
     case Map.get(settings, "location_scope") do
       nil -> changeset  # Optional field
       scope when scope in ["place", "city", "region", "country", "custom"] -> changeset
       _ -> add_error(changeset, :settings, "invalid location scope")
+    end
+  end
+
+  defp validate_max_rankings_setting(changeset, settings) do
+    case Map.get(settings, "max_rankings") do
+      nil -> changeset  # Optional field, will use default
+      value when is_integer(value) and value in 3..7 -> changeset
+      _ -> add_error(changeset, :settings, "max_rankings must be between 3 and 7")
     end
   end
 end
