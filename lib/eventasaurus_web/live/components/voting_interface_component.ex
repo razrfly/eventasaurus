@@ -387,7 +387,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <div class="mt-2">
               <.live_component
                 module={EmbeddedProgressBarComponent}
-                id={"progress-#{option.id}-#{System.unique_integer()}"}
+                id={"progress-#{@poll.id}-#{option.id}-binary"}
                 poll_stats={@poll_stats}
                 option_id={option.id}
                 voting_system={@poll.voting_system}
@@ -579,7 +579,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <div class="mt-2">
               <.live_component
                 module={EmbeddedProgressBarComponent}
-                id={"progress-#{option.id}-#{System.unique_integer()}"}
+                id={"progress-#{@poll.id}-#{option.id}-approval"}
                 poll_stats={@poll_stats}
                 option_id={option.id}
                 voting_system={@poll.voting_system}
@@ -692,7 +692,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <div class="mt-1">
                   <.live_component
                     module={EmbeddedProgressBarComponent}
-                    id={"progress-#{option.id}-#{System.unique_integer()}"}
+                    id={"progress-#{@poll.id}-#{option.id}-ranked"}
                     poll_stats={@poll_stats}
                     option_id={option.id}
                     voting_system={@poll.voting_system}
@@ -844,7 +844,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     <div class="mt-1">
                       <.live_component
                         module={EmbeddedProgressBarComponent}
-                        id={"progress-#{option.id}-#{System.unique_integer()}"}
+                        id={"progress-#{@poll.id}-#{option.id}-ranked-drag"}
                         poll_stats={@poll_stats}
                         option_id={option.id}
                         voting_system={@poll.voting_system}
@@ -940,7 +940,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <div class="mt-2">
               <.live_component
                 module={EmbeddedProgressBarComponent}
-                id={"progress-#{option.id}-#{System.unique_integer()}"}
+                id={"progress-#{@poll.id}-#{option.id}-star"}
                 poll_stats={@poll_stats}
                 option_id={option.id}
                 voting_system={@poll.voting_system}
