@@ -5,6 +5,7 @@ alias EventasaurusApp.{Repo, Events, Accounts}
 alias EventasaurusApp.Events.{Event, EventActivity}
 alias EventasaurusWeb.Services.TmdbService
 alias EventasaurusWeb.Services.MovieConfig
+alias EventasaurusWeb.Services.MovieDataAdapter
 alias EventasaurusWeb.Services.GooglePlaces.TextSearch
 alias EventasaurusWeb.Services.GooglePlaces.Photos
 import Ecto.Query
@@ -125,7 +126,7 @@ defmodule ActivitySeed do
           Enum.random(tmdb_movies)
       end
 
-    # Create activity with rich metadata
+    # Create activity with rich metadata using adapter
     {:ok, _activity} =
       Events.create_event_activity(%{
         event_id: event.id,
@@ -133,18 +134,7 @@ defmodule ActivitySeed do
         created_by_id: organizer.id,
         occurred_at: event.start_at || DateTime.utc_now(),
         source: "seed_data",
-        metadata: %{
-          "title" => movie.title,
-          "overview" => movie[:overview] || movie[:description],
-          "tmdb_id" => movie[:id] || movie[:tmdb_id],
-          "year" => movie[:year] || extract_year(movie),
-          "genre" => movie[:genre],
-          "rating" => movie[:rating],
-          "poster_path" => movie[:poster_path],
-          "image_url" => build_movie_image_url(movie),
-          "api_source" => if(movie[:id], do: "tmdb", else: "curated"),
-          "seeded_at" => DateTime.utc_now()
-        }
+        metadata: MovieDataAdapter.build_activity_metadata(movie)
       })
 
     Logger.info("Created movie activity: #{movie.title}")
@@ -421,18 +411,4 @@ defmodule ActivitySeed do
     organizer || Enum.random(users)
   end
 
-  defp extract_year(%{year: year}) when is_integer(year), do: year
-  defp extract_year(%{"year" => year}) when is_integer(year), do: year
-  defp extract_year(%{release_date: date}) when is_binary(date), do: String.slice(date, 0..3)
-  defp extract_year(_), do: nil
-
-  defp build_movie_image_url(%{poster_path: poster_path}) when is_binary(poster_path) do
-    MovieConfig.build_image_url(poster_path, "w500")
-  end
-
-  defp build_movie_image_url(%{"poster_path" => poster_path}) when is_binary(poster_path) do
-    MovieConfig.build_image_url(poster_path, "w500")
-  end
-
-  defp build_movie_image_url(_), do: nil
 end
