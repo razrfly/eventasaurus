@@ -73,10 +73,10 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
     <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
       <%= if @display_data.stats.voters > 0 do %>
         <!-- Header -->
-        <div class="px-6 py-4 pb-6 border-b border-gray-200">
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-gray-900 mr-8">Current Standings</h3>
-            <div class="flex items-center gap-6 text-sm text-gray-600">
+        <div class="px-4 sm:px-6 py-4 pb-4 sm:pb-6 border-b border-gray-200">
+          <div class="flex items-center justify-between w-full">
+            <h3 class="text-lg font-semibold text-gray-900">Current Standings</h3>
+            <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm text-gray-600 pl-8">
               <div class="flex items-center gap-1">
                 <span>👥</span>
                 <span><%= @display_data.stats.voters %> voters</span>
@@ -95,26 +95,28 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
 
         <!-- Winner Section -->
         <%= if @display_data.winner do %>
-          <div class="p-6 border-b border-gray-200">
-            <div class="bg-green-50 rounded-lg p-6 border border-green-200">
+          <div class="p-4 sm:p-6 border-b border-gray-200">
+            <div class="bg-green-50 rounded-lg p-4 sm:p-6 border border-green-200">
               <!-- Winner Header -->
-              <div class="grid grid-cols-3 gap-4 items-center mb-4">
-                <div class="flex items-center gap-3">
+              <div class="flex flex-col sm:grid sm:grid-cols-3 gap-4 items-start sm:items-center mb-4">
+                <div class="flex items-center gap-3 w-full sm:w-auto">
                   <span class="text-2xl">🏆</span>
-                  <div>
-                    <h4 class="text-xl font-bold text-green-900"><%= @display_data.winner.option.title %></h4>
-                    <span class="inline-block px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+                  <div class="flex-1 sm:flex-initial">
+                    <h4 class="text-lg sm:text-xl font-bold text-green-900 leading-tight"><%= @display_data.winner.option.title %></h4>
+                    <span class="inline-block px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded mt-1">
                       LEADING
                     </span>
                   </div>
                 </div>
-                <div class="text-center">
-                  <div class="text-2xl font-bold text-green-900"><%= @display_data.winner.percentage %>%</div>
-                  <div class="text-sm text-green-700"><%= @display_data.winner.votes %> votes</div>
-                </div>
-                <div class="text-right text-sm text-green-800">
-                  <div>(<%= @display_data.winner.percentage %>%) in Round <%= @display_data.stats.final_round %></div>
-                  <div><%= @display_data.winner.votes %>/<%= @display_data.stats.voters %> votes</div>
+                <div class="flex justify-between sm:block sm:text-center w-full sm:w-auto">
+                  <div>
+                    <div class="text-xl sm:text-2xl font-bold text-green-900"><%= @display_data.winner.percentage %>%</div>
+                    <div class="text-sm text-green-700"><%= @display_data.winner.votes %> votes</div>
+                  </div>
+                  <div class="text-right sm:text-center text-sm text-green-800 sm:mt-2">
+                    <div>(<%= @display_data.winner.percentage %>%) in Round <%= @display_data.stats.final_round %></div>
+                    <div><%= @display_data.winner.votes %>/<%= @display_data.stats.voters %> votes</div>
+                  </div>
                 </div>
               </div>
 
@@ -131,15 +133,15 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
 
         <!-- Top Contenders -->
         <%= if length(@display_data.contenders) > 0 do %>
-          <div class="p-6 border-b border-gray-200">
+          <div class="p-4 sm:p-6 border-b border-gray-200">
             <!-- Section Header -->
-            <div class="flex items-center justify-between mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
               <h5 class="text-sm font-medium text-gray-700">📊 Top Contenders</h5>
               <%= if length(@display_data.other_contenders) > 0 do %>
                 <button
                   phx-click="toggle_other_contenders"
                   phx-target={@myself}
-                  class="text-sm text-gray-600 hover:text-gray-800 hover:underline"
+                  class="text-sm text-gray-600 hover:text-gray-800 hover:underline self-start sm:self-auto"
                 >
                   <%= if @show_other_contenders do %>
                     Hide other options
@@ -151,21 +153,19 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
             </div>
 
             <!-- Contenders List -->
-            <div class="space-y-4">
+            <div class="space-y-3 sm:space-y-4">
               <%= for {contender, index} <- Enum.with_index(@display_data.contenders, 2) do %>
-                <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                  <div class="grid grid-cols-3 gap-4 items-center">
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 sm:p-4">
+                  <div class="flex flex-col sm:grid sm:grid-cols-3 gap-3 sm:gap-4 sm:items-center">
                     <div class="flex items-center gap-3">
-                      <span class="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                      <span class="w-6 h-6 sm:w-8 sm:h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">
                         <%= index %>
                       </span>
-                      <span class="font-medium text-gray-900"><%= contender.option.title %></span>
+                      <span class="font-medium text-gray-900 text-sm sm:text-base leading-tight"><%= contender.option.title %></span>
                     </div>
-                    <div class="text-center">
+                    <div class="flex justify-between sm:block sm:text-center">
                       <div class="text-lg font-semibold text-blue-900"><%= contender.percentage %>%</div>
-                    </div>
-                    <div class="text-right">
-                      <div class="text-sm text-gray-600"><%= contender.votes %> votes</div>
+                      <div class="text-sm text-gray-600 sm:mt-0"><%= contender.votes %> votes</div>
                     </div>
                   </div>
                 </div>
@@ -195,11 +195,11 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
           <button
             phx-click="toggle_participation_metrics"
             phx-target={@myself}
-            class="w-full px-6 py-4 text-left hover:bg-gray-50 flex items-center justify-between"
+            class="w-full px-4 sm:px-6 py-4 text-left hover:bg-gray-50 flex items-center justify-between"
           >
-            <span class="font-medium text-gray-900">📋 See how people ranked every option overall</span>
+            <span class="font-medium text-gray-900 text-sm sm:text-base">📋 See how people ranked every option overall</span>
             <svg class={[
-              "w-5 h-5 text-gray-400 transition-transform",
+              "w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ml-2",
               if(@show_participation_metrics, do: "rotate-180", else: "")
             ]} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -264,11 +264,11 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
           <button
             phx-click="toggle_round_breakdown"
             phx-target={@myself}
-            class="w-full px-6 py-4 text-left hover:bg-gray-50 flex items-center justify-between"
+            class="w-full px-4 sm:px-6 py-4 text-left hover:bg-gray-50 flex items-center justify-between"
           >
-            <span class="font-medium text-gray-900">📊 How the rounds played out</span>
+            <span class="font-medium text-gray-900 text-sm sm:text-base">📊 How the rounds played out</span>
             <svg class={[
-              "w-5 h-5 text-gray-400 transition-transform",
+              "w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ml-2",
               if(@show_round_breakdown, do: "rotate-180", else: "")
             ]} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
