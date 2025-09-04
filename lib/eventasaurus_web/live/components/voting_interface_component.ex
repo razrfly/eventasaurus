@@ -1366,6 +1366,11 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     end
   end
 
+  # Event handler to stop propagation for movie links in voting interfaces
+  def handle_event("stop_propagation", _params, socket) do
+    {:noreply, socket}
+  end
+
   # Note: LiveComponents don't support handle_info callbacks
   # Real-time updates are handled by the parent LiveView which reloads the poll data
 
@@ -1886,11 +1891,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
     end
-  end
-
-  # Event handler to stop propagation for movie links in voting interfaces
-  def handle_event("stop_propagation", _params, socket) do
-    {:noreply, socket}
   end
 
 end
