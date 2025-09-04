@@ -12,9 +12,13 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   alias EventasaurusApp.Events.{Poll, PollOption, PollVote}
   alias EventasaurusApp.Repo
   import Ecto.Query
+  
+  # Simple in-memory cache for IRV results
+  @irv_cache_name :irv_results_cache
 
   @doc """
   Calculate the IRV winner for a poll with all round-by-round details.
+  Uses caching to avoid recalculating unchanged results.
   
   Returns:
     %{
@@ -25,7 +29,23 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
       majority_threshold: integer
     }
   """
-  def calculate_irv_winner(%Poll{id: poll_id}) do
+  def calculate_irv_winner(%Poll{id: poll_id} = poll) do
+    # Generate cache key based on vote hash for this poll
+    cache_key = generate_cache_key(poll_id)
+    
+    case get_cached_result(cache_key) do
+      nil ->
+        # Calculate fresh result and cache it
+        result = calculate_irv_winner_uncached(poll)
+        cache_result(cache_key, result)
+        result
+      cached_result ->
+        cached_result
+    end
+  end
+
+  # Calculate IRV winner without caching (internal function)
+  defp calculate_irv_winner_uncached(%Poll{id: poll_id}) do
     # Get all votes and options
     votes = get_ranked_votes(poll_id)
     options = get_poll_options(poll_id)
@@ -320,5 +340,62 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
     |> where([o], o.id in ^option_ids)
     |> Repo.all()
     |> Map.new(&{&1.id, &1})
+  end
+
+  # Cache management functions
+  
+  @doc """
+  Invalidate IRV cache for a specific poll when votes change.
+  """
+  def invalidate_cache(poll_id) do
+    cache_key = generate_cache_key(poll_id)
+    :ets.delete(@irv_cache_name, cache_key)
+  end
+
+  @doc """
+  Clear all IRV cache entries (for maintenance).
+  """
+  def clear_all_cache do
+    case :ets.whereis(@irv_cache_name) do
+      :undefined -> :ok
+      _table -> :ets.delete_all_objects(@irv_cache_name)
+    end
+  end
+
+  # Private cache functions
+
+  defp generate_cache_key(poll_id) do
+    # Create a simple cache key that includes poll_id and vote count hash
+    vote_count = from(v in PollVote, 
+                     join: o in assoc(v, :poll_option),
+                     where: o.poll_id == ^poll_id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
+                     select: count(v.id))
+                 |> Repo.one()
+    
+    # Simple hash of poll_id + vote_count for cache invalidation
+    "irv_#{poll_id}_#{vote_count}"
+  end
+
+  defp get_cached_result(cache_key) do
+    ensure_cache_table()
+    
+    case :ets.lookup(@irv_cache_name, cache_key) do
+      [{^cache_key, result}] -> result
+      [] -> nil
+    end
+  end
+
+  defp cache_result(cache_key, result) do
+    ensure_cache_table()
+    :ets.insert(@irv_cache_name, {cache_key, result})
+  end
+
+  defp ensure_cache_table do
+    case :ets.whereis(@irv_cache_name) do
+      :undefined ->
+        :ets.new(@irv_cache_name, [:set, :public, :named_table])
+      _table -> 
+        :ok
+    end
   end
 end

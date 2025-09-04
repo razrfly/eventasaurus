@@ -5190,6 +5190,9 @@ defmodule EventasaurusApp.Events do
           end
         end
 
+        # Invalidate IRV cache since votes changed
+        EventasaurusApp.Events.RankedChoiceVoting.invalidate_cache(poll.id)
+        
         broadcast_poll_update(poll, :votes_updated)
         broadcast_poll_stats_update(poll)
         results
@@ -5222,6 +5225,12 @@ defmodule EventasaurusApp.Events do
                 where: po.poll_id == ^poll.id and pv.voter_id == ^user.id)
 
     {count, _} = Repo.delete_all(query)
+    
+    # Invalidate IRV cache since votes changed
+    if poll.voting_system == "ranked" do
+      EventasaurusApp.Events.RankedChoiceVoting.invalidate_cache(poll.id)
+    end
+    
     broadcast_poll_update(poll, :votes_updated)
     broadcast_poll_stats_update(poll)
     {:ok, count}
