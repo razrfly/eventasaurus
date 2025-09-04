@@ -352,7 +352,12 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                         <% movie_url = MovieUtils.get_primary_movie_url(option) %>
                         <%= if movie_url do %>
                           <h4 class="font-medium text-gray-900 mb-1">
-                            <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                            <.link
+                              href={movie_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="text-blue-600 hover:text-blue-800 hover:underline"
+                            >
                               <%= option.title %>
                             </.link>
                           </h4>
