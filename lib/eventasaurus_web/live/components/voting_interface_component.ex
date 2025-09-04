@@ -601,14 +601,6 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     ~H"""
     <div class="px-4 sm:px-6 py-4">
       <div class="space-y-4">
-        <!-- Ranked Choice Leaderboard -->
-        <.live_component
-          module={EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent}
-          id={"rcv-leaderboard-#{@poll.id}"}
-          poll={@poll}
-        />
-        
-        
         <!-- Instructions -->
         <div class={"hidden sm:block border rounded-md p-3 sm:p-4 " <> if(@anonymous_mode, do: "bg-blue-50 border-blue-200", else: "bg-blue-50 border-blue-200")}>
           <div class="flex">
@@ -881,6 +873,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             </div>
           </div>
         <% end %>
+        
       </div>
     </div>
     """
