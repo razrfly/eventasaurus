@@ -41,6 +41,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   use EventasaurusWeb, :live_component
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Events.Poll
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.MovieUtils
   alias EventasaurusWeb.EmbeddedProgressBarComponent
@@ -613,6 +614,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                 <%= if @anonymous_mode do %>
                   <span class="font-medium">Rankings are temporarily stored.</span>
                 <% end %>
+                <br/>
+                <% max_rankings = @poll |> Poll.get_max_rankings() %>
+                <%= if max_rankings do %>
+                  <span class="font-medium">
+                    Ranking limit: <%= length(@ranked_options) %>/<%= max_rankings %> choices
+                    <%= if length(@ranked_options) >= max_rankings do %>
+                      <span class="text-amber-700">(limit reached)</span>
+                    <% end %>
+                  </span>
+                <% end %>
               </p>
             </div>
           </div>
@@ -855,12 +866,22 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                       />
                     </div>
                   </div>
+                  <% max_rankings = @poll |> Poll.get_max_rankings() %>
+                  <% can_add = max_rankings == nil || length(@ranked_options) < max_rankings %>
                   <button
                     type="button"
                     phx-click="add_to_ranking"
                     phx-value-option-id={option.id}
                     phx-target={@myself}
-                    class="flex items-center px-2 py-1.5 sm:px-3 sm:py-2 ml-2 text-xs sm:text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 whitespace-nowrap"
+                    disabled={!can_add}
+                    class={[
+                      "flex items-center px-2 py-1.5 sm:px-3 sm:py-2 ml-2 text-xs sm:text-sm rounded whitespace-nowrap",
+                      if(can_add, 
+                        do: "bg-indigo-600 text-white hover:bg-indigo-700", 
+                        else: "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      )
+                    ]}
+                    title={if can_add, do: "Add to ranking", else: "Ranking limit reached"}
                   >
                     <svg class="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -1239,7 +1260,9 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
         option = find_poll_option(socket, option_id)
-        if option do
+        max_rankings = socket.assigns.poll |> Poll.get_max_rankings()
+        
+        if option && can_add_more_rankings?(socket.assigns.ranked_options, max_rankings) do
           new_ranked_options = socket.assigns.ranked_options ++ [option]
 
           if socket.assigns.anonymous_mode do
@@ -1699,6 +1722,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         |> List.insert_at(index + 1, Enum.at(ranked_options, index))
     end
   end
+
+  # Helper function to check if more rankings can be added
+  defp can_add_more_rankings?(ranked_options, max_rankings) when is_integer(max_rankings) do
+    length(ranked_options) < max_rankings
+  end
+  defp can_add_more_rankings?(_, nil), do: true  # No limit for non-ranked polls
 
   # UI Helper Functions
 
