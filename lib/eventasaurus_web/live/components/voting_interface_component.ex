@@ -312,7 +312,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
           
           <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-2">
-              <h4 class={"text-sm font-medium text-gray-900 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}><%= option.title %></h4>
+              <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
+              <%= if movie_url do %>
+                <h4 class={"text-sm font-medium " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}>
+                  <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                    <%= option.title %>
+                  </.link>
+                </h4>
+              <% else %>
+                <h4 class={"text-sm font-medium text-gray-900 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}><%= option.title %></h4>
+              <% end %>
               <%= if has_time_slots?(option) do %>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -488,7 +497,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
           
           <div class="flex-1 min-w-0">
             <div class="flex items-start sm:items-center space-x-2">
-              <h4 class={"text-sm font-medium text-gray-900 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}><%= option.title %></h4>
+              <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
+              <%= if movie_url do %>
+                <h4 class={"text-sm font-medium " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}>
+                  <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                    <%= option.title %>
+                  </.link>
+                </h4>
+              <% else %>
+                <h4 class={"text-sm font-medium text-gray-900 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-none", else: "break-words")}><%= option.title %></h4>
+              <% end %>
               <%= if has_time_slots?(option) do %>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -636,7 +654,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
               <% end %>
               
               <div class="flex-1 min-w-0">
-                <h4 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h4>
+                <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
+                <%= if movie_url do %>
+                  <h4 class="text-sm font-medium line-clamp-1 sm:line-clamp-none">
+                    <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                      <%= option.title %>
+                    </.link>
+                  </h4>
+                <% else %>
+                  <h4 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h4>
+                <% end %>
                 <%= if option.description do %>
                   <p class={"text-xs text-gray-500 mt-0.5 sm:mt-1 " <> if(@poll.poll_type == "movie", do: "line-clamp-2", else: "")}><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
                 <% end %>
@@ -750,7 +777,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                   <% end %>
                   
                   <div class="flex-1 min-w-0">
-                    <h5 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h5>
+                    <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
+                    <%= if movie_url do %>
+                      <h5 class="text-sm font-medium line-clamp-1 sm:line-clamp-none">
+                        <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                          <%= option.title %>
+                        </.link>
+                      </h5>
+                    <% else %>
+                      <h5 class="text-sm font-medium text-gray-900 line-clamp-1 sm:line-clamp-none"><%= option.title %></h5>
+                    <% end %>
                     <%= if option.description do %>
                       <p class={"text-xs text-gray-500 mt-0.5 " <> if(@poll.poll_type == "movie", do: "line-clamp-1 sm:line-clamp-2", else: "mt-1")}><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
                     <% end %>
@@ -829,7 +865,16 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       <div class="px-4 sm:px-6 py-4">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+            <% movie_url = if @poll.poll_type == "movie", do: MovieUtils.get_primary_movie_url(option), else: nil %>
+            <%= if movie_url do %>
+              <h4 class="text-sm font-medium">
+                <.link href={movie_url} target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                  <%= option.title %>
+                </.link>
+              </h4>
+            <% else %>
+              <h4 class="text-sm font-medium text-gray-900"><%= option.title %></h4>
+            <% end %>
             <%= if option.description do %>
               <p class="text-sm text-gray-500 mt-1"><%= if @poll.poll_type == "movie", do: truncate(option.description, length: 240, separator: " "), else: option.description %></p>
             <% end %>
