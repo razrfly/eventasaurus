@@ -1260,9 +1260,11 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
         option = find_poll_option(socket, option_id)
-        max_rankings = socket.assigns.poll |> Poll.get_max_rankings()
-        
-        if option && can_add_more_rankings?(socket.assigns.ranked_options, max_rankings) do
+        max_rankings = Poll.get_max_rankings(socket.assigns.poll)
+
+        if option &&
+             not Enum.any?(socket.assigns.ranked_options, &(&1.id == option_id)) &&
+             can_add_more_rankings?(socket.assigns.ranked_options, max_rankings) do
           new_ranked_options = socket.assigns.ranked_options ++ [option]
 
           if socket.assigns.anonymous_mode do
