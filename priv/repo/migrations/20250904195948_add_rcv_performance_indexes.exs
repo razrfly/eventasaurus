@@ -15,6 +15,7 @@ defmodule EventasaurusApp.Repo.Migrations.AddRcvPerformanceIndexes do
     
     # Index to optimize unique voter counting in RCV - uses poll_option_id + voter_id
     # This works because we join through poll_options to filter by poll_id
+    execute("DROP INDEX IF EXISTS poll_votes_unique_voters_idx")
     create index(:poll_votes, [:poll_option_id, :voter_id],
       where: "vote_rank IS NOT NULL AND deleted_at IS NULL",
       name: :poll_votes_unique_voters_idx)

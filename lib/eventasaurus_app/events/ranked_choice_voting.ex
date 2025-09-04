@@ -348,9 +348,16 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   Invalidate IRV cache for a specific poll when votes change.
   """
   def invalidate_cache(poll_id) do
-    ensure_cache_table()
-    # Delete all entries for this poll (any vote/options count)
-    :ets.match_delete(@irv_cache_name, {{:irv, poll_id, :_, :_}, :_})
+    case ensure_cache_table() do
+      :ok ->
+        try do
+          # Delete all entries for this poll (any vote/options count)
+          :ets.match_delete(@irv_cache_name, {{:irv, poll_id, :_, :_}, :_})
+        rescue
+          ArgumentError -> :ok  # Cache unavailable, silently continue
+        end
+      :error -> :ok  # Cache unavailable, silently continue
+    end
   end
 
   @doc """
@@ -359,7 +366,12 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   def clear_all_cache do
     case :ets.whereis(@irv_cache_name) do
       :undefined -> :ok
-      _table -> :ets.delete_all_objects(@irv_cache_name)
+      _table -> 
+        try do
+          :ets.delete_all_objects(@irv_cache_name)
+        rescue
+          ArgumentError -> :ok  # Table was destroyed, already cleared
+        end
     end
   end
 
@@ -385,17 +397,30 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
   end
 
   defp get_cached_result(cache_key) do
-    ensure_cache_table()
-    
-    case :ets.lookup(@irv_cache_name, cache_key) do
-      [{^cache_key, result}] -> result
-      [] -> nil
+    case ensure_cache_table() do
+      :ok ->
+        try do
+          case :ets.lookup(@irv_cache_name, cache_key) do
+            [{^cache_key, result}] -> result
+            [] -> nil
+          end
+        rescue
+          ArgumentError -> nil  # Table doesn't exist, return nil to trigger fresh calculation
+        end
+      :error -> nil  # Cache unavailable, return nil to trigger fresh calculation
     end
   end
 
   defp cache_result(cache_key, result) do
-    ensure_cache_table()
-    :ets.insert(@irv_cache_name, {cache_key, result})
+    case ensure_cache_table() do
+      :ok ->
+        try do
+          :ets.insert(@irv_cache_name, {cache_key, result})
+        rescue
+          ArgumentError -> :ok  # Cache unavailable, silently continue
+        end
+      :error -> :ok  # Cache unavailable, silently continue
+    end
   end
 
   defp ensure_cache_table do
@@ -403,10 +428,16 @@ defmodule EventasaurusApp.Events.RankedChoiceVoting do
       :undefined ->
         try do
           :ets.new(@irv_cache_name, [:set, :public, :named_table, :read_concurrency, :write_concurrency])
+          :ok
         rescue
-          ArgumentError -> :ok  # table already created by another process
+          ArgumentError -> 
+            # Table might already exist, check again
+            case :ets.whereis(@irv_cache_name) do
+              :undefined -> :error
+              _table -> :ok
+            end
         end
-      _ -> :ok
+      _table -> :ok
     end
   end
 end

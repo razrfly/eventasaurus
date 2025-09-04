@@ -852,8 +852,8 @@ defmodule EventasaurusWeb.PollCreationComponent do
       v when is_integer(v) -> v
       v when is_binary(v) ->
         case Integer.parse(v) do
-          {int, _} -> int
-          :error -> fallback_max_rankings(poll)
+          {int, ""} when int in [3, 5, 7] -> int
+          _ -> fallback_max_rankings(poll)
         end
       _ -> fallback_max_rankings(poll)
     end
