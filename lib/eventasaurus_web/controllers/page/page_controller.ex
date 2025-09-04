@@ -47,6 +47,10 @@ defmodule EventasaurusWeb.PageController do
     render(conn, :pitch2)
   end
 
+  def crypto_pitch(conn, _params) do
+    render(conn, :crypto_pitch)
+  end
+
   def invite_only(conn, _params) do
     render(conn, :invite_only)
   end
