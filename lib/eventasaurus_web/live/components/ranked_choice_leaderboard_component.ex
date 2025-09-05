@@ -3,48 +3,52 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
   Clean, professional RCV leaderboard with simple card-based layout.
   No complex flexbox - just clean stacked cards and simple grid.
   """
-  
+
   use EventasaurusWeb, :live_component
-  
+
   alias EventasaurusApp.Events.RankedChoiceVoting
   alias EventasaurusApp.Repo
   import Ecto.Query
-  
+
   @impl true
   def mount(socket) do
-    {:ok, 
+    {:ok,
      socket
      |> assign(
        show_participation_metrics: false,
        show_round_breakdown: false,
-       show_other_contenders: false
+       show_other_contenders: false,
+       participation_metrics_loaded: false,
+       participation_metrics: []
      )}
   end
 
   @impl true
   def update(assigns, socket) do
     # Get IRV results and leaderboard data
-    {irv_results, leaderboard} = if assigns[:poll] && assigns.poll.voting_system == "ranked" do
-      results = RankedChoiceVoting.calculate_irv_winner(assigns.poll)
-      board = RankedChoiceVoting.get_leaderboard(assigns.poll)
-      {results, board}
-    else
-      {nil, []}
-    end
+    {irv_results, leaderboard} =
+      if assigns[:poll] && assigns.poll.voting_system == "ranked" do
+        results = RankedChoiceVoting.calculate_irv_winner(assigns.poll)
+        board = RankedChoiceVoting.get_leaderboard(assigns.poll)
+        {results, board}
+      else
+        {nil, []}
+      end
 
-    # Prepare display data
-    display_data = if irv_results && leaderboard != [] do
-      prepare_display_data(irv_results, leaderboard, assigns.poll)
-    else
-      %{
-        winner: nil,
-        contenders: [],
-        other_contenders: [],
-        stats: %{voters: 0, majority: 0, final_round: 0}
-      }
-    end
+    # Prepare display data (without expensive participation metrics)
+    display_data =
+      if irv_results && leaderboard != [] do
+        prepare_display_data(irv_results, leaderboard, assigns.poll, lazy_load: true)
+      else
+        %{
+          winner: nil,
+          contenders: [],
+          other_contenders: [],
+          stats: %{voters: 0, majority: 0, final_round: 0}
+        }
+      end
 
-    {:ok, 
+    {:ok,
      socket
      |> assign(assigns)
      |> assign(
@@ -56,7 +60,27 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
 
   @impl true
   def handle_event("toggle_participation_metrics", _params, socket) do
-    {:noreply, assign(socket, :show_participation_metrics, !socket.assigns.show_participation_metrics)}
+    new_show_state = !socket.assigns.show_participation_metrics
+
+    # Load participation metrics if showing and not already loaded
+    socket =
+      if new_show_state && !socket.assigns.participation_metrics_loaded do
+        case {socket.assigns.leaderboard, socket.assigns[:poll]} do
+          {leaderboard, poll} when leaderboard != [] and not is_nil(poll) ->
+            participation_metrics = prepare_participation_metrics(leaderboard, poll)
+
+            socket
+            |> assign(:participation_metrics, participation_metrics)
+            |> assign(:participation_metrics_loaded, true)
+
+          _ ->
+            socket
+        end
+      else
+        socket
+      end
+
+    {:noreply, assign(socket, :show_participation_metrics, new_show_state)}
   end
 
   def handle_event("toggle_round_breakdown", _params, socket) do
@@ -208,8 +232,9 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
           
           <%= if @show_participation_metrics do %>
             <div class="px-6 pb-6">
-              <div class="space-y-3">
-                <%= for metric <- @display_data.participation_metrics do %>
+              <%= if @participation_metrics_loaded do %>
+                <div class="space-y-3">
+                  <%= for metric <- @participation_metrics do %>
                   <div class="bg-white border border-gray-200 rounded-lg p-4">
                     <div class="grid grid-cols-3 gap-4 items-start">
                       <!-- Title Column (Fixed Width) -->
@@ -253,8 +278,17 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
                       </div>
                     </div>
                   </div>
-                <% end %>
-              </div>
+                  <% end %>
+                </div>
+              <% else %>
+                <div class="flex items-center justify-center py-8 text-gray-500">
+                  <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading participation metrics...
+                </div>
+              <% end %>
             </div>
           <% end %>
         </div>
@@ -363,38 +397,43 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
   end
 
   # Prepare display data with proper structure  
-  defp prepare_display_data(irv_results, leaderboard, poll) do
+  defp prepare_display_data(irv_results, leaderboard, poll, opts \\ []) do
     # Sort leaderboard by status and votes
-    sorted_leaderboard = Enum.sort_by(leaderboard, fn entry ->
-      case entry.status do
-        :winner -> {0, -entry.votes}
-        :runner_up -> {1, -entry.votes}
-        :eliminated -> {2, entry.eliminated_round || 999, -entry.votes}
-      end
-    end)
+    sorted_leaderboard =
+      Enum.sort_by(leaderboard, fn entry ->
+        case entry.status do
+          :winner -> {0, -entry.votes}
+          :runner_up -> {1, -entry.votes}
+          :eliminated -> {2, entry.eliminated_round || 999, -entry.votes}
+        end
+      end)
 
     # Extract winner and contenders
-    winner = Enum.find(sorted_leaderboard, & &1.status == :winner)
-    non_winners = Enum.reject(sorted_leaderboard, & &1.status == :winner)
-    
+    winner = Enum.find(sorted_leaderboard, &(&1.status == :winner))
+    non_winners = Enum.reject(sorted_leaderboard, &(&1.status == :winner))
+
     # Split contenders by vote count
-    {contenders, other_contenders} = Enum.split_with(non_winners, & &1.votes > 0)
-    
+    {contenders, other_contenders} = Enum.split_with(non_winners, &(&1.votes > 0))
+
     # Take only top 2 contenders for clean display
     contenders = Enum.take(contenders, 2)
 
-    # Prepare participation metrics with rank distribution
-    participation_metrics = prepare_participation_metrics(leaderboard, poll)
-    
+    # Only prepare participation metrics if not lazy loading
+    lazy_load? = Keyword.get(opts, :lazy_load, false)
+
+    participation_metrics =
+      if lazy_load?, do: [], else: prepare_participation_metrics(leaderboard, poll)
+
     # Build options map to avoid N+1 queries in templates
     options_by_id = Map.new(leaderboard, &{&1.option_id, &1.option})
 
     # Determine round explanation (for single round cases)
-    round_explanation = if length(irv_results.rounds) == 1 && winner do
-      "Only 1 round was needed because #{winner.option.title} already had a majority in Round 1 (#{winner.percentage}%). No eliminations or transfers were required."
-    else
-      nil
-    end
+    round_explanation =
+      if length(irv_results.rounds) == 1 && winner do
+        "Only 1 round was needed because #{winner.option.title} already had a majority in Round 1 (#{winner.percentage}%). No eliminations or transfers were required."
+      else
+        nil
+      end
 
     %{
       winner: winner,
@@ -414,45 +453,54 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
   # Prepare enhanced participation metrics with rank distribution
   defp prepare_participation_metrics(leaderboard, poll) do
     # Get all votes for this poll to calculate rank distributions
-    votes = from(v in EventasaurusApp.Events.PollVote,
-      where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
-      preload: :poll_option
-    ) |> Repo.all()
+    votes =
+      from(v in EventasaurusApp.Events.PollVote,
+        where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
+        preload: :poll_option
+      )
+      |> Repo.all()
 
     # Calculate total unique voters once (computed once)
-    total_voters = from(v in EventasaurusApp.Events.PollVote,
-      where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
-      select: count(fragment("DISTINCT ?", v.voter_id))
-    ) |> Repo.one()
+    total_voters =
+      from(v in EventasaurusApp.Events.PollVote,
+        where: v.poll_id == ^poll.id and not is_nil(v.vote_rank) and is_nil(v.deleted_at),
+        select: count(fragment("DISTINCT ?", v.voter_id))
+      )
+      |> Repo.one()
 
     # Group votes by option to calculate distributions
     votes_by_option = Enum.group_by(votes, & &1.poll_option_id)
 
     Enum.map(leaderboard, fn entry ->
       option_votes = Map.get(votes_by_option, entry.option_id, [])
-      
+
       # Calculate rank distribution
-      rank_distribution = option_votes
+      rank_distribution =
+        option_votes
         |> Enum.group_by(& &1.vote_rank)
         |> Map.new(fn {rank, votes} -> {rank, length(votes)} end)
 
       # Calculate average rank
       total_votes = length(option_votes)
-      avg_rank = if total_votes > 0 do
-        sum_ranks = option_votes |> Enum.map(& &1.vote_rank) |> Enum.sum()
-        (sum_ranks / total_votes) |> Float.round(1)
-      else
-        0.0
-      end
+
+      avg_rank =
+        if total_votes > 0 do
+          sum_ranks = option_votes |> Enum.map(& &1.vote_rank) |> Enum.sum()
+          (sum_ranks / total_votes) |> Float.round(1)
+        else
+          0.0
+        end
 
       # Calculate participation percentage using pre-computed total_voters
-      participation_percentage = if total_voters > 0 do
-        (total_votes / total_voters * 100) |> Float.round(0) |> trunc()
-      else
-        0
-      end
+      participation_percentage =
+        if total_voters > 0 do
+          (total_votes / total_voters * 100) |> Float.round(0) |> trunc()
+        else
+          0
+        end
 
-      max_rank = if option_votes != [], do: Enum.max_by(option_votes, & &1.vote_rank).vote_rank, else: 0
+      max_rank =
+        if option_votes != [], do: Enum.max_by(option_votes, & &1.vote_rank).vote_rank, else: 0
 
       %{
         option: entry.option,
@@ -464,7 +512,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
         max_rank: max_rank
       }
     end)
-    |> Enum.sort_by(& -(&1.total_rankings)) # Sort by participation
+    # Sort by participation
+    |> Enum.sort_by(&(-&1.total_rankings))
   end
-
 end
