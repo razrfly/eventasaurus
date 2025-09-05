@@ -13,6 +13,10 @@ defmodule EventasaurusApp.Repo.Migrations.AddPrivacyControlsToGroups do
     create constraint(:groups, :groups_join_policy_check, 
       check: "join_policy IN ('open', 'request', 'invite_only')")
 
+    # Prevent invalid combination: private visibility cannot be open join policy
+    create constraint(:groups, :groups_privacy_compat_check,
+      check: "NOT (visibility = 'private' AND join_policy = 'open')")
+
     # Add indexes for performance
     create index(:groups, [:visibility])
     create index(:groups, [:join_policy])
