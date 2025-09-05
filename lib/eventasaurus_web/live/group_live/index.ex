@@ -81,23 +81,43 @@ defmodule EventasaurusWeb.GroupLive.Index do
     group = Groups.get_group!(id)
     user = socket.assigns.user
     
-    case Groups.add_user_to_group(group, user, "member", user) do
-      {:ok, _} ->
+    # Check if user can join this group based on privacy settings
+    case Groups.can_join_group?(group, user) do
+      {:error, error_reason} ->
+        message = case error_reason do
+          :cannot_view -> "You don't have permission to view this group"
+          :already_member -> "You are already a member of this group"
+          :invite_only -> "This group is invite only"
+          _ -> "You don't have permission to join this group"
+        end
         {:noreply,
          socket
-         |> put_flash(:info, "Successfully joined #{group.name}")
-         |> load_groups()}
+         |> put_flash(:error, message)}
       
-      {:error, :already_member} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "You are already a member of this group")
-         |> load_groups()}
-      
-      {:error, _changeset} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Failed to join group")}
+      {:ok, join_type} ->
+        case Groups.add_user_to_group(group, user, "member", user) do
+          {:ok, _} ->
+            message = case join_type do
+              :immediate -> "Successfully joined #{group.name}"
+              :request_required -> "Join request sent for #{group.name}. Awaiting approval."
+            end
+            
+            {:noreply,
+             socket
+             |> put_flash(:info, message)
+             |> load_groups()}
+          
+          {:error, :already_member} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "You are already a member of this group")
+             |> load_groups()}
+          
+          {:error, _changeset} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Failed to join group")}
+        end
     end
   end
 
