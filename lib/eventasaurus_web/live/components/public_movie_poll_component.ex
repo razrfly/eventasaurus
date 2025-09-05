@@ -34,52 +34,56 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     movie_options = if movie_poll, do: Events.list_poll_options(movie_poll), else: []
 
     # Load user votes for this poll
-    user_votes = if assigns.current_user && movie_poll do
-      Events.list_user_poll_votes(movie_poll, assigns.current_user)
-    else
-      []
-    end
+    user_votes =
+      if assigns.current_user && movie_poll do
+        Events.list_user_poll_votes(movie_poll, assigns.current_user)
+      else
+        []
+      end
 
     # Preload suggested_by for all options using batch loading
-    movie_options = if movie_poll && length(movie_options) > 0 do
-      # Check if any options need preloading
-      needs_preload = Enum.any?(movie_options, fn option ->
-        match?(%Ecto.Association.NotLoaded{}, option.suggested_by)
-      end)
-      
-      if needs_preload do
-        # Get all option IDs and batch load them with suggested_by preloaded
-        option_ids = Enum.map(movie_options, & &1.id)
-        preloaded_options = Events.list_poll_options_by_ids(option_ids, [:suggested_by])
-        
-        # Create a map for quick lookup
-        preloaded_map = Map.new(preloaded_options, fn option -> {option.id, option} end)
-        
-        # Return options with preloaded data, filtering out any that were deleted
-        movie_options
-        |> Enum.filter(fn option -> Map.has_key?(preloaded_map, option.id) end)
-        |> Enum.map(fn option -> Map.get(preloaded_map, option.id, option) end)
+    movie_options =
+      if movie_poll && length(movie_options) > 0 do
+        # Check if any options need preloading
+        needs_preload =
+          Enum.any?(movie_options, fn option ->
+            match?(%Ecto.Association.NotLoaded{}, option.suggested_by)
+          end)
+
+        if needs_preload do
+          # Get all option IDs and batch load them with suggested_by preloaded
+          option_ids = Enum.map(movie_options, & &1.id)
+          preloaded_options = Events.list_poll_options_by_ids(option_ids, [:suggested_by])
+
+          # Create a map for quick lookup
+          preloaded_map = Map.new(preloaded_options, fn option -> {option.id, option} end)
+
+          # Return options with preloaded data, filtering out any that were deleted
+          movie_options
+          |> Enum.filter(fn option -> Map.has_key?(preloaded_map, option.id) end)
+          |> Enum.map(fn option -> Map.get(preloaded_map, option.id, option) end)
+        else
+          # All options already have suggested_by loaded
+          movie_options
+        end
       else
-        # All options already have suggested_by loaded
         movie_options
       end
-    else
-      movie_options
-    end
 
     # Get temp votes for this poll (for anonymous users)
     temp_votes = assigns[:temp_votes] || %{}
 
     # Load poll statistics for embedded display
-    poll_stats = if movie_poll do
-      try do
-        Events.get_poll_voting_stats(movie_poll)
-      rescue
-        _ -> %{options: []}
+    poll_stats =
+      if movie_poll do
+        try do
+          Events.get_poll_voting_stats(movie_poll)
+        rescue
+          _ -> %{options: []}
+        end
+      else
+        %{options: []}
       end
-    else
-      %{options: []}
-    end
 
     # Note: Real-time updates handled by parent LiveView
 
@@ -123,40 +127,41 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   @impl true
   def handle_event("search_movies", %{"value" => query}, socket) do
     if socket.assigns.current_user do
-    if String.length(query) >= 2 do
-      # Use the centralized RichDataManager system (same as backend)
-      search_options = %{
-        providers: [:tmdb],
-        limit: 5,
-        content_type: :movie
-      }
+      if String.length(query) >= 2 do
+        # Use the centralized RichDataManager system (same as backend)
+        search_options = %{
+          providers: [:tmdb],
+          limit: 5,
+          content_type: :movie
+        }
 
-      case RichDataManager.search(query, search_options) do
-        {:ok, results_by_provider} ->
-          # Extract movie results from TMDB provider
-          movie_results = case Map.get(results_by_provider, :tmdb) do
-            {:ok, results} when is_list(results) -> results
-            {:ok, result} -> [result]
-            _ -> []
-          end
+        case RichDataManager.search(query, search_options) do
+          {:ok, results_by_provider} ->
+            # Extract movie results from TMDB provider
+            movie_results =
+              case Map.get(results_by_provider, :tmdb) do
+                {:ok, results} when is_list(results) -> results
+                {:ok, result} -> [result]
+                _ -> []
+              end
 
-          {:noreply,
-           socket
-           |> assign(:search_query, query)
-           |> assign(:search_results, movie_results)}
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, movie_results)}
 
-        {:error, _} ->
-          {:noreply,
-           socket
-           |> assign(:search_query, query)
-           |> assign(:search_results, [])}
+          {:error, _} ->
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, [])}
+        end
+      else
+        {:noreply,
+         socket
+         |> assign(:search_query, query)
+         |> assign(:search_results, [])}
       end
-    else
-      {:noreply,
-       socket
-       |> assign(:search_query, query)
-       |> assign(:search_results, [])}
-    end
     else
       {:noreply, socket}
     end
@@ -176,16 +181,17 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
          |> put_flash(:error, "You must be logged in to add movies.")
          |> assign(:adding_movie, false)}
       else
-                # Find the movie in search results
+        # Find the movie in search results
         # Handle both string and integer movie_id formats
-        movie_data = socket.assigns.search_results
-        |> Enum.find(fn movie ->
-          # Compare both integer and string formats to handle type mismatches
-          case Integer.parse(movie_id) do
-            {id, _} -> movie.id == id
-            :error -> to_string(movie.id) == movie_id
-          end
-        end)
+        movie_data =
+          socket.assigns.search_results
+          |> Enum.find(fn movie ->
+            # Compare both integer and string formats to handle type mismatches
+            case Integer.parse(movie_id) do
+              {id, _} -> movie.id == id
+              :error -> to_string(movie.id) == movie_id
+            end
+          end)
 
         if movie_data do
           # Set adding_movie to true to prevent multiple requests
@@ -195,20 +201,22 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
           case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
             {:ok, rich_movie_data} ->
               # Use the shared MovieDataService to prepare movie data consistently
-              option_params = MovieDataService.prepare_movie_option_data(
-                movie_data.id,
-                rich_movie_data
-              )
-              |> Map.merge(%{
-                "poll_id" => socket.assigns.movie_poll.id,
-                "suggested_by_id" => user.id
-              })
+              option_params =
+                MovieDataService.prepare_movie_option_data(
+                  movie_data.id,
+                  rich_movie_data
+                )
+                |> Map.merge(%{
+                  "poll_id" => socket.assigns.movie_poll.id,
+                  "suggested_by_id" => user.id
+                })
 
               case Events.create_poll_option(option_params) do
                 {:ok, _option} ->
                   # Reload movie options to show the new movie immediately
-                  updated_movie_options = Events.list_poll_options(socket.assigns.movie_poll)
-                  |> Repo.preload(:suggested_by)
+                  updated_movie_options =
+                    Events.list_poll_options(socket.assigns.movie_poll)
+                    |> Repo.preload(:suggested_by)
 
                   # Notify the parent LiveView to reload polls for all users
                   send(self(), {:poll_stats_updated, socket.assigns.movie_poll.id, %{}})
@@ -225,6 +233,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                 {:error, changeset} ->
                   require Logger
                   Logger.error("Failed to create poll option: #{inspect(changeset)}")
+
                   {:noreply,
                    socket
                    |> put_flash(:error, "Failed to add movie. Please try again.")
@@ -234,6 +243,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
             {:error, reason} ->
               require Logger
               Logger.error("Failed to fetch rich movie data: #{inspect(reason)}")
+
               {:noreply,
                socket
                |> put_flash(:error, "Failed to fetch movie details. Please try again.")
@@ -252,23 +262,24 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   @impl true
   def handle_event("delete_option", %{"option-id" => option_id}, socket) do
     with {option_id_int, _} <- Integer.parse(option_id),
-         option when not is_nil(option) <- Enum.find(socket.assigns.movie_options, &(&1.id == option_id_int)),
+         option when not is_nil(option) <-
+           Enum.find(socket.assigns.movie_options, &(&1.id == option_id_int)),
          true <- Events.can_delete_own_suggestion?(option, socket.assigns.current_user) do
-      
       case Events.delete_poll_option(option) do
         {:ok, _} ->
           # Reload movie options with proper preloading
-          updated_movie_options = Events.list_poll_options(socket.assigns.movie_poll)
-          |> Repo.preload(:suggested_by)
-          
+          updated_movie_options =
+            Events.list_poll_options(socket.assigns.movie_poll)
+            |> Repo.preload(:suggested_by)
+
           # Notify parent to reload
           send(self(), {:poll_stats_updated, socket.assigns.movie_poll.id, %{}})
-          
+
           {:noreply,
            socket
            |> put_flash(:info, "Movie removed successfully.")
            |> assign(:movie_options, updated_movie_options)}
-           
+
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "Failed to remove movie.")}
       end
@@ -288,7 +299,6 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   end
 
   # Note: Voting helper functions have been removed as voting is now handled by VotingInterfaceComponent
-
 
   @impl true
   def render(assigns) do
@@ -327,7 +337,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
             </div>
 
             <!-- Current Standings (for ranked choice voting) -->
-            <%= if @movie_poll.voting_system == "ranked" do %>
+            <%= if @movie_poll.voting_system == "ranked" && EventasaurusApp.Events.Poll.show_current_standings?(@movie_poll) do %>
               <div class="mb-6">
                 <.live_component
                   module={EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent}
@@ -537,16 +547,19 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
 
   # Helper functions for deletion time display
   defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
+
   defp get_deletion_time_remaining(inserted_at) do
     elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
-    max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
+    # 300 seconds = 5 minutes
+    max(0, 300 - elapsed_seconds)
   end
 
   defp format_deletion_time_remaining(seconds) when seconds <= 0, do: ""
+
   defp format_deletion_time_remaining(seconds) do
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
-    
+
     cond do
       minutes > 0 -> "#{minutes}:#{String.pad_leading(to_string(remaining_seconds), 2, "0")}"
       true -> "#{remaining_seconds}s"
@@ -556,11 +569,12 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
   # Helper function to display suggester name with proper blank value handling
   defp display_suggester_name(suggested_by) when is_nil(suggested_by), do: "Anonymous"
   defp display_suggester_name(%Ecto.Association.NotLoaded{}), do: "Anonymous"
+
   defp display_suggester_name(suggested_by) do
     name = Map.get(suggested_by, :name)
     username = Map.get(suggested_by, :username)
     email = Map.get(suggested_by, :email)
-    
+
     cond do
       is_binary(name) and String.trim(name) != "" -> String.trim(name)
       is_binary(username) and String.trim(username) != "" -> String.trim(username)
@@ -568,5 +582,4 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
       true -> "Anonymous"
     end
   end
-
 end

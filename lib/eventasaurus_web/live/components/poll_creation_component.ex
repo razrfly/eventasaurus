@@ -41,10 +41,14 @@ defmodule EventasaurusWeb.PollCreationComponent do
   ]
 
   @voting_systems [
-    {"binary", "Yes/Maybe/No", "Quick consensus on individual options - great for simple decisions where participants might be unsure"},
-    {"approval", "Approval", "Select multiple acceptable options - perfect when you want to find all viable choices"},
-    {"ranked", "Ranked Choice", "Rank options in order of preference - ideal for finding the most preferred single option"},
-    {"star", "Star Rating", "Rate options from 1 to 5 stars - best for detailed feedback and comparison"}
+    {"binary", "Yes/Maybe/No",
+     "Quick consensus on individual options - great for simple decisions where participants might be unsure"},
+    {"approval", "Approval",
+     "Select multiple acceptable options - perfect when you want to find all viable choices"},
+    {"ranked", "Ranked Choice",
+     "Rank options in order of preference - ideal for finding the most preferred single option"},
+    {"star", "Star Rating",
+     "Rate options from 1 to 5 stars - best for detailed feedback and comparison"}
   ]
 
   @impl true
@@ -66,71 +70,78 @@ defmodule EventasaurusWeb.PollCreationComponent do
     is_editing = poll != nil
 
     # Create changeset
-    changeset = if is_editing do
-      Poll.changeset(poll, %{})
-    else
-      # Auto-populate from event venue if available
-      initial_settings = %{"location_scope" => "place"}
-      
-      # Check if venue exists on the event
-      venue = case assigns.event do
-        %{venue: %{} = v} -> v
-        _ -> nil
-      end
-      
-      initial_settings = if venue do
-        # Set location scope based on venue type - EXACTLY like ActivityCreationComponent
-        location_scope = case venue.venue_type do
-          "city" -> "city"
-          "region" -> "region"
-          _ -> "place"
-        end
-        
-        # Add venue location data if coordinates exist
-        settings_with_location = Map.put(initial_settings, "location_scope", location_scope)
-        
-        # Only provide location data for physical venues - EXACTLY like ActivityCreationComponent
-        if venue.venue_type in ["venue", "city", "region"] && venue.latitude && venue.longitude do
-          # Use venue name (or address if no name) as the search location display
-          search_location_display = venue.name || venue.address || venue.city
-          
-          settings_with_location
-          |> Map.put("search_location", search_location_display)
-          |> Map.put("search_location_data", %{
-            "geometry" => %{
-              "lat" => venue.latitude,
-              "lng" => venue.longitude
-            },
-            "city" => venue.city,
-            "name" => venue.name || venue.address
-          })
-        else
-          settings_with_location
-        end
+    changeset =
+      if is_editing do
+        Poll.changeset(poll, %{})
       else
-        initial_settings
+        # Auto-populate from event venue if available
+        initial_settings = %{"location_scope" => "place"}
+
+        # Check if venue exists on the event
+        venue =
+          case assigns.event do
+            %{venue: %{} = v} -> v
+            _ -> nil
+          end
+
+        initial_settings =
+          if venue do
+            # Set location scope based on venue type - EXACTLY like ActivityCreationComponent
+            location_scope =
+              case venue.venue_type do
+                "city" -> "city"
+                "region" -> "region"
+                _ -> "place"
+              end
+
+            # Add venue location data if coordinates exist
+            settings_with_location = Map.put(initial_settings, "location_scope", location_scope)
+
+            # Only provide location data for physical venues - EXACTLY like ActivityCreationComponent
+            if venue.venue_type in ["venue", "city", "region"] && venue.latitude &&
+                 venue.longitude do
+              # Use venue name (or address if no name) as the search location display
+              search_location_display = venue.name || venue.address || venue.city
+
+              settings_with_location
+              |> Map.put("search_location", search_location_display)
+              |> Map.put("search_location_data", %{
+                "geometry" => %{
+                  "lat" => venue.latitude,
+                  "lng" => venue.longitude
+                },
+                "city" => venue.city,
+                "name" => venue.name || venue.address
+              })
+            else
+              settings_with_location
+            end
+          else
+            initial_settings
+          end
+
+        # Create a poll struct with the venue-enhanced settings
+        new_poll = %Poll{
+          event_id: assigns.event.id,
+          created_by_id: assigns.user.id,
+          phase: "list_building",
+          poll_type: "custom",
+          voting_system: "binary",
+          # Now contains venue data if available
+          settings: initial_settings
+        }
+
+        # Create changeset from the populated struct
+        Poll.changeset(new_poll, %{})
       end
-      
-      # Create a poll struct with the venue-enhanced settings
-      new_poll = %Poll{
-        event_id: assigns.event.id,
-        created_by_id: assigns.user.id,
-        phase: "list_building",
-        poll_type: "custom",
-        voting_system: "binary",
-        settings: initial_settings  # Now contains venue data if available
-      }
-      
-      # Create changeset from the populated struct
-      Poll.changeset(new_poll, %{})
-    end
 
     # Determine current poll type for UI display
-    current_poll_type = if is_editing do
-      poll.poll_type
-    else
-      Ecto.Changeset.get_field(changeset, :poll_type) || "custom"
-    end
+    current_poll_type =
+      if is_editing do
+        poll.poll_type
+      else
+        Ecto.Changeset.get_field(changeset, :poll_type) || "custom"
+      end
 
     {:ok,
      socket
@@ -500,6 +511,25 @@ defmodule EventasaurusWeb.PollCreationComponent do
                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                         />
                       </div>
+
+                      <!-- Show Current Standings (for ranked choice polls only) -->
+                      <%= if Phoenix.HTML.Form.input_value(f, :voting_system) == "ranked" do %>
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <label for="show_current_standings" class="text-sm font-medium text-gray-700">
+                              Show Current Standings
+                            </label>
+                            <p class="text-xs text-gray-500">Display voting results during the voting phase</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            name="poll[settings][show_current_standings]"
+                            id="show_current_standings"
+                            checked={get_current_standings_setting(@changeset, @poll)}
+                            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                        </div>
+                      <% end %>
                     </div>
                   </div>
 
@@ -602,15 +632,17 @@ defmodule EventasaurusWeb.PollCreationComponent do
     {:noreply, assign(socket, changeset: changeset, current_poll_type: current_poll_type)}
   end
 
-
-
   @impl true
   def handle_event("submit_poll", %{"poll" => poll_params}, socket) do
     socket = assign(socket, :loading, true)
 
     case save_poll(socket, poll_params) do
       {:ok, poll} ->
-        message = if socket.assigns.is_editing, do: "Poll updated successfully!", else: "Poll created successfully!"
+        message =
+          if socket.assigns.is_editing,
+            do: "Poll updated successfully!",
+            else: "Poll created successfully!"
+
         send(self(), {:poll_saved, poll, message})
         {:noreply, socket}
 
@@ -628,58 +660,65 @@ defmodule EventasaurusWeb.PollCreationComponent do
     poll = socket.assigns.poll || %Poll{}
 
     # Merge default values for new polls
-    poll_params = if socket.assigns.is_editing do
-      poll_params
-    else
-      # Get venue-based settings if not already in poll_params
-      poll_params_with_defaults = Map.merge(%{
-        "event_id" => socket.assigns.event.id,
-        "created_by_id" => socket.assigns.user.id,
-        "phase" => "list_building"
-      }, poll_params)
-      
-      # If settings are not in params or are minimal, add venue-based settings
-      poll_params_with_defaults = 
-        if !Map.has_key?(poll_params_with_defaults, "settings") || 
-           !Map.has_key?(poll_params_with_defaults["settings"] || %{}, "search_location") do
-          venue_settings = get_venue_settings(socket.assigns.event)
-          
-          current_settings = Map.get(poll_params_with_defaults, "settings", %{})
-          updated_settings = Map.merge(venue_settings, current_settings)
-          
-          Map.put(poll_params_with_defaults, "settings", updated_settings)
-        else
-          poll_params_with_defaults
-        end
-      
-      poll_params_with_defaults
-    end
+    poll_params =
+      if socket.assigns.is_editing do
+        poll_params
+      else
+        # Get venue-based settings if not already in poll_params
+        poll_params_with_defaults =
+          Map.merge(
+            %{
+              "event_id" => socket.assigns.event.id,
+              "created_by_id" => socket.assigns.user.id,
+              "phase" => "list_building"
+            },
+            poll_params
+          )
+
+        # If settings are not in params or are minimal, add venue-based settings
+        poll_params_with_defaults =
+          if !Map.has_key?(poll_params_with_defaults, "settings") ||
+               !Map.has_key?(poll_params_with_defaults["settings"] || %{}, "search_location") do
+            venue_settings = get_venue_settings(socket.assigns.event)
+
+            current_settings = Map.get(poll_params_with_defaults, "settings", %{})
+            updated_settings = Map.merge(venue_settings, current_settings)
+
+            Map.put(poll_params_with_defaults, "settings", updated_settings)
+          else
+            poll_params_with_defaults
+          end
+
+        poll_params_with_defaults
+      end
 
     Poll.changeset(poll, poll_params)
   end
-  
+
   defp get_venue_settings(event) do
-    venue = case event do
-      %{venue: %{} = v} -> v
-      _ -> nil
-    end
-    
+    venue =
+      case event do
+        %{venue: %{} = v} -> v
+        _ -> nil
+      end
+
     if venue do
       # Set location scope based on venue type - EXACTLY like ActivityCreationComponent
-      location_scope = case venue.venue_type do
-        "city" -> "city"
-        "region" -> "region"
-        _ -> "place"
-      end
-      
+      location_scope =
+        case venue.venue_type do
+          "city" -> "city"
+          "region" -> "region"
+          _ -> "place"
+        end
+
       # Build settings with venue data
       settings = %{"location_scope" => location_scope}
-      
+
       # Only provide location data for physical venues - EXACTLY like ActivityCreationComponent
       if venue.venue_type in ["venue", "city", "region"] && venue.latitude && venue.longitude do
         # Use venue name (or address if no name) as the search location display
         search_location_display = venue.name || venue.address || venue.city
-        
+
         settings
         |> Map.put("search_location", search_location_display)
         |> Map.put("search_location_data", %{
@@ -701,88 +740,131 @@ defmodule EventasaurusWeb.PollCreationComponent do
   defp save_poll(socket, poll_params) do
     # Process privacy_settings to convert checkbox values to booleans
     poll_params = process_privacy_settings(poll_params)
-    
+
+    # Process settings to convert checkbox values to booleans  
+    poll_params = process_settings(poll_params)
+
     # Parse datetime fields with event timezone
     poll_params = parse_datetime_fields(poll_params, socket.assigns.event)
-    
+
     if socket.assigns.is_editing do
       Events.update_poll(socket.assigns.poll, poll_params)
     else
       # Ensure required fields for new polls
-      poll_params = Map.merge(poll_params, %{
-        "event_id" => socket.assigns.event.id,
-        "created_by_id" => socket.assigns.user.id,
-        "phase" => "list_building"
-      })
+      poll_params =
+        Map.merge(poll_params, %{
+          "event_id" => socket.assigns.event.id,
+          "created_by_id" => socket.assigns.user.id,
+          "phase" => "list_building"
+        })
 
       Events.create_poll(poll_params)
     end
   end
-  
+
   defp process_privacy_settings(poll_params) do
     case Map.get(poll_params, "privacy_settings") do
-      nil -> 
+      nil ->
         # No privacy settings provided, set default
         Map.put(poll_params, "privacy_settings", %{"show_suggester_names" => true})
+
       settings when is_map(settings) ->
         # Convert checkbox values ("on" = checked, missing = unchecked) to booleans
         # If the checkbox is unchecked, it won't be in the params at all
         processed_settings = %{
           "show_suggester_names" => Map.get(settings, "show_suggester_names") == "on"
         }
-        
+
         Map.put(poll_params, "privacy_settings", processed_settings)
-      _ -> 
+
+      _ ->
+        poll_params
+    end
+  end
+
+  defp process_settings(poll_params) do
+    case Map.get(poll_params, "settings") do
+      nil ->
+        poll_params
+
+      settings when is_map(settings) ->
+        # Convert checkbox values ("on" = checked, missing = unchecked) to booleans
+        # If the checkbox is unchecked, it won't be in the params at all
+        processed_settings =
+          settings
+          |> Map.update("show_current_standings", false, fn
+            "on" -> true
+            _ -> false
+          end)
+
+        Map.put(poll_params, "settings", processed_settings)
+
+      _ ->
         poll_params
     end
   end
 
   defp parse_datetime_fields(params, event) do
     timezone = event.timezone || "UTC"
-    
+
     params
     |> parse_datetime_field("list_building_deadline", timezone)
     |> parse_datetime_field("voting_deadline", timezone)
   end
-  
+
   defp parse_datetime_field(params, field, timezone) do
     case Map.get(params, field) do
-      nil -> params
-      "" -> Map.put(params, field, nil)
+      nil ->
+        params
+
+      "" ->
+        Map.put(params, field, nil)
+
       datetime_str when is_binary(datetime_str) ->
         # datetime-local inputs provide YYYY-MM-DDTHH:MM format without timezone
         case DateTimeHelper.parse_datetime_local(datetime_str, timezone) do
           {:ok, datetime} -> Map.put(params, field, datetime)
-          {:error, _} -> params  # Keep original value, let changeset handle validation
+          # Keep original value, let changeset handle validation
+          {:error, _} -> params
         end
-      _ -> params
+
+      _ ->
+        params
     end
   end
-  
+
   defp format_datetime_local(changeset, field, event) do
     case Ecto.Changeset.get_field(changeset, field) do
       %DateTime{} = datetime ->
         # Convert to event timezone if available
         timezone = if event && event.timezone, do: event.timezone, else: "UTC"
         shifted = DateTimeHelper.utc_to_timezone(datetime, timezone)
-        
+
         # Format for datetime-local input (YYYY-MM-DDTHH:MM)
         shifted
         |> DateTime.to_naive()
         |> NaiveDateTime.to_iso8601()
-        |> String.slice(0, 16)  # Remove seconds for datetime-local input
+        # Remove seconds for datetime-local input
+        |> String.slice(0, 16)
 
-      nil -> ""
-      _ -> ""
+      nil ->
+        ""
+
+      _ ->
+        ""
     end
   end
 
   defp get_privacy_setting(changeset, key, default) do
     case Ecto.Changeset.get_field(changeset, :privacy_settings) do
-      nil -> default
+      nil ->
+        default
+
       settings when is_map(settings) ->
         Map.get(settings, key, default)
-      _ -> default
+
+      _ ->
+        default
     end
   end
 
@@ -790,13 +872,16 @@ defmodule EventasaurusWeb.PollCreationComponent do
   defp get_current_location_scope(changeset, poll) do
     # Try to get from changeset first (if form has been submitted)
     case Ecto.Changeset.get_field(changeset, :settings) do
-      %{"location_scope" => scope} when is_binary(scope) -> scope
-      _ -> 
+      %{"location_scope" => scope} when is_binary(scope) ->
+        scope
+
+      _ ->
         # Fall back to poll's current scope (for editing) or default
         if poll do
           Poll.get_location_scope(poll)
         else
-          "place"  # Default for new polls
+          # Default for new polls
+          "place"
         end
     end
   end
@@ -804,7 +889,9 @@ defmodule EventasaurusWeb.PollCreationComponent do
   # Helper function to get search location from changeset or poll
   defp get_search_location(changeset, poll) do
     case Ecto.Changeset.get_field(changeset, :settings) do
-      %{"search_location" => location} when is_binary(location) -> location
+      %{"search_location" => location} when is_binary(location) ->
+        location
+
       _ ->
         if poll && poll.settings do
           Map.get(poll.settings, "search_location")
@@ -817,8 +904,12 @@ defmodule EventasaurusWeb.PollCreationComponent do
   # Helper function to get search location data from changeset or poll
   defp get_search_location_data(changeset, poll) do
     case Ecto.Changeset.get_field(changeset, :settings) do
-      %{"search_location_data" => data} when is_binary(data) -> data
-      %{"search_location_data" => data} when is_map(data) -> Jason.encode!(data)
+      %{"search_location_data" => data} when is_binary(data) ->
+        data
+
+      %{"search_location_data" => data} when is_map(data) ->
+        Jason.encode!(data)
+
       _ ->
         if poll && poll.settings do
           case Map.get(poll.settings, "search_location_data") do
@@ -831,16 +922,18 @@ defmodule EventasaurusWeb.PollCreationComponent do
         end
     end
   end
-  
+
   # Helper to check if we're using the event venue location
   defp is_using_event_venue(changeset, poll, event) do
     # For edited polls, check if they were never manually changed
     if poll && poll.id do
-      false  # Existing polls might have been manually changed
+      # Existing polls might have been manually changed
+      false
     else
       # For new polls, check if location matches venue
       search_location = get_search_location(changeset, nil)
-      event.venue && search_location && 
+
+      event.venue && search_location &&
         (search_location == event.venue.city || search_location == event.venue.name)
     end
   end
@@ -848,18 +941,52 @@ defmodule EventasaurusWeb.PollCreationComponent do
   # Helper function to get max rankings setting from changeset or poll
   defp get_max_rankings_setting(changeset, poll) do
     settings = Ecto.Changeset.get_field(changeset, :settings) || %{}
+
     case Map.get(settings, "max_rankings") do
-      v when is_integer(v) -> Integer.to_string(v)
+      v when is_integer(v) ->
+        Integer.to_string(v)
+
       v when is_binary(v) ->
         case Integer.parse(v) do
           {int, ""} when int in [3, 5, 7] -> Integer.to_string(int)
           _ -> fallback_max_rankings(poll)
         end
-      _ -> fallback_max_rankings(poll)
+
+      _ ->
+        fallback_max_rankings(poll)
     end
   end
 
   defp fallback_max_rankings(nil), do: "3"
   defp fallback_max_rankings(poll), do: Poll.get_max_rankings(poll) |> to_string()
 
+  # Helper function to get current standings setting from changeset or poll
+  defp get_current_standings_setting(changeset, poll) do
+    settings = Ecto.Changeset.get_field(changeset, :settings) || %{}
+
+    case Map.get(settings, "show_current_standings") do
+      v when is_boolean(v) ->
+        v
+
+      "on" ->
+        true
+
+      "off" ->
+        false
+
+      "true" ->
+        true
+
+      "false" ->
+        false
+
+      _ ->
+        # Fallback to poll's existing setting or default (true)
+        if poll do
+          Poll.show_current_standings?(poll)
+        else
+          true
+        end
+    end
+  end
 end
