@@ -157,4 +157,28 @@ defmodule EventasaurusWeb.GroupLive.Index do
     
     assign(socket, :groups, groups_with_info)
   end
+
+  defp privacy_indicator(group) do
+    case {group.visibility, group.join_policy} do
+      {"public", "open"} -> "🌍"
+      {"public", "request"} -> "🌍📝"
+      {"public", "invite_only"} -> "🌍📮"
+      {"unlisted", "open"} -> "🔗"
+      {"unlisted", "request"} -> "🔗📝"
+      {"unlisted", "invite_only"} -> "🔗📮"
+      {"private", _} -> "🔒"
+    end
+  end
+
+  defp privacy_tooltip(group) do
+    case {group.visibility, group.join_policy} do
+      {"public", "open"} -> "Public - Anyone can join"
+      {"public", "request"} -> "Public - Request to join"
+      {"public", "invite_only"} -> "Public - Invite only"
+      {"unlisted", "open"} -> "Unlisted - Anyone can join"
+      {"unlisted", "request"} -> "Unlisted - Request to join"
+      {"unlisted", "invite_only"} -> "Unlisted - Invite only"
+      {"private", _} -> "Private group"
+    end
+  end
 end
