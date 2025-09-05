@@ -237,6 +237,14 @@ defmodule EventasaurusApp.AuditLogger do
       }))
   end
 
+  def log_join_request_approved(group_id, requester_user_id, approver_user_id, metadata \\ %{}) do
+    log_group_membership_event("join_request_approved", group_id, requester_user_id, approver_user_id, metadata)
+  end
+
+  def log_join_request_denied(group_id, requester_user_id, denier_user_id, metadata \\ %{}) do
+    log_group_membership_event("join_request_denied", group_id, requester_user_id, denier_user_id, metadata)
+  end
+
   # Private functions
 
   defp get_client_ip(metadata) do
