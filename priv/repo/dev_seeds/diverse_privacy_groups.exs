@@ -37,7 +37,7 @@ created_groups = Enum.map(diverse_group_configs, fn config ->
   Logger.info("Creating group: #{config.name} (#{config.visibility}/#{config.join_policy})")
   
   # Check if group already exists (idempotent operation)
-  group = case Repo.get_by(Groups.Group, name: config.name) do
+  {group, acting_user} = case Repo.get_by(Groups.Group, name: config.name) do
     nil ->
       {:ok, group} = Groups.create_group_with_creator(%{
         "name" => config.name,
@@ -46,10 +46,11 @@ created_groups = Enum.map(diverse_group_configs, fn config ->
         "join_policy" => config.join_policy
       }, creator)
       Logger.info("Created new group: #{group.name}")
-      group
+      {group, creator}
     existing_group ->
+      existing_group = Repo.preload(existing_group, :created_by)
       Logger.info("Group already exists: #{existing_group.name}")
-      existing_group
+      {existing_group, existing_group.created_by || creator}
   end
   
   # Add 2-5 additional members to each group (excluding creator to avoid re-addition)
@@ -60,8 +61,8 @@ created_groups = Enum.map(diverse_group_configs, fn config ->
   |> Enum.take_random(target_member_count)
   |> Enum.map(fn user ->
     role = Enum.random(["member", "admin"])
-    # Pass the creator as acting_user so they can add members even to private groups
-    case Groups.add_user_to_group(group, user, role, creator) do
+    # Use acting_user (creator or existing admin) to bypass request flow during seeding
+    case Groups.add_user_to_group(group, user, role, acting_user) do
       {:ok, _} -> 1
       {:error, :already_member} -> 0
       {:error, _} -> 0
