@@ -66,6 +66,12 @@ defmodule PollSeed do
 
     # Get participants for this event (or use random users)
     participants = get_event_participants(event, all_users)
+    
+    # Defensive check: Skip if not enough participants
+    if length(participants) < 2 do
+      Logger.info("Skipping poll creation for '#{event.title}' - insufficient participants (#{length(participants)})")
+      nil
+    else
 
     # Check if this event belongs to movie_buff or foodie_friend
     event_with_users = Repo.preload(event, :users)
@@ -104,6 +110,7 @@ defmodule PollSeed do
 
         create_poll_by_type(poll_type, event, participants)
     end
+    end  # End of defensive if-else block
   end
 
   defp get_event_organizer(event) do
@@ -644,17 +651,22 @@ defmodule PollSeed do
     option_ids
     |> Enum.with_index(1)
     |> Enum.each(fn {option_id, rank} ->
-      # Get the poll option
-      poll_option = Events.get_poll_option!(option_id)
-
-      case Events.create_poll_vote(poll_option, user, %{vote_rank: rank}, "ranked") do
-        {:ok, _vote} ->
+      # Get the poll option with defensive check
+      case Repo.get(EventasaurusApp.Events.PollOption, option_id) do
+        nil ->
+          Logger.warning("Poll option #{option_id} not found, skipping vote")
           :ok
+        
+        poll_option ->
+          case Events.create_poll_vote(poll_option, user, %{vote_rank: rank}, "ranked") do
+            {:ok, _vote} ->
+              :ok
 
-        {:error, reason} ->
-          Logger.warning(
-            "Failed to create ranked vote for option #{option_id}, rank #{rank}: #{inspect(reason)}"
-          )
+            {:error, reason} ->
+              Logger.warning(
+                "Failed to create ranked vote for option #{option_id}, rank #{rank}: #{inspect(reason)}"
+              )
+          end
       end
     end)
   end
@@ -669,7 +681,7 @@ defmodule PollSeed do
       location: warsaw_coordinates,
       radius: 5000  # 5km radius
     }) do
-      {:ok, places} when length(places) > 0 ->
+      {:ok, [_|_] = places} ->
         Logger.info("Successfully fetched #{length(places)} restaurants from Google Places")
         # Convert Google Places format to our expected format
         places

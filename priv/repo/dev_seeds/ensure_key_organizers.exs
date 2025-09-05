@@ -4,7 +4,6 @@ defmodule DevSeeds.EnsureKeyOrganizers do
   This fixes the issue where these important users have 0 or few events.
   """
   
-  import EventasaurusApp.Factory
   alias EventasaurusApp.{Repo, Accounts, Events}
   alias EventasaurusApp.Events.EventUser
   
@@ -89,7 +88,26 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             timezone: Faker.Address.time_zone()
           }, Helpers.get_random_image_attrs())
           
-          {:ok, _event} = Events.create_event_with_organizer(event_params, movie_user)
+          {:ok, event} = Events.create_event_with_organizer(event_params, movie_user)
+          
+          # Add participants to the event (excluding the organizer who's already connected)
+          available_users = Repo.all(from u in Accounts.User, where: u.id != ^movie_user.id, limit: 50)
+          participants = Enum.take_random(available_users, Enum.random(8..15))
+          
+          Enum.each(participants, fn user ->
+            case Events.create_event_participant(%{
+              event_id: event.id,
+              user_id: user.id,
+              status: :accepted,
+              role: :poll_voter,
+              source: "key_organizer_seeding"
+            }) do
+              {:ok, _participant} -> :ok
+              {:error, _reason} -> :ok  # Skip duplicates silently
+            end
+          end)
+          
+          Helpers.log("Added #{length(participants)} participants to movie event: #{event.title}", :green)
         end)
       end
     else
@@ -160,7 +178,26 @@ defmodule DevSeeds.EnsureKeyOrganizers do
             timezone: Faker.Address.time_zone()
           }, Helpers.get_random_image_attrs())
           
-          {:ok, _event} = Events.create_event_with_organizer(event_params, foodie_user)
+          {:ok, event} = Events.create_event_with_organizer(event_params, foodie_user)
+          
+          # Add participants to the event (excluding the organizer who's already connected)
+          available_users = Repo.all(from u in Accounts.User, where: u.id != ^foodie_user.id, limit: 50)
+          participants = Enum.take_random(available_users, Enum.random(8..15))
+          
+          Enum.each(participants, fn user ->
+            case Events.create_event_participant(%{
+              event_id: event.id,
+              user_id: user.id,
+              status: :accepted,
+              role: :poll_voter,
+              source: "key_organizer_seeding"
+            }) do
+              {:ok, _participant} -> :ok
+              {:error, _reason} -> :ok  # Skip duplicates silently
+            end
+          end)
+          
+          Helpers.log("Added #{length(participants)} participants to foodie event: #{event.title}", :green)
         end)
       end
     else
