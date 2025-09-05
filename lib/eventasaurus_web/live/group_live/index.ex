@@ -38,8 +38,28 @@ defmodule EventasaurusWeb.GroupLive.Index do
   end
 
   @impl true
-  def handle_event("filter_my_groups", %{"show_my_groups_only" => show_my_groups}, socket) do
-    show_my_groups_only = show_my_groups == "true"
+  def handle_event("search", params, socket) do
+    # Handle different parameter formats for search clearing
+    query = case params do
+      %{"search[query]" => query} -> query
+      %{"search" => %{"query" => query}} -> query
+      _ -> ""
+    end
+    
+    {:noreply,
+     socket
+     |> assign(:search_query, query)
+     |> load_groups()}
+  end
+
+  @impl true
+  def handle_event("filter_my_groups", params, socket) do
+    # Handle checkbox state - when unchecked, the parameter is not sent
+    show_my_groups_only = case params do
+      %{"show_my_groups_only" => "true"} -> true
+      %{"show_my_groups_only" => show_my_groups} -> show_my_groups == "true"
+      _ -> false  # Checkbox unchecked - parameter not sent
+    end
     
     {:noreply,
      socket
