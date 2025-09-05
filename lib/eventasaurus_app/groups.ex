@@ -506,9 +506,17 @@ defmodule EventasaurusApp.Groups do
       role: role || "member"
     }
 
-    result = %GroupUser{}
-    |> GroupUser.changeset(attrs)
-    |> Repo.insert()
+    changeset = GroupUser.changeset(%GroupUser{}, attrs)
+    result =
+      Repo.insert(changeset,
+        on_conflict: :nothing,
+        conflict_target: [:group_id, :user_id],
+        returning: true
+      )
+      |> case do
+        {:ok, %GroupUser{id: nil}} -> {:error, :already_member}
+        other -> other
+      end
     
     # Log membership addition
     case result do
@@ -1361,14 +1369,30 @@ defmodule EventasaurusApp.Groups do
       {:error, %Ecto.Changeset{}}
   """
   def create_join_request(attrs \\ %{}) do
-    %GroupJoinRequest{}
-    |> GroupJoinRequest.changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, request} ->
-        {:ok, Repo.preload(request, [:group, :user, :reviewed_by])}
-      error ->
-        error
+    group_id = Map.get(attrs, :group_id) || Map.get(attrs, "group_id")
+    user_id  = Map.get(attrs, :user_id)  || Map.get(attrs, "user_id")
+
+    with %Group{} = group <- Repo.get(Group, group_id) || {:error, :group_not_found},
+         %User{}  = user  <- Repo.get(User,  user_id)  || {:error, :user_not_found},
+         false <- user_in_group?(group, user) || {:error, :already_member},
+         {:ok, :request_required} <- can_join_group?(group, user)
+    do
+      %GroupJoinRequest{}
+      |> GroupJoinRequest.changeset(attrs)
+      |> Repo.insert()
+      |> case do
+        {:ok, request} ->
+          {:ok, Repo.preload(request, [:group, :user, :reviewed_by])}
+        error ->
+          error
+      end
+    else
+      {:error, _} = e -> e
+      true -> {:error, :already_member}
+      {:ok, :immediate} -> {:error, :not_required}
+      {:error, :invite_only} -> {:error, :invite_only}
+      {:error, :cannot_view} -> {:error, :cannot_view}
+      nil -> {:error, :not_found}
     end
   end
 
@@ -1513,43 +1537,51 @@ defmodule EventasaurusApp.Groups do
       {:ok, %{request: %GroupJoinRequest{status: "approved"}, membership: %GroupUser{}}}
   """
   def approve_join_request(%GroupJoinRequest{} = request, %User{} = reviewer, metadata \\ %{}) do
-    if request.status != "pending" do
-      {:error, :already_processed}
-    else
-      Repo.transaction(fn ->
-        # Update request status
-        update_attrs = %{
-          status: "approved",
-          reviewed_by_id: reviewer.id,
-          reviewed_at: DateTime.utc_now()
-        }
-        
-        case update_join_request_status(request, update_attrs) do
-          {:ok, updated_request} ->
-            case perform_add_user_to_group(updated_request.group, updated_request.user, "member", reviewer, metadata) do
-              {:ok, membership} ->
-                # Log the approval
-                AuditLogger.log_join_request_approved(
-                  updated_request.group.id,
-                  updated_request.user.id,
-                  reviewer.id,
-                  metadata
-                )
-                
-                %{request: updated_request, membership: membership}
-              
-              {:error, :already_member} ->
-                # User is already a member, just update the request status
-                %{request: updated_request, membership: nil}
-              
-              {:error, reason} ->
-                Repo.rollback(reason)
-            end
+    request = Repo.preload(request, [:group, :user])
+    cond do
+      request.status != "pending" ->
+        {:error, :already_processed}
+      not can_manage?(request.group, reviewer) ->
+        {:error, :forbidden}
+      true ->
+        Repo.transaction(fn ->
+          # Update request status
+          update_attrs = %{
+            status: "approved",
+            reviewed_by_id: reviewer.id,
+            reviewed_at: DateTime.utc_now()
+          }
           
-          {:error, reason} ->
-            Repo.rollback(reason)
-        end
-      end)
+          case update_join_request_status(request, update_attrs) do
+            {:ok, updated_request} ->
+              case perform_add_user_to_group(updated_request.group, updated_request.user, "member", reviewer, metadata) do
+                {:ok, membership} ->
+                  # Log the approval
+                  AuditLogger.log_join_request_approved(
+                    updated_request.group.id,
+                    updated_request.user.id,
+                    reviewer.id,
+                    metadata
+                  )
+                  
+                  %{request: updated_request, membership: membership}
+                
+                {:error, :already_member} ->
+                  # User is already a member, just update the request status
+                  %{request: updated_request, membership: nil}
+                
+                {:error, %Ecto.Changeset{} = _cs} ->
+                  # Treat unique constraint like already_member
+                  %{request: updated_request, membership: nil}
+                
+                {:error, reason} ->
+                  Repo.rollback(reason)
+              end
+            
+            {:error, reason} ->
+              Repo.rollback(reason)
+          end
+        end)
     end
   end
 
@@ -1568,29 +1600,33 @@ defmodule EventasaurusApp.Groups do
       {:ok, %GroupJoinRequest{status: "denied"}}
   """
   def deny_join_request(%GroupJoinRequest{} = request, %User{} = reviewer, metadata \\ %{}) do
-    if request.status != "pending" do
-      {:error, :already_processed}
-    else
-      update_attrs = %{
-        status: "denied",
-        reviewed_by_id: reviewer.id,
-        reviewed_at: DateTime.utc_now()
-      }
-      
-      case update_join_request_status(request, update_attrs) do
-        {:ok, updated_request} ->
-          # Log the denial
-          AuditLogger.log_join_request_denied(
-            updated_request.group.id,
-            updated_request.user.id,
-            reviewer.id,
-            metadata
-          )
-          
-          {:ok, updated_request}
-        error ->
-          error
-      end
+    request = Repo.preload(request, [:group, :user])
+    cond do
+      request.status != "pending" ->
+        {:error, :already_processed}
+      not can_manage?(request.group, reviewer) ->
+        {:error, :forbidden}
+      true ->
+        update_attrs = %{
+          status: "denied",
+          reviewed_by_id: reviewer.id,
+          reviewed_at: DateTime.utc_now()
+        }
+        
+        case update_join_request_status(request, update_attrs) do
+          {:ok, updated_request} ->
+            # Log the denial
+            AuditLogger.log_join_request_denied(
+              updated_request.group.id,
+              updated_request.user.id,
+              reviewer.id,
+              metadata
+            )
+            
+            {:ok, updated_request}
+          error ->
+            error
+        end
     end
   end
 
@@ -1602,12 +1638,16 @@ defmodule EventasaurusApp.Groups do
       iex> cancel_join_request(request)
       {:ok, %GroupJoinRequest{status: "cancelled"}}
   """
-  def cancel_join_request(%GroupJoinRequest{} = request) do
-    if request.status != "pending" do
-      {:error, :already_processed}
-    else
-      update_attrs = %{status: "cancelled"}
-      update_join_request_status(request, update_attrs)
+  def cancel_join_request(%GroupJoinRequest{} = request, %User{} = acting_user) do
+    request = Repo.preload(request, [:group, :user])
+    cond do
+      request.status != "pending" ->
+        {:error, :already_processed}
+      acting_user.id != request.user_id and not can_manage?(request.group, acting_user) ->
+        {:error, :forbidden}
+      true ->
+        update_attrs = %{status: "cancelled"}
+        update_join_request_status(request, update_attrs)
     end
   end
 
