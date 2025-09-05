@@ -32,6 +32,70 @@
       />
     </div>
 
+    <!-- Privacy Settings Section -->
+    <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 space-y-6">
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Group Privacy</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400">Control who can find and join your group</p>
+      </div>
+      
+      <!-- Visibility Settings -->
+      <div class="space-y-4">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Who can find this group?</label>
+        <div class="space-y-3">
+          <label class="flex items-start">
+            <input type="radio" name="group[visibility]" value="public" checked={Ecto.Changeset.get_field(@changeset, :visibility, "public") == "public"} class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+            <div class="flex-1">
+              <div class="font-medium text-gray-900 dark:text-white">📂 Public</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">Anyone can find this group in search and browse</div>
+            </div>
+          </label>
+          <label class="flex items-start">
+            <input type="radio" name="group[visibility]" value="unlisted" checked={Ecto.Changeset.get_field(@changeset, :visibility, "public") == "unlisted"} class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+            <div class="flex-1">
+              <div class="font-medium text-gray-900 dark:text-white">🔗 Unlisted</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">Only people with the link can find this group</div>
+            </div>
+          </label>
+          <label class="flex items-start">
+            <input type="radio" name="group[visibility]" value="private" checked={Ecto.Changeset.get_field(@changeset, :visibility, "public") == "private"} class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+            <div class="flex-1">
+              <div class="font-medium text-gray-900 dark:text-white">🔒 Private</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">Only members can see this group</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      
+      <!-- Join Policy Settings -->
+      <div class="space-y-4">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Who can join this group?</label>
+        <div class="space-y-3">
+          <label class="flex items-start">
+            <input type="radio" name="group[join_policy]" value="open" checked={Ecto.Changeset.get_field(@changeset, :join_policy, "open") == "open"} class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+            <div class="flex-1">
+              <div class="font-medium text-gray-900 dark:text-white">🚪 Anyone</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">Anyone who can see the group can join immediately</div>
+            </div>
+          </label>
+          <label class="flex items-start">
+            <input type="radio" name="group[join_policy]" value="request" checked={Ecto.Changeset.get_field(@changeset, :join_policy, "open") == "request"} class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+            <div class="flex-1">
+              <div class="font-medium text-gray-900 dark:text-white">📋 Request to join</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">People can request to join and admins approve</div>
+            </div>
+          </label>
+          <label class="flex items-start">
+            <input type="radio" name="group[join_policy]" value="invite_only" checked={Ecto.Changeset.get_field(@changeset, :join_policy, "open") == "invite_only"} class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+            <div class="flex-1">
+              <div class="font-medium text-gray-900 dark:text-white">🎫 Invite only</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">Only admins can invite new members</div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
     <div>
       <.input
         field={f[:slug]}
