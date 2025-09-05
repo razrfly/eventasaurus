@@ -4,12 +4,10 @@ defmodule DevSeeds.Events do
   Creates events in various states with realistic data.
   """
   
-  import EventasaurusApp.Factory
   alias DevSeeds.Helpers
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events
   alias EventasaurusApp.Events.EventUser
-  alias EventasaurusWeb.Services.DefaultImagesService
   
   @doc """
   Seeds events with various states and configurations.
