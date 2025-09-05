@@ -54,12 +54,12 @@ defmodule ComprehensiveSeed do
     Enum.map(group_configs, fn config ->
       creator = Enum.random(users)
       
-      # Pick visibility first, then constrain join_policy choices to avoid invalid combinations
-      visibility = Enum.random(["public", "public", "unlisted", "private"])
+      # Create diverse privacy settings with equal distribution
+      visibility = Enum.random(["public", "unlisted", "private"])
       join_policy_pool =
         case visibility do
           "private" -> ["request", "invite_only"]  # Private groups cannot be open
-          _ -> ["open", "open", "request", "invite_only"]
+          _ -> ["open", "request", "invite_only"]
         end
       
       # Use production API that handles slug generation automatically
