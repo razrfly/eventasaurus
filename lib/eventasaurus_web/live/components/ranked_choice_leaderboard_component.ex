@@ -7,6 +7,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
   use EventasaurusWeb, :live_component
 
   alias EventasaurusApp.Events.RankedChoiceVoting
+  alias EventasaurusApp.Events.Poll
   alias EventasaurusApp.Repo
   import Ecto.Query
 
@@ -397,7 +398,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
   end
 
   # Prepare display data with proper structure  
-  defp prepare_display_data(irv_results, leaderboard, poll, opts \\ []) do
+  defp prepare_display_data(irv_results, leaderboard, poll, opts) do
     # Sort leaderboard by status and votes
     sorted_leaderboard =
       Enum.sort_by(leaderboard, fn entry ->
@@ -499,8 +500,7 @@ defmodule EventasaurusWeb.Live.Components.RankedChoiceLeaderboardComponent do
           0
         end
 
-      max_rank =
-        if option_votes != [], do: Enum.max_by(option_votes, & &1.vote_rank).vote_rank, else: 0
+      max_rank = Poll.get_max_rankings(poll) || 0
 
       %{
         option: entry.option,

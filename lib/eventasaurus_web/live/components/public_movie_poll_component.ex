@@ -79,7 +79,9 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
         try do
           Events.get_poll_voting_stats(movie_poll)
         rescue
-          _ -> %{options: []}
+          e ->
+            Logger.error(Exception.format(:error, e, __STACKTRACE__))
+            %{options: []}
         end
       else
         %{options: []}
