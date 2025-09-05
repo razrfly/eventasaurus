@@ -64,14 +64,17 @@ defmodule PollSeed do
   defp seed_polls_for_event(event, all_users) do
     Logger.info("Seeding polls for event: #{event.title}")
 
-    # Get participants for this event (or use random users)
-    participants = get_event_participants(event, all_users)
-    
-    # Defensive check: Skip if not enough participants
-    if length(participants) < 2 do
-      Logger.info("Skipping poll creation for '#{event.title}' - insufficient participants (#{length(participants)})")
+    # Defensive check: require actual event participants (not fabricated)
+    actual_participant_count =
+      Events.list_event_participants(event)
+      |> length()
+
+    if actual_participant_count < 2 do
+      Logger.info("Skipping poll creation for '#{event.title}' - insufficient event participants (#{actual_participant_count})")
       nil
     else
+      # Now build the working participant set (may augment for realism)
+      participants = get_event_participants(event, all_users)
 
     # Check if this event belongs to movie_buff or foodie_friend
     event_with_users = Repo.preload(event, :users)

@@ -94,20 +94,21 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           available_users = Repo.all(from u in Accounts.User, where: u.id != ^movie_user.id, limit: 50)
           participants = Enum.take_random(available_users, Enum.random(8..15))
           
-          Enum.each(participants, fn user ->
-            case Events.create_event_participant(%{
-              event_id: event.id,
-              user_id: user.id,
-              status: :accepted,
-              role: :poll_voter,
-              source: "key_organizer_seeding"
-            }) do
-              {:ok, _participant} -> :ok
-              {:error, _reason} -> :ok  # Skip duplicates silently
-            end
-          end)
+          inserted_count =
+            Enum.reduce(participants, 0, fn user, acc ->
+              case Events.create_event_participant(%{
+                event_id: event.id,
+                user_id: user.id,
+                status: :accepted,
+                role: :poll_voter,
+                source: "key_organizer_seeding"
+              }) do
+                {:ok, _participant} -> acc + 1
+                {:error, _reason} -> acc
+              end
+            end)
           
-          Helpers.log("Added #{length(participants)} participants to movie event: #{event.title}", :green)
+          Helpers.log("Added #{inserted_count}/#{length(participants)} participants to movie event: #{event.title}", :green)
         end)
       end
     else
@@ -184,20 +185,21 @@ defmodule DevSeeds.EnsureKeyOrganizers do
           available_users = Repo.all(from u in Accounts.User, where: u.id != ^foodie_user.id, limit: 50)
           participants = Enum.take_random(available_users, Enum.random(8..15))
           
-          Enum.each(participants, fn user ->
-            case Events.create_event_participant(%{
-              event_id: event.id,
-              user_id: user.id,
-              status: :accepted,
-              role: :poll_voter,
-              source: "key_organizer_seeding"
-            }) do
-              {:ok, _participant} -> :ok
-              {:error, _reason} -> :ok  # Skip duplicates silently
-            end
-          end)
+          inserted_count =
+            Enum.reduce(participants, 0, fn user, acc ->
+              case Events.create_event_participant(%{
+                event_id: event.id,
+                user_id: user.id,
+                status: :accepted,
+                role: :poll_voter,
+                source: "key_organizer_seeding"
+              }) do
+                {:ok, _participant} -> acc + 1
+                {:error, _reason} -> acc
+              end
+            end)
           
-          Helpers.log("Added #{length(participants)} participants to foodie event: #{event.title}", :green)
+          Helpers.log("Added #{inserted_count}/#{length(participants)} participants to foodie event: #{event.title}", :green)
         end)
       end
     else
