@@ -8,38 +8,39 @@ defmodule EventasaurusApp.Events.Poll do
   alias EventasaurusApp.Repo
 
   schema "polls" do
-    field :title, :string
-    field :description, :string
-    field :poll_type, :string
-    field :voting_system, :string
-    field :phase, :string, default: "list_building"
-    field :status, :string, virtual: true  # Virtual field for backward compatibility
-    field :list_building_deadline, :utc_datetime
-    field :voting_deadline, :utc_datetime
-    field :finalized_date, :date
-    field :finalized_option_ids, {:array, :integer}
-    field :max_options_per_user, :integer
-    field :auto_finalize, :boolean, default: false
-    
+    field(:title, :string)
+    field(:description, :string)
+    field(:poll_type, :string)
+    field(:voting_system, :string)
+    field(:phase, :string, default: "list_building")
+    # Virtual field for backward compatibility
+    field(:status, :string, virtual: true)
+    field(:list_building_deadline, :utc_datetime)
+    field(:voting_deadline, :utc_datetime)
+    field(:finalized_date, :date)
+    field(:finalized_option_ids, {:array, :integer})
+    field(:max_options_per_user, :integer)
+    field(:auto_finalize, :boolean, default: false)
+
     # Privacy and ordering fields
-    field :privacy_settings, :map, default: %{}
-    field :order_index, :integer, default: 0
-    
+    field(:privacy_settings, :map, default: %{})
+    field(:order_index, :integer, default: 0)
+
     # Settings for flexible configuration (location scope, etc.)
     # Default matches DB migration default for consistency
-    field :settings, :map, default: %{"location_scope" => "place"}
+    field(:settings, :map, default: %{"location_scope" => "place"})
 
     # Virtual fields for attaching stats in queries
-    field :stats, {:array, :map}, virtual: true
-    field :unique_voters, :integer, virtual: true
+    field(:stats, {:array, :map}, virtual: true)
+    field(:unique_voters, :integer, virtual: true)
 
-    belongs_to :event, Event
-    belongs_to :created_by, User, foreign_key: :created_by_id
-    has_many :poll_options, PollOption
+    belongs_to(:event, Event)
+    belongs_to(:created_by, User, foreign_key: :created_by_id)
+    has_many(:poll_options, PollOption)
 
     # Deletion metadata fields
-    field :deletion_reason, :string
-    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+    field(:deletion_reason, :string)
+    belongs_to(:deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id)
 
     timestamps()
     soft_delete_schema()
@@ -61,7 +62,8 @@ defmodule EventasaurusApp.Events.Poll do
       "list_building" -> "list_building"
       "voting_with_suggestions" -> "voting"
       "voting_only" -> "voting"
-      "voting" -> "voting"  # Legacy support
+      # Legacy support
+      "voting" -> "voting"
       "closed" -> "finalized"
       phase -> phase
     end
@@ -72,7 +74,8 @@ defmodule EventasaurusApp.Events.Poll do
     case Map.get(attrs, :status) || Map.get(attrs, "status") do
       nil -> attrs
       "list_building" -> Map.put(attrs, :phase, "list_building")
-      "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")  # Default to suggestions allowed
+      # Default to suggestions allowed
+      "voting" -> Map.put(attrs, :phase, "voting_with_suggestions")
       "finalized" -> Map.put(attrs, :phase, "closed")
       status -> Map.put(attrs, :phase, status)
     end
@@ -80,6 +83,7 @@ defmodule EventasaurusApp.Events.Poll do
 
   # Private helper to normalize privacy settings
   defp normalize_privacy_settings(nil), do: %{"show_suggester_names" => true}
+
   defp normalize_privacy_settings(settings) when is_map(settings) do
     value =
       case Map.get(settings, "show_suggester_names") || Map.get(settings, :show_suggester_names) do
@@ -95,6 +99,7 @@ defmodule EventasaurusApp.Events.Poll do
 
     %{"show_suggester_names" => value}
   end
+
   defp normalize_privacy_settings(_), do: %{"show_suggester_names" => true}
 
   @doc false
@@ -104,11 +109,22 @@ defmodule EventasaurusApp.Events.Poll do
 
     poll
     |> cast(attrs, [
-      :title, :description, :poll_type, :voting_system, :phase,
-      :list_building_deadline, :voting_deadline, :finalized_date,
-      :finalized_option_ids, :max_options_per_user, :auto_finalize,
-      :privacy_settings, :order_index, :settings,
-      :event_id, :created_by_id
+      :title,
+      :description,
+      :poll_type,
+      :voting_system,
+      :phase,
+      :list_building_deadline,
+      :voting_deadline,
+      :finalized_date,
+      :finalized_option_ids,
+      :max_options_per_user,
+      :auto_finalize,
+      :privacy_settings,
+      :order_index,
+      :settings,
+      :event_id,
+      :created_by_id
     ])
     |> update_change(:privacy_settings, &normalize_privacy_settings/1)
     |> update_change(:settings, &normalize_settings/1)
@@ -125,8 +141,9 @@ defmodule EventasaurusApp.Events.Poll do
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:created_by_id)
     |> unique_constraint([:event_id, :poll_type],
-         name: :polls_event_poll_type_unique,
-         message: "A poll of this type already exists for this event")
+      name: :polls_event_poll_type_unique,
+      message: "A poll of this type already exists for this event"
+    )
   end
 
   @doc """
@@ -138,10 +155,19 @@ defmodule EventasaurusApp.Events.Poll do
 
     poll
     |> cast(attrs, [
-      :title, :description, :poll_type, :voting_system,
-      :list_building_deadline, :voting_deadline, :max_options_per_user,
-      :auto_finalize, :privacy_settings, :order_index, :settings,
-      :event_id, :created_by_id
+      :title,
+      :description,
+      :poll_type,
+      :voting_system,
+      :list_building_deadline,
+      :voting_deadline,
+      :max_options_per_user,
+      :auto_finalize,
+      :privacy_settings,
+      :order_index,
+      :settings,
+      :event_id,
+      :created_by_id
     ])
     |> update_change(:privacy_settings, &normalize_privacy_settings/1)
     |> update_change(:settings, &normalize_settings/1)
@@ -156,14 +182,16 @@ defmodule EventasaurusApp.Events.Poll do
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:created_by_id)
     |> unique_constraint([:event_id, :poll_type],
-         name: :polls_event_poll_type_unique,
-         message: "A poll of this type already exists for this event")
+      name: :polls_event_poll_type_unique,
+      message: "A poll of this type already exists for this event"
+    )
   end
 
   @doc """
   Creates a changeset for transitioning poll phase.
   """
-  def phase_transition_changeset(poll, new_phase) when new_phase in ["list_building", "voting_with_suggestions", "voting_only", "closed"] do
+  def phase_transition_changeset(poll, new_phase)
+      when new_phase in ["list_building", "voting_with_suggestions", "voting_only", "closed"] do
     poll
     |> cast(%{phase: new_phase}, [:phase])
     |> validate_required([:phase])
@@ -184,11 +212,14 @@ defmodule EventasaurusApp.Events.Poll do
     finalized_date = finalized_date || Date.utc_today()
 
     poll
-    |> cast(%{
-      finalized_option_ids: option_ids,
-      finalized_date: finalized_date,
-      phase: "closed"
-    }, [:finalized_option_ids, :finalized_date, :phase])
+    |> cast(
+      %{
+        finalized_option_ids: option_ids,
+        finalized_date: finalized_date,
+        phase: "closed"
+      },
+      [:finalized_option_ids, :finalized_date, :phase]
+    )
     |> validate_required([:finalized_option_ids, :finalized_date])
     |> validate_finalized_date()
     |> validate_finalized_options()
@@ -202,11 +233,12 @@ defmodule EventasaurusApp.Events.Poll do
     # Map status to phase for backward compatibility
     attrs = map_status_to_phase(attrs)
 
-    changeset = poll
-    |> cast(attrs, [:phase])
-    |> validate_required([:phase])
-    |> validate_inclusion(:phase, phases())
-    |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
+    changeset =
+      poll
+      |> cast(attrs, [:phase])
+      |> validate_required([:phase])
+      |> validate_inclusion(:phase, phases())
+      |> check_constraint(:phase, name: :valid_phase, message: "Invalid phase value")
 
     new_phase = get_field(changeset, :phase)
     validate_phase_transition(changeset, poll.phase, new_phase)
@@ -223,14 +255,16 @@ defmodule EventasaurusApp.Events.Poll do
   """
   def voting?(%__MODULE__{phase: "voting_with_suggestions"}), do: true
   def voting?(%__MODULE__{phase: "voting_only"}), do: true
-  def voting?(%__MODULE__{phase: "voting"}), do: true  # Legacy support
+  # Legacy support
+  def voting?(%__MODULE__{phase: "voting"}), do: true
   def voting?(%__MODULE__{}), do: false
 
   @doc """
   Check if the poll is in voting phase with suggestions allowed.
   """
   def voting_with_suggestions?(%__MODULE__{phase: "voting_with_suggestions"}), do: true
-  def voting_with_suggestions?(%__MODULE__{phase: "voting"}), do: true  # Legacy support - assume suggestions allowed
+  # Legacy support - assume suggestions allowed
+  def voting_with_suggestions?(%__MODULE__{phase: "voting"}), do: true
   def voting_with_suggestions?(%__MODULE__{}), do: false
 
   @doc """
@@ -244,7 +278,8 @@ defmodule EventasaurusApp.Events.Poll do
   """
   def suggestions_allowed?(%__MODULE__{phase: "list_building"}), do: true
   def suggestions_allowed?(%__MODULE__{phase: "voting_with_suggestions"}), do: true
-  def suggestions_allowed?(%__MODULE__{phase: "voting"}), do: true  # Legacy support
+  # Legacy support
+  def suggestions_allowed?(%__MODULE__{phase: "voting"}), do: true
   def suggestions_allowed?(%__MODULE__{}), do: false
 
   @doc """
@@ -283,7 +318,8 @@ defmodule EventasaurusApp.Events.Poll do
     end
   end
 
-  def active_for_phase?(%__MODULE__{phase: "voting"} = poll) do  # Legacy support
+  # Legacy support
+  def active_for_phase?(%__MODULE__{phase: "voting"} = poll) do
     case poll.voting_deadline do
       nil -> true
       deadline -> DateTime.compare(DateTime.utc_now(), deadline) == :lt
@@ -314,8 +350,10 @@ defmodule EventasaurusApp.Events.Poll do
   def poll_type_display("places"), do: "Places"
   def poll_type_display("custom"), do: "Custom"
   def poll_type_display("time"), do: "Time/Schedule"
-  def poll_type_display("general"), do: "General"  # Test type
-  def poll_type_display("venue"), do: "Venue"  # Test type
+  # Test type
+  def poll_type_display("general"), do: "General"
+  # Test type
+  def poll_type_display("venue"), do: "Venue"
   def poll_type_display("date_selection"), do: "Date Selection"
   def poll_type_display(type), do: String.capitalize(type)
 
@@ -334,7 +372,8 @@ defmodule EventasaurusApp.Events.Poll do
   def phase_display("voting_with_suggestions"), do: "Voting Phase - Vote and suggest more options"
   def phase_display("voting_only"), do: "Voting Phase - Vote on existing options"
   def phase_display("closed"), do: "Results - Poll closed"
-  def phase_display("voting"), do: "Voting Phase"  # Legacy support
+  # Legacy support
+  def phase_display("voting"), do: "Voting Phase"
 
   defp validate_poll_type(changeset) do
     poll_type = get_field(changeset, :poll_type)
@@ -357,6 +396,7 @@ defmodule EventasaurusApp.Events.Poll do
   end
 
   defp validate_deadline(changeset, _field, nil), do: changeset
+
   defp validate_deadline(changeset, field, deadline) do
     if DateTime.compare(deadline, DateTime.utc_now()) == :gt do
       changeset
@@ -367,6 +407,7 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_deadline_order(changeset, nil, _), do: changeset
   defp validate_deadline_order(changeset, _, nil), do: changeset
+
   defp validate_deadline_order(changeset, list_deadline, voting_deadline) do
     if DateTime.compare(list_deadline, voting_deadline) == :lt do
       changeset
@@ -379,9 +420,12 @@ defmodule EventasaurusApp.Events.Poll do
     finalized_date = get_field(changeset, :finalized_date)
 
     case finalized_date do
-      nil -> changeset
+      nil ->
+        changeset
+
       date ->
         today = Date.utc_today()
+
         if Date.compare(date, today) != :lt do
           changeset
         else
@@ -403,45 +447,80 @@ defmodule EventasaurusApp.Events.Poll do
   defp validate_phase_transition(changeset, current_phase, new_phase) do
     case {current_phase, new_phase} do
       # Same phase (no change)
-      {same, same} -> changeset
+      {same, same} ->
+        changeset
 
       # From list_building phase
-      {"list_building", "voting_with_suggestions"} -> changeset
-      {"list_building", "voting_only"} -> changeset
-      {"list_building", "closed"} -> changeset
-      {"list_building", "voting"} -> changeset  # Legacy support
+      {"list_building", "voting_with_suggestions"} ->
+        changeset
+
+      {"list_building", "voting_only"} ->
+        changeset
+
+      {"list_building", "closed"} ->
+        changeset
+
+      # Legacy support
+      {"list_building", "voting"} ->
+        changeset
 
       # From voting_with_suggestions phase
-      {"voting_with_suggestions", "voting_only"} -> changeset
-      {"voting_with_suggestions", "closed"} -> changeset
-      {"voting_with_suggestions", "list_building"} -> validate_no_votes_for_building_transition(changeset)
+      {"voting_with_suggestions", "voting_only"} ->
+        changeset
+
+      {"voting_with_suggestions", "closed"} ->
+        changeset
+
+      {"voting_with_suggestions", "list_building"} ->
+        validate_no_votes_for_building_transition(changeset)
 
       # From voting_only phase
-      {"voting_only", "voting_with_suggestions"} -> changeset  # NEW: Allow bidirectional voting transitions
-      {"voting_only", "closed"} -> changeset
-      {"voting_only", "list_building"} -> validate_no_votes_for_building_transition(changeset)
+      # NEW: Allow bidirectional voting transitions
+      {"voting_only", "voting_with_suggestions"} ->
+        changeset
+
+      {"voting_only", "closed"} ->
+        changeset
+
+      {"voting_only", "list_building"} ->
+        validate_no_votes_for_building_transition(changeset)
 
       # Legacy voting phase transitions
-      {"voting", "closed"} -> changeset
-      {"voting", "list_building"} -> validate_no_votes_for_building_transition(changeset)
-      {"voting", "voting_with_suggestions"} -> changeset
-      {"voting", "voting_only"} -> changeset
+      {"voting", "closed"} ->
+        changeset
+
+      {"voting", "list_building"} ->
+        validate_no_votes_for_building_transition(changeset)
+
+      {"voting", "voting_with_suggestions"} ->
+        changeset
+
+      {"voting", "voting_only"} ->
+        changeset
 
       # From closed phase - no transitions allowed (final state)
-      {"closed", _} -> add_error(changeset, :phase, "cannot transition from closed phase")
+      {"closed", _} ->
+        add_error(changeset, :phase, "cannot transition from closed phase")
 
       # Invalid transitions
-      _ -> add_error(changeset, :phase, "invalid phase transition from #{current_phase} to #{new_phase}")
+      _ ->
+        add_error(
+          changeset,
+          :phase,
+          "invalid phase transition from #{current_phase} to #{new_phase}"
+        )
     end
   end
 
   defp validate_no_votes_for_building_transition(changeset) do
     poll = changeset.data
 
-    vote_count = from(v in PollVote,
-                     join: o in assoc(v, :poll_option),
-                     where: o.poll_id == ^poll.id)
-                 |> Repo.aggregate(:count, :id)
+    vote_count =
+      from(v in PollVote,
+        join: o in assoc(v, :poll_option),
+        where: o.poll_id == ^poll.id
+      )
+      |> Repo.aggregate(:count, :id)
 
     if vote_count > 0 do
       add_error(changeset, :phase, "cannot return to building phase when votes exist")
@@ -452,21 +531,26 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_privacy_settings(changeset) do
     case get_field(changeset, :privacy_settings) do
-      nil -> changeset
+      nil ->
+        changeset
+
       settings when is_map(settings) ->
         # Validate that privacy settings has valid boolean values
         valid_keys = ~w(show_suggester_names)
-        
+
         Enum.reduce(settings, changeset, fn {key, value}, acc ->
           cond do
             key not in valid_keys ->
               add_error(acc, :privacy_settings, "invalid privacy setting: #{key}")
+
             not is_boolean(value) ->
               add_error(acc, :privacy_settings, "#{key} must be a boolean")
+
             true ->
               acc
           end
         end)
+
       _ ->
         add_error(changeset, :privacy_settings, "must be a map")
     end
@@ -496,7 +580,9 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Check if suggester names should be shown for this poll.
   """
-  def show_suggester_names?(%__MODULE__{privacy_settings: nil}), do: true  # Default to showing
+  # Default to showing
+  def show_suggester_names?(%__MODULE__{privacy_settings: nil}), do: true
+
   def show_suggester_names?(%__MODULE__{privacy_settings: settings}) do
     Map.get(settings, "show_suggester_names", true)
   end
@@ -504,7 +590,9 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Get location scope for this poll.
   """
-  def get_location_scope(%__MODULE__{settings: nil}), do: "place"  # Default to place
+  # Default to place
+  def get_location_scope(%__MODULE__{settings: nil}), do: "place"
+
   def get_location_scope(%__MODULE__{settings: settings}) do
     Map.get(settings, "location_scope", "place")
   end
@@ -512,7 +600,8 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Set location scope for this poll.
   """
-  def set_location_scope(%__MODULE__{settings: settings} = poll, scope) when scope in ["place", "city", "region", "country", "custom"] do
+  def set_location_scope(%__MODULE__{settings: settings} = poll, scope)
+      when scope in ["place", "city", "region", "country", "custom"] do
     new_settings = Map.put(settings || %{}, "location_scope", scope)
     %{poll | settings: new_settings}
   end
@@ -539,12 +628,15 @@ defmodule EventasaurusApp.Events.Poll do
   def get_max_rankings(%__MODULE__{voting_system: "ranked", settings: settings}) do
     Map.get(settings || %{}, "max_rankings", 3)
   end
-  def get_max_rankings(%__MODULE__{}), do: nil  # Not applicable to non-ranked polls
+
+  # Not applicable to non-ranked polls
+  def get_max_rankings(%__MODULE__{}), do: nil
 
   @doc """
   Set maximum rankings allowed for ranked choice polls.
   """
-  def set_max_rankings(%__MODULE__{settings: settings} = poll, max_rankings) when max_rankings in [3, 5, 7] do
+  def set_max_rankings(%__MODULE__{settings: settings} = poll, max_rankings)
+      when max_rankings in [3, 5, 7] do
     new_settings = Map.put(settings || %{}, "max_rankings", max_rankings)
     %{poll | settings: new_settings}
   end
@@ -562,80 +654,154 @@ defmodule EventasaurusApp.Events.Poll do
   def max_rankings_display(7), do: "7 choices"
   def max_rankings_display(num), do: "#{num} choices"
 
+  @doc """
+  Check if current standings should be shown for this poll.
+  """
+  # Default to showing
+  def show_current_standings?(%__MODULE__{settings: nil}), do: true
+
+  def show_current_standings?(%__MODULE__{settings: settings}) do
+    case Map.get(settings, "show_current_standings") do
+      # Default to showing
+      nil -> true
+      "on" -> true
+      "off" -> false
+      "true" -> true
+      "false" -> false
+      true -> true
+      false -> false
+      # Invalid value, default to showing
+      _ -> true
+    end
+  end
+
+  @doc """
+  Set current standings visibility for this poll.
+  """
+  def set_show_current_standings(%__MODULE__{settings: settings} = poll, show_standings)
+      when is_boolean(show_standings) do
+    new_settings = Map.put(settings || %{}, "show_current_standings", show_standings)
+    %{poll | settings: new_settings}
+  end
+
   # Private helper to normalize settings
   defp normalize_settings(nil), do: %{}
+
   defp normalize_settings(settings) when is_map(settings) do
     # Normalize location_scope if present
-    settings = case Map.get(settings, "location_scope") do
-      scope when scope in ["place", "city", "region", "country", "custom"] -> settings
-      scope when is_binary(scope) -> Map.put(settings, "location_scope", "place")  # Invalid scope, default to place
-      nil -> settings  # No scope set, leave as is
-      _ -> Map.put(settings, "location_scope", "place")  # Invalid type, default to place
-    end
-    
+    settings =
+      case Map.get(settings, "location_scope") do
+        scope when scope in ["place", "city", "region", "country", "custom"] -> settings
+        # Invalid scope, default to place
+        scope when is_binary(scope) -> Map.put(settings, "location_scope", "place")
+        # No scope set, leave as is
+        nil -> settings
+        # Invalid type, default to place
+        _ -> Map.put(settings, "location_scope", "place")
+      end
+
     # Normalize max_rankings if present
-    settings = case Map.get(settings, "max_rankings") do
-      nil -> settings  # No max_rankings set, leave as is
-      value when is_integer(value) and value in 3..7 -> settings  # Valid integer
-      value when is_binary(value) ->
-        case Integer.parse(value) do
-          {parsed, ""} when parsed in 3..7 -> Map.put(settings, "max_rankings", parsed)
-          _ -> Map.put(settings, "max_rankings", 3)  # Invalid, default to 3
-        end
-      _ -> Map.put(settings, "max_rankings", 3)  # Invalid type, default to 3
-    end
-    
-    # Normalize search_location_data from JSON string to map
-    settings = case Map.get(settings, "search_location_data") do
-      nil -> settings
-      "" -> Map.delete(settings, "search_location_data")  # Remove empty strings
-      json_str when is_binary(json_str) ->
-        # Trim whitespace and check if it's actually empty
-        trimmed = String.trim(json_str)
-        if trimmed == "" do
-          Map.delete(settings, "search_location_data")
-        else
-          case Jason.decode(trimmed) do
-            {:ok, data} when is_map(data) -> 
-              # Only keep if it's a valid map with content
-              if map_size(data) > 0 do
-                Map.put(settings, "search_location_data", data)
-              else
-                Map.delete(settings, "search_location_data")
-              end
-            _ -> 
-              # Invalid JSON or not a map - remove it
-              Map.delete(settings, "search_location_data")
-          end
-        end
-      data when is_map(data) ->
-        # Already a map, keep it if it has content
-        if map_size(data) > 0 do
+    settings =
+      case Map.get(settings, "max_rankings") do
+        # No max_rankings set, leave as is
+        nil ->
           settings
-        else
+
+        # Valid integer
+        value when is_integer(value) and value in 3..7 ->
+          settings
+
+        value when is_binary(value) ->
+          case Integer.parse(value) do
+            {parsed, ""} when parsed in 3..7 -> Map.put(settings, "max_rankings", parsed)
+            # Invalid, default to 3
+            _ -> Map.put(settings, "max_rankings", 3)
+          end
+
+        # Invalid type, default to 3
+        _ ->
+          Map.put(settings, "max_rankings", 3)
+      end
+
+    # Normalize show_current_standings if present
+    settings =
+      case Map.get(settings, "show_current_standings") do
+        # No setting, leave as is
+        nil -> settings
+        "on" -> Map.put(settings, "show_current_standings", true)
+        "off" -> Map.put(settings, "show_current_standings", false)
+        "true" -> Map.put(settings, "show_current_standings", true)
+        "false" -> Map.put(settings, "show_current_standings", false)
+        # Already a boolean
+        value when is_boolean(value) -> settings
+        # Invalid value, default to true
+        _ -> Map.put(settings, "show_current_standings", true)
+      end
+
+    # Normalize search_location_data from JSON string to map
+    settings =
+      case Map.get(settings, "search_location_data") do
+        nil ->
+          settings
+
+        # Remove empty strings
+        "" ->
           Map.delete(settings, "search_location_data")
-        end
-      _ ->
-        # Invalid type - remove it
-        Map.delete(settings, "search_location_data")
-    end
+
+        json_str when is_binary(json_str) ->
+          # Trim whitespace and check if it's actually empty
+          trimmed = String.trim(json_str)
+
+          if trimmed == "" do
+            Map.delete(settings, "search_location_data")
+          else
+            case Jason.decode(trimmed) do
+              {:ok, data} when is_map(data) ->
+                # Only keep if it's a valid map with content
+                if map_size(data) > 0 do
+                  Map.put(settings, "search_location_data", data)
+                else
+                  Map.delete(settings, "search_location_data")
+                end
+
+              _ ->
+                # Invalid JSON or not a map - remove it
+                Map.delete(settings, "search_location_data")
+            end
+          end
+
+        data when is_map(data) ->
+          # Already a map, keep it if it has content
+          if map_size(data) > 0 do
+            settings
+          else
+            Map.delete(settings, "search_location_data")
+          end
+
+        _ ->
+          # Invalid type - remove it
+          Map.delete(settings, "search_location_data")
+      end
 
     settings
   end
+
   defp normalize_settings(_), do: %{}
 
   # Add settings validation to the existing validation pipeline
   defp validate_settings(changeset) do
     settings = get_field(changeset, :settings) || %{}
-    
+
     changeset
     |> validate_location_scope_setting(settings)
     |> validate_max_rankings_setting(settings)
+    |> validate_show_current_standings_setting(settings)
   end
 
   defp validate_location_scope_setting(changeset, settings) do
     case Map.get(settings, "location_scope") do
-      nil -> changeset  # Optional field
+      # Optional field
+      nil -> changeset
       scope when scope in ["place", "city", "region", "country", "custom"] -> changeset
       _ -> add_error(changeset, :settings, "invalid location scope")
     end
@@ -643,9 +809,27 @@ defmodule EventasaurusApp.Events.Poll do
 
   defp validate_max_rankings_setting(changeset, settings) do
     case Map.get(settings, "max_rankings") do
+      nil ->
+        changeset
+
+      value when is_integer(value) and value in [3, 5, 7] ->
+        changeset
+
+      _ ->
+        add_error(
+          changeset,
+          :settings,
+          "max_rankings must be one of #{Enum.join([3, 5, 7], ", ")}"
+        )
+    end
+  end
+
+  defp validate_show_current_standings_setting(changeset, settings) do
+    case Map.get(settings, "show_current_standings") do
+      # Optional field
       nil -> changeset
-      value when is_integer(value) and value in [3, 5, 7] -> changeset
-      _ -> add_error(changeset, :settings, "max_rankings must be one of #{Enum.join([3, 5, 7], ", ")}")
+      value when is_boolean(value) -> changeset
+      _ -> add_error(changeset, :settings, "show_current_standings must be a boolean")
     end
   end
 end
