@@ -106,27 +106,35 @@ activities = Repo.all(EventasaurusApp.Events.EventActivity)
 # Validate seeding consistency
 Helpers.section("Validating Seeding Consistency")
 import Ecto.Query
-alias EventasaurusApp.Events.{Event, Poll}
+alias EventasaurusApp.Events.{Event, Poll, EventParticipant}
 
-events_with_polls = from(e in Event, 
-  join: p in Poll, 
-  on: p.event_id == e.id, 
-  select: e, 
-  distinct: true) 
+events_with_polls_count =
+  from(e in Event,
+    join: p in Poll, on: p.event_id == e.id,
+    where: is_nil(e.deleted_at),
+    select: count(fragment("distinct ?", e.id))
+  )
+  |> Repo.one()
+
+inconsistent =
+  from(e in Event,
+    join: p in Poll, on: p.event_id == e.id,
+    left_join: ep in EventParticipant, on: ep.event_id == e.id,
+    where: is_nil(e.deleted_at),
+    group_by: [e.id, e.title],
+    having: count(ep.id) == 0,
+    select: %{id: e.id, title: e.title}
+  )
   |> Repo.all()
 
-inconsistent = Enum.filter(events_with_polls, fn event ->
-  EventasaurusApp.Events.list_event_participants(event) |> length() == 0
-end)
-
-if length(inconsistent) > 0 do
+if inconsistent != [] do
   Helpers.error("❌ Found #{length(inconsistent)} events with polls but no participants!")
-  Enum.each(inconsistent, fn event ->
-    IO.puts("   - #{event.title} (ID: #{event.id})")
+  Enum.each(inconsistent, fn e ->
+    IO.puts("   - #{e.title} (ID: #{e.id})")
   end)
   IO.puts("\nThis indicates a seeding coordination issue.")
 else
-  Helpers.success("✅ All #{length(events_with_polls)} events with polls have participants")
+  Helpers.success("✅ All #{events_with_polls_count} events with polls have participants")
 end
 
 # Summary
