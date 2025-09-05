@@ -25,6 +25,13 @@ defmodule EventasaurusApp.Repo.Migrations.CreateGroupJoinRequests do
     
     # Ensure valid status values
     create constraint(:group_join_requests, :group_join_requests_status_check,
-      check: "status IN ('pending', 'approved', 'denied')")
+      check: "status IN ('pending', 'approved', 'denied', 'cancelled')")
+
+    # Enforce review-field invariants:
+    # - approved/denied require reviewer and reviewed_at
+    # - pending/cancelled must not have reviewer nor reviewed_at
+    create constraint(:group_join_requests, :group_join_requests_review_fields_check,
+      check: "(status IN ('approved','denied') AND reviewed_by_id IS NOT NULL AND reviewed_at IS NOT NULL)
+              OR (status IN ('pending','cancelled') AND reviewed_by_id IS NULL AND reviewed_at IS NULL)")
   end
 end

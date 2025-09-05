@@ -16,7 +16,7 @@ defmodule EventasaurusApp.Groups.GroupJoinRequest do
     timestamps(type: :utc_datetime)
   end
 
-  @valid_statuses ["pending", "approved", "denied"]
+  @valid_statuses ["pending", "approved", "denied", "cancelled"]
 
   @doc false
   def changeset(group_join_request, attrs) do
@@ -46,11 +46,11 @@ defmodule EventasaurusApp.Groups.GroupJoinRequest do
       status in ["approved", "denied"] and is_nil(reviewed_at) ->
         add_error(changeset, :reviewed_at, "must be present when status is #{status}")
 
-      status == "pending" and not is_nil(reviewed_by_id) ->
-        add_error(changeset, :reviewed_by_id, "must be nil when status is pending")
+      status in ["pending", "cancelled"] and not is_nil(reviewed_by_id) ->
+        add_error(changeset, :reviewed_by_id, "must be nil when status is #{status}")
 
-      status == "pending" and not is_nil(reviewed_at) ->
-        add_error(changeset, :reviewed_at, "must be nil when status is pending")
+      status in ["pending", "cancelled"] and not is_nil(reviewed_at) ->
+        add_error(changeset, :reviewed_at, "must be nil when status is #{status}")
 
       true ->
         changeset
