@@ -167,6 +167,7 @@ defmodule EventasaurusWeb.GroupLive.Index do
       {"unlisted", "request"} -> "🔗📝"
       {"unlisted", "invite_only"} -> "🔗📮"
       {"private", _} -> "🔒"
+      _ -> "❓"
     end
   end
 
@@ -179,6 +180,7 @@ defmodule EventasaurusWeb.GroupLive.Index do
       {"unlisted", "request"} -> "Unlisted - Request to join"
       {"unlisted", "invite_only"} -> "Unlisted - Invite only"
       {"private", _} -> "Private group"
+      _ -> "Unknown privacy settings"
     end
   end
 end
