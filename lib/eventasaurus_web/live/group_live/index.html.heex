@@ -162,31 +162,8 @@
                     <%= group.description %>
                   </p>
                 <% end %>
-                <div class="mt-2 flex items-center justify-between">
-                  <div class="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <.icon name="hero-calendar" class="flex-shrink-0 mr-1.5 h-4 w-4" />
-                    <%= group.event_count %> <%= if group.event_count == 1, do: "event", else: "events" %>
-                  </div>
-                  
-                  <!-- Privacy indicators -->
-                  <div class="flex items-center space-x-1">
-                    <%= case {group.visibility, group.join_policy} do %>
-                      <% {"public", "open"} -> %>
-                        <span class="text-xs text-gray-400" title="Public - Anyone can join">🌍</span>
-                      <% {"public", "request"} -> %>
-                        <span class="text-xs text-gray-400" title="Public - Request to join">🌍📝</span>
-                      <% {"public", "invite_only"} -> %>
-                        <span class="text-xs text-gray-400" title="Public - Invite only">🌍📮</span>
-                      <% {"unlisted", "open"} -> %>
-                        <span class="text-xs text-gray-400" title="Unlisted - Anyone can join">🔗</span>
-                      <% {"unlisted", "request"} -> %>
-                        <span class="text-xs text-gray-400" title="Unlisted - Request to join">🔗📝</span>
-                      <% {"unlisted", "invite_only"} -> %>
-                        <span class="text-xs text-gray-400" title="Unlisted - Invite only">🔗📮</span>
-                      <% {"private", _} -> %>
-                        <span class="text-xs text-gray-400" title="Private group">🔒</span>
-                    <% end %>
-                  </div>
+                <div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <%= group.event_count %> <%= if group.event_count == 1, do: "event", else: "events" %>
                 </div>
               </div>
               <.live_component 
@@ -203,16 +180,13 @@
               <div class="flex items-center space-x-3">
                 <!-- Membership Status Badge -->
                 <%= if group.is_member do %>
-                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                  <span class="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
                     <%= case group.user_role do %>
                       <% "owner" -> %>
-                        <.icon name="hero-star" class="w-3 h-3 mr-1" />
                         Owner
                       <% "admin" -> %>
-                        <.icon name="hero-shield-check" class="w-3 h-3 mr-1" />
                         Admin
                       <% _ -> %>
-                        <.icon name="hero-check-circle" class="w-3 h-3 mr-1" />
                         Member
                     <% end %>
                   </span>
