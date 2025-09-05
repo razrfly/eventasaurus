@@ -707,18 +707,19 @@ defmodule EventasaurusApp.Events.Poll do
         nil ->
           settings
 
-        # Valid integer
-        value when is_integer(value) and value in 3..7 ->
+        # Valid integer in the allowed set
+        value when is_integer(value) and value in [3, 5, 7] ->
           settings
 
         value when is_binary(value) ->
           case Integer.parse(value) do
-            {parsed, ""} when parsed in 3..7 -> Map.put(settings, "max_rankings", parsed)
-            # Invalid, default to 3
-            _ -> Map.put(settings, "max_rankings", 3)
+            {parsed, ""} when parsed in [3, 5, 7] ->
+              Map.put(settings, "max_rankings", parsed)
+            _ ->
+              Map.put(settings, "max_rankings", 3)
           end
 
-        # Invalid type, default to 3
+        # Invalid type or value, default to 3
         _ ->
           Map.put(settings, "max_rankings", 3)
       end
