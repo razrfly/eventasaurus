@@ -7,7 +7,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreateGroupJoinRequests do
       add :user_id, references(:users, on_delete: :delete_all), null: false
       add :status, :string, size: 20, default: "pending", null: false
       add :message, :text
-      add :reviewed_by_id, references(:users, on_delete: :nilify_all)
+      add :reviewed_by_id, references(:users, on_delete: :restrict)
       add :reviewed_at, :utc_datetime
 
       timestamps(type: :utc_datetime)
