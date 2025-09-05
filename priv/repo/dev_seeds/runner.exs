@@ -103,6 +103,32 @@ Code.require_file("activity_seed.exs", __DIR__)
 ActivitySeed.run()
 activities = Repo.all(EventasaurusApp.Events.EventActivity)
 
+# Validate seeding consistency
+Helpers.section("Validating Seeding Consistency")
+import Ecto.Query
+alias EventasaurusApp.Events.{Event, Poll}
+
+events_with_polls = from(e in Event, 
+  join: p in Poll, 
+  on: p.event_id == e.id, 
+  select: e, 
+  distinct: true) 
+  |> Repo.all()
+
+inconsistent = Enum.filter(events_with_polls, fn event ->
+  EventasaurusApp.Events.list_event_participants(event) |> length() == 0
+end)
+
+if length(inconsistent) > 0 do
+  Helpers.error("❌ Found #{length(inconsistent)} events with polls but no participants!")
+  Enum.each(inconsistent, fn event ->
+    IO.puts("   - #{event.title} (ID: #{event.id})")
+  end)
+  IO.puts("\nThis indicates a seeding coordination issue.")
+else
+  Helpers.success("✅ All #{length(events_with_polls)} events with polls have participants")
+end
+
 # Summary
 elapsed_time = System.monotonic_time(:second) - start_time
 Helpers.section("Seeding Complete!")
@@ -135,5 +161,6 @@ Personal Account:
 ----------------
 - Email: holden@gmail.com / Password: sawyer1234
 """)
+
 
 Helpers.success("Development database seeded successfully! 🎉")

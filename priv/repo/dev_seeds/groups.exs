@@ -4,7 +4,6 @@ defmodule DevSeeds.Groups do
   Creates groups with varying sizes and activity levels.
   """
   
-  import EventasaurusApp.Factory
   alias DevSeeds.Helpers
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Groups
