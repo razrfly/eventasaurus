@@ -88,6 +88,7 @@ defmodule EventasaurusWeb.GroupLive.Index do
           :cannot_view -> "You don't have permission to view this group"
           :already_member -> "You are already a member of this group"
           :invite_only -> "This group is invite only"
+          :invalid_join_policy -> "This group has invalid configuration"
           _ -> "You don't have permission to join this group"
         end
         {:noreply,
