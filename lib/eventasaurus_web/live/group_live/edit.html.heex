@@ -32,6 +32,143 @@
       />
     </div>
 
+    <!-- Privacy Settings Section -->
+    <div class="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+      <div>
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Group Privacy Settings</h3>
+        
+        <!-- Visibility Setting -->
+        <div class="space-y-2 mb-4">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Who can see this group?
+          </label>
+          <div class="space-y-2">
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input 
+                type="radio" 
+                name="group[visibility]" 
+                value="public" 
+                checked={Ecto.Changeset.get_field(@changeset, :visibility) == "public"}
+                class="mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div class="flex-1">
+                <div class="flex items-center space-x-2">
+                  <span class="text-base">🌍</span>
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Public</span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Anyone can find and view this group on the platform
+                </p>
+              </div>
+            </label>
+            
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input 
+                type="radio" 
+                name="group[visibility]" 
+                value="unlisted" 
+                checked={Ecto.Changeset.get_field(@changeset, :visibility) == "unlisted"}
+                class="mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div class="flex-1">
+                <div class="flex items-center space-x-2">
+                  <span class="text-base">🔗</span>
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Unlisted</span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Only people with the link can find and view this group
+                </p>
+              </div>
+            </label>
+            
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input 
+                type="radio" 
+                name="group[visibility]" 
+                value="private" 
+                checked={Ecto.Changeset.get_field(@changeset, :visibility) == "private"}
+                class="mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div class="flex-1">
+                <div class="flex items-center space-x-2">
+                  <span class="text-base">🔒</span>
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Private</span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Only current members can see this group exists
+                </p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Join Policy Setting -->
+        <div class="space-y-2">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            How can people join?
+          </label>
+          <div class="space-y-2">
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input 
+                type="radio" 
+                name="group[join_policy]" 
+                value="open" 
+                checked={Ecto.Changeset.get_field(@changeset, :join_policy) == "open"}
+                class="mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div class="flex-1">
+                <div class="flex items-center space-x-2">
+                  <span class="text-base">✅</span>
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Anyone can join</span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  People can join immediately without approval
+                </p>
+              </div>
+            </label>
+            
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input 
+                type="radio" 
+                name="group[join_policy]" 
+                value="request" 
+                checked={Ecto.Changeset.get_field(@changeset, :join_policy) == "request"}
+                class="mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div class="flex-1">
+                <div class="flex items-center space-x-2">
+                  <span class="text-base">📝</span>
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Request to join</span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  People must request to join and wait for approval
+                </p>
+              </div>
+            </label>
+            
+            <label class="flex items-start space-x-3 cursor-pointer">
+              <input 
+                type="radio" 
+                name="group[join_policy]" 
+                value="invite_only" 
+                checked={Ecto.Changeset.get_field(@changeset, :join_policy) == "invite_only"}
+                class="mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div class="flex-1">
+                <div class="flex items-center space-x-2">
+                  <span class="text-base">📮</span>
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Invite only</span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Only organizers can invite new members
+                </p>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div>
       <.input
         field={f[:slug]}

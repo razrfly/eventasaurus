@@ -11,6 +11,10 @@ defmodule EventasaurusApp.Groups.Group do
     field :cover_image_url, :string
     field :avatar_url, :string
     
+    # Privacy controls
+    field :visibility, :string, default: "public"
+    field :join_policy, :string, default: "open"
+    
     # Venue fields (for Google Places integration)
     field :venue_name, :string
     field :venue_address, :string
@@ -41,11 +45,14 @@ defmodule EventasaurusApp.Groups.Group do
     group
     |> cast(attrs, [:name, :slug, :description, :cover_image_url, :avatar_url, :venue_id, :created_by_id,
                    :venue_name, :venue_address, :venue_city, :venue_state, :venue_country,
-                   :venue_latitude, :venue_longitude])
+                   :venue_latitude, :venue_longitude, :visibility, :join_policy])
     |> validate_required([:name, :created_by_id])
     |> validate_length(:name, min: 3, max: 100)
     |> validate_length(:slug, min: 3, max: 100)
     |> validate_slug()
+    |> validate_inclusion(:visibility, ["public", "unlisted", "private"])
+    |> validate_inclusion(:join_policy, ["open", "request", "invite_only"])
+    |> validate_privacy_compatibility()
     |> unique_constraint(:slug)
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:created_by_id)
@@ -61,6 +68,18 @@ defmodule EventasaurusApp.Groups.Group do
         else
           add_error(changeset, :slug, "must contain only lowercase letters, numbers, and hyphens")
         end
+    end
+  end
+
+  defp validate_privacy_compatibility(changeset) do
+    visibility = get_field(changeset, :visibility)
+    join_policy = get_field(changeset, :join_policy)
+    
+    case {visibility, join_policy} do
+      {"private", "open"} -> 
+        add_error(changeset, :join_policy, "Private groups cannot have open join policy")
+      _ -> 
+        changeset
     end
   end
 

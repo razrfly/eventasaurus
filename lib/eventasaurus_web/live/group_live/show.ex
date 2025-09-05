@@ -15,12 +15,12 @@ defmodule EventasaurusWeb.GroupLive.Show do
          |> redirect(to: "/auth/login")}
       
       user ->
-        # Try to find the group
-        case Groups.get_group_by_slug(slug) do
+        # Try to find the group with access control
+        case Groups.get_group_by_slug_if_accessible(slug, user) do
           nil ->
             {:ok,
              socket
-             |> put_flash(:error, "Group not found.")
+             |> put_flash(:error, "Group not found or you don't have access to view it.")
              |> redirect(to: "/groups")}
           
           group ->
@@ -39,7 +39,17 @@ defmodule EventasaurusWeb.GroupLive.Show do
                |> assign(:event_count, 0)
                |> assign(:activities, [])
                |> assign(:activity_filter, "all")
-               |> assign(:active_tab, "events")}
+               |> assign(:active_tab, "events")
+               |> assign(:search_query, "")
+               |> assign(:role_filter, "all")
+               |> assign(:paginated_members, [])
+               |> assign(:total_pages, 1)
+               |> assign(:current_page, 1)
+               |> assign(:show_add_modal, false)
+               |> assign(:potential_members, [])
+               |> assign(:add_member_search, "")
+               |> assign(:selected_user_id, nil)
+               |> assign(:open_member_menu, nil)}
             else
               # Load full group data for members
               members = Groups.list_group_members_with_roles(group)
@@ -128,53 +138,78 @@ defmodule EventasaurusWeb.GroupLive.Show do
     group = socket.assigns.group
     user = socket.assigns.user
     
-    case Groups.add_user_to_group(group, user) do
-      {:ok, _} ->
-        # Reload group data after joining
-        members = Groups.list_group_members_with_roles(group)
-        member_count = length(members)
+    # Check if user can join this group
+    case Groups.can_join_group?(group, user) do
+      {:ok, :immediate} ->
+        # User can join immediately
+        case Groups.add_user_to_group(group, user) do
+          {:ok, _} ->
+            # Reload group data after joining
+            members = Groups.list_group_members_with_roles(group)
+            member_count = length(members)
+            
+            # Load group events using unified function with proper ordering
+            time_filter = :upcoming
+            events = Events.list_events_for_group(group, user, [
+              time_filter: time_filter,
+              limit: 100
+            ])
+            
+            # Calculate filter counts
+            all_events = Events.list_events_for_group(group, user, [
+              time_filter: :all,
+              limit: 1000
+            ])
+            filter_counts = calculate_filter_counts(all_events)
+            event_count = length(events)
+            
+            {:noreply,
+             socket
+             |> put_flash(:info, "Successfully joined the group!")
+             |> assign(:is_member, true)
+             |> assign(:members, members)
+             |> assign(:member_count, member_count)
+             |> assign(:events, events)
+             |> assign(:event_count, event_count)
+             |> assign(:time_filter, time_filter)
+             |> assign(:filter_counts, filter_counts)
+             |> assign(:active_tab, "events")
+             |> assign(:search_query, "")
+             |> assign(:role_filter, "all")
+             |> assign(:paginated_members, [])
+             |> assign(:total_pages, 1)
+             |> assign(:current_page, 1)
+             |> assign(:show_add_modal, false)
+             |> assign(:potential_members, [])
+             |> assign(:add_member_search, "")
+             |> assign(:selected_user_id, nil)
+             |> assign(:open_member_menu, nil)}
+          
+          {:error, _} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Failed to join group")}
+        end
         
-        # Load group events using unified function with proper ordering
-        time_filter = :upcoming
-        events = Events.list_events_for_group(group, user, [
-          time_filter: time_filter,
-          limit: 100
-        ])
-        
-        # Calculate filter counts
-        all_events = Events.list_events_for_group(group, user, [
-          time_filter: :all,
-          limit: 1000
-        ])
-        filter_counts = calculate_filter_counts(all_events)
-        event_count = length(events)
-        
+      {:ok, :request_required} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Successfully joined the group!")
-         |> assign(:is_member, true)
-         |> assign(:members, members)
-         |> assign(:member_count, member_count)
-         |> assign(:events, events)
-         |> assign(:event_count, event_count)
-         |> assign(:time_filter, time_filter)
-         |> assign(:filter_counts, filter_counts)
-         |> assign(:active_tab, "events")
-         |> assign(:search_query, "")
-         |> assign(:role_filter, "all")
-         |> assign(:paginated_members, [])
-         |> assign(:total_pages, 1)
-         |> assign(:current_page, 1)
-         |> assign(:show_add_modal, false)
-         |> assign(:potential_members, [])
-         |> assign(:add_member_search, "")
-         |> assign(:selected_user_id, nil)
-         |> assign(:open_member_menu, nil)}
+         |> put_flash(:info, "Join request sent! Waiting for admin approval.")}
       
-      {:error, _} ->
+      {:error, :already_member} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Failed to join group")}
+         |> put_flash(:info, "You are already a member of this group")}
+      
+      {:error, :invite_only} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "This group is invite-only. Contact an admin to join.")}
+      
+      {:error, :cannot_view} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "You cannot join this group")}
     end
   end
   
