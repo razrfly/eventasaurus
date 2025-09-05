@@ -36,24 +36,42 @@ created_groups = Enum.map(diverse_group_configs, fn config ->
   
   Logger.info("Creating group: #{config.name} (#{config.visibility}/#{config.join_policy})")
   
-  {:ok, group} = Groups.create_group_with_creator(%{
-    "name" => config.name,
-    "description" => config.description,
-    "visibility" => config.visibility,
-    "join_policy" => config.join_policy
-  }, creator)
+  # Check if group already exists (idempotent operation)
+  group = case Repo.get_by(Groups.Group, name: config.name) do
+    nil ->
+      {:ok, group} = Groups.create_group_with_creator(%{
+        "name" => config.name,
+        "description" => config.description,
+        "visibility" => config.visibility,
+        "join_policy" => config.join_policy
+      }, creator)
+      Logger.info("Created new group: #{group.name}")
+      group
+    existing_group ->
+      Logger.info("Group already exists: #{existing_group.name}")
+      existing_group
+  end
   
-  # Add 2-5 members to each group
-  member_count = Enum.random(2..5)
+  # Add 2-5 additional members to each group (excluding creator to avoid re-addition)
+  target_member_count = Enum.random(2..5)
   
-  users
-  |> Enum.take_random(member_count)
-  |> Enum.each(fn user ->
-    role = if user.id == creator.id, do: "owner", else: Enum.random(["member", "admin"])
-    Groups.add_user_to_group(group, user, role)
+  successful_additions = users
+  |> Enum.reject(&(&1.id == creator.id))  # Remove creator from potential members
+  |> Enum.take_random(target_member_count)
+  |> Enum.map(fn user ->
+    role = Enum.random(["member", "admin"])
+    # Pass the creator as acting_user so they can add members even to private groups
+    case Groups.add_user_to_group(group, user, role, creator) do
+      {:ok, _} -> 1
+      {:error, :already_member} -> 0
+      {:error, _} -> 0
+    end
   end)
+  |> Enum.sum()
   
-  Logger.info("Created group: #{group.name} with #{member_count} members")
+  # Total members = creator (1) + successful additions
+  total_members = 1 + successful_additions
+  Logger.info("Group #{group.name} now has #{total_members} members (#{successful_additions} added)")
   group
 end)
 

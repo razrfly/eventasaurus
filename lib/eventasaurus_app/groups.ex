@@ -59,7 +59,7 @@ defmodule EventasaurusApp.Groups do
   import Ecto.Query, warn: false
   require Logger
   alias EventasaurusApp.Repo
-  alias EventasaurusApp.Groups.{Group, GroupUser}
+  alias EventasaurusApp.Groups.{Group, GroupUser, GroupJoinRequest}
   alias EventasaurusApp.Accounts.User
   alias EventasaurusApp.AuditLogger
 
@@ -459,26 +459,66 @@ defmodule EventasaurusApp.Groups do
       true ->
         {:error, :already_member}
       false ->
-        attrs = %{
-          group_id: group.id,
-          user_id: user.id,
-          role: role || "member"
-        }
-
-        result = %GroupUser{}
-        |> GroupUser.changeset(attrs)
-        |> Repo.insert()
-        
-        # Log membership addition
-        case result do
-          {:ok, _group_user} ->
-            if acting_user do
-              AuditLogger.log_member_added(group.id, user.id, acting_user.id, role, metadata)
+        # Special case: group owner can always be added regardless of privacy settings
+        if group.created_by_id == user.id do
+          perform_add_user_to_group(group, user, role, acting_user, metadata)
+        else
+          # Check if this is via a join request workflow or direct invitation
+          case can_join_group?(group, user) do
+          {:ok, :immediate} ->
+            # Can join immediately (open group)
+            perform_add_user_to_group(group, user, role, acting_user, metadata)
+          
+          {:ok, :request_required} ->
+            # Need to create join request instead of adding directly
+            if acting_user && can_manage?(group, acting_user) do
+              # Admin is inviting them directly, bypass request system
+              perform_add_user_to_group(group, user, role, acting_user, metadata)
+            else
+              # User is trying to join request-based group, create join request
+              create_join_request(%{
+                group_id: group.id,
+                user_id: user.id,
+                message: Map.get(metadata, :message)
+              })
             end
-            result
-          _ ->
-            result
+          
+          {:error, :invite_only} ->
+            # Only admins can add users to invite-only groups
+            if acting_user && can_manage?(group, acting_user) do
+              perform_add_user_to_group(group, user, role, acting_user, metadata)
+            else
+              {:error, :invite_only}
+            end
+          
+            {:error, reason} ->
+              {:error, reason}
+          end
         end
+    end
+  end
+
+  # Private function to actually add user to group
+  defp perform_add_user_to_group(group, user, role, acting_user, metadata) do
+    attrs = %{
+      group_id: group.id,
+      user_id: user.id,
+      role: role || "member"
+    }
+
+    result = %GroupUser{}
+    |> GroupUser.changeset(attrs)
+    |> Repo.insert()
+    
+    # Log membership addition
+    case result do
+      {:ok, _group_user} ->
+        if acting_user do
+          AuditLogger.log_member_added(group.id, user.id, acting_user.id, role, metadata)
+        end
+        result
+      _ ->
+        result
     end
   end
 
@@ -1296,5 +1336,346 @@ defmodule EventasaurusApp.Groups do
       total: total,
       total_pages: ceil(total / per_page)
     }
+  end
+
+  ## Group Join Requests
+
+  @doc """
+  Creates a new group join request.
+  
+  ## Parameters
+  
+  * `attrs` - Map with group_id, user_id, and optional message
+  
+  ## Returns
+  
+  * `{:ok, %GroupJoinRequest{}}` - Successfully created request
+  * `{:error, %Ecto.Changeset{}}` - Validation errors
+  
+  ## Examples
+  
+      iex> create_join_request(%{group_id: 1, user_id: 2, message: "I'd love to join!"})
+      {:ok, %GroupJoinRequest{}}
+      
+      iex> create_join_request(%{group_id: 1, user_id: 2})  # Duplicate request
+      {:error, %Ecto.Changeset{}}
+  """
+  def create_join_request(attrs \\ %{}) do
+    %GroupJoinRequest{}
+    |> GroupJoinRequest.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, request} ->
+        {:ok, Repo.preload(request, [:group, :user, :reviewed_by])}
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Gets a join request by ID.
+  
+  ## Examples
+  
+      iex> get_join_request(123)
+      %GroupJoinRequest{}
+      
+      iex> get_join_request(999)
+      nil
+  """
+  def get_join_request(id) do
+    GroupJoinRequest
+    |> Repo.get(id)
+    |> case do
+      nil -> nil
+      request -> Repo.preload(request, [:group, :user, :reviewed_by])
+    end
+  end
+
+  @doc """
+  Gets a join request by ID with error if not found.
+  
+  ## Examples
+  
+      iex> get_join_request!(123)
+      %GroupJoinRequest{}
+      
+      iex> get_join_request!(999)
+      ** (Ecto.NoResultsError)
+  """
+  def get_join_request!(id) do
+    GroupJoinRequest
+    |> Repo.get!(id)
+    |> Repo.preload([:group, :user, :reviewed_by])
+  end
+
+  @doc """
+  Lists pending join requests for a group.
+  
+  ## Examples
+  
+      iex> list_pending_join_requests(group)
+      [%GroupJoinRequest{status: "pending"}, ...]
+  """
+  def list_pending_join_requests(%Group{} = group) do
+    from(r in GroupJoinRequest,
+      where: r.group_id == ^group.id and r.status == "pending",
+      order_by: [desc: r.inserted_at],
+      preload: [:user, :group]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists all join requests for a group with optional status filter.
+  
+  ## Parameters
+  
+  * `group` - Group struct
+  * `opts` - Options including:
+    * `:status` - Filter by status ("pending", "approved", "denied")
+    * `:limit` - Maximum results (default: 50)
+  
+  ## Examples
+  
+      iex> list_join_requests(group)
+      [%GroupJoinRequest{}, ...]
+      
+      iex> list_join_requests(group, status: "approved", limit: 10)
+      [%GroupJoinRequest{status: "approved"}, ...]
+  """
+  def list_join_requests(%Group{} = group, opts \\ []) do
+    status = Keyword.get(opts, :status)
+    limit = Keyword.get(opts, :limit, 50)
+    
+    query = from(r in GroupJoinRequest,
+      where: r.group_id == ^group.id,
+      order_by: [desc: r.inserted_at],
+      preload: [:user, :group, :reviewed_by],
+      limit: ^limit
+    )
+    
+    query = if status do
+      where(query, [r], r.status == ^status)
+    else
+      query
+    end
+    
+    Repo.all(query)
+  end
+
+  @doc """
+  Lists join requests for a user with optional status filter.
+  
+  ## Examples
+  
+      iex> list_user_join_requests(user)
+      [%GroupJoinRequest{}, ...]
+  """
+  def list_user_join_requests(%User{} = user, opts \\ []) do
+    status = Keyword.get(opts, :status)
+    limit = Keyword.get(opts, :limit, 50)
+    
+    query = from(r in GroupJoinRequest,
+      where: r.user_id == ^user.id,
+      order_by: [desc: r.inserted_at],
+      preload: [:user, :group, :reviewed_by],
+      limit: ^limit
+    )
+    
+    query = if status do
+      where(query, [r], r.status == ^status)
+    else
+      query
+    end
+    
+    Repo.all(query)
+  end
+
+  @doc """
+  Approves a join request and adds the user to the group.
+  
+  ## Parameters
+  
+  * `request` - GroupJoinRequest struct
+  * `reviewer` - User who is approving the request
+  * `metadata` - Optional audit metadata
+  
+  ## Returns
+  
+  * `{:ok, %{request: %GroupJoinRequest{}, membership: %GroupUser{}}}` - Success
+  * `{:error, %Ecto.Changeset{}}` - Validation errors
+  * `{:error, atom}` - Other errors
+  
+  ## Examples
+  
+      iex> approve_join_request(request, admin_user)
+      {:ok, %{request: %GroupJoinRequest{status: "approved"}, membership: %GroupUser{}}}
+  """
+  def approve_join_request(%GroupJoinRequest{} = request, %User{} = reviewer, metadata \\ %{}) do
+    if request.status != "pending" do
+      {:error, :already_processed}
+    else
+      Repo.transaction(fn ->
+        # Update request status
+        update_attrs = %{
+          status: "approved",
+          reviewed_by_id: reviewer.id,
+          reviewed_at: DateTime.utc_now()
+        }
+        
+        case update_join_request_status(request, update_attrs) do
+          {:ok, updated_request} ->
+            case perform_add_user_to_group(updated_request.group, updated_request.user, "member", reviewer, metadata) do
+              {:ok, membership} ->
+                # Log the approval
+                AuditLogger.log_join_request_approved(
+                  updated_request.group.id,
+                  updated_request.user.id,
+                  reviewer.id,
+                  metadata
+                )
+                
+                %{request: updated_request, membership: membership}
+              
+              {:error, :already_member} ->
+                # User is already a member, just update the request status
+                %{request: updated_request, membership: nil}
+              
+              {:error, reason} ->
+                Repo.rollback(reason)
+            end
+          
+          {:error, reason} ->
+            Repo.rollback(reason)
+        end
+      end)
+    end
+  end
+
+  @doc """
+  Denies a join request.
+  
+  ## Parameters
+  
+  * `request` - GroupJoinRequest struct
+  * `reviewer` - User who is denying the request
+  * `metadata` - Optional audit metadata
+  
+  ## Examples
+  
+      iex> deny_join_request(request, admin_user)
+      {:ok, %GroupJoinRequest{status: "denied"}}
+  """
+  def deny_join_request(%GroupJoinRequest{} = request, %User{} = reviewer, metadata \\ %{}) do
+    if request.status != "pending" do
+      {:error, :already_processed}
+    else
+      update_attrs = %{
+        status: "denied",
+        reviewed_by_id: reviewer.id,
+        reviewed_at: DateTime.utc_now()
+      }
+      
+      case update_join_request_status(request, update_attrs) do
+        {:ok, updated_request} ->
+          # Log the denial
+          AuditLogger.log_join_request_denied(
+            updated_request.group.id,
+            updated_request.user.id,
+            reviewer.id,
+            metadata
+          )
+          
+          {:ok, updated_request}
+        error ->
+          error
+      end
+    end
+  end
+
+  @doc """
+  Cancels a pending join request (by the requester).
+  
+  ## Examples
+  
+      iex> cancel_join_request(request)
+      {:ok, %GroupJoinRequest{status: "cancelled"}}
+  """
+  def cancel_join_request(%GroupJoinRequest{} = request) do
+    if request.status != "pending" do
+      {:error, :already_processed}
+    else
+      update_attrs = %{status: "cancelled"}
+      update_join_request_status(request, update_attrs)
+    end
+  end
+
+  @doc """
+  Checks if a user has a pending join request for a group.
+  
+  ## Examples
+  
+      iex> has_pending_join_request?(group, user)
+      true
+      
+      iex> has_pending_join_request?(group, user)
+      false
+  """
+  def has_pending_join_request?(%Group{} = group, %User{} = user) do
+    Repo.exists?(
+      from r in GroupJoinRequest,
+      where: r.group_id == ^group.id and r.user_id == ^user.id and r.status == "pending"
+    )
+  end
+
+  @doc """
+  Gets a pending join request for a user and group.
+  
+  Returns nil if no pending request exists.
+  
+  ## Examples
+  
+      iex> get_pending_join_request(group, user)
+      %GroupJoinRequest{}
+      
+      iex> get_pending_join_request(group, user)
+      nil
+  """
+  def get_pending_join_request(%Group{} = group, %User{} = user) do
+    from(r in GroupJoinRequest,
+      where: r.group_id == ^group.id and r.user_id == ^user.id and r.status == "pending",
+      preload: [:group, :user, :reviewed_by]
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Counts pending join requests for a group.
+  
+  ## Examples
+  
+      iex> count_pending_join_requests(group)
+      5
+  """
+  def count_pending_join_requests(%Group{} = group) do
+    from(r in GroupJoinRequest,
+      where: r.group_id == ^group.id and r.status == "pending",
+      select: count(r.id)
+    )
+    |> Repo.one()
+  end
+
+  # Private function to update join request status
+  defp update_join_request_status(%GroupJoinRequest{} = request, attrs) do
+    request
+    |> GroupJoinRequest.changeset(attrs)
+    |> Repo.update()
+    |> case do
+      {:ok, updated_request} ->
+        {:ok, Repo.preload(updated_request, [:group, :user, :reviewed_by])}
+      error ->
+        error
+    end
   end
 end
