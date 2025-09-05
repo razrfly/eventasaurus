@@ -58,7 +58,8 @@ defmodule ComprehensiveSeed do
       {:ok, group} = Groups.create_group_with_creator(%{
         "name" => config.name,
         "description" => config.description,
-        "visibility" => Enum.random(["public", "private"])
+        "visibility" => Enum.random(["public", "public", "unlisted", "private"]),
+        "join_policy" => Enum.random(["open", "open", "request", "invite_only"])
       }, creator)
       
       # Add members based on size

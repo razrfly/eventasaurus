@@ -79,6 +79,7 @@ defmodule EventasaurusApp.Groups do
   @doc """
   Returns groups with preloaded user info and event counts.
   This avoids N+1 queries when displaying group lists.
+  Respects privacy settings - only returns discoverable groups.
   
   ## Parameters
   - user: The current user to check membership
@@ -91,11 +92,18 @@ defmodule EventasaurusApp.Groups do
       [%{group: %Group{}, event_count: 5, is_member: true, user_role: "admin"}, ...]
   """
   def list_groups_with_user_info(%User{} = user, search_query \\ "", only_user_groups \\ false) do
-    # Base query for groups
+    # Base query for groups with privacy filtering
     base_query = from g in Group,
       left_join: gu in GroupUser,
       on: gu.group_id == g.id and gu.user_id == ^user.id,
-      preload: [:venue, :created_by]
+      preload: [:venue, :created_by],
+      where: 
+        # Show public groups to everyone
+        g.visibility == "public" or
+        # Show private groups only to members  
+        (g.visibility == "private" and not is_nil(gu.id)) or
+        # Unlisted groups are not discoverable in listings
+        false
     
     # Apply search filter
     query = if search_query && String.trim(search_query) != "" do
@@ -134,8 +142,12 @@ defmodule EventasaurusApp.Groups do
     
     event_count_map = Repo.all(event_counts) |> Map.new()
     
-    # Combine results
-    Enum.map(results, fn %{group: group, is_member: is_member, user_role: user_role} ->
+    # Combine results and filter based on discoverability
+    results
+    |> Enum.filter(fn %{group: group, is_member: is_member} ->
+      can_discover_group?(group, user)
+    end)
+    |> Enum.map(fn %{group: group, is_member: is_member, user_role: user_role} ->
       Map.merge(group, %{
         event_count: Map.get(event_count_map, group.id, 0),
         is_member: is_member,
@@ -682,6 +694,111 @@ defmodule EventasaurusApp.Groups do
     else
       # Check if user is admin
       is_admin?(group, user)
+    end
+  end
+
+  @doc """
+  Checks if a user can discover a group (see it in listings).
+  
+  ## Discovery Rules
+  - Public groups: Visible to all users
+  - Unlisted groups: Only visible via direct link (not in discovery)
+  - Private groups: Only visible to current members
+  
+  ## Examples
+  
+      iex> public_group = %Group{visibility: "public"}
+      iex> can_discover_group?(public_group, user)
+      true
+      
+      iex> private_group = %Group{visibility: "private"}
+      iex> can_discover_group?(private_group, non_member)
+      false
+  """
+  def can_discover_group?(%Group{} = group, %User{} = user) do
+    case group.visibility do
+      "public" -> true
+      "unlisted" -> false  # Not discoverable in listings
+      "private" -> user_in_group?(group, user)
+    end
+  end
+
+  @doc """
+  Checks if a user can view a group's details page.
+  
+  ## Access Rules
+  - Public groups: Anyone can view
+  - Unlisted groups: Anyone with link can view
+  - Private groups: Only members can view
+  
+  ## Examples
+  
+      iex> unlisted_group = %Group{visibility: "unlisted"}
+      iex> can_view_group?(unlisted_group, anyone)
+      true
+      
+      iex> private_group = %Group{visibility: "private"}
+      iex> can_view_group?(private_group, non_member)
+      false
+  """
+  def can_view_group?(%Group{} = group, %User{} = user) do
+    case group.visibility do
+      "public" -> true
+      "unlisted" -> true
+      "private" -> user_in_group?(group, user)
+    end
+  end
+
+  @doc """
+  Checks if a user can join a group directly.
+  
+  ## Join Rules
+  - Open: Anyone who can view can join immediately
+  - Request: Users can request to join (needs approval)
+  - Invite Only: Only admins can invite users
+  
+  ## Examples
+  
+      iex> open_group = %Group{join_policy: "open", visibility: "public"}
+      iex> can_join_group?(open_group, user)
+      {:ok, :immediate}
+      
+      iex> request_group = %Group{join_policy: "request"}
+      iex> can_join_group?(request_group, user)
+      {:ok, :request_required}
+  """
+  def can_join_group?(%Group{} = group, %User{} = user) do
+    # Can't join if already a member
+    if user_in_group?(group, user) do
+      {:error, :already_member}
+    else
+      # Check if user can even see the group
+      if can_view_group?(group, user) do
+        case group.join_policy do
+          "open" -> {:ok, :immediate}
+          "request" -> {:ok, :request_required}
+          "invite_only" -> {:error, :invite_only}
+        end
+      else
+        {:error, :cannot_view}
+      end
+    end
+  end
+
+  @doc """
+  Gets a group by slug only if user can access it.
+  
+  Returns nil if group doesn't exist or user cannot view it.
+  """
+  def get_group_by_slug_if_accessible(slug, %User{} = user) when is_binary(slug) do
+    case get_group_by_slug(slug) do
+      nil -> nil
+      group ->
+        if can_view_group?(group, user) do
+          group
+        else
+          nil
+        end
     end
   end
 
