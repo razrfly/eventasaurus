@@ -144,7 +144,7 @@ defmodule EventasaurusApp.Groups do
     
     # Combine results and filter based on discoverability
     results
-    |> Enum.filter(fn %{group: group, is_member: is_member} ->
+    |> Enum.filter(fn %{group: group, is_member: _is_member} ->
       can_discover_group?(group, user)
     end)
     |> Enum.map(fn %{group: group, is_member: is_member, user_role: user_role} ->
@@ -720,6 +720,7 @@ defmodule EventasaurusApp.Groups do
       "public" -> true
       "unlisted" -> false  # Not discoverable in listings
       "private" -> user_in_group?(group, user)
+      _ -> false  # Guard against unexpected or nil values
     end
   end
 
@@ -746,6 +747,7 @@ defmodule EventasaurusApp.Groups do
       "public" -> true
       "unlisted" -> true
       "private" -> user_in_group?(group, user)
+      _ -> false  # Guard against unexpected or nil values
     end
   end
 
@@ -778,6 +780,7 @@ defmodule EventasaurusApp.Groups do
           "open" -> {:ok, :immediate}
           "request" -> {:ok, :request_required}
           "invite_only" -> {:error, :invite_only}
+          _ -> {:error, :invalid_join_policy}  # Guard against unexpected or nil values
         end
       else
         {:error, :cannot_view}

@@ -46,7 +46,7 @@ defmodule EventasaurusApp.Groups.Group do
     |> cast(attrs, [:name, :slug, :description, :cover_image_url, :avatar_url, :venue_id, :created_by_id,
                    :venue_name, :venue_address, :venue_city, :venue_state, :venue_country,
                    :venue_latitude, :venue_longitude, :visibility, :join_policy])
-    |> validate_required([:name, :created_by_id])
+    |> validate_required([:name, :created_by_id, :visibility, :join_policy])
     |> validate_length(:name, min: 3, max: 100)
     |> validate_length(:slug, min: 3, max: 100)
     |> validate_slug()
