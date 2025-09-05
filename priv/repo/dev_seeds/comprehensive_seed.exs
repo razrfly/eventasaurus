@@ -157,8 +157,9 @@ defmodule ComprehensiveSeed do
         visibility: visibility,
         status: template.status,
         group_id: group && group.id,
-        is_virtual: rem(i, 4) == 0,
-        virtual_venue_url: if(rem(i, 4) == 0, do: "https://zoom.us/j/#{:rand.uniform(999999999)}", else: nil),
+        is_virtual: rem(i, 3) == 0,  # Changed from rem(i, 4) to make 33% virtual instead of 25%
+        virtual_venue_url: if(rem(i, 3) == 0, do: "https://zoom.us/j/#{:rand.uniform(999999999)}", else: nil),
+        location: if(rem(i, 3) != 0, do: generate_physical_location(), else: nil),  # Add physical locations for non-virtual events
         threshold_count: if(template.status == "threshold", do: Enum.random(5..15), else: nil),
         polling_deadline: if(template.status == "polling", do: Timex.shift(DateTime.utc_now(), days: template.time_offset - 3), else: nil)
       }
@@ -225,6 +226,64 @@ defmodule ComprehensiveSeed do
     ]
     
     "#{Enum.random(intros)} #{event_type} #{Enum.random(middles)} #{Enum.random(endings)} #{Faker.Lorem.paragraph(2..4)}"
+  end
+  
+  defp generate_physical_location do
+    locations = [
+      # San Francisco Bay Area
+      "123 Mission Street, San Francisco, CA 94103",
+      "456 Castro Street, San Francisco, CA 94114",
+      "789 Lombard Street, San Francisco, CA 94133",
+      "321 University Avenue, Palo Alto, CA 94301",
+      "654 Shattuck Avenue, Berkeley, CA 94709",
+      
+      # New York
+      "147 Broadway, New York, NY 10038",
+      "258 5th Avenue, New York, NY 10001",
+      "369 Washington Square, New York, NY 10003",
+      "741 Atlantic Avenue, Brooklyn, NY 11217",
+      "852 Grand Street, Brooklyn, NY 11211",
+      
+      # Los Angeles
+      "963 Sunset Boulevard, Los Angeles, CA 90026",
+      "174 Melrose Avenue, Los Angeles, CA 90046",
+      "285 Venice Beach Boardwalk, Venice, CA 90291",
+      "396 Santa Monica Boulevard, Santa Monica, CA 90401",
+      "407 Rodeo Drive, Beverly Hills, CA 90210",
+      
+      # Seattle
+      "518 Pike Place, Seattle, WA 98101",
+      "629 Capitol Hill, Seattle, WA 98102",
+      "730 Fremont Avenue, Seattle, WA 98103",
+      "841 Ballard Street, Seattle, WA 98107",
+      
+      # Austin
+      "952 South by Southwest, Austin, TX 78701",
+      "163 6th Street, Austin, TX 78701",
+      "274 Rainey Street, Austin, TX 78701",
+      
+      # Portland
+      "385 Pearl District, Portland, OR 97209",
+      "496 Hawthorne Boulevard, Portland, OR 97214",
+      
+      # Chicago
+      "507 Michigan Avenue, Chicago, IL 60611",
+      "618 Lincoln Park, Chicago, IL 60614",
+      
+      # Denver
+      "729 16th Street Mall, Denver, CO 80202",
+      "830 LoDo District, Denver, CO 80202",
+      
+      # Miami
+      "941 Ocean Drive, Miami Beach, FL 33139",
+      "152 Wynwood Walls, Miami, FL 33127",
+      
+      # Boston
+      "263 Newbury Street, Boston, MA 02116",
+      "374 North End, Boston, MA 02113"
+    ]
+    
+    Enum.random(locations)
   end
 end
 
