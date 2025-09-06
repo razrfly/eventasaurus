@@ -49,6 +49,9 @@ defmodule DiversePollingEvents do
   defp create_date_movie_poll_events(users, groups) do
     Logger.info("Creating 15 events with date + movie star rating polls...")
     
+    # Load helpers for image assignment
+    Code.require_file("helpers.exs", __DIR__)
+    
     # Date + Movie combination templates
     event_templates = [
       %{
@@ -88,7 +91,7 @@ defmodule DiversePollingEvents do
         days_ahead = Enum.random(template.days_ahead)
         base_date = DateTime.utc_now() |> DateTime.add(days_ahead * 24 * 60 * 60, :second)
         
-        event_params = %{
+        event_params = Map.merge(%{
           title: "#{template.title_template} ##{iteration}",
           description: template.description_template,
           start_at: base_date,
@@ -100,7 +103,7 @@ defmodule DiversePollingEvents do
           is_virtual: true, # Phase I focuses on polling, Phase II adds venues
           virtual_venue_url: "https://zoom.us/j/#{:rand.uniform(999999999)}",
           polling_deadline: DateTime.add(base_date, -3 * 24 * 60 * 60, :second) # 3 days before event
-        }
+        }, DevSeeds.Helpers.get_random_image_attrs())
         
         case Events.create_event(event_params) do
           {:ok, event} ->
@@ -292,7 +295,7 @@ defmodule DiversePollingEvents do
                 _ -> 5               # 20% give 5 stars
               end
               
-              case Events.create_poll_vote(option, participant, %{vote_value: rating}, "star") do
+              case Events.create_poll_vote(option, participant, %{vote_value: "star", vote_numeric: Decimal.new(rating)}, "star") do
                 {:ok, _vote} -> :ok
                 {:error, reason} -> Logger.warning("Failed to create star vote: #{inspect(reason)}")
               end
