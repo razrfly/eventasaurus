@@ -1310,6 +1310,12 @@ defmodule EventasaurusApp.Events do
             e.id
           ),
           
+          # Poll count calculated in DB
+          poll_count: fragment(
+            "(SELECT COUNT(*) FROM polls WHERE event_id = ? AND deleted_at IS NULL)",
+            e.id
+          ),
+          
           # Venue fields (flattened)
           venue: %{
             id: v.id,
