@@ -200,7 +200,7 @@ defmodule DevSeeds.Events do
     end
     
     # Venue assignment: virtual URL or venue_id from pool
-    venue_attrs = if attrs.is_virtual do
+    venue_attrs = if Map.get(attrs, :is_virtual) do
       %{virtual_venue_url: Faker.Internet.url()}
     else
       # Assign a venue from the pool (if available) for physical events
@@ -216,8 +216,11 @@ defmodule DevSeeds.Events do
     # Get a random default image for the event
     image_attrs = Helpers.get_random_image_attrs()
     
-    # Use production API for event creation (handles slug generation automatically)
-    event_params = Map.merge(Map.merge(venue_attrs, image_attrs), attrs)
+    # Ensure venue_attrs take precedence over incoming attrs (especially is_virtual)
+    event_params =
+      attrs
+      |> Map.merge(venue_attrs)
+      |> Map.merge(image_attrs)
     
     # Add group_id if selected
     event_params = if group && is_nil(Map.get(attrs, :group_id)) do
@@ -408,33 +411,33 @@ defmodule DevSeeds.Events do
     end
     
     # Create venues with delay to avoid rate limits
-    google_results = Enum.with_index(google_venues)
-    |> Enum.map(fn {venue_data, index} ->
-      if index > 0, do: Process.sleep(1500) # 1.5s delay between venues
-      
-      venue_params = %{
-        name: venue_data["name"],
-        address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
-        city: extract_city_from_address(venue_data) || "San Francisco",
-        state: extract_state_from_address(venue_data) || "CA",
-        country: extract_country_from_address(venue_data) || "United States",
-        latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
-        longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
-        venue_type: "venue"
-      }
-      
-      case Venues.create_venue(venue_params) do
-        {:ok, venue} -> 
-          Helpers.log("Created restaurant venue: #{venue.name}")
-          venue
-        {:error, reason} -> 
-          Helpers.error("Failed to create venue: #{inspect(reason)}")
-          nil
-      end
-    end)
-    |> Enum.filter(&(&1)) # Remove nils
-    
-    # Fill remaining with fallbacks
+    google_results =
+      Enum.with_index(google_venues)
+      |> Enum.map(fn {venue_data, index} ->
+        if index > 0, do: Process.sleep(1500) # 1.5s delay between venues
+        
+        venue_params = %{
+          name: venue_data["name"],
+          address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
+          city: extract_city_from_address(venue_data) || "San Francisco",
+          state: extract_state_from_address(venue_data) || "CA",
+          country: extract_country_from_address(venue_data) || "United States",
+          latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
+          longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
+          venue_type: "venue"
+        }
+        
+        case Venues.create_venue(venue_params) do
+          {:ok, venue} -> 
+            Helpers.log("Created restaurant venue: #{venue.name}")
+            venue
+          {:error, reason} -> 
+            Helpers.error("Failed to create venue: #{inspect(reason)}")
+            nil
+        end
+      end)
+      |> Enum.filter(&(&1)) # Remove nils
+
     fallback_venues = create_fallback_restaurants(count - length(google_results))
     (google_results ++ fallback_venues) |> Enum.take(count)
   end
@@ -458,33 +461,33 @@ defmodule DevSeeds.Events do
         []
     end
     
-    google_results = Enum.with_index(google_venues)
-    |> Enum.map(fn {venue_data, index} ->
-      if index > 0, do: Process.sleep(1500) # 1.5s delay between venues
-      
-      venue_params = %{
-        name: venue_data["name"],
-        address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
-        city: extract_city_from_address(venue_data) || "San Francisco",
-        state: extract_state_from_address(venue_data) || "CA", 
-        country: extract_country_from_address(venue_data) || "United States",
-        latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
-        longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
-        venue_type: "venue"
-      }
-      
-      case Venues.create_venue(venue_params) do
-        {:ok, venue} -> 
-          Helpers.log("Created theater venue: #{venue.name}")
-          venue
-        {:error, reason} -> 
-          Helpers.error("Failed to create venue: #{inspect(reason)}")
-          nil
-      end
-    end)
-    |> Enum.filter(&(&1)) # Remove nils
-    
-    # Fill remaining with fallbacks
+    google_results =
+      Enum.with_index(google_venues)
+      |> Enum.map(fn {venue_data, index} ->
+        if index > 0, do: Process.sleep(1500) # 1.5s delay between venues
+        
+        venue_params = %{
+          name: venue_data["name"],
+          address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
+          city: extract_city_from_address(venue_data) || "San Francisco",
+          state: extract_state_from_address(venue_data) || "CA", 
+          country: extract_country_from_address(venue_data) || "United States",
+          latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
+          longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
+          venue_type: "venue"
+        }
+        
+        case Venues.create_venue(venue_params) do
+          {:ok, venue} -> 
+            Helpers.log("Created theater venue: #{venue.name}")
+            venue
+          {:error, reason} -> 
+            Helpers.error("Failed to create venue: #{inspect(reason)}")
+            nil
+        end
+      end)
+      |> Enum.filter(&(&1)) # Remove nils
+
     fallback_venues = create_fallback_theaters(count - length(google_results))
     (google_results ++ fallback_venues) |> Enum.take(count)
   end
