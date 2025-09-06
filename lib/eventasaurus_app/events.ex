@@ -47,7 +47,8 @@ defmodule EventasaurusApp.Events do
 
   """
   def list_events(opts \\ []) do
-    query = from e in Event
+    query = from e in Event,
+            preload: [:venue, :users]
     
     query = apply_soft_delete_filter(query, opts)
     
@@ -1290,6 +1291,7 @@ defmodule EventasaurusApp.Events do
           timezone: e.timezone,
           status: e.status,
           taxation_type: e.taxation_type,
+          is_virtual: e.is_virtual,
           venue_id: e.venue_id,
           group_id: e.group_id,
           cover_image_url: e.cover_image_url,

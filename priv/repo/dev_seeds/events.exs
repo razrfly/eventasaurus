@@ -36,8 +36,13 @@ defmodule DevSeeds.Events do
       end
       Helpers.section("Creating #{total_count} Events")
       
+      # Phase II: Create venue pool for physical events
+      Helpers.section("Creating Venue Pool")
+      venue_pool = create_venue_pool()
+      Helpers.success("Created venue pool with #{length(venue_pool)} venues")
+      
       # Create events with proper time distribution
-      events = create_time_distributed_events(count, users, groups)
+      events = create_time_distributed_events(count, users, groups, venue_pool)
       
       # Add participants to events
       add_participants_to_events(events, users)
@@ -47,7 +52,7 @@ defmodule DevSeeds.Events do
     end
   end
   
-  defp create_time_distributed_events(count, users, groups) do
+  defp create_time_distributed_events(count, users, groups, venue_pool \\ []) do
     # Handle both map and integer count formats
     {past_count, upcoming_count, future_count} = if is_map(count) do
       {count[:past] || 0, count[:upcoming] || 0, count[:future] || 0}
@@ -59,14 +64,14 @@ defmodule DevSeeds.Events do
       {past, upcoming, future}
     end
     
-    past_events = create_past_events(past_count, users, groups)
-    upcoming_events = create_upcoming_events(upcoming_count, users, groups)
-    future_events = create_future_events(future_count, users, groups)
+    past_events = create_past_events(past_count, users, groups, venue_pool)
+    upcoming_events = create_upcoming_events(upcoming_count, users, groups, venue_pool)
+    future_events = create_future_events(future_count, users, groups, venue_pool)
     
     past_events ++ upcoming_events ++ future_events
   end
   
-  defp create_past_events(count, users, groups) do
+  defp create_past_events(count, users, groups, venue_pool) do
     Helpers.log("Creating #{count} past events...")
     
     Enum.map(1..count, fn _ ->
@@ -89,7 +94,7 @@ defmodule DevSeeds.Events do
         theme: random_theme(),
         is_virtual: Enum.random([false, false, false, true]), # 25% virtual
         timezone: Faker.Address.time_zone()
-      }, taxation_attrs), users, groups)
+      }, taxation_attrs), users, groups, venue_pool)
       
       # Mark some as soft-deleted
       if Enum.random(1..20) == 1 do # 5% deleted
@@ -105,7 +110,7 @@ defmodule DevSeeds.Events do
     end)
   end
   
-  defp create_upcoming_events(count, users, groups) do
+  defp create_upcoming_events(count, users, groups, venue_pool) do
     Helpers.log("Creating #{count} upcoming events...")
     
     Enum.map(1..count, fn _ ->
@@ -142,11 +147,11 @@ defmodule DevSeeds.Events do
         is_virtual: Enum.random([false, false, false, true]),
         threshold_count: maybe_threshold(),
         timezone: Faker.Address.time_zone()
-      }, taxation_attrs), users, groups)
+      }, taxation_attrs), users, groups, venue_pool)
     end)
   end
   
-  defp create_future_events(count, users, groups) do
+  defp create_future_events(count, users, groups, venue_pool) do
     Helpers.log("Creating #{count} far future events...")
     
     Enum.map(1..count, fn _ ->
@@ -179,11 +184,11 @@ defmodule DevSeeds.Events do
         is_virtual: Enum.random([false, false, true]),
         threshold_count: maybe_threshold(),
         timezone: Faker.Address.time_zone()
-      }, taxation_attrs), users, groups)
+      }, taxation_attrs), users, groups, venue_pool)
     end)
   end
   
-  defp create_event(attrs, users, groups) do
+  defp create_event(attrs, users, groups, venue_pool \\ []) do
     # Select a random organizer
     organizer = Enum.random(users)
     
@@ -194,21 +199,18 @@ defmodule DevSeeds.Events do
       nil
     end
     
-    # Create venue or virtual URL
+    # Venue assignment: virtual URL or venue_id from pool
     venue_attrs = if attrs.is_virtual do
       %{virtual_venue_url: Faker.Internet.url()}
     else
-      # Create venue data manually to avoid datetime issues
-      %{venue: %{
-        name: Faker.Company.name(),
-        address: Faker.Address.street_address(),
-        city: Faker.Address.city(),
-        state: Faker.Address.state_abbr(),
-        country: Faker.Address.country(),
-        latitude: :rand.uniform() * 180 - 90,  # Random latitude between -90 and 90
-        longitude: :rand.uniform() * 360 - 180,  # Random longitude between -180 and 180
-        venue_type: Enum.random(["venue", "city", "region", "online", "tbd"])
-      }}
+      # Assign a venue from the pool (if available) for physical events
+      if length(venue_pool) > 0 do
+        venue = Enum.random(venue_pool)
+        %{venue_id: venue.id}
+      else
+        # Fallback: keep as virtual if no venues available
+        %{is_virtual: true, virtual_venue_url: Faker.Internet.url()}
+      end
     end
     
     # Get a random default image for the event
@@ -349,7 +351,7 @@ defmodule DevSeeds.Events do
         theme: :celebration,
         taxation_type: "ticketless",
         timezone: Faker.Address.time_zone()
-      }, users, [])
+      }, users, [], [])
       
       # Add participants up to the threshold number (or available users)
       participants = Enum.take(users, min(20, length(users)))
@@ -365,6 +367,246 @@ defmodule DevSeeds.Events do
       
       event
     end)
+  end
+
+  # Venue Pool Creation Functions (from comprehensive_seed.exs)
+  
+  defp create_venue_pool do
+    alias EventasaurusApp.Venues
+    alias EventasaurusWeb.Services.GooglePlaces.TextSearch
+
+    Helpers.log("Creating venue pool (slowly to avoid API rate limits)...")
+    
+    # Create 8 venues total (4 restaurants, 4 theaters) with delays
+    restaurant_venues = create_restaurant_venues(4)
+    Process.sleep(2000) # 2 second delay between venue types
+    
+    theater_venues = create_theater_venues(4)
+    
+    all_venues = restaurant_venues ++ theater_venues
+    Helpers.log("Venue pool created: #{length(all_venues)} venues")
+    all_venues
+  end
+  
+  defp create_restaurant_venues(count) do
+    Helpers.log("Creating #{count} restaurant venues...")
+    alias EventasaurusApp.Venues
+    alias EventasaurusWeb.Services.GooglePlaces.TextSearch
+    
+    # First try Google Places API for real data
+    google_venues = case TextSearch.search("restaurant", %{
+      type: "restaurant", 
+      location: {37.7749, -122.4194}, # San Francisco
+      radius: 5000
+    }) do
+      {:ok, venues} when length(venues) >= count ->
+        Helpers.log("Using Google Places restaurant data")
+        venues |> Enum.take(count)
+      _ ->
+        Helpers.log("Google Places unavailable, using fallback restaurant data")
+        []
+    end
+    
+    # Create venues with delay to avoid rate limits
+    google_results = Enum.with_index(google_venues)
+    |> Enum.map(fn {venue_data, index} ->
+      if index > 0, do: Process.sleep(1500) # 1.5s delay between venues
+      
+      venue_params = %{
+        name: venue_data["name"],
+        address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
+        city: extract_city_from_address(venue_data) || "San Francisco",
+        state: extract_state_from_address(venue_data) || "CA",
+        country: extract_country_from_address(venue_data) || "United States",
+        latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
+        longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
+        venue_type: "venue"
+      }
+      
+      case Venues.create_venue(venue_params) do
+        {:ok, venue} -> 
+          Helpers.log("Created restaurant venue: #{venue.name}")
+          venue
+        {:error, reason} -> 
+          Helpers.error("Failed to create venue: #{inspect(reason)}")
+          nil
+      end
+    end)
+    |> Enum.filter(&(&1)) # Remove nils
+    
+    # Fill remaining with fallbacks
+    fallback_venues = create_fallback_restaurants(count - length(google_results))
+    (google_results ++ fallback_venues) |> Enum.take(count)
+  end
+  
+  defp create_theater_venues(count) do
+    Helpers.log("Creating #{count} theater venues...")
+    alias EventasaurusApp.Venues
+    alias EventasaurusWeb.Services.GooglePlaces.TextSearch
+    
+    # Try Google Places API for theaters
+    google_venues = case TextSearch.search("movie theater", %{
+      type: "movie_theater",
+      location: {37.7749, -122.4194}, # San Francisco
+      radius: 5000
+    }) do
+      {:ok, venues} when length(venues) >= count ->
+        Helpers.log("Using Google Places theater data")
+        venues |> Enum.take(count)
+      _ ->
+        Helpers.log("Google Places unavailable, using fallback theater data")
+        []
+    end
+    
+    google_results = Enum.with_index(google_venues)
+    |> Enum.map(fn {venue_data, index} ->
+      if index > 0, do: Process.sleep(1500) # 1.5s delay between venues
+      
+      venue_params = %{
+        name: venue_data["name"],
+        address: venue_data["formatted_address"] || venue_data["vicinity"] || "San Francisco, CA",
+        city: extract_city_from_address(venue_data) || "San Francisco",
+        state: extract_state_from_address(venue_data) || "CA", 
+        country: extract_country_from_address(venue_data) || "United States",
+        latitude: get_in(venue_data, ["geometry", "location", "lat"]) || 37.7749,
+        longitude: get_in(venue_data, ["geometry", "location", "lng"]) || -122.4194,
+        venue_type: "venue"
+      }
+      
+      case Venues.create_venue(venue_params) do
+        {:ok, venue} -> 
+          Helpers.log("Created theater venue: #{venue.name}")
+          venue
+        {:error, reason} -> 
+          Helpers.error("Failed to create venue: #{inspect(reason)}")
+          nil
+      end
+    end)
+    |> Enum.filter(&(&1)) # Remove nils
+    
+    # Fill remaining with fallbacks
+    fallback_venues = create_fallback_theaters(count - length(google_results))
+    (google_results ++ fallback_venues) |> Enum.take(count)
+  end
+  
+  defp create_fallback_restaurants(count) do
+    Helpers.log("Creating #{count} fallback restaurant venues...")
+    alias EventasaurusApp.Venues
+    
+    fallback_restaurants = [
+      %{name: "Luigi's Italian Kitchen", address: "123 Market Street, San Francisco, CA 94103", lat: 37.7849, lng: -122.4094},
+      %{name: "Sakura Sushi Bar", address: "456 Mission Street, San Francisco, CA 94105", lat: 37.7749, lng: -122.4194},
+      %{name: "El Mariachi Cantina", address: "789 Valencia Street, San Francisco, CA 94110", lat: 37.7599, lng: -122.4213},
+      %{name: "The Garden Restaurant", address: "321 Union Square, San Francisco, CA 94108", lat: 37.7879, lng: -122.4074}
+    ]
+    
+    fallback_restaurants
+    |> Enum.take(count)
+    |> Enum.with_index()
+    |> Enum.map(fn {restaurant, index} ->
+      if index > 0, do: Process.sleep(500) # Brief delay for fallbacks
+      
+      venue_params = %{
+        name: restaurant.name,
+        address: restaurant.address,
+        city: "San Francisco", 
+        state: "CA",
+        country: "United States",
+        latitude: restaurant.lat,
+        longitude: restaurant.lng,
+        venue_type: "venue"
+      }
+      
+      case Venues.create_venue(venue_params) do
+        {:ok, venue} -> 
+          Helpers.log("Created fallback restaurant: #{venue.name}")
+          venue
+        {:error, reason} -> 
+          Helpers.error("Failed to create fallback restaurant: #{inspect(reason)}")
+          nil
+      end
+    end)
+    |> Enum.filter(&(&1)) # Remove nils
+  end
+  
+  defp create_fallback_theaters(count) do
+    Helpers.log("Creating #{count} fallback theater venues...")
+    alias EventasaurusApp.Venues
+    
+    fallback_theaters = [
+      %{name: "AMC Theater Downtown", address: "987 Powell Street, San Francisco, CA 94102", lat: 37.7849, lng: -122.4094},
+      %{name: "Century Theaters SF", address: "654 Geary Boulevard, San Francisco, CA 94102", lat: 37.7866, lng: -122.4196},
+      %{name: "Landmark Cinema", address: "432 Castro Street, San Francisco, CA 94114", lat: 37.7609, lng: -122.4350},
+      %{name: "Roxie Theater", address: "876 16th Street, San Francisco, CA 94114", lat: 37.7656, lng: -122.4180}
+    ]
+    
+    fallback_theaters
+    |> Enum.take(count)
+    |> Enum.with_index()
+    |> Enum.map(fn {theater, index} ->
+      if index > 0, do: Process.sleep(500) # Brief delay for fallbacks
+      
+      venue_params = %{
+        name: theater.name,
+        address: theater.address,
+        city: "San Francisco",
+        state: "CA", 
+        country: "United States",
+        latitude: theater.lat,
+        longitude: theater.lng,
+        venue_type: "venue"
+      }
+      
+      case Venues.create_venue(venue_params) do
+        {:ok, venue} -> 
+          Helpers.log("Created fallback theater: #{venue.name}")
+          venue
+        {:error, reason} -> 
+          Helpers.error("Failed to create fallback theater: #{inspect(reason)}")
+          nil
+      end
+    end)
+    |> Enum.filter(&(&1)) # Remove nils
+  end
+
+  # Google Places address extraction helpers
+  defp extract_city_from_address(venue_data) do
+    address_components = venue_data["address_components"] || []
+    city_component = Enum.find(address_components, fn component ->
+      types = component["types"] || []
+      "locality" in types or "administrative_area_level_2" in types
+    end)
+    
+    case city_component do
+      %{"long_name" => city} -> city
+      _ -> nil
+    end
+  end
+  
+  defp extract_state_from_address(venue_data) do
+    address_components = venue_data["address_components"] || []
+    state_component = Enum.find(address_components, fn component ->
+      types = component["types"] || []
+      "administrative_area_level_1" in types
+    end)
+    
+    case state_component do
+      %{"short_name" => state} -> state
+      _ -> nil
+    end
+  end
+  
+  defp extract_country_from_address(venue_data) do
+    address_components = venue_data["address_components"] || []
+    country_component = Enum.find(address_components, fn component ->
+      types = component["types"] || []
+      "country" in types
+    end)
+    
+    case country_component do
+      %{"long_name" => country} -> country
+      _ -> nil
+    end
   end
   
 end
