@@ -32,6 +32,19 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
         </span>
       <% end %>
 
+      <%= if Map.get(@event, :poll_count, 0) > 0 do %>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+          <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+          </svg>
+          <%= if @event.poll_count == 1 do %>
+            1 Poll
+          <% else %>
+            <%= @event.poll_count %> Polls
+          <% end %>
+        </span>
+      <% end %>
+
       <%= if @context == :user_dashboard && group_loaded?(@event) && @event.group && @event.group.slug do %>
         <a 
           href={"/groups/#{@event.group.slug}"} 
