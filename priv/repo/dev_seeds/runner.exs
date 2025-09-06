@@ -94,6 +94,11 @@ DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
 # Create Phase I diverse polling events (date + movie star rating)
 Helpers.section("Creating Phase I: Date + Movie Star Rating Polls")
 Code.require_file("diverse_polling_events.exs", __DIR__)
+if Code.ensure_loaded?(DiversePollingEvents) and function_exported?(DiversePollingEvents, :run, 0) do
+  DiversePollingEvents.run()
+else
+  Helpers.error("DiversePollingEvents module not properly loaded")
+end
 
 # Create polls for events
 Helpers.section("Creating Polls with Votes")
