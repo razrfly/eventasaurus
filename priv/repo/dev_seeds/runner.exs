@@ -91,6 +91,10 @@ all_events = events ++ full_events
 Code.require_file("ensure_key_organizers.exs", __DIR__)
 DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
 
+# Create Phase I diverse polling events (date + movie star rating)
+Helpers.section("Creating Phase I: Date + Movie Star Rating Polls")
+Code.require_file("diverse_polling_events.exs", __DIR__)
+
 # Create polls for events
 Helpers.section("Creating Polls with Votes")
 Code.require_file("poll_seed.exs", __DIR__)
