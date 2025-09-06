@@ -112,6 +112,15 @@ Code.require_file("activity_seed.exs", __DIR__)
 ActivitySeed.run()
 activities = Repo.all(EventasaurusApp.Events.EventActivity)
 
+# Create Phase IV: Enhanced Variety Polls
+Helpers.section("Creating Phase IV: Enhanced Variety Polls")
+Code.require_file("enhanced_variety_polls.exs", __DIR__)
+if Code.ensure_loaded?(EnhancedVarietyPolls) and function_exported?(EnhancedVarietyPolls, :run, 0) do
+  EnhancedVarietyPolls.run()
+else
+  Helpers.error("EnhancedVarietyPolls module not properly loaded")
+end
+
 # Validate seeding consistency
 Helpers.section("Validating Seeding Consistency")
 import Ecto.Query
