@@ -1,0 +1,39 @@
+## 🎯 EXACT ROOT CAUSE IDENTIFIED
+
+### The Real Culprit
+
+**It's NOT a participant creation issue** - that works fine. 
+
+**The Problem**: Mismatched expectations between two seed files:
+
+1. **`DiversePollingEvents`** ✅ Working correctly
+   - Creates movie events with participants  
+   - Creates date polls (binary voting)
+   - Creates movie polls (**star rating**, not RCV)
+
+2. **`poll_seed.exs`** ❌ Not creating RCV polls
+   - Expects to find events with participants for RCV poll creation
+   - Gets confused by coordination with DiversePollingEvents
+
+### Timeline of the Break
+
+**Recent CodeRabbit commit** `de25b90f` "fixed" `DiversePollingEvents` execution by adding:
+```elixir
+if Code.ensure_loaded?(DiversePollingEvents) and function_exported?(DiversePollingEvents, :run, 0) do
+  DiversePollingEvents.run()
+else
+  Helpers.error("DiversePollingEvents module not properly loaded")
+end
+```
+
+**Before this fix**: `DiversePollingEvents` was loaded but never executed, so only `poll_seed.exs` ran
+**After this fix**: Both modules run, but they don't coordinate properly for RCV poll creation
+
+### The Solution
+
+The issue is **seed file coordination**, not core functionality. Both modules work individually but interfere with each other.
+
+**Moving to 09-06-polling branch to implement the fix.**
+
+### Key Insight
+`DiversePollingEvents` creates **star rating polls** for movies, not RCV polls. The RCV functionality exists and works - it's just not being triggered during seeding due to the coordination issue between seed files.
