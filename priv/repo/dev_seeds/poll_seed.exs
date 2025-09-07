@@ -50,14 +50,35 @@ defmodule PollSeed do
   end
 
   defp get_events do
-    # Get a mix of events in different states
-    Repo.all(
+    # Get a mix of events in different states, prioritizing movie_buff events
+    movie_buff = Repo.get_by(Accounts.User, email: "movie_buff@example.com")
+    
+    movie_buff_events = if movie_buff do
+      # Get movie_buff events with participants
+      Repo.all(
+        from(e in Events.Event,
+          join: eu in "event_users", on: eu.event_id == e.id,
+          where: e.status in [:draft, :confirmed, :polling] and eu.user_id == ^movie_buff.id,
+          order_by: [desc: e.inserted_at]
+        )
+      )
+    else
+      []
+    end
+    
+    # Get other recent events to fill remaining slots
+    other_events = Repo.all(
       from(e in Events.Event,
         where: e.status in [:draft, :confirmed, :polling],
-        limit: 20,
+        limit: 30,
         order_by: [desc: e.inserted_at]
       )
     )
+    
+    # Combine and deduplicate, prioritizing movie_buff events
+    (movie_buff_events ++ other_events)
+    |> Enum.uniq_by(&(&1.id))
+    |> Enum.take(25)
     |> Repo.preload(:users)
   end
 

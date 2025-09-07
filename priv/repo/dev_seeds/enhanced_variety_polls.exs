@@ -301,7 +301,7 @@ defmodule EnhancedVarietyPolls do
       event_id: event.id,
       title: "Which conference track interests you most?",
       description: "Help us gauge interest for different technical tracks",
-      poll_type: "custom",
+      poll_type: "general",
       voting_system: "binary",
       phase: "active",
       auto_finalize: false,
@@ -435,7 +435,7 @@ defmodule EnhancedVarietyPolls do
       event_id: event.id,
       title: "Reception Music Style",
       description: "What music style should dominate our reception?",
-      poll_type: "custom",
+      poll_type: "general",
       voting_system: "binary",
       phase: "active",
       privacy_settings: %{"visibility" => "private"},
@@ -501,8 +501,8 @@ defmodule EnhancedVarietyPolls do
       event_id: event.id,
       title: "Most Exciting Demo Feature",
       description: "Which feature demo are you most excited to see?",
-      poll_type: "star_rating",
-      voting_system: "star_rating",
+      poll_type: "custom",
+      voting_system: "star",
       phase: "active",
       privacy_settings: %{"visibility" => "public"},
       created_by_id: organizer.id
@@ -533,7 +533,7 @@ defmodule EnhancedVarietyPolls do
       event_id: event.id,
       title: "Networking Format Preference",
       description: "How would you prefer to network at our launch event?",
-      poll_type: "custom",
+      poll_type: "general",
       voting_system: "binary",
       phase: "active",
       privacy_settings: %{"visibility" => "public"},
@@ -702,7 +702,7 @@ defmodule EnhancedVarietyPolls do
       event_id: event.id,
       title: "Team Building Activity Preference",
       description: "What team building activities would be most valuable?",
-      poll_type: "custom",
+      poll_type: "general",
       voting_system: "ranked",
       phase: "active",
       privacy_settings: %{"visibility" => "members_only"},
@@ -767,7 +767,7 @@ defmodule EnhancedVarietyPolls do
       event_id: event.id,
       title: "Professional Development Workshop Topics",
       description: "What skills would be most valuable to develop? (Planning phase)",
-      poll_type: "custom",
+      poll_type: "general",
       voting_system: "approval",
       phase: "draft",
       max_options_per_user: 3,
@@ -809,3 +809,6 @@ defmodule EnhancedVarietyPolls do
     Repo.all(from v in Venues.Venue, limit: 20)
   end
 end
+
+# Run the enhanced variety polls seeding
+EnhancedVarietyPolls.run()
