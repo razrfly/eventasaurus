@@ -264,6 +264,133 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
     </div>
     """
   end
+
+  defp render_result_item(assigns, %{type: :track} = result) do
+    assigns = assign(assigns, :result, result)
+    ~H"""
+    <div class="flex items-start space-x-3">
+      <div class="flex-shrink-0">
+        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+          <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.369 4.369 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
+          </svg>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-gray-900 truncate">
+          <%= @result.title %>
+        </p>
+        <%= if @result.description do %>
+          <p class="mt-1 text-sm text-gray-500 line-clamp-2">
+            <%= @result.description %>
+          </p>
+        <% end %>
+        <%= if @result.metadata && @result.metadata["duration_formatted"] do %>
+          <div class="mt-1 flex items-center">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="ml-1 text-xs text-gray-600"><%= @result.metadata["duration_formatted"] %></span>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_result_item(assigns, %{type: :artist} = result) do
+    assigns = assign(assigns, :result, result)
+    ~H"""
+    <div class="flex items-start space-x-3">
+      <div class="flex-shrink-0">
+        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+          <svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clip-rule="evenodd" />
+          </svg>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-gray-900 truncate">
+          <%= @result.title %>
+        </p>
+        <%= if @result.description do %>
+          <p class="mt-1 text-sm text-gray-500 line-clamp-2">
+            <%= @result.description %>
+          </p>
+        <% end %>
+        <%= if @result.metadata && @result.metadata["country"] do %>
+          <div class="mt-1 flex items-center">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span class="ml-1 text-xs text-gray-600"><%= @result.metadata["country"] %></span>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_result_item(assigns, %{type: :album} = result) do
+    assigns = assign(assigns, :result, result)
+    ~H"""
+    <div class="flex items-start space-x-3">
+      <div class="flex-shrink-0">
+        <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+          <svg class="w-6 h-6 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a2 2 0 11-1-1.732V8a3 3 0 014.222-2.683l.025.007A1 1 0 0110 6.334l-.445.834zm1.45 2.666a1 1 0 00-.555-.832L10 9l1.45.834zm-1 1.166L10 10v1a1 1 0 00-.996.999L9 12h0l0 .002v-.004z" clip-rule="evenodd" />
+          </svg>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-gray-900 truncate">
+          <%= @result.title %>
+        </p>
+        <%= if @result.description do %>
+          <p class="mt-1 text-sm text-gray-500 line-clamp-2">
+            <%= @result.description %>
+          </p>
+        <% end %>
+        <%= if @result.metadata && (@result.metadata["first_release_date"] || @result.metadata["primary_type"]) do %>
+          <div class="mt-1 flex items-center space-x-2 text-xs text-gray-600">
+            <%= if @result.metadata["primary_type"] do %>
+              <span class="px-2 py-1 bg-gray-100 rounded-full"><%= @result.metadata["primary_type"] %></span>
+            <% end %>
+            <%= if @result.metadata["first_release_date"] do %>
+              <span><%= String.slice(@result.metadata["first_release_date"], 0..3) %></span>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_result_item(assigns, %{type: :playlist} = result) do
+    assigns = assign(assigns, :result, result)
+    ~H"""
+    <div class="flex items-start space-x-3">
+      <div class="flex-shrink-0">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+          <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-gray-900 truncate">
+          <%= @result.title %>
+        </p>
+        <%= if @result.description do %>
+          <p class="mt-1 text-sm text-gray-500 line-clamp-2">
+            <%= @result.description %>
+          </p>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
   
   defp render_result_item(assigns, result) do
     # Generic fallback for other content types
@@ -405,6 +532,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
             :movie -> "movie_selected"
             :tv -> "tv_show_selected"
             :place -> "place_selected"
+            :track -> "music_track_selected"
+            :artist -> "music_artist_selected"
+            :album -> "music_album_selected"
+            :playlist -> "music_playlist_selected"
             _ -> "item_selected"
           end
           
@@ -427,6 +558,10 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
             :movie -> "movie_selected"
             :tv -> "tv_show_selected"
             :place -> "place_selected"
+            :track -> "music_track_selected"
+            :artist -> "music_artist_selected"
+            :album -> "music_album_selected"
+            :playlist -> "music_playlist_selected"
             _ -> "item_selected"
           end
           
@@ -466,6 +601,22 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
   defp get_detailed_data(:google_places, item, :place) do
     RichDataManager.get_cached_details(:google_places, item.id, :place)
   end
+
+  defp get_detailed_data(:musicbrainz, item, :track) do
+    RichDataManager.get_cached_details(:musicbrainz, item.id, :track)
+  end
+
+  defp get_detailed_data(:musicbrainz, item, :artist) do
+    RichDataManager.get_cached_details(:musicbrainz, item.id, :artist)
+  end
+
+  defp get_detailed_data(:musicbrainz, item, :album) do
+    RichDataManager.get_cached_details(:musicbrainz, item.id, :album)
+  end
+
+  defp get_detailed_data(:musicbrainz, item, :playlist) do
+    RichDataManager.get_cached_details(:musicbrainz, item.id, :playlist)
+  end
   
   defp get_detailed_data(_provider, item, _type) do
     # For providers that don't support detailed data, return the item as-is
@@ -474,9 +625,11 @@ defmodule EventasaurusWeb.RichDataSearchComponent do
   
   defp default_placeholder(:tmdb), do: "Search for movies..."
   defp default_placeholder(:google_places), do: "Search for places..."
+  defp default_placeholder(:musicbrainz), do: "Search for music..."
   defp default_placeholder(_), do: "Search..."
   
   defp default_content_type(:tmdb), do: :movie
   defp default_content_type(:google_places), do: :place
+  defp default_content_type(:musicbrainz), do: :track
   defp default_content_type(_), do: :generic
 end

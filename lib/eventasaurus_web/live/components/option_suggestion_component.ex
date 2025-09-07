@@ -410,20 +410,34 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     </label>
                   <div class="mt-1 relative">
                     <%= if should_use_api_search?(@poll.poll_type) do %>
-                      <%= if @poll.poll_type == "movie" do %>
-                        <input
-                          type="text"
-                          name="poll_option[title]"
-                          id="option_title"
-                          value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
-                          placeholder={option_title_placeholder(@poll)}
-                          phx-change="search_movies"
-                          phx-target={@myself}
-                          phx-debounce="300"
-                          autocomplete="off"
-                          class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
-                      <% else %>
+                      <%= cond do %>
+                        <% @poll.poll_type == "movie" -> %>
+                          <input
+                            type="text"
+                            name="poll_option[title]"
+                            id="option_title"
+                            value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                            placeholder={option_title_placeholder(@poll)}
+                            phx-change="search_movies"
+                            phx-target={@myself}
+                            phx-debounce="300"
+                            autocomplete="off"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          />
+                        <% @poll.poll_type in ["music_track", "music_artist", "music_album", "music_playlist"] -> %>
+                          <input
+                            type="text"
+                            name="poll_option[title]"
+                            id="option_title"
+                            value={if @search_query != "", do: @search_query, else: Map.get(@changeset.changes, :title, Map.get(@changeset.data, :title, ""))}
+                            placeholder={option_title_placeholder(@poll)}
+                            phx-change="search_music"
+                            phx-target={@myself}
+                            phx-debounce="300"
+                            autocomplete="off"
+                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          />
+                        <% true -> %>
                         <input
                           type="text"
                           name="poll_option[title]"
@@ -485,8 +499,61 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       </div>
                     <% end %>
 
+                    <!-- Music search results dropdown -->
+                    <%= if @poll.poll_type in ["music_track", "music_artist", "music_album", "music_playlist"] and length(@search_results) > 0 do %>
+                      <div class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        <%= for music <- @search_results do %>
+                          <div class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                               phx-click="select_music"
+                               phx-value-music-id={music.id}
+                               phx-target={@myself}>
+                            <% image_url = music.image_url %>
+                            <%= if image_url do %>
+                              <img src={image_url} alt={music.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
+                            <% else %>
+                              <div class="w-10 h-14 bg-blue-100 rounded mr-3 flex-shrink-0 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                                </svg>
+                              </div>
+                            <% end %>
+                            <div class="flex-1 min-w-0">
+                              <h4 class="font-medium text-gray-900 truncate"><%= music.title %></h4>
+                              <%= if music.metadata && music.metadata["artist_credit"] do %>
+                                <p class="text-sm text-gray-600">
+                                  <%= music.metadata["artist_credit"] |> Enum.map(& &1["name"] || &1["artist"]["name"]) |> Enum.join(", ") %>
+                                </p>
+                              <% end %>
+                              <%= if music.metadata && music.metadata["releases"] && length(music.metadata["releases"]) > 0 do %>
+                                <% first_release = List.first(music.metadata["releases"]) %>
+                                <p class="text-xs text-gray-500 mt-1">
+                                  <%= first_release["title"] %>
+                                  <%= if first_release["date"] do %>
+                                    (<%= String.slice(first_release["date"], 0, 4) %>)
+                                  <% end %>
+                                </p>
+                              <% end %>
+                              <%= if is_binary(music.description) && String.length(music.description) > 0 do %>
+                                <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= music.description %></p>
+                              <% end %>
+                            </div>
+                          </div>
+                        <% end %>
+                      </div>
+                    <% end %>
+
                     <!-- Loading indicator for movie search -->
                     <%= if @poll.poll_type == "movie" and @search_loading do %>
+                      <div class="absolute right-3 top-9 flex items-center">
+                        <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                    <% end %>
+
+                    <!-- Loading indicator for music search -->
+                    <%= if @poll.poll_type in ["music_track", "music_artist", "music_album", "music_playlist"] and @search_loading do %>
                       <div class="absolute right-3 top-9 flex items-center">
                         <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1313,6 +1380,131 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   @impl true
   def handle_event("search_movies", _params, socket) do
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("search_music", %{"poll_option" => %{"title" => query}} = _params, socket) do
+    # Only search if this is a music poll
+    if socket.assigns.poll.poll_type in ["music_track", "music_artist", "music_album", "music_playlist"] do
+      if String.length(String.trim(query)) >= 2 do
+        # Set loading state
+        socket = assign(socket, :search_loading, true)
+        
+        # Determine content type based on poll type
+        content_type = case socket.assigns.poll.poll_type do
+          "music_track" -> :track
+          "music_artist" -> :artist
+          "music_album" -> :album
+          "music_playlist" -> :playlist
+          _ -> :track
+        end
+        
+        # Use the centralized RichDataManager system
+        search_options = %{
+          providers: [:musicbrainz],
+          limit: 8,
+          content_type: content_type
+        }
+        
+        case RichDataManager.search(query, search_options) do
+          {:ok, results_by_provider} ->
+            # Extract music results from MusicBrainz provider
+            music_results = case Map.get(results_by_provider, :musicbrainz) do
+              {:ok, results} when is_list(results) -> results
+              {:error, _reason} -> []
+              results when is_list(results) -> results  # Fallback for direct list format
+              _ -> []
+            end
+
+            # Debug logging
+            require Logger
+            Logger.debug("Music search results for '#{query}': #{inspect(music_results)}")
+            Logger.debug("Results count: #{length(music_results)}")
+
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, music_results)
+             |> assign(:search_loading, false)}
+
+          {:error, _} ->
+            {:noreply,
+             socket
+             |> assign(:search_query, query)
+             |> assign(:search_results, [])
+             |> assign(:search_loading, false)}
+        end
+      else
+        {:noreply,
+         socket
+         |> assign(:search_query, query)
+         |> assign(:search_results, [])
+         |> assign(:search_loading, false)}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Fallback handler for search_music in case parameters don't match expected format
+  @impl true
+  def handle_event("search_music", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("select_music", %{"music-id" => music_id}, socket) do
+    # Find the selected music item in search results
+    music_data = socket.assigns.search_results
+    |> Enum.find(fn music ->
+      music.id == music_id
+    end)
+
+    if music_data do
+      # Set loading state for rich data
+      socket = assign(socket, :loading_rich_data, true)
+      
+      # Determine content type based on poll type
+      content_type = case socket.assigns.poll.poll_type do
+        "music_track" -> :track
+        "music_artist" -> :artist
+        "music_album" -> :album
+        "music_playlist" -> :playlist
+        _ -> :track
+      end
+
+      # Use the centralized RichDataManager to get detailed music data
+      case RichDataManager.get_details(music_data.id, :musicbrainz, %{content_type: content_type}) do
+        {:ok, rich_music_data} ->
+          # Prepare music data for poll option
+          prepared_data = prepare_music_option_data(music_data, rich_music_data)
+          
+          # Create changeset with the rich data
+          changeset = create_option_changeset(socket, prepared_data)
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:loading_rich_data, false)
+           |> assign(:search_results, [])
+           |> assign(:search_query, "")}
+
+        {:error, _reason} ->
+          # Fallback to basic music data if rich data fetch fails
+          fallback_data = prepare_music_option_data(music_data, nil)
+          
+          changeset = create_option_changeset(socket, fallback_data)
+
+          {:noreply,
+           socket
+           |> assign(:changeset, changeset)
+           |> assign(:loading_rich_data, false)
+           |> assign(:search_results, [])
+           |> assign(:search_query, "")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Music item not found.")}
+    end
   end
 
   @impl true
@@ -2302,6 +2494,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_title_placeholder(%{poll_type: poll_type} = poll) do
     case poll_type do
       "movie" -> "Start typing to search movies..."
+      "music_track" -> "Start typing to search music tracks..."
+      "music_artist" -> "Start typing to search music artists..."
+      "music_album" -> "Start typing to search music albums..."
+      "music_playlist" -> "Start typing to search music playlists..."
       "places" -> 
         alias EventasaurusWeb.Utils.PollPhaseUtils
         scope_display = PollPhaseUtils.format_poll_type(poll)
@@ -2314,6 +2510,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp option_title_placeholder(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Start typing to search movies..."
+      "music_track" -> "Start typing to search music tracks..."
+      "music_artist" -> "Start typing to search music artists..."
+      "music_album" -> "Start typing to search music albums..."
+      "music_playlist" -> "Start typing to search music playlists..."
       "places" -> "Start typing to search places..."
       "time" -> "Select a time..."
       _ -> "Enter your option (e.g., Option A, Choice 1, etc.)"
@@ -2395,7 +2595,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
   # Helper function to determine if a poll type should use API search
   defp should_use_api_search?(poll_type) do
-    poll_type in ["movie", "places", "time"]
+    poll_type in ["movie", "music_track", "music_artist", "music_album", "music_playlist", "places", "time"]
   end
 
   # New helper functions for empty state
@@ -2607,5 +2807,73 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     else
       ""
     end
+  end
+
+  # Helper function to prepare music option data from search results
+  defp prepare_music_option_data(search_result, rich_data) do
+    base_data = %{
+      "title" => search_result.title,
+      "description" => format_music_description(search_result),
+      "external_id" => search_result.id
+    }
+
+    if rich_data do
+      Map.merge(base_data, %{
+        "title" => search_result.title,
+        "description" => format_rich_music_description(rich_data),
+        "rich_data" => Jason.encode!(rich_data)
+      })
+    else
+      base_data
+    end
+  end
+
+  defp format_music_description(search_result) do
+    parts = []
+    
+    parts = if search_result.metadata["artist_credit"] do
+      artist_names = search_result.metadata["artist_credit"] 
+        |> Enum.map(& &1["name"] || &1["artist"]["name"])
+        |> Enum.join(", ")
+      parts ++ ["by #{artist_names}"]
+    else
+      parts
+    end
+
+    parts = if search_result.metadata["duration_formatted"] do
+      parts ++ ["(#{search_result.metadata["duration_formatted"]})"]
+    else
+      parts
+    end
+
+    Enum.join(parts, " ")
+  end
+
+  defp format_rich_music_description(rich_data) do
+    parts = []
+    
+    parts = if rich_data["artist_credit"] do
+      artist_names = rich_data["artist_credit"] 
+        |> Enum.map(& &1["name"] || &1["artist"]["name"])
+        |> Enum.join(", ")
+      parts ++ ["by #{artist_names}"]
+    else
+      parts
+    end
+
+    parts = if rich_data["releases"] && length(rich_data["releases"]) > 0 do
+      album_title = List.first(rich_data["releases"])["title"]
+      parts ++ ["from #{album_title}"]
+    else
+      parts
+    end
+
+    parts = if rich_data["duration_formatted"] do
+      parts ++ ["(#{rich_data["duration_formatted"]})"]
+    else
+      parts
+    end
+
+    Enum.join(parts, " ")
   end
 end

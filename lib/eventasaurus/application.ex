@@ -69,6 +69,8 @@ defmodule Eventasaurus.Application do
       EventasaurusWeb.Services.StripeCurrencyService,
       # Start TMDB Service for movie/TV data caching
       EventasaurusWeb.Services.TmdbService,
+      # Start MusicBrainz Service for music data caching
+      EventasaurusWeb.Services.MusicBrainzService,
       # Start Rich Data Manager for external API providers
       EventasaurusWeb.Services.RichDataManager,
       # Start Broadcast Throttler for real-time poll updates

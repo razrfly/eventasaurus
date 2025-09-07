@@ -1409,6 +1409,17 @@ defmodule EventasaurusWeb.PublicEventLive do
                         temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
                       />
 
+                    <% poll.poll_type in ["music_track", "music_artist", "music_album", "music_playlist"] -> %>
+                      <!-- Special handling for music polls -->
+                      <.live_component
+                        module={EventasaurusWeb.Live.Components.PublicMusicTrackPollComponent}
+                        id={"music-poll-#{poll.id}"}
+                        poll={poll}
+                        event={@event}
+                        current_user={@user}
+                        temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
+                      />
+
                     <% poll.poll_type == "date_selection" -> %>
                       <!-- Date selection polls have their own component -->
                       <.live_component

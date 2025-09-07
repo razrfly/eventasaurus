@@ -37,7 +37,11 @@ defmodule EventasaurusWeb.PollCreationComponent do
     {"movie", "Movie", "Vote on movies to watch"},
     {"places", "Place", "Pick places to visit"},
     {"time", "Time/Schedule", "Schedule events"},
-    {"date_selection", "DateTime", "Vote on possible dates"}
+    {"date_selection", "DateTime", "Vote on possible dates"},
+    {"music_track", "Music Tracks", "Vote on songs to play"},
+    {"music_artist", "Music Artists", "Vote on favorite artists"},
+    {"music_album", "Music Albums", "Vote on albums to listen to"},
+    {"music_playlist", "Music Playlists", "Create collaborative playlists"}
   ]
 
   @voting_systems [

@@ -32,11 +32,13 @@ defmodule EventasaurusWeb.Services.RichDataManager do
 
   alias EventasaurusWeb.Services.TmdbRichDataProvider
   alias EventasaurusWeb.Services.GooglePlacesRichDataProvider
+  alias EventasaurusWeb.Services.MusicBrainzRichDataProvider
 
   @registry_table :rich_data_providers
   @default_providers [
     TmdbRichDataProvider,
-    GooglePlacesRichDataProvider
+    GooglePlacesRichDataProvider,
+    MusicBrainzRichDataProvider
   ]
 
   # ============================================================================
@@ -244,10 +246,13 @@ defmodule EventasaurusWeb.Services.RichDataManager do
     # Search across providers in parallel
     search_tasks = Enum.map(providers, fn {provider_id, provider_module} ->
       Task.async(fn ->
+        Logger.debug("RichDataManager calling search on provider #{provider_id} with query '#{query}' and options: #{inspect(options)}")
         case provider_module.search(query, options) do
           {:ok, results} ->
+            Logger.debug("RichDataManager: Provider #{provider_id} returned #{length(results)} results")
             {provider_id, {:ok, results}}
           {:error, reason} ->
+            Logger.debug("RichDataManager: Provider #{provider_id} returned error: #{inspect(reason)}")
             {provider_id, {:error, reason}}
         end
       end)
@@ -257,6 +262,8 @@ defmodule EventasaurusWeb.Services.RichDataManager do
     results = search_tasks
       |> Task.await_many(timeout)
       |> Enum.into(%{})
+    
+    Logger.debug("RichDataManager final results structure: #{inspect(results)}")
 
     {:reply, {:ok, results}, state}
   end
