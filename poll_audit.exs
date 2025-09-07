@@ -3,6 +3,17 @@
 import Ecto.Query
 alias EventasaurusApp.{Repo, Events}
 
+# Safe helper functions to avoid nil crashes
+fmt_dt = fn
+  nil -> "n/a"
+  dt -> Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+end
+
+safe_slice = fn
+  nil, _n -> ""
+  s, n -> String.slice(s, 0, n)
+end
+
 IO.puts("=== RCV POLL AUDIT ===")
 
 # Get all RCV polls with their events
@@ -23,7 +34,7 @@ IO.puts("")
 Enum.each(rcv_polls, fn {poll, event, option_count} ->
   IO.puts("📊 Poll: #{poll.title}")
   IO.puts("   Event: #{event.title}")
-  IO.puts("   Event Date: #{Calendar.strftime(event.start_at, "%Y-%m-%d %H:%M")}")
+  IO.puts("   Event Date: #{fmt_dt.(event.start_at)}")
   IO.puts("   Poll Phase: #{poll.phase}")
   IO.puts("   Poll Type: #{poll.poll_type}")
   IO.puts("   Options: #{option_count}")
@@ -52,7 +63,7 @@ IO.puts("")
 
 Enum.each(movie_events, fn {event, poll_count} ->
   IO.puts("🎬 Event: #{event.title}")
-  IO.puts("   Date: #{Calendar.strftime(event.start_at, "%Y-%m-%d %H:%M")}")
+  IO.puts("   Date: #{fmt_dt.(event.start_at)}")
   IO.puts("   Status: #{event.status}")
   IO.puts("   Poll Count: #{poll_count}")
   IO.puts("   Visibility: #{event.visibility}")
@@ -78,10 +89,10 @@ IO.puts("")
 
 Enum.each(rcv_description_events, fn {event, poll_count} ->
   IO.puts("📋 Event: #{event.title}")
-  IO.puts("   Date: #{Calendar.strftime(event.start_at, "%Y-%m-%d %H:%M")}")
+  IO.puts("   Date: #{fmt_dt.(event.start_at)}")
   IO.puts("   Status: #{event.status}")
   IO.puts("   Poll Count: #{poll_count}")
-  IO.puts("   Description: #{String.slice(event.description, 0, 100)}...")
+  IO.puts("   Description: #{safe_slice.(event.description, 100)}...")
   if poll_count == 0 do
     IO.puts("   ❌ NO POLLS DESPITE MENTIONING RCV")
   else
