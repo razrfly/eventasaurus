@@ -131,9 +131,12 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           tabindex="0"
           style={"z-index: #{@max_avatars - index}"}
         >
-          <%= avatar_img_size(participant.user, @avatar_size,
-                class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
-              ) %>
+          <.link navigate={EventasaurusApp.Accounts.User.profile_url(participant.user)} 
+                class="block hover:opacity-80 transition-opacity">
+            <%= avatar_img_size(participant.user, @avatar_size,
+                  class: "border-2 border-white rounded-full shadow-sm hover:scale-110 transition-transform duration-200 cursor-pointer relative"
+                ) %>
+          </.link>
 
           <!-- Tooltip on hover -->
           <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
