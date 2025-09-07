@@ -1289,10 +1289,19 @@ defmodule EventasaurusWeb.PublicEventLive do
             <h3 class="text-lg font-semibold mb-4 text-gray-900">Hosted by</h3>
             <div class="flex items-center space-x-3">
               <%= if Ecto.assoc_loaded?(@event.users) and @event.users != [] do %>
-                <%= avatar_img_size(hd(@event.users), :lg, class: "border border-gray-200") %>
+                <.link navigate={EventasaurusApp.Accounts.User.profile_url(hd(@event.users))} 
+                      class="hover:opacity-80 transition-opacity">
+                  <%= avatar_img_size(hd(@event.users), :lg, class: "border border-gray-200") %>
+                </.link>
                 <div class="flex-1">
-                  <div class="font-medium text-gray-900"><%= hd(@event.users).name %></div>
-                  <a href="#" class="text-blue-600 hover:text-blue-800 text-sm font-medium">View other events</a>
+                  <.link navigate={EventasaurusApp.Accounts.User.profile_url(hd(@event.users))} 
+                        class="font-medium text-gray-900 hover:text-blue-600 transition-colors">
+                    <%= hd(@event.users).name %>
+                  </.link>
+                  <.link navigate={EventasaurusApp.Accounts.User.profile_url(hd(@event.users))} 
+                        class="text-blue-600 hover:text-blue-800 text-sm font-medium block">
+                    View profile
+                  </.link>
 
                   <!-- Social Media Links -->
                   <%= if Enum.any?(EventasaurusWeb.ProfileHTML.social_links(hd(@event.users))) do %>

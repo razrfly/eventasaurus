@@ -1,40 +1,69 @@
 <div class="min-h-screen bg-gray-50">
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Profile Header -->
-    <div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="bg-white shadow-sm rounded-lg overflow-hidden">
       <div class="px-6 py-8">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-6 sm:space-y-0 sm:space-x-8">
           <!-- Avatar -->
           <div class="flex-shrink-0">
-            <img 
-              class="h-24 w-24 rounded-full object-cover border-4 border-white shadow-lg"
-              src={"https://api.dicebear.com/7.x/initials/svg?seed=#{@user.email}&backgroundColor=3b82f6"}
-              alt={"#{display_name(@user)}'s avatar"}
-            />
+            <div class="relative">
+              <img 
+                class="h-32 w-32 rounded-full object-cover border-4 border-white shadow-lg"
+                src={EventasaurusApp.Accounts.User.avatar_url(@user, size: 150)}
+                alt={"#{display_name(@user)}'s avatar"}
+              />
+              <!-- Status indicator (could be online/offline in future) -->
+              <div class="absolute bottom-2 right-2 h-6 w-6 rounded-full bg-green-400 border-2 border-white"></div>
+            </div>
           </div>
           
           <!-- User Info -->
           <div class="flex-1 min-w-0">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 class="text-2xl font-bold text-gray-900 truncate">
+            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between">
+              <div class="flex-1">
+                <h1 class="text-3xl font-bold text-gray-900 mb-1">
                   <%= display_name(@user) %>
                 </h1>
-                <p class="text-lg text-gray-600">@<%= EventasaurusApp.Accounts.User.username_slug(@user) %></p>
+                <p class="text-lg text-gray-600 mb-3">@<%= EventasaurusApp.Accounts.User.username_slug(@user) %></p>
                 
+                <!-- Join Date -->
+                <div class="flex items-center text-sm text-gray-500 mb-4">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                  </svg>
+                  <%= format_join_date(@user.inserted_at) %>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="flex flex-wrap gap-6 mb-4">
+                  <div class="flex flex-col">
+                    <span class="text-2xl font-bold text-gray-900"><%= @stats.hosted %></span>
+                    <span class="text-sm text-gray-600">Hosted</span>
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-2xl font-bold text-gray-900"><%= @stats.attended %></span>
+                    <span class="text-sm text-gray-600">Attended</span>
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-2xl font-bold text-gray-900"><%= @stats.together %></span>
+                    <span class="text-sm text-gray-600">Together</span>
+                  </div>
+                </div>
+                
+                <!-- Bio -->
                 <%= if @user.bio && @user.bio != "" do %>
-                  <p class="mt-2 text-gray-700 leading-relaxed">
+                  <p class="text-gray-700 leading-relaxed mb-4">
                     <%= @user.bio %>
                   </p>
                 <% end %>
               </div>
               
               <!-- Profile Actions -->
-              <div class="mt-4 sm:mt-0">
+              <div class="mt-6 lg:mt-0 lg:ml-6">
                 <%= if assigns[:is_own_profile] do %>
                   <.link 
                     href={~p"/settings"} 
-                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    class="inline-flex items-center px-6 py-2 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                   >
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -42,10 +71,9 @@
                     Edit Profile
                   </.link>
                 <% else %>
-                  <!-- Share Profile Button -->
                   <button 
                     onclick={"navigator.share ? navigator.share({title: '#{display_name(@user)}', url: window.location.href}) : navigator.clipboard.writeText(window.location.href)"}
-                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    class="inline-flex items-center px-6 py-2 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                   >
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
@@ -60,81 +88,221 @@
       </div>
     </div>
 
-    <!-- Links & Social Media -->
-    <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Website Link -->
-      <%= if @user.website_url && @user.website_url != "" do %>
-        <div class="bg-white shadow rounded-lg p-6">
-          <h2 class="text-lg font-medium text-gray-900 mb-4">Website</h2>
-          <a 
-            href={format_website_url(@user.website_url)} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            class="inline-flex items-center text-indigo-600 hover:text-indigo-500 font-medium"
-          >
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-            </svg>
-            <%= @user.website_url %>
-          </a>
-        </div>
-      <% end %>
+    <!-- Content Grid -->
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Main Content -->
+      <div class="lg:col-span-2 space-y-8">
+        <!-- Mutual Events Section (only show if there are mutual events) -->
+        <%= if length(@mutual_events) > 0 do %>
+          <div class="bg-white shadow-sm rounded-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+              <h2 class="text-lg font-semibold text-gray-900">Mutual Events</h2>
+            </div>
+            <div class="p-6">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <%= for event <- @mutual_events do %>
+                  <.link href={~p"/#{event.slug}"} class="group block">
+                    <div class="aspect-w-16 aspect-h-9 rounded-lg overflow-hidden bg-gray-100 mb-3">
+                      <img 
+                        src={event_cover_image_url(event)} 
+                        alt={event.title}
+                        class="w-full h-32 object-cover group-hover:opacity-90 transition-opacity"
+                      />
+                    </div>
+                    <h3 class="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                      <%= event.title %>
+                    </h3>
+                    <p class="text-sm text-gray-600 mt-1">
+                      <%= format_event_date(event.start_at, event.timezone) %>
+                    </p>
+                  </.link>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
 
-      <!-- Social Media Links -->
-      <%= if Enum.any?(social_links(@user)) do %>
-        <div class="bg-white shadow rounded-lg p-6">
-          <h2 class="text-lg font-medium text-gray-900 mb-4">Connect</h2>
+        <!-- Recent Events Section -->
+        <div class="bg-white shadow-sm rounded-lg overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900">
+              <%= if assigns[:is_own_profile], do: "Your Events", else: "Recent Events" %>
+            </h2>
+            <%= if length(@recent_events) > 6 do %>
+              <button class="text-sm text-blue-600 hover:text-blue-800 font-medium">View All</button>
+            <% end %>
+          </div>
+          
+          <%= if length(@recent_events) > 0 do %>
+            <div class="divide-y divide-gray-200">
+              <%= for event <- Enum.take(@recent_events, 6) do %>
+                <div class="p-6 hover:bg-gray-50 transition-colors">
+                  <.link href={~p"/#{event.slug}"} class="flex items-start space-x-4 group">
+                    <div class="flex-shrink-0">
+                      <img 
+                        src={event_cover_image_url(event)} 
+                        alt={event.title}
+                        class="w-16 h-16 rounded-lg object-cover"
+                      />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                          <h3 class="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            <%= event.title %>
+                          </h3>
+                          <%= if event.tagline && event.tagline != "" do %>
+                            <p class="text-sm text-gray-600 mt-1 line-clamp-2">
+                              <%= event.tagline %>
+                            </p>
+                          <% end %>
+                          <div class="flex items-center mt-2 space-x-4 text-sm text-gray-500">
+                            <span>
+                              <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                              </svg>
+                              <%= format_event_date(event.start_at, event.timezone) %>
+                            </span>
+                            <span>
+                              <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                              </svg>
+                              <%= format_event_location(event) %>
+                            </span>
+                          </div>
+                        </div>
+                        <div class="flex flex-col items-end space-y-2">
+                          <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{event_status_color(event.status)}"}>
+                            <%= event_status_text(event.status) %>
+                          </span>
+                          <span class={[
+                            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                            if(event.user_role == "organizer", do: "bg-blue-100 text-blue-800", else: "bg-green-100 text-green-800")
+                          ]}>
+                            <%= if event.user_role == "organizer", do: "Hosted", else: "Attended" %>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </.link>
+                </div>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="text-center py-12">
+              <svg class="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+              <p class="text-gray-500">
+                <%= if assigns[:is_own_profile], do: "You haven't participated in any events yet.", else: "No events to display yet." %>
+              </p>
+              <%= if assigns[:is_own_profile] do %>
+                <.link href={~p"/events/new"} class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
+                  Create your first event
+                </.link>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="space-y-6">
+        <!-- Social Links -->
+        <%= if @user.website_url || Enum.any?(social_links(@user)) do %>
+          <div class="bg-white shadow-sm rounded-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Connect</h3>
+            <div class="space-y-3">
+              <%= if @user.website_url && @user.website_url != "" do %>
+                <a 
+                  href={format_website_url(@user.website_url)} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="flex items-center text-gray-700 hover:text-blue-600 transition-colors"
+                >
+                  <svg class="w-5 h-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                  <span class="font-medium">Website</span>
+                </a>
+              <% end %>
+
+              <%= for {platform, handle} <- social_links(@user) do %>
+                <a 
+                  href={social_url(handle, platform)} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="flex items-center text-gray-700 hover:text-blue-600 transition-colors"
+                >
+                  <div class="w-5 h-5 mr-3 flex items-center justify-center">
+                    <span class="text-sm">🔗</span>
+                  </div>
+                  <span class="font-medium"><%= platform_name(platform) %></span>
+                </a>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Quick Stats Card -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+          <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Activity</h3>
           <div class="space-y-3">
-            <%= for {platform, handle} <- social_links(@user) do %>
-              <a 
-                href={social_url(handle, platform)} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                class="flex items-center text-gray-700 hover:text-indigo-600 transition-colors"
-              >
-                <span class="text-lg mr-3"><%= social_icon(platform) %></span>
-                <span class="font-medium"><%= platform_name(platform) %></span>
-                <span class="text-gray-500 ml-2">@<%= String.replace(handle, ~r/^@/, "") %></span>
-                <svg class="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                </svg>
-              </a>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Events hosted</span>
+              <span class="font-semibold text-gray-900"><%= @stats.hosted %></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Events attended</span>
+              <span class="font-semibold text-gray-900"><%= @stats.attended %></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">People met</span>
+              <span class="font-semibold text-gray-900"><%= @stats.together %></span>
+            </div>
+            <%= if @stats.hosted > 0 || @stats.attended > 0 do %>
+              <div class="pt-3 border-t border-gray-200">
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Total events</span>
+                  <span class="font-bold text-blue-600"><%= @stats.hosted + @stats.attended %></span>
+                </div>
+              </div>
             <% end %>
           </div>
         </div>
-      <% end %>
-    </div>
 
-    <!-- Events Section (Future Implementation) -->
-    <div class="mt-6 bg-white shadow rounded-lg p-6">
-      <h2 class="text-lg font-medium text-gray-900 mb-4">Events</h2>
-      <div class="text-center py-8 text-gray-500">
-        <svg class="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-        </svg>
-        <p class="text-sm">No events to display yet.</p>
-        <%= if assigns[:is_own_profile] do %>
-          <p class="text-xs mt-1">Events you create will appear here.</p>
-        <% end %>
+        <!-- Member Since -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+          <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Member Since</h3>
+          <div class="flex items-center">
+            <svg class="w-5 h-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <span class="text-gray-900"><%= format_join_date(@user.inserted_at) %></span>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Footer Note for Private Profiles -->
     <%= if assigns[:is_own_profile] && !@user.profile_public do %>
-      <div class="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <div class="flex items-center">
-          <svg class="w-5 h-5 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="mt-8 bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div class="flex items-start">
+          <svg class="w-5 h-5 text-amber-600 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
           </svg>
-          <p class="text-sm text-yellow-800">
-            <strong>Private Profile:</strong> Only you can see this profile. 
-            <.link href={~p"/settings"} class="underline hover:no-underline">
-              Make it public
-            </.link> 
-            to let others view it.
-          </p>
+          <div>
+            <p class="text-sm text-amber-800">
+              <strong>Private Profile:</strong> Only you can see this profile page. 
+              <.link href={~p"/settings"} class="underline hover:no-underline font-medium">
+                Make it public
+              </.link> 
+              so others can discover your events and connect with you.
+            </p>
+          </div>
         </div>
       </div>
     <% end %>
   </div>
-</div> 
+</div>
