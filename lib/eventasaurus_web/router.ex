@@ -290,9 +290,12 @@ defmodule EventasaurusWeb.Router do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
-      # Username-based profile routes
-      get "/user/:username", ProfileController, :show
+      # Username-based profile routes (new plural form)
+      get "/users/:username", ProfileController, :show
       get "/u/:username", ProfileController, :redirect_short
+      
+      # Backward compatibility redirects for old /user/ URLs
+      get "/user/:username", ProfileController, :redirect_legacy
     end
   end
 
