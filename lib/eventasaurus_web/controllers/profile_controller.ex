@@ -28,9 +28,26 @@ defmodule EventasaurusWeb.ProfileController do
         else
           if user.profile_public == true do
             # Public profile - show the profile page
+            auth_user = conn.assigns[:auth_user]
+            
+            # Get profile data
+            stats = Accounts.get_user_event_stats(user)
+            recent_events = Accounts.get_user_recent_events(user, limit: 10)
+            
+            # Get mutual events if user is logged in
+            mutual_events = if auth_user && auth_user.id != user.id do
+              Accounts.get_mutual_events(auth_user, user, limit: 6)
+            else
+              []
+            end
+            
             conn
             |> assign(:user, user)
             |> assign(:page_title, "#{User.display_name(user)} (@#{canonical_username})")
+            |> assign(:stats, stats)
+            |> assign(:recent_events, recent_events)
+            |> assign(:mutual_events, mutual_events)
+            |> assign(:is_own_profile, false)
             |> render(:show)
           else
             # Private profile - check if it's the current user viewing their own profile
@@ -38,9 +55,15 @@ defmodule EventasaurusWeb.ProfileController do
 
             if auth_user && auth_user.id == user.id do
               # User viewing their own private profile
+              stats = Accounts.get_user_event_stats(user)
+              recent_events = Accounts.get_user_recent_events(user, limit: 10)
+              
               conn
               |> assign(:user, user)
               |> assign(:page_title, "Your Profile (@#{canonical_username})")
+              |> assign(:stats, stats)
+              |> assign(:recent_events, recent_events)
+              |> assign(:mutual_events, [])
               |> assign(:is_own_profile, true)
               |> render(:show)
             else

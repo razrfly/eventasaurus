@@ -192,4 +192,108 @@ defmodule EventasaurusWeb.ProfileHTML do
   end
 
   def profile_meta_tags(nil), do: %{}
+
+  @doc """
+  Format a join date for display
+  """
+  def format_join_date(%DateTime{} = datetime) do
+    date = DateTime.to_date(datetime)
+    month_name = Calendar.strftime(date, "%B")
+    "Joined #{month_name} #{date.year}"
+  end
+
+  def format_join_date(%NaiveDateTime{} = naive_datetime) do
+    date = NaiveDateTime.to_date(naive_datetime)
+    month_name = Calendar.strftime(date, "%B")
+    "Joined #{month_name} #{date.year}"
+  end
+
+  def format_join_date(nil), do: ""
+
+  @doc """
+  Format event date for display in event cards
+  """
+  def format_event_date(datetime, timezone \\ nil)
+  
+  def format_event_date(%DateTime{} = datetime, timezone) do
+    case timezone do
+      tz when is_binary(tz) ->
+        try do
+          datetime
+          |> DateTime.shift_zone!(tz)
+          |> Calendar.strftime("%a, %b %d, %I:%M %p")
+        rescue
+          _ -> Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
+        end
+      _ ->
+        Calendar.strftime(datetime, "%a, %b %d, %I:%M %p UTC")
+    end
+  end
+
+  def format_event_date(nil, _timezone), do: "Date TBD"
+
+  @doc """
+  Get event cover image URL, with fallbacks
+  """
+  def event_cover_image_url(event) do
+    cond do
+      event.cover_image_url && event.cover_image_url != "" ->
+        event.cover_image_url
+      
+      event.external_image_data && Map.get(event.external_image_data, "url") ->
+        Map.get(event.external_image_data, "url")
+      
+      true ->
+        # Fallback gradient based on event title
+        seed = :erlang.phash2(event.title || "event")
+        "https://api.dicebear.com/9.x/shapes/svg?seed=#{seed}&backgroundColor=gradient"
+    end
+  end
+
+  @doc """
+  Get event status badge color
+  """
+  def event_status_color(status) do
+    case status do
+      :confirmed -> "bg-green-100 text-green-800"
+      :draft -> "bg-gray-100 text-gray-800"
+      :polling -> "bg-blue-100 text-blue-800"
+      :threshold -> "bg-yellow-100 text-yellow-800"
+      :canceled -> "bg-red-100 text-red-800"
+      _ -> "bg-gray-100 text-gray-800"
+    end
+  end
+
+  @doc """
+  Get human readable event status
+  """
+  def event_status_text(status) do
+    case status do
+      :confirmed -> "Confirmed"
+      :draft -> "Draft"
+      :polling -> "Polling"
+      :threshold -> "Threshold"
+      :canceled -> "Canceled"
+      _ -> to_string(status)
+    end
+  end
+
+  @doc """
+  Format event location for display
+  """
+  def format_event_location(event) do
+    cond do
+      event.venue && event.venue.name ->
+        event.venue.name
+      
+      Map.get(event, :virtual_venue_url) && event.virtual_venue_url != "" ->
+        "Virtual Event"
+      
+      Map.get(event, :is_virtual) == true ->
+        "Virtual Event"
+      
+      true ->
+        "Location TBD"
+    end
+  end
 end
