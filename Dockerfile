@@ -24,7 +24,7 @@ FROM ${BUILDER_IMAGE} as builder
 RUN apt-get update -y && apt-get install -y build-essential git curl libbsd-dev \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
-    && apt-get clean && rm -f /var/lib/apt/lists/*_*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # prepare build dir
 WORKDIR /app
@@ -68,10 +68,13 @@ COPY lib lib
 COPY assets assets
 
 # install npm dependencies
-RUN cd assets && npm install
+RUN cd assets && npm ci --only=production
 
 # compile assets
 RUN mix assets.deploy
+
+# Clean up node_modules after asset compilation
+RUN rm -rf assets/node_modules
 
 # Compile the release
 RUN mix compile
@@ -87,8 +90,8 @@ RUN mix release
 FROM ${RUNNER_IMAGE}
 
 RUN apt-get update -y && \
-  apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates librsvg2-bin \
-  && apt-get clean && rm -f /var/lib/apt/lists/*_*
+  apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
