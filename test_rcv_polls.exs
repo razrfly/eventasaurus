@@ -6,6 +6,10 @@ alias EventasaurusApp.{Repo, Events, Accounts}
 
 # Get available users and create a simple event
 users = Repo.all(from(u in Accounts.User, limit: 10))
+if users == [] do
+  IO.puts("❌ No users found. Seed users before running this script.")
+  System.halt(1)
+end
 organizer = Enum.random(users)
 
 IO.puts("=== Testing RCV Poll Creation ===")
