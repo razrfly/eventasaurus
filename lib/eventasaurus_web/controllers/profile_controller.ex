@@ -30,13 +30,20 @@ defmodule EventasaurusWeb.ProfileController do
             # Public profile - show the profile page
             auth_user = conn.assigns[:auth_user]
             
+            # Ensure we have a proper User struct for mutual events query
+            viewer_user = case auth_user do
+              %User{} = u -> u
+              %{id: id} when is_integer(id) -> Accounts.get_user(id)
+              _ -> nil
+            end
+            
             # Get profile data
             stats = Accounts.get_user_event_stats(user)
             recent_events = Accounts.get_user_recent_events(user, limit: 10)
             
-            # Get mutual events if user is logged in
-            mutual_events = if auth_user && auth_user.id != user.id do
-              Accounts.get_mutual_events(auth_user, user, limit: 6)
+            # Get mutual events if user is logged in and different from profile user
+            mutual_events = if viewer_user && viewer_user.id != user.id do
+              Accounts.get_mutual_events(viewer_user, user, limit: 6)
             else
               []
             end
