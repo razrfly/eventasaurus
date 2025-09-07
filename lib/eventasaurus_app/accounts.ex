@@ -379,11 +379,16 @@ defmodule EventasaurusApp.Accounts do
     end
     
     # Union the queries and order by start date
-    union_query = hosted_events_query |> union(^attended_events_query)
+    # Use UNION ALL to avoid removing duplicates during union, then apply DISTINCT ON to prefer organizer role
+    union_query = hosted_events_query |> union_all(^attended_events_query)
     
-    events = from(
-      e in subquery(union_query),
-      order_by: [desc: e.start_at],
+    events = from(e in subquery(union_query),
+      # Prefer organizer when both roles exist for same event
+      order_by: [
+        desc: e.start_at,
+        desc: fragment("CASE WHEN ? = 'organizer' THEN 1 ELSE 0 END", e.user_role)
+      ],
+      distinct: e.id,
       limit: ^limit
     )
     |> Repo.all(with_deleted: true)
