@@ -246,13 +246,13 @@ defmodule EventasaurusApp.Accounts.User do
   end
 
   @doc """
-  Get the canonical profile URL for a user (/user/:username)
+  Get the canonical profile URL for a user (/users/:username)
   """
   def profile_url(%__MODULE__{username: username}) when is_binary(username) do
-    "/user/#{username}"
+    "/users/#{username}"
   end
   def profile_url(%__MODULE__{id: id}) do
-    "/user/#{id}"
+    "/users/user-#{id}"
   end
 
   @doc """
