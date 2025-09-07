@@ -37,9 +37,9 @@ defmodule EventasaurusWeb.ProfileController do
               _ -> nil
             end
             
-            # Get profile data
+            # Get profile data - filter to public events only for public profiles
             stats = Accounts.get_user_event_stats(user)
-            recent_events = Accounts.get_user_recent_events(user, limit: 10)
+            recent_events = Accounts.get_user_recent_events(user, limit: 10, public_only: true)
             
             # Get mutual events if user is logged in and different from profile user
             mutual_events = if viewer_user && viewer_user.id != user.id do
@@ -61,9 +61,9 @@ defmodule EventasaurusWeb.ProfileController do
             auth_user = conn.assigns[:auth_user]
 
             if auth_user && auth_user.id == user.id do
-              # User viewing their own private profile
+              # User viewing their own private profile - show all events
               stats = Accounts.get_user_event_stats(user)
-              recent_events = Accounts.get_user_recent_events(user, limit: 10)
+              recent_events = Accounts.get_user_recent_events(user, limit: 10, public_only: false)
               
               conn
               |> assign(:user, user)
@@ -118,5 +118,14 @@ defmodule EventasaurusWeb.ProfileController do
           end
         end
     end
+  end
+
+  @doc """
+  Redirect legacy /user/:username URLs to new /users/:username format
+  
+  This provides backward compatibility for old bookmarks and shared links.
+  """
+  def redirect_legacy(conn, %{"username" => username}) do
+    redirect(conn, to: ~p"/users/#{username}")
   end
 end

@@ -37,12 +37,15 @@ defmodule EventasaurusApp.Accounts do
       {:error, _reason} ->
         # Invalid email format, return nil
         nil
+
       nil ->
         nil
+
       normalized_email when is_binary(normalized_email) ->
         Repo.get_by(User, email: normalized_email)
     end
   end
+
   def get_user_by_email(_), do: nil
 
   @doc """
@@ -68,7 +71,9 @@ defmodule EventasaurusApp.Accounts do
   def get_user_by_username_or_id(identifier) when is_binary(identifier) do
     # First try username lookup
     case get_user_by_username(identifier) do
-      %User{} = user -> user
+      %User{} = user ->
+        user
+
       nil ->
         # Check if it's a "user-{id}" pattern from username_slug
         case Regex.run(~r/^user-(\d+)$/, identifier) do
@@ -77,6 +82,7 @@ defmodule EventasaurusApp.Accounts do
               {id, ""} -> get_user(id)
               _ -> nil
             end
+
           nil ->
             # Try regular ID lookup if not a "user-{id}" pattern
             case Integer.parse(identifier) do
@@ -123,10 +129,15 @@ defmodule EventasaurusApp.Accounts do
   Finds or creates a user from Supabase user data.
   Returns {:ok, user} or {:error, reason}.
   """
-  def find_or_create_from_supabase(%{"id" => supabase_id, "email" => email, "user_metadata" => user_metadata}) do
+  def find_or_create_from_supabase(%{
+        "id" => supabase_id,
+        "email" => email,
+        "user_metadata" => user_metadata
+      }) do
     case get_user_by_supabase_id(supabase_id) do
       %User{} = user ->
         {:ok, user}
+
       nil ->
         # Normalize email to ensure consistency
         # Supabase should always provide valid emails, but we validate anyway
@@ -134,21 +145,27 @@ defmodule EventasaurusApp.Accounts do
           {:error, reason} ->
             # This shouldn't happen with Supabase, but handle it gracefully
             {:error, {:invalid_email, reason}}
+
           nil ->
             {:error, {:invalid_email, "Email is nil"}}
+
           normalized_email when is_binary(normalized_email) ->
             # Safely extract name from user_metadata
-            name = 
+            name =
               case user_metadata do
-                m when is_map(m) -> Map.get(m, "name") || extract_name_from_email(normalized_email)
-                _ -> extract_name_from_email(normalized_email)
+                m when is_map(m) ->
+                  Map.get(m, "name") || extract_name_from_email(normalized_email)
+
+                _ ->
+                  extract_name_from_email(normalized_email)
               end
-            
+
             user_params = %{
               email: normalized_email,
               name: name,
               supabase_id: supabase_id
             }
+
             create_user(user_params)
         end
     end
@@ -167,12 +184,15 @@ defmodule EventasaurusApp.Accounts do
       {:error, reason} ->
         # Invalid email format
         {:error, {:invalid_email, reason}}
+
       nil ->
         {:error, {:invalid_email, "Email cannot be nil"}}
+
       normalized_email when is_binary(normalized_email) ->
         case get_user_by_email(normalized_email) do
           %User{} = user ->
             {:ok, user}
+
           nil ->
             name = extract_name_from_email(normalized_email)
             # Generate a temporary supabase_id for guest users
@@ -183,6 +203,7 @@ defmodule EventasaurusApp.Accounts do
               name: name,
               supabase_id: temp_supabase_id
             }
+
             create_user(user_params)
         end
     end
@@ -192,7 +213,7 @@ defmodule EventasaurusApp.Accounts do
 
   @doc """
   Gets user event statistics for profile display.
-  
+
   Returns a map with:
   - hosted: Number of events the user has organized/hosted
   - attended: Number of events the user has attended
@@ -201,58 +222,69 @@ defmodule EventasaurusApp.Accounts do
   def get_user_event_stats(%User{} = user) do
     alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
     import Ecto.Query
-    
+
     # Count hosted events (user is in event_users table)
-    hosted_count = 
+    hosted_count =
       from(eu in EventUser,
-        join: e in Event, on: eu.event_id == e.id,
+        join: e in Event,
+        on: eu.event_id == e.id,
         where: eu.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(eu.deleted_at),
         select: count(e.id)
       )
       |> Repo.one(with_deleted: true)
-    
+
     # Count attended events (user is in event_participants table)
-    attended_count = 
+    attended_count =
       from(ep in EventParticipant,
-        join: e in Event, on: ep.event_id == e.id,
+        join: e in Event,
+        on: ep.event_id == e.id,
         where: ep.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(ep.deleted_at),
         select: count(e.id, :distinct)
       )
       |> Repo.one(with_deleted: true)
-    
+
     # Count unique other users they've shared events with (both as organizer and participant)
     # First query: Events where user was organizer - get other participants
-    organizer_participants_query = 
+    organizer_participants_query =
       from(eu in EventUser,
-        join: e in Event, on: eu.event_id == e.id,
-        join: ep in EventParticipant, on: e.id == ep.event_id,
-        where: eu.user_id == ^user.id and ep.user_id != ^user.id and 
-               is_nil(e.deleted_at) and is_nil(eu.deleted_at) and is_nil(ep.deleted_at),
+        join: e in Event,
+        on: eu.event_id == e.id,
+        join: ep in EventParticipant,
+        on: e.id == ep.event_id,
+        where:
+          eu.user_id == ^user.id and ep.user_id != ^user.id and
+            is_nil(e.deleted_at) and is_nil(eu.deleted_at) and is_nil(ep.deleted_at),
         select: %{user_id: ep.user_id}
       )
-    
+
     # Second query: Events where user was participant - get organizers
-    participant_organizers_query = 
+    participant_organizers_query =
       from(ep in EventParticipant,
-        join: e in Event, on: ep.event_id == e.id,
-        join: eu in EventUser, on: e.id == eu.event_id,
-        where: ep.user_id == ^user.id and eu.user_id != ^user.id and 
-               is_nil(e.deleted_at) and is_nil(ep.deleted_at) and is_nil(eu.deleted_at),
+        join: e in Event,
+        on: ep.event_id == e.id,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        where:
+          ep.user_id == ^user.id and eu.user_id != ^user.id and
+            is_nil(e.deleted_at) and is_nil(ep.deleted_at) and is_nil(eu.deleted_at),
         select: %{user_id: eu.user_id}
       )
-    
+
     # Third query: Events where user was participant - get other participants  
-    participant_participants_query = 
+    participant_participants_query =
       from(ep1 in EventParticipant,
-        join: e in Event, on: ep1.event_id == e.id,
-        join: ep2 in EventParticipant, on: e.id == ep2.event_id,
-        where: ep1.user_id == ^user.id and ep2.user_id != ^user.id and 
-               is_nil(e.deleted_at) and is_nil(ep1.deleted_at) and is_nil(ep2.deleted_at),
+        join: e in Event,
+        on: ep1.event_id == e.id,
+        join: ep2 in EventParticipant,
+        on: e.id == ep2.event_id,
+        where:
+          ep1.user_id == ^user.id and ep2.user_id != ^user.id and
+            is_nil(e.deleted_at) and is_nil(ep1.deleted_at) and is_nil(ep2.deleted_at),
         select: %{user_id: ep2.user_id}
       )
-    
+
     # Combine all queries with union and count distinct
-    together_count = 
+    together_count =
       from(
         u in subquery(
           organizer_participants_query
@@ -262,7 +294,7 @@ defmodule EventasaurusApp.Accounts do
         select: count(u.user_id, :distinct)
       )
       |> Repo.one(with_deleted: true)
-    
+
     %{
       hosted: hosted_count || 0,
       attended: attended_count || 0,
@@ -272,25 +304,33 @@ defmodule EventasaurusApp.Accounts do
 
   @doc """
   Gets recent events for a user's profile (both hosted and attended).
-  
+
   Options:
   - limit: Maximum number of events to return (default: 10)
   - include_future: Include future events (default: true)
+  - public_only: Only return public events (default: false)
   """
   def get_user_recent_events(%User{} = user, opts \\ []) do
     alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
     import Ecto.Query
-    
+
     limit = Keyword.get(opts, :limit, 10)
     include_future = Keyword.get(opts, :include_future, true)
-    
-    # Build time filter conditions directly instead of using dynamic
-    
-    # Get events where user was organizer
-    hosted_events_query = if include_future do
-      from(eu in EventUser,
-        join: e in Event, on: eu.event_id == e.id,
-        where: eu.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(eu.deleted_at),
+    public_only = Keyword.get(opts, :public_only, false)
+
+    # Build base query with conditional JOINs - more efficient than UNION
+    base_query =
+      from(e in Event,
+        # LEFT JOIN for organizer relationship
+        left_join: eu in EventUser,
+        on: e.id == eu.event_id and eu.user_id == ^user.id and is_nil(eu.deleted_at),
+        # LEFT JOIN for participant relationship
+        left_join: ep in EventParticipant,
+        on: e.id == ep.event_id and ep.user_id == ^user.id and is_nil(ep.deleted_at),
+        # User must be either organizer or participant
+        where:
+          is_nil(e.deleted_at) and
+            (not is_nil(eu.id) or not is_nil(ep.id)),
         select: %{
           id: e.id,
           title: e.title,
@@ -304,137 +344,98 @@ defmodule EventasaurusApp.Accounts do
           status: e.status,
           visibility: e.visibility,
           venue_id: e.venue_id,
-          user_role: "organizer",
-          inserted_at: e.inserted_at
-        }
+          # Determine user role with organizer priority
+          user_role:
+            fragment("CASE WHEN ? IS NOT NULL THEN 'organizer' ELSE 'attendee' END", eu.id),
+          inserted_at: e.inserted_at,
+          # For ordering - organizer takes priority
+          role_priority: fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", eu.id)
+        },
+        # Order by start_at desc, then by role priority (organizer first) for same event
+        # Use the fragment directly in ORDER BY since role_priority is a computed field
+        order_by: [desc: :start_at, desc: fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", eu.id)],
+        # Use DISTINCT ON to ensure each event appears only once
+        distinct: :id,
+        limit: ^limit
       )
-    else
-      from(eu in EventUser,
-        join: e in Event, on: eu.event_id == e.id,
-        where: eu.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(eu.deleted_at) and
-               (is_nil(e.start_at) or e.start_at < ^DateTime.utc_now()),
-        select: %{
-          id: e.id,
-          title: e.title,
-          tagline: e.tagline,
-          start_at: e.start_at,
-          ends_at: e.ends_at,
-          timezone: e.timezone,
-          slug: e.slug,
-          cover_image_url: e.cover_image_url,
-          external_image_data: e.external_image_data,
-          status: e.status,
-          visibility: e.visibility,
-          venue_id: e.venue_id,
-          user_role: "organizer",
-          inserted_at: e.inserted_at
-        }
-      )
-    end
-    
-    # Get events where user was participant
-    attended_events_query = if include_future do
-      from(ep in EventParticipant,
-        join: e in Event, on: ep.event_id == e.id,
-        where: ep.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(ep.deleted_at),
-        select: %{
-          id: e.id,
-          title: e.title,
-          tagline: e.tagline,
-          start_at: e.start_at,
-          ends_at: e.ends_at,
-          timezone: e.timezone,
-          slug: e.slug,
-          cover_image_url: e.cover_image_url,
-          external_image_data: e.external_image_data,
-          status: e.status,
-          visibility: e.visibility,
-          venue_id: e.venue_id,
-          user_role: "attendee",
-          inserted_at: e.inserted_at
-        }
-      )
-    else
-      from(ep in EventParticipant,
-        join: e in Event, on: ep.event_id == e.id,
-        where: ep.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(ep.deleted_at) and
-               (is_nil(e.start_at) or e.start_at < ^DateTime.utc_now()),
-        select: %{
-          id: e.id,
-          title: e.title,
-          tagline: e.tagline,
-          start_at: e.start_at,
-          ends_at: e.ends_at,
-          timezone: e.timezone,
-          slug: e.slug,
-          cover_image_url: e.cover_image_url,
-          external_image_data: e.external_image_data,
-          status: e.status,
-          visibility: e.visibility,
-          venue_id: e.venue_id,
-          user_role: "attendee",
-          inserted_at: e.inserted_at
-        }
-      )
-    end
-    
-    # Union the queries and order by start date
-    # Use UNION ALL to avoid removing duplicates during union, then apply DISTINCT ON to prefer organizer role
-    union_query = hosted_events_query |> union_all(^attended_events_query)
-    
-    events = from(e in subquery(union_query),
-      # Prefer organizer when both roles exist for same event
-      order_by: [
-        desc: e.start_at,
-        desc: fragment("CASE WHEN ? = 'organizer' THEN 1 ELSE 0 END", e.user_role)
-      ],
-      distinct: e.id,
-      limit: ^limit
-    )
-    |> Repo.all(with_deleted: true)
-    
-    # For now, just return events without venue data to fix the subquery issue
+
+    # Apply conditional where clauses
+    query =
+      base_query
+      |> maybe_filter_future_events(include_future)
+      |> maybe_filter_public_only(public_only)
+
+    events = Repo.all(query, with_deleted: true)
+
+    # Add venue field set to nil for template compatibility
     # TODO: Load venues separately if needed by the template
     events
     |> Enum.map(fn event ->
-      Map.put(event, :venue, nil)
+      # Remove internal ordering field
+      Map.drop(event, [:role_priority])
+      |> Map.put(:venue, nil)
     end)
+  end
+
+  # Helper function to conditionally filter future events
+  defp maybe_filter_future_events(query, true), do: query
+
+  defp maybe_filter_future_events(query, false) do
+    from([e, eu, ep] in query,
+      where: is_nil(e.start_at) or e.start_at < ^DateTime.utc_now()
+    )
+  end
+
+  # Helper function to conditionally filter for public events only
+  defp maybe_filter_public_only(query, false), do: query
+
+  defp maybe_filter_public_only(query, true) do
+    from([e, eu, ep] in query,
+      where: e.visibility == :public
+    )
   end
 
   @doc """
   Gets mutual events between the current auth user and a profile user.
-  
+
   This shows events that both users have been involved with (either as organizers or participants).
   Only returns public events or events where the auth user is also involved.
   """
   def get_mutual_events(%User{} = auth_user, %User{} = profile_user, opts \\ []) do
     alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
     import Ecto.Query
-    
+
     limit = Keyword.get(opts, :limit, 6)
-    
+
     # Find events where both users were involved - using a simpler approach with joins
-    mutual_events_query = 
+    mutual_events_query =
       from(e in Event,
         left_join: v in assoc(e, :venue),
         # Join with EventUser for profile_user
-        left_join: eu1 in EventUser, on: e.id == eu1.event_id and eu1.user_id == ^profile_user.id,
+        left_join: eu1 in EventUser,
+        on: e.id == eu1.event_id and eu1.user_id == ^profile_user.id,
         # Join with EventParticipant for profile_user  
-        left_join: ep1 in EventParticipant, on: e.id == ep1.event_id and ep1.user_id == ^profile_user.id,
+        left_join: ep1 in EventParticipant,
+        on: e.id == ep1.event_id and ep1.user_id == ^profile_user.id,
         # Join with EventUser for auth_user
-        left_join: eu2 in EventUser, on: e.id == eu2.event_id and eu2.user_id == ^auth_user.id,
+        left_join: eu2 in EventUser,
+        on: e.id == eu2.event_id and eu2.user_id == ^auth_user.id,
         # Join with EventParticipant for auth_user
-        left_join: ep2 in EventParticipant, on: e.id == ep2.event_id and ep2.user_id == ^auth_user.id,
-        where: is_nil(e.deleted_at) and
-               # Check soft deletes for joins
-               (is_nil(eu1.deleted_at) or is_nil(eu1.id)) and
-               (is_nil(ep1.deleted_at) or is_nil(ep1.id)) and
-               (is_nil(eu2.deleted_at) or is_nil(eu2.id)) and
-               (is_nil(ep2.deleted_at) or is_nil(ep2.id)) and
-               # Profile user was involved (organizer or participant)
-               (not is_nil(eu1.id) or not is_nil(ep1.id)) and
-               # Auth user was also involved (organizer or participant)
-               (not is_nil(eu2.id) or not is_nil(ep2.id)),
+        left_join: ep2 in EventParticipant,
+        on: e.id == ep2.event_id and ep2.user_id == ^auth_user.id,
+        # Check soft deletes for joins
+        # Profile user was involved (organizer or participant)
+        # Auth user was also involved (organizer or participant)
+        # Only show public events for mutual events
+        where:
+          is_nil(e.deleted_at) and
+            (is_nil(eu1.deleted_at) or is_nil(eu1.id)) and
+            (is_nil(ep1.deleted_at) or is_nil(ep1.id)) and
+            (is_nil(eu2.deleted_at) or is_nil(eu2.id)) and
+            (is_nil(ep2.deleted_at) or is_nil(ep2.id)) and
+            (not is_nil(eu1.id) or not is_nil(ep1.id)) and
+            (not is_nil(eu2.id) or not is_nil(ep2.id)) and
+            e.visibility == :public,
         select: %{
           id: e.id,
           title: e.title,
@@ -452,9 +453,9 @@ defmodule EventasaurusApp.Accounts do
         order_by: [desc: e.start_at],
         limit: ^limit
       )
-    
+
     events = Repo.all(mutual_events_query, with_deleted: true)
-    
+
     # Add venue field set to nil for template compatibility
     events
     |> Enum.map(fn event ->
@@ -487,7 +488,8 @@ defmodule EventasaurusApp.Accounts do
       [%User{name: "John Smith", username: "johnsmith"}, ...]
   """
   def search_users_for_organizers(query, opts \\ []) when is_binary(query) do
-    limit = Keyword.get(opts, :limit, 20) |> min(50)  # Cap at 50 for performance
+    # Cap at 50 for performance
+    limit = Keyword.get(opts, :limit, 20) |> min(50)
     offset = Keyword.get(opts, :offset, 0)
     exclude_user_id = Keyword.get(opts, :exclude_user_id)
     include_private = Keyword.get(opts, :include_private, false)
@@ -503,51 +505,62 @@ defmodule EventasaurusApp.Accounts do
     else
       search_pattern = "%#{clean_query}%"
 
-      base_query = from u in User,
-        where: (
-          ilike(u.name, ^search_pattern) or
-          ilike(u.username, ^search_pattern) or
-          ilike(u.email, ^search_pattern)
-        ),
-        limit: ^limit,
-        offset: ^offset,
-        order_by: [
-          # Prioritize exact username matches, then name matches
-          desc: fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.username, ^clean_query),
-          desc: fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.name, ^clean_query),
-          asc: u.name
-        ],
-        select: %{
-          id: u.id,
-          name: u.name,
-          username: u.username,
-          email: u.email,
-          profile_public: u.profile_public
-        }
+      base_query =
+        from(u in User,
+          where:
+            ilike(u.name, ^search_pattern) or
+              ilike(u.username, ^search_pattern) or
+              ilike(u.email, ^search_pattern),
+          limit: ^limit,
+          offset: ^offset,
+          order_by: [
+            # Prioritize exact username matches, then name matches
+            desc:
+              fragment(
+                "CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END",
+                u.username,
+                ^clean_query
+              ),
+            desc:
+              fragment("CASE WHEN lower(?) = lower(?) THEN 1 ELSE 0 END", u.name, ^clean_query),
+            asc: u.name
+          ],
+          select: %{
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            profile_public: u.profile_public
+          }
+        )
 
       # Add privacy filter - include private profiles if user can manage the event
-      query_with_privacy = if include_private or can_see_private_profiles?(requesting_user_id, event_id) do
-        base_query
-      else
-        from u in base_query, where: u.profile_public == true
-      end
+      query_with_privacy =
+        if include_private or can_see_private_profiles?(requesting_user_id, event_id) do
+          base_query
+        else
+          from(u in base_query, where: u.profile_public == true)
+        end
 
       # Exclude users who are already organizers of this event
-      query_with_event_filter = if event_id do
-        from u in query_with_privacy,
-          left_join: eu in EventasaurusApp.Events.EventUser,
-          on: eu.user_id == u.id and eu.event_id == ^event_id,
-          where: is_nil(eu.id)
-      else
-        query_with_privacy
-      end
+      query_with_event_filter =
+        if event_id do
+          from(u in query_with_privacy,
+            left_join: eu in EventasaurusApp.Events.EventUser,
+            on: eu.user_id == u.id and eu.event_id == ^event_id,
+            where: is_nil(eu.id)
+          )
+        else
+          query_with_privacy
+        end
 
       # Exclude specific user if provided
-      final_query = if exclude_user_id do
-        from u in query_with_event_filter, where: u.id != ^exclude_user_id
-      else
-        query_with_event_filter
-      end
+      final_query =
+        if exclude_user_id do
+          from(u in query_with_event_filter, where: u.id != ^exclude_user_id)
+        else
+          query_with_event_filter
+        end
 
       Repo.all(final_query)
     end
@@ -565,9 +578,13 @@ defmodule EventasaurusApp.Accounts do
           case EventasaurusApp.Events.get_event(event_id) do
             %EventasaurusApp.Events.Event{} = event ->
               EventasaurusApp.Events.user_can_manage_event?(user, event)
-            _ -> false
+
+            _ ->
+              false
           end
-        _ -> false
+
+        _ ->
+          false
       end
     end
   end
