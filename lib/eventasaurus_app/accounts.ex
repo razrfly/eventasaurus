@@ -191,6 +191,273 @@ defmodule EventasaurusApp.Accounts do
   def find_or_create_guest_user(_), do: {:error, {:invalid_email, "Email must be a string"}}
 
   @doc """
+  Gets user event statistics for profile display.
+  
+  Returns a map with:
+  - hosted: Number of events the user has organized/hosted
+  - attended: Number of events the user has attended
+  - together: Number of unique other users they've shared events with
+  """
+  def get_user_event_stats(%User{} = user) do
+    alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
+    import Ecto.Query
+    
+    # Count hosted events (user is in event_users table)
+    hosted_count = 
+      from(eu in EventUser,
+        join: e in Event, on: eu.event_id == e.id,
+        where: eu.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(eu.deleted_at),
+        select: count(e.id)
+      )
+      |> Repo.one(with_deleted: true)
+    
+    # Count attended events (user is in event_participants table)
+    attended_count = 
+      from(ep in EventParticipant,
+        join: e in Event, on: ep.event_id == e.id,
+        where: ep.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(ep.deleted_at),
+        select: count(e.id, :distinct)
+      )
+      |> Repo.one(with_deleted: true)
+    
+    # Count unique other users they've shared events with (both as organizer and participant)
+    # First query: Events where user was organizer - get other participants
+    organizer_participants_query = 
+      from(eu in EventUser,
+        join: e in Event, on: eu.event_id == e.id,
+        join: ep in EventParticipant, on: e.id == ep.event_id,
+        where: eu.user_id == ^user.id and ep.user_id != ^user.id and 
+               is_nil(e.deleted_at) and is_nil(eu.deleted_at) and is_nil(ep.deleted_at),
+        select: %{user_id: ep.user_id}
+      )
+    
+    # Second query: Events where user was participant - get organizers
+    participant_organizers_query = 
+      from(ep in EventParticipant,
+        join: e in Event, on: ep.event_id == e.id,
+        join: eu in EventUser, on: e.id == eu.event_id,
+        where: ep.user_id == ^user.id and eu.user_id != ^user.id and 
+               is_nil(e.deleted_at) and is_nil(ep.deleted_at) and is_nil(eu.deleted_at),
+        select: %{user_id: eu.user_id}
+      )
+    
+    # Third query: Events where user was participant - get other participants  
+    participant_participants_query = 
+      from(ep1 in EventParticipant,
+        join: e in Event, on: ep1.event_id == e.id,
+        join: ep2 in EventParticipant, on: e.id == ep2.event_id,
+        where: ep1.user_id == ^user.id and ep2.user_id != ^user.id and 
+               is_nil(e.deleted_at) and is_nil(ep1.deleted_at) and is_nil(ep2.deleted_at),
+        select: %{user_id: ep2.user_id}
+      )
+    
+    # Combine all queries with union and count distinct
+    together_count = 
+      from(
+        u in subquery(
+          organizer_participants_query
+          |> union(^participant_organizers_query)
+          |> union(^participant_participants_query)
+        ),
+        select: count(u.user_id, :distinct)
+      )
+      |> Repo.one(with_deleted: true)
+    
+    %{
+      hosted: hosted_count || 0,
+      attended: attended_count || 0,
+      together: together_count || 0
+    }
+  end
+
+  @doc """
+  Gets recent events for a user's profile (both hosted and attended).
+  
+  Options:
+  - limit: Maximum number of events to return (default: 10)
+  - include_future: Include future events (default: true)
+  """
+  def get_user_recent_events(%User{} = user, opts \\ []) do
+    alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
+    import Ecto.Query
+    
+    limit = Keyword.get(opts, :limit, 10)
+    include_future = Keyword.get(opts, :include_future, true)
+    
+    # Build time filter conditions directly instead of using dynamic
+    
+    # Get events where user was organizer
+    hosted_events_query = if include_future do
+      from(eu in EventUser,
+        join: e in Event, on: eu.event_id == e.id,
+        where: eu.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(eu.deleted_at),
+        select: %{
+          id: e.id,
+          title: e.title,
+          tagline: e.tagline,
+          start_at: e.start_at,
+          ends_at: e.ends_at,
+          timezone: e.timezone,
+          slug: e.slug,
+          cover_image_url: e.cover_image_url,
+          external_image_data: e.external_image_data,
+          status: e.status,
+          visibility: e.visibility,
+          venue_id: e.venue_id,
+          user_role: "organizer",
+          inserted_at: e.inserted_at
+        }
+      )
+    else
+      from(eu in EventUser,
+        join: e in Event, on: eu.event_id == e.id,
+        where: eu.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(eu.deleted_at) and
+               (is_nil(e.start_at) or e.start_at < ^DateTime.utc_now()),
+        select: %{
+          id: e.id,
+          title: e.title,
+          tagline: e.tagline,
+          start_at: e.start_at,
+          ends_at: e.ends_at,
+          timezone: e.timezone,
+          slug: e.slug,
+          cover_image_url: e.cover_image_url,
+          external_image_data: e.external_image_data,
+          status: e.status,
+          visibility: e.visibility,
+          venue_id: e.venue_id,
+          user_role: "organizer",
+          inserted_at: e.inserted_at
+        }
+      )
+    end
+    
+    # Get events where user was participant
+    attended_events_query = if include_future do
+      from(ep in EventParticipant,
+        join: e in Event, on: ep.event_id == e.id,
+        where: ep.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(ep.deleted_at),
+        select: %{
+          id: e.id,
+          title: e.title,
+          tagline: e.tagline,
+          start_at: e.start_at,
+          ends_at: e.ends_at,
+          timezone: e.timezone,
+          slug: e.slug,
+          cover_image_url: e.cover_image_url,
+          external_image_data: e.external_image_data,
+          status: e.status,
+          visibility: e.visibility,
+          venue_id: e.venue_id,
+          user_role: "attendee",
+          inserted_at: e.inserted_at
+        }
+      )
+    else
+      from(ep in EventParticipant,
+        join: e in Event, on: ep.event_id == e.id,
+        where: ep.user_id == ^user.id and is_nil(e.deleted_at) and is_nil(ep.deleted_at) and
+               (is_nil(e.start_at) or e.start_at < ^DateTime.utc_now()),
+        select: %{
+          id: e.id,
+          title: e.title,
+          tagline: e.tagline,
+          start_at: e.start_at,
+          ends_at: e.ends_at,
+          timezone: e.timezone,
+          slug: e.slug,
+          cover_image_url: e.cover_image_url,
+          external_image_data: e.external_image_data,
+          status: e.status,
+          visibility: e.visibility,
+          venue_id: e.venue_id,
+          user_role: "attendee",
+          inserted_at: e.inserted_at
+        }
+      )
+    end
+    
+    # Union the queries and order by start date
+    union_query = hosted_events_query |> union(^attended_events_query)
+    
+    events = from(
+      e in subquery(union_query),
+      order_by: [desc: e.start_at],
+      limit: ^limit
+    )
+    |> Repo.all(with_deleted: true)
+    
+    # For now, just return events without venue data to fix the subquery issue
+    # TODO: Load venues separately if needed by the template
+    events
+    |> Enum.map(fn event ->
+      Map.put(event, :venue, nil)
+    end)
+  end
+
+  @doc """
+  Gets mutual events between the current auth user and a profile user.
+  
+  This shows events that both users have been involved with (either as organizers or participants).
+  Only returns public events or events where the auth user is also involved.
+  """
+  def get_mutual_events(%User{} = auth_user, %User{} = profile_user, opts \\ []) do
+    alias EventasaurusApp.Events.{Event, EventUser, EventParticipant}
+    import Ecto.Query
+    
+    limit = Keyword.get(opts, :limit, 6)
+    
+    # Find events where both users were involved - using a simpler approach with joins
+    mutual_events_query = 
+      from(e in Event,
+        left_join: v in assoc(e, :venue),
+        # Join with EventUser for profile_user
+        left_join: eu1 in EventUser, on: e.id == eu1.event_id and eu1.user_id == ^profile_user.id,
+        # Join with EventParticipant for profile_user  
+        left_join: ep1 in EventParticipant, on: e.id == ep1.event_id and ep1.user_id == ^profile_user.id,
+        # Join with EventUser for auth_user
+        left_join: eu2 in EventUser, on: e.id == eu2.event_id and eu2.user_id == ^auth_user.id,
+        # Join with EventParticipant for auth_user
+        left_join: ep2 in EventParticipant, on: e.id == ep2.event_id and ep2.user_id == ^auth_user.id,
+        where: is_nil(e.deleted_at) and
+               # Check soft deletes for joins
+               (is_nil(eu1.deleted_at) or is_nil(eu1.id)) and
+               (is_nil(ep1.deleted_at) or is_nil(ep1.id)) and
+               (is_nil(eu2.deleted_at) or is_nil(eu2.id)) and
+               (is_nil(ep2.deleted_at) or is_nil(ep2.id)) and
+               # Profile user was involved (organizer or participant)
+               (not is_nil(eu1.id) or not is_nil(ep1.id)) and
+               # Auth user was also involved (organizer or participant)
+               (not is_nil(eu2.id) or not is_nil(ep2.id)),
+        select: %{
+          id: e.id,
+          title: e.title,
+          tagline: e.tagline,
+          start_at: e.start_at,
+          timezone: e.timezone,
+          slug: e.slug,
+          cover_image_url: e.cover_image_url,
+          external_image_data: e.external_image_data,
+          status: e.status,
+          visibility: e.visibility,
+          venue_id: e.venue_id
+        },
+        distinct: true,
+        order_by: [desc: e.start_at],
+        limit: ^limit
+      )
+    
+    events = Repo.all(mutual_events_query, with_deleted: true)
+    
+    # Add venue field set to nil for template compatibility
+    events
+    |> Enum.map(fn event ->
+      Map.put(event, :venue, nil)
+    end)
+  end
+
+  @doc """
   Searches for users that can be added as event organizers.
 
   Searches by name, username, or email and only returns users with public profiles
