@@ -335,6 +335,7 @@ defmodule EventasaurusWeb.Router do
 
     get "/search/unified", SearchController, :unified
     get "/username/availability/:username", UsernameController, :check_availability
+    post "/spotify/token", SpotifyController, :get_token
   end
 
   # Stripe payment API routes (require authentication and HTTPS)

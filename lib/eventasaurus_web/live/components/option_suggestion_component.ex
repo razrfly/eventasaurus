@@ -508,18 +508,23 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                                phx-click="music_track_selected"
                                phx-value-track={Jason.encode!(track)}
                                phx-target={@myself}>
-                            <div class="w-10 h-10 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
-                              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                              </svg>
-                            </div>
+                            <% image_url = track.image_url %>
+                            <%= if image_url do %>
+                              <img src={image_url} alt={track.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
+                            <% else %>
+                              <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                </svg>
+                              </div>
+                            <% end %>
                             <div class="flex-1 min-w-0">
                               <h4 class="font-medium text-gray-900 truncate"><%= track.title %></h4>
-                              <%= if is_binary(track.description) && String.length(track.description) > 0 do %>
-                                <p class="text-sm text-gray-600 truncate"><%= track.description %></p>
+                              <%= if track.metadata && track.metadata["duration_formatted"] do %>
+                                <p class="text-sm text-gray-600"><%= track.metadata["duration_formatted"] %></p>
                               <% end %>
-                              <%= if track.metadata && track.metadata["artist"] do %>
-                                <p class="text-xs text-gray-500 mt-1 truncate">by <%= track.metadata["artist"] %></p>
+                              <%= if is_binary(track.description) && String.length(track.description) > 0 do %>
+                                <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= track.description %></p>
                               <% end %>
                             </div>
                           </div>
@@ -1375,15 +1380,21 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         # Set loading state
         socket = assign(socket, :search_loading, true)
         
-        # Search for music tracks using the backend MusicBrainz provider
-        case EventasaurusWeb.Services.RichDataManager.search(query, %{providers: [:musicbrainz], type: :track}) do
+        # Use the centralized RichDataManager system (same pattern as movies)
+        search_options = %{
+          providers: [:spotify],
+          limit: 5,
+          content_type: :track
+        }
+
+        case EventasaurusWeb.Services.RichDataManager.search(query, search_options) do
           {:ok, provider_results} ->
             Logger.info("OptionSuggestionComponent received provider results: #{inspect(provider_results)}")
             
             # Extract tracks from provider results format: %{provider => {:ok, tracks}}
             tracks = case provider_results do
-              %{musicbrainz: {:ok, track_list}} -> track_list
-              [{:musicbrainz, {:ok, track_list}}] -> track_list  # fallback format
+              %{spotify: {:ok, track_list}} -> track_list
+              [{:spotify, {:ok, track_list}}] -> track_list  # fallback format
               results when is_list(results) -> 
                 # Handle case where results are already in the expected format
                 results
@@ -1398,8 +1409,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 id: track.id,
                 title: track.title,
                 description: track.description,
+                image_url: track.image_url,
                 metadata: track.metadata,
-                external_urls: track.external_urls
+                external_urls: Map.get(track, :external_urls, %{})
               }
             end)
 
@@ -1505,6 +1517,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         "title" => parsed_track["title"],
         "description" => parsed_track["description"] || "",
         "external_id" => parsed_track["id"],
+        "image_url" => parsed_track["image_url"],
         "metadata" => parsed_track["metadata"] || %{}
       }
 
@@ -1514,7 +1527,8 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       {:noreply,
        socket
        |> assign(:changeset, changeset)
-       |> assign(:search_results, [])}
+       |> assign(:search_results, [])
+       |> assign(:search_query, "")}
     else
       {:noreply, socket}
     end

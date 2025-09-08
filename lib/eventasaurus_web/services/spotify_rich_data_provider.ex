@@ -2,8 +2,8 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
   @moduledoc """
   Spotify provider for rich data integration.
 
-  An example implementation of RichDataProviderBehaviour for music data.
-  This demonstrates how to extend the system with additional providers.
+  Implements the RichDataProviderBehaviour for music track data.
+  Wraps the SpotifyService with the standardized provider interface.
 
   ## Configuration
 
@@ -12,17 +12,13 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
 
   ## Supported Content Types
 
-  - `:music` - Albums, tracks, playlists
-  - `:artist` - Artists and bands
+  - `:track` - Music tracks with full metadata and audio features
   """
 
   @behaviour EventasaurusWeb.Services.RichDataProviderBehaviour
 
+  alias EventasaurusWeb.Services.SpotifyService
   require Logger
-
-  # Note: This is a skeleton implementation for demonstration.
-  # A full implementation would include proper HTTP client setup,
-  # authentication token management, and comprehensive API integration.
 
   # ============================================================================
   # Provider Behaviour Implementation
@@ -35,45 +31,44 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
   def provider_name, do: "Spotify"
 
   @impl true
-  def supported_types, do: [:music, :artist]
+  def supported_types, do: [:track]
 
   @impl true
   def search(query, options \\ %{}) do
-    # Skeleton implementation - would integrate with Spotify Web API
-    Logger.info("Spotify search for: #{query} with options: #{inspect(options)}")
+    limit = Map.get(options, :limit, 20)
+    content_type = Map.get(options, :content_type)
 
-    # Mock response for demonstration
-    mock_results = [
-      %{
-        id: "4uLU6hMCjMI75M1A2tKUQC",
-        type: :music,
-        title: "Example Album",
-        description: "An example music album from Spotify",
-        images: [
-          %{url: "https://i.scdn.co/image/example", type: :cover, size: "640x640"}
-        ],
-        metadata: %{
-          spotify_id: "4uLU6hMCjMI75M1A2tKUQC",
-          album_type: "album",
-          artists: ["Example Artist"],
-          release_date: "2023-01-01"
-        }
-      }
-    ]
+    # Only search if content_type is track or not specified
+    case content_type do
+      :track -> perform_search(query, limit)
+      nil -> perform_search(query, limit)
+      _ -> {:ok, []} # Don't search for other types
+    end
+  end
 
-    {:ok, mock_results}
+  defp perform_search(query, limit) do
+    case SpotifyService.search_tracks(query, limit) do
+      {:ok, tracks} ->
+        normalized_results = Enum.map(tracks, &normalize_search_result/1)
+        {:ok, normalized_results}
+        
+      {:error, reason} ->
+        Logger.error("Spotify search failed: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 
   @impl true
   def get_details(id, type, options \\ %{}) do
-    # Skeleton implementation - would fetch detailed data from Spotify API
-    Logger.info("Spotify get_details for: #{id} (#{type}) with options: #{inspect(options)}")
-
     case type do
-      :music ->
-        mock_album_details(id)
-      :artist ->
-        mock_artist_details(id)
+      :track ->
+        case SpotifyService.get_track_details(id) do
+          {:ok, track_data} ->
+            {:ok, normalize_track_details(track_data)}
+          {:error, reason} ->
+            {:error, reason}
+        end
+
       _ ->
         {:error, "Unsupported content type: #{type}"}
     end
@@ -81,9 +76,18 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
 
   @impl true
   def get_cached_details(id, type, options \\ %{}) do
-    # For this example, no caching - fall back to regular details
-    # A full implementation would include ETS or other caching mechanism
-    get_details(id, type, options)
+    case type do
+      :track ->
+        case SpotifyService.get_cached_track_details(id) do
+          {:ok, track_data} ->
+            {:ok, normalize_track_details(track_data)}
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      _ ->
+        {:error, "Unsupported content type: #{type}"}
+    end
   end
 
   @impl true
@@ -135,133 +139,140 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
     }
   end
 
+  @impl true
+  def normalize_data(raw_data, type) do
+    case type do
+      :track ->
+        {:ok, normalize_track_details(raw_data)}
+      _ ->
+        {:error, "Unsupported content type for normalization: #{type}"}
+    end
+  end
+
   # ============================================================================
-  # Private Functions - Mock Data
+  # Private Functions - Data Normalization
   # ============================================================================
 
-  defp mock_album_details(album_id) do
-    details = %{
-      id: album_id,
-      type: :music,
-      title: "Example Album Title",
-      description: "A comprehensive album with rich metadata from Spotify",
-      metadata: %{
-        spotify_id: album_id,
-        album_type: "album",
-        total_tracks: 12,
-        release_date: "2023-01-01",
-        release_date_precision: "day",
-        artists: [
-          %{id: "artist123", name: "Example Artist", type: "artist"}
-        ],
-        genres: ["pop", "electronic"],
-        label: "Example Records",
-        popularity: 85,
-        available_markets: ["US", "CA", "GB"],
-        copyrights: [
-          %{text: "2023 Example Records", type: "C"}
-        ]
-      },
-      images: [
-        %{url: "https://i.scdn.co/image/640x640", type: :cover, size: "640x640", width: 640, height: 640},
-        %{url: "https://i.scdn.co/image/300x300", type: :cover, size: "300x300", width: 300, height: 300},
-        %{url: "https://i.scdn.co/image/64x64", type: :cover, size: "64x64", width: 64, height: 64}
-      ],
+  defp normalize_search_result(track) do
+    artists = track[:artists] || []
+    primary_artist = List.first(artists) || "Unknown Artist"
+    
+    # Format description like "Artist - Album"
+    description = case track[:album] do
+      nil -> primary_artist
+      album -> "#{primary_artist} - #{album}"
+    end
+
+    %{
+      id: track[:id],
+      type: :track,
+      title: track[:title],
+      description: description,
+      image_url: track[:image_url],
       external_urls: %{
-        spotify: "https://open.spotify.com/album/#{album_id}"
+        spotify: track[:external_url]
       },
-      cast: [], # Not applicable for music
-      crew: [
-        %{name: "Producer Name", job: "Producer", department: "Production"},
-        %{name: "Engineer Name", job: "Audio Engineer", department: "Sound"}
-      ],
+      metadata: %{
+        spotify_id: track[:id],
+        artist: primary_artist,
+        artists: artists,
+        album: track[:album],
+        duration_ms: track[:duration_ms],
+        duration_formatted: track[:duration_formatted],
+        popularity: track[:popularity],
+        explicit: track[:explicit],
+        preview_url: track[:preview_url]
+      },
+      images: build_images_from_url(track[:image_url])
+    }
+  end
+
+  defp normalize_track_details(track_data) do
+    artists = track_data[:artists] || []
+    primary_artist = List.first(artists) || "Unknown Artist"
+    
+    description = case track_data[:album] do
+      nil -> primary_artist
+      album -> "#{primary_artist} - #{album}"
+    end
+
+    # Get the best image from available images
+    images = track_data[:images] || []
+    image_url = get_best_image_url(images)
+
+    %{
+      id: track_data[:id],
+      type: :track,
+      title: track_data[:title],
+      description: description,
+      image_url: image_url,
+      metadata: %{
+        spotify_id: track_data[:id],
+        artist: primary_artist,
+        artists: artists,
+        album: track_data[:album],
+        album_release_date: track_data[:album_release_date],
+        album_type: track_data[:album_type],
+        duration_ms: track_data[:duration_ms],
+        popularity: track_data[:popularity],
+        explicit: track_data[:explicit],
+        preview_url: track_data[:preview_url],
+        disc_number: track_data[:disc_number],
+        track_number: track_data[:track_number],
+        available_markets: track_data[:available_markets] || []
+      },
+      images: normalize_images(images),
+      external_urls: %{
+        spotify: track_data[:external_url]
+      },
+      cast: [], # Not applicable to music tracks
+      crew: [], # Could include producers, writers in the future
       media: %{
-        tracks: [
-          %{
-            id: "track1",
-            name: "Track 1 Title",
-            duration_ms: 180000,
-            track_number: 1,
-            explicit: false,
-            preview_url: "https://p.scdn.co/mp3-preview/example"
-          },
-          %{
-            id: "track2",
-            name: "Track 2 Title",
-            duration_ms: 210000,
-            track_number: 2,
-            explicit: false,
-            preview_url: nil
-          }
-        ],
-        audio_features: %{
-          danceability: 0.735,
-          energy: 0.578,
-          valence: 0.624,
-          tempo: 120.0
+        audio_features: track_data[:audio_features] || %{},
+        duration_formatted: format_duration(track_data[:duration_ms]),
+        preview: %{
+          url: track_data[:preview_url],
+          available: !is_nil(track_data[:preview_url])
         }
       },
       additional_data: %{
-        related_albums: [],
-        top_tracks: [],
-        similar_artists: []
+        spotify_track_data: track_data,
+        audio_analysis_available: !is_nil(track_data[:audio_features])
       }
     }
-
-    {:ok, details}
   end
 
-  defp mock_artist_details(artist_id) do
-    details = %{
-      id: artist_id,
-      type: :artist,
-      title: "Example Artist Name",
-      description: "A popular music artist with comprehensive metadata",
-      metadata: %{
-        spotify_id: artist_id,
-        followers: 1250000,
-        genres: ["pop", "electronic", "indie"],
-        popularity: 78,
-        artist_type: "artist"
-      },
-      images: [
-        %{url: "https://i.scdn.co/image/artist640", type: :photo, size: "640x640", width: 640, height: 640},
-        %{url: "https://i.scdn.co/image/artist320", type: :photo, size: "320x320", width: 320, height: 320},
-        %{url: "https://i.scdn.co/image/artist160", type: :photo, size: "160x160", width: 160, height: 160}
-      ],
-      external_urls: %{
-        spotify: "https://open.spotify.com/artist/#{artist_id}"
-      },
-      cast: [], # Not applicable for artists
-      crew: [], # Not applicable for artists
-      media: %{
-        top_tracks: [
-          %{
-            id: "track123",
-            name: "Popular Song",
-            popularity: 89,
-            preview_url: "https://p.scdn.co/mp3-preview/popular"
-          }
-        ],
-        albums: [
-          %{
-            id: "album123",
-            name: "Latest Album",
-            release_date: "2023-01-01",
-            total_tracks: 12
-          }
-        ]
-      },
-      additional_data: %{
-        related_artists: [
-          %{id: "related1", name: "Similar Artist 1"},
-          %{id: "related2", name: "Similar Artist 2"}
-        ],
-        appears_on: [],
-        compilations: []
+  defp normalize_images(images) when is_list(images) do
+    Enum.map(images, fn image ->
+      %{
+        url: image["url"],
+        type: :cover,
+        width: image["width"],
+        height: image["height"],
+        size: "#{image["width"]}x#{image["height"]}"
       }
-    }
-
-    {:ok, details}
+    end)
   end
+  defp normalize_images(_), do: []
+
+  defp build_images_from_url(nil), do: []
+  defp build_images_from_url(image_url) do
+    [%{url: image_url, type: :cover, size: "unknown"}]
+  end
+
+  defp get_best_image_url([]), do: nil
+  defp get_best_image_url([image | _rest]) when is_map(image) do
+    image["url"]
+  end
+  defp get_best_image_url(_), do: nil
+
+  defp format_duration(nil), do: nil
+  defp format_duration(ms) when is_integer(ms) do
+    seconds = div(ms, 1000)
+    minutes = div(seconds, 60)
+    remaining_seconds = rem(seconds, 60)
+    
+    "#{minutes}:#{String.pad_leading(Integer.to_string(remaining_seconds), 2, "0")}"
+  end
+  defp format_duration(_), do: nil
 end
