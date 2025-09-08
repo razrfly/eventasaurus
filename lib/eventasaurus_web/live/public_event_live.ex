@@ -188,13 +188,6 @@ defmodule EventasaurusWeb.PublicEventLive do
 
 
 
-  @impl true
-  def handle_event("search_music_tracks", params, socket) do
-    # This event is handled by the PublicMusicTrackPollComponent
-    # We add this handler to prevent errors but the component should handle the event
-    Logger.debug("search_music_tracks event received with params: #{inspect(params)}")
-    {:noreply, socket}
-  end
 
   @impl true
   def handle_event("save_all_votes", _params, socket) do
@@ -625,6 +618,8 @@ defmodule EventasaurusWeb.PublicEventLive do
      |> assign(:modal_temp_votes, %{})
     }
   end
+
+
 
   # Legacy cast_vote handler removed - using generic polling system
 
