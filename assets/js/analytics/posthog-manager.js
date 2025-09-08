@@ -105,10 +105,11 @@ export class PostHogManager {
           console.warn('PostHog request failed:', error);
         },
         
-        // Batch settings for performance
-        batch_requests: true,
-        batch_size: 10,
-        batch_flush_interval_ms: 5000,
+        // Batch settings for performance (using correct PostHog config keys)
+        request_batching: true,
+        request_queue_config: { 
+          flush_interval_ms: 5000 
+        },
         
         // Cross-domain settings
         cross_subdomain_cookie: false,
@@ -147,8 +148,8 @@ export class PostHogManager {
         console.log(`Retrying PostHog load in ${delay}ms (attempt ${this.loadAttempts}/${this.maxLoadAttempts})`);
         setTimeout(() => this.init(), delay);
       } else {
-        console.warn('PostHog failed to load after multiple attempts - analytics disabled');
-        this.processQueue(); // Process queue to clear it
+        console.warn('PostHog failed to load after multiple attempts - dropping queued events');
+        this.eventQueue = [];
       }
     }
   }
@@ -276,7 +277,11 @@ export class PostHogManager {
   }
   
   updatePrivacyConsent(consent) {
-    this.privacyConsent = { ...this.privacyConsent, ...consent };
+    const prev = this.privacyConsent;
+    this.privacyConsent = { ...prev, ...consent };
+    const analyticsOn  = !prev.analytics && this.privacyConsent.analytics;
+    const analyticsOff =  prev.analytics && !this.privacyConsent.analytics;
+    const cookiesChanged = prev.cookies !== this.privacyConsent.cookies;
     
     try {
       localStorage.setItem('posthog_privacy_consent', JSON.stringify(this.privacyConsent));
@@ -286,11 +291,24 @@ export class PostHogManager {
     
     console.log('Privacy consent updated:', this.privacyConsent);
     
-    // Reinitialize PostHog if consent changed
-    if (consent.analytics && !this.isLoaded) {
-      this.init();
-    } else if (!consent.analytics && this.isLoaded) {
+    // Apply changes
+    if (analyticsOn) {
+      if (this.isLoaded && this.posthog?.opt_in_capturing) {
+        try { this.posthog.opt_in_capturing(); } catch {}
+      } else {
+        this.init();
+      }
+    } else if (analyticsOff && this.isLoaded) {
       this.disable();
+    } else if (this.isLoaded && cookiesChanged) {
+      // Reconfigure cookie behavior; if set_config isn't available, re-init.
+      if (this.posthog?.set_config) {
+        try { this.posthog.set_config({ disable_cookie: !this.privacyConsent.cookies }); } catch {}
+      } else {
+        try { this.posthog?.shutdown?.(); } catch {}
+        this.isLoaded = false;
+        this.init();
+      }
     }
   }
   
@@ -332,7 +350,12 @@ export class PostHogManager {
 
   // GDPR compliance helper
   showPrivacyBanner() {
-    if (this.privacyConsent.analytics === undefined) {
+    let missing = false;
+    try { 
+      missing = localStorage.getItem('posthog_privacy_consent') === null; 
+    } catch {}
+    
+    if (missing) {
       // Dispatch event to show privacy banner UI
       window.dispatchEvent(new CustomEvent('posthog:show-privacy-banner'));
       

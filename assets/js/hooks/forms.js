@@ -165,53 +165,73 @@ export const DateTimeSync = {
     // Original start/end date logic
     if (!startDate || !startTime || !endDate || !endTime) return;
 
-    // Helper: round up to next 30-min interval
+    // Helper: round up to next 30-min interval (with day rollover)
     function getNextHalfHour(now) {
-      let mins = now.getMinutes();
-      let rounded = mins < 30 ? 30 : 0;
-      let hour = now.getHours() + (mins >= 30 ? 1 : 0);
-      return { hour: hour % 24, minute: rounded };
+      const mins = now.getMinutes();
+      let hour = now.getHours();
+      let minute;
+      let dayOffset = 0;
+      if (mins < 30) {
+        minute = 30;
+      } else {
+        minute = 0;
+        hour = hour + 1;
+        if (hour === 24) {
+          hour = 0;
+          dayOffset = 1;
+        }
+      }
+      return { hour, minute, dayOffset };
     }
 
     function setInitialTimes() {
       const now = new Date();
-      const { hour, minute } = getNextHalfHour(now);
+      const { hour, minute, dayOffset } = getNextHalfHour(now);
 
       // Format to HH:MM
       const pad = n => n.toString().padStart(2, '0');
       const startTimeVal = `${pad(hour)}:${pad(minute)}`;
       startTime.value = startTimeVal;
 
-      // Set start date to today if empty
+      // Set start date to today (or tomorrow if we rolled over) if empty
       if (!startDate.value) {
-        startDate.value = now.toISOString().slice(0, 10);
+        const startDateObj = new Date(now);
+        if (dayOffset) startDateObj.setDate(startDateObj.getDate() + 1);
+        startDate.value = startDateObj.toISOString().slice(0, 10);
       }
 
-      // Set end date to match start date
-      endDate.value = startDate.value;
-
-      // Set end time to +1 hour
-      let endHour = (hour + 1) % 24;
+      // Set end date/time to +1 hour (with possible day rollover)
+      const endHour = (hour + 1) % 24;
+      const endDateObj = new Date(startDate.value);
+      if (endHour < hour) endDateObj.setDate(endDateObj.getDate() + 1);
+      endDate.value = endDateObj.toISOString().slice(0, 10);
       endTime.value = `${pad(endHour)}:${pad(minute)}`;
     }
 
     // Sync end date/time when start changes
     function syncEndFields() {
-      // Copy start date to end date
-      endDate.value = startDate.value;
-      endDate.dispatchEvent(new Event('change', { bubbles: true }));
-
       // Parse start time
       const [sHour, sMinute] = startTime.value.split(':').map(Number);
-      let endHour = (sHour + 1) % 24;
+      const endHour = (sHour + 1) % 24;
+
+      // Set end date (increment if time rolls over)
+      const endDateObj = new Date(startDate.value);
+      if (endHour < sHour) endDateObj.setDate(endDateObj.getDate() + 1);
+      endDate.value = endDateObj.toISOString().slice(0, 10);
+      endDate.dispatchEvent(new Event('change', { bubbles: true }));
+
       endTime.value = `${endHour.toString().padStart(2, '0')}:${sMinute.toString().padStart(2, '0')}`;
     }
 
     // On mount, set initial times if start time is empty
     if (!startTime.value) setInitialTimes();
 
-    startDate.addEventListener('change', syncEndFields);
-    startTime.addEventListener('change', syncEndFields);
+    // Save refs for cleanup
+    this._startDateEl = startDate;
+    this._startTimeEl = startTime;
+    this._onStartChange = syncEndFields;
+    startDate.addEventListener('change', this._onStartChange);
+    startTime.addEventListener('change', this._onStartChange);
   },
 
   destroyed() {
@@ -219,6 +239,9 @@ export const DateTimeSync = {
     if (this.pollingCleanup) {
       this.pollingCleanup();
     }
+    // Remove start/end listeners
+    if (this._startDateEl && this._onStartChange) this._startDateEl.removeEventListener('change', this._onStartChange);
+    if (this._startTimeEl && this._onStartChange) this._startTimeEl.removeEventListener('change', this._onStartChange);
   }
 };
 
