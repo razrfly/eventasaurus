@@ -184,6 +184,18 @@ export const DateTimeSync = {
       return { hour, minute, dayOffset };
     }
 
+    // Helpers for local date formatting/parsing (avoid UTC skew from toISOString)
+    function fmtLocalDate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    function parseLocalDate(yyyyMmDd) {
+      const [y, m, d] = yyyyMmDd.split('-').map(Number);
+      return new Date(y, m - 1, d); // local midnight
+    }
+
     function setInitialTimes() {
       const now = new Date();
       const { hour, minute, dayOffset } = getNextHalfHour(now);
@@ -197,14 +209,14 @@ export const DateTimeSync = {
       if (!startDate.value) {
         const startDateObj = new Date(now);
         if (dayOffset) startDateObj.setDate(startDateObj.getDate() + 1);
-        startDate.value = startDateObj.toISOString().slice(0, 10);
+        startDate.value = fmtLocalDate(startDateObj);
       }
 
       // Set end date/time to +1 hour (with possible day rollover)
       const endHour = (hour + 1) % 24;
-      const endDateObj = new Date(startDate.value);
+      const endDateObj = parseLocalDate(startDate.value);
       if (endHour < hour) endDateObj.setDate(endDateObj.getDate() + 1);
-      endDate.value = endDateObj.toISOString().slice(0, 10);
+      endDate.value = fmtLocalDate(endDateObj);
       endTime.value = `${pad(endHour)}:${pad(minute)}`;
     }
 
@@ -215,9 +227,9 @@ export const DateTimeSync = {
       const endHour = (sHour + 1) % 24;
 
       // Set end date (increment if time rolls over)
-      const endDateObj = new Date(startDate.value);
+      const endDateObj = parseLocalDate(startDate.value);
       if (endHour < sHour) endDateObj.setDate(endDateObj.getDate() + 1);
-      endDate.value = endDateObj.toISOString().slice(0, 10);
+      endDate.value = fmtLocalDate(endDateObj);
       endDate.dispatchEvent(new Event('change', { bubbles: true }));
 
       endTime.value = `${endHour.toString().padStart(2, '0')}:${sMinute.toString().padStart(2, '0')}`;
