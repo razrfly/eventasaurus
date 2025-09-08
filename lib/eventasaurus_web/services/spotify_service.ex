@@ -342,8 +342,8 @@ defmodule EventasaurusWeb.Services.SpotifyService do
     
     # Get the medium-sized image (usually 300x300)
     image_url = case images do
-      [large, medium, _small] -> medium["url"]
-      [large, small] -> small["url"] 
+      [_large, medium, _small] -> medium["url"]
+      [_large, small] -> small["url"] 
       [single] -> single["url"]
       [] -> nil
     end
