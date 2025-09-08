@@ -12,6 +12,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.PublicGenericPollComponent
+  alias EventasaurusWeb.PublicMusicTrackPollComponent
 
   alias EventasaurusWeb.ReservedSlugs
 
@@ -186,6 +187,14 @@ defmodule EventasaurusWeb.PublicEventLive do
   # All handle_event/3 functions grouped together to avoid compilation issues
 
 
+
+  @impl true
+  def handle_event("search_music_tracks", params, socket) do
+    # This event is handled by the PublicMusicTrackPollComponent
+    # We add this handler to prevent errors but the component should handle the event
+    Logger.debug("search_music_tracks event received with params: #{inspect(params)}")
+    {:noreply, socket}
+  end
 
   @impl true
   def handle_event("save_all_votes", _params, socket) do
@@ -1115,6 +1124,24 @@ defmodule EventasaurusWeb.PublicEventLive do
   end
 
   @impl true
+  def handle_info({:music_track_selected, track_data, option_data}, socket) do
+    # Handle music track selection from the music poll component
+    Logger.info("Music track selected: #{track_data["title"]} (ID: #{track_data["id"]})")
+    
+    # Create the poll option using the Events context
+    case Events.create_poll_option(option_data) do
+      {:ok, _option} ->
+        # Reload polls to show the new option
+        socket = load_event_polls(socket)
+        {:noreply, put_flash(socket, :info, "Music track added successfully!")}
+      
+      {:error, changeset} ->
+        Logger.error("Failed to add music track: #{inspect(changeset.errors)}")
+        {:noreply, put_flash(socket, :error, "Failed to add music track. Please try again.")}
+    end
+  end
+
+  @impl true
   def handle_info({:show_anonymous_voter_modal, poll_id, temp_votes}, socket) do
     # Show the anonymous voter modal for saving votes
     # First, find the poll to get its info
@@ -1403,6 +1430,17 @@ defmodule EventasaurusWeb.PublicEventLive do
                       <.live_component
                         module={EventasaurusWeb.PublicMoviePollComponent}
                         id={"movie-poll-#{poll.id}"}
+                        poll={poll}
+                        event={@event}
+                        current_user={@user}
+                        temp_votes={Map.get(@poll_temp_votes || %{}, poll.id, %{})}
+                      />
+
+                    <% poll.poll_type == "music_track" -> %>
+                      <!-- Special handling for music track polls -->
+                      <.live_component
+                        module={EventasaurusWeb.PublicMusicTrackPollComponent}
+                        id={"music-track-poll-#{poll.id}"}
                         poll={poll}
                         event={@event}
                         current_user={@user}
