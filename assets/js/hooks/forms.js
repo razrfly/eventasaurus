@@ -192,10 +192,13 @@ export const DateTimeSync = {
       return `${y}-${m}-${day}`;
     }
     function parseLocalDate(yyyyMmDd) {
-      if (typeof yyyyMmDd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) return null;
+      if (typeof yyyyMmDd !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(yyyyMmDd)) return null;
       const [y, m, d] = yyyyMmDd.split('-').map(Number);
       const dt = new Date(y, m - 1, d); // local midnight
-      return Number.isNaN(dt.getTime()) ? null : dt;
+      if (Number.isNaN(dt.getTime())) return null;
+      // Reject normalized dates like 2025-02-31 → Mar 03
+      if (dt.getFullYear() !== y || dt.getMonth() !== (m - 1) || dt.getDate() !== d) return null;
+      return dt;
     }
 
     function setInitialTimes() {
@@ -217,7 +220,10 @@ export const DateTimeSync = {
       // Set end date/time to +1 hour (with possible day rollover)
       const endHour = (hour + 1) % 24;
       let endDateObj = parseLocalDate(startDate.value);
-      if (!endDateObj) endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (!endDateObj) {
+        endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (dayOffset) endDateObj.setDate(endDateObj.getDate() + 1);
+      }
       if (endHour < hour) endDateObj.setDate(endDateObj.getDate() + 1);
       endDate.value = fmtLocalDate(endDateObj);
       endTime.value = `${pad(endHour)}:${pad(minute)}`;
@@ -225,13 +231,19 @@ export const DateTimeSync = {
 
     // Sync end date/time when start changes
     function syncEndFields() {
-      // Parse start time
-      const [sHour, sMinute] = startTime.value.split(':').map(Number);
+      // Parse start time (HH:MM), fallback to next half-hour if invalid
+      const tm = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(startTime.value || '');
+      const fallback = getNextHalfHour(new Date());
+      const sHour = tm ? Number(tm[1]) : fallback.hour;
+      const sMinute = tm ? Number(tm[2]) : fallback.minute;
       const endHour = (sHour + 1) % 24;
 
       // Set end date (increment if time rolls over)
       let endDateObj = parseLocalDate(startDate.value);
-      if (!endDateObj) endDateObj = new Date(); // fallback to current date
+      if (!endDateObj) {
+        const now = new Date();
+        endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // midnight local
+      }
       if (endHour < sHour) endDateObj.setDate(endDateObj.getDate() + 1);
       endDate.value = fmtLocalDate(endDateObj);
       endDate.dispatchEvent(new Event('change', { bubbles: true }));
