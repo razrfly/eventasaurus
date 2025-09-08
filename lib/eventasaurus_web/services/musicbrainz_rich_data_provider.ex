@@ -26,10 +26,10 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
   def supported_types, do: [:track]
 
   @impl true
-  def search(query, _options \\ %{}) do
+  def search(query, options \\ %{}) do
     Logger.info("MusicBrainz backend search for: \"#{query}\"")
     
-    case perform_musicbrainz_search(query) do
+    case perform_musicbrainz_search(query, options) do
       {:ok, results} -> 
         Logger.info("MusicBrainz search returned #{length(results)} results")
         {:ok, results}
@@ -101,17 +101,21 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
   # Private Functions
   # ============================================================================
 
-  defp perform_musicbrainz_search(query) do
+  defp perform_musicbrainz_search(query, options) do
     # MusicBrainz API endpoint
     base_url = "https://musicbrainz.org/ws/2/recording"
-    search_query = "recording:\"#{query}\""
+    sanitized = sanitize_query(query)
+    search_query = "recording:\"#{sanitized}\""
     
     # Build request URL with proper parameters
-    url = "#{base_url}?" <> URI.encode_query(%{
-      "query" => search_query,
-      "limit" => "8",
-      "fmt" => "json"
-    })
+    url =
+      "#{base_url}?"
+      <> URI.encode_query(%{
+        "query" => search_query,
+        "limit" => to_string(Map.get(options, :limit, 8)),
+        "fmt" => "json",
+        "inc" => "artist-credits+releases"
+      })
     
     headers = [
       {"User-Agent", "Eventasaurus/1.0.0 ( https://eventasaurus.com )"},
@@ -124,6 +128,8 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
           {:ok, %{"recordings" => recordings}} ->
             results = Enum.map(recordings, &format_musicbrainz_result/1)
             {:ok, results}
+          {:ok, _} ->
+            {:ok, []}
           {:error, _} ->
             {:error, "Failed to parse MusicBrainz response"}
         end
@@ -235,4 +241,9 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
       end
     end)
   end
+
+  defp sanitize_query(query) when is_binary(query) do
+    query |> String.replace("\"", "\\\"") |> String.trim()
+  end
+  defp sanitize_query(other), do: to_string(other)
 end
