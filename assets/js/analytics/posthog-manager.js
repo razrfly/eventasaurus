@@ -85,7 +85,9 @@ export class PostHogManager {
         
         // Privacy settings
         disable_session_recording: !this.privacyConsent.analytics,
-        disable_cookie: !this.privacyConsent.cookies,
+        // Storage/persistence aligned with consent
+        disable_persistence: !this.privacyConsent.cookies,
+        persistence: this.privacyConsent.cookies ? 'localStorage+cookie' : 'memory',
         respect_dnt: true,
         opt_out_capturing_by_default: !this.privacyConsent.analytics,
         
@@ -300,12 +302,17 @@ export class PostHogManager {
       }
     } else if (analyticsOff && this.isLoaded) {
       this.disable();
-    } else if (this.isLoaded && cookiesChanged) {
-      // Reconfigure cookie behavior; if set_config isn't available, re-init.
+    } 
+    // Don't chain with else-if so cookies + analytics changes both apply
+    if (this.isLoaded && cookiesChanged) {
+      // Reconfigure persistence based on consent
       if (this.posthog?.set_config) {
-        try { this.posthog.set_config({ disable_cookie: !this.privacyConsent.cookies }); } catch {}
+        const cfg = this.privacyConsent.cookies
+          ? { disable_persistence: false, persistence: 'localStorage+cookie' }
+          : { disable_persistence: true,  persistence: 'memory' };
+        try { this.posthog.set_config(cfg); } catch {}
       } else {
-        try { this.posthog?.shutdown?.(); } catch {}
+        // Fallback: re-init with new config
         this.isLoaded = false;
         this.init();
       }
