@@ -331,7 +331,7 @@ defmodule EventasaurusApp.Events.Poll do
   @doc """
   Get all supported poll types.
   """
-  def poll_types, do: ~w(movie places custom time general venue date_selection)
+  def poll_types, do: ~w(movie places custom time general venue date_selection music_track)
 
   @doc """
   Get all supported voting systems.
