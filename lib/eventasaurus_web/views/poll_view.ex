@@ -8,7 +8,8 @@ defmodule EventasaurusWeb.PollView do
     "places" => "📍",
     "time" => "⏰",
     "date_selection" => "📅",
-    "custom" => "📝"
+    "custom" => "📝",
+    "music_track" => "🎵"
   }
 
   @doc """
