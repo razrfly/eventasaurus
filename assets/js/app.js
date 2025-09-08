@@ -7,6 +7,13 @@ import { TicketQR } from "./ticket_qr";
 import { MusicBrainzSearch } from "./musicbrainz_search";
 import { SpotifySearch } from "./spotify_search";
 
+// Import new modular components (shadow implementation - keeping existing code)
+import { initializeClipboard } from "./utils/clipboard";
+import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
+import { initSupabaseClient, SupabaseAuthHandler } from "./auth/supabase-manager";
+import FormHooks from "./hooks/forms";
+import UIHooks from "./hooks/ui-interactions";
+
 // Supabase client setup for identity management
 let supabaseClient = null;
 
@@ -398,51 +405,51 @@ class PostHogManager {
   }
 }
 
-// Initialize PostHog manager
-const posthogManager = new PostHogManager();
+// Initialize PostHog manager - NOW IMPORTED FROM MODULAR VERSION
+// const posthogManager = new PostHogManager(); // COMMENTED OUT - using imported version
 
-// Legacy compatibility function
-function initPostHogClient() {
-  return posthogManager.init();
-}
+// Legacy compatibility function - NOW IMPORTED FROM MODULAR VERSION
+// function initPostHogClient() {  // COMMENTED OUT - using imported version
+//   return posthogManager.init();
+// }
 
-// Initialize Supabase client if needed
-function initSupabaseClient() {
-  if (!supabaseClient && typeof window !== 'undefined') {
-    try {
-      // Get Supabase config from meta tags or data attributes
-      let supabaseUrl = document.querySelector('meta[name="supabase-url"]')?.content;
-      let supabaseAnonKey = document.querySelector('meta[name="supabase-anon-key"]')?.content;
-      
-      // Fallback to body data attributes if meta tags not found
-      if (!supabaseUrl || !supabaseAnonKey) {
-        const body = document.body;
-        supabaseUrl = body.dataset.supabaseUrl;
-        supabaseAnonKey = body.dataset.supabaseApiKey;
-      }
-      
-      console.log('Supabase config found:', { 
-        hasUrl: !!supabaseUrl, 
-        hasKey: !!supabaseAnonKey,
-        hasSupabaseGlobal: !!window.supabase 
-      });
-      
-      if (supabaseUrl && supabaseAnonKey && window.supabase) {
-        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-        console.log('Supabase client initialized successfully');
-      } else {
-        console.error('Missing Supabase configuration or library:', {
-          supabaseUrl: !!supabaseUrl,
-          supabaseAnonKey: !!supabaseAnonKey,
-          supabaseLibrary: !!window.supabase
-        });
-      }
-    } catch (error) {
-      console.error('Error initializing Supabase client:', error);
-    }
-  }
-  return supabaseClient;
-}
+// Initialize Supabase client if needed - NOW IMPORTED FROM MODULAR VERSION
+// function initSupabaseClient() {  // COMMENTED OUT - using imported version
+//   if (!supabaseClient && typeof window !== 'undefined') {
+//     try {
+//       // Get Supabase config from meta tags or data attributes
+//       let supabaseUrl = document.querySelector('meta[name="supabase-url"]')?.content;
+//       let supabaseAnonKey = document.querySelector('meta[name="supabase-anon-key"]')?.content;
+//       
+//       // Fallback to body data attributes if meta tags not found
+//       if (!supabaseUrl || !supabaseAnonKey) {
+//         const body = document.body;
+//         supabaseUrl = body.dataset.supabaseUrl;
+//         supabaseAnonKey = body.dataset.supabaseApiKey;
+//       }
+//       
+//       console.log('Supabase config found:', { 
+//         hasUrl: !!supabaseUrl, 
+//         hasKey: !!supabaseAnonKey,
+//         hasSupabaseGlobal: !!window.supabase 
+//       });
+//       
+//       if (supabaseUrl && supabaseAnonKey && window.supabase) {
+//         supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+//         console.log('Supabase client initialized successfully');
+//       } else {
+//         console.error('Missing Supabase configuration or library:', {
+//           supabaseUrl: !!supabaseUrl,
+//           supabaseAnonKey: !!supabaseAnonKey,
+//           supabaseLibrary: !!window.supabase
+//         });
+//       }
+//     } catch (error) {
+//       console.error('Error initializing Supabase client:', error);
+//     }
+//   }
+//   return supabaseClient;
+// }
 
 // Define LiveView hooks here
 import SupabaseImageUpload from "./supabase_upload";
@@ -2614,11 +2621,25 @@ Hooks.CastCarouselKeyboard = {
   }
 };
 
+// Merge modular hooks with existing hooks (shadow implementation)
+// This allows the new modular hooks to override the old implementations
+const ModularHooks = {
+  ...FormHooks,
+  ...UIHooks,
+  SupabaseAuthHandler // Individual hook import
+};
+
+// Merge all hooks - modular ones take precedence if there are conflicts
+const AllHooks = {
+  ...Hooks,      // Existing hooks (kept for safety)
+  ...ModularHooks // New modular hooks (override existing)
+};
+
 // Set up LiveView
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
-  hooks: Hooks
+  hooks: AllHooks
 });
 
 // Show progress bar on live navigation and form submits
@@ -2843,4 +2864,15 @@ Hooks.PlacesHistorySearch = {
 // Both PlacesSuggestionSearch_OLD and PlacesHistorySearch_OLD have been deleted
 // They contained about 540 lines of duplicate code (lines 2570-3109)
 // All three place selection features now use UnifiedGooglePlaces hook
+
+// Initialize modular components (shadow implementation)
+// Initialize clipboard functionality from the modular version
+initializeClipboard();
+
+// Initialize PostHog manager (if not already initialized by existing code)
+// The modular PostHogManager is already exposed as posthogManager above
+
+// Initialize Supabase client (if not already initialized by existing code)
+// This will use the modular version
+initSupabaseClient();
 
