@@ -1,0 +1,21 @@
+reviews:
+  auto_review:
+    enabled: true
+  ignore:
+    - "assets/js/app.js"  # Large bundled file that exceeds CodeRabbit message limits
+    - "assets/package-lock.json"  # Generated dependency lockfile
+  path_instructions:
+    - path: "assets/js/**"
+      instructions: |
+        Focus on:
+        - Code quality and best practices
+        - Potential security issues
+        - Performance implications
+        - API usage patterns
+    - path: "lib/**/*.ex"
+      instructions: |
+        Focus on:
+        - Elixir/Phoenix best practices  
+        - Security vulnerabilities
+        - Performance optimizations
+        - Code maintainability
