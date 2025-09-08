@@ -192,8 +192,10 @@ export const DateTimeSync = {
       return `${y}-${m}-${day}`;
     }
     function parseLocalDate(yyyyMmDd) {
+      if (typeof yyyyMmDd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) return null;
       const [y, m, d] = yyyyMmDd.split('-').map(Number);
-      return new Date(y, m - 1, d); // local midnight
+      const dt = new Date(y, m - 1, d); // local midnight
+      return Number.isNaN(dt.getTime()) ? null : dt;
     }
 
     function setInitialTimes() {
@@ -214,7 +216,8 @@ export const DateTimeSync = {
 
       // Set end date/time to +1 hour (with possible day rollover)
       const endHour = (hour + 1) % 24;
-      const endDateObj = parseLocalDate(startDate.value);
+      let endDateObj = parseLocalDate(startDate.value);
+      if (!endDateObj) endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       if (endHour < hour) endDateObj.setDate(endDateObj.getDate() + 1);
       endDate.value = fmtLocalDate(endDateObj);
       endTime.value = `${pad(endHour)}:${pad(minute)}`;
@@ -227,7 +230,8 @@ export const DateTimeSync = {
       const endHour = (sHour + 1) % 24;
 
       // Set end date (increment if time rolls over)
-      const endDateObj = parseLocalDate(startDate.value);
+      let endDateObj = parseLocalDate(startDate.value);
+      if (!endDateObj) endDateObj = new Date(); // fallback to current date
       if (endHour < sHour) endDateObj.setDate(endDateObj.getDate() + 1);
       endDate.value = fmtLocalDate(endDateObj);
       endDate.dispatchEvent(new Event('change', { bubbles: true }));
