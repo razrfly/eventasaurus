@@ -5,6 +5,7 @@ import {LiveSocket} from "phoenix_live_view";
 import topbar from "../vendor/topbar";
 import { TicketQR } from "./ticket_qr";
 import { MusicBrainzSearch } from "./musicbrainz_search";
+import { SpotifySearch } from "./spotify_search";
 
 // Supabase client setup for identity management
 let supabaseClient = null;
