@@ -65,25 +65,35 @@ export const SupabaseAuthHandler = {
         console.error('Auth error:', error, errorDescription);
         window.location.href = `/auth/callback?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription || '')}`;
       } else if (accessToken) {
-        // Build callback URL with tokens
-        let callbackUrl = '/auth/callback?access_token=' + encodeURIComponent(accessToken);
-        
-        if (refreshToken) {
-          callbackUrl += '&refresh_token=' + encodeURIComponent(refreshToken);
-        }
-        
-        if (tokenType) {
-          callbackUrl += '&type=' + encodeURIComponent(tokenType);
-        }
-
-        // Clear the fragment from URL and redirect to callback
+        // Clear fragment before submitting
         if (history.replaceState) {
           const url = window.location.href.split('#')[0];
           history.replaceState(null, '', url);
         }
         
-        // Redirect to auth callback to process tokens
-        window.location.href = callbackUrl;
+        // POST tokens to server (avoid leaking in URL/referrers)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/auth/callback';
+        
+        const add = (name, value) => {
+          if (!value) return;
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          input.value = value;
+          form.appendChild(input);
+        };
+        
+        // CSRF (Phoenix default meta tag)
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+        add('_csrf_token', csrf);
+        add('access_token', accessToken);
+        add('refresh_token', refreshToken);
+        add('type', tokenType);
+        
+        document.body.appendChild(form);
+        form.submit(); // navigation replaces current doc
       }
     }
   }
