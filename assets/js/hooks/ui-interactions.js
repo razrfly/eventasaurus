@@ -233,7 +233,7 @@ export const CalendarKeyboardNav = {
         case 'ArrowLeft':
           targetCell = focusedCell.previousElementSibling;
           break;
-        case 'ArrowDown':
+        case 'ArrowDown': {
           // Move to same day next week (7 cells forward)
           const nextRow = focusedCell.parentElement.nextElementSibling;
           if (nextRow) {
@@ -241,7 +241,8 @@ export const CalendarKeyboardNav = {
             targetCell = nextRow.children[cellIndex];
           }
           break;
-        case 'ArrowUp':
+        }
+        case 'ArrowUp': {
           // Move to same day previous week (7 cells backward)  
           const prevRow = focusedCell.parentElement.previousElementSibling;
           if (prevRow) {
@@ -249,6 +250,7 @@ export const CalendarKeyboardNav = {
             targetCell = prevRow.children[cellIndex];
           }
           break;
+        }
         case 'Enter':
         case ' ':
           // Activate the focused date
