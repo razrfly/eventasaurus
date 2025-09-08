@@ -59,7 +59,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
   end
 
   @impl true
-  def get_details(id, type, options \\ %{}) do
+  def get_details(id, type, _options \\ %{}) do
     case type do
       :track ->
         case SpotifyService.get_track_details(id) do
@@ -75,7 +75,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
   end
 
   @impl true
-  def get_cached_details(id, type, options \\ %{}) do
+  def get_cached_details(id, type, _options \\ %{}) do
     case type do
       :track ->
         case SpotifyService.get_cached_track_details(id) do
