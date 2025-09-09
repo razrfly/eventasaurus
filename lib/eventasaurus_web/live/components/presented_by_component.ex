@@ -30,7 +30,14 @@ defmodule EventasaurusWeb.PresentedByComponent do
               :if={!@group.avatar_url}
               class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-sm font-semibold"
             >
-              <%= String.first(@group.name) |> String.upcase() %>
+              <%= case @group do
+                    %{name: name} when is_binary(name) and name != "" ->
+                      name |> String.first() |> String.upcase()
+                    %{slug: slug} when is_binary(slug) and slug != "" ->
+                      slug |> String.first() |> String.upcase()
+                    _ ->
+                      "?"
+                  end %>
             </div>
           </div>
           
