@@ -1512,14 +1512,6 @@ defmodule EventasaurusWeb.PublicEventLive do
             />
           <% end %>
 
-          <!-- Presented By Section (when event belongs to a group) -->
-          <%= if @group do %>
-            <.live_component
-              module={PresentedByComponent}
-              id="presented-by"
-              group={@group}
-            />
-          <% end %>
 
                      <!-- Registration Card -->
            <div class="mobile-register-card bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
@@ -1712,6 +1704,15 @@ defmodule EventasaurusWeb.PublicEventLive do
                </svg>
              </button>
            </div>
+
+          <!-- Presented by -->
+          <%= if @group do %>
+            <.live_component
+              module={PresentedByComponent}
+              id="presented-by"
+              group={@group}
+            />
+          <% end %>
 
                      <!-- Combined Share & Calendar Section -->
            <div id="mobile-secondary-actions" class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
