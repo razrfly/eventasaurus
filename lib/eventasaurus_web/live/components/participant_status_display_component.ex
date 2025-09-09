@@ -84,6 +84,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
                   participants={@display_participants}
                   max_avatars={@max_avatars}
                   avatar_size={@avatar_size}
+                  id={@id}
                 />
               </div>
             <% end %>
@@ -99,6 +100,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
                   avatar_size={:sm}
                   max_avatars={5}
                   show_avatars={true}
+                  id={@id}
                 />
               <% end %>
             </div>
@@ -140,6 +142,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
             max_avatars={@max_avatars}
             avatar_size={@avatar_size}
             status={@status}
+            id={@id}
           />
         </div>
       <% end %>
