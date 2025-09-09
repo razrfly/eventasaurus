@@ -97,7 +97,9 @@ config :eventasaurus, Oban,
     # Keep completed jobs for 7 days for debugging
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     # Reindex daily for performance
-    {Oban.Plugins.Reindexer, schedule: "@daily"}
+    {Oban.Plugins.Reindexer, schedule: "@daily"},
+    # Recover orphaned jobs after 60 seconds
+    {Oban.Plugins.Lifeline, rescue_after: 60}
   ]
 
 # Avatar configuration

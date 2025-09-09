@@ -2677,10 +2677,15 @@ defmodule EventasaurusApp.Events do
         participant_attrs = build_participant_attrs(event, organizer, user, invitation_message, current_time, metadata, mode)
 
         case create_event_participant(participant_attrs) do
-          {:ok, _participant} ->
-            # Queue email job for invitation mode only
+          {:ok, participant} ->
             if mode == :invitation do
-              queue_invitation_email(user, event, invitation_message, organizer)
+              case queue_invitation_email(user, event, invitation_message, organizer) do
+                {:ok, _job} ->
+                  :ok
+                {:error, reason} ->
+                  failed = EventParticipant.mark_email_failed(participant, format_email_error(reason))
+                  _ = update_event_participant(participant, %{metadata: failed.metadata})
+              end
             end
             {:ok, :created}
           {:error, changeset} -> {:error, changeset}
@@ -2692,25 +2697,51 @@ defmodule EventasaurusApp.Events do
 
   # Queue invitation email job to be processed by Oban
   defp queue_invitation_email(user, event, invitation_message, organizer) do
-    %{
+    organizer_id =
+      case organizer do
+        %User{id: id} -> id
+        %{id: id} when is_integer(id) -> id
+        id when is_integer(id) -> id
+        _ -> nil
+      end
+
+    args = %{
       user_id: user.id,
       event_id: event.id,
       invitation_message: invitation_message || "",
-      organizer_id: organizer.id
+      organizer_id: organizer_id
     }
-    |> EmailInvitationJob.new()
+
+    args
+    |> EmailInvitationJob.new(
+      unique: [keys: [:user_id, :event_id], states: [:available, :scheduled, :executing, :retryable], period: 3600]
+    )
     |> Oban.insert()
   end
 
   # Queue a single participant email using Oban
-  def queue_single_participant_email(%EventParticipant{} = participant, %Event{} = event, organizer) do
+  def queue_single_participant_email(%EventParticipant{} = participant, %Event{} = event, organizer \\ nil) do
+    organizer_id =
+      case organizer do
+        %User{id: id} -> id
+        %{id: id} when is_integer(id) -> id
+        id when is_integer(id) -> id
+        _ ->
+          case get_event_organizer(event) do
+            %User{id: id} -> id
+            _ -> participant.invited_by_user_id
+          end
+      end
+
     %{
       user_id: participant.user_id,
       event_id: event.id,
       invitation_message: participant.invitation_message || "",
-      organizer_id: organizer.id
+      organizer_id: organizer_id
     }
-    |> EmailInvitationJob.new()
+    |> EmailInvitationJob.new(
+      unique: [keys: [:user_id, :event_id], states: [:available, :scheduled, :executing, :retryable], period: 3600]
+    )
     |> Oban.insert()
   end
 
