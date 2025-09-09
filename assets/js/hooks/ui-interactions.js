@@ -271,11 +271,32 @@ export const CalendarKeyboardNav = {
   }
 };
 
+// SetupPathSelector hook to sync radio button states
+export const SetupPathSelector = {
+  mounted() {
+    this.syncRadioButtons();
+  },
+
+  updated() {
+    this.syncRadioButtons();
+  },
+
+  syncRadioButtons() {
+    const selectedPath = this.el.dataset.selectedPath;
+    const radioButtons = this.el.querySelectorAll('input[type="radio"][name="setup_path"]');
+    
+    radioButtons.forEach(radio => {
+      radio.checked = radio.value === selectedPath;
+    });
+  }
+};
+
 // Export all UI interaction hooks as a default object for easy importing
 export default {
   ModalCleanup,
   ImagePicker,
   FocusTrap,
   LazyImage,
-  CalendarKeyboardNav
+  CalendarKeyboardNav,
+  SetupPathSelector
 };
