@@ -340,7 +340,8 @@ defmodule EventasaurusWeb.PublicMusicTrackPollComponent do
     with {option_id_int, _} <- Integer.parse(option_id),
          option when not is_nil(option) <-
            Enum.find(socket.assigns.music_options, &(&1.id == option_id_int)),
-         true <- Events.can_delete_option_based_on_poll_settings?(option, socket.assigns.current_user) do
+         user when not is_nil(user) <- socket.assigns.current_user,
+         true <- Events.can_delete_option_based_on_poll_settings?(option, user) do
       case Events.delete_poll_option(option) do
         {:ok, _} ->
           # Reload music options with proper preloading
