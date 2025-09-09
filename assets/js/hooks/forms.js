@@ -236,6 +236,7 @@ export const DateTimeSync = {
       const fallback = getNextHalfHour(new Date());
       const sHour = tm ? Number(tm[1]) : fallback.hour;
       const sMinute = tm ? Number(tm[2]) : fallback.minute;
+      const fallbackDayOffset = !tm && fallback.dayOffset ? 1 : 0;
       const endHour = (sHour + 1) % 24;
 
       // Set end date (increment if time rolls over)
@@ -243,12 +244,14 @@ export const DateTimeSync = {
       if (!endDateObj) {
         const now = new Date();
         endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // midnight local
+        if (fallbackDayOffset) endDateObj.setDate(endDateObj.getDate() + 1);
       }
       if (endHour < sHour) endDateObj.setDate(endDateObj.getDate() + 1);
       endDate.value = fmtLocalDate(endDateObj);
       endDate.dispatchEvent(new Event('change', { bubbles: true }));
 
       endTime.value = `${endHour.toString().padStart(2, '0')}:${sMinute.toString().padStart(2, '0')}`;
+      endTime.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     // On mount, set initial times if start time is empty
