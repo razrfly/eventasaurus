@@ -315,14 +315,27 @@ export const CastCarouselKeyboard = {
   },
 
   handleKeydown(event) {
+    // Avoid hijacking typing in inputs
+    if (event.target.tagName === 'INPUT' || 
+        event.target.tagName === 'TEXTAREA' || 
+        event.target.tagName === 'SELECT' ||
+        event.target.contentEditable === 'true') {
+      return;
+    }
+    
     const componentId = this.el.dataset.componentId;
+    const targetSelector = componentId ? `[data-component-id="${componentId}"]` : null;
     
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      this.pushEvent('scroll_left', {}, componentId);
+      targetSelector
+        ? this.pushEventTo(targetSelector, 'scroll_left', {})
+        : this.pushEvent('scroll_left', {});
     } else if (event.key === 'ArrowRight') {
       event.preventDefault();
-      this.pushEvent('scroll_right', {}, componentId);
+      targetSelector
+        ? this.pushEventTo(targetSelector, 'scroll_right', {})
+        : this.pushEvent('scroll_right', {});
     }
   }
 };
