@@ -2628,6 +2628,7 @@ Hooks.CitySearch = {
     this.inputEl = this.el;
     this.mounted = true;
     this.autocomplete = null;
+    this.initRetryHandle = null;
     this.hiddenInput = document.getElementById('poll_search_location_data');
     
     // Initialize Google Places autocomplete for cities
@@ -2639,13 +2640,17 @@ Hooks.CitySearch = {
       google.maps.event.clearInstanceListeners(this.autocomplete);
       this.autocomplete = null;
     }
+    if (this.initRetryHandle) {
+      clearTimeout(this.initRetryHandle);
+      this.initRetryHandle = null;
+    }
     this.mounted = false;
   },
   
   initCityAutocomplete() {
     if (!this.mounted || !window.google || !window.google.maps || !window.google.maps.places) {
       if (process.env.NODE_ENV !== 'production') console.log("Google Maps not loaded yet for CitySearch, waiting...");
-      setTimeout(() => this.initCityAutocomplete(), 100);
+      this.initRetryHandle = setTimeout(() => this.initCityAutocomplete(), 100);
       return;
     }
     
@@ -2659,7 +2664,7 @@ Hooks.CitySearch = {
       // Listen for place selection
       this.autocomplete.addListener('place_changed', () => {
         const place = this.autocomplete.getPlace();
-        if (place && place.place_id) {
+        if (place && place.place_id && place.geometry && place.geometry.location) {
           // Store the city data in the hidden input
           const cityData = {
             place_id: place.place_id,
@@ -2673,11 +2678,13 @@ Hooks.CitySearch = {
           
           if (this.hiddenInput) {
             this.hiddenInput.value = JSON.stringify(cityData);
-            // Trigger change event to update LiveView
+            // Trigger both input and change events for LiveView
+            this.hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
             this.hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
           }
           
-          // Also trigger change on the visible input
+          // Also trigger input and change events on the visible input
+          this.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
           this.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
       });
