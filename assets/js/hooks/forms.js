@@ -344,11 +344,28 @@ export const CalendarFormSync = {
   }
 };
 
+// Timezone Detection Hook to detect the user's timezone
+export const TimezoneDetectionHook = {
+  mounted() {
+    if (process.env.NODE_ENV !== 'production') console.log("TimezoneDetectionHook mounted on element:", this.el.id);
+    
+    // Get the user's timezone using Intl.DateTimeFormat
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (process.env.NODE_ENV !== 'production') console.log("Detected user timezone:", timezone);
+    
+    // Send the timezone to the server
+    if (timezone) {
+      this.pushEvent("set_timezone", { timezone });
+    }
+  }
+};
+
 // Export all form hooks as a default object for easy importing
 export default {
   InputSync,
   PricingValidator,
   DateTimeSync,
   TimeSync,
-  CalendarFormSync
+  CalendarFormSync,
+  TimezoneDetectionHook
 };
