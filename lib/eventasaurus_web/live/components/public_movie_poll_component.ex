@@ -266,7 +266,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
     with {option_id_int, _} <- Integer.parse(option_id),
          option when not is_nil(option) <-
            Enum.find(socket.assigns.movie_options, &(&1.id == option_id_int)),
-         true <- Events.can_delete_own_suggestion?(option, socket.assigns.current_user) do
+         true <- Events.can_delete_option_based_on_poll_settings?(option, socket.assigns.current_user) do
       case Events.delete_poll_option(option) do
         {:ok, _} ->
           # Reload movie options with proper preloading
@@ -399,7 +399,7 @@ defmodule EventasaurusWeb.PublicMoviePollComponent do
                               Suggested by <%= display_suggester_name(option.suggested_by) %>
                             </p>
                             <!-- Delete button for user's own suggestions -->
-                            <%= if @current_user && Events.can_delete_own_suggestion?(option, @current_user) do %>
+                            <%= if @current_user && Events.can_delete_option_based_on_poll_settings?(option, @current_user) do %>
                               <div class="flex items-center space-x-2">
                                 <button
                                   type="button"

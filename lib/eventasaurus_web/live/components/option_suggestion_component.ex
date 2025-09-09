@@ -933,7 +933,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                       </button>
                     <% end %>
 
-                    <%= if @is_creator || Events.can_delete_own_suggestion?(option, @user) do %>
+                    <%= if @is_creator || Events.can_delete_option_based_on_poll_settings?(option, @user) do %>
                       <!-- Remove option button -->
                       <div class="flex items-center space-x-2">
                         <button
@@ -1650,7 +1650,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
           poll_option ->
             # Check if user is authorized to delete this option
-            if socket.assigns.is_creator || Events.can_delete_own_suggestion?(poll_option, socket.assigns.user) do
+            if socket.assigns.is_creator || Events.can_delete_option_based_on_poll_settings?(poll_option, socket.assigns.user) do
               case Events.delete_poll_option(poll_option) do
                 {:ok, _} ->
                   # Broadcast the deletion to all participants
