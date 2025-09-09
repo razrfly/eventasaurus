@@ -2714,7 +2714,11 @@ defmodule EventasaurusApp.Events do
 
     args
     |> EmailInvitationJob.new(
-      unique: [keys: [:user_id, :event_id], states: [:available, :scheduled, :executing, :retryable], period: 3600]
+      unique: [
+        keys: [:user_id, :event_id],
+        states: [:available, :scheduled, :executing, :retryable, :completed, :cancelled, :discarded],
+        period: 3600
+      ]
     )
     |> Oban.insert()
   end
@@ -2740,7 +2744,11 @@ defmodule EventasaurusApp.Events do
       organizer_id: organizer_id
     }
     |> EmailInvitationJob.new(
-      unique: [keys: [:user_id, :event_id], states: [:available, :scheduled, :executing, :retryable], period: 3600]
+      unique: [
+        keys: [:user_id, :event_id],
+        states: [:available, :scheduled, :executing, :retryable, :completed, :cancelled, :discarded],
+        period: 3600
+      ]
     )
     |> Oban.insert()
   end
