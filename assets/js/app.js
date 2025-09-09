@@ -29,52 +29,7 @@ let Hooks = {};
 // TicketQR hook for generating QR codes on tickets
 Hooks.TicketQR = TicketQR;
 
-// SupabaseAuthHandler hook to handle auth tokens from URL fragments
-Hooks.SupabaseAuthHandler = {
-  mounted() {
-    this.handleAuthTokens();
-  },
-
-  handleAuthTokens() {
-    // Check for auth tokens in URL fragment (Supabase sends tokens this way)
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-      // Parse the URL fragment
-      const params = new URLSearchParams(hash.substring(1));
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const tokenType = params.get('type');
-      const error = params.get('error');
-      const errorDescription = params.get('error_description');
-
-      if (error) {
-        // Handle auth errors
-        console.error('Auth error:', error, errorDescription);
-        window.location.href = `/auth/callback?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription || '')}`;
-      } else if (accessToken) {
-        // Build callback URL with tokens
-        let callbackUrl = '/auth/callback?access_token=' + encodeURIComponent(accessToken);
-        
-        if (refreshToken) {
-          callbackUrl += '&refresh_token=' + encodeURIComponent(refreshToken);
-        }
-        
-        if (tokenType) {
-          callbackUrl += '&type=' + encodeURIComponent(tokenType);
-        }
-
-        // Clear the fragment from URL and redirect to callback
-        if (history.replaceState) {
-          const url = window.location.href.split('#')[0];
-          history.replaceState(null, '', url);
-        }
-        
-        // Redirect to auth callback to process tokens
-        window.location.href = callbackUrl;
-      }
-    }
-  }
-};
+// SupabaseAuthHandler hook is imported from auth/supabase-manager.js
 
 // Supabase image upload hook for file input
 Hooks.SupabaseImageUpload = SupabaseImageUpload;
@@ -180,68 +135,14 @@ liveSocket.connect();
 // Expose liveSocket on window for web console debug logs and latency simulation
 window.liveSocket = liveSocket;
 
-// Handle Supabase Auth Callback (from email confirmation links)
+// Initialize components on page load
 document.addEventListener("DOMContentLoaded", function() {
-  // Check if we have an access token in the URL hash
-  if (window.location.hash && window.location.hash.includes("access_token")) {
-    // Parse hash params
-    const hashParams = window.location.hash.substring(1).split("&").reduce((acc, pair) => {
-      const [key, value] = pair.split("=");
-      acc[key] = decodeURIComponent(value);
-      return acc;
-    }, {});
-
-    // Check for required tokens
-    if (hashParams.access_token && hashParams.refresh_token) {
-      // Create a form to post the tokens
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = "/auth/callback";
-      form.style.display = "none";
-
-      // Add CSRF token
-      const csrfInput = document.createElement("input");
-      csrfInput.type = "hidden";
-      csrfInput.name = "_csrf_token";
-      csrfInput.value = csrfToken;
-      form.appendChild(csrfInput);
-
-      // Add the tokens
-      const accessTokenInput = document.createElement("input");
-      accessTokenInput.type = "hidden";
-      accessTokenInput.name = "access_token";
-      accessTokenInput.value = hashParams.access_token;
-      form.appendChild(accessTokenInput);
-
-      const refreshTokenInput = document.createElement("input");
-      refreshTokenInput.type = "hidden";
-      refreshTokenInput.name = "refresh_token";
-      refreshTokenInput.value = hashParams.refresh_token;
-      form.appendChild(refreshTokenInput);
-
-      // Add callback type
-      const typeInput = document.createElement("input");
-      typeInput.type = "hidden";
-      typeInput.name = "type";
-      typeInput.value = hashParams.type || "unknown";
-      form.appendChild(typeInput);
-
-      // Submit form to handle tokens server-side
-      document.body.appendChild(form);
-      form.submit();
-
-      // Remove hash from URL (to prevent tokens from staying in browser history)
-      window.history.replaceState(null, null, window.location.pathname);
-    }
-  }
-  
   // Initialize PostHog analytics with privacy checks
   posthogManager.showPrivacyBanner();
   posthogManager.init();
   
   // Initialize Supabase client
   initSupabaseClient();
-  
 });
 
 // City Search Hook for Poll Creation Component

@@ -10,14 +10,22 @@ export const MusicTrackSearch = {
     this.loadingIndicator = document.getElementById('music-search-loading');
     this.searchTimeout = null;
     this.currentQuery = '';
+    this.resultButtonListeners = new Map(); // Track button listeners for cleanup
+    this.trackDataCache = new Map(); // In-memory cache for track data (security fix)
+
+    // Verify required elements exist
+    if (!this.inputEl) {
+      console.error('MusicTrackSearch: Input element not found');
+      return;
+    }
 
     // Initialize MusicBrainz search
     if (window.MusicBrainzSearch) {
       window.MusicBrainzSearch.init();
     }
 
-    // Set up debounced search
-    this.inputEl.addEventListener('input', (e) => {
+    // Set up debounced search - bind to maintain context for cleanup
+    this.handleInput = (e) => {
       const query = e.target.value.trim();
       
       if (this.searchTimeout) {
@@ -34,14 +42,18 @@ export const MusicTrackSearch = {
       this.searchTimeout = setTimeout(async () => {
         await this.performSearch(query);
       }, 300);
-    });
+    };
 
-    // Hide results when clicking outside
-    document.addEventListener('click', (e) => {
+    this.inputEl.addEventListener('input', this.handleInput);
+
+    // Hide results when clicking outside - bind to maintain context for cleanup
+    this.handleDocumentClick = (e) => {
       if (!this.el.contains(e.target) && !this.resultsContainer?.contains(e.target)) {
         this.hideResults();
       }
-    });
+    };
+
+    document.addEventListener('click', this.handleDocumentClick);
   },
 
   async performSearch(query) {
@@ -71,26 +83,50 @@ export const MusicTrackSearch = {
   displayResults(results) {
     if (!this.resultsList || !this.resultsContainer) return;
 
+    // Clean up previous button listeners and cached data
+    this.cleanupButtonListeners();
+    this.trackDataCache.clear();
+
     if (results.length === 0) {
       this.resultsList.innerHTML = '<div class="p-4 text-gray-500 text-center">No tracks found</div>';
     } else {
-      this.resultsList.innerHTML = results.map(result => this.createResultHTML(result)).join('');
+      this.resultsList.innerHTML = results.map((result, index) => this.createResultHTML(result, index)).join('');
       
-      // Add click handlers to result buttons
+      // Add click handlers to result buttons and track them for cleanup
       this.resultsList.querySelectorAll('.music-result-button').forEach(button => {
-        button.addEventListener('click', (e) => {
-          const trackData = JSON.parse(button.dataset.track);
-          this.selectTrack(trackData);
-        });
+        const handler = (e) => {
+          const trackId = button.dataset.trackId;
+          const trackData = this.trackDataCache.get(trackId);
+          if (trackData) {
+            this.selectTrack(trackData);
+          } else {
+            console.error('Track data not found for ID:', trackId);
+          }
+        };
+        
+        button.addEventListener('click', handler);
+        this.resultButtonListeners.set(button, handler);
       });
     }
 
     this.showResults();
   },
 
-  createResultHTML(result) {
+  cleanupButtonListeners() {
+    // Remove all tracked button listeners
+    this.resultButtonListeners.forEach((handler, button) => {
+      button.removeEventListener('click', handler);
+    });
+    this.resultButtonListeners.clear();
+  },
+
+  createResultHTML(result, index) {
     const artist = this.extractArtistNames(result.metadata.artist_credit);
     const duration = result.metadata.duration_formatted || '';
+    
+    // Generate safe track ID and store in memory cache
+    const trackId = `track_${Date.now()}_${index}`;
+    this.trackDataCache.set(trackId, result);
     
     return `
       <div class="border rounded-lg p-3 bg-white hover:bg-gray-50">
@@ -103,12 +139,12 @@ export const MusicTrackSearch = {
               <h5 class="font-medium text-gray-900 truncate">${this.escapeHtml(result.title)}</h5>
             </div>
             <p class="text-sm text-gray-600 mb-1">${this.escapeHtml(artist)}</p>
-            ${duration ? `<p class="text-xs text-gray-500">Duration: ${duration}</p>` : ''}
+            ${duration ? `<p class="text-xs text-gray-500">Duration: ${this.escapeHtml(duration)}</p>` : ''}
           </div>
           <button
             type="button"
             class="music-result-button ml-3 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            data-track='${JSON.stringify(result)}'
+            data-track-id="${this.escapeHtml(trackId)}"
           >
             Add Track
           </button>
@@ -178,8 +214,22 @@ export const MusicTrackSearch = {
   },
 
   destroyed() {
+    // Clear any pending search timeout
     if (this.searchTimeout) {
       clearTimeout(this.searchTimeout);
+    }
+
+    // Clean up button listeners and cached data
+    this.cleanupButtonListeners();
+    this.trackDataCache.clear();
+
+    // Remove main event listeners
+    if (this.inputEl && this.handleInput) {
+      this.inputEl.removeEventListener('input', this.handleInput);
+    }
+
+    if (this.handleDocumentClick) {
+      document.removeEventListener('click', this.handleDocumentClick);
     }
   }
 };

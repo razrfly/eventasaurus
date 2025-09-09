@@ -32,6 +32,19 @@ export const PollOptionDragDrop = {
     this.touchMoveThrottle = null;
     this.mobileDragIndicator = null;
     
+    // Store bound handlers for proper cleanup
+    this.boundHandlers = {
+      dragStart: this.handleDragStart.bind(this),
+      dragEnd: this.handleDragEnd.bind(this),
+      dragOver: this.handleDragOver.bind(this),
+      drop: this.handleDrop.bind(this),
+      dragEnter: this.handleDragEnter.bind(this),
+      dragLeave: this.handleDragLeave.bind(this),
+      touchStart: this.handleTouchStart.bind(this),
+      touchMove: this.handleTouchMove.bind(this),
+      touchEnd: this.handleTouchEnd.bind(this)
+    };
+    
     this.canReorder = this.el.dataset.canReorder === "true";
     
     if (!this.canReorder) {
@@ -55,13 +68,13 @@ export const PollOptionDragDrop = {
       item.draggable = true;
       item.dataset.originalIndex = index;
       
-      // Drag event listeners
-      item.addEventListener('dragstart', this.handleDragStart.bind(this));
-      item.addEventListener('dragend', this.handleDragEnd.bind(this));
-      item.addEventListener('dragover', this.handleDragOver.bind(this));
-      item.addEventListener('drop', this.handleDrop.bind(this));
-      item.addEventListener('dragenter', this.handleDragEnter.bind(this));
-      item.addEventListener('dragleave', this.handleDragLeave.bind(this));
+      // Drag event listeners using bound handlers
+      item.addEventListener('dragstart', this.boundHandlers.dragStart);
+      item.addEventListener('dragend', this.boundHandlers.dragEnd);
+      item.addEventListener('dragover', this.boundHandlers.dragOver);
+      item.addEventListener('drop', this.boundHandlers.drop);
+      item.addEventListener('dragenter', this.boundHandlers.dragEnter);
+      item.addEventListener('dragleave', this.boundHandlers.dragLeave);
     });
   },
 
@@ -69,9 +82,9 @@ export const PollOptionDragDrop = {
     const items = this.el.querySelectorAll('[data-draggable="true"]');
     
     items.forEach(item => {
-      item.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-      item.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
-      item.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+      item.addEventListener('touchstart', this.boundHandlers.touchStart, { passive: false });
+      item.addEventListener('touchmove', this.boundHandlers.touchMove, { passive: false });
+      item.addEventListener('touchend', this.boundHandlers.touchEnd, { passive: false });
     });
   },
 
@@ -402,25 +415,27 @@ export const PollOptionDragDrop = {
     // Clear drop indicators
     this.clearDropIndicators();
     
-    // Remove all event listeners from draggable items
-    const items = this.el.querySelectorAll('[data-draggable="true"]');
-    items.forEach(item => {
-      // Remove drag event listeners
-      item.removeEventListener('dragstart', this.handleDragStart);
-      item.removeEventListener('dragend', this.handleDragEnd);
-      item.removeEventListener('dragover', this.handleDragOver);
-      item.removeEventListener('drop', this.handleDrop);
-      item.removeEventListener('dragenter', this.handleDragEnter);
-      item.removeEventListener('dragleave', this.handleDragLeave);
-      
-      // Remove touch event listeners
-      item.removeEventListener('touchstart', this.handleTouchStart);
-      item.removeEventListener('touchmove', this.handleTouchMove);
-      item.removeEventListener('touchend', this.handleTouchEnd);
-      
-      // Clean up visual state
-      item.classList.remove('touch-dragging', 'scale-105', 'shadow-lg', 'z-50', 'opacity-50', 'scale-95', 'invisible', 'bg-blue-50', 'border-blue-200');
-    });
+    // Remove all event listeners from draggable items using bound handlers
+    if (this.boundHandlers && this.el) {
+      const items = this.el.querySelectorAll('[data-draggable="true"]');
+      items.forEach(item => {
+        // Remove drag event listeners using bound handlers
+        item.removeEventListener('dragstart', this.boundHandlers.dragStart);
+        item.removeEventListener('dragend', this.boundHandlers.dragEnd);
+        item.removeEventListener('dragover', this.boundHandlers.dragOver);
+        item.removeEventListener('drop', this.boundHandlers.drop);
+        item.removeEventListener('dragenter', this.boundHandlers.dragEnter);
+        item.removeEventListener('dragleave', this.boundHandlers.dragLeave);
+        
+        // Remove touch event listeners using bound handlers
+        item.removeEventListener('touchstart', this.boundHandlers.touchStart);
+        item.removeEventListener('touchmove', this.boundHandlers.touchMove);
+        item.removeEventListener('touchend', this.boundHandlers.touchEnd);
+        
+        // Clean up visual state
+        item.classList.remove('touch-dragging', 'scale-105', 'shadow-lg', 'z-50', 'opacity-50', 'scale-95', 'invisible', 'bg-blue-50', 'border-blue-200');
+      });
+    }
   }
 };
 
