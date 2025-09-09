@@ -347,15 +347,36 @@ export const CalendarFormSync = {
 // Timezone Detection Hook to detect the user's timezone
 export const TimezoneDetectionHook = {
   mounted() {
-    if (process.env.NODE_ENV !== 'production') console.log("TimezoneDetectionHook mounted on element:", this.el.id);
+    // Guard against environments without process object
+    const isProduction = typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production';
     
-    // Get the user's timezone using Intl.DateTimeFormat
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (process.env.NODE_ENV !== 'production') console.log("Detected user timezone:", timezone);
+    if (!isProduction) console.debug("TimezoneDetectionHook mounted on element:", this.el.id);
     
-    // Send the timezone to the server
-    if (timezone) {
-      this.pushEvent("set_timezone", { timezone });
+    // Check if timezone was already sent to prevent duplicate events
+    if (this.el.dataset.timezoneSent === 'true') {
+      if (!isProduction) console.debug("Timezone already sent, skipping");
+      return;
+    }
+    
+    // Guard against environments without Intl support
+    if (typeof Intl === 'undefined' || !Intl.DateTimeFormat) {
+      if (!isProduction) console.debug("Intl.DateTimeFormat not supported, skipping timezone detection");
+      return;
+    }
+    
+    try {
+      // Get the user's timezone using Intl.DateTimeFormat
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!isProduction) console.debug("Detected user timezone:", timezone);
+      
+      // Send the timezone to the server
+      if (timezone) {
+        this.pushEvent("set_timezone", { timezone });
+        // Mark as sent to prevent duplicate events
+        this.el.dataset.timezoneSent = 'true';
+      }
+    } catch (error) {
+      if (!isProduction) console.debug("Error detecting timezone:", error);
     }
   }
 };
