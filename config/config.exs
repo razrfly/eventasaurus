@@ -84,6 +84,22 @@ config :hammer,
     ]
   }
 
+# Configure Oban for background job processing
+config :eventasaurus, Oban,
+  repo: EventasaurusApp.Repo,
+  queues: [
+    # Email queue with limited concurrency for Resend API rate limiting
+    emails: 2,  # Max 2 concurrent jobs to respect Resend's 2/second limit
+    # Default queue for other background jobs
+    default: 10
+  ],
+  plugins: [
+    # Keep completed jobs for 7 days for debugging
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    # Reindex daily for performance
+    {Oban.Plugins.Reindexer, schedule: "@daily"}
+  ]
+
 # Avatar configuration
 config :eventasaurus, :avatars,
   provider: :dicebear,
