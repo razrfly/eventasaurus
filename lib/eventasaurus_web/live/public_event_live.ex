@@ -6,12 +6,14 @@ defmodule EventasaurusWeb.PublicEventLive do
   require Logger
 
   alias EventasaurusApp.Events
+  alias EventasaurusApp.Groups
   alias EventasaurusApp.Venues
   alias EventasaurusApp.Accounts
   alias EventasaurusApp.Ticketing
   alias EventasaurusWeb.EventRegistrationComponent
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.PublicGenericPollComponent
+  alias EventasaurusWeb.PresentedByComponent
 
   alias EventasaurusWeb.ReservedSlugs
 
@@ -44,6 +46,10 @@ defmodule EventasaurusWeb.PublicEventLive do
         event ->
           # Load venue if needed
           venue = if event.venue_id, do: Venues.get_venue(event.venue_id), else: nil
+          
+          # Load group if event belongs to one
+          group = if event.group_id, do: Groups.get_group(event.group_id), else: nil
+          
           organizers = Events.list_event_organizers(event)
 
           # Load participants for social proof
@@ -121,6 +127,7 @@ defmodule EventasaurusWeb.PublicEventLive do
            socket
            |> assign(:event, event)
            |> assign(:venue, venue)
+           |> assign(:group, group)
            |> assign(:organizers, organizers)
            |> assign(:participants, participants)
            |> assign(:registration_status, registration_status)
@@ -1502,6 +1509,15 @@ defmodule EventasaurusWeb.PublicEventLive do
               event={@event}
               user={@user}
               loading={@ticket_loading}
+            />
+          <% end %>
+
+          <!-- Presented By Section (when event belongs to a group) -->
+          <%= if @group do %>
+            <.live_component
+              module={PresentedByComponent}
+              id="presented-by"
+              group={@group}
             />
           <% end %>
 
