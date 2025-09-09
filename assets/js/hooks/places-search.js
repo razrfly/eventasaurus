@@ -130,12 +130,22 @@ export const UnifiedGooglePlaces = {
         radius = 200000; // 200km for region scope
       }
       
-      this.autocomplete.setBounds(
-        new google.maps.Circle({
-          center: center,
-          radius: radius
-        }).getBounds()
-      );
+      try {
+        this.autocomplete.setBounds(
+          new google.maps.Circle({
+            center: center,
+            radius: radius
+          }).getBounds()
+        );
+      } catch (error) {
+        console.error('Error setting autocomplete bounds:', error);
+        // Fallback to simple circle bounds
+        const bounds = new google.maps.LatLngBounds();
+        const offset = radius / 111000; // Rough conversion from meters to degrees
+        bounds.extend(new google.maps.LatLng(center.lat - offset, center.lng - offset));
+        bounds.extend(new google.maps.LatLng(center.lat + offset, center.lng + offset));
+        this.autocomplete.setBounds(bounds);
+      }
     }
     
     // Set up place selection handler
@@ -266,41 +276,51 @@ export const UnifiedGooglePlaces = {
     }
   },
   
-  // Restore original poll hidden field handling
+  // Restore original poll hidden field handling - scoped to current form
   updatePollHiddenFields() {
     const data = this.selectedPlaceData;
     const jsonData = JSON.stringify(data);
     
-    // Save in external_data field (what backend expects)
-    const externalDataField = document.querySelector('input[name="poll_option[external_data]"]');
+    // Find the form containing this input to scope field searches
+    const form = this.el.closest('form');
+    if (!form) {
+      console.error('updatePollHiddenFields: No form found');
+      return;
+    }
+    
+    // Save in external_data field (what backend expects) - scoped to current form
+    let externalDataField = form.querySelector('input[name="poll_option[external_data]"]');
     if (!externalDataField) {
       // Create the field if it doesn't exist
-      const form = this.el.closest('form');
-      if (form) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'poll_option[external_data]';
-        input.value = jsonData;
-        form.appendChild(input);
-      }
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'poll_option[external_data]';
+      input.value = jsonData;
+      form.appendChild(input);
+      externalDataField = input;
     } else {
       externalDataField.value = jsonData;
     }
     
-    // Also set place_id and external_id for backend processing
-    const placeIdField = document.querySelector('input[name="poll_option[place_id]"]');
-    if (placeIdField) placeIdField.value = data.place_id;
+    // Also set place_id and external_id for backend processing - scoped to current form
+    let placeIdField = form.querySelector('input[name="poll_option[place_id]"]');
+    if (!placeIdField) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'poll_option[place_id]';
+      input.value = data.place_id;
+      form.appendChild(input);
+    } else {
+      placeIdField.value = data.place_id;
+    }
     
-    const externalIdField = document.querySelector('input[name="poll_option[external_id]"]');
+    let externalIdField = form.querySelector('input[name="poll_option[external_id]"]');
     if (!externalIdField) {
-      const form = this.el.closest('form');
-      if (form) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'poll_option[external_id]';
-        input.value = data.place_id;
-        form.appendChild(input);
-      }
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'poll_option[external_id]';
+      input.value = data.place_id;
+      form.appendChild(input);
     } else {
       externalIdField.value = data.place_id;
     }
@@ -354,6 +374,16 @@ export const UnifiedGooglePlaces = {
     if (infoContainer) {
       infoContainer.innerHTML = this.createSelectionHTML();
       infoContainer.style.display = 'block';
+      
+      // Add clear button event handler
+      const clearBtn = infoContainer.querySelector('.place-clear-btn');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.clearSelection();
+        });
+      }
     }
   },
   
@@ -388,7 +418,7 @@ export const UnifiedGooglePlaces = {
         html += `<div class="text-gray-600">📞 ${this.escapeHtml(place.phone)}</div>`;
       }
       if (place.website) {
-        html += `<div class="text-gray-600">🌐 <a href="${this.escapeHtml(place.website)}" target="_blank" class="text-blue-600 hover:underline">Website</a></div>`;
+        html += `<div class="text-gray-600">🌐 <a href="${this.escapeHtml(place.website)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Website</a></div>`;
       }
       html += '</div>';
     }
