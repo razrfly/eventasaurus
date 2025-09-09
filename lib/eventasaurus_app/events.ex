@@ -4397,7 +4397,7 @@ defmodule EventasaurusApp.Events do
   - For "vote_based" strategy: no votes have been cast on this option
   """
   def can_delete_option_based_on_poll_settings?(%PollOption{} = poll_option, %User{} = user) do
-    with %Poll{} = poll <- get_poll!(poll_option.poll_id) do
+    with %Poll{} = poll <- get_poll(poll_option.poll_id) do
       # User must be the one who suggested the option
       if poll_option.suggested_by_id == user.id do
         check_removal_strategy_allows_deletion?(poll, poll_option)
@@ -4419,15 +4419,20 @@ defmodule EventasaurusApp.Events do
       
       "time_based" ->
         time_limit_minutes = Poll.get_option_removal_time_limit(poll)
-        time_limit_seconds = time_limit_minutes * 60
+        time_limit_seconds =
+          if is_integer(time_limit_minutes) and time_limit_minutes > 0,
+            do: time_limit_minutes * 60,
+            else: 0
         NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) < time_limit_seconds
       
       "vote_based" ->
         # Check if any votes exist on this option
         vote_count = from(v in PollVote, where: v.poll_option_id == ^poll_option.id)
         |> Repo.aggregate(:count, :id)
-        
         vote_count == 0
+      
+      _ ->
+        false
     end
   end
 
