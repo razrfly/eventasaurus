@@ -2842,6 +2842,98 @@ document.addEventListener("DOMContentLoaded", function() {
   
 });
 
+// City Search Hook for Poll Creation Component
+Hooks.CitySearch = {
+  mounted() {
+    if (process.env.NODE_ENV !== 'production') console.log("CitySearch hook mounted");
+    this.inputEl = this.el;
+    this.mounted = true;
+    this.autocomplete = null;
+    this.hiddenInput = document.getElementById('poll_search_location_data');
+    
+    // Initialize Google Places autocomplete for cities
+    this.initCityAutocomplete();
+  },
+  
+  destroyed() {
+    if (this.autocomplete) {
+      google.maps.event.clearInstanceListeners(this.autocomplete);
+      this.autocomplete = null;
+    }
+    this.mounted = false;
+  },
+  
+  initCityAutocomplete() {
+    if (!this.mounted || !window.google || !window.google.maps || !window.google.maps.places) {
+      if (process.env.NODE_ENV !== 'production') console.log("Google Maps not loaded yet for CitySearch, waiting...");
+      setTimeout(() => this.initCityAutocomplete(), 100);
+      return;
+    }
+    
+    try {
+      // Create autocomplete for cities only
+      this.autocomplete = new google.maps.places.Autocomplete(this.inputEl, {
+        types: ['(cities)'],
+        fields: ['place_id', 'name', 'formatted_address', 'geometry']
+      });
+      
+      // Listen for place selection
+      this.autocomplete.addListener('place_changed', () => {
+        const place = this.autocomplete.getPlace();
+        if (place && place.place_id) {
+          // Store the city data in the hidden input
+          const cityData = {
+            place_id: place.place_id,
+            name: place.name,
+            formatted_address: place.formatted_address,
+            geometry: {
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng()
+            }
+          };
+          
+          if (this.hiddenInput) {
+            this.hiddenInput.value = JSON.stringify(cityData);
+            // Trigger change event to update LiveView
+            this.hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          
+          // Also trigger change on the visible input
+          this.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+      
+      if (process.env.NODE_ENV !== 'production') console.log("City autocomplete initialized successfully");
+    } catch (error) {
+      console.error("Error initializing city autocomplete:", error);
+    }
+  }
+};
+
+// Simplified Google Places Autocomplete Hook for Polls
+// Following issue #771 recommendations - using native Google Autocomplete widget
+// Reduced from 642 lines to ~200 lines while maintaining all functionality
+
+// DEPRECATED: PlacesSuggestionSearch - Now uses UnifiedGooglePlaces
+// This is kept for backward compatibility but delegates to the unified hook
+Hooks.PlacesSuggestionSearch = {
+  mounted() {
+    // Set mode for unified hook
+    this.el.dataset.mode = 'poll';
+    this.el.dataset.showPersistent = 'true'; // Polls show persistent box like main branch
+    this.el.dataset.showRecent = 'false';
+    
+    // Location scope and search location are already in dataset from the template
+    
+    // Delegate to unified hook - copy all methods first
+    Object.assign(this, Hooks.UnifiedGooglePlaces);
+    
+    // Call the mounted method
+    if (Hooks.UnifiedGooglePlaces.mounted) {
+      Hooks.UnifiedGooglePlaces.mounted.call(this);
+    }
+  }
+};
 // OLD IMPLEMENTATION OF PlacesSuggestionSearch REMOVED
 // The old 300-line implementation has been replaced with UnifiedGooglePlaces  
 // PlacesSuggestionSearch now delegates to UnifiedGooglePlaces with mode='poll'
