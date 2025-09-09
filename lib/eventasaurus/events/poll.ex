@@ -718,7 +718,8 @@ defmodule EventasaurusApp.Events.Poll do
   """
   def set_option_removal_time_limit(%__MODULE__{settings: settings} = poll, time_limit)
       when is_integer(time_limit) and time_limit > 0 do
-    new_settings = Map.put(settings || %{}, "option_removal_time_limit", time_limit)
+    capped = min(time_limit, 1440)
+    new_settings = Map.put(settings || %{}, "option_removal_time_limit", capped)
     %{poll | settings: new_settings}
   end
 
@@ -848,10 +849,12 @@ defmodule EventasaurusApp.Events.Poll do
     settings =
       case Map.get(settings, "option_removal_time_limit") do
         nil -> settings
-        value when is_integer(value) and value > 0 -> settings
+        value when is_integer(value) and value > 0 ->
+          Map.put(settings, "option_removal_time_limit", min(value, 1440))
         value when is_binary(value) ->
           case Integer.parse(value) do
-            {parsed, ""} when parsed > 0 -> Map.put(settings, "option_removal_time_limit", parsed)
+            {parsed, ""} when parsed > 0 ->
+              Map.put(settings, "option_removal_time_limit", min(parsed, 1440))
             _ -> Map.put(settings, "option_removal_time_limit", 5)
           end
         # Invalid type or value, default to 5
@@ -919,10 +922,18 @@ defmodule EventasaurusApp.Events.Poll do
   end
 
   defp validate_option_removal_time_limit_setting(changeset, settings) do
+    strategy = Map.get(settings, "option_removal_strategy") || get_option_removal_strategy(changeset.data)
     case Map.get(settings, "option_removal_time_limit") do
-      nil -> changeset
-      value when is_integer(value) and value > 0 -> changeset
-      _ -> add_error(changeset, :settings, "option_removal_time_limit must be a positive integer")
+      nil when strategy == "time_based" ->
+        add_error(changeset, :settings, "option_removal_time_limit is required when strategy is time_based")
+      value when is_integer(value) and value > 0 and value <= 1440 ->
+        changeset
+      value when is_integer(value) and value > 1440 ->
+        add_error(changeset, :settings, "option_removal_time_limit must be <= 1440 minutes")
+      _ when strategy == "time_based" ->
+        add_error(changeset, :settings, "option_removal_time_limit must be a positive integer")
+      _ ->
+        changeset
     end
   end
 end
