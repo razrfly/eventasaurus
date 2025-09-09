@@ -456,6 +456,40 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
+  def handle_event("send_participant_email", %{"participant_id" => participant_id}, socket) do
+    participant_id = String.to_integer(participant_id)
+    event = socket.assigns.event
+    organizer = socket.assigns.user
+
+    # Find the participant
+    participant = Enum.find(socket.assigns.participants, &(&1.id == participant_id))
+
+    if participant && participant.user do
+      # Use the same Oban queue system as the bulk invitations
+      case Events.queue_single_participant_email(participant, event, organizer) do
+        {:ok, _job} ->
+          # Refresh participants to show updated email status
+          updated_participants = Events.list_event_participants(event, limit: socket.assigns.participants_loaded)
+                               |> Enum.sort_by(& &1.inserted_at, :desc)
+
+          {:noreply,
+           socket
+           |> assign_participants_with_stats(updated_participants)
+           |> put_flash(:info, "Email queued for #{participant.user.name || participant.user.email}")}
+
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to queue email: #{reason}")}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Participant not found or has no email")}
+    end
+  end
+
+  @impl true
   def handle_event("add_guests_directly", _params, socket) do
     event = socket.assigns.event
     organizer = socket.assigns.user

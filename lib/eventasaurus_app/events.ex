@@ -20,6 +20,7 @@ defmodule EventasaurusApp.Events do
   alias EventasaurusApp.Events.EventActivity
 
   alias EventasaurusApp.GuestInvitations
+  alias Eventasaurus.Jobs.EmailInvitationJob
   require Logger
 
   # Private helper for applying soft delete filtering
@@ -2677,9 +2678,9 @@ defmodule EventasaurusApp.Events do
 
         case create_event_participant(participant_attrs) do
           {:ok, _participant} ->
-            # Send email for invitation mode only
+            # Queue email job for invitation mode only
             if mode == :invitation do
-              send_invitation_email(user, event, invitation_message, organizer)
+              queue_invitation_email(user, event, invitation_message, organizer)
             end
             {:ok, :created}
           {:error, changeset} -> {:error, changeset}
@@ -2689,98 +2690,33 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  # Send invitation email to the invited user
-  defp send_invitation_email(user, event, invitation_message, organizer) do
-    # Send email asynchronously to avoid blocking the user flow
-    Task.start(fn ->
-      # Load event with venue for email context
-      case get_event_with_venue(event.id) do
-        nil ->
-          require Logger
-          Logger.error("Cannot send invitation email - event not found",
-            user_id: user.id,
-            event_id: event.id,
-            organizer_id: organizer.id
-          )
-
-        event_with_venue ->
-          guest_name = get_user_display_name(user)
-
-          # Get the participant record to update email status
-          participant = get_event_participant_by_event_and_user(event_with_venue, user)
-
-          if participant do
-            # Mark email as being sent
-            updated_participant = EventParticipant.update_email_status(participant, "sending")
-
-            case update_event_participant(participant, %{metadata: updated_participant.metadata}) do
-              {:ok, _} ->
-                # Attempt to send the email
-                case Eventasaurus.Emails.send_guest_invitation(
-                  user.email,
-                  guest_name,
-                  event_with_venue,
-                  invitation_message,
-                  organizer
-                ) do
-                  {:ok, response} ->
-                    require Logger
-                    Logger.info("Guest invitation email sent successfully",
-                      user_id: user.id,
-                      event_id: event.id,
-                      organizer_id: organizer.id
-                    )
-
-                    # Mark email as sent successfully
-                    delivery_id = extract_delivery_id(response)
-                    sent_participant = EventParticipant.mark_email_sent(participant, delivery_id)
-                    update_event_participant(participant, %{metadata: sent_participant.metadata})
-
-                  {:error, reason} ->
-                    require Logger
-                    Logger.error("Failed to send guest invitation email",
-                      user_id: user.id,
-                      event_id: event.id,
-                      organizer_id: organizer.id,
-                      reason: inspect(reason)
-                    )
-
-                    # Mark email as failed
-                    error_message = format_email_error(reason)
-                    failed_participant = EventParticipant.mark_email_failed(participant, error_message)
-                    update_event_participant(participant, %{metadata: failed_participant.metadata})
-                end
-
-              {:error, changeset_error} ->
-                require Logger
-                Logger.error("Failed to update participant email status",
-                  user_id: user.id,
-                  event_id: event.id,
-                  reason: inspect(changeset_error)
-                )
-            end
-          else
-            require Logger
-            Logger.error("Cannot find participant record for email tracking",
-              user_id: user.id,
-              event_id: event.id
-            )
-          end
-      end
-    end)
+  # Queue invitation email job to be processed by Oban
+  defp queue_invitation_email(user, event, invitation_message, organizer) do
+    %{
+      user_id: user.id,
+      event_id: event.id,
+      invitation_message: invitation_message || "",
+      organizer_id: organizer.id
+    }
+    |> EmailInvitationJob.new()
+    |> Oban.insert()
   end
 
-  # Helper function to extract delivery ID from email service response
-  defp extract_delivery_id(response) do
-    case response do
-      %{id: id} -> id
-      %{"id" => id} -> id
-      _ -> nil
-    end
+  # Queue a single participant email using Oban
+  def queue_single_participant_email(%EventParticipant{} = participant, %Event{} = event, organizer) do
+    %{
+      user_id: participant.user_id,
+      event_id: event.id,
+      invitation_message: participant.invitation_message || "",
+      organizer_id: organizer.id
+    }
+    |> EmailInvitationJob.new()
+    |> Oban.insert()
   end
+
 
   # Helper function to format error messages for storage
-  defp format_email_error(reason) do
+  def format_email_error(reason) do
     case reason do
       %{message: message} -> message
       %{"message" => message} -> message
@@ -2790,7 +2726,7 @@ defmodule EventasaurusApp.Events do
   end
 
   # Get event with venue preloaded for email templates
-  defp get_event_with_venue(event_id) do
+  def get_event_with_venue(event_id) do
     case Repo.one(
       from e in Event,
       where: e.id == ^event_id,
@@ -2804,7 +2740,7 @@ defmodule EventasaurusApp.Events do
   end
 
   # Get user display name for emails
-  defp get_user_display_name(user) do
+  def get_user_display_name(user) do
     cond do
       user.name && user.name != "" -> user.name
       user.username && user.username != "" -> user.username
@@ -3103,53 +3039,29 @@ defmodule EventasaurusApp.Events do
     unless EventParticipant.can_retry_email?(participant) do
       {:error, "Maximum retry attempts exceeded"}
     else
-
-    # Load event with venue and get organizer info
-    case get_event_with_venue(event.id) do
-      nil ->
-        {:error, "Event not found"}
-
-      event_with_venue ->
-        organizer = get_event_organizer(event_with_venue)
-        guest_name = get_user_display_name(participant.user)
-        invitation_message = participant.invitation_message || ""
-
-        # Mark as retrying
-        retrying_participant = EventParticipant.update_email_status(participant, "retrying")
-
-        case update_event_participant(participant, %{metadata: retrying_participant.metadata}) do
-          {:ok, _} ->
-            # Attempt to send the email
-            case Eventasaurus.Emails.send_guest_invitation(
-              participant.user.email,
-              guest_name,
-              event_with_venue,
-              invitation_message,
-              organizer
-            ) do
-              {:ok, response} ->
-                Logger.info("Email retry successful for participant #{participant.id}")
-
-                # Mark as sent
-                delivery_id = extract_delivery_id(response)
-                sent_participant = EventParticipant.mark_email_sent(participant, delivery_id)
-                update_event_participant(participant, %{metadata: sent_participant.metadata})
-                :ok
-
-              {:error, reason} ->
-                Logger.error("Email retry failed for participant #{participant.id}: #{inspect(reason)}")
-
-                # Mark as failed again
-                error_message = format_email_error(reason)
-                failed_participant = EventParticipant.mark_email_failed(participant, error_message)
-                update_event_participant(participant, %{metadata: failed_participant.metadata})
-                {:error, reason}
-            end
-
-                     {:error, changeset_error} ->
-             {:error, changeset_error}
-         end
-    end
+      # Get the event organizer
+      organizer = get_event_organizer(event)
+      
+      # Mark as retrying before queueing the job
+      retrying_participant = EventParticipant.update_email_status(participant, "retrying")
+      
+      case update_event_participant(participant, %{metadata: retrying_participant.metadata}) do
+        {:ok, _} ->
+          # Queue the retry using Oban (same as single participant email)
+          case queue_single_participant_email(participant, event, organizer) do
+            {:ok, _job} ->
+              Logger.info("Email retry queued for participant #{participant.id}")
+              :ok
+            {:error, reason} ->
+              # Mark as failed if we couldn't even queue the job
+              error_message = format_email_error(reason)
+              failed_participant = EventParticipant.mark_email_failed(participant, error_message)
+              update_event_participant(participant, %{metadata: failed_participant.metadata})
+              {:error, reason}
+          end
+        {:error, changeset_error} ->
+          {:error, changeset_error}
+      end
     end
   end
 
