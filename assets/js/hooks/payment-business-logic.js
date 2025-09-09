@@ -26,6 +26,14 @@ export const StripePaymentElements = {
       console.error("Stripe publishable key not found");
       return;
     }
+
+    // Check if payment element container exists
+    const paymentContainer = document.getElementById('stripe-payment-element');
+    if (!paymentContainer) {
+      console.error("Stripe payment element container not found");
+      this.pushEvent("payment_failed", {error: {message: "Payment form not available"}});
+      return;
+    }
     
     const stripe = Stripe(window.stripePublishableKey);
     
@@ -47,12 +55,18 @@ export const StripePaymentElements = {
     
     // Create and mount the Payment Element
     const paymentElement = elements.create('payment');
-    paymentElement.mount('#stripe-payment-element');
+    try {
+      paymentElement.mount('#stripe-payment-element');
+    } catch (error) {
+      console.error("Failed to mount payment element:", error);
+      this.pushEvent("payment_failed", {error: {message: "Failed to initialize payment form"}});
+      return;
+    }
     
     // Handle form submission
     const submitButton = document.getElementById('stripe-submit-button');
     if (submitButton) {
-      submitButton.addEventListener('click', async (e) => {
+      this.handleSubmit = async (e) => {
         e.preventDefault();
         
         if (submitButton.disabled) return;
@@ -81,19 +95,33 @@ export const StripePaymentElements = {
           console.error("Payment error:", err);
           submitButton.disabled = false;
         }
-      });
+      };
+
+      submitButton.addEventListener('click', this.handleSubmit);
     }
     
     // Store references for cleanup
     this.stripe = stripe;
     this.elements = elements;
     this.paymentElement = paymentElement;
+    this.submitButton = submitButton;
   },
   
   destroyed() {
     console.log("Stripe Payment Elements hook destroyed");
+    
+    // Clean up payment element
     if (this.paymentElement) {
-      this.paymentElement.unmount();
+      try {
+        this.paymentElement.unmount();
+      } catch (error) {
+        console.error("Error unmounting payment element:", error);
+      }
+    }
+
+    // Remove event listeners
+    if (this.submitButton && this.handleSubmit) {
+      this.submitButton.removeEventListener('click', this.handleSubmit);
     }
   }
 };
@@ -104,6 +132,7 @@ export const TaxationTypeValidator = {
     this.selectElement = this.el.querySelector('select');
     this.hiddenInput = this.el.querySelector('input[type="hidden"]');
     this.priceDisplay = document.querySelector('[data-price-display]');
+    this.isUpdating = false; // Prevent infinite loops
     
     if (!this.selectElement) {
       console.error('TaxationTypeValidator: No select element found');
@@ -119,18 +148,26 @@ export const TaxationTypeValidator = {
     this.updateHiddenField();
     this.updatePriceDisplay();
     
+    // Bind methods to maintain context for proper listener cleanup
+    this.handleTaxationChange = this.handleTaxationChange.bind(this);
+    this.handlePriceUpdate = this.handlePriceUpdate.bind(this);
+    
     // Listen for changes
-    this.selectElement.addEventListener('change', this.handleTaxationChange.bind(this));
+    this.selectElement.addEventListener('change', this.handleTaxationChange);
     
     // Listen for price updates from other components
-    document.addEventListener('price:updated', this.handlePriceUpdate.bind(this));
+    document.addEventListener('price:updated', this.handlePriceUpdate);
   },
   
   destroyed() {
-    if (this.selectElement) {
-      this.selectElement.removeEventListener('change', this.handleTaxationChange.bind(this));
+    // Remove listeners using the bound methods
+    if (this.selectElement && this.handleTaxationChange) {
+      this.selectElement.removeEventListener('change', this.handleTaxationChange);
     }
-    document.removeEventListener('price:updated', this.handlePriceUpdate.bind(this));
+    
+    if (this.handlePriceUpdate) {
+      document.removeEventListener('price:updated', this.handlePriceUpdate);
+    }
   },
   
   handleTaxationChange() {
@@ -162,10 +199,13 @@ export const TaxationTypeValidator = {
   },
   
   updatePriceDisplay() {
-    if (!this.priceDisplay || !this.selectElement) return;
+    if (!this.priceDisplay || !this.selectElement || this.isUpdating) return;
     
     const selectedOption = this.selectElement.selectedOptions[0];
     if (!selectedOption) return;
+    
+    // Prevent infinite loops
+    this.isUpdating = true;
     
     const basePrice = parseFloat(this.priceDisplay.dataset.basePrice || '0');
     const taxRate = parseFloat(selectedOption.dataset.rate || '0');
@@ -204,24 +244,36 @@ export const TaxationTypeValidator = {
       }
     }
     
-    // Dispatch price update event
-    document.dispatchEvent(new CustomEvent('price:updated', {
-      detail: {
-        basePrice: basePrice,
-        taxAmount: taxAmount,
-        finalPrice: finalPrice,
-        taxRate: taxRate,
-        isInclusive: isInclusive
-      }
-    }));
+    // Dispatch price update event only if values changed
+    const eventDetail = {
+      basePrice: basePrice,
+      taxAmount: taxAmount,
+      finalPrice: finalPrice,
+      taxRate: taxRate,
+      isInclusive: isInclusive,
+      source: 'taxation' // Identify source to prevent loops
+    };
+    
+    document.dispatchEvent(new CustomEvent('price:updated', { detail: eventDetail }));
+    
+    // Reset flag after a short delay to allow other handlers to process
+    setTimeout(() => {
+      this.isUpdating = false;
+    }, 10);
   },
   
   handlePriceUpdate(event) {
-    // Handle external price updates
-    if (this.priceDisplay && event.detail && typeof event.detail.basePrice !== 'undefined') {
-      this.priceDisplay.dataset.basePrice = event.detail.basePrice.toString();
-      this.updatePriceDisplay();
+    // Handle external price updates, but avoid infinite loops
+    if (this.isUpdating || 
+        !this.priceDisplay || 
+        !event.detail || 
+        typeof event.detail.basePrice === 'undefined' ||
+        event.detail.source === 'taxation') { // Don't react to our own events
+      return;
     }
+    
+    this.priceDisplay.dataset.basePrice = event.detail.basePrice.toString();
+    this.updatePriceDisplay();
   },
   
   formatPrice(amount) {
