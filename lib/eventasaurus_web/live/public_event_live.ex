@@ -199,6 +199,11 @@ defmodule EventasaurusWeb.PublicEventLive do
     end
   end
 
+  def handle_event("poll_location_cleared", _params, socket) do
+    # Handle location clearing for poll suggestions - no action needed, just acknowledge
+    {:noreply, socket}
+  end
+
   def handle_event("one_click_register", _params, socket) do
     handle_event("register_with_status", %{"status" => "accepted"}, socket)
   end
