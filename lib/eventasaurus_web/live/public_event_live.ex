@@ -1585,15 +1585,6 @@ defmodule EventasaurusWeb.PublicEventLive do
                   <h4 class="text-lg font-semibold text-gray-900 mb-2">You're In</h4>
                   <p class="text-sm text-gray-600 mb-4">You're registered for this event</p>
 
-                  <div class="flex gap-2 mb-4">
-                    <button class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200">
-                      Add to Calendar
-                    </button>
-                    <button class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200">
-                      Share
-                    </button>
-                  </div>
-
                   <%= if @just_registered do %>
                     <!-- Email verification notice for newly registered users only -->
                     <div class="border-t border-gray-200 pt-4 mt-4 mb-4">
@@ -1675,14 +1666,6 @@ defmodule EventasaurusWeb.PublicEventLive do
                     </form>
                   </div>
 
-                  <div class="flex gap-2 mb-4">
-                    <button class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200">
-                      Add to Calendar
-                    </button>
-                    <button class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors duration-200">
-                      Share
-                    </button>
-                  </div>
 
                   <button
                     phx-click="manage_event"
@@ -1707,59 +1690,64 @@ defmodule EventasaurusWeb.PublicEventLive do
                aria-controls="mobile-secondary-actions"
                aria-label="Toggle sharing and calendar options"
              >
-               <span id="show-more-text">Show sharing options</span>
+               <span id="show-more-text">Share & Calendar</span>
                <svg id="show-more-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                </svg>
              </button>
            </div>
 
-                     <!-- Share buttons -->
-           <div id="mobile-secondary-actions" class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm mb-4">
-            <h3 class="text-base font-semibold mb-3 text-gray-900">Share this event</h3>
-            <div class="flex space-x-3">
-              <a href={"https://twitter.com/intent/tweet?text=Check out #{@event.title}&url=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" rel="noopener noreferrer" class="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.162 5.656a8.384 8.384 0 0 1-2.402.658A4.196 4.196 0 0 0 21.6 4c-.82.488-1.719.83-2.656 1.015a4.182 4.182 0 0 0-7.126 3.814 11.874 11.874 0 0 1-8.62-4.37 4.168 4.168 0 0 0-.566 2.103c0 1.45.738 2.731 1.86 3.481a4.168 4.168 0 0 1-1.894-.523v.052a4.185 4.185 0 0 0 3.355 4.101 4.21 4.21 0 0 1-1.89.072A4.185 4.185 0 0 0 7.97 16.65a8.394 8.394 0 0 1-6.191 1.732 11.83 11.83 0 0 0 6.41 1.88c7.693 0 11.9-6.373 11.9-11.9 0-.18-.005-.362-.013-.54a8.496 8.496 0 0 0 2.087-2.165z"/></svg>
-              </a>
-              <a href={"https://www.facebook.com/sharer/sharer.php?u=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" rel="noopener noreferrer" class="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.04c-5.5 0-10 4.49-10 10.02 0 5 3.66 9.15 8.44 9.9v-7H7.9v-2.9h2.54V9.85c0-2.51 1.49-3.89 3.78-3.89 1.09 0 2.23.19 2.23.19v2.47h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.45 2.9h-2.33v7a10 10 0 0 0 8.44-9.9c0-5.53-4.5-10.02-10-10.02z"/></svg>
-              </a>
-              <a href={"https://www.linkedin.com/sharing/share-offsite/?url=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" rel="noopener noreferrer" class="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>
-              </a>
-              <button id="copy-link-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors duration-200" data-clipboard-text={EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}"}>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </button>
+                     <!-- Combined Share & Calendar Section -->
+           <div id="mobile-secondary-actions" class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 class="text-base font-semibold mb-4 text-gray-900">Share & Calendar</h3>
+            
+            <!-- Share Section -->
+            <div class="mb-6">
+              <h4 class="text-sm font-medium text-gray-700 mb-3">Share this event</h4>
+              <div class="flex space-x-3">
+                <a href={"https://twitter.com/intent/tweet?text=Check out #{@event.title}&url=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition-colors duration-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.162 5.656a8.384 8.384 0 0 1-2.402.658A4.196 4.196 0 0 0 21.6 4c-.82.488-1.719.83-2.656 1.015a4.182 4.182 0 0 0-7.126 3.814 11.874 11.874 0 0 1-8.62-4.37 4.168 4.168 0 0 0-.566 2.103c0 1.45.738 2.731 1.86 3.481a4.168 4.168 0 0 1-1.894-.523v.052a4.185 4.185 0 0 0 3.355 4.101 4.21 4.21 0 0 1-1.89.072A4.185 4.185 0 0 0 7.97 16.65a8.394 8.394 0 0 1-6.191 1.732 11.83 11.83 0 0 0 6.41 1.88c7.693 0 11.9-6.373 11.9-11.9 0-.18-.005-.362-.013-.54a8.496 8.496 0 0 0 2.087-2.165z"/></svg>
+                </a>
+                <a href={"https://www.facebook.com/sharer/sharer.php?u=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition-colors duration-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.04c-5.5 0-10 4.49-10 10.02 0 5 3.66 9.15 8.44 9.9v-7H7.9v-2.9h2.54V9.85c0-2.51 1.49-3.89 3.78-3.89 1.09 0 2.23.19 2.23.19v2.47h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.45 2.9h-2.33v7a10 10 0 0 0 8.44-9.9c0-5.53-4.5-10.02-10-10.02z"/></svg>
+                </a>
+                <a href={"https://www.linkedin.com/sharing/share-offsite/?url=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition-colors duration-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>
+                </a>
+                <a href="#" id="copy-link-btn" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition-colors duration-200" data-clipboard-text={EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}"}>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </a>
+              </div>
             </div>
-          </div>
 
-                     <!-- Add to calendar -->
-           <div class="mobile-secondary-actions bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-            <h3 class="text-base font-semibold mb-3 text-gray-900">Add to calendar</h3>
-            <div class="flex flex-col space-y-2">
-              <a href={~p"/events/#{@event.slug}/calendar/google"} target="_blank" rel="noopener noreferrer" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
-                <!-- Google Calendar Icon -->
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
-                </svg>
-                Google Calendar
-              </a>
-              <a href={~p"/events/#{@event.slug}/calendar/ics"} download={"#{@event.slug}.ics"} class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
-                <!-- Apple Calendar Icon -->
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.75 3A3.25 3.25 0 0121 6.25v11.5A3.25 3.25 0 0117.75 21H6.25A3.25 3.25 0 013 17.75V6.25A3.25 3.25 0 016.25 3h11.5zm1.75 5.5h-15v9.25c0 .966.784 1.75 1.75 1.75h11.5a1.75 1.75 0 001.75-1.75V8.5zm-11.75 6a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm-8-4a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm2-6H6.25A1.75 1.75 0 004.5 6.25V7h15v-.75a1.75 1.75 0 00-1.75-1.75z"/>
-                </svg>
-                Apple Calendar
-              </a>
-              <a href={~p"/events/#{@event.slug}/calendar/outlook"} target="_blank" rel="noopener noreferrer" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
-                <!-- Outlook Icon -->
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10h5v-2h-5c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8v1.43c0 .79-.71 1.57-1.5 1.57s-1.5-.78-1.5-1.57V12c0-2.76-2.24-5-5-5s-5 2.24-5 5 2.24 5 5 5c1.38 0 2.64-.56 3.54-1.47.65.89 1.77 1.47 2.96 1.47 1.97 0 3.5-1.6 3.5-3.57V12c0-5.52-4.48-10-10-10zm0 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
-                </svg>
-                Outlook
-              </a>
+            <!-- Calendar Section -->
+            <div>
+              <h4 class="text-sm font-medium text-gray-700 mb-3">Add to calendar</h4>
+              <div class="flex flex-col space-y-2">
+                <a href={~p"/events/#{@event.slug}/calendar/google"} target="_blank" rel="noopener noreferrer" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
+                  <!-- Google Calendar Icon -->
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                  </svg>
+                  Google Calendar
+                </a>
+                <a href={~p"/events/#{@event.slug}/calendar/ics"} download={"#{@event.slug}.ics"} class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
+                  <!-- Apple Calendar Icon -->
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.75 3A3.25 3.25 0 0121 6.25v11.5A3.25 3.25 0 0117.75 21H6.25A3.25 3.25 0 013 17.75V6.25A3.25 3.25 0 016.25 3h11.5zm1.75 5.5h-15v9.25c0 .966.784 1.75 1.75 1.75h11.5a1.75 1.75 0 001.75-1.75V8.5zm-11.75 6a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm-8-4a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm2-6H6.25A1.75 1.75 0 004.5 6.25V7h15v-.75a1.75 1.75 0 00-1.75-1.75z"/>
+                  </svg>
+                  Apple Calendar
+                </a>
+                <a href={~p"/events/#{@event.slug}/calendar/outlook"} target="_blank" rel="noopener noreferrer" class="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors duration-200">
+                  <!-- Outlook Icon -->
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10h5v-2h-5c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8v1.43c0 .79-.71 1.57-1.5 1.57s-1.5-.78-1.5-1.57V12c0-2.76-2.24-5-5-5s-5 2.24-5 5 2.24 5 5 5c1.38 0 2.64-.56 3.54-1.47.65.89 1.77 1.47 2.96 1.47 1.97 0 3.5-1.6 3.5-3.57V12c0-5.52-4.48-10-10-10zm0 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
+                  </svg>
+                  Outlook
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -1812,7 +1800,8 @@ defmodule EventasaurusWeb.PublicEventLive do
 
          <script>
        // Simple clipboard functionality
-       document.getElementById('copy-link-btn').addEventListener('click', function() {
+       document.getElementById('copy-link-btn').addEventListener('click', function(e) {
+         e.preventDefault();
          const url = this.getAttribute('data-clipboard-text');
          navigator.clipboard.writeText(url).then(function() {
            alert('Link copied to clipboard!');
@@ -1850,7 +1839,7 @@ defmodule EventasaurusWeb.PublicEventLive do
 
              // Update accessibility attributes and UI
              toggleBtn.setAttribute('aria-expanded', !isExpanded);
-             showMoreText.textContent = isExpanded ? 'Show sharing options' : 'Hide sharing options';
+             showMoreText.textContent = isExpanded ? 'Share & Calendar' : 'Hide';
              showMoreIcon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
            });
          }
