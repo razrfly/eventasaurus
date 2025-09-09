@@ -411,7 +411,7 @@ defmodule Eventasaurus.Emails do
   defp build_event_url(event) do
     base_url = Application.get_env(:eventasaurus, :base_url) || get_default_base_url()
 
-    "#{base_url}/events/#{event.slug}"
+    "#{base_url}/#{event.slug}"
   end
 
   defp get_default_base_url do
