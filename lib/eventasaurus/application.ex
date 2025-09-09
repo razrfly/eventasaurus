@@ -59,6 +59,8 @@ defmodule Eventasaurus.Application do
       {Phoenix.PubSub, name: Eventasaurus.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Eventasaurus.Finch},
+      # Start Oban background job processor
+      {Oban, Application.fetch_env!(:eventasaurus, Oban)},
       # Add a Task Supervisor for background jobs
       {Task.Supervisor, name: Eventasaurus.TaskSupervisor},
       # Start PostHog analytics service
