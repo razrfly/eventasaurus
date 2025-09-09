@@ -7,7 +7,7 @@ import { TicketQR } from "./ticket_qr";
 import { MusicBrainzSearch } from "./musicbrainz_search";
 import { SpotifySearch } from "./spotify_search";
 
-// Import new modular components (shadow implementation - keeping existing code)
+// Import modular components
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
 import { initSupabaseClient, SupabaseAuthHandler } from "./auth/supabase-manager";
@@ -37,8 +37,7 @@ Hooks.SupabaseImageUpload = SupabaseImageUpload;
 
 
 
-// Merge modular hooks with existing hooks (shadow implementation)
-// This allows the new modular hooks to override the old implementations
+// Merge modular hooks with existing hooks
 const ModularHooks = {
   ...FormHooks,
   ...UIHooks,
@@ -112,16 +111,6 @@ document.addEventListener("DOMContentLoaded", function() {
   initSupabaseClient();
 });
 
-// City Search Hook for Poll Creation Component
-
-// Initialize modular components (shadow implementation)
-// Initialize clipboard functionality from the modular version
+// Initialize modular components
 initializeClipboard();
-
-// Initialize PostHog manager (if not already initialized by existing code)
-// The modular PostHogManager is already exposed as posthogManager above
-
-// Initialize Supabase client (if not already initialized by existing code)
-// This will use the modular version
-initSupabaseClient();
 
