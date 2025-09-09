@@ -77,6 +77,8 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
                 phx-click="toggle_expanded"
                 phx-target={@myself}
                 class="text-sm text-blue-600 hover:text-blue-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md px-2 py-1"
+                aria-expanded={@show_expanded}
+                aria-controls={"breakdown-#{@id}"}
               >
                 <%= if @show_expanded, do: "Hide details", else: "Show details" %>
               </button>
@@ -85,7 +87,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
 
           <!-- Expanded status breakdown -->
           <%= if @show_expanded && @has_breakdown do %>
-            <div class="expanded-breakdown border-t border-gray-200 pt-4 space-y-3">
+            <div id={"breakdown-#{@id}"} class="expanded-breakdown border-t border-gray-200 pt-4 space-y-3">
               <%= for {status, group} <- @participant_groups do %>
                 <.status_section
                   status={status}
@@ -152,7 +154,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           ]}
           role="img"
           aria-label={get_participant_name(participant)}
-          aria-describedby={"tooltip-#{participant.id}"}
+          aria-describedby={"tooltip-unified-#{participant.id}"}
           tabindex="0"
           style={"z-index: #{@max_avatars - index}"}
         >
@@ -166,8 +168,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           <!-- Tooltip on hover -->
           <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-white text-gray-900 text-xs rounded-md shadow-lg border border-gray-200 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
                role="tooltip"
-               id={"tooltip-#{participant.id}"}
-               aria-hidden="true">
+               id={"tooltip-unified-#{participant.id}"}>
             <%= get_participant_name(participant) %>
             <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"></div>
           </div>
@@ -201,7 +202,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           ]}
           role="img"
           aria-label={get_participant_name(participant)}
-          aria-describedby={"tooltip-#{participant.id}"}
+          aria-describedby={"tooltip-breakdown-#{@status}-#{participant.id}"}
           tabindex="0"
           style={"z-index: #{@max_avatars - index}"}
         >
@@ -215,8 +216,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           <!-- Tooltip on hover -->
           <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-white text-gray-900 text-xs rounded-md shadow-lg border border-gray-200 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
                role="tooltip"
-               id={"tooltip-#{participant.id}"}
-               aria-hidden="true">
+               id={"tooltip-breakdown-#{@status}-#{participant.id}"}>
             <%= get_participant_name(participant) %>
             <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"></div>
           </div>

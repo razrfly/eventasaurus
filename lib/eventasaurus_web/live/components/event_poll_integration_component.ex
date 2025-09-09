@@ -1892,11 +1892,10 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     # User can manage poll if they are:
     # 1. The poll creator
     # 2. An event organizer
-    # 3. The event creator
+    # 3. An event organizer
     cond do
       is_nil(user) -> false
       poll.created_by_id == user.id -> true
-      event.user_id == user.id -> true
       Events.user_is_organizer?(event, user) -> true
       true -> false
     end
