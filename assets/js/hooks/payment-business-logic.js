@@ -27,8 +27,10 @@ export const StripePaymentElements = {
       return;
     }
 
-    // Check if payment element container exists
-    const paymentContainer = document.getElementById('stripe-payment-element');
+    // Check if payment element container exists - scope to component first, fallback to global
+    const paymentContainer = 
+      this.el.querySelector('#stripe-payment-element') ||
+      document.getElementById('stripe-payment-element');
     if (!paymentContainer) {
       console.error("Stripe payment element container not found");
       this.pushEvent("payment_failed", {error: {message: "Payment form not available"}});
@@ -56,15 +58,17 @@ export const StripePaymentElements = {
     // Create and mount the Payment Element
     const paymentElement = elements.create('payment');
     try {
-      paymentElement.mount('#stripe-payment-element');
+      paymentElement.mount(paymentContainer);
     } catch (error) {
       console.error("Failed to mount payment element:", error);
       this.pushEvent("payment_failed", {error: {message: "Failed to initialize payment form"}});
       return;
     }
     
-    // Handle form submission
-    const submitButton = document.getElementById('stripe-submit-button');
+    // Handle form submission - scope to component first, fallback to global
+    const submitButton = 
+      this.el.querySelector('#stripe-submit-button') ||
+      document.getElementById('stripe-submit-button');
     if (submitButton) {
       this.handleSubmit = async (e) => {
         e.preventDefault();
@@ -131,7 +135,10 @@ export const TaxationTypeValidator = {
   mounted() {
     this.selectElement = this.el.querySelector('select');
     this.hiddenInput = this.el.querySelector('input[type="hidden"]');
-    this.priceDisplay = document.querySelector('[data-price-display]');
+    
+    // Scope to this component/form to avoid cross-form interference
+    const formRoot = this.el.closest('form') || this.el;
+    this.priceDisplay = formRoot.querySelector('[data-price-display]');
     this.isUpdating = false; // Prevent infinite loops
     
     if (!this.selectElement) {
@@ -155,8 +162,8 @@ export const TaxationTypeValidator = {
     // Listen for changes
     this.selectElement.addEventListener('change', this.handleTaxationChange);
     
-    // Listen for price updates from other components
-    document.addEventListener('price:updated', this.handlePriceUpdate);
+    // Listen for price updates from other components - scoped to element to avoid cross-form interference
+    this.el.addEventListener('price:updated', this.handlePriceUpdate);
   },
   
   destroyed() {
@@ -166,7 +173,7 @@ export const TaxationTypeValidator = {
     }
     
     if (this.handlePriceUpdate) {
-      document.removeEventListener('price:updated', this.handlePriceUpdate);
+      this.el.removeEventListener('price:updated', this.handlePriceUpdate);
     }
   },
   
@@ -227,8 +234,9 @@ export const TaxationTypeValidator = {
     // Update the display
     this.priceDisplay.textContent = this.formatPrice(finalPrice);
     
-    // Update tax breakdown if present
-    const taxBreakdown = document.querySelector('[data-tax-breakdown]');
+    // Update tax breakdown if present - scope to form/component
+    const formRoot = this.el.closest('form') || this.el;
+    const taxBreakdown = formRoot.querySelector('[data-tax-breakdown]');
     if (taxBreakdown) {
       if (taxAmount > 0) {
         taxBreakdown.innerHTML = `
@@ -244,7 +252,7 @@ export const TaxationTypeValidator = {
       }
     }
     
-    // Dispatch price update event only if values changed
+    // Dispatch scoped event and allow bubbling to ancestors if needed
     const eventDetail = {
       basePrice: basePrice,
       taxAmount: taxAmount,
@@ -254,7 +262,7 @@ export const TaxationTypeValidator = {
       source: 'taxation' // Identify source to prevent loops
     };
     
-    document.dispatchEvent(new CustomEvent('price:updated', { detail: eventDetail }));
+    this.el.dispatchEvent(new CustomEvent('price:updated', { detail: eventDetail, bubbles: true }));
     
     // Reset flag after a short delay to allow other handlers to process
     setTimeout(() => {
