@@ -2648,7 +2648,8 @@ Hooks.CitySearch = {
   },
   
   initCityAutocomplete() {
-    if (!this.mounted || !window.google || !window.google.maps || !window.google.maps.places) {
+    if (!this.mounted) return;
+    if (!window.google || !window.google.maps || !window.google.maps.places) {
       if (process.env.NODE_ENV !== 'production') console.log("Google Maps not loaded yet for CitySearch, waiting...");
       this.initRetryHandle = setTimeout(() => this.initCityAutocomplete(), 100);
       return;
@@ -2664,7 +2665,11 @@ Hooks.CitySearch = {
       // Listen for place selection
       this.autocomplete.addListener('place_changed', () => {
         const place = this.autocomplete.getPlace();
-        if (place && place.place_id && place.geometry && place.geometry.location) {
+        if (place && place.place_id) {
+          if (!place.geometry || !place.geometry.location) {
+            if (process.env.NODE_ENV !== 'production') console.warn('CitySearch: selected place missing geometry');
+            return;
+          }
           // Store the city data in the hidden input
           const cityData = {
             place_id: place.place_id,
