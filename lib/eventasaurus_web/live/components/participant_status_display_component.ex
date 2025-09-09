@@ -51,37 +51,41 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
       <%= if @total_attendees > 0 do %>
         <div class="space-y-4">
           <!-- Unified attendee display -->
-          <div class="unified-attendee-section flex items-center space-x-4">
-            <div class="attendee-info">
-              <span class="font-semibold text-lg text-gray-900">
-                <%= @total_attendees %>
-              </span>
-              <span class="text-sm text-gray-600 ml-1">
-                <%= if @total_attendees == 1, do: "Attendee", else: "Attendees" %>
-              </span>
+          <div class="unified-attendee-section space-y-3">
+            <!-- Attendee count and show details button -->
+            <div class="flex items-center justify-between">
+              <div class="attendee-info">
+                <span class="font-semibold text-lg text-gray-900">
+                  <%= @total_attendees %>
+                </span>
+                <span class="text-sm text-gray-600 ml-1">
+                  <%= if @total_attendees == 1, do: "Attendee", else: "Attendees" %>
+                </span>
+              </div>
+
+              <%= if @has_breakdown do %>
+                <button
+                  type="button"
+                  phx-click="toggle_expanded"
+                  phx-target={@myself}
+                  class="hidden md:block text-sm text-blue-600 hover:text-blue-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md px-2 py-1"
+                  aria-expanded={@show_expanded}
+                  aria-controls={"breakdown-#{@id}"}
+                >
+                  <%= if @show_expanded, do: "Hide details", else: "Show details" %>
+                </button>
+              <% end %>
             </div>
 
+            <!-- Avatars on their own line -->
             <%= if @show_avatars && length(@display_participants) > 0 do %>
-              <div class="participant-avatars flex-1">
+              <div class="participant-avatars">
                 <.unified_avatar_stack
                   participants={@display_participants}
                   max_avatars={@max_avatars}
                   avatar_size={@avatar_size}
                 />
               </div>
-            <% end %>
-
-            <%= if @has_breakdown do %>
-              <button
-                type="button"
-                phx-click="toggle_expanded"
-                phx-target={@myself}
-                class="text-sm text-blue-600 hover:text-blue-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md px-2 py-1"
-                aria-expanded={@show_expanded}
-                aria-controls={"breakdown-#{@id}"}
-              >
-                <%= if @show_expanded, do: "Hide details", else: "Show details" %>
-              </button>
             <% end %>
           </div>
 
@@ -154,7 +158,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           ]}
           role="img"
           aria-label={get_participant_name(participant)}
-          aria-describedby={"tooltip-unified-#{participant.id}"}
+          aria-describedby={"tooltip-unified-#{@id}-#{participant.id}"}
           tabindex="0"
           style={"z-index: #{@max_avatars - index}"}
         >
@@ -168,7 +172,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           <!-- Tooltip on hover -->
           <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-white text-gray-900 text-xs rounded-md shadow-lg border border-gray-200 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
                role="tooltip"
-               id={"tooltip-unified-#{participant.id}"}>
+               id={"tooltip-unified-#{@id}-#{participant.id}"}>
             <%= get_participant_name(participant) %>
             <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"></div>
           </div>
@@ -202,7 +206,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           ]}
           role="img"
           aria-label={get_participant_name(participant)}
-          aria-describedby={"tooltip-breakdown-#{@status}-#{participant.id}"}
+          aria-describedby={"tooltip-breakdown-#{@id}-#{@status}-#{participant.id}"}
           tabindex="0"
           style={"z-index: #{@max_avatars - index}"}
         >
@@ -216,7 +220,7 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
           <!-- Tooltip on hover -->
           <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-white text-gray-900 text-xs rounded-md shadow-lg border border-gray-200 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50"
                role="tooltip"
-               id={"tooltip-breakdown-#{@status}-#{participant.id}"}>
+               id={"tooltip-breakdown-#{@id}-#{@status}-#{participant.id}"}>
             <%= get_participant_name(participant) %>
             <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"></div>
           </div>
