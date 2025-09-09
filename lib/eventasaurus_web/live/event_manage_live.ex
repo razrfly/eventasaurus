@@ -457,35 +457,39 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("send_participant_email", %{"participant_id" => participant_id}, socket) do
-    participant_id = String.to_integer(participant_id)
-    event = socket.assigns.event
-    organizer = socket.assigns.user
+    with {:ok, participant_id} <- safe_string_to_integer(participant_id) do
+      event = socket.assigns.event
+      organizer = socket.assigns.user
+      
+      # Find the participant
+      participant = Enum.find(socket.assigns.participants, &(&1.id == participant_id))
 
-    # Find the participant
-    participant = Enum.find(socket.assigns.participants, &(&1.id == participant_id))
+      if participant && participant.user do
+        case Events.queue_single_participant_email(participant, event, organizer) do
+          {:ok, _job} ->
+            updated_participants = Events.list_event_participants(event, limit: socket.assigns.participants_loaded)
+                                 |> Enum.sort_by(& &1.inserted_at, :desc)
 
-    if participant && participant.user do
-      # Use the same Oban queue system as the bulk invitations
-      case Events.queue_single_participant_email(participant, event, organizer) do
-        {:ok, _job} ->
-          # Refresh participants to show updated email status
-          updated_participants = Events.list_event_participants(event, limit: socket.assigns.participants_loaded)
-                               |> Enum.sort_by(& &1.inserted_at, :desc)
+            {:noreply,
+             socket
+             |> assign_participants_with_stats(updated_participants)
+             |> assign(:open_participant_menu, nil)
+             |> put_flash(:info, "Email queued for #{participant.user.name || participant.user.email}")}
 
-          {:noreply,
-           socket
-           |> assign_participants_with_stats(updated_participants)
-           |> put_flash(:info, "Email queued for #{participant.user.name || participant.user.email}")}
-
-        {:error, reason} ->
-          {:noreply,
-           socket
-           |> put_flash(:error, "Failed to queue email: #{reason}")}
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> assign(:open_participant_menu, nil)
+             |> put_flash(:error, "Failed to queue email: #{reason}")}
+        end
+      else
+        {:noreply,
+         socket
+         |> assign(:open_participant_menu, nil)
+         |> put_flash(:error, "Participant not found or has no email")}
       end
     else
-      {:noreply,
-       socket
-       |> put_flash(:error, "Participant not found or has no email")}
+      _ -> {:noreply, put_flash(socket, :error, "Invalid participant ID")}
     end
   end
 
