@@ -493,6 +493,7 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
                                 placeholder={get_title_placeholder(@poll)}
                                 phx-hook="PlacesSuggestionSearch"
                                 data-location-scope={get_location_scope(@poll)}
+                                data-search-location={get_search_location_json(@poll)}
                                 autocomplete="off"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                 required
@@ -760,6 +761,19 @@ defmodule EventasaurusWeb.PublicGenericPollComponent do
   # Helper function to get location scope from poll settings
   defp get_location_scope(poll) do
     Poll.get_location_scope(poll)
+  end
+
+  # Helper function to get search location data as JSON for JavaScript
+  defp get_search_location_json(poll) do
+    if poll && poll.settings do
+      case Map.get(poll.settings, "search_location_data") do
+        data when is_map(data) -> Jason.encode!(data)
+        data when is_binary(data) -> data
+        _ -> ""
+      end
+    else
+      ""
+    end
   end
 
 end
