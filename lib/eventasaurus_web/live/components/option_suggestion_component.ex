@@ -1534,6 +1534,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
+  # NOTE: poll_location_selected event handler removed - now using form-based submission
+  # Place selection data is sent via hidden form fields (external_data, external_id, place_id)
+  # and processed through the normal form submission flow in create_option
+
   @impl true
   def handle_event("validate_suggestion", %{"poll_option" => option_params}, socket) do
     changeset = create_option_changeset(socket, option_params)
@@ -2775,4 +2779,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       ""
     end
   end
+
+  # Helper function to extract image URL from place data
 end
