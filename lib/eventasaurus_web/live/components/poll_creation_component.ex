@@ -617,6 +617,25 @@ defmodule EventasaurusWeb.PollCreationComponent do
   end
 
   @impl true
+  def handle_event("city_selected", %{"city" => city_data}, socket) do
+    # Get existing changeset parameters and merge with city data
+    current_params = socket.assigns.changeset.params || %{}
+    current_settings = get_in(current_params, ["settings"]) || %{}
+    
+    # Update settings with selected city data
+    updated_settings = Map.merge(current_settings, %{
+      "search_location" => city_data["name"],
+      "search_location_data" => city_data
+    })
+    
+    # Create new poll_params with updated settings
+    poll_params = Map.merge(current_params, %{"settings" => updated_settings})
+    
+    changeset = create_changeset(socket, poll_params)
+    {:noreply, assign(socket, :changeset, changeset)}
+  end
+
+  @impl true
   def handle_event("toggle_advanced_options", _params, socket) do
     {:noreply, assign(socket, :show_advanced_options, !socket.assigns.show_advanced_options)}
   end
