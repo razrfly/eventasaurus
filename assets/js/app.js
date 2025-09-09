@@ -2819,8 +2819,6 @@ Hooks.CitySearch = {
 // DEPRECATED: PlacesSuggestionSearch - Now uses UnifiedGooglePlaces
 // This is kept for backward compatibility but delegates to the unified hook
 Hooks.PlacesSuggestionSearch = {
-  ...Hooks.UnifiedGooglePlaces,
-  
   mounted() {
     // Set mode for unified hook
     this.el.dataset.mode = 'poll';
@@ -2829,8 +2827,13 @@ Hooks.PlacesSuggestionSearch = {
     
     // Location scope and search location are already in dataset from the template
     
-    // Delegate to unified hook
-    Hooks.UnifiedGooglePlaces.mounted.call(this);
+    // Delegate to unified hook - copy all methods first
+    Object.assign(this, Hooks.UnifiedGooglePlaces);
+    
+    // Call the mounted method
+    if (Hooks.UnifiedGooglePlaces.mounted) {
+      Hooks.UnifiedGooglePlaces.mounted.call(this);
+    }
   }
 };
 
