@@ -534,6 +534,63 @@ defmodule EventasaurusWeb.PollCreationComponent do
                     </div>
                   </div>
 
+                  <!-- Option Removal Settings -->
+                  <div class="bg-orange-50 p-4 rounded-lg mt-4">
+                    <h4 class="text-sm font-medium text-gray-900 mb-3">Option Removal Settings</h4>
+                    
+                    <div class="space-y-4">
+                      <!-- Option Removal Strategy -->
+                      <div>
+                        <label for="option_removal_strategy" class="block text-sm font-medium text-gray-700 mb-2">
+                          When can users remove their own suggestions?
+                        </label>
+                        <div class="mt-1 relative">
+                          <select
+                            name="poll[settings][option_removal_strategy]"
+                            id="option_removal_strategy"
+                            class="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                          >
+                            <%= for strategy <- Poll.option_removal_strategies() do %>
+                              <option
+                                value={strategy}
+                                selected={get_option_removal_strategy_setting(@changeset, @poll) == strategy}
+                              >
+                                <%= Poll.option_removal_strategy_display(strategy) %>
+                              </option>
+                            <% end %>
+                          </select>
+                          <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                            <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                          </div>
+                        </div>
+                        <p class="mt-2 text-xs text-gray-500">
+                          <strong>Until someone votes on it:</strong> Users can remove their suggestions as long as nobody has voted on them (recommended)<br>
+                          <strong>For a limited time only:</strong> Users have a set amount of time to remove their suggestions<br>
+                          <strong>Never:</strong> Users cannot remove their suggestions once posted
+                        </p>
+                      </div>
+
+                      <!-- Time Limit (only show for time_based strategy) -->
+                      <div id="time_limit_section" style={"display: #{if get_option_removal_strategy_setting(@changeset, @poll) == "time_based", do: "block", else: "none"}"}>
+                        <label for="option_removal_time_limit" class="block text-sm font-medium text-gray-700">
+                          Time Limit (minutes)
+                        </label>
+                        <input
+                          type="number"
+                          name="poll[settings][option_removal_time_limit]"
+                          id="option_removal_time_limit"
+                          value={get_option_removal_time_limit_setting(@changeset, @poll)}
+                          min="1"
+                          max="1440"
+                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        />
+                        <p class="mt-1 text-xs text-gray-500">How many minutes users have to remove their suggestions (max: 24 hours)</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- Deadlines -->
                   <div class="bg-blue-50 p-4 rounded-lg">
                     <h4 class="text-sm font-medium text-gray-900 mb-3">Deadlines (Optional)</h4>
@@ -1009,4 +1066,44 @@ defmodule EventasaurusWeb.PollCreationComponent do
         end
     end
   end
+
+  # Helper function to get option removal strategy setting from changeset or poll
+  defp get_option_removal_strategy_setting(changeset, poll) do
+    settings = Ecto.Changeset.get_field(changeset, :settings) || %{}
+
+    case Map.get(settings, "option_removal_strategy") do
+      strategy when strategy in ["vote_based", "time_based", "disabled"] ->
+        strategy
+
+      _ ->
+        # Fallback to poll's existing setting or default (vote_based)
+        if poll do
+          Poll.get_option_removal_strategy(poll)
+        else
+          "vote_based"
+        end
+    end
+  end
+
+  # Helper function to get option removal time limit setting from changeset or poll
+  defp get_option_removal_time_limit_setting(changeset, poll) do
+    settings = Ecto.Changeset.get_field(changeset, :settings) || %{}
+
+    case Map.get(settings, "option_removal_time_limit") do
+      v when is_integer(v) and v > 0 ->
+        v
+
+      v when is_binary(v) ->
+        case Integer.parse(v) do
+          {int, ""} when int > 0 -> int
+          _ -> fallback_option_removal_time_limit(poll)
+        end
+
+      _ ->
+        fallback_option_removal_time_limit(poll)
+    end
+  end
+
+  defp fallback_option_removal_time_limit(nil), do: 5
+  defp fallback_option_removal_time_limit(poll), do: Poll.get_option_removal_time_limit(poll)
 end

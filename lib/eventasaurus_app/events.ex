@@ -4387,6 +4387,50 @@ defmodule EventasaurusApp.Events do
 
   def can_delete_own_suggestion?(_, _), do: false
 
+  @doc """
+  Checks if a user can delete their own poll option based on the poll's configured removal settings.
+  
+  Returns true if:
+  - The user is the one who suggested the option
+  - The poll's removal strategy allows deletion (not "disabled")
+  - For "time_based" strategy: option was created within the configured time limit
+  - For "vote_based" strategy: no votes have been cast on this option
+  """
+  def can_delete_option_based_on_poll_settings?(%PollOption{} = poll_option, %User{} = user) do
+    with %Poll{} = poll <- get_poll!(poll_option.poll_id) do
+      # User must be the one who suggested the option
+      if poll_option.suggested_by_id == user.id do
+        check_removal_strategy_allows_deletion?(poll, poll_option)
+      else
+        false
+      end
+    else
+      _ -> false
+    end
+  end
+
+  def can_delete_option_based_on_poll_settings?(_, _), do: false
+
+  # Private helper to check if poll strategy allows deletion
+  defp check_removal_strategy_allows_deletion?(%Poll{} = poll, %PollOption{} = poll_option) do
+    case Poll.get_option_removal_strategy(poll) do
+      "disabled" -> 
+        false
+      
+      "time_based" ->
+        time_limit_minutes = Poll.get_option_removal_time_limit(poll)
+        time_limit_seconds = time_limit_minutes * 60
+        NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) < time_limit_seconds
+      
+      "vote_based" ->
+        # Check if any votes exist on this option
+        vote_count = from(v in PollVote, where: v.poll_option_id == ^poll_option.id)
+        |> Repo.aggregate(:count, :id)
+        
+        vote_count == 0
+    end
+  end
+
   # =================
   # Date Selection Poll Options
   # =================
