@@ -684,6 +684,57 @@ defmodule EventasaurusApp.Events.Poll do
     %{poll | settings: new_settings}
   end
 
+  @doc """
+  Get option removal strategy for this poll.
+  Returns "vote_based" (default), "time_based", or "disabled".
+  """
+  def get_option_removal_strategy(%__MODULE__{settings: nil}), do: "vote_based"
+
+  def get_option_removal_strategy(%__MODULE__{settings: settings}) do
+    Map.get(settings, "option_removal_strategy", "vote_based")
+  end
+
+  @doc """
+  Set option removal strategy for this poll.
+  """
+  def set_option_removal_strategy(%__MODULE__{settings: settings} = poll, strategy)
+      when strategy in ["vote_based", "time_based", "disabled"] do
+    new_settings = Map.put(settings || %{}, "option_removal_strategy", strategy)
+    %{poll | settings: new_settings}
+  end
+
+  @doc """
+  Get option removal time limit in minutes for this poll.
+  Returns configured time limit (defaults to 5) for time-based removal.
+  """
+  def get_option_removal_time_limit(%__MODULE__{settings: nil}), do: 5
+
+  def get_option_removal_time_limit(%__MODULE__{settings: settings}) do
+    Map.get(settings, "option_removal_time_limit", 5)
+  end
+
+  @doc """
+  Set option removal time limit in minutes for this poll.
+  """
+  def set_option_removal_time_limit(%__MODULE__{settings: settings} = poll, time_limit)
+      when is_integer(time_limit) and time_limit > 0 do
+    new_settings = Map.put(settings || %{}, "option_removal_time_limit", time_limit)
+    %{poll | settings: new_settings}
+  end
+
+  @doc """
+  Get all valid option removal strategies.
+  """
+  def option_removal_strategies, do: ~w(vote_based time_based disabled)
+
+  @doc """
+  Get display name for option removal strategy.
+  """
+  def option_removal_strategy_display("vote_based"), do: "Until someone votes on it"
+  def option_removal_strategy_display("time_based"), do: "For a limited time only"
+  def option_removal_strategy_display("disabled"), do: "Never (disabled)"
+  def option_removal_strategy_display(strategy), do: String.capitalize(strategy)
+
   # Private helper to normalize settings
   defp normalize_settings(nil), do: %{}
 
@@ -784,6 +835,29 @@ defmodule EventasaurusApp.Events.Poll do
           Map.delete(settings, "search_location_data")
       end
 
+    # Normalize option_removal_strategy if present
+    settings =
+      case Map.get(settings, "option_removal_strategy") do
+        nil -> settings
+        strategy when strategy in ["vote_based", "time_based", "disabled"] -> settings
+        # Invalid strategy, default to vote_based
+        _ -> Map.put(settings, "option_removal_strategy", "vote_based")
+      end
+
+    # Normalize option_removal_time_limit if present
+    settings =
+      case Map.get(settings, "option_removal_time_limit") do
+        nil -> settings
+        value when is_integer(value) and value > 0 -> settings
+        value when is_binary(value) ->
+          case Integer.parse(value) do
+            {parsed, ""} when parsed > 0 -> Map.put(settings, "option_removal_time_limit", parsed)
+            _ -> Map.put(settings, "option_removal_time_limit", 5)
+          end
+        # Invalid type or value, default to 5
+        _ -> Map.put(settings, "option_removal_time_limit", 5)
+      end
+
     settings
   end
 
@@ -797,6 +871,8 @@ defmodule EventasaurusApp.Events.Poll do
     |> validate_location_scope_setting(settings)
     |> validate_max_rankings_setting(settings)
     |> validate_show_current_standings_setting(settings)
+    |> validate_option_removal_strategy_setting(settings)
+    |> validate_option_removal_time_limit_setting(settings)
   end
 
   defp validate_location_scope_setting(changeset, settings) do
@@ -831,6 +907,22 @@ defmodule EventasaurusApp.Events.Poll do
       nil -> changeset
       value when is_boolean(value) -> changeset
       _ -> add_error(changeset, :settings, "show_current_standings must be a boolean")
+    end
+  end
+
+  defp validate_option_removal_strategy_setting(changeset, settings) do
+    case Map.get(settings, "option_removal_strategy") do
+      nil -> changeset
+      strategy when strategy in ["vote_based", "time_based", "disabled"] -> changeset
+      _ -> add_error(changeset, :settings, "option_removal_strategy must be one of: vote_based, time_based, disabled")
+    end
+  end
+
+  defp validate_option_removal_time_limit_setting(changeset, settings) do
+    case Map.get(settings, "option_removal_time_limit") do
+      nil -> changeset
+      value when is_integer(value) and value > 0 -> changeset
+      _ -> add_error(changeset, :settings, "option_removal_time_limit must be a positive integer")
     end
   end
 end

@@ -352,7 +352,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <% end %>
             
             <!-- Delete button for user's own suggestions -->
-            <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+            <%= if option.suggested_by && @user && Events.can_delete_option_based_on_poll_settings?(option, @user) do %>
               <div class="mt-2 flex items-center space-x-2">
                 <button
                   type="button"
@@ -544,7 +544,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <% end %>
             
             <!-- Delete button for user's own suggestions -->
-            <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+            <%= if option.suggested_by && @user && Events.can_delete_option_based_on_poll_settings?(option, @user) do %>
               <div class="mt-2 flex items-center space-x-2">
                 <button
                   type="button"
@@ -830,7 +830,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
                     <% end %>
                     
                     <!-- Delete button for user's own suggestions -->
-                    <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+                    <%= if option.suggested_by && @user && Events.can_delete_option_based_on_poll_settings?(option, @user) do %>
                       <div class="mt-2 flex items-center space-x-2">
                         <button
                           type="button"
@@ -936,7 +936,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
             <% end %>
             
             <!-- Delete button for user's own suggestions -->
-            <%= if option.suggested_by && @user && Events.can_delete_own_suggestion?(option, @user) do %>
+            <%= if option.suggested_by && @user && Events.can_delete_option_based_on_poll_settings?(option, @user) do %>
               <div class="mt-2 flex items-center space-x-2">
                 <button
                   type="button"
@@ -1320,7 +1320,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   def handle_event("delete_option", %{"option-id" => option_id}, socket) do
     with {option_id_int, _} <- Integer.parse(option_id),
          option when not is_nil(option) <- Enum.find(socket.assigns.poll.poll_options, &(&1.id == option_id_int)),
-         true <- Events.can_delete_own_suggestion?(option, socket.assigns.user) do
+         true <- Events.can_delete_option_based_on_poll_settings?(option, socket.assigns.user) do
       
       case Events.delete_poll_option(option) do
         {:ok, _} ->
@@ -1877,7 +1877,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
   defp get_deletion_time_remaining(inserted_at) do
     elapsed_seconds = NaiveDateTime.diff(NaiveDateTime.utc_now(), inserted_at, :second)
-    # Use < 300 to match can_delete_own_suggestion? boundary condition (≤ 300)
+    # Use < 300 to match original time-based deletion boundary condition (≤ 300)
     # When elapsed_seconds = 300, remaining = 0, so button disappears at same time as countdown
     max(0, 300 - elapsed_seconds)  # 300 seconds = 5 minutes
   end
