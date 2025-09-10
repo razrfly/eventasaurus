@@ -164,6 +164,10 @@
                 <% end %>
                 <div class="mt-2 flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
                   <span><%= group.event_count %> <%= if group.event_count == 1, do: "event", else: "events" %></span>
+                  <%= if group.visibility != "private" do %>
+                    <span>•</span>
+                    <span><%= group.member_count %> <%= if group.member_count == 1, do: "member", else: "members" %></span>
+                  <% end %>
                   <span
                     class="text-xs relative group/tooltip cursor-help"
                     tabindex="0"

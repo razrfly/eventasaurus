@@ -142,6 +142,16 @@ defmodule EventasaurusApp.Groups do
     
     event_count_map = Repo.all(event_counts) |> Map.new()
     
+    # Get member counts for each group
+    member_counts = 
+      from(gu in GroupUser,
+        where: gu.group_id in ^group_ids,
+        group_by: gu.group_id,
+        select: {gu.group_id, count(gu.id)}
+      )
+    
+    member_count_map = Repo.all(member_counts) |> Map.new()
+    
     # Combine results and filter based on discoverability
     results
     |> Enum.filter(fn %{group: group, is_member: _is_member} ->
@@ -150,6 +160,7 @@ defmodule EventasaurusApp.Groups do
     |> Enum.map(fn %{group: group, is_member: is_member, user_role: user_role} ->
       Map.merge(group, %{
         event_count: Map.get(event_count_map, group.id, 0),
+        member_count: Map.get(member_count_map, group.id, 0),
         is_member: is_member,
         user_role: user_role
       })
@@ -1390,8 +1401,6 @@ defmodule EventasaurusApp.Groups do
       {:error, _} = e -> e
       true -> {:error, :already_member}
       {:ok, :immediate} -> {:error, :not_required}
-      {:error, :invite_only} -> {:error, :invite_only}
-      {:error, :cannot_view} -> {:error, :cannot_view}
       nil -> {:error, :not_found}
     end
   end
