@@ -103,6 +103,71 @@ window.liveSocket = liveSocket;
 
 // Initialize components on page load
 document.addEventListener("DOMContentLoaded", function() {
+  // Handle Supabase Auth Callback FIRST (critical for password reset links)
+  if (window.location.hash && window.location.hash.includes("access_token")) {
+    console.log('Processing Supabase auth tokens from URL hash...');
+    // Parse hash params
+    const hashParams = window.location.hash.substring(1).split("&").reduce((acc, pair) => {
+      const [key, value] = pair.split("=");
+      acc[key] = decodeURIComponent(value);
+      return acc;
+    }, {});
+
+    console.log('Parsed hash params:', Object.keys(hashParams));
+
+    // Check for required tokens
+    if (hashParams.access_token) {
+      console.log('Found access_token, creating form to submit to callback...');
+      
+      // Create a form to post the tokens
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/auth/callback";
+      form.style.display = "none";
+
+      // Add CSRF token (Phoenix default meta tag)
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+      if (csrfToken) {
+        const csrfInput = document.createElement("input");
+        csrfInput.type = "hidden";
+        csrfInput.name = "_csrf_token";
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+      }
+
+      // Add the tokens
+      const accessTokenInput = document.createElement("input");
+      accessTokenInput.type = "hidden";
+      accessTokenInput.name = "access_token";
+      accessTokenInput.value = hashParams.access_token;
+      form.appendChild(accessTokenInput);
+
+      if (hashParams.refresh_token) {
+        const refreshTokenInput = document.createElement("input");
+        refreshTokenInput.type = "hidden";
+        refreshTokenInput.name = "refresh_token";
+        refreshTokenInput.value = hashParams.refresh_token;
+        form.appendChild(refreshTokenInput);
+      }
+
+      // Add callback type
+      const typeInput = document.createElement("input");
+      typeInput.type = "hidden";
+      typeInput.name = "type";
+      typeInput.value = hashParams.type || "unknown";
+      form.appendChild(typeInput);
+
+      // Submit form to handle tokens server-side
+      document.body.appendChild(form);
+      console.log('Submitting auth callback form...');
+      form.submit();
+
+      // Remove hash from URL (to prevent tokens from staying in browser history)
+      window.history.replaceState(null, null, window.location.pathname);
+      return; // Exit early, form submission will navigate away
+    }
+  }
+
   // Initialize PostHog analytics with privacy checks
   posthogManager.showPrivacyBanner();
   posthogManager.init();
