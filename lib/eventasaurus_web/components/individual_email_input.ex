@@ -109,13 +109,15 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
           </summary>
           
           <div class="mt-3 space-y-2">
-            <textarea
-              id={"#{@id}-bulk-input"}
-              rows="3"
-              placeholder="Paste multiple emails separated by commas or new lines:&#10;user1@example.com, user2@example.com&#10;user3@example.com"
-              class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              phx-change="bulk_email_input"
-            ></textarea>
+            <form phx-change="bulk_email_input">
+              <textarea
+                id={"#{@id}-bulk-input"}
+                name="bulk_email_input"
+                rows="3"
+                placeholder="Paste multiple emails separated by commas or new lines:&#10;user1@example.com, user2@example.com&#10;user3@example.com"
+                class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              ></textarea>
+            </form>
             
             <button
               type="button"
