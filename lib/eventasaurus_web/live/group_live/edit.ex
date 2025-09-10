@@ -30,11 +30,11 @@ defmodule EventasaurusWeb.GroupLive.Edit do
              |> redirect(to: "/groups")}
           
           group ->
-            # Check if user is the creator
-            if group.created_by_id != user.id do
+            # Check if user can manage the group (creator or admin)
+            if not Groups.can_manage?(group, user) do
               {:ok,
                socket
-               |> put_flash(:error, "Only the group creator can edit the group.")
+               |> put_flash(:error, "You don't have permission to edit this group.")
                |> redirect(to: "/groups/#{group.slug}")}
             else
               changeset = Groups.change_group(group)
