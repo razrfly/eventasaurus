@@ -11,21 +11,34 @@ defmodule EventasaurusApp.Auth.ServerAuth do
   alias EventasaurusApp.Auth.Client
   
   @doc """
-  Exchange an authorization code for tokens using Supabase's server-side API.
+  Exchange an authorization code for tokens using OAuth2 standard flow.
   
   This is the secure, server-side equivalent of client-side token extraction.
+  Uses proper OAuth2 authorization code flow with Basic authentication.
   """
   def exchange_code_for_tokens(code) do
     url = "#{get_auth_url()}/token?grant_type=authorization_code"
     
-    body = Jason.encode!(%{
-      code: code
+    # Get the site URL from config for redirect_uri parameter
+    site_url = get_config()[:auth][:site_url] || "https://eventasaur.us"
+    redirect_uri = "#{site_url}/auth/callback"
+    
+    # Use form-encoded body for OAuth2 standard
+    body = URI.encode_query(%{
+      "grant_type" => "authorization_code",
+      "code" => code,
+      "redirect_uri" => redirect_uri
     })
     
+    # Use OAuth2 Basic authentication with client credentials
+    api_key = get_api_key()
+    service_key = get_service_role_key() || api_key
+    basic_auth = Base.encode64("#{api_key}:#{service_key}")
+    
     headers = [
-      {"Content-Type", "application/json"},
-      {"Authorization", "Bearer #{get_api_key()}"},
-      {"apikey", get_api_key()}
+      {"Content-Type", "application/x-www-form-urlencoded"},
+      {"Authorization", "Basic #{basic_auth}"},
+      {"Accept", "application/json"}
     ]
     
     Logger.info("Exchanging authorization code for tokens: #{url}")
