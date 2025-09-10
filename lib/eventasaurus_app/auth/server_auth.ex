@@ -24,21 +24,26 @@ defmodule EventasaurusApp.Auth.ServerAuth do
     
     headers = [
       {"Content-Type", "application/json"},
-      {"Authorization", "Bearer #{get_service_role_key()}"},
-      {"apikey", get_service_role_key()}
+      {"Authorization", "Bearer #{get_api_key()}"},
+      {"apikey", get_api_key()}
     ]
     
     Logger.info("Exchanging authorization code for tokens: #{url}")
     
-    case HTTPoison.post(url, body, headers) do
+    case HTTPoison.post(url, body, headers, timeout: 5_000, recv_timeout: 8_000) do
       {:ok, %{status_code: 200, body: response_body}} ->
-        response = Jason.decode!(response_body)
-        Logger.info("Successfully exchanged code for tokens")
-        {:ok, response}
+        with {:ok, response} <- Jason.decode(response_body) do
+          Logger.info("Successfully exchanged code for tokens")
+          {:ok, response}
+        else
+          {:error, decode_err} ->
+            Logger.error("JSON decode error during code exchange: #{inspect(decode_err)}")
+            {:error, %{message: "Invalid response from authentication service"}}
+        end
         
-      {:ok, %{status_code: code, body: response_body}} ->
-        Logger.error("Code exchange failed with status #{code}: #{response_body}")
-        {:error, %{status: code, message: "Failed to exchange code for tokens"}}
+      {:ok, %{status_code: status, body: response_body}} ->
+        Logger.error("Code exchange failed with status #{status}: #{response_body}")
+        {:error, %{status: status, message: "Failed to exchange code for tokens"}}
         
       {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.error("HTTP error during code exchange: #{inspect(reason)}")
@@ -71,14 +76,14 @@ defmodule EventasaurusApp.Auth.ServerAuth do
     
     Logger.info("Requesting password reset with proper redirect: #{url} with redirect_to: #{redirect_url}")
     
-    case HTTPoison.post(url, body, headers) do
+    case HTTPoison.post(url, body, headers, timeout: 5_000, recv_timeout: 8_000) do
       {:ok, %{status_code: status}} when status in [200, 204] ->
         Logger.info("Password reset request successful for email: #{email}")
         {:ok, %{email: email}}
         
-      {:ok, %{status_code: code, body: response_body}} ->
-        Logger.error("Password reset request failed with status #{code}: #{response_body}")
-        {:error, %{status: code, message: "Failed to request password reset"}}
+      {:ok, %{status_code: status, body: response_body}} ->
+        Logger.error("Password reset request failed with status #{status}: #{response_body}")
+        {:error, %{status: status, message: "Failed to request password reset"}}
         
       {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.error("HTTP error during password reset request: #{inspect(reason)}")
@@ -99,15 +104,20 @@ defmodule EventasaurusApp.Auth.ServerAuth do
       {"apikey", get_api_key()}
     ]
     
-    case HTTPoison.get(url, headers) do
+    case HTTPoison.get(url, headers, timeout: 5_000, recv_timeout: 8_000) do
       {:ok, %{status_code: 200, body: response_body}} ->
-        user = Jason.decode!(response_body)
-        Logger.debug("Successfully retrieved user data")
-        {:ok, user}
+        with {:ok, user} <- Jason.decode(response_body) do
+          Logger.debug("Successfully retrieved user data")
+          {:ok, user}
+        else
+          {:error, decode_err} ->
+            Logger.error("JSON decode error getting user data: #{inspect(decode_err)}")
+            {:error, %{message: "Invalid user response"}}
+        end
         
-      {:ok, %{status_code: code, body: response_body}} ->
-        Logger.error("Failed to get user data with status #{code}: #{response_body}")
-        {:error, %{status: code, message: "Failed to get user data"}}
+      {:ok, %{status_code: status, body: response_body}} ->
+        Logger.error("Failed to get user data with status #{status}: #{response_body}")
+        {:error, %{status: status, message: "Failed to get user data"}}
         
       {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.error("HTTP error getting user data: #{inspect(reason)}")
@@ -133,15 +143,20 @@ defmodule EventasaurusApp.Auth.ServerAuth do
     
     Logger.info("Updating password with recovery token")
     
-    case HTTPoison.put(url, body, headers) do
+    case HTTPoison.put(url, body, headers, timeout: 5_000, recv_timeout: 8_000) do
       {:ok, %{status_code: 200, body: response_body}} ->
-        user = Jason.decode!(response_body)
-        Logger.info("Password updated successfully")
-        {:ok, user}
+        with {:ok, user} <- Jason.decode(response_body) do
+          Logger.info("Password updated successfully")
+          {:ok, user}
+        else
+          {:error, decode_err} ->
+            Logger.error("JSON decode error updating password: #{inspect(decode_err)}")
+            {:error, %{message: "Invalid response from authentication service"}}
+        end
         
-      {:ok, %{status_code: code, body: response_body}} ->
-        Logger.error("Password update failed with status #{code}: #{response_body}")
-        {:error, %{status: code, message: "Failed to update password"}}
+      {:ok, %{status_code: status, body: response_body}} ->
+        Logger.error("Password update failed with status #{status}: #{response_body}")
+        {:error, %{status: status, message: "Failed to update password"}}
         
       {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.error("HTTP error updating password: #{inspect(reason)}")
