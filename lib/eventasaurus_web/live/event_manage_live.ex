@@ -320,13 +320,23 @@ defmodule EventasaurusWeb.EventManageLive do
   def handle_event("add_bulk_emails", _params, socket) do
     bulk_input = Map.get(socket.assigns, :bulk_email_input, "")
     
-    new_emails = 
+    existing_set = MapSet.new(Enum.map(socket.assigns.manual_emails, &normalize_email/1))
+    new_emails =
       bulk_input
-      |> String.split(~r/[,\n]/)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
-      |> Enum.filter(&valid_email?/1)
-      |> Enum.reject(&(&1 in socket.assigns.manual_emails))
+      |> String.split(~r/[,\n]/, trim: true)
+      |> Enum.reduce({[], existing_set}, fn piece, {acc, set} ->
+        email = String.trim(piece)
+        cond do
+          email == "" or not valid_email?(email) ->
+            {acc, set}
+          MapSet.member?(set, normalize_email(email)) ->
+            {acc, set}
+          true ->
+            {[email | acc], MapSet.put(set, normalize_email(email))}
+        end
+      end)
+      |> elem(0)
+      |> Enum.reverse()
     
     updated_emails = socket.assigns.manual_emails ++ new_emails
     
@@ -1366,6 +1376,8 @@ defmodule EventasaurusWeb.EventManageLive do
   defp valid_email?(email) do
     String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/)
   end
+
+  defp normalize_email(email), do: String.downcase(email)
 
   defp build_invitation_success_message(result) do
     case {result.successful_invitations, result.skipped_duplicates} do
