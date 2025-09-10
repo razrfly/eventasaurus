@@ -274,9 +274,14 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("add_email", _params, socket) do
-    email = String.trim(socket.assigns.current_email_input)
+    email =
+      socket.assigns.current_email_input
+      |> String.trim()
+      |> String.downcase()
     
-    if email != "" && valid_email?(email) && email not in socket.assigns.manual_emails do
+    existing_emails_lower = Enum.map(socket.assigns.manual_emails, fn e -> String.downcase(e) end)
+    
+    if email != "" && valid_email?(email) && !(email in existing_emails_lower) do
       updated_emails = socket.assigns.manual_emails ++ [email]
       
       {:noreply, 
@@ -317,11 +322,14 @@ defmodule EventasaurusWeb.EventManageLive do
     
     new_emails = 
       bulk_input
-      |> String.split(~r/[,\n]/)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+      |> String.split(~r/[\s,;]+/, trim: true)
+      |> Enum.map(&String.downcase/1)
       |> Enum.filter(&valid_email?/1)
-      |> Enum.reject(&(&1 in socket.assigns.manual_emails))
+      |> Enum.uniq()
+      |> Enum.reject(fn email ->
+        existing_emails_lower = Enum.map(socket.assigns.manual_emails, fn e -> String.downcase(e) end)
+        email in existing_emails_lower
+      end)
     
     updated_emails = socket.assigns.manual_emails ++ new_emails
     
