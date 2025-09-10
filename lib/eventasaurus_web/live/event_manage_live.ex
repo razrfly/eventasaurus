@@ -322,14 +322,11 @@ defmodule EventasaurusWeb.EventManageLive do
     
     new_emails = 
       bulk_input
-      |> String.split(~r/[\s,;]+/, trim: true)
-      |> Enum.map(&String.downcase/1)
+      |> String.split(~r/[,\n]/)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
       |> Enum.filter(&valid_email?/1)
-      |> Enum.uniq()
-      |> Enum.reject(fn email ->
-        existing_emails_lower = Enum.map(socket.assigns.manual_emails, fn e -> String.downcase(e) end)
-        email in existing_emails_lower
-      end)
+      |> Enum.reject(&(&1 in socket.assigns.manual_emails))
     
     updated_emails = socket.assigns.manual_emails ++ new_emails
     
@@ -338,6 +335,7 @@ defmodule EventasaurusWeb.EventManageLive do
      |> assign(:manual_emails, updated_emails)
      |> assign(:bulk_email_input, "")}
   end
+
 
   @impl true
   def handle_event("toggle_add_mode", %{"mode" => mode}, socket) when mode in ["invite", "direct"] do
