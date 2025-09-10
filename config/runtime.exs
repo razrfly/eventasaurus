@@ -154,6 +154,7 @@ if config_env() == :prod do
   config :eventasaurus, :supabase,
     url: System.get_env("SUPABASE_URL"),
     api_key: System.get_env("SUPABASE_API_KEY"),
+    service_role_key: System.get_env("SUPABASE_SERVICE_ROLE_KEY"),
     database_url: System.get_env("SUPABASE_DATABASE_URL"),
     bucket: System.get_env("SUPABASE_BUCKET") || "event-images",
     auth: %{

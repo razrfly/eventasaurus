@@ -357,6 +357,11 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.info("Auth callback received: #{inspect(params)}")
 
     case params do
+      # NEW: Server-side authorization code for password recovery
+      %{"code" => code, "type" => "recovery"} when not is_nil(code) ->
+        Logger.info("Password recovery callback with authorization code: #{code}")
+        handle_password_recovery_with_code(conn, code)
+        
       # OAuth callback with authorization code
       %{"code" => code} when not is_nil(code) ->
         # Determine which provider based on session
@@ -605,6 +610,37 @@ defmodule EventasaurusWeb.Auth.AuthController do
     |> delete_session(:oauth_provider)
     |> put_flash(:error, "Google authentication was cancelled or failed.")
     |> redirect(to: ~p"/auth/login")
+  end
+
+  defp handle_password_recovery_with_code(conn, code) do
+    require Logger
+    alias EventasaurusApp.Auth.ServerAuth
+    
+    # Exchange authorization code for tokens on the server side
+    case ServerAuth.exchange_code_for_tokens(code) do
+      {:ok, %{"access_token" => access_token} = auth_data} ->
+        Logger.info("Successfully exchanged code for tokens, setting recovery session")
+        
+        case Auth.store_session(conn, auth_data, true) do
+          {:ok, conn} ->
+            conn
+            |> put_session(:password_recovery, true)
+            |> put_flash(:info, "Please set your new password below.")
+            |> redirect(to: ~p"/auth/reset-password")
+            
+          {:error, reason} ->
+            Logger.error("Failed to store recovery session: #{inspect(reason)}")
+            conn
+            |> put_flash(:error, "Session error. Please try again.")
+            |> redirect(to: ~p"/auth/login")
+        end
+        
+      {:error, reason} ->
+        Logger.error("Failed to exchange code for tokens: #{inspect(reason)}")
+        conn
+        |> put_flash(:error, "Password reset link is invalid or expired. Please request a new one.")
+        |> redirect(to: ~p"/auth/forgot-password")
+    end
   end
 
   defp handle_facebook_oauth_callback(conn, code, _params) do
