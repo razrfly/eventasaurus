@@ -4,7 +4,7 @@ defmodule EventasaurusWeb.Components.ActivityListComponent do
   def render(assigns) do
     ~H"""
     <div class="bg-white shadow rounded-lg">
-      <div class="px-6 py-5 border-b border-gray-200">
+      <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
         <div class="flex items-center justify-between mb-4">
           <div>
             <h3 class="text-lg font-medium text-gray-900">Group Activities</h3>
@@ -39,8 +39,8 @@ defmodule EventasaurusWeb.Components.ActivityListComponent do
       <%= if @activities != [] do %>
         <div class="divide-y divide-gray-200">
           <%= for activity <- @activities do %>
-            <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
-              <div class="flex items-start gap-4">
+            <div class="px-4 sm:px-6 py-4 sm:py-6 hover:bg-gray-50 transition-colors">
+              <div class="flex items-start gap-3 sm:gap-4">
                 <!-- Activity Icon/Image -->
                 <div class="flex-shrink-0">
                   <%= if get_activity_image(activity) do %>
@@ -60,49 +60,52 @@ defmodule EventasaurusWeb.Components.ActivityListComponent do
                 
                 <!-- Activity Details -->
                 <div class="flex-1 min-w-0">
-                  <div class="flex items-start justify-between">
-                    <div class="flex-1">
-                      <h4 class="text-sm font-medium text-gray-900 truncate">
-                        <%= get_activity_title(activity) %>
-                      </h4>
+                  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-start justify-between gap-2">
+                        <h4 class="text-sm font-medium text-gray-900 line-clamp-2 sm:truncate flex-1">
+                          <%= get_activity_title(activity) %>
+                        </h4>
+                        <!-- Activity Type Badge - Top right on mobile -->
+                        <span class={[
+                          "flex-shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                          activity_type_badge_class(activity.activity_type)
+                        ]}>
+                          <%= activity_type_display(activity.activity_type) %>
+                        </span>
+                      </div>
+                      
                       <%= if get_activity_description(activity) do %>
                         <p class="mt-1 text-sm text-gray-500 line-clamp-2">
                           <%= get_activity_description(activity) %>
                         </p>
                       <% end %>
-                      <div class="mt-2 flex items-center gap-4 text-xs text-gray-400">
+                      
+                      <div class="mt-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-400">
                         <span class="flex items-center gap-1">
-                          <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg class="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                           <%= format_activity_date(activity.occurred_at) %>
                         </span>
                         <%= if activity.event do %>
-                          <.link navigate={"/events/#{activity.event.slug}"} class="flex items-center gap-1 hover:text-blue-600">
-                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <.link navigate={"/events/#{activity.event.slug}"} class="flex items-center gap-1 hover:text-blue-600 truncate">
+                            <svg class="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                             </svg>
-                            <%= activity.event.title %>
+                            <span class="truncate"><%= activity.event.title %></span>
                           </.link>
                         <% end %>
                         <%= if activity.created_by do %>
-                          <span class="flex items-center gap-1">
-                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <span class="flex items-center gap-1 truncate">
+                            <svg class="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
-                            <%= activity.created_by.name || "Unknown" %>
+                            <span class="truncate"><%= activity.created_by.name || "Unknown" %></span>
                           </span>
                         <% end %>
                       </div>
                     </div>
-                    
-                    <!-- Activity Type Badge -->
-                    <span class={[
-                      "ml-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-                      activity_type_badge_class(activity.activity_type)
-                    ]}>
-                      <%= activity_type_display(activity.activity_type) %>
-                    </span>
                   </div>
                 </div>
               </div>
@@ -110,7 +113,7 @@ defmodule EventasaurusWeb.Components.ActivityListComponent do
           <% end %>
         </div>
       <% else %>
-        <div class="px-6 py-12 text-center">
+        <div class="px-4 sm:px-6 py-12 text-center">
           <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
