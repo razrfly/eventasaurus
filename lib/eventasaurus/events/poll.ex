@@ -736,6 +736,23 @@ defmodule EventasaurusApp.Events.Poll do
   def option_removal_strategy_display("disabled"), do: "Never (disabled)"
   def option_removal_strategy_display(strategy), do: String.capitalize(strategy)
 
+  @doc """
+  Check if vote confirmation is required for this poll.
+  Returns false by default.
+  """
+  def require_vote_confirmation?(%__MODULE__{settings: nil}), do: false
+  def require_vote_confirmation?(%__MODULE__{settings: settings}) do
+    Map.get(settings, "require_vote_confirmation", false)
+  end
+
+  @doc """
+  Set whether vote confirmation is required for this poll.
+  """
+  def set_require_vote_confirmation(%__MODULE__{settings: settings} = poll, require_confirmation) when is_boolean(require_confirmation) do
+    new_settings = Map.put(settings || %{}, "require_vote_confirmation", require_confirmation)
+    %{poll | settings: new_settings}
+  end
+
   # Private helper to normalize settings
   defp normalize_settings(nil), do: %{}
 
@@ -861,6 +878,21 @@ defmodule EventasaurusApp.Events.Poll do
         _ -> Map.put(settings, "option_removal_time_limit", 5)
       end
 
+    # Normalize require_vote_confirmation if present
+    settings =
+      case Map.get(settings, "require_vote_confirmation") do
+        # No setting, leave as is (defaults to false)
+        nil -> settings
+        "on" -> Map.put(settings, "require_vote_confirmation", true)
+        "off" -> Map.put(settings, "require_vote_confirmation", false)
+        "true" -> Map.put(settings, "require_vote_confirmation", true)
+        "false" -> Map.put(settings, "require_vote_confirmation", false)
+        # Already a boolean
+        value when is_boolean(value) -> settings
+        # Invalid value, default to false
+        _ -> Map.put(settings, "require_vote_confirmation", false)
+      end
+
     settings
   end
 
@@ -876,6 +908,7 @@ defmodule EventasaurusApp.Events.Poll do
     |> validate_show_current_standings_setting(settings)
     |> validate_option_removal_strategy_setting(settings)
     |> validate_option_removal_time_limit_setting(settings)
+    |> validate_require_vote_confirmation_setting(settings)
   end
 
   defp validate_location_scope_setting(changeset, settings) do
@@ -934,6 +967,16 @@ defmodule EventasaurusApp.Events.Poll do
         add_error(changeset, :settings, "option_removal_time_limit must be a positive integer")
       _ ->
         changeset
+    end
+  end
+
+  defp validate_require_vote_confirmation_setting(changeset, settings) do
+    case Map.get(settings, "require_vote_confirmation") do
+      # Optional field
+      nil -> changeset
+      # Valid boolean values
+      value when is_boolean(value) -> changeset
+      _ -> add_error(changeset, :settings, "require_vote_confirmation must be a boolean")
     end
   end
 end

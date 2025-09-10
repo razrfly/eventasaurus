@@ -45,6 +45,7 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   alias EventasaurusWeb.Utils.TimeUtils
   alias EventasaurusWeb.Utils.MovieUtils
   alias EventasaurusWeb.EmbeddedProgressBarComponent
+  alias EventasaurusWeb.VoteConfirmationDialogComponent
   import EventasaurusWeb.VoterCountDisplay
   import EventasaurusWeb.ClearVotesButton
   import Phoenix.HTML.SimplifiedHelpers.Truncate
@@ -58,14 +59,27 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
      |> assign(:vote_state, %{})
      |> assign(:ranked_options, [])
      |> assign(:temp_votes, %{})
-     |> assign(:anonymous_mode, false)}
+     |> assign(:anonymous_mode, false)
+     |> assign(:show_confirmation, false)
+     |> assign(:pending_vote_data, %{})
+     |> assign(:pending_option, nil)}
   end
 
   @impl true
   def update(assigns, socket) do
-    # Determine if we're in anonymous mode
-    anonymous_mode = assigns[:anonymous_mode] || is_nil(assigns[:user])
-    temp_votes = assigns[:temp_votes] || %{}
+    # Handle vote confirmation updates first
+    cond do
+      Map.has_key?(assigns, :vote_confirmed) ->
+        handle_vote_confirmed(socket, assigns.vote_confirmed)
+
+      Map.has_key?(assigns, :vote_confirmation_cancelled) ->
+        {:ok, assign(socket, :show_confirmation, false)}
+
+      true ->
+        # Normal update flow
+        # Determine if we're in anonymous mode
+        anonymous_mode = assigns[:anonymous_mode] || is_nil(assigns[:user])
+        temp_votes = assigns[:temp_votes] || %{}
     
     # Ensure poll options are preloaded with suggested_by
     poll = if assigns.poll do
@@ -166,17 +180,18 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       end
     end
 
-    {:ok,
-     socket_with_anon_id
-     |> assign(assigns)
-     |> assign(:poll, poll)
-     |> assign(:vote_state, vote_state)
-     |> assign(:ranked_options, ranked_options)
-     |> assign(:temp_votes, temp_votes)
-     |> assign(:anonymous_mode, anonymous_mode)
-     |> assign(:poll_stats, poll_stats)
-     |> assign(:poll_view_tracked, true)
-     |> assign_new(:loading, fn -> false end)}
+        {:ok,
+         socket_with_anon_id
+         |> assign(assigns)
+         |> assign(:poll, poll)
+         |> assign(:vote_state, vote_state)
+         |> assign(:ranked_options, ranked_options)
+         |> assign(:temp_votes, temp_votes)
+         |> assign(:anonymous_mode, anonymous_mode)
+         |> assign(:poll_stats, poll_stats)
+         |> assign(:poll_view_tracked, true)
+         |> assign_new(:loading, fn -> false end)}
+    end
   end
 
   @impl true
@@ -265,6 +280,18 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         </div>
       <% end %>
     </div>
+    
+    <!-- Vote Confirmation Dialog -->
+    <.live_component
+      module={VoteConfirmationDialogComponent}
+      id={"vote-confirmation-#{@poll.id}"}
+      show={@show_confirmation}
+      poll={@poll}
+      option={@pending_option}
+      vote_data={@pending_vote_data}
+      voting_system={@poll.voting_system}
+      anonymous_mode={@anonymous_mode}
+    />
     """
   end
 
@@ -1131,10 +1158,28 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   def handle_event("cast_binary_vote", %{"option-id" => option_id, "vote" => vote}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
-        if socket.assigns.anonymous_mode do
-          handle_anonymous_binary_vote(socket, option_id, vote)
+        option = find_poll_option(socket, option_id)
+        
+        if requires_confirmation?(socket.assigns.poll) && option do
+          # Show confirmation dialog
+          vote_data = %{
+            type: "binary",
+            option_id: option_id,
+            vote: vote
+          }
+          
+          {:noreply,
+           socket
+           |> assign(:show_confirmation, true)
+           |> assign(:pending_vote_data, vote_data)
+           |> assign(:pending_option, option)}
         else
-          handle_authenticated_binary_vote(socket, option_id, vote)
+          # Proceed with vote directly
+          if socket.assigns.anonymous_mode do
+            handle_anonymous_binary_vote(socket, option_id, vote)
+          else
+            handle_authenticated_binary_vote(socket, option_id, vote)
+          end
         end
       {:error, _} ->
         send(self(), {:show_error, "Invalid option ID"})
@@ -1153,10 +1198,30 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       option_id ->
         case safe_string_to_integer(option_id) do
           {:ok, option_id} ->
-            if socket.assigns.anonymous_mode do
-              handle_anonymous_approval_vote(socket, option_id)
+            option = find_poll_option(socket, option_id)
+            current_vote = socket.assigns.vote_state[option_id]
+            new_vote = if current_vote == "approved", do: nil, else: "approved"
+            
+            if requires_confirmation?(socket.assigns.poll) && option do
+              # Show confirmation dialog
+              vote_data = %{
+                type: "approval",
+                option_id: option_id,
+                vote: new_vote
+              }
+              
+              {:noreply,
+               socket
+               |> assign(:show_confirmation, true)
+               |> assign(:pending_vote_data, vote_data)
+               |> assign(:pending_option, option)}
             else
-              handle_authenticated_approval_vote(socket, option_id)
+              # Proceed with vote directly
+              if socket.assigns.anonymous_mode do
+                handle_anonymous_approval_vote(socket, option_id)
+              else
+                handle_authenticated_approval_vote(socket, option_id)
+              end
             end
           {:error, _} ->
             send(self(), {:show_error, "Invalid option ID"})
@@ -1169,10 +1234,28 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   def handle_event("cast_star_vote", %{"option-id" => option_id, "rating" => rating}, socket) do
     with {:ok, option_id} <- safe_string_to_integer(option_id),
          {:ok, rating} <- safe_string_to_integer(rating) do
-      if socket.assigns.anonymous_mode do
-        handle_anonymous_star_vote(socket, option_id, rating)
+      option = find_poll_option(socket, option_id)
+      
+      if requires_confirmation?(socket.assigns.poll) && option do
+        # Show confirmation dialog
+        vote_data = %{
+          type: "star",
+          option_id: option_id,
+          rating: rating
+        }
+        
+        {:noreply,
+         socket
+         |> assign(:show_confirmation, true)
+         |> assign(:pending_vote_data, vote_data)
+         |> assign(:pending_option, option)}
       else
-        handle_authenticated_star_vote(socket, option_id, rating)
+        # Proceed with vote directly
+        if socket.assigns.anonymous_mode do
+          handle_anonymous_star_vote(socket, option_id, rating)
+        else
+          handle_authenticated_star_vote(socket, option_id, rating)
+        end
       end
     else
       {:error, _} ->
@@ -1185,10 +1268,27 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
   def handle_event("clear_star_vote", %{"option-id" => option_id}, socket) do
     case safe_string_to_integer(option_id) do
       {:ok, option_id} ->
-        if socket.assigns.anonymous_mode do
-          handle_anonymous_clear_star_vote(socket, option_id)
+        option = find_poll_option(socket, option_id)
+        
+        if requires_confirmation?(socket.assigns.poll) && option do
+          # Show confirmation dialog
+          vote_data = %{
+            type: "clear",
+            option_id: option_id
+          }
+          
+          {:noreply,
+           socket
+           |> assign(:show_confirmation, true)
+           |> assign(:pending_vote_data, vote_data)
+           |> assign(:pending_option, option)}
         else
-          handle_authenticated_clear_star_vote(socket, option_id)
+          # Proceed with clearing directly
+          if socket.assigns.anonymous_mode do
+            handle_anonymous_clear_star_vote(socket, option_id)
+          else
+            handle_authenticated_clear_star_vote(socket, option_id)
+          end
         end
       {:error, _} ->
         send(self(), {:show_error, "Invalid option ID"})
@@ -1209,20 +1309,35 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
       {:ok, option_id} ->
         new_ranked_options = move_option_up(socket.assigns.ranked_options, option_id)
 
-        if socket.assigns.anonymous_mode do
-          # Update temp votes for anonymous users
-          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
-          send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
-
+        if requires_confirmation?(socket.assigns.poll) do
+          # Show confirmation dialog for ranked vote
+          vote_data = %{
+            type: "ranked",
+            ranked_options: new_ranked_options
+          }
+          
           {:noreply,
            socket
-           |> assign(:ranked_options, new_ranked_options)
-           |> assign(:temp_votes, temp_votes)
-           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+           |> assign(:show_confirmation, true)
+           |> assign(:pending_vote_data, vote_data)
+           |> assign(:pending_option, nil)}
         else
-          # Submit for authenticated users
-          submit_ranked_votes(socket, new_ranked_options)
-          {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+          # Proceed directly
+          if socket.assigns.anonymous_mode do
+            # Update temp votes for anonymous users
+            temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+            send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
+
+            {:noreply,
+             socket
+             |> assign(:ranked_options, new_ranked_options)
+             |> assign(:temp_votes, temp_votes)
+             |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+          else
+            # Submit for authenticated users
+            submit_ranked_votes(socket, new_ranked_options)
+            {:noreply, assign(socket, :ranked_options, new_ranked_options)}
+          end
         end
       {:error, _} ->
         {:noreply, socket}
@@ -1342,27 +1457,39 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
 
   @impl true
   def handle_event("clear_all_votes", _params, socket) do
-    if socket.assigns.anonymous_mode do
-      # Clear temp votes for anonymous users
-      empty_temp_votes = %{}
-      send(self(), {:temp_votes_updated, socket.assigns.poll.id, empty_temp_votes})
-
+    if requires_confirmation?(socket.assigns.poll) do
+      # Show confirmation dialog
+      vote_data = %{type: "clear_all"}
+      
       {:noreply,
        socket
-       |> assign(:temp_votes, empty_temp_votes)
-       |> assign(:vote_state, %{})
-       |> assign(:ranked_options, [])}
+       |> assign(:show_confirmation, true)
+       |> assign(:pending_vote_data, vote_data)
+       |> assign(:pending_option, nil)}
     else
-      # Clear authenticated user votes
-      socket = assign(socket, :loading, true)
+      # Proceed with clearing directly
+      if socket.assigns.anonymous_mode do
+        # Clear temp votes for anonymous users
+        empty_temp_votes = %{}
+        send(self(), {:temp_votes_updated, socket.assigns.poll.id, empty_temp_votes})
 
-      {:ok, _} = clear_all_user_votes(socket)
-      send(self(), {:votes_cleared})
-      {:noreply,
-       socket
-       |> assign(:loading, false)
-       |> assign(:vote_state, %{})
-       |> assign(:ranked_options, [])}
+        {:noreply,
+         socket
+         |> assign(:temp_votes, empty_temp_votes)
+         |> assign(:vote_state, %{})
+         |> assign(:ranked_options, [])}
+      else
+        # Clear authenticated user votes
+        socket = assign(socket, :loading, true)
+
+        {:ok, _} = clear_all_user_votes(socket)
+        send(self(), {:votes_cleared})
+        {:noreply,
+         socket
+         |> assign(:loading, false)
+         |> assign(:vote_state, %{})
+         |> assign(:ranked_options, [])}
+      end
     end
   end
 
@@ -1371,8 +1498,79 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
     {:noreply, socket}
   end
 
-  # Note: LiveComponents don't support handle_info callbacks
-  # Real-time updates are handled by the parent LiveView which reloads the poll data
+  # Helper function to handle vote confirmation via update messages
+  defp handle_vote_confirmed(socket, vote_data) do
+    socket = assign(socket, :show_confirmation, false)
+    
+    case vote_data.type do
+      "binary" ->
+        if socket.assigns.anonymous_mode do
+          handle_anonymous_binary_vote(socket, vote_data.option_id, vote_data.vote)
+        else
+          handle_authenticated_binary_vote(socket, vote_data.option_id, vote_data.vote)
+        end
+        
+      "approval" ->
+        if socket.assigns.anonymous_mode do
+          handle_anonymous_approval_vote(socket, vote_data.option_id)
+        else
+          handle_authenticated_approval_vote(socket, vote_data.option_id)
+        end
+        
+      "star" ->
+        if socket.assigns.anonymous_mode do
+          handle_anonymous_star_vote(socket, vote_data.option_id, vote_data.rating)
+        else
+          handle_authenticated_star_vote(socket, vote_data.option_id, vote_data.rating)
+        end
+        
+      "clear" ->
+        if socket.assigns.anonymous_mode do
+          handle_anonymous_clear_star_vote(socket, vote_data.option_id)
+        else
+          handle_authenticated_clear_star_vote(socket, vote_data.option_id)
+        end
+        
+      "clear_all" ->
+        if socket.assigns.anonymous_mode do
+          empty_temp_votes = %{}
+          send(self(), {:temp_votes_updated, socket.assigns.poll.id, empty_temp_votes})
+
+          {:ok,
+           socket
+           |> assign(:temp_votes, empty_temp_votes)
+           |> assign(:vote_state, %{})
+           |> assign(:ranked_options, [])}
+        else
+          socket = assign(socket, :loading, true)
+          {:ok, _} = clear_all_user_votes(socket)
+          send(self(), {:votes_cleared})
+          {:ok,
+           socket
+           |> assign(:loading, false)
+           |> assign(:vote_state, %{})
+           |> assign(:ranked_options, [])}
+        end
+        
+      "ranked" ->
+        new_ranked_options = vote_data.ranked_options
+        if socket.assigns.anonymous_mode do
+          temp_votes = update_temp_votes_for_ranked(socket.assigns.temp_votes, new_ranked_options, socket.assigns.poll.voting_system)
+          send(self(), {:temp_votes_updated, socket.assigns.poll.id, temp_votes})
+
+          {:ok,
+           socket
+           |> assign(:ranked_options, new_ranked_options)
+           |> assign(:temp_votes, temp_votes)
+           |> assign(:vote_state, initialize_anonymous_vote_state(socket.assigns.poll, temp_votes))}
+        else
+          submit_ranked_votes(socket, new_ranked_options)
+          {:ok, assign(socket, :ranked_options, new_ranked_options)}
+        end
+    end
+  end
+
+  # Note: Real-time updates are handled by the parent LiveView which reloads the poll data
 
   # Anonymous vote handlers
 
@@ -1872,6 +2070,12 @@ defmodule EventasaurusWeb.VotingInterfaceComponent do
         nil
     end
   end
+
+  # Helper function to check if vote confirmation is required
+  defp requires_confirmation?(poll) do
+    Poll.require_vote_confirmation?(poll)
+  end
+
 
   # Helper functions for deletion time display
   defp get_deletion_time_remaining(inserted_at) when is_nil(inserted_at), do: 0
