@@ -1,6 +1,7 @@
 defmodule EventasaurusWeb.Components.GuestInvitationModal do
   use EventasaurusWeb, :html
   import EventasaurusWeb.CoreComponents
+  import EventasaurusWeb.Components.IndividualEmailInput
 
   @doc """
   Renders a guest invitation modal with toggle between invitation and direct add modes.
@@ -31,7 +32,8 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
   attr :suggestions, :list, default: []
   attr :suggestions_loading, :boolean, default: false
   attr :invitation_message, :string, default: ""
-  attr :manual_emails, :string, default: ""
+  attr :manual_emails, :list, default: []
+  attr :current_email_input, :string, default: ""
   attr :selected_suggestions, :list, default: []
   attr :add_mode, :string, default: "invite"  # "invite" or "direct"
   attr :on_close, :any, required: true
@@ -248,27 +250,24 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                 <% end %>
               </div>
 
-              <!-- Manual Email Entry -->
+              <!-- Individual Email Entry -->
               <div>
                 <div class="mb-4">
                   <h3 class="text-lg font-medium text-gray-900">
                     <%= if @add_mode == "direct", do: "Add by email", else: "Invite by email" %>
                   </h3>
-                  <p class="text-sm text-gray-500">Enter email addresses separated by commas or new lines</p>
+                  <p class="text-sm text-gray-500">Add email addresses one by one</p>
                 </div>
 
-                <div class="space-y-4">
-                  <.input
-                    type="textarea"
-                    name="manual_emails"
-                    value={@manual_emails}
-                    placeholder="Enter email addresses (one per line or separated by commas)&#10;example@domain.com, another@example.com"
-                    rows="4"
-                    class="block w-full"
-                    phx-change="manual_emails"
-                    phx-debounce="300"
-                  />
-                </div>
+                <.individual_email_input
+                  id="manual-email-input"
+                  emails={@manual_emails}
+                  current_input={@current_email_input}
+                  on_add_email="add_email"
+                  on_remove_email="remove_email"
+                  on_input_change="email_input_change"
+                  placeholder="Enter email address"
+                />
               </div>
 
               <!-- Invitation Message (only in invite mode) -->
@@ -369,7 +368,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                     type="button"
                     phx-click={@on_add_directly}
                     class="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    disabled={length(@selected_suggestions) == 0 && String.trim(@manual_emails || "") == ""}
+                    disabled={length(@selected_suggestions) == 0 && length(@manual_emails) == 0}
                   >
                     ➕ Add to Event
                   </button>
@@ -380,7 +379,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
                     type="button"
                     phx-click={@on_invite_selected}
                     class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    disabled={length(@selected_suggestions) == 0 && String.trim(@manual_emails || "") == ""}
+                    disabled={length(@selected_suggestions) == 0 && length(@manual_emails) == 0}
                   >
                     📧 Send Invitations
                   </button>
@@ -399,19 +398,7 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
   # Helper function to calculate invitation count server-side
   defp calculate_invitation_count(selected_suggestions, manual_emails) do
     selected_count = length(selected_suggestions || [])
-
-    email_count =
-      case manual_emails do
-        nil -> 0
-        "" -> 0
-        emails ->
-          emails
-          |> String.split(~r/[,\n]/)
-          |> Enum.map(&String.trim/1)
-          |> Enum.reject(&(&1 == ""))
-          |> length()
-      end
-
+    email_count = length(manual_emails || [])
     selected_count + email_count
   end
 
