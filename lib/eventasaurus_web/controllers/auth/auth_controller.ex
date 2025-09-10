@@ -359,7 +359,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
     case params do
       # NEW: Server-side authorization code for password recovery
       %{"code" => code, "type" => "recovery"} when not is_nil(code) ->
-        Logger.info("Password recovery callback with authorization code: #{code}")
+        Logger.info("Password recovery callback via authorization code")
         handle_password_recovery_with_code(conn, code)
         
       # OAuth callback with authorization code
