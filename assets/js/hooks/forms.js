@@ -381,6 +381,52 @@ export const TimezoneDetectionHook = {
   }
 };
 
+// Email Input Hook - Handles input changes for email invitation component
+export const EmailInput = {
+  mounted() {
+    this.handleInputChange = this.handleInputChange.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    
+    // Listen for input changes to send to Phoenix
+    this.el.addEventListener('input', this.handleInputChange);
+    this.el.addEventListener('keyup', this.handleInputChange);
+    this.el.addEventListener('keydown', this.handleKeyDown);
+  },
+
+  destroyed() {
+    this.el.removeEventListener('input', this.handleInputChange);
+    this.el.removeEventListener('keyup', this.handleInputChange);
+    this.el.removeEventListener('keydown', this.handleKeyDown);
+  },
+
+  handleKeyDown(event) {
+    // If Enter key is pressed, clear the input field immediately to prevent race conditions
+    if (event.key === 'Enter') {
+      // Small delay to allow the Phoenix event to fire first, then clear the field
+      setTimeout(() => {
+        this.el.value = '';
+        // Send an empty input change to sync with server
+        this.pushEvent("email_input_change", { 
+          "email_input": "" 
+        });
+      }, 50);
+    }
+  },
+
+  handleInputChange(event) {
+    // Don't send input change events immediately after Enter key
+    if (event.type === 'keyup' && event.key === 'Enter') {
+      return;
+    }
+    
+    // Send the input change event to Phoenix with correct parameter structure
+    // The server expects %{"email_input" => input} based on the name attribute
+    this.pushEvent("email_input_change", { 
+      "email_input": this.el.value 
+    });
+  }
+};
+
 // Export all form hooks as a default object for easy importing
 export default {
   InputSync,
@@ -388,5 +434,6 @@ export default {
   DateTimeSync,
   TimeSync,
   CalendarFormSync,
-  TimezoneDetectionHook
+  TimezoneDetectionHook,
+  EmailInput
 };
