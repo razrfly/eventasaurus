@@ -138,11 +138,16 @@ defmodule EventasaurusApp.Auth.Client do
   def reset_password(email) do
     url = "#{get_auth_url()}/recover"
 
+    # Get the site URL from config for redirect
+    site_url = get_config()[:site_url] || "https://eventasaur.us"
+    redirect_url = "#{site_url}/auth/callback"
+
     body = Jason.encode!(%{
-      email: email
+      email: email,
+      redirect_to: redirect_url
     })
 
-    Logger.info("Sending password reset request to: #{url}")
+    Logger.info("Sending password reset request to: #{url} with redirect_to: #{redirect_url}")
 
     case HTTPoison.post(url, body, default_headers()) do
       {:ok, %{status_code: status}} when status in [200, 204] ->
