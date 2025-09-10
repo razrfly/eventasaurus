@@ -618,7 +618,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
     
     # Exchange authorization code for tokens on the server side
     case ServerAuth.exchange_code_for_tokens(code) do
-      {:ok, %{"access_token" => access_token} = auth_data} ->
+      {:ok, %{"access_token" => _access_token} = auth_data} ->
         Logger.info("Successfully exchanged code for tokens, setting recovery session")
         
         case Auth.store_session(conn, auth_data, true) do

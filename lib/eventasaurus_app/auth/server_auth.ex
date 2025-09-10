@@ -8,8 +8,6 @@ defmodule EventasaurusApp.Auth.ServerAuth do
   
   require Logger
   
-  alias EventasaurusApp.Auth.Client
-  
   @doc """
   Exchange an authorization code for tokens using OAuth2 standard flow.
   
