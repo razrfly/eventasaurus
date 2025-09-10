@@ -77,7 +77,9 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:historical_suggestions, [])
                |> assign(:suggestions_loading, false)
                |> assign(:selected_suggestions, [])
-               |> assign(:manual_emails, "")
+               |> assign(:manual_emails, [])
+               |> assign(:current_email_input, "")
+               |> assign(:bulk_email_input, "")
                |> assign(:invitation_message, "")
                |> assign(:add_mode, "invite")
                |> assign(:open_participant_menu, nil)  # Track which dropdown is open
@@ -195,7 +197,8 @@ defmodule EventasaurusWeb.EventManageLive do
       |> assign(:suggestions_loading, true)
       |> assign(:selected_suggestions, [])
       |> assign(:invitation_message, "")
-      |> assign(:manual_emails, "")
+      |> assign(:manual_emails, [])
+      |> assign(:current_email_input, "")
 
     # Fetch suggestions asynchronously
     send(self(), :load_historical_suggestions)
@@ -211,7 +214,8 @@ defmodule EventasaurusWeb.EventManageLive do
      |> assign(:historical_suggestions, [])
      |> assign(:selected_suggestions, [])
      |> assign(:invitation_message, "")
-     |> assign(:manual_emails, "")}
+     |> assign(:manual_emails, [])
+     |> assign(:current_email_input, "")}
   end
 
   @impl true
@@ -264,8 +268,67 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_event("manual_emails", %{"manual_emails" => emails}, socket) do
-    {:noreply, assign(socket, :manual_emails, emails)}
+  def handle_event("email_input_change", %{"email_input" => input}, socket) do
+    {:noreply, assign(socket, :current_email_input, input)}
+  end
+
+  @impl true
+  def handle_event("add_email", _params, socket) do
+    email = String.trim(socket.assigns.current_email_input)
+    
+    if email != "" && valid_email?(email) && email not in socket.assigns.manual_emails do
+      updated_emails = socket.assigns.manual_emails ++ [email]
+      
+      {:noreply, 
+       socket
+       |> assign(:manual_emails, updated_emails)
+       |> assign(:current_email_input, "")}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("add_email_on_enter", _params, socket) do
+    handle_event("add_email", %{}, socket)
+  end
+
+  @impl true
+  def handle_event("remove_email", %{"index" => index_str}, socket) do
+    index = String.to_integer(index_str)
+    updated_emails = List.delete_at(socket.assigns.manual_emails, index)
+    
+    {:noreply, assign(socket, :manual_emails, updated_emails)}
+  end
+
+  @impl true
+  def handle_event("clear_all_emails", _params, socket) do
+    {:noreply, assign(socket, :manual_emails, [])}
+  end
+
+  @impl true
+  def handle_event("bulk_email_input", %{"value" => bulk_input}, socket) do
+    {:noreply, assign(socket, :bulk_email_input, bulk_input)}
+  end
+
+  @impl true
+  def handle_event("add_bulk_emails", _params, socket) do
+    bulk_input = Map.get(socket.assigns, :bulk_email_input, "")
+    
+    new_emails = 
+      bulk_input
+      |> String.split(~r/[,\n]/)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.filter(&valid_email?/1)
+      |> Enum.reject(&(&1 in socket.assigns.manual_emails))
+    
+    updated_emails = socket.assigns.manual_emails ++ new_emails
+    
+    {:noreply, 
+     socket
+     |> assign(:manual_emails, updated_emails)
+     |> assign(:bulk_email_input, "")}
   end
 
   @impl true
@@ -281,8 +344,8 @@ defmodule EventasaurusWeb.EventManageLive do
     manual_emails = socket.assigns.manual_emails
     invitation_message = socket.assigns.invitation_message
 
-    # Parse manual emails
-    parsed_emails = parse_email_list(manual_emails)
+    # Use manual emails directly (already in list format)
+    parsed_emails = manual_emails
 
     # Get selected suggestion users
     suggested_users = socket.assigns.historical_suggestions
@@ -340,7 +403,8 @@ defmodule EventasaurusWeb.EventManageLive do
        |> assign(:historical_suggestions, [])
        |> assign(:selected_suggestions, [])
        |> assign(:invitation_message, "")
-       |> assign(:manual_emails, "")
+       |> assign(:manual_emails, [])
+      |> assign(:current_email_input, "")
        |> put_flash(:info, success_message)}
     else
       {:noreply, put_flash(socket, :error, "Please select guests or enter email addresses to invite.")}
@@ -500,8 +564,8 @@ defmodule EventasaurusWeb.EventManageLive do
     selected_suggestions = socket.assigns.selected_suggestions
     manual_emails = socket.assigns.manual_emails
 
-    # Parse manual emails
-    parsed_emails = parse_email_list(manual_emails)
+    # Use manual emails directly (already in list format)
+    parsed_emails = manual_emails
 
     # Get selected suggestion users
     suggested_users = socket.assigns.historical_suggestions
@@ -539,7 +603,8 @@ defmodule EventasaurusWeb.EventManageLive do
        |> assign_participants_with_stats(updated_participants)
        |> assign(:show_guest_invitation_modal, false)
        |> assign(:selected_suggestions, [])
-       |> assign(:manual_emails, "")
+       |> assign(:manual_emails, [])
+      |> assign(:current_email_input, "")
        |> assign(:invitation_message, "")
        |> put_flash(:info, success_message)}
     else
@@ -1291,15 +1356,6 @@ defmodule EventasaurusWeb.EventManageLive do
 
   # Guest invitation helper functions
 
-  defp parse_email_list(emails_string) when is_binary(emails_string) do
-    emails_string
-    |> String.split(~r/[,\n]/)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.filter(&valid_email?/1)
-  end
-
-  defp parse_email_list(_), do: []
 
   defp valid_email?(email) do
     String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/)
