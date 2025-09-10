@@ -111,7 +111,9 @@ defmodule EventasaurusApp.Auth do
     access_token = get_session(conn, :access_token)
 
     if access_token do
-      Client.update_user_password(access_token, new_password)
+      # Use server-side API for password updates during recovery
+      alias EventasaurusApp.Auth.ServerAuth
+      ServerAuth.update_password_with_recovery(access_token, new_password)
     else
       {:error, :no_authentication_token}
     end
