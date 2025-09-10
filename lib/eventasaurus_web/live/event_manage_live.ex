@@ -307,7 +307,7 @@ defmodule EventasaurusWeb.EventManageLive do
   end
 
   @impl true
-  def handle_event("bulk_email_input", %{"value" => bulk_input}, socket) do
+  def handle_event("bulk_email_input", %{"bulk_email_input" => bulk_input}, socket) do
     {:noreply, assign(socket, :bulk_email_input, bulk_input)}
   end
 
