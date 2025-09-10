@@ -278,18 +278,14 @@ defmodule EventasaurusApp.Auth.Client do
     service_role_key =
       if runtime_env == "dev" do
         System.get_env("SUPABASE_SERVICE_ROLE_KEY_LOCAL") ||
-          System.get_env("SUPABASE_SECRET_KEY") ||
-          System.get_env("SUPABASE_API_SECRET") ||
-          System.get_env("SUPABASE_SERVICE_ROLE_KEY")
+          System.get_env("SUPABASE_SECRET_KEY")
       else
-        System.get_env("SUPABASE_SECRET_KEY") ||
-          System.get_env("SUPABASE_API_SECRET") ||
-          System.get_env("SUPABASE_SERVICE_ROLE_KEY")
+        System.get_env("SUPABASE_SECRET_KEY")
       end
 
     # Fail fast if no service role key is available - don't fall back to regular API key for security
     if is_nil(service_role_key) do
-      raise "No service role key found. Please set SUPABASE_SERVICE_ROLE_KEY_LOCAL (dev) or SUPABASE_SECRET_KEY/SUPABASE_API_SECRET/SUPABASE_SERVICE_ROLE_KEY (prod) environment variables."
+      raise "No service role key found. Please set SUPABASE_SERVICE_ROLE_KEY_LOCAL (dev) or SUPABASE_SECRET_KEY (prod) environment variables."
     end
 
     [
