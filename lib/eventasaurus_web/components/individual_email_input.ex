@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
   attr :id, :string, required: true
   attr :emails, :list, default: []
   attr :current_input, :string, default: ""
+  attr :bulk_input, :string, default: ""
   attr :on_add_email, :any, required: true
   attr :on_remove_email, :any, required: true
   attr :on_input_change, :any, required: true
@@ -113,6 +114,7 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
               <textarea
                 id={"#{@id}-bulk-input"}
                 name="bulk_email_input"
+                value={@bulk_input}
                 rows="3"
                 placeholder="Paste multiple emails separated by commas or new lines:&#10;user1@example.com, user2@example.com&#10;user3@example.com"
                 class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
