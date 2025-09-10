@@ -4,10 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 
 // Always read Supabase credentials from <body> data attributes, set by the layout for the current environment
 const SUPABASE_URL = document.body.dataset.supabaseUrl;
-const SUPABASE_API_KEY = document.body.dataset.supabaseApiKey;
+const SUPABASE_PUBLISHABLE_KEY = document.body.dataset.supabaseApiKey;
 const BUCKET = document.body.dataset.supabaseBucket || 'event-images';
 
-if (!SUPABASE_URL || !SUPABASE_API_KEY) {
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error("Supabase credentials are missing. Make sure your layout injects them as data attributes for this environment.");
 }
 
@@ -29,7 +29,7 @@ const SupabaseImageUpload = {
 
     try {
       // Initialize Supabase client for this hook instance
-      this.supabase = createClient(SUPABASE_URL, SUPABASE_API_KEY, {
+      this.supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
         global: {
           headers: {
             'Authorization': `Bearer ${accessToken}`
