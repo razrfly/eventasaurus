@@ -332,10 +332,14 @@ export const UnifiedGooglePlaces = {
     const directAdd = this.inputEl.dataset.directAdd === 'true';
     
     if (directAdd && this.selectedPlaceData) {
-      // Direct addition: send event to LiveView to create poll option immediately
-      this.pushEvent('add_place', {
-        place_data: this.selectedPlaceData
-      });
+      // Direct addition: send event to the owning component when available
+      const componentElement = this.el.closest('[phx-target],[data-poll-id]');
+      const payload = { place_data: this.selectedPlaceData };
+      if (componentElement) {
+        this.pushEventTo(componentElement, 'add_place', payload);
+      } else {
+        this.pushEvent('add_place', payload);
+      }
       
       // Clear the form and hide it
       this.inputEl.value = '';
