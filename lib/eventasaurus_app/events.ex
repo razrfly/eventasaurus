@@ -4338,16 +4338,18 @@ defmodule EventasaurusApp.Events do
 
       # Insert dragged option at new position
       new_ordered_options = List.insert_at(other_options, insert_index, dragged_option)
+      max_index = length(new_ordered_options) - 1
 
-      # Calculate which options need their order_index updated
-      new_orders = new_ordered_options
-                  |> Enum.with_index()
-                  |> Enum.filter(fn {option, new_index} ->
-                       option.order_index != new_index
-                     end)
-                  |> Enum.map(fn {option, new_index} ->
-                       {option.id, new_index}
-                     end)
+      # For desc display, highest index should render first
+      new_orders =
+        new_ordered_options
+        |> Enum.with_index()
+        |> Enum.filter(fn {option, new_index} ->
+          option.order_index != max_index - new_index
+        end)
+        |> Enum.map(fn {option, new_index} ->
+          {option.id, max_index - new_index}
+        end)
 
       {new_orders, length(new_orders)}
     end
