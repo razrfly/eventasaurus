@@ -130,6 +130,7 @@ defmodule EventasaurusWeb.Utils.PollPhaseUtils do
   def format_poll_type(poll_type) when is_binary(poll_type) do
     case poll_type do
       "movie" -> "Movie"
+      "music_track" -> "Music"
       "places" -> "Place"
       "time" -> "Time"
       "custom" -> "General"
