@@ -204,4 +204,35 @@ defmodule EventasaurusApp.Events.EventParticipant do
       changeset
     end
   end
+
+  # Status validation functions - single source of truth from schema
+
+  @doc """
+  Gets valid status atoms directly from the schema definition.
+  This ensures the schema remains the single source of truth.
+  """
+  def valid_statuses do
+    __MODULE__.__schema__(:type, :status) 
+    |> elem(1) 
+    |> Keyword.get(:values)
+  end
+
+  @doc """
+  Gets valid status strings for API/form validation.
+  """
+  def valid_status_strings do
+    valid_statuses() |> Enum.map(&Atom.to_string/1)
+  end
+
+  @doc """
+  Safely parses a status string to atom, validating against schema.
+  Returns {:ok, atom} for valid statuses, {:error, :invalid_status} otherwise.
+  """
+  def parse_status(status_str) when is_binary(status_str) do
+    if status_str in valid_status_strings() do
+      {:ok, String.to_existing_atom(status_str)}
+    else
+      {:error, :invalid_status}
+    end
+  end
 end
