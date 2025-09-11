@@ -477,12 +477,14 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("toggle_status_menu", %{"participant_id" => participant_id}, socket) do
-    participant_id = String.to_integer(participant_id)
-    current_open = socket.assigns.open_status_menu
-
-    new_open = if current_open == participant_id, do: nil, else: participant_id
-
-    {:noreply, assign(socket, :open_status_menu, new_open)}
+    case safe_string_to_integer(participant_id) do
+      {:ok, participant_id_int} ->
+        current_open = socket.assigns.open_status_menu
+        new_open = if current_open == participant_id_int, do: nil, else: participant_id_int
+        {:noreply, assign(socket, :open_status_menu, new_open)}
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -492,38 +494,35 @@ defmodule EventasaurusWeb.EventManageLive do
 
   @impl true
   def handle_event("change_participant_status", %{"participant_id" => participant_id, "status" => status}, socket) do
-    case Integer.parse(participant_id) do
-      {participant_id, _} ->
-        case EventasaurusApp.Repo.get(EventasaurusApp.Events.EventParticipant, participant_id) do
-          nil ->
-            {:noreply, put_flash(socket, :error, "Participant not found")}
+    with {:ok, participant_id_int} <- safe_string_to_integer(participant_id),
+         participant when not is_nil(participant) <-
+           EventasaurusApp.Repo.get(EventasaurusApp.Events.EventParticipant, participant_id_int),
+         {:ok, status_atom} <- parse_status(status) do
+      case Events.admin_update_participant_status(participant, status_atom, socket.assigns.user) do
+        {:ok, _updated_participant} ->
+          updated_participants =
+            Events.list_event_participants(socket.assigns.event, limit: socket.assigns.participants_loaded)
+            |> Enum.sort_by(& &1.inserted_at, :desc)
 
-          participant ->
-            # Convert string status to atom
-            status_atom = String.to_existing_atom(status)
-            
-            case Events.admin_update_participant_status(participant, status_atom, socket.assigns.user) do
-              {:ok, _updated_participant} ->
-                # Reload participants to show updated status
-                updated_participants = Events.list_event_participants(socket.assigns.event, limit: socket.assigns.participants_loaded)
-                                     |> Enum.sort_by(& &1.inserted_at, :desc)
+          {:noreply,
+           socket
+           |> assign_participants_with_stats(updated_participants)
+           |> assign(:open_status_menu, nil)
+           |> put_flash(:info, "Participant status updated successfully")}
 
-                {:noreply,
-                 socket
-                 |> assign_participants_with_stats(updated_participants)
-                 |> assign(:open_status_menu, nil)  # Close the dropdown
-                 |> put_flash(:info, "Participant status updated successfully")}
+        {:error, :permission_denied} ->
+          {:noreply, put_flash(socket, :error, "You don't have permission to change this participant's status")}
 
-              {:error, :permission_denied} ->
-                {:noreply, put_flash(socket, :error, "You don't have permission to change this participant's status")}
-
-              {:error, _changeset} ->
-                {:noreply, put_flash(socket, :error, "Failed to update participant status")}
-            end
-        end
-
-      :error ->
+        {:error, _changeset} ->
+          {:noreply, put_flash(socket, :error, "Failed to update participant status")}
+      end
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "Participant not found")}
+      {:error, :invalid_format} ->
         {:noreply, put_flash(socket, :error, "Invalid participant ID")}
+      {:error, :invalid_status} ->
+        {:noreply, put_flash(socket, :error, "Invalid status")}
     end
   end
 
@@ -1837,6 +1836,19 @@ defmodule EventasaurusWeb.EventManageLive do
       {:noreply, assign(socket, :polls, polls)}
     else
       {:noreply, socket}
+    end
+  end
+
+  # Maps allowed status strings to atoms; rejects anything else.
+  defp parse_status(status_str) do
+    case status_str do
+      "pending" -> {:ok, :pending}
+      "accepted" -> {:ok, :accepted}
+      "declined" -> {:ok, :declined}
+      "cancelled" -> {:ok, :cancelled}
+      "confirmed_with_order" -> {:ok, :confirmed_with_order}
+      "interested" -> {:ok, :interested}
+      _ -> {:error, :invalid_status}
     end
   end
 
