@@ -212,9 +212,7 @@ defmodule EventasaurusApp.Events.EventParticipant do
   This ensures the schema remains the single source of truth.
   """
   def valid_statuses do
-    __MODULE__.__schema__(:type, :status) 
-    |> elem(1) 
-    |> Keyword.get(:values)
+    Ecto.Enum.values(__MODULE__, :status)
   end
 
   @doc """
