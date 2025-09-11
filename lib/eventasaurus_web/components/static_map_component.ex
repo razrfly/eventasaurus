@@ -8,6 +8,18 @@ defmodule EventasaurusWeb.StaticMapComponent do
   - Accessibility features
   - Error handling and graceful fallbacks
   - Loading states
+  
+  ## Security Notes
+  
+  This component uses Mapbox Static API tokens in client-side URLs, which is the standard
+  approach for static maps. To secure your Mapbox usage:
+  
+  1. Use a PUBLIC token (not secret) with minimal required scopes
+  2. Enable URL restrictions on your Mapbox token for your domain
+  3. Rotate tokens periodically if abuse is detected
+  4. Consider rate limiting at the application level
+  
+  For more security guidance, see: https://docs.mapbox.com/help/troubleshooting/how-to-use-mapbox-securely/
   """
 
   use EventasaurusWeb, :live_component
@@ -87,7 +99,7 @@ defmodule EventasaurusWeb.StaticMapComponent do
     has_coordinates?(venue) || has_address?(venue)
   end
   
-  defp has_coordinates?(%{latitude: lat, longitude: lon}) when is_float(lat) and is_float(lon), do: true
+  defp has_coordinates?(%{latitude: lat, longitude: lon}) when is_number(lat) and is_number(lon), do: true
   defp has_coordinates?(_), do: false
   
   defp has_address?(%{address: address}) when is_binary(address) and address != "", do: true
@@ -156,20 +168,41 @@ defmodule EventasaurusWeb.StaticMapComponent do
     end
   end
   
-  defp get_coordinates(%{latitude: lat, longitude: lon}) when is_float(lat) and is_float(lon) do
+  defp get_coordinates(%{latitude: lat, longitude: lon}) when is_number(lat) and is_number(lon) do
     {lat, lon}
   end
   
   defp get_coordinates(_venue) do
     # If no coordinates, we would need to geocode the address
-    # For now, return a default (this should be handled by should_render_map?)
-    {0.0, 0.0}
+    # This should not be reached due to should_render_map? check
+    raise "Attempted to get coordinates for venue without valid location data"
   end
   
   defp get_mapbox_style_id(theme) do
-    # Use your custom Mapbox style for all themes for now
-    # Later we can create different custom styles for different themes
-    "holden/cm7pbsjwv004401sc5z5ldatr"
+    # Map event themes to appropriate Mapbox built-in styles
+    case theme do
+      # Clean custom style for minimal theme
+      :minimal -> "holden/cm7pc60fv00zf01s2846m99jm"
+      # Dark style perfect for cosmic theme
+      :cosmic -> "mapbox/dark-v11"
+      # Clean streets for velocity theme
+      :velocity -> "mapbox/streets-v12"
+      # Outdoors style for retro theme
+      :retro -> "mapbox/outdoors-v12"
+      # Satellite streets for celebration
+      :celebration -> "mapbox/satellite-streets-v12"
+      # Natural features for nature theme
+      :nature -> "mapbox/outdoors-v12"
+      # Configurable custom style as default
+      :professional -> get_default_style_id()
+      # Default to configurable professional style
+      _ -> get_default_style_id()
+    end
+  end
+  
+  defp get_default_style_id do
+    # Allow configurable default style via environment variable
+    System.get_env("MAPBOX_DEFAULT_STYLE_ID") || "holden/cm7pc8jcc005f01s8al2s9aqh"
   end
   
   defp get_marker_color(theme) do
