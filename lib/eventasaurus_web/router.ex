@@ -15,8 +15,35 @@ defmodule EventasaurusWeb.Router do
     scope "/dev" do
       pipe_through :browser
       
-      # Oban Web UI for monitoring background jobs
+      # Oban Web UI for monitoring background jobs (dev - no auth)
       oban_dashboard("/oban")
+    end
+  end
+
+  # Production Oban Web UI with authentication
+  if Mix.env() == :prod do
+    import Oban.Web.Router
+    
+    pipeline :oban_admin do
+      plug :accepts, ["html"]
+      plug :fetch_session
+      plug :fetch_live_flash
+      plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
+      plug :protect_from_forgery
+      plug :put_secure_browser_headers
+      plug EventasaurusWeb.Plugs.CSPPlug
+      plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
+      plug :fetch_auth_user
+      plug :assign_user_struct
+      plug :require_authenticated_user
+      plug EventasaurusWeb.Plugs.ObanAuthPlug
+    end
+    
+    scope "/admin" do
+      pipe_through :oban_admin
+      
+      # Oban Web UI with admin authentication
+      oban_dashboard("/oban", csp_nonce_assign_key: :csp_nonce)
     end
   end
 
