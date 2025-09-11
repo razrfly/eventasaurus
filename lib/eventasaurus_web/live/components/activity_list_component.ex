@@ -63,7 +63,7 @@ defmodule EventasaurusWeb.Components.ActivityListComponent do
                   <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                     <div class="flex-1 min-w-0">
                       <div class="flex items-start justify-between gap-2">
-                        <h4 class="text-sm font-medium text-gray-900 line-clamp-2 sm:truncate flex-1">
+                        <h4 title={get_activity_title(activity)} class="text-sm font-medium text-gray-900 line-clamp-2 sm:truncate flex-1">
                           <%= get_activity_title(activity) %>
                         </h4>
                         <!-- Activity Type Badge - Top right on mobile -->
