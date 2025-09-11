@@ -1585,7 +1585,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     if socket.assigns[:adding_movie] do
       {:noreply, socket}
     else
-      user = socket.assigns.user
+      case check_rate_limit(socket, :add_movie) do
+        {:error, :rate_limited} ->
+          {:noreply, put_flash(socket, :error, "Please wait a moment before adding another movie.")}
+        {:ok, socket} ->
+          user = socket.assigns.user
 
       if is_nil(user) do
         {:noreply,
@@ -1627,7 +1631,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
                   {:noreply,
                    socket
-                   |> put_flash(:info, "Movie added successfully!")
                    |> assign(:adding_movie, false)
                    |> assign(:suggestion_form_visible, false)
                    |> assign(:search_query, "")
@@ -1657,6 +1660,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         end
       end
     end
+  end
   end
 
   @impl true
@@ -1697,7 +1701,11 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     if socket.assigns[:adding_track] do
       {:noreply, socket}
     else
-      user = socket.assigns.user
+      case check_rate_limit(socket, :add_track) do
+        {:error, :rate_limited} ->
+          {:noreply, put_flash(socket, :error, "Please wait a moment before adding another track.")}
+        {:ok, socket} ->
+          user = socket.assigns.user
 
       if is_nil(user) do
         {:noreply,
@@ -1733,7 +1741,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
               {:noreply,
                socket
-               |> put_flash(:info, "Track added successfully!")
                |> assign(:adding_track, false)
                |> assign(:suggestion_form_visible, false)
                |> assign(:search_query, "")
@@ -1755,6 +1762,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
       end
     end
   end
+  end
 
   # Direct place addition handler (triggered by JavaScript hook)
   @impl true
@@ -1763,15 +1771,20 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     if socket.assigns[:adding_place] do
       {:noreply, socket}
     else
-      user = socket.assigns.user
+      case check_rate_limit(socket, :add_place) do
+        {:error, :rate_limited} ->
+          {:noreply, put_flash(socket, :error, "Please wait a moment before adding another place.")}
+        {:ok, socket} ->
+          user = socket.assigns.user
 
-      if is_nil(user) do
-        {:noreply,
-         socket
-         |> put_flash(:error, "You must be logged in to add places.")
-         |> assign(:adding_place, false)}
-      else
-        if place_data do
+          if is_nil(user) do
+            {:noreply,
+             socket
+             |> put_flash(:error, "You must be logged in to add places.")
+             |> assign(:adding_place, false)}
+          else
+            # Validate place_data has required fields
+            if place_data && Map.get(place_data, "name") && Map.get(place_data, "place_id") do
           # Set loading state to prevent duplicate submissions
           socket = assign(socket, :adding_place, true)
 
@@ -1792,7 +1805,6 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
 
               {:noreply,
                socket
-               |> put_flash(:info, "Place added successfully!")
                |> assign(:adding_place, false)
                |> assign(:suggestion_form_visible, false)}
 
@@ -1805,12 +1817,15 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                |> assign(:adding_place, false)}
           end
         else
+          Logger.warning("Invalid place_data received: #{inspect(place_data)}")
           {:noreply,
            socket
-           |> assign(:adding_place, false)}
+           |> assign(:adding_place, false)
+           |> put_flash(:error, "Invalid place data. Please try again.")}
         end
       end
     end
+  end
   end
 
   # NOTE: poll_location_selected event handler removed - now using form-based submission
@@ -2323,6 +2338,20 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
   defp maybe_put_param(params, _key, nil), do: params
   defp maybe_put_param(params, _key, ""), do: params
   defp maybe_put_param(params, key, value), do: Map.put(params, key, value)
+
+  # Rate limiting for direct add operations
+  defp check_rate_limit(socket, action_type) do
+    # Track last action timestamp in socket assigns
+    last_action_key = :"last_#{action_type}_at"
+    last_action = socket.assigns[last_action_key]
+    now = System.system_time(:millisecond)
+    
+    if last_action && now - last_action < 1000 do  # 1 second rate limit
+      {:error, :rate_limited}
+    else
+      {:ok, assign(socket, last_action_key, now)}
+    end
+  end
 
   # Template helper functions
   
