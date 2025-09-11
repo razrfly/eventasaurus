@@ -83,6 +83,7 @@ defmodule EventasaurusWeb.EventManageLive do
                |> assign(:invitation_message, "")
                |> assign(:add_mode, "invite")
                |> assign(:open_participant_menu, nil)  # Track which dropdown is open
+               |> assign(:open_status_menu, nil)  # Track which status dropdown is open
                # Organizer management state
                |> assign(:organizers, organizers)
                |> assign(:show_organizer_search_modal, false)
@@ -472,6 +473,58 @@ defmodule EventasaurusWeb.EventManageLive do
   @impl true
   def handle_event("close_participant_menu", _params, socket) do
     {:noreply, assign(socket, :open_participant_menu, nil)}
+  end
+
+  @impl true
+  def handle_event("toggle_status_menu", %{"participant_id" => participant_id}, socket) do
+    participant_id = String.to_integer(participant_id)
+    current_open = socket.assigns.open_status_menu
+
+    new_open = if current_open == participant_id, do: nil, else: participant_id
+
+    {:noreply, assign(socket, :open_status_menu, new_open)}
+  end
+
+  @impl true
+  def handle_event("close_status_menu", _params, socket) do
+    {:noreply, assign(socket, :open_status_menu, nil)}
+  end
+
+  @impl true
+  def handle_event("change_participant_status", %{"participant_id" => participant_id, "status" => status}, socket) do
+    case Integer.parse(participant_id) do
+      {participant_id, _} ->
+        case EventasaurusApp.Repo.get(EventasaurusApp.Events.EventParticipant, participant_id) do
+          nil ->
+            {:noreply, put_flash(socket, :error, "Participant not found")}
+
+          participant ->
+            # Convert string status to atom
+            status_atom = String.to_existing_atom(status)
+            
+            case Events.admin_update_participant_status(participant, status_atom, socket.assigns.user) do
+              {:ok, _updated_participant} ->
+                # Reload participants to show updated status
+                updated_participants = Events.list_event_participants(socket.assigns.event, limit: socket.assigns.participants_loaded)
+                                     |> Enum.sort_by(& &1.inserted_at, :desc)
+
+                {:noreply,
+                 socket
+                 |> assign_participants_with_stats(updated_participants)
+                 |> assign(:open_status_menu, nil)  # Close the dropdown
+                 |> put_flash(:info, "Participant status updated successfully")}
+
+              {:error, :permission_denied} ->
+                {:noreply, put_flash(socket, :error, "You don't have permission to change this participant's status")}
+
+              {:error, _changeset} ->
+                {:noreply, put_flash(socket, :error, "Failed to update participant status")}
+            end
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Invalid participant ID")}
+    end
   end
 
   @impl true
