@@ -30,24 +30,31 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
         |> redirect(to: ~p"/dashboard")
         |> halt()
 
-      # If session already verified, allow access
-      get_session(conn, "oban_admin_verified") == admin_password ->
+      # If session already verified with current password digest, allow access
+      get_session(conn, "oban_admin_token") == oban_password_digest(admin_password) ->
         conn
 
-      # Check if password provided in params
-      conn.params["admin_password"] == admin_password ->
-        # Store verification in session
+      # Handle POSTed password securely
+      conn.method == "POST" and is_binary(conn.params["admin_password"])
+        and Plug.Crypto.secure_compare(conn.params["admin_password"], admin_password) ->
         conn
-        |> put_session("oban_admin_verified", admin_password)
+        |> configure_session(renew: true)
+        |> put_session("oban_admin_token", oban_password_digest(admin_password))
+        |> redirect(to: conn.request_path) # clear query params
+        |> halt()
 
-      # If this is a GET request without password, show auth form
-      conn.method == "GET" and is_nil(conn.params["admin_password"]) ->
+      # If this is a GET request, show auth form
+      conn.method == "GET" ->
         show_auth_form(conn)
 
       # Wrong password provided
       true ->
         show_auth_form(conn, "Invalid admin password")
     end
+  end
+
+  defp oban_password_digest(password) do
+    :crypto.hash(:sha256, password) |> Base.url_encode64()
   end
 
   defp show_auth_form(conn, error_message \\ nil) do
@@ -58,7 +65,7 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Oban Admin Authentication</title>
-      <style>
+      <style nonce="#{conn.assigns[:csp_nonce]}">
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           margin: 0;
@@ -142,10 +149,11 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
         
         #{if error_message, do: ~s(<div class="error">#{error_message}</div>), else: ""}
         
-        <form method="get" action="#{conn.request_path}">
+        <form method="post" action="#{conn.request_path}">
+          <input type="hidden" name="_csrf_token" value="#{Plug.CSRFProtection.get_csrf_token()}">
           <div class="form-group">
             <label for="admin_password">Admin Password:</label>
-            <input type="password" id="admin_password" name="admin_password" required autofocus>
+            <input type="password" id="admin_password" name="admin_password" required autofocus autocomplete="current-password">
           </div>
           
           <button type="submit">Access Oban Dashboard</button>
@@ -159,9 +167,11 @@ defmodule EventasaurusWeb.Plugs.ObanAuthPlug do
     </html>
     """
 
+    status = if error_message, do: 401, else: 200
+    
     conn
     |> put_resp_content_type("text/html")
-    |> send_resp(200, html)
+    |> send_resp(status, html)
     |> halt()
   end
 end
