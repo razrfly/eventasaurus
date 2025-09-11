@@ -328,18 +328,32 @@ export const UnifiedGooglePlaces = {
   
   // Restore original poll selection handling
   handlePollSelection() {
-    // For polls, set the title field and submit the form
-    if (this.selectedPlaceData) {
-      // Set the input value to the place name for submission
-      this.inputEl.value = this.selectedPlaceData.name || '';
-    }
+    // Check if direct add mode is enabled
+    const directAdd = this.inputEl.dataset.directAdd === 'true';
     
-    // Submit the form after selection
-    const form = this.el.closest('form');
-    if (form && this.config.required) {
-      // Trigger form validation
-      const event = new Event('submit', { bubbles: true, cancelable: true });
-      form.dispatchEvent(event);
+    if (directAdd && this.selectedPlaceData) {
+      // Direct addition: send event to LiveView to create poll option immediately
+      this.pushEvent('add_place', {
+        place_data: this.selectedPlaceData
+      });
+      
+      // Clear the form and hide it
+      this.inputEl.value = '';
+      this.clearSelection();
+    } else {
+      // Original form filling behavior
+      if (this.selectedPlaceData) {
+        // Set the input value to the place name for submission
+        this.inputEl.value = this.selectedPlaceData.name || '';
+      }
+      
+      // Submit the form after selection
+      const form = this.el.closest('form');
+      if (form && this.config.required) {
+        // Trigger form validation
+        const event = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+      }
     }
   },
   
