@@ -1028,6 +1028,22 @@ defmodule EventasaurusApp.Events do
   end
 
   @doc """
+  Updates a participant's status with admin permission checking.
+  Only event organizers can change participant status.
+  """
+  def admin_update_participant_status(%EventParticipant{} = participant, new_status, %User{} = admin_user) do
+    # Load the event with preloaded organizers to check permissions
+    event = get_event!(participant.event_id)
+
+    # Check if the admin user is an organizer of this event
+    if user_is_organizer?(event, admin_user) do
+      update_event_participant(participant, %{status: new_status})
+    else
+      {:error, :permission_denied}
+    end
+  end
+
+  @doc """
   Deletes an event participant.
   """
   def delete_event_participant(%EventParticipant{} = event_participant) do
