@@ -4046,12 +4046,32 @@ defmodule EventasaurusApp.Events do
       _ -> nil
     end
     
+    # Auto-assign order_index if not provided (new items go to top)
+    attrs_with_order = if is_nil(attrs["order_index"]) && is_nil(attrs[:order_index]) && poll_id do
+      max_order_index = from(po in PollOption, 
+                           where: po.poll_id == ^poll_id,
+                           select: max(po.order_index)) 
+                      |> Repo.one()
+      
+      # If there are no existing options, start at 0, otherwise use max + 1
+      new_order_index = if max_order_index, do: max_order_index + 1, else: 0
+      
+      # Normalize the attrs map format and add order_index
+      if is_map(attrs) && Map.has_key?(attrs, "poll_id") do
+        Map.put(attrs, "order_index", new_order_index)
+      else
+        Map.put(attrs, :order_index, new_order_index)
+      end
+    else
+      attrs
+    end
+    
     # Check for duplicates using place_id (for places) or title (for non-places)
     if poll_id && title && suggested_by_id do
       case check_duplicate_option(poll_id, title, place_id, suggested_by_id) do
         {:ok, :unique} ->
           result = %PollOption{}
-          |> PollOption.creation_changeset(attrs, opts)
+          |> PollOption.creation_changeset(attrs_with_order, opts)
           |> Repo.insert()
           
           case result do
@@ -4082,19 +4102,19 @@ defmodule EventasaurusApp.Events do
         
         {:error, :duplicate_by_same_user} ->
           changeset = %PollOption{}
-          |> PollOption.creation_changeset(attrs, opts)
+          |> PollOption.creation_changeset(attrs_with_order, opts)
           |> add_error(:title, "You have already suggested this option")
           {:error, changeset}
         
         {:error, :duplicate_by_other_user} ->
           changeset = %PollOption{}
-          |> PollOption.creation_changeset(attrs, opts)
+          |> PollOption.creation_changeset(attrs_with_order, opts)
           |> add_error(:title, "This option has already been suggested by another user")
           {:error, changeset}
         
         {:error, error_message} when is_binary(error_message) ->
           changeset = %PollOption{}
-          |> PollOption.creation_changeset(attrs, opts)
+          |> PollOption.creation_changeset(attrs_with_order, opts)
           |> add_error(:base, error_message)
           {:error, changeset}
       end

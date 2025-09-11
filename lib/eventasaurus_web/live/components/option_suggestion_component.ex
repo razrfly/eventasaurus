@@ -49,7 +49,9 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
      # NEW: Time selection state
      |> assign(:time_enabled, false)
      |> assign(:selected_date_for_time, nil)
-     |> assign(:date_time_slots, %{})}
+     |> assign(:date_time_slots, %{})
+     # Direct addition mode for places
+     |> assign(:places_direct_mode, true)}  # Default to direct mode for better UX
   end
 
   @impl true
@@ -401,13 +403,35 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                 <% else %>
                   <!-- Regular option input for other poll types -->
                   <div class="relative">
-                    <label for="option_title" class="block text-sm font-medium text-gray-700">
-                      <%= option_title_label(@poll) %> 
-                      <%= if search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll) do %>
-                        <span class="text-xs text-gray-500 font-normal">(<%= search_location %>)</span>
+                    <div class="flex items-center justify-between">
+                      <label for="option_title" class="block text-sm font-medium text-gray-700">
+                        <%= option_title_label(@poll) %> 
+                        <%= if search_location = EventasaurusWeb.Utils.PollPhaseUtils.get_poll_search_location(@poll) do %>
+                          <span class="text-xs text-gray-500 font-normal">(<%= search_location %>)</span>
+                        <% end %>
+                        <span class="text-red-500">*</span>
+                      </label>
+                      
+                      <!-- Places mode toggle -->
+                      <%= if @poll.poll_type == "places" do %>
+                        <div class="flex items-center space-x-2 text-xs">
+                          <button type="button"
+                                  class={"px-2 py-1 rounded transition-colors #{if @places_direct_mode, do: "bg-indigo-100 text-indigo-700", else: "text-gray-500 hover:text-gray-700"}"}
+                                  phx-click="toggle_places_mode"
+                                  phx-target={@myself}
+                                  title="Add places directly when selected">
+                            Quick Add
+                          </button>
+                          <button type="button"
+                                  class={"px-2 py-1 rounded transition-colors #{if !@places_direct_mode, do: "bg-indigo-100 text-indigo-700", else: "text-gray-500 hover:text-gray-700"}"}
+                                  phx-click="toggle_places_mode"
+                                  phx-target={@myself}
+                                  title="Fill form with place details before adding">
+                            Edit First
+                          </button>
+                        </div>
                       <% end %>
-                      <span class="text-red-500">*</span>
-                    </label>
+                    </div>
                   <div class="mt-1 relative">
                     <%= if should_use_api_search?(@poll.poll_type) do %>
                       <%= if @poll.poll_type == "movie" do %>
@@ -448,6 +472,7 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                           phx-hook="PlacesSuggestionSearch"
                           data-location-scope={@poll |> get_location_scope()}
                           data-search-location={@poll |> get_search_location_json()}
+                          data-direct-add={to_string(@places_direct_mode)}
                           autocomplete="off"
                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         />
@@ -472,28 +497,53 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <%= if @poll.poll_type == "movie" and length(@search_results) > 0 do %>
                       <div class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         <%= for movie <- @search_results do %>
-                          <div class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                               phx-click="select_movie"
-                               phx-value-movie-id={movie.id}
-                               phx-target={@myself}>
-                            <% image_url = get_movie_poster_url(movie) %>
-                            <%= if image_url do %>
-                              <img src={image_url} alt={movie.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
-                            <% else %>
-                              <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2"/>
-                                </svg>
+                          <div class="flex items-center justify-between p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                            <!-- Movie info section (clickable for direct add) -->
+                            <div class="flex items-center flex-1 cursor-pointer"
+                                 phx-click="add_movie"
+                                 phx-value-movie-id={movie.id}
+                                 phx-target={@myself}>
+                              <% image_url = get_movie_poster_url(movie) %>
+                              <%= if image_url do %>
+                                <img src={image_url} alt={movie.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
+                              <% else %>
+                                <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
+                                  <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                                  </svg>
+                                </div>
+                              <% end %>
+                              <div class="flex-1 min-w-0">
+                                <h4 class="font-medium text-gray-900 truncate"><%= movie.title %></h4>
+                                <%= if movie.metadata && movie.metadata["release_date"] do %>
+                                  <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
+                                <% end %>
+                                <%= if is_binary(movie.description) && String.length(movie.description) > 0 do %>
+                                  <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
+                                <% end %>
                               </div>
-                            <% end %>
-                            <div class="flex-1 min-w-0">
-                              <h4 class="font-medium text-gray-900 truncate"><%= movie.title %></h4>
-                              <%= if movie.metadata && movie.metadata["release_date"] do %>
-                                <p class="text-sm text-gray-600"><%= String.slice(movie.metadata["release_date"], 0, 4) %></p>
-                              <% end %>
-                              <%= if is_binary(movie.description) && String.length(movie.description) > 0 do %>
-                                <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= movie.description %></p>
-                              <% end %>
+                            </div>
+                            
+                            <!-- Action buttons -->
+                            <div class="flex items-center space-x-2 ml-3">
+                              <!-- Direct Add Button -->
+                              <button type="button" 
+                                      class="px-3 py-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors"
+                                      phx-click="add_movie"
+                                      phx-value-movie-id={movie.id}
+                                      phx-target={@myself}
+                                      title="Add movie directly">
+                                Add
+                              </button>
+                              <!-- Fill Form Button -->
+                              <button type="button"
+                                      class="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+                                      phx-click="select_movie"
+                                      phx-value-movie-id={movie.id}
+                                      phx-target={@myself}
+                                      title="Fill form with movie details">
+                                Edit
+                              </button>
                             </div>
                           </div>
                         <% end %>
@@ -504,28 +554,53 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
                     <%= if @poll.poll_type == "music_track" and length(@search_results) > 0 do %>
                       <div class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         <%= for track <- @search_results do %>
-                          <div class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                               phx-click="music_track_selected"
-                               phx-value-track={Jason.encode!(track)}
-                               phx-target={@myself}>
-                            <% image_url = track.image_url %>
-                            <%= if image_url do %>
-                              <img src={image_url} alt={track.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
-                            <% else %>
-                              <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                </svg>
+                          <div class="flex items-center justify-between p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                            <!-- Track info section (clickable for direct add) -->
+                            <div class="flex items-center flex-1 cursor-pointer"
+                                 phx-click="add_music_track"
+                                 phx-value-track={Jason.encode!(track)}
+                                 phx-target={@myself}>
+                              <% image_url = track.image_url %>
+                              <%= if image_url do %>
+                                <img src={image_url} alt={track.title} class="w-10 h-14 object-cover rounded mr-3 flex-shrink-0" />
+                              <% else %>
+                                <div class="w-10 h-14 bg-gray-200 rounded mr-3 flex-shrink-0 flex items-center justify-center">
+                                  <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                  </svg>
+                                </div>
+                              <% end %>
+                              <div class="flex-1 min-w-0">
+                                <h4 class="font-medium text-gray-900 truncate"><%= track.title %></h4>
+                                <%= if track.metadata && track.metadata["duration_formatted"] do %>
+                                  <p class="text-sm text-gray-600"><%= track.metadata["duration_formatted"] %></p>
+                                <% end %>
+                                <%= if is_binary(track.description) && String.length(track.description) > 0 do %>
+                                  <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= track.description %></p>
+                                <% end %>
                               </div>
-                            <% end %>
-                            <div class="flex-1 min-w-0">
-                              <h4 class="font-medium text-gray-900 truncate"><%= track.title %></h4>
-                              <%= if track.metadata && track.metadata["duration_formatted"] do %>
-                                <p class="text-sm text-gray-600"><%= track.metadata["duration_formatted"] %></p>
-                              <% end %>
-                              <%= if is_binary(track.description) && String.length(track.description) > 0 do %>
-                                <p class="text-xs text-gray-500 mt-1 line-clamp-2"><%= track.description %></p>
-                              <% end %>
+                            </div>
+                            
+                            <!-- Action buttons -->
+                            <div class="flex items-center space-x-2 ml-3">
+                              <!-- Direct Add Button -->
+                              <button type="button" 
+                                      class="px-3 py-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors"
+                                      phx-click="add_music_track"
+                                      phx-value-track={Jason.encode!(track)}
+                                      phx-target={@myself}
+                                      title="Add track directly">
+                                Add
+                              </button>
+                              <!-- Fill Form Button -->
+                              <button type="button"
+                                      class="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+                                      phx-click="music_track_selected"
+                                      phx-value-track={Jason.encode!(track)}
+                                      phx-target={@myself}
+                                      title="Fill form with track details">
+                                Edit
+                              </button>
                             </div>
                           </div>
                         <% end %>
@@ -1503,6 +1578,87 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
+  # Direct movie addition handler (like public interface)
+  @impl true
+  def handle_event("add_movie", %{"movie-id" => movie_id}, socket) do
+    # Check if already processing to prevent double-clicks
+    if socket.assigns[:adding_movie] do
+      {:noreply, socket}
+    else
+      user = socket.assigns.user
+
+      if is_nil(user) do
+        {:noreply,
+         socket
+         |> put_flash(:error, "You must be logged in to add movies.")
+         |> assign(:adding_movie, false)}
+      else
+        # Find the selected movie in search results
+        movie_data = socket.assigns.search_results
+        |> Enum.find(fn movie ->
+          case Integer.parse(movie_id) do
+            {id, _} -> movie.id == id
+            :error -> to_string(movie.id) == movie_id
+          end
+        end)
+
+        if movie_data do
+          # Set loading state to prevent duplicate submissions
+          socket = assign(socket, :adding_movie, true)
+
+          # Get rich data and create poll option directly
+          case RichDataManager.get_cached_details(:tmdb, movie_data.id, :movie) do
+            {:ok, rich_movie_data} ->
+              # Prepare movie option data
+              option_params =
+                MovieDataService.prepare_movie_option_data(
+                  movie_data.id,
+                  rich_movie_data
+                )
+                |> Map.merge(%{
+                  "poll_id" => socket.assigns.poll.id,
+                  "suggested_by_id" => user.id
+                })
+
+              case Events.create_poll_option(option_params) do
+                {:ok, _option} ->
+                  # Notify parent component of successful option creation
+                  send(self(), %{type: :option_suggested})
+
+                  {:noreply,
+                   socket
+                   |> put_flash(:info, "Movie added successfully!")
+                   |> assign(:adding_movie, false)
+                   |> assign(:suggestion_form_visible, false)
+                   |> assign(:search_query, "")
+                   |> assign(:search_results, [])}
+
+                {:error, changeset} ->
+                  Logger.error("Failed to create movie poll option: #{inspect(changeset)}")
+
+                  {:noreply,
+                   socket
+                   |> put_flash(:error, "Failed to add movie. Please try again.")
+                   |> assign(:adding_movie, false)}
+              end
+
+            {:error, reason} ->
+              Logger.error("Failed to fetch rich movie data: #{inspect(reason)}")
+
+              {:noreply,
+               socket
+               |> put_flash(:error, "Failed to fetch movie details. Please try again.")
+               |> assign(:adding_movie, false)}
+          end
+        else
+          {:noreply,
+           socket
+           |> assign(:adding_movie, false)}
+        end
+      end
+    end
+  end
+
   @impl true
   def handle_event("music_track_selected", %{"track" => track_data}, socket) do
     if socket.assigns.poll.poll_type == "music_track" do
@@ -1534,9 +1690,137 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
     end
   end
 
+  # Direct music track addition handler (like public interface)
+  @impl true
+  def handle_event("add_music_track", %{"track" => track_data}, socket) do
+    # Check if already processing to prevent double-clicks
+    if socket.assigns[:adding_track] do
+      {:noreply, socket}
+    else
+      user = socket.assigns.user
+
+      if is_nil(user) do
+        {:noreply,
+         socket
+         |> put_flash(:error, "You must be logged in to add tracks.")
+         |> assign(:adding_track, false)}
+      else
+        # Parse JSON string if needed
+        parsed_track = case Jason.decode(track_data) do
+          {:ok, data} -> data
+          {:error, _} -> track_data  # Already a map
+        end
+
+        if parsed_track do
+          # Set loading state to prevent duplicate submissions
+          socket = assign(socket, :adding_track, true)
+
+          # Prepare music track option data
+          option_params = %{
+            "title" => parsed_track["title"],
+            "description" => parsed_track["description"] || "",
+            "external_id" => parsed_track["id"],
+            "image_url" => parsed_track["image_url"],
+            "metadata" => parsed_track["metadata"] || %{},
+            "poll_id" => socket.assigns.poll.id,
+            "suggested_by_id" => user.id
+          }
+
+          case Events.create_poll_option(option_params) do
+            {:ok, _option} ->
+              # Notify parent component of successful option creation
+              send(self(), %{type: :option_suggested})
+
+              {:noreply,
+               socket
+               |> put_flash(:info, "Track added successfully!")
+               |> assign(:adding_track, false)
+               |> assign(:suggestion_form_visible, false)
+               |> assign(:search_query, "")
+               |> assign(:search_results, [])}
+
+            {:error, changeset} ->
+              Logger.error("Failed to create music track poll option: #{inspect(changeset)}")
+
+              {:noreply,
+               socket
+               |> put_flash(:error, "Failed to add track. Please try again.")
+               |> assign(:adding_track, false)}
+          end
+        else
+          {:noreply,
+           socket
+           |> assign(:adding_track, false)}
+        end
+      end
+    end
+  end
+
+  # Direct place addition handler (triggered by JavaScript hook)
+  @impl true
+  def handle_event("add_place", %{"place_data" => place_data}, socket) do
+    # Check if already processing to prevent double-clicks
+    if socket.assigns[:adding_place] do
+      {:noreply, socket}
+    else
+      user = socket.assigns.user
+
+      if is_nil(user) do
+        {:noreply,
+         socket
+         |> put_flash(:error, "You must be logged in to add places.")
+         |> assign(:adding_place, false)}
+      else
+        if place_data do
+          # Set loading state to prevent duplicate submissions
+          socket = assign(socket, :adding_place, true)
+
+          # Prepare place option data (using same logic as form submission)
+          option_params = %{
+            "title" => Map.get(place_data, "name", ""),
+            "description" => Map.get(place_data, "formatted_address", ""),
+            "external_data" => place_data,
+            "external_id" => Map.get(place_data, "place_id"),
+            "poll_id" => socket.assigns.poll.id,
+            "suggested_by_id" => user.id
+          }
+
+          case Events.create_poll_option(option_params) do
+            {:ok, _option} ->
+              # Notify parent component of successful option creation
+              send(self(), %{type: :option_suggested})
+
+              {:noreply,
+               socket
+               |> put_flash(:info, "Place added successfully!")
+               |> assign(:adding_place, false)
+               |> assign(:suggestion_form_visible, false)}
+
+            {:error, changeset} ->
+              Logger.error("Failed to create place poll option: #{inspect(changeset)}")
+
+              {:noreply,
+               socket
+               |> put_flash(:error, "Failed to add place. Please try again.")
+               |> assign(:adding_place, false)}
+          end
+        else
+          {:noreply,
+           socket
+           |> assign(:adding_place, false)}
+        end
+      end
+    end
+  end
+
   # NOTE: poll_location_selected event handler removed - now using form-based submission
   # Place selection data is sent via hidden form fields (external_data, external_id, place_id)
   # and processed through the normal form submission flow in create_option
+
+  @impl true
+  def handle_event("toggle_places_mode", _params, socket) do
+    {:noreply, assign(socket, :places_direct_mode, !socket.assigns.places_direct_mode)}
+  end
 
   @impl true
   def handle_event("validate_suggestion", %{"poll_option" => option_params}, socket) do
@@ -2063,10 +2347,10 @@ defmodule EventasaurusWeb.OptionSuggestionComponent do
         end)
       
       _ ->
-        # For other poll types, sort by order_index
+        # For other poll types, sort by order_index (descending - higher values appear first)
         Enum.sort_by(options, fn option ->
           option.order_index || 0
-        end)
+        end, :desc)
     end
   end
 
