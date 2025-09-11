@@ -31,6 +31,10 @@ config :eventasaurus, :turnstile,
   site_key: System.get_env("TURNSTILE_SITE_KEY"),
   secret_key: System.get_env("TURNSTILE_SECRET_KEY")
 
+# Configure Mapbox for static maps
+config :eventasaurus, :mapbox,
+  access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
+
 # Configure Sentry for all environments (dev/test/prod)
 # Using runtime.exs ensures File.cwd() runs at startup, not compile time
 case System.get_env("SENTRY_DSN") do
