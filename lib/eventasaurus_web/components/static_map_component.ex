@@ -61,26 +61,37 @@ defmodule EventasaurusWeb.StaticMapComponent do
         
         <!-- Map image -->
         <div class={map_container_classes(@size)} id={"map-container-#{@id}"}>
-          <img
-            src={mapbox_static_url(@venue, @theme, @size)}
-            alt={map_alt_text(@venue)}
-            class="w-full h-full object-cover rounded-lg"
-            loading="lazy"
-            onerror={"this.style.display='none'; document.getElementById('map-fallback-#{@id}').style.display='block'"}
-          />
-          
-          <!-- Error fallback (hidden by default) -->
-          <div 
-            id={"map-fallback-#{@id}"} 
-            class="hidden w-full h-full bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 text-sm"
-          >
-            <div class="text-center">
-              <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
-              </svg>
-              <p>Map unavailable</p>
+          <%= if has_coordinates?(@venue) do %>
+            <img
+              src={mapbox_static_url(@venue, @theme, @size)}
+              alt={map_alt_text(@venue)}
+              class="w-full h-full object-cover rounded-lg"
+              loading="lazy"
+              onerror={"this.style.display='none'; document.getElementById('map-fallback-#{@id}').style.display='block'"}
+            />
+            <!-- Error fallback (hidden by default) -->
+            <div 
+              id={"map-fallback-#{@id}"} 
+              class="hidden w-full h-full bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 text-sm"
+            >
+              <div class="text-center">
+                <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
+                </svg>
+                <p>Map unavailable</p>
+              </div>
             </div>
-          </div>
+          <% else %>
+            <!-- Address-only fallback -->
+            <div class="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 text-sm">
+              <div class="text-center">
+                <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
+                </svg>
+                <p>Map unavailable</p>
+              </div>
+            </div>
+          <% end %>
         </div>
       </div>
       """
@@ -202,7 +213,7 @@ defmodule EventasaurusWeb.StaticMapComponent do
   
   defp get_default_style_id do
     # Allow configurable default style via environment variable
-    System.get_env("MAPBOX_DEFAULT_STYLE_ID") || "holden/cm7pc8jcc005f01s8al2s9aqh"
+    System.get_env("MAPBOX_DEFAULT_STYLE_ID") || "mapbox/streets-v12"
   end
   
   defp get_marker_color(theme) do
