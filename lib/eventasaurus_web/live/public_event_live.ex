@@ -14,6 +14,7 @@ defmodule EventasaurusWeb.PublicEventLive do
   alias EventasaurusWeb.AnonymousVoterComponent
   alias EventasaurusWeb.PublicGenericPollComponent
   alias EventasaurusWeb.PresentedByComponent
+  alias EventasaurusWeb.StaticMapComponent
 
   alias EventasaurusWeb.ReservedSlugs
 
@@ -1309,6 +1310,17 @@ defmodule EventasaurusWeb.PublicEventLive do
               <h2 class="text-xl font-semibold mb-4 text-gray-900">About This Event</h2>
               <p class="text-gray-500">No description provided for this event.</p>
             </div>
+          <% end %>
+
+          <!-- Event Location Map -->
+          <%= if @venue do %>
+            <.live_component
+              module={StaticMapComponent}
+              id="event-location-map"
+              venue={@venue}
+              theme={@theme}
+              size={:medium}
+            />
           <% end %>
 
           <% end %>
