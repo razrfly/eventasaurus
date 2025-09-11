@@ -333,7 +333,9 @@ export const UnifiedGooglePlaces = {
     
     if (directAdd && this.selectedPlaceData) {
       // Direct addition: send event to the owning component when available
-      const componentElement = this.el.closest('[phx-target],[data-poll-id]');
+      const componentElement =
+        this.el.closest('[data-phx-component]') ||
+        this.el.closest('[phx-target],[data-poll-id]');
       const payload = { place_data: this.selectedPlaceData };
       if (componentElement) {
         this.pushEventTo(componentElement, 'add_place', payload);
@@ -651,7 +653,9 @@ export const CitySearch = {
       
       // Only send city selected event if we're in a context that can handle it
       // This prevents crashes when the hook is used in contexts that don't expect this event
-      const componentElement = this.el.closest('[phx-click],[phx-target],[data-poll-id]');
+      const componentElement =
+        this.el.closest('[data-phx-component]') ||
+        this.el.closest('[phx-click],[phx-target],[data-poll-id]');
       if (componentElement) {
         // Send to the specific component context
         this.pushEventTo(componentElement, 'city_selected', { city: cityData });
