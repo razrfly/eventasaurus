@@ -497,7 +497,11 @@ defmodule EventasaurusWeb.EventManageLive do
     with {:ok, participant_id_int} <- safe_string_to_integer(participant_id),
          participant when not is_nil(participant) <-
            EventasaurusApp.Repo.get(EventasaurusApp.Events.EventParticipant, participant_id_int),
-         {:ok, status_atom} <- parse_status(status) do
+         {:ok, :same_event} <-
+           (if participant.event_id == socket.assigns.event.id,
+             do: {:ok, :same_event},
+             else: {:error, :wrong_event}),
+         {:ok, status_atom} <- EventasaurusApp.Events.EventParticipant.parse_status(status) do
       case Events.admin_update_participant_status(participant, status_atom, socket.assigns.user) do
         {:ok, _updated_participant} ->
           updated_participants =
@@ -508,7 +512,7 @@ defmodule EventasaurusWeb.EventManageLive do
            socket
            |> assign_participants_with_stats(updated_participants)
            |> assign(:open_status_menu, nil)
-           |> put_flash(:info, "Participant status updated successfully")}
+           |> put_flash(:info, "Participant status updated to #{status}")}
 
         {:error, :permission_denied} ->
           {:noreply, put_flash(socket, :error, "You don't have permission to change this participant's status")}
@@ -521,6 +525,10 @@ defmodule EventasaurusWeb.EventManageLive do
         {:noreply, put_flash(socket, :error, "Participant not found")}
       {:error, :invalid_format} ->
         {:noreply, put_flash(socket, :error, "Invalid participant ID")}
+      {:error, :invalid_input} ->
+        {:noreply, put_flash(socket, :error, "Invalid participant ID")}
+      {:error, :wrong_event} ->
+        {:noreply, put_flash(socket, :error, "Participant does not belong to this event")}
       {:error, :invalid_status} ->
         {:noreply, put_flash(socket, :error, "Invalid status")}
     end
@@ -1577,6 +1585,8 @@ defmodule EventasaurusWeb.EventManageLive do
         {"Cancelled", "bg-gray-100 text-gray-800"}
       :confirmed_with_order ->
         {"Confirmed", "bg-emerald-100 text-emerald-800"}
+      :interested ->
+        {"Interested", "bg-sky-100 text-sky-800"}
       _ ->
         {"Unknown", "bg-gray-100 text-gray-800"}
     end
@@ -1839,17 +1849,7 @@ defmodule EventasaurusWeb.EventManageLive do
     end
   end
 
-  # Maps allowed status strings to atoms; rejects anything else.
-  defp parse_status(status_str) do
-    case status_str do
-      "pending" -> {:ok, :pending}
-      "accepted" -> {:ok, :accepted}
-      "declined" -> {:ok, :declined}
-      "cancelled" -> {:ok, :cancelled}
-      "confirmed_with_order" -> {:ok, :confirmed_with_order}
-      "interested" -> {:ok, :interested}
-      _ -> {:error, :invalid_status}
-    end
-  end
+  # Status validation now handled by EventParticipant.parse_status/1
+  # This eliminates duplication and uses schema as single source of truth
 
 end

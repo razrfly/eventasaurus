@@ -770,7 +770,7 @@ defmodule EventasaurusWeb.EventController do
         case ensure_user_struct(conn.assigns.auth_user) do
           {:ok, user} ->
             # Validate status is a valid EventParticipant status
-            valid_statuses = ["pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"]
+            valid_statuses = EventParticipant.valid_status_strings()
 
             if status in valid_statuses do
               status_atom = String.to_atom(status)
@@ -935,7 +935,7 @@ defmodule EventasaurusWeb.EventController do
           {:ok, user} ->
             if Events.user_can_manage_event?(user, event) do
               # Validate status
-              valid_statuses = ["pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"]
+              valid_statuses = EventParticipant.valid_status_strings()
 
               if status in valid_statuses do
                 status_atom = String.to_atom(status)
