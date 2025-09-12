@@ -1569,7 +1569,7 @@ defmodule EventasaurusApp.Events do
 
   Returns:
   - {:ok, :new_registration, participant} - User was created and registered
-  - {:ok, :existing_user_registered, participant} - Existing user was registered
+  - {:ok, :existing_user_registered, participant} - Existing user was registered  
   - {:error, :already_registered} - User already registered for event
   - {:error, reason} - Other errors
   """
@@ -1585,8 +1585,9 @@ defmodule EventasaurusApp.Events do
       _event ->
         # Delegate to the unified registration service
         case UserRegistrationService.register_user(email, name, :event_registration, event_id: event_id) do
-          {:ok, %{registration_type: :already_registered, participant: _participant}} ->
-            {:error, :already_registered}
+          {:ok, %{registration_type: :already_registered, participant: participant}} ->
+            # Return the format that callers expect for existing users
+            {:ok, :existing_user_registered, participant}
             
           {:ok, %{registration_type: registration_type, participant: participant}} ->
             # Map to the original return format for backward compatibility
