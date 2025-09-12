@@ -5,8 +5,9 @@ defmodule EventasaurusApp.Repo.Migrations.RemoveUniqueConstraintOnStripeSessionI
   # This prevents blocking writes to the orders table during migration
   @disable_ddl_transaction true
   
-  # Keep Ecto's migration lock enabled (default) to prevent cross-node race conditions
-  # The migration lock ensures only one node runs this migration at a time
+  # Disable migration lock to allow concurrent index operations
+  # Required when using concurrently: true on index operations
+  @disable_migration_lock true
 
   def up do
     # Drop the unique constraint on stripe_session_id
