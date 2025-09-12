@@ -5,10 +5,10 @@ defmodule EventasaurusApp.Repo.Migrations.RemoveUniqueConstraintOnStripeSessionI
   # This prevents blocking writes to the orders table during migration
   @disable_ddl_transaction true
   
-  # Enable advisory locks to prevent migration race conditions
-  @disable_migration_lock true
+  # Keep Ecto's migration lock enabled (default) to prevent cross-node race conditions
+  # The migration lock ensures only one node runs this migration at a time
 
-  def change do
+  def up do
     # Drop the unique constraint on stripe_session_id
     # This allows multiple orders to share the same checkout session
     # (e.g., when purchasing multiple tickets in one transaction)
@@ -23,6 +23,22 @@ defmodule EventasaurusApp.Repo.Migrations.RemoveUniqueConstraintOnStripeSessionI
     # The partial index (WHERE stripe_session_id IS NOT NULL) keeps the index small
     # and aligned with our lookup patterns, as we only query non-null session IDs
     create index(:orders, [:stripe_session_id],
+      name: :orders_stripe_session_id_index,
+      where: "stripe_session_id IS NOT NULL",
+      concurrently: true
+    )
+  end
+  
+  def down do
+    # Revert to the previous unique partial index
+    drop_if_exists index(:orders, [:stripe_session_id],
+      name: :orders_stripe_session_id_index,
+      concurrently: true
+    )
+    
+    # Restore the original unique constraint on stripe_session_id
+    # This was the original state before allowing multi-ticket purchases
+    create unique_index(:orders, [:stripe_session_id],
       name: :orders_stripe_session_id_index,
       where: "stripe_session_id IS NOT NULL",
       concurrently: true
