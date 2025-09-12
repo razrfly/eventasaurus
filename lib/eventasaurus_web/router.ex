@@ -352,6 +352,12 @@ defmodule EventasaurusWeb.Router do
       # Guest-accessible checkout
       live "/events/:slug/checkout", CheckoutLive
 
+      # Public polls page (must be before catch-all)
+      live "/:slug/polls", PublicPollsLive
+      
+      # Individual poll page
+      live "/:slug/polls/:poll_id", PublicPollLive
+
       # Public event page with embedded registration (catch-all route should be last)
       live "/:slug", PublicEventLive
     end
