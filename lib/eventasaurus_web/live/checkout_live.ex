@@ -904,9 +904,9 @@ defmodule EventasaurusWeb.CheckoutLive do
                 <div class="bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
                   <%= if @show_guest_form do %>
                     <!-- Guest Checkout Form -->
-                    <div class="text-center mb-8">
-                      <h2 class="text-2xl font-bold text-gray-900 mb-2">Complete Your Purchase</h2>
-                      <p class="text-gray-600">Enter your information to get your tickets</p>
+                    <div class="text-center mb-6">
+                      <h2 class="text-xl font-bold text-gray-900 mb-2">Complete Your Purchase</h2>
+                      <p class="text-sm text-gray-600">Enter your information to get your tickets</p>
                     </div>
 
                     <%= if @errors != [] do %>
@@ -919,9 +919,9 @@ defmodule EventasaurusWeb.CheckoutLive do
                       </div>
                     <% end %>
 
-                    <form phx-change="update_guest_form" class="max-w-md mx-auto space-y-6">
+                    <form phx-change="update_guest_form" class="max-w-md mx-auto space-y-4">
                       <div>
-                        <label for="guest_form_name" class="block text-lg font-medium text-gray-900 mb-3">
+                        <label for="guest_form_name" class="block text-sm font-semibold text-gray-900 mb-2">
                           Full Name <span class="text-red-500">*</span>
                         </label>
                         <input
@@ -930,14 +930,14 @@ defmodule EventasaurusWeb.CheckoutLive do
                           id="guest_form_name"
                           value={@guest_form["name"]}
                           phx-debounce="300"
-                          class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-0 focus:border-zinc-400 transition-colors"
                           placeholder="Enter your full name"
                           disabled={@processing}
                         />
                       </div>
 
                       <div>
-                        <label for="guest_form_email" class="block text-lg font-medium text-gray-900 mb-3">
+                        <label for="guest_form_email" class="block text-sm font-semibold text-gray-900 mb-2">
                           Email Address <span class="text-red-500">*</span>
                         </label>
                         <input
@@ -946,14 +946,14 @@ defmodule EventasaurusWeb.CheckoutLive do
                           id="guest_form_email"
                           value={@guest_form["email"]}
                           phx-debounce="300"
-                          class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-0 focus:border-zinc-400 transition-colors"
                           placeholder="Enter your email address"
                           disabled={@processing}
                         />
                       </div>
                     </form>
 
-                    <div class="max-w-md mx-auto space-y-6">
+                    <div class="max-w-md mx-auto space-y-4">
                       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <p class="text-sm text-blue-800">
                           <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -966,7 +966,7 @@ defmodule EventasaurusWeb.CheckoutLive do
                       <button
                         type="button"
                         phx-click="proceed_with_checkout"
-                        class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-4 px-6 rounded-lg transition-colors duration-200 text-lg"
+                        class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2.5 px-4 rounded-lg transition-colors duration-200 text-sm"
                         disabled={@processing}
                       >
                         <%= if @processing do %>
