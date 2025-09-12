@@ -44,18 +44,14 @@ defmodule EventasaurusWeb.PollHelpers do
   Returns a formatted participation summary for a poll.
   """
   def poll_participation_summary(poll) do
-    try do
-      stats = Events.get_poll_voting_stats(poll)
-      participant_count = stats.total_unique_voters || 0
-      
-      if participant_count > 0 do
-        participant_word = if participant_count == 1, do: "participant", else: "participants"
-        "#{participant_count} #{participant_word}"
-      else
+    case Events.get_poll_voting_stats(poll) do
+      %{total_unique_voters: count} when is_integer(count) and count > 0 ->
+        word = if count == 1, do: "participant", else: "participants"
+        "#{count} #{word}"
+      %{total_unique_voters: _} ->
         "No participants yet"
-      end
-    rescue
-      _ -> "Loading..."
+      _ ->
+        "Loading..."
     end
   end
 
@@ -87,6 +83,7 @@ defmodule EventasaurusWeb.PollHelpers do
 
   @doc """
   Handles authenticated user voting logic.
+  Returns result tuple that calling LiveView should handle.
   """
   def handle_authenticated_vote(socket, poll_id, params, user) do
     polls = get_polls_from_socket(socket)
@@ -94,27 +91,17 @@ defmodule EventasaurusWeb.PollHelpers do
     
     case poll do
       nil ->
-        loading_polls = remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)
-        {:noreply, 
-         socket
-         |> Phoenix.LiveView.put_flash(:error, "Poll not found")
-         |> Phoenix.LiveView.assign(:loading_polls, loading_polls)
-        }
+        {:error, "Poll not found", remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)}
         
       poll ->
         # Process the vote based on poll type and voting system
         case process_vote(poll, params, user) do
           {:ok, _result} ->
             send(self(), {:vote_completed, poll_id})
-            {:noreply, socket}
+            {:ok, :vote_processed}
             
           {:error, reason} ->
-            loading_polls = remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)
-            {:noreply,
-             socket
-             |> Phoenix.LiveView.put_flash(:error, reason)
-             |> Phoenix.LiveView.assign(:loading_polls, loading_polls)
-            }
+            {:error, reason, remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)}
         end
     end
   end
@@ -124,22 +111,109 @@ defmodule EventasaurusWeb.PollHelpers do
   Processes a vote for a poll option.
   """
   def process_vote(poll, params, user) do
-    # This would delegate to appropriate voting logic based on poll type
-    # For now, handle generic voting
-    option_id = String.to_integer(params["option_id"])
-    vote_value = params["vote_value"] || "yes"
-    
-    # Get the poll option
-    case Events.get_poll_option(option_id) do
-      nil -> {:error, "Option not found"}
-      poll_option ->
-        case Events.cast_binary_vote(poll, poll_option, user, vote_value) do
-          {:ok, _vote} -> {:ok, :voted}
-          {:error, _reason} -> {:error, "Failed to submit vote"}
+    # Safely parse option id
+    option_id = case params["option_id"] || params["option-id"] do
+      option_id_str when is_binary(option_id_str) ->
+        case Integer.parse(option_id_str) do
+          {id, ""} -> id
+          _ -> nil
         end
+      option_id_int when is_integer(option_id_int) -> option_id_int
+      _ -> nil
     end
-  rescue
-    _ -> {:error, "Failed to submit vote"}
+    
+    if is_nil(option_id) do
+      {:error, "Invalid option id"}
+    else
+      # Get the poll option and validate it belongs to the poll
+      case Events.get_poll_option(option_id) do
+        nil -> 
+          {:error, "Option not found"}
+        poll_option ->
+          # Ensure option belongs to this poll
+          if poll_option.poll_id != poll.id do
+            {:error, "Option does not belong to this poll"}
+          else
+            process_vote_by_system(poll, poll_option, user, params)
+          end
+      end
+    end
+  end
+  
+  # Process vote based on voting system
+  defp process_vote_by_system(poll, poll_option, user, params) do
+    case poll.voting_system do
+      "binary" ->
+        vote_value = String.downcase(to_string(params["vote_value"] || params["vote"] || "yes"))
+        
+        if vote_value in ["yes", "maybe", "no"] do
+          case Events.cast_binary_vote(poll, poll_option, user, vote_value) do
+            {:ok, _vote} -> {:ok, :voted}
+            {:error, reason} -> {:error, "Failed to submit vote: #{inspect(reason)}"}
+          end
+        else
+          {:error, "Invalid vote value for binary voting. Use 'yes', 'maybe', or 'no'."}
+        end
+        
+      "approval" ->
+        selected = case params["vote_value"] || params["vote"] do
+          val when val in ["true", "1", "yes", "selected"] -> true
+          val when val in ["false", "0", "no", "unselected"] -> false
+          _ -> true  # Default to selected for approval voting
+        end
+        
+        case Events.cast_approval_vote(poll, poll_option, user, selected) do
+          {:ok, _vote} -> {:ok, :voted}
+          {:error, reason} -> {:error, "Failed to submit vote: #{inspect(reason)}"}
+        end
+        
+      "star" ->
+        rating = case params["rating"] || params["vote_value"] || params["vote"] do
+          rating_str when is_binary(rating_str) ->
+            case Float.parse(rating_str) do
+              {rating, _} when rating >= 1.0 and rating <= 5.0 -> rating
+              _ -> nil
+            end
+          rating_num when is_number(rating_num) and rating_num >= 1 and rating_num <= 5 -> 
+            rating_num
+          _ -> 
+            nil
+        end
+        
+        if is_nil(rating) do
+          {:error, "Invalid rating for star voting. Use rating between 1 and 5."}
+        else
+          case Events.cast_star_vote(poll, poll_option, user, rating) do
+            {:ok, _vote} -> {:ok, :voted}
+            {:error, reason} -> {:error, "Failed to submit vote: #{inspect(reason)}"}
+          end
+        end
+        
+      "ranked" ->
+        rank = case params["rank"] || params["vote_rank"] || params["vote"] do
+          rank_str when is_binary(rank_str) ->
+            case Integer.parse(rank_str) do
+              {rank, ""} when rank > 0 -> rank
+              _ -> nil
+            end
+          rank_int when is_integer(rank_int) and rank_int > 0 -> 
+            rank_int
+          _ -> 
+            nil
+        end
+        
+        if is_nil(rank) do
+          {:error, "Invalid rank for ranked voting. Use positive integer."}
+        else
+          case Events.cast_ranked_vote(poll, poll_option, user, rank) do
+            {:ok, _vote} -> {:ok, :voted}
+            {:error, reason} -> {:error, "Failed to submit vote: #{inspect(reason)}"}
+          end
+        end
+        
+      unknown_system ->
+        {:error, "Unsupported voting system: #{unknown_system}"}
+    end
   end
 
   @doc """
@@ -179,14 +253,16 @@ defmodule EventasaurusWeb.PollHelpers do
   Returns updated loading_polls list with poll_id added.
   """
   def add_poll_to_loading_list(loading_polls, poll_id) do
-    [poll_id | loading_polls]
+    loading_polls = loading_polls || []
+    [poll_id | loading_polls] |> Enum.uniq()
   end
 
   @doc """
   Returns updated loading_polls list with poll_id removed.
   """
   def remove_poll_from_loading_list(loading_polls, poll_id) do
-    List.delete(loading_polls, poll_id)
+    loading_polls = loading_polls || []
+    Enum.reject(loading_polls, &(&1 == poll_id))
   end
 
   @doc """

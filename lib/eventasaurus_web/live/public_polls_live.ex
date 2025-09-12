@@ -78,19 +78,22 @@ defmodule EventasaurusWeb.PublicPollsLive do
   end
 
   def handle_event("hide_anonymous_voter", _, socket) do
+    loading_polls =
+      case socket.assigns.selected_poll_for_voting do
+        %{id: id} -> remove_poll_from_loading_list(socket.assigns.loading_polls, id)
+        _ -> socket.assigns.loading_polls
+      end
+      
     {:noreply,
      socket
      |> assign(:show_anonymous_voter, false)
      |> assign(:selected_poll_for_voting, nil)
+     |> assign(:loading_polls, loading_polls)
     }
   end
 
   def handle_event("vote", params, socket) do
     poll_id = String.to_integer(params["poll_id"])
-    
-    # Add poll to loading state
-    loading_polls = add_poll_to_loading_list(socket.assigns.loading_polls, poll_id)
-    socket = assign(socket, :loading_polls, loading_polls)
     
     # Handle voting logic based on whether user is authenticated
     case socket.assigns[:auth_user] do
@@ -104,8 +107,21 @@ defmodule EventasaurusWeb.PublicPollsLive do
         }
         
       user ->
+        # Add poll to loading state for authenticated users only
+        loading_polls = add_poll_to_loading_list(socket.assigns.loading_polls, poll_id)
+        socket = assign(socket, :loading_polls, loading_polls)
+        
         # Handle authenticated user voting
-        EventasaurusWeb.PollHelpers.handle_authenticated_vote(socket, poll_id, params, user)
+        case EventasaurusWeb.PollHelpers.handle_authenticated_vote(socket, poll_id, params, user) do
+          {:ok, :vote_processed} ->
+            {:noreply, socket}
+          {:error, reason, loading_polls} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, reason)
+             |> assign(:loading_polls, loading_polls)
+            }
+        end
     end
   end
 
