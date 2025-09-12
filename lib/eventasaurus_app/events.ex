@@ -3603,10 +3603,14 @@ defmodule EventasaurusApp.Events do
   Returns the list of polls for an event.
   """
   def list_polls(%Event{} = event) do
+    ordered_options = from po in PollOption,
+                         order_by: [asc: po.order_index],
+                         preload: [:suggested_by, :votes]
+    
     query = from p in Poll,
             where: p.event_id == ^event.id,
             order_by: [asc: p.order_index, asc: p.inserted_at],
-            preload: [:created_by, poll_options: [:suggested_by, :votes]]
+            preload: [:created_by, poll_options: ^ordered_options]
 
     Repo.all(query)
   end
@@ -3656,7 +3660,7 @@ defmodule EventasaurusApp.Events do
       else
         from po in PollOption,
           where: po.poll_id == ^poll.id,
-          order_by: [desc: po.order_index],
+          order_by: [asc: po.order_index],
           preload: [:suggested_by, :votes]
       end
       
@@ -3729,8 +3733,12 @@ defmodule EventasaurusApp.Events do
         where: is_nil(e.deleted_at) and is_nil(p.deleted_at)
     end
     
+    ordered_options = from po in PollOption,
+                         order_by: [asc: po.order_index],
+                         preload: [:suggested_by, :votes]
+    
     query = from [p, e] in query,
-            preload: [:created_by, poll_options: [:suggested_by, :votes]]
+            preload: [:created_by, poll_options: ^ordered_options]
     
     Repo.one(query)
   end
@@ -3914,7 +3922,7 @@ defmodule EventasaurusApp.Events do
   def list_poll_options(%Poll{} = poll) do
     query = from po in PollOption,
             where: po.poll_id == ^poll.id and po.status == "active",
-            order_by: [desc: po.order_index, desc: po.inserted_at],
+            order_by: [asc: po.order_index, asc: po.inserted_at],
             preload: [:suggested_by, :votes]
 
     Repo.all(query)
@@ -3926,7 +3934,7 @@ defmodule EventasaurusApp.Events do
   def list_all_poll_options(%Poll{} = poll) do
     query = from po in PollOption,
             where: po.poll_id == ^poll.id,
-            order_by: [desc: po.order_index, desc: po.inserted_at],
+            order_by: [asc: po.order_index, asc: po.inserted_at],
             preload: [:suggested_by, :votes]
 
     Repo.all(query)
@@ -3939,7 +3947,7 @@ defmodule EventasaurusApp.Events do
   def list_poll_options_by_ids(option_ids, preloads \\ []) when is_list(option_ids) do
     query = from po in PollOption,
             where: po.id in ^option_ids and po.status == "active",
-            order_by: [desc: po.order_index, desc: po.inserted_at],
+            order_by: [asc: po.order_index, asc: po.inserted_at],
             preload: ^preloads
 
     Repo.all(query)
@@ -4232,7 +4240,7 @@ defmodule EventasaurusApp.Events do
       # Get all poll options ordered by current order_index
       all_options = from(po in PollOption,
                          where: po.poll_id == ^dragged_option.poll_id,
-                         order_by: [desc: po.order_index, desc: po.id])
+                         order_by: [asc: po.order_index, asc: po.id])
                     |> Repo.all()
 
       # Calculate new order indices

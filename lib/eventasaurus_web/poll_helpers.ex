@@ -111,31 +111,36 @@ defmodule EventasaurusWeb.PollHelpers do
   Processes a vote for a poll option.
   """
   def process_vote(poll, params, user) do
-    # Safely parse option id
-    option_id = case params["option_id"] || params["option-id"] do
-      option_id_str when is_binary(option_id_str) ->
-        case Integer.parse(option_id_str) do
-          {id, ""} -> id
-          _ -> nil
-        end
-      option_id_int when is_integer(option_id_int) -> option_id_int
-      _ -> nil
-    end
-    
-    if is_nil(option_id) do
-      {:error, "Invalid option id"}
+    # Guard: enforce phase, deadline, and participation rules
+    unless Events.can_user_vote?(poll, user) do
+      {:error, "Voting is closed or you are not allowed to vote"}
     else
-      # Get the poll option and validate it belongs to the poll
-      case Events.get_poll_option(option_id) do
-        nil -> 
-          {:error, "Option not found"}
-        poll_option ->
-          # Ensure option belongs to this poll
-          if poll_option.poll_id != poll.id do
-            {:error, "Option does not belong to this poll"}
-          else
-            process_vote_by_system(poll, poll_option, user, params)
+      # Safely parse option id
+      option_id = case params["option_id"] || params["option-id"] do
+        option_id_str when is_binary(option_id_str) ->
+          case Integer.parse(option_id_str) do
+            {id, ""} -> id
+            _ -> nil
           end
+        option_id_int when is_integer(option_id_int) -> option_id_int
+        _ -> nil
+      end
+      
+      if is_nil(option_id) do
+        {:error, "Invalid option id"}
+      else
+        # Get the poll option and validate it belongs to the poll
+        case Events.get_poll_option(option_id) do
+          nil -> 
+            {:error, "Option not found"}
+          poll_option ->
+            # Ensure option belongs to this poll
+            if poll_option.poll_id != poll.id do
+              {:error, "Option does not belong to this poll"}
+            else
+              process_vote_by_system(poll, poll_option, user, params)
+            end
+        end
       end
     end
   end
