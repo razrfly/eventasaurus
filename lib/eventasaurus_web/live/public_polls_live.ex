@@ -53,7 +53,7 @@ defmodule EventasaurusWeb.PublicPollsLive do
            # Anonymous voting state
            |> assign(:show_anonymous_voter, false)
            |> assign(:selected_poll_for_voting, nil)
-           |> assign(:temp_votes, %{})
+           |> assign(:poll_temp_votes, %{})
            |> assign(:loading_polls, [])
           }
       end
@@ -198,8 +198,9 @@ defmodule EventasaurusWeb.PublicPollsLive do
     }
   end
 
-  def handle_info({:temp_votes_updated, _poll_id, temp_votes}, socket) do
-    {:noreply, assign(socket, :temp_votes, temp_votes)}
+  def handle_info({:temp_votes_updated, poll_id, temp_votes}, socket) do
+    votes = Map.put(socket.assigns[:poll_temp_votes] || %{}, poll_id, temp_votes)
+    {:noreply, assign(socket, :poll_temp_votes, votes)}
   end
 
   # Private functions

@@ -126,7 +126,7 @@
                     poll={poll}
                     event={@event}
                     current_user={@auth_user}
-                    temp_votes={@temp_votes}
+                    temp_votes={Map.get(@poll_temp_votes, poll.id, %{})}
                   />
                   
                   <%= if is_nil(@auth_user) do %>
@@ -234,15 +234,4 @@
     <% end %>
   </div>
 
-  <!-- Anonymous Voter Modal -->
-  <%= if @show_anonymous_voter and @selected_poll_for_voting do %>
-    <.live_component
-      module={AnonymousVoterComponent}
-      id={"anonymous-voter-#{@selected_poll_for_voting.id}"}
-      poll={@selected_poll_for_voting}
-      event={@event}
-      target={self()}
-      show={true}
-    />
-  <% end %>
 </div>
