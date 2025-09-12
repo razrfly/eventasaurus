@@ -106,12 +106,13 @@ defmodule DevSeeds.AddInterestToTicketedEvents do
       users_to_add = Enum.take_random(eligible_users, num_interested)
       
       added_count = Enum.reduce(users_to_add, 0, fn user, acc ->
-        # Mix of interested and accepted statuses (more interested for ticketed events)
+        # Use appropriate status based on event type
         status = if event.is_ticketed do
-          # For ticketed events, most are interested (haven't bought tickets yet)
-          Enum.random([:interested, :interested, :interested, :accepted])
+          # For ticketed events, only use interested (can't accept without buying a ticket)
+          # See issue #1040 for discussion about this status confusion
+          :interested
         else
-          # For free events, more have accepted
+          # For free events, mix of interested and accepted
           Enum.random([:interested, :accepted, :accepted])
         end
         
