@@ -958,7 +958,13 @@ defmodule EventasaurusApp.Events do
     # For upsert, we need to handle metadata merging at the database level
     # Since PostgreSQL doesn't have easy metadata merging in upsert, we'll use a transaction
     result = Repo.transaction(fn ->
-      case Repo.get_by(EventParticipant, event_id: event_id, user_id: user_id) do
+      # Check for active (non-deleted) participant only
+      existing_query = from(ep in EventParticipant,
+        where: ep.event_id == ^event_id and ep.user_id == ^user_id and is_nil(ep.deleted_at),
+        limit: 1
+      )
+      
+      case Repo.one(existing_query) do
         nil ->
           # No existing participant, create new one
           participant_attrs = Map.merge(attrs, %{
@@ -1062,7 +1068,7 @@ defmodule EventasaurusApp.Events do
   """
   def list_event_participants_for_event(%Event{} = event) do
     query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id,
+            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
             preload: [:user, :invited_by_user]
 
     Repo.all(query)
@@ -1533,7 +1539,11 @@ defmodule EventasaurusApp.Events do
   Get an event participant by event and user.
   """
   def get_event_participant_by_event_and_user(%Event{} = event, %User{} = user) do
-    Repo.get_by(EventParticipant, event_id: event.id, user_id: user.id)
+    from(ep in EventParticipant,
+      where: ep.event_id == ^event.id and ep.user_id == ^user.id and is_nil(ep.deleted_at),
+      limit: 1
+    )
+    |> Repo.one()
   end
 
   @doc """
@@ -2888,7 +2898,7 @@ defmodule EventasaurusApp.Events do
   """
   def count_event_participants(event) do
     Repo.aggregate(
-      from(p in EventParticipant, where: p.event_id == ^event.id),
+      from(p in EventParticipant, where: p.event_id == ^event.id and is_nil(p.deleted_at)),
       :count,
       :id
     )
@@ -2902,7 +2912,7 @@ defmodule EventasaurusApp.Events do
     offset = Keyword.get(opts, :offset, 0)
 
     query = from p in EventParticipant,
-            where: p.event_id == ^event.id,
+            where: p.event_id == ^event.id and is_nil(p.deleted_at),
             preload: [:user]
 
     query = if limit do
@@ -2921,7 +2931,7 @@ defmodule EventasaurusApp.Events do
   """
   def list_event_participants_by_email_status(%Event{} = event, status) do
     query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id,
+            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
             preload: [:user, :invited_by_user]
 
     query
@@ -2934,7 +2944,7 @@ defmodule EventasaurusApp.Events do
   """
   def list_event_participants_with_failed_emails(%Event{} = event) do
     query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id,
+            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
             preload: [:user, :invited_by_user]
 
     query
@@ -2947,7 +2957,7 @@ defmodule EventasaurusApp.Events do
   """
   def list_event_participants_without_email_status(%Event{} = event) do
     query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id,
+            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
             preload: [:user, :invited_by_user]
 
     query
@@ -3463,7 +3473,7 @@ defmodule EventasaurusApp.Events do
   """
   def list_participants_by_status(%Event{} = event, status) when is_atom(status) do
     query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and ep.status == ^status,
+            where: ep.event_id == ^event.id and ep.status == ^status and is_nil(ep.deleted_at),
             preload: [:user],
             order_by: [desc: ep.inserted_at]
 
@@ -3480,7 +3490,7 @@ defmodule EventasaurusApp.Events do
     offset = (page - 1) * per_page
 
     query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and ep.status == ^status,
+            where: ep.event_id == ^event.id and ep.status == ^status and is_nil(ep.deleted_at),
             preload: [:user],
             order_by: [desc: ep.inserted_at],
             limit: ^per_page,
@@ -3496,7 +3506,7 @@ defmodule EventasaurusApp.Events do
   """
   def count_participants_by_status(%Event{} = event, status) when is_atom(status) do
     from(ep in EventParticipant,
-      where: ep.event_id == ^event.id and ep.status == ^status,
+      where: ep.event_id == ^event.id and ep.status == ^status and is_nil(ep.deleted_at),
       select: count(ep.id)
     )
     |> Repo.one()
