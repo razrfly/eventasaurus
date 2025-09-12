@@ -138,19 +138,46 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
   def create_participant_for_context(user, context, opts) do
     event_id = Keyword.get(opts, :event_id)
     
-    if event_id do
+    if is_nil(event_id) do
+      {:ok, nil}
+    else
       status = determine_participant_status(context, opts)
       source = determine_participant_source(context, opts)
       
-      Events.create_or_upgrade_participant_for_order(%{
-        event_id: event_id,
-        user_id: user.id,
-        status: status,
-        source: source
-      })
-    else
-      # Some contexts don't require participant creation (e.g., pure voting without event)
-      {:ok, nil}
+      case context do
+        :ticket_purchase ->
+          # Only ticket purchases should use the order-specific function
+          Events.create_or_upgrade_participant_for_order(%{
+            event_id: event_id,
+            user_id: user.id,
+            status: status,
+            source: source
+          })
+          
+        _ ->
+          # For non-ticket contexts, use regular participant creation/update
+          event = Events.get_event!(event_id)
+          case Events.get_event_participant_by_event_and_user(event, user) do
+            nil ->
+              # Create new participant with the intended status and role
+              Events.create_event_participant(%{
+                event_id: event_id,
+                user_id: user.id,
+                role: :invitee,  # Default role for non-ticket holders
+                status: status,
+                source: source
+              })
+              
+            participant ->
+              # Update existing participant's status if needed
+              # Only update if the new status is different
+              if participant.status != status do
+                Events.update_event_participant(participant, %{status: status})
+              else
+                {:ok, participant}
+              end
+          end
+      end
     end
   end
   
@@ -306,15 +333,16 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
   
   defp save_votes_for_user(user, poll_id, votes, _opts) do
     # This would need to be implemented based on your voting system
-    # For now, returning a placeholder
-    Logger.info("Saving votes for user", %{
+    # For now, returning an error to indicate it's not implemented
+    Logger.warn("Vote saving not yet implemented", %{
       user_id: user.id,
       poll_id: poll_id,
       vote_count: map_size(votes)
     })
     
     # TODO: Implement actual vote saving logic
-    # This would likely call Events.save_poll_votes/3 or similar
-    {:ok, :votes_saved}
+    # This would likely call Events.create_poll_vote, Events.cast_approval_votes,
+    # Events.cast_ranked_vote, or Events.cast_star_vote depending on poll type
+    {:error, :not_implemented}
   end
 end
