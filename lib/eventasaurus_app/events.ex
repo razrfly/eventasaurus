@@ -3701,7 +3701,7 @@ defmodule EventasaurusApp.Events do
       # For other poll types, use the regular order_index
       from po in PollOption,
         where: po.poll_id == ^poll.id,
-        order_by: [desc: po.order_index],
+        order_by: [asc: po.order_index],
         preload: [:suggested_by, :votes]
     end
     

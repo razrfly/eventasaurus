@@ -255,7 +255,7 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
     # Save votes if provided
     votes_result = if poll_id && map_size(votes) > 0 do
       case save_votes_for_user(user, poll_id, votes, opts) do
-        {:ok, _} -> true
+        {:error, :not_implemented} -> false
         _ -> false
       end
     else
@@ -334,7 +334,7 @@ defmodule EventasaurusApp.Services.UserRegistrationService do
   defp save_votes_for_user(user, poll_id, votes, _opts) do
     # This would need to be implemented based on your voting system
     # For now, returning an error to indicate it's not implemented
-    Logger.warn("Vote saving not yet implemented", %{
+    Logger.warning("Vote saving not yet implemented", %{
       user_id: user.id,
       poll_id: poll_id,
       vote_count: map_size(votes)
