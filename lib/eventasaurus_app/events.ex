@@ -3604,7 +3604,8 @@ defmodule EventasaurusApp.Events do
   """
   def list_polls(%Event{} = event) do
     ordered_options = from po in PollOption,
-                         order_by: [asc: po.order_index],
+                         where: po.status == "active" and is_nil(po.deleted_at),
+                         order_by: [asc: po.order_index, asc: po.inserted_at],
                          preload: [:suggested_by, :votes]
     
     query = from p in Poll,
@@ -3734,7 +3735,8 @@ defmodule EventasaurusApp.Events do
     end
     
     ordered_options = from po in PollOption,
-                         order_by: [asc: po.order_index],
+                         where: po.status == "active" and is_nil(po.deleted_at),
+                         order_by: [asc: po.order_index, asc: po.inserted_at],
                          preload: [:suggested_by, :votes]
     
     query = from [p, e] in query,

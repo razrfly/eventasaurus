@@ -198,6 +198,10 @@ defmodule EventasaurusWeb.PublicPollsLive do
     }
   end
 
+  def handle_info({:temp_votes_updated, _poll_id, temp_votes}, socket) do
+    {:noreply, assign(socket, :temp_votes, temp_votes)}
+  end
+
   # Private functions
 
 
