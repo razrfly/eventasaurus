@@ -168,8 +168,10 @@ defmodule EventasaurusWeb.EmailStatusComponents do
         <div class="text-sm text-gray-600 mb-2">Delivery Progress</div>
         <div class="w-full bg-gray-200 rounded-full h-2">
           <div
-            class="bg-green-500 h-2 rounded-full transition-all duration-300"
-            style={"width: #{delivery_percentage(@stats)}%"}
+            id="email-delivery-progress"
+            class="bg-green-500 h-2 rounded-full transition-all duration-300 progress-bar"
+            phx-hook="ProgressBar"
+            data-progress-width={delivery_percentage(@stats)}
           ></div>
         </div>
         <div class="text-xs text-gray-500 mt-1">

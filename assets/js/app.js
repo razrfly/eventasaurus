@@ -7,6 +7,9 @@ import { TicketQR } from "./ticket_qr";
 import { MusicBrainzSearch } from "./musicbrainz_search";
 import { SpotifySearch } from "./spotify_search";
 
+// Import initialization scripts (for CSP compliance)
+import "./init";
+
 // Import modular components
 import { initializeClipboard } from "./utils/clipboard";
 import { posthogManager, initPostHogClient } from "./analytics/posthog-manager";
@@ -17,6 +20,7 @@ import PaymentHooks from "./hooks/payment-business-logic";
 import MediaHooks from "./hooks/media-external-apis";
 import PlacesHooks from "./hooks/places-search";
 import DragDropHooks from "./hooks/poll-drag-drop";
+import CSPSafeHooks from "./hooks/csp-safe";
 
 // Supabase client setup for identity management
 let supabaseClient = null;
@@ -45,6 +49,7 @@ const ModularHooks = {
   ...MediaHooks,
   ...PlacesHooks,
   ...DragDropHooks,
+  ...CSPSafeHooks,
   SupabaseAuthHandler // Individual hook import
 };
 

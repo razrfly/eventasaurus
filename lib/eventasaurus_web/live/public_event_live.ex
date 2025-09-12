@@ -1705,6 +1705,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                           <!-- Mobile Show More Button -->
                           <button
                id="mobile-toggle-btn"
+               phx-hook="MobileActionsToggle"
                class="lg:hidden w-full mt-2 py-2 px-4 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 border border-gray-200"
                aria-expanded="false"
                aria-controls="mobile-secondary-actions"
@@ -1743,7 +1744,7 @@ defmodule EventasaurusWeb.PublicEventLive do
                 <a href={"https://www.linkedin.com/sharing/share-offsite/?url=#{URI.encode_www_form(EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}")}"} target="_blank" rel="noopener noreferrer" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition-colors duration-200">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>
                 </a>
-                <a href="#" id="copy-link-btn" aria-label="Copy event link" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition-colors duration-200" data-clipboard-text={EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}"}>
+                <a href="#" id="copy-link-btn" phx-hook="EventCopyLink" aria-label="Copy event link" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full flex items-center justify-center transition-colors duration-200" data-clipboard-text={EventasaurusWeb.Endpoint.url() <> "/#{@event.slug}"}>
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
@@ -1827,100 +1828,7 @@ defmodule EventasaurusWeb.PublicEventLive do
       <% end %>
     </script>
 
-         <script>
-       // Simple clipboard functionality
-       document.getElementById('copy-link-btn').addEventListener('click', function(e) {
-         e.preventDefault();
-         const url = this.getAttribute('data-clipboard-text');
-         navigator.clipboard.writeText(url).then(function() {
-           alert('Link copied to clipboard!');
-         }).catch(function(err) {
-           console.error('Could not copy text: ', err);
-         });
-       });
-
-              // Mobile secondary actions toggle
-       document.addEventListener('DOMContentLoaded', function() {
-         const toggleBtn = document.getElementById('mobile-toggle-btn');
-
-         if (toggleBtn) {
-           toggleBtn.addEventListener('click', function() {
-             const secondaryActions = document.querySelectorAll('.mobile-secondary-actions');
-             const showMoreText = document.getElementById('show-more-text');
-             const showMoreIcon = document.getElementById('show-more-icon');
-
-             // Check if all required elements exist
-             if (!secondaryActions.length || !showMoreText || !showMoreIcon) {
-               console.warn('Mobile toggle: Missing required DOM elements');
-               return;
-             }
-
-             const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-
-             // Toggle visibility with proper animation
-             secondaryActions.forEach(action => {
-               if (isExpanded) {
-                 action.classList.remove('show');
-               } else {
-                 action.classList.add('show');
-               }
-             });
-
-             // Update accessibility attributes and UI
-             toggleBtn.setAttribute('aria-expanded', !isExpanded);
-             showMoreText.textContent = isExpanded ? 'Share & Calendar' : 'Hide';
-             showMoreIcon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
-           });
-         }
-       });
-
-      // Theme switching functionality
-      window.addEventListener("phx:switch-theme-css", (e) => {
-        const newTheme = e.detail.theme;
-
-        // Find existing theme CSS link
-        const existingThemeLink = document.querySelector('link[href*="/themes/"][href$=".css"]');
-
-        if (newTheme === 'minimal') {
-          // For minimal theme, just remove any existing theme CSS
-          if (existingThemeLink) {
-            existingThemeLink.remove();
-          }
-        } else {
-          // For other themes, create or update the theme CSS link
-          const newHref = `/themes/${newTheme}.css`;
-
-          if (existingThemeLink) {
-            // Update existing link
-            existingThemeLink.href = newHref;
-          } else {
-            // Create new link
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = newHref;
-            document.head.appendChild(link);
-          }
-        }
-
-        // Handle dark/light mode for navbar and protected UI elements
-        const htmlElement = document.documentElement;
-        const darkThemes = ['cosmic']; // Only cosmic is currently a dark theme
-
-        if (darkThemes.includes(newTheme)) {
-          htmlElement.classList.add('dark');
-        } else {
-          htmlElement.classList.remove('dark');
-        }
-
-        // Update body class for theme-specific styling
-        document.body.className = document.body.className.replace(/\btheme-\w+\b/g, '');
-        if (newTheme !== 'minimal') {
-          document.body.classList.add(`theme-${newTheme}`);
-        }
-
-        console.log(`Theme switched to: ${newTheme}`);
-      });
-    </script>
+    <div phx-hook="ThemeSwitcher" id="theme-switcher-hook" class="hidden"></div>
     """
   end
 

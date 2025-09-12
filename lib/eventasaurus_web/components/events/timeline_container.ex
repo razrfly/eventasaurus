@@ -34,7 +34,7 @@ defmodule EventasaurusWeb.Components.Events.TimelineContainer do
               
               <!-- Timeline Line (except for last item) -->
               <%= unless is_last_date?(date, @grouped_events) do %>
-                <div class="w-0.5 bg-gray-300 flex-1 mt-2" style="min-height: 13rem; border-left: 2px dashed #d1d5db; background: none;"></div>
+                <div class="timeline-connector w-0.5 flex-1 mt-2"></div>
               <% end %>
             </div>
               

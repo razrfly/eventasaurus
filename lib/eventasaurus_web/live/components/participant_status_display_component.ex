@@ -157,13 +157,13 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
         <div
           class={[
             "relative group",
-            if(index > 0, do: "-ml-2", else: "")
+            if(index > 0, do: "-ml-2", else: ""),
+            get_avatar_z_index_class(@max_avatars - index)
           ]}
           role="img"
           aria-label={get_participant_name(participant)}
           aria-describedby={"tooltip-unified-#{@id}-#{participant.id}"}
           tabindex="0"
-          style={"z-index: #{@max_avatars - index}"}
         >
           <.link navigate={EventasaurusApp.Accounts.User.profile_url(participant.user)} 
                 class="block hover:opacity-80 transition-opacity">
@@ -185,10 +185,9 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
       <%= if length(@participants) > @max_avatars do %>
         <div
           class={[
-            "relative -ml-2 flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm bg-gray-100 rounded-full border-2 border-white",
+            "relative -ml-2 flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm bg-gray-100 rounded-full border-2 border-white z-0",
             avatar_overflow_size(@avatar_size)
           ]}
-          style="z-index: 0"
           title={"#{length(@participants) - @max_avatars} more"}
         >
           +<%= length(@participants) - @max_avatars %>
@@ -205,13 +204,13 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
         <div
           class={[
             "relative group",
-            if(index > 0, do: "-ml-2", else: "")
+            if(index > 0, do: "-ml-2", else: ""),
+            get_avatar_z_index_class(@max_avatars - index)
           ]}
           role="img"
           aria-label={get_participant_name(participant)}
           aria-describedby={"tooltip-breakdown-#{@id}-#{@status}-#{participant.id}"}
           tabindex="0"
-          style={"z-index: #{@max_avatars - index}"}
         >
           <.link navigate={EventasaurusApp.Accounts.User.profile_url(participant.user)} 
                 class="block hover:opacity-80 transition-opacity">
@@ -233,10 +232,9 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
       <%= if length(@participants) > @max_avatars do %>
         <div
           class={[
-            "relative -ml-2 flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm bg-gray-100 rounded-full border-2 border-white",
+            "relative -ml-2 flex items-center justify-center text-sm font-medium text-gray-600 shadow-sm bg-gray-100 rounded-full border-2 border-white z-0",
             avatar_overflow_size(@avatar_size)
           ]}
-          style="z-index: 0"
           title={"#{length(@participants) - @max_avatars} more"}
         >
           +<%= length(@participants) - @max_avatars %>
@@ -332,4 +330,17 @@ defmodule EventasaurusWeb.ParticipantStatusDisplayComponent do
   defp avatar_overflow_size(:md), do: "w-10 h-10 text-sm"
   defp avatar_overflow_size(:lg), do: "w-12 h-12 text-base"
   defp avatar_overflow_size(_), do: "w-10 h-10 text-sm"
+
+  # Helper function to get Tailwind z-index class based on index
+  defp get_avatar_z_index_class(index) when index >= 10, do: "z-50"
+  defp get_avatar_z_index_class(index) when index == 9, do: "z-50"
+  defp get_avatar_z_index_class(index) when index == 8, do: "z-40"
+  defp get_avatar_z_index_class(index) when index == 7, do: "z-40"
+  defp get_avatar_z_index_class(index) when index == 6, do: "z-30"
+  defp get_avatar_z_index_class(index) when index == 5, do: "z-30"
+  defp get_avatar_z_index_class(index) when index == 4, do: "z-20"
+  defp get_avatar_z_index_class(index) when index == 3, do: "z-20"
+  defp get_avatar_z_index_class(index) when index == 2, do: "z-10"
+  defp get_avatar_z_index_class(index) when index == 1, do: "z-10"
+  defp get_avatar_z_index_class(_), do: "z-0"
 end

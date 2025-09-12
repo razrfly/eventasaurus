@@ -31,9 +31,8 @@ defmodule EventasaurusWeb.Router do
       plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
       plug :protect_from_forgery
       plug :put_secure_browser_headers
-      if Mix.env() != :dev do
-        plug EventasaurusWeb.Plugs.CSPPlug
-      end
+      # Temporarily enable CSP in dev for debugging
+      plug EventasaurusWeb.Plugs.CSPPlug
       plug EventasaurusWeb.Plugs.SecurityPlug, force_https: true, security_headers: true
       plug :fetch_auth_user
       plug :assign_user_struct
@@ -56,9 +55,8 @@ defmodule EventasaurusWeb.Router do
     plug :put_root_layout, html: {EventasaurusWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    if Mix.env() != :dev do
-      plug EventasaurusWeb.Plugs.CSPPlug
-    end
+    # Temporarily enable CSP in dev for debugging
+    plug EventasaurusWeb.Plugs.CSPPlug
     if Mix.env() == :dev do
       plug EventasaurusWeb.Dev.DevAuthPlug
     end

@@ -71,7 +71,7 @@ defmodule EventasaurusWeb.Helpers.ProgressBarHelper do
         ""
       end}
       <div class="flex #{height_class} bg-gray-100 rounded-full overflow-hidden">
-        <div class="bg-green-500" style="width: #{approval_percentage}%"></div>
+        <div id="approval-bar-#{System.unique_integer([:positive])}" class="bg-green-500 progress-bar" phx-hook="ProgressBar" data-progress-width="#{approval_percentage}"></div>
       </div>
     </div>
     """
@@ -104,7 +104,7 @@ defmodule EventasaurusWeb.Helpers.ProgressBarHelper do
         ""
       end}
       <div class="flex #{height_class} bg-gray-100 rounded-full overflow-hidden">
-        <div class="bg-indigo-500" style="width: #{rank_quality_percentage}%"></div>
+        <div id="rank-bar-#{System.unique_integer([:positive])}" class="bg-indigo-500 progress-bar" phx-hook="ProgressBar" data-progress-width="#{rank_quality_percentage}"></div>
       </div>
     </div>
     """
@@ -229,19 +229,19 @@ defmodule EventasaurusWeb.Helpers.ProgressBarHelper do
 
   defp render_binary_segments(breakdown, height_class) do
     ~s"""
-    <div class="bg-green-500 #{height_class}" style="width: #{breakdown.yes_percentage}%"></div>
-    <div class="bg-yellow-400 #{height_class}" style="width: #{breakdown.maybe_percentage}%"></div>
-    <div class="bg-red-400 #{height_class}" style="width: #{breakdown.no_percentage}%"></div>
+    <div id="approval-yes-#{System.unique_integer([:positive])}" class="bg-green-500 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{breakdown.yes_percentage}"></div>
+    <div id="approval-maybe-#{System.unique_integer([:positive])}" class="bg-yellow-400 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{breakdown.maybe_percentage}"></div>
+    <div id="approval-no-#{System.unique_integer([:positive])}" class="bg-red-400 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{breakdown.no_percentage}"></div>
     """
   end
 
   defp render_star_segments(star_breakdown, height_class) do
     ~s"""
-    <div class="bg-red-400 #{height_class}" style="width: #{star_breakdown.one_star_percentage}%"></div>
-    <div class="bg-orange-400 #{height_class}" style="width: #{star_breakdown.two_star_percentage}%"></div>
-    <div class="bg-yellow-400 #{height_class}" style="width: #{star_breakdown.three_star_percentage}%"></div>
-    <div class="bg-lime-500 #{height_class}" style="width: #{star_breakdown.four_star_percentage}%"></div>
-    <div class="bg-green-500 #{height_class}" style="width: #{star_breakdown.five_star_percentage}%"></div>
+    <div id="star-1-#{System.unique_integer([:positive])}" class="bg-red-400 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{star_breakdown.one_star_percentage}"></div>
+    <div id="star-2-#{System.unique_integer([:positive])}" class="bg-orange-400 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{star_breakdown.two_star_percentage}"></div>
+    <div id="star-3-#{System.unique_integer([:positive])}" class="bg-yellow-400 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{star_breakdown.three_star_percentage}"></div>
+    <div id="star-4-#{System.unique_integer([:positive])}" class="bg-lime-500 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{star_breakdown.four_star_percentage}"></div>
+    <div id="star-5-#{System.unique_integer([:positive])}" class="bg-green-500 #{height_class} progress-bar" phx-hook="ProgressBar" data-progress-width="#{star_breakdown.five_star_percentage}"></div>
     """
   end
 

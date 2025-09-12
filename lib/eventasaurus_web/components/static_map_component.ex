@@ -63,11 +63,13 @@ defmodule EventasaurusWeb.StaticMapComponent do
         <div class={map_container_classes(@size)} id={"map-container-#{@id}"}>
           <%= if has_coordinates?(@venue) do %>
             <img
+              id={"map-image-#{@id}"}
               src={mapbox_static_url(@venue, @theme, @size)}
               alt={map_alt_text(@venue)}
               class="w-full h-full object-cover rounded-lg"
               loading="lazy"
-              onerror={"this.style.display='none'; document.getElementById('map-fallback-#{@id}').style.display='block'"}
+              phx-hook="ImageFallback"
+              data-fallback-id={"map-fallback-#{@id}"}
             />
             <!-- Error fallback (hidden by default) -->
             <div 

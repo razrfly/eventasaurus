@@ -64,8 +64,9 @@ defmodule EventasaurusWeb.CoreComponents do
       id={@id}
       phx-mounted={@show && show_modal(@id)}
       phx-remove={hide_modal(@id)}
-      class={if @show, do: "relative z-50", else: "relative z-50 hidden"}
-      style={if @show, do: "display: block;", else: "display: none;"}
+      class={if @show, do: "relative z-50 dynamic-display", else: "relative z-50 hidden dynamic-display"}
+      phx-hook="DisplayToggle"
+      data-show={to_string(@show)}
     >
       <div id={"#{@id}-bg"} class="bg-zinc-50/90 fixed inset-0 transition-opacity" aria-hidden="true" />
       <div class="fixed inset-0 overflow-y-auto">
@@ -149,34 +150,27 @@ defmodule EventasaurusWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      style={
-        case @kind do
-          :info -> "position: fixed !important; top: 1rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
-          :error -> "position: fixed !important; top: 5rem !important; right: 1rem !important; z-index: 9999 !important; max-width: 24rem !important; width: 100% !important; background: white !important; border-radius: 0.5rem !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; pointer-events: auto !important; padding: 1rem !important; border: 0 !important; outline: 0 !important; margin: 0 !important; font-family: Inter, sans-serif !important; color: #1f2937 !important; background-color: #ffffff !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;"
-        end
-      }
+      class={"flash-container #{if @kind == :error, do: "flash-error", else: "flash-info"}"}
       {@rest}
     >
-      <div style="display: flex !important; align-items: flex-start !important; border: 0 !important; outline: 0 !important; margin: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
-        <div style="flex-shrink: 0 !important; border: 0 !important; outline: 0 !important; margin: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
-          <span style="font-size: 1.25rem !important; line-height: 1 !important; border: 0 !important; outline: 0 !important; margin: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+      <div class="flash-content">
+        <div class="flash-icon-wrapper">
+          <span class="flash-icon">
             <%= if @kind == :info, do: "🎉", else: "⚠️" %>
           </span>
         </div>
-        <div style="margin-left: 0.75rem !important; flex: 1 !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
-          <p :if={@title} style="font-size: 0.875rem !important; font-weight: 600 !important; color: #1f2937 !important; margin: 0 !important; font-family: Inter, sans-serif !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+        <div class="flash-text-wrapper">
+          <p :if={@title} class="flash-title">
             <%= @title %>
           </p>
-          <p style={"font-size: 0.875rem !important; color: #6b7280 !important; margin: 0 !important; font-family: Inter, sans-serif !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important; #{@title && "margin-top: 0.25rem !important;"}"}>
+          <p class={"flash-message #{if @title, do: "with-title", else: ""}"}>  
             <%= msg %>
           </p>
         </div>
-        <div style="margin-left: 1rem !important; flex-shrink: 0 !important; border: 0 !important; outline: 0 !important; padding: 0 !important; border-style: none !important; border-width: 0 !important; box-sizing: border-box !important;">
+        <div class="flash-close-wrapper">
           <button
             type="button"
-            style="color: #374151 !important; background: #f9fafb !important; border: 1px solid #e5e7eb !important; outline: 0 !important; padding: 0.25rem !important; cursor: pointer !important; border-radius: 0.375rem !important; margin: 0 !important; border-style: solid !important; border-width: 1px !important; box-sizing: border-box !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important; width: 1.5rem !important; height: 1.5rem !important; font-size: 1rem !important; font-weight: bold !important; font-family: Inter, sans-serif !important;"
-            onmouseover="this.style.background='#e5e7eb'; this.style.color='#111827';"
-            onmouseout="this.style.background='#f9fafb'; this.style.color='#374151';"
+            class="flash-close-button"
             aria-label={gettext("close")}
           >
             ×

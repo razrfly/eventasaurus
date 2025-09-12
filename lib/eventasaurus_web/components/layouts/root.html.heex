@@ -58,6 +58,15 @@
       <link phx-track-static rel="stylesheet" href={"/themes/#{assigns[:theme]}.css"} />
     <% end %>
     
+    <!-- CSS Variables with nonce -->
+    <%= if assigns[:css_variables] do %>
+      <style nonce={assigns[:csp_nonce]}>
+        #app-body {
+          <%= assigns[:css_variables] %>
+        }
+      </style>
+    <% end %>
+    
     <!-- Google Fonts - Knewave for logo -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -88,122 +97,36 @@
       posthog_api_key = System.get_env("POSTHOG_PUBLIC_API_KEY")
       posthog_host = "https://eu.i.posthog.com"
     %>
-    <%= if posthog_api_key do %>
-      <script>
-        // Debug: Log PostHog configuration
-        console.log("PostHog configuration loaded:", {
-          apiKeyPresent: true,
-          apiKeyLength: "<%= String.length(posthog_api_key) %>",
-          host: "<%= posthog_host %>"
-        });
-        
-        window.POSTHOG_API_KEY = "<%= posthog_api_key %>";
-        window.POSTHOG_HOST = "<%= posthog_host %>";
-<%= if @conn.assigns[:user] do %>        window.currentUser = {
-          id: "<%= @conn.assigns.user.supabase_id %>",
-          email: "<%= @conn.assigns.user.email %>",
-          name: "<%= @conn.assigns.user.name %>"
-        };
-<% end %>      </script>
-    <% else %>
-      <script>
-        // PostHog disabled (no API key configured)
-        window.POSTHOG_API_KEY = null;
+    <%= if @conn.assigns[:user] do %>
+      <!-- Current user data for PostHog -->
+      <script id="current-user-data" type="application/json" nonce={@csp_nonce}>
+        {
+          "id": "<%= @conn.assigns.user.supabase_id %>",
+          "email": "<%= @conn.assigns.user.email %>",
+          "name": "<%= @conn.assigns.user.name %>"
+        }
       </script>
     <% end %>
     
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
     
-    <!-- Load Google Maps API with environment variable -->
-    <script>
-      console.log("Setting up Google Maps API loader...");
-      
-      // Track loading state
-      window.googleMapsLoaded = false;
-      
-      // Error handler
-      function handleGoogleMapsError() {
-        console.error("Failed to load Google Maps API. Check your API key and network connection.");
-        window.googleMapsLoaded = false;
-      }
-      
-      // Success handler
-      function initGoogleMaps() {
-        console.log("Google Maps API loaded successfully");
-        window.googleMapsLoaded = true;
-        
-        // Call any initialization hooks
-        if (typeof window.initGooglePlaces === 'function') {
-          console.log("Initializing Google Places components...");
-          try {
-            window.initGooglePlaces();
-          } catch (e) {
-            console.error("Error initializing Google Places:", e);
-          }
-        }
-      }
-    </script>
-    
+    <!-- Google Maps API configuration -->
     <% maps_api_key = System.get_env("GOOGLE_MAPS_API_KEY") |> String.trim() %>
-    <script>
-      // Google Maps API async loader - properly handles loading=async
-      (function() {
-        const googleMapsLoader = document.createElement('script');
-        googleMapsLoader.src = "https://maps.googleapis.com/maps/api/js?key=<%= maps_api_key %>&libraries=places&v=weekly&callback=initGoogleMaps";
-        googleMapsLoader.async = true;
-        googleMapsLoader.defer = true;
-        googleMapsLoader.onerror = handleGoogleMapsError;
-        document.head.appendChild(googleMapsLoader);
-      })();
-    </script>
 
-    <!-- Mobile Navigation Script -->
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        const mobileMenuButton = document.getElementById('mobile-menu-button');
-        const mobileMenu = document.getElementById('mobile-menu');
-        const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
-        
-        function toggleMobileMenu() {
-          const isOpen = !mobileMenu.classList.contains('translate-x-full');
-          
-          if (isOpen) {
-            // Close menu
-            mobileMenu.classList.add('translate-x-full');
-            mobileMenuOverlay.classList.add('opacity-0', 'pointer-events-none');
-            document.body.classList.remove('overflow-hidden');
-          } else {
-            // Open menu
-            mobileMenu.classList.remove('translate-x-full');
-            mobileMenuOverlay.classList.remove('opacity-0', 'pointer-events-none');
-            document.body.classList.add('overflow-hidden');
-          }
-        }
-        
-        if (mobileMenuButton && mobileMenu) {
-          mobileMenuButton.addEventListener('click', toggleMobileMenu);
-          mobileMenuOverlay.addEventListener('click', toggleMobileMenu);
-          
-          // Close menu on escape key
-          document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && !mobileMenu.classList.contains('translate-x-full')) {
-              toggleMobileMenu();
-            }
-          });
-        }
-      });
-    </script>
+    <!-- Mobile navigation handled by init.js -->
   </head>
   <body id="app-body" class={[
       "bg-white antialiased overflow-x-hidden min-h-screen flex flex-col",
       # Apply theme class to body for universal background application
       assigns[:theme] && EventasaurusWeb.ThemeHelpers.theme_class(assigns[:theme])
     ]}
-    style={assigns[:css_variables] && assigns[:css_variables]}
     data-supabase-url={supabase_url}
     data-supabase-api-key={supabase_api_key}
     data-supabase-bucket={supabase_bucket}
+    data-posthog-api-key={posthog_api_key}
+    data-posthog-host={posthog_host}
+    data-google-maps-api-key={maps_api_key}
     phx-hook="SupabaseAuthHandler"
   >
     <!-- Gradient Background for pages that need it -->
@@ -302,7 +225,7 @@
         <!-- Mobile Menu Header -->
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
           <.logo />
-          <button id="mobile-menu-close" onclick="document.getElementById('mobile-menu-button').click()" class="inline-flex items-center justify-center rounded-md p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-950 dark:hover:text-white transition-colors">
+          <button id="mobile-menu-close" phx-hook="MobileMenuClose" class="inline-flex items-center justify-center rounded-md p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-950 dark:hover:text-white transition-colors">
             <span class="sr-only">Close menu</span>
             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -463,7 +386,7 @@
     </div>
 
     <!-- PostHog Privacy Consent Banner -->
-    <div id="privacy-banner" class="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 shadow-lg transform translate-y-full transition-transform duration-300 z-50" style="display: none;">
+    <div id="privacy-banner" class="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 shadow-lg transform translate-y-full transition-transform duration-300 z-50 hidden">
       <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div class="flex-1">
           <p class="text-sm">
@@ -488,59 +411,6 @@
       </div>
     </div>
 
-    <script>
-      // Privacy banner functionality
-      document.addEventListener('DOMContentLoaded', function() {
-        const banner = document.getElementById('privacy-banner');
-        const acceptBtn = document.getElementById('privacy-accept');
-        const declineBtn = document.getElementById('privacy-decline');
-        
-        // Check if consent is already given
-        const hasConsent = localStorage.getItem('posthog_privacy_consent');
-        
-        if (!hasConsent) {
-          // Show banner after a short delay
-          setTimeout(() => {
-            banner.style.display = 'block';
-            requestAnimationFrame(() => {
-              banner.classList.remove('translate-y-full');
-            });
-          }, 2000);
-        }
-        
-        // Handle accept button
-        acceptBtn.addEventListener('click', function() {
-          const consent = { analytics: true, cookies: true, essential: true };
-          localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
-          
-          // Trigger PostHog consent event
-          window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
-            detail: { consent }
-          }));
-          
-          hideBanner();
-        });
-        
-        // Handle decline button
-        declineBtn.addEventListener('click', function() {
-          const consent = { analytics: false, cookies: false, essential: true };
-          localStorage.setItem('posthog_privacy_consent', JSON.stringify(consent));
-          
-          // Trigger PostHog consent event
-          window.dispatchEvent(new CustomEvent('posthog:privacy-consent', {
-            detail: { consent }
-          }));
-          
-          hideBanner();
-        });
-        
-        function hideBanner() {
-          banner.classList.add('translate-y-full');
-          setTimeout(() => {
-            banner.style.display = 'none';
-          }, 300);
-        }
-      });
-    </script>
+    <!-- Privacy banner functionality handled by init.js -->
   </body>
 </html> 

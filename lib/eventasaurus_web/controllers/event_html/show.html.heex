@@ -300,8 +300,9 @@
               class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md text-sm bg-gray-50"
             />
             <button 
+              id="event-url-copy-btn"
               class="px-4 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-              onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy', 2000);"
+              phx-hook="ClipboardCopy"
             >
               Copy
             </button>

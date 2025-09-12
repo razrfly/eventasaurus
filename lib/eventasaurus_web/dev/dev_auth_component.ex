@@ -23,17 +23,18 @@ defmodule EventasaurusWeb.Dev.DevAuthComponent do
             <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
             
             <select 
+              id="dev-quick-login-select"
+              phx-hook="DevQuickLogin"
               name="user_id" 
               class="block w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
               required
-              onchange="this.form.submit()"
             >
               <option value="" disabled selected>Quick login as test user...</option>
               
               <% personal = Map.get(@users, :personal, []) %>
               <%= if Enum.any?(personal) do %>
                 <%= for {user, label} <- personal do %>
-                  <option value={user.id} style="font-weight: bold;">
+                  <option value={user.id} class="font-bold">
                     👤 <%= label %>
                   </option>
                 <% end %>
