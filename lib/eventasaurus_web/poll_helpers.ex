@@ -134,11 +134,14 @@ defmodule EventasaurusWeb.PollHelpers do
           nil -> 
             {:error, "Option not found"}
           poll_option ->
-            # Ensure option belongs to this poll
-            if poll_option.poll_id != poll.id do
-              {:error, "Option does not belong to this poll"}
-            else
-              process_vote_by_system(poll, poll_option, user, params)
+            # Ensure option belongs to this poll and is active
+            cond do
+              poll_option.poll_id != poll.id ->
+                {:error, "Option does not belong to this poll"}
+              Map.get(poll_option, :deleted_at) != nil or poll_option.status != "active" ->
+                {:error, "Option is inactive"}
+              true ->
+                process_vote_by_system(poll, poll_option, user, params)
             end
         end
       end
