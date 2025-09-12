@@ -91,6 +91,14 @@ all_events = events ++ full_events
 Code.require_file("ensure_key_organizers.exs", __DIR__)
 DevSeeds.EnsureKeyOrganizers.ensure_key_organizers()
 
+# Create ticketed event organizer personas (Phase 1 from issue #1036)
+Code.require_file("ticketed_event_organizers.exs", __DIR__)
+DevSeeds.TicketedEventOrganizers.ensure_ticketed_event_organizers()
+
+# Add interested participants to ticketed events
+Code.require_file("add_interest_to_ticketed_events.exs", __DIR__)
+DevSeeds.AddInterestToTicketedEvents.add_interest_to_organizer_events()
+
 # Create Phase I diverse polling events (date + movie star rating)
 Helpers.section("Creating Phase I: Date + Movie Star Rating Polls")
 Code.require_file("diverse_polling_events.exs", __DIR__)
