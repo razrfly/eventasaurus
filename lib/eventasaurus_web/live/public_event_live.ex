@@ -560,12 +560,12 @@ defmodule EventasaurusWeb.PublicEventLive do
             |> Enum.map(fn {id, qty} -> {Integer.to_string(id), qty} end)
             |> URI.encode_query()
 
-          path = "/#{socket.assigns.event.slug}/checkout?#{query}"
+          path = "/events/#{socket.assigns.event.slug}/checkout?#{query}"
           {:noreply, push_navigate(socket, to: path)}
 
         _user ->
           # User is logged in - proceed directly to payment
-          assign(socket, :ticket_loading, true)
+          socket = assign(socket, :ticket_loading, true)
 
           # Convert selected tickets to the format expected by Stripe checkout
           ticket_items =
@@ -579,7 +579,7 @@ defmodule EventasaurusWeb.PublicEventLive do
             socket.assigns.user,
             ticket_items
           ) do
-            {:ok, checkout_url} ->
+            {:ok, %{checkout_url: checkout_url}} ->
               {:noreply,
                socket
                |> assign(:ticket_loading, false)
