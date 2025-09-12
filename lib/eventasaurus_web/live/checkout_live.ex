@@ -881,7 +881,7 @@ defmodule EventasaurusWeb.CheckoutLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-50">
+    <div class="min-h-screen">
       <div class="container mx-auto px-6 py-8 max-w-6xl">
         <div class="mb-8">
           <h1 class="text-3xl font-bold text-gray-900 mb-2">Checkout</h1>
@@ -953,20 +953,11 @@ defmodule EventasaurusWeb.CheckoutLive do
                       </div>
                     </form>
 
-                    <div class="max-w-md mx-auto space-y-4">
-                      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <p class="text-sm text-blue-800">
-                          <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                          </svg>
-                          We'll create an account for you and send your tickets to this email address.
-                        </p>
-                      </div>
-
+                    <div class="max-w-md mx-auto space-y-4 mt-6">
                       <button
                         type="button"
                         phx-click="proceed_with_checkout"
-                        class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2.5 px-4 rounded-lg transition-colors duration-200 text-sm"
+                        class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center"
                         disabled={@processing}
                       >
                         <%= if @processing do %>
@@ -1006,9 +997,9 @@ defmodule EventasaurusWeb.CheckoutLive do
 
                         <a
                           href="/auth/facebook"
-                          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center block flex items-center justify-center"
+                          class="w-full bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-lg border border-gray-300 transition-colors duration-200 text-center flex items-center justify-center"
                         >
-                          <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                          <svg class="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                           </svg>
                           Continue with Facebook
@@ -1049,9 +1040,9 @@ defmodule EventasaurusWeb.CheckoutLive do
 
                       <a
                         href="/auth/facebook"
-                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center block flex items-center justify-center"
+                        class="w-full bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-lg border border-gray-300 transition-colors duration-200 text-center flex items-center justify-center"
                       >
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                         </svg>
                         Continue with Facebook
