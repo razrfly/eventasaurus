@@ -1574,141 +1574,62 @@ defmodule EventasaurusApp.Events do
   - {:error, reason} - Other errors
   """
   def register_user_for_event(event_id, name, email) do
-    alias EventasaurusApp.Auth.Client
-    alias EventasaurusApp.Auth.SupabaseSync
-    alias EventasaurusApp.Accounts
-
-    Logger.debug("Starting user registration process", %{
-      event_id: event_id,
-      name: name,
-      email_domain: email |> String.split("@") |> List.last()
-    })
-
-    Repo.transaction(fn ->
-      # Get the event (handle exception)
-      event = try do
-        get_event!(event_id)
-      rescue
-        Ecto.NoResultsError ->
-          Logger.error("Event not found", %{event_id: event_id})
-          Repo.rollback(:event_not_found)
-      end
-      Logger.debug("Event found for registration", %{event_title: event.title, event_id: event.id})
-
-      # Get the user from the database to update socket assigns
-      user = case Accounts.get_user_by_email(email) do
-        nil -> nil
-        user -> user
-      end
-
-      if user do
-        Logger.debug("Existing user found in local database", %{user_id: user.id})
-      else
-        Logger.debug("No existing user found in local database")
-      end
-
-      user = case user do
-        nil ->
-          # User doesn't exist locally, check Supabase and create if needed
-          Logger.info("User not found locally, attempting Supabase user creation/lookup")
-          case create_or_find_supabase_user(email, name) do
-            {:ok, supabase_user} ->
-              Logger.info("Successfully created/found user in Supabase")
-              # Sync with local database
-              case SupabaseSync.sync_user(supabase_user) do
-                {:ok, user} ->
-                  Logger.info("Successfully synced user to local database", %{user_id: user.id})
-                  user
-                {:error, reason} ->
-                  Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
-                  Repo.rollback(reason)
-              end
-                          {:error, :user_confirmation_required} ->
-                # User was created via OTP but email confirmation is required
-                Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
-                # Create user with pending confirmation ID - TODO: implement cleanup for unconfirmed users
-                temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
-                case Accounts.create_user(%{
-                  email: email,
-                  name: name,
-                  supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
-                }) do
-                  {:ok, user} ->
-                    Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
-                    user
-                  {:error, reason} ->
-                    Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
-                    Repo.rollback(reason)
-                end
-              {:error, :invalid_user_data} ->
-                Logger.error("Invalid user data from Supabase after OTP creation")
-                Repo.rollback(:invalid_user_data)
-            {:error, reason} ->
-              Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
-              Repo.rollback(reason)
-          end
-
-        user ->
-          # User exists locally
-          Logger.debug("Using existing local user", %{user_id: user.id})
-          user
-      end
-
-      # Check if user is already registered for this event
-      case get_event_participant_by_event_and_user(event, user) do
-        nil ->
-          Logger.debug("User not yet registered for event, creating participant record", %{
-            user_id: user.id,
-            event_id: event.id
-          })
-          # User not registered, create participant record
-          participant_attrs = %{
-            event_id: event.id,
-            user_id: user.id,
-            role: :invitee,
-            status: :pending,
-            source: "public_registration",
-            metadata: %{
-              registration_date: DateTime.utc_now(),
-              registered_name: name
-            }
-          }
-
-          case create_event_participant(participant_attrs) do
-            {:ok, participant} ->
-              Logger.info("Successfully created event participant", %{
-                participant_id: participant.id,
-                user_id: user.id,
-                event_id: event.id
-              })
-              if user do
-                {:existing_user_registered, participant}
-              else
-                {:new_registration, participant}
-              end
-            {:error, reason} ->
-              Logger.error("Failed to create event participant", %{reason: inspect(reason)})
-              Repo.rollback(reason)
-          end
-
-        _participant ->
-          Logger.info("User already registered for event", %{user_id: user.id, event_id: event.id})
-          Repo.rollback(:already_registered)
-      end
-    end)
-    |> case do
-      {:ok, result} ->
-        Logger.info("Registration transaction completed successfully", %{
-          result_type: elem(result, 0),
-          participant_id: elem(result, 1).id
-        })
-        {:ok, elem(result, 0), elem(result, 1)}
-      {:error, reason} ->
-        Logger.warning("Registration transaction failed", %{reason: inspect(reason)})
-        {:error, reason}
+    alias EventasaurusApp.Services.UserRegistrationService
+    
+    # Validate event exists first
+    case get_event(event_id) do
+      nil ->
+        Logger.error("Event not found", %{event_id: event_id})
+        {:error, :event_not_found}
+        
+      _event ->
+        # Delegate to the unified registration service
+        case UserRegistrationService.register_user(email, name, :event_registration, event_id: event_id) do
+          {:ok, %{registration_type: :already_registered, participant: _participant}} ->
+            {:error, :already_registered}
+            
+          {:ok, %{registration_type: registration_type, participant: participant}} ->
+            # Map to the original return format for backward compatibility
+            {:ok, registration_type, participant}
+            
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 
+  @doc """
+  Register a user for voting.
+  
+  This function handles user registration when voting on a poll,
+  ensuring the user is created and their votes are saved.
+  
+  ## Parameters
+  
+  - poll_id: ID of the poll being voted on
+  - name: User's name
+  - email: User's email address
+  - votes: Map of votes to save
+  - opts: Additional options (event_id, poll_options, etc.)
+  
+  ## Returns
+  
+  - {:ok, result} - User registered and votes saved
+  - {:error, reason} - Registration or vote saving failed
+  """
+  def register_voter(poll_id, name, email, votes, opts \\ []) do
+    alias EventasaurusApp.Services.UserRegistrationService
+    
+    # Add poll_id and votes to options
+    registration_opts = Keyword.merge(opts, [
+      poll_id: poll_id,
+      votes: votes
+    ])
+    
+    # Delegate to the unified registration service
+    UserRegistrationService.register_user(email, name, :voting, registration_opts)
+  end
+  
   @doc """
   Get registration status for a user and event.
   Returns one of: :not_registered, :registered, :cancelled, :organizer
