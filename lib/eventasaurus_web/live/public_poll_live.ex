@@ -187,6 +187,14 @@ defmodule EventasaurusWeb.PublicPollLive do
     {:noreply, assign(socket, :poll, updated_poll)}
   end
 
+  def handle_info({:temp_votes_updated, poll_id, temp_votes}, socket) do
+    if socket.assigns.poll.id == poll_id do
+      {:noreply, assign(socket, :temp_votes, temp_votes)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # Private functions
 
   defp get_poll_by_id(event, poll_id) do
