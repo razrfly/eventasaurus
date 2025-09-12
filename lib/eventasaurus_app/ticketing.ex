@@ -1508,58 +1508,10 @@ defmodule EventasaurusApp.Ticketing do
   end
 
   defp find_or_create_guest_user(email, name) do
-    alias EventasaurusApp.Auth.SupabaseSync
-    alias EventasaurusApp.Accounts
-    alias EventasaurusApp.Events
-
-    # Check if user exists in our local database first
-    existing_user = Accounts.get_user_by_email(email)
-
-    if existing_user do
-      Logger.debug("Existing user found in local database", %{user_id: existing_user.id})
-      {:ok, existing_user}
-    else
-      Logger.debug("No existing user found in local database")
-
-      # User doesn't exist locally, check Supabase and create if needed
-      Logger.info("User not found locally, attempting Supabase user creation/lookup")
-      case Events.create_or_find_supabase_user(email, name) do
-        {:ok, supabase_user} ->
-          Logger.info("Successfully created/found user in Supabase")
-          # Sync with local database
-          case SupabaseSync.sync_user(supabase_user) do
-            {:ok, user} ->
-              Logger.info("Successfully synced user to local database", %{user_id: user.id})
-              {:ok, user}
-            {:error, reason} ->
-              Logger.error("Failed to sync user to local database", %{reason: inspect(reason)})
-              {:error, reason}
-          end
-        {:error, :user_confirmation_required} ->
-          # User was created via OTP but email confirmation is required
-          Logger.info("User created via OTP but email confirmation required, creating temporary local user record")
-          # Create user with temporary supabase_id - will be updated when they confirm email
-          temp_supabase_id = "pending_confirmation_#{Ecto.UUID.generate()}"
-          case Accounts.create_user(%{
-            email: email,
-            name: name,
-            supabase_id: temp_supabase_id  # Temporary ID - will be updated when user confirms email
-          }) do
-            {:ok, user} ->
-              Logger.info("Successfully created temporary local user", %{user_id: user.id, temp_supabase_id: temp_supabase_id})
-              {:ok, user}
-            {:error, reason} ->
-              Logger.error("Failed to create temporary local user", %{reason: inspect(reason)})
-              {:error, reason}
-          end
-        {:error, :invalid_user_data} ->
-          Logger.error("Invalid user data from Supabase after OTP creation")
-          {:error, :invalid_user_data}
-        {:error, reason} ->
-          Logger.error("Failed to create/find user in Supabase", %{reason: inspect(reason)})
-          {:error, reason}
-      end
-    end
+    alias EventasaurusApp.Services.UserRegistrationService
+    
+    # Delegate to the unified registration service
+    UserRegistrationService.find_or_create_user(email, name)
   end
 
   defp create_guest_order(user, ticket, attrs, name, email) do
