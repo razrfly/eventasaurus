@@ -198,6 +198,7 @@ defmodule EventasaurusApp.Stripe do
       "currency" => currency,
       "application_fee_amount" => application_fee_amount,
       "transfer_data[destination]" => connect_account.stripe_user_id,
+      "on_behalf_of" => connect_account.stripe_user_id,
       "automatic_payment_methods[enabled]" => "true"
     }
 
@@ -391,6 +392,7 @@ defmodule EventasaurusApp.Stripe do
       # Use Stripe Connect's application fee handling
       "payment_intent_data[application_fee_amount]" => application_fee_amount,
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
+      "payment_intent_data[on_behalf_of]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => allow_promotion_codes || false,
 
       # Line items
@@ -539,6 +541,7 @@ defmodule EventasaurusApp.Stripe do
       # Use Stripe Connect's application fee handling
       "payment_intent_data[application_fee_amount]" => application_fee_amount,
       "payment_intent_data[transfer_data][destination]" => connect_account.stripe_user_id,
+      "payment_intent_data[on_behalf_of]" => connect_account.stripe_user_id,
       "allow_promotion_codes" => false
     }
 
