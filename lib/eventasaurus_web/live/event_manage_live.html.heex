@@ -67,9 +67,9 @@
         ]}
       >
         Guests
-        <%= if @participants && length(@participants) > 0 do %>
+        <%= if @participants_count && @participants_count > 0 do %>
           <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-            <%= length(@participants) %>
+            <%= @participants_count %>
           </span>
         <% end %>
       </button>
