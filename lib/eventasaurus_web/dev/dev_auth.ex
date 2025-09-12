@@ -80,6 +80,10 @@ defmodule EventasaurusWeb.Dev.DevAuth do
     emoji = cond do
       String.contains?(email_prefix, "movie") -> "🎬"
       String.contains?(email_prefix, "foodie") -> "🍴"
+      String.contains?(email_prefix, "go_kart") -> "🏎️"
+      String.contains?(email_prefix, "workshop") -> "🎓"
+      String.contains?(email_prefix, "entertainment") -> "🎭"
+      String.contains?(email_prefix, ["community_fund", "fundraiser"]) -> "🤝"
       String.contains?(email_prefix, "sports") -> "⚽"
       String.contains?(email_prefix, "book") -> "📚"
       String.contains?(email_prefix, ["game", "gaming"]) -> "🎮"
