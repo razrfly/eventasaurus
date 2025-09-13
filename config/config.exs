@@ -90,6 +90,10 @@ config :eventasaurus, Oban,
   queues: [
     # Email queue with limited concurrency for Resend API rate limiting
     emails: 2,  # Max 2 concurrent jobs to respect Resend's 2/second limit
+    # Scraper queue for event data ingestion
+    scraper: 5,  # Limited concurrency for rate-limited external APIs
+    # Google API queue for places lookups
+    google_lookup: 1,  # Single concurrency to respect Google's rate limits
     # Default queue for other background jobs
     default: 10
   ],
