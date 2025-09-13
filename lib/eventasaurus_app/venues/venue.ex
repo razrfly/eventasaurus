@@ -11,8 +11,13 @@ defmodule EventasaurusApp.Venues.Venue do
     field :latitude, :float
     field :longitude, :float
     field :venue_type, :string, default: "venue"
+    field :place_id, :string
+    field :source, :string, default: "user"
+    field :metadata, :map, default: %{}
 
+    belongs_to :city_ref, EventasaurusApp.Locations.City, foreign_key: :city_id
     has_many :events, EventasaurusApp.Events.Event
+    has_many :public_events, EventasaurusApp.PublicEvents.PublicEvent
 
     timestamps()
   end
@@ -22,9 +27,12 @@ defmodule EventasaurusApp.Venues.Venue do
   @doc false
   def changeset(venue, attrs) do
     venue
-    |> cast(attrs, [:name, :address, :city, :state, :country, :latitude, :longitude, :venue_type])
+    |> cast(attrs, [:name, :address, :city, :state, :country, :latitude, :longitude,
+                    :venue_type, :place_id, :source, :city_id, :metadata])
     |> validate_required([:name, :venue_type])
     |> validate_inclusion(:venue_type, @valid_venue_types, message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}")
+    |> validate_inclusion(:source, ["user", "scraper", "google"])
+    |> foreign_key_constraint(:city_id)
   end
 
   @doc """
