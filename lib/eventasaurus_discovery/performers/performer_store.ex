@@ -12,10 +12,20 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
 
   @doc """
   Find or create performer using upsert pattern based on slug.
+  First tries fuzzy matching to avoid duplicates.
   """
   def find_or_create_performer(attrs) do
     normalized_attrs = normalize_performer_attrs(attrs)
-    upsert_by_slug(normalized_attrs)
+
+    # First try fuzzy matching to find existing performer
+    case find_by_name(normalized_attrs.name, threshold: 0.85) do
+      [existing | _] ->
+        Logger.info("🎤 Found existing performer by fuzzy match: #{existing.name}")
+        {:ok, existing}
+      [] ->
+        # No fuzzy match found, proceed with upsert
+        upsert_by_slug(normalized_attrs)
+    end
   end
 
   defp upsert_by_slug(attrs) do

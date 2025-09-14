@@ -25,10 +25,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   def process_event(event_data, source_id, source_priority \\ 10) do
     with {:ok, normalized} <- normalize_event_data(event_data),
          {:ok, venue} <- process_venue(normalized),
-         {:ok, event} <- find_or_create_event(normalized, venue),
+         {:ok, event} <- find_or_create_event(normalized, venue, source_id),
          {:ok, _source} <- update_event_source(event, source_id, source_priority, normalized),
          {:ok, _performers} <- process_performers(event, normalized) do
-      {:ok, Repo.preload(event, [:venue, :city, :performers])}
+      {:ok, Repo.preload(event, [:venue, :performers])}
     else
       {:error, reason} = error ->
         Logger.error("Failed to process event: #{inspect(reason)}")
@@ -88,11 +88,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     VenueProcessor.process_venue(venue_data)
   end
 
-  defp find_or_create_event(data, venue) do
+  defp find_or_create_event(data, venue, source_id) do
     slug = Normalizer.create_slug("#{data.title} #{format_date(data.start_at)}")
 
     # First check if we have this event from this source
-    case find_existing_event(data.external_id, data.source_id) do
+    case find_existing_event(data.external_id, source_id) do
       nil ->
         # Check if we have this event from another source (by slug/title/time)
         case find_similar_event(data.title, data.start_at, venue) do
@@ -105,24 +105,26 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-  defp find_similar_event(title, start_at, venue) do
-    # Find events with similar title and start time
-    start_window = DateTime.add(start_at, -3600, :second)
-    end_window = DateTime.add(start_at, 3600, :second)
+  defp find_similar_event(_title, start_at, venue) do
+    # Focus on venue + time matching (ignore title as it's unreliable)
+    # Events at same venue within 2 hour window are likely the same
+    start_window = DateTime.add(start_at, -7200, :second)  # 2 hours before
+    end_window = DateTime.add(start_at, 7200, :second)     # 2 hours after
 
-    query = from(pe in PublicEvent,
-      where: pe.title == ^title and
-             pe.start_at >= ^start_window and
-             pe.start_at <= ^end_window
-    )
-
-    query = if venue do
-      where(query, [pe], pe.venue_id == ^venue.id)
+    # If we have a venue, that's our strongest signal
+    if venue do
+      from(pe in PublicEvent,
+        where: pe.venue_id == ^venue.id and
+               pe.starts_at >= ^start_window and
+               pe.starts_at <= ^end_window,
+        limit: 1
+      )
+      |> Repo.one()
     else
-      query
+      # Without venue, we can't reliably match
+      # TODO: Could check performers + date as fallback
+      nil
     end
-
-    Repo.one(query)
   end
 
   defp create_event(data, venue, slug) do
@@ -134,10 +136,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       description: data.description,
       venue_id: if(venue, do: venue.id, else: nil),
       city_id: city_id,
-      start_at: data.start_at,
+      starts_at: data.start_at,  # Note: normalized data uses start_at, schema uses starts_at
       ends_at: data.ends_at,
-      status: "active",
-      metadata: data.metadata
+      metadata: data.metadata,
+      external_id: data.external_id
     }
 
     %PublicEvent{}
@@ -196,7 +198,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       source_id: source_id,
       external_id: data.external_id,
       source_url: data.source_url,
-      last_seen_at: DateTime.utc_now(),
+      last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second),
       metadata: metadata
     }
 
