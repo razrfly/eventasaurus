@@ -57,7 +57,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       address: data[:address] || data["address"],
       city_name: data[:city] || data["city"],
       state: data[:state] || data["state"],
-      country_name: data[:country] || data["country"] || "United States",
+      country_name: data[:country] || data["country"],
       latitude: parse_coordinate(data[:latitude] || data["latitude"]),
       longitude: parse_coordinate(data[:longitude] || data["longitude"]),
       place_id: data[:place_id] || data["place_id"],
@@ -116,14 +116,37 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     |> Repo.insert!()
   end
 
-  defp derive_country_code("United States"), do: "US"
-  defp derive_country_code("Canada"), do: "CA"
-  defp derive_country_code("United Kingdom"), do: "GB"
-  defp derive_country_code("Mexico"), do: "MX"
-  defp derive_country_code(name) do
-    name
-    |> String.upcase()
-    |> String.slice(0, 2)
+  defp derive_country_code(country_name) when is_binary(country_name) do
+    # Use Countries library to get proper country code
+    case find_country_by_name(country_name) do
+      nil ->
+        Logger.warning("Unknown country: #{country_name}, using XX")
+        "XX"
+      country ->
+        country.alpha2
+    end
+  end
+  defp derive_country_code(_), do: "XX"
+
+  defp find_country_by_name(name) when is_binary(name) do
+    input = String.trim(name)
+
+    # Try as country code first
+    country = if String.length(input) <= 3 do
+      Countries.get(String.upcase(input))
+    end
+
+    # Try by exact name
+    country = country || case Countries.filter_by(:name, input) do
+      [c | _] -> c
+      _ -> nil
+    end
+
+    # Try by unofficial names
+    country || case Countries.filter_by(:unofficial_names, input) do
+      [c | _] -> c
+      _ -> nil
+    end
   end
 
   defp create_city(name, country, data) do

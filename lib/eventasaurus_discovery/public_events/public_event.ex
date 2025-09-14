@@ -54,12 +54,27 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
                     :source_id, :external_id, :ticket_url, :min_price,
                     :max_price, :currency, :metadata, :category_id])
     |> validate_required([:title, :starts_at], message: "An event must have both a title and start date - these are non-negotiable")
+    |> validate_length(:currency, is: 3)
+    |> validate_number(:min_price, greater_than_or_equal_to: 0)
+    |> validate_number(:max_price, greater_than_or_equal_to: 0)
+    |> validate_price_range()
     |> validate_date_order()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
     |> unique_constraint([:external_id, :source_id])
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:category_id)
+  end
+
+  defp validate_price_range(changeset) do
+    min_price = get_field(changeset, :min_price)
+    max_price = get_field(changeset, :max_price)
+
+    if min_price && max_price && Decimal.compare(max_price, min_price) == :lt do
+      add_error(changeset, :max_price, "must be greater than or equal to min_price")
+    else
+      changeset
+    end
   end
 
   defp validate_date_order(changeset) do
