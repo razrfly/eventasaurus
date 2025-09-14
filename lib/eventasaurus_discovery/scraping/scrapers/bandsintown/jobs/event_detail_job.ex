@@ -26,6 +26,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
+  alias EventasaurusDiscovery.PublicEvents.PublicEventSource
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: args}) do
@@ -108,7 +109,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           Repo.rollback({:performer_error, reason})
       end
 
-      # Create or update the event
+      # Create or update the event (without source_id)
       event_attrs = %{
         title: event_data["title"] || event_data["artist_name"],
         description: event_data["description"],
@@ -116,7 +117,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         ends_at: DateParser.parse_end_date(event_data["end_date"]),
         venue_id: venue.id,
         category_id: 2, # Concerts - Bandsintown is primarily a music/concert platform
-        source_id: source_id,
         external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
         ticket_url: event_data["ticket_url"],
         min_price: parse_price(event_data["min_price"]),
@@ -155,6 +155,28 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       # Link performer to event
       link_performer_to_event(event, performer)
 
+      # Create or update public_event_source record
+      source_attrs = %{
+        event_id: event.id,
+        source_id: source_id,
+        source_url: event_data["url"],
+        external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
+        last_seen_at: DateTime.utc_now(),
+        metadata: %{
+          is_primary: true,  # Bandsintown is our primary source for now
+          scraper_version: "1.0",
+          job_id: event_data["job_id"] || nil
+        }
+      }
+
+      case upsert_event_source(source_attrs) do
+        {:ok, _source} ->
+          Logger.info("✅ Successfully linked event to source")
+        {:error, reason} ->
+          Logger.error("Failed to create event source link: #{inspect(reason)}")
+          # Don't rollback - the event is still valid
+      end
+
       Logger.info("✅ Successfully stored event: #{event.title} (#{event.id})")
       event
     end)
@@ -167,8 +189,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       latitude: event_data["venue_latitude"],
       longitude: event_data["venue_longitude"],
       city_name: event_data["venue_city"],
-      country_code: extract_country_code(event_data["venue_country"]),
-      external_id: extract_venue_external_id(event_data)
+      country_code: extract_country_code(event_data["venue_country"])
     }
 
     VenueStore.find_or_create_venue(venue_attrs)
@@ -177,9 +198,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   defp store_performer(event_data, source_id) do
     performer_attrs = %{
       name: event_data["artist_name"],
-      external_id: extract_artist_external_id(event_data),
       image_url: event_data["image_url"],
-      genre: event_data["genre"],
       source_id: source_id,
       metadata: %{
         artist_url: event_data["artist_url"],
@@ -196,7 +215,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
 
     Repo.insert(changeset,
       on_conflict: {:replace_all_except, [:id, :inserted_at]},
-      conflict_target: [:external_id, :source_id],
+      conflict_target: [:external_id],
       returning: true
     )
   end
@@ -215,21 +234,33 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       |> PublicEventPerformer.changeset(%{
         event_id: event_id,
         performer_id: performer_id,
-        billing_order: 1,
-        metadata: %{is_headliner: true}
+        metadata: %{
+          is_headliner: true,
+          billing_order: 1
+        }
       })
       |> Repo.insert()
     end
   end
 
-  defp extract_venue_external_id(_event_data) do
-    # TODO: Extract venue ID from Bandsintown data if available
-    nil
-  end
+  defp upsert_event_source(attrs) do
+    # Check if source already exists for this event
+    existing = Repo.get_by(PublicEventSource,
+      event_id: attrs.event_id,
+      source_id: attrs.source_id
+    )
 
-  defp extract_artist_external_id(_event_data) do
-    # TODO: Extract artist ID from Bandsintown data if available
-    nil
+    if existing do
+      # Update last_seen_at
+      existing
+      |> PublicEventSource.changeset(%{last_seen_at: attrs.last_seen_at})
+      |> Repo.update()
+    else
+      # Create new source link
+      %PublicEventSource{}
+      |> PublicEventSource.changeset(attrs)
+      |> Repo.insert()
+    end
   end
 
   defp extract_country_code(country_name) when is_binary(country_name) do

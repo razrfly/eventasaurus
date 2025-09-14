@@ -36,9 +36,7 @@ defmodule EventasaurusApp.Venues.Venue do
     field :longitude, :float
     field :venue_type, :string, default: "venue"
     field :place_id, :string
-    field :external_id, :string  # Bandsintown venue ID
     field :source, :string, default: "user"
-    field :metadata, :map, default: %{}
 
     belongs_to :city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id
     has_many :events, EventasaurusApp.Events.Event
@@ -53,7 +51,7 @@ defmodule EventasaurusApp.Venues.Venue do
   def changeset(venue, attrs) do
     venue
     |> cast(attrs, [:name, :address, :city, :state, :country, :latitude, :longitude,
-                    :venue_type, :place_id, :external_id, :source, :city_id, :metadata])
+                    :venue_type, :place_id, :source, :city_id])
     |> validate_required([:name, :venue_type])
     |> validate_inclusion(:venue_type, @valid_venue_types, message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}")
     |> update_change(:source, fn s -> if is_binary(s), do: String.downcase(s), else: s end)
@@ -65,7 +63,6 @@ defmodule EventasaurusApp.Venues.Venue do
     |> unique_constraint(:slug)
     |> unique_constraint([:normalized_name, :city_id])
     |> unique_constraint(:place_id)
-    |> unique_constraint([:external_id, :source])
     |> foreign_key_constraint(:city_id)
   end
 
@@ -110,9 +107,12 @@ defmodule EventasaurusApp.Venues.Venue do
   # Helper to find or create city from string inputs
   defp find_or_create_city_from_strings(city_name, country_name) do
     try do
-      country = find_or_create_country(country_name)
-      city = find_or_create_city(city_name, country)
-      {:ok, city}
+      case find_or_create_country(country_name) do
+        nil -> {:error, :unknown_country}
+        country ->
+          city = find_or_create_city(city_name, country)
+          {:ok, city}
+      end
     rescue
       e ->
         require Logger
@@ -145,10 +145,10 @@ defmodule EventasaurusApp.Venues.Venue do
       # Country not found in library - this shouldn't happen for real countries
       require Logger
       Logger.error("Unknown country: #{country_name}")
-      raise "Unknown country: #{country_name}"
+      nil  # Return nil to signal failure
     end
   end
-  defp find_or_create_country(_), do: raise "Invalid country name"
+  defp find_or_create_country(_), do: nil
 
   defp find_country_data(country_input) when is_binary(country_input) do
     input = String.trim(country_input)
@@ -185,16 +185,10 @@ defmodule EventasaurusApp.Venues.Venue do
     if city do
       city
     else
-      # Create new city
-      slug = normalized_name
-      |> String.downcase()
-      |> String.replace(~r/[^a-z0-9\s]/, "")
-      |> String.replace(~r/\s+/, "-")
-
+      # Create new city (let changeset handle slug generation)
       %EventasaurusDiscovery.Locations.City{}
       |> EventasaurusDiscovery.Locations.City.changeset(%{
         name: normalized_name,
-        slug: slug,
         country_id: country.id
       })
       |> EventasaurusApp.Repo.insert!()
