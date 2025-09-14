@@ -35,10 +35,23 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   @doc """
-  Finds an existing venue by place_id or name/city combination.
+  Finds an existing venue by place_id, coordinates, or name/city combination.
   """
   def find_existing_venue(%{place_id: place_id}) when not is_nil(place_id) do
     Repo.get_by(Venue, place_id: place_id)
+  end
+
+  def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id} = attrs)
+      when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) do
+    # First try coordinates (within 100 meters)
+    venue = find_venue_by_coordinates(lat, lng, city_id, 100)
+
+    # If no coordinate match, try by name if available
+    if is_nil(venue) and Map.has_key?(attrs, :name) do
+      find_existing_venue(%{name: attrs.name, city_id: city_id})
+    else
+      venue
+    end
   end
 
   def find_existing_venue(%{name: name, city_id: city_id}) do
@@ -50,6 +63,39 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   def find_existing_venue(_), do: nil
+
+  defp find_venue_by_coordinates(lat, lng, city_id, radius_meters) do
+    # Convert to float if needed
+    lat_float = case lat do
+      %Decimal{} -> Decimal.to_float(lat)
+      val -> val
+    end
+
+    lng_float = case lng do
+      %Decimal{} -> Decimal.to_float(lng)
+      val -> val
+    end
+
+    # Simple distance calculation using degrees
+    # At latitude ~50° (Kraków), 1 degree ≈ 111km, so 100m ≈ 0.0009 degrees
+    lat_delta = radius_meters / 111_000.0
+    lng_delta = radius_meters / (111_000.0 * :math.cos(lat_float * :math.pi() / 180))
+
+    min_lat = lat_float - lat_delta
+    max_lat = lat_float + lat_delta
+    min_lng = lng_float - lng_delta
+    max_lng = lng_float + lng_delta
+
+    from(v in Venue,
+      where: v.city_id == ^city_id and
+             fragment("CAST(? AS float8) >= ?", v.latitude, ^min_lat) and
+             fragment("CAST(? AS float8) <= ?", v.latitude, ^max_lat) and
+             fragment("CAST(? AS float8) >= ?", v.longitude, ^min_lng) and
+             fragment("CAST(? AS float8) <= ?", v.longitude, ^max_lng),
+      limit: 1
+    )
+    |> Repo.one()
+  end
 
   defp normalize_venue_data(data) do
     normalized = %{
@@ -84,17 +130,28 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   defp ensure_city(%{city_name: city_name, country_name: country_name} = data) do
     country = find_or_create_country(country_name)
 
+    # First try to find by exact name match
     city = from(c in City,
       where: c.name == ^city_name and c.country_id == ^country.id,
       limit: 1
     )
     |> Repo.one()
-    |> case do
-      nil -> create_city(city_name, country, data)
-      existing -> existing
-    end
 
-    {:ok, city}
+    # If not found, try to find by slug to handle variations (e.g., Kraków vs Krakow)
+    city = city || from(c in City,
+      where: c.slug == ^Normalizer.create_slug(city_name) and c.country_id == ^country.id,
+      limit: 1
+    )
+    |> Repo.one()
+
+    # If still not found, create it
+    city = city || create_city(city_name, country, data)
+
+    if city do
+      {:ok, city}
+    else
+      {:error, "Failed to find or create city: #{city_name}"}
+    end
   end
 
   defp find_or_create_country(country_name) do
@@ -149,22 +206,46 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp create_city(name, country, data) do
-    %City{}
-    |> City.changeset(%{
+    attrs = %{
       name: name,
       slug: Normalizer.create_slug(name),
       country_id: country.id,
       latitude: data[:latitude],
       longitude: data[:longitude]
-    })
-    |> Repo.insert!()
+    }
+
+    case %City{} |> City.changeset(attrs) |> Repo.insert() do
+      {:ok, city} ->
+        city
+      {:error, changeset} ->
+        # If insert fails (e.g., unique constraint), try to find the existing city
+        # This handles race conditions and edge cases with slug generation
+        Logger.warning("Failed to create city #{name}: #{inspect(changeset.errors)}")
+
+        from(c in City,
+          where: c.country_id == ^country.id and
+                 (c.name == ^name or c.slug == ^attrs.slug),
+          limit: 1
+        )
+        |> Repo.one()
+        |> case do
+          nil ->
+            # If we still can't find it, something is wrong
+            Logger.error("Cannot create or find city #{name} in country #{country.name}")
+            nil
+          city ->
+            city
+        end
+    end
   end
 
   defp find_or_create_venue(data, city, source) do
     venue_attrs = %{
       name: data.name,
       city_id: city.id,
-      place_id: data.place_id
+      place_id: data.place_id,
+      latitude: data.latitude,
+      longitude: data.longitude
     }
 
     case find_existing_venue(venue_attrs) do
