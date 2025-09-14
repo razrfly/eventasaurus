@@ -1,24 +1,32 @@
+defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
+  use EctoAutoslugField.Slug, from: :title, to: :slug
+end
+
 defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   use Ecto.Schema
   import Ecto.Changeset
+  alias EventasaurusDiscovery.PublicEvents.PublicEvent.Slug
 
   schema "public_events" do
-    field :external_id, :string
     field :title, :string
-    field :slug, :string
+    field :slug, Slug.Type
     field :description, :string
-    field :start_at, :utc_datetime
+    field :starts_at, :utc_datetime
     field :ends_at, :utc_datetime
-    field :status, :string, default: "active"
+    field :source_id, :integer
+    field :external_id, :string
+    field :ticket_url, :string
+    field :min_price, :decimal
+    field :max_price, :decimal
+    field :currency, :string
     field :metadata, :map, default: %{}
 
     belongs_to :venue, EventasaurusApp.Venues.Venue
-    belongs_to :city, EventasaurusDiscovery.Locations.City
     belongs_to :category, EventasaurusDiscovery.Categories.Category
 
-    has_many :public_event_sources, EventasaurusDiscovery.PublicEvents.PublicEventSource, foreign_key: :event_id
     many_to_many :performers, EventasaurusDiscovery.Performers.Performer,
-      join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer
+      join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
+      join_keys: [event_id: :id, performer_id: :id]
 
     timestamps()
   end
@@ -26,12 +34,14 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   @doc false
   def changeset(public_event, attrs) do
     public_event
-    |> cast(attrs, [:external_id, :title, :slug, :description, :venue_id, :city_id,
-                    :category_id, :start_at, :ends_at, :status, :metadata])
-    |> validate_required([:title, :slug, :city_id, :start_at])
-    |> validate_inclusion(:status, ["active", "cancelled", "postponed"])
+    |> cast(attrs, [:title, :description, :starts_at, :ends_at, :venue_id,
+                    :source_id, :external_id, :ticket_url, :min_price,
+                    :max_price, :currency, :metadata, :category_id])
+    |> validate_required([:title])
+    |> Slug.maybe_generate_slug()
+    |> unique_constraint(:slug)
+    |> unique_constraint([:external_id, :source_id])
     |> foreign_key_constraint(:venue_id)
-    |> foreign_key_constraint(:city_id)
     |> foreign_key_constraint(:category_id)
   end
 end

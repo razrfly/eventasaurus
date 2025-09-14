@@ -58,7 +58,8 @@ defmodule Mix.Tasks.Scraper.PaginationTest do
     """)
 
     # Test fetching all events with pagination
-    case Client.fetch_all_city_events(city, max_pages: max_pages) do
+    # For testing, use dummy coordinates (this task is for pagination testing only)
+    case Client.fetch_all_city_events(50.0647, 19.945, city, max_pages: max_pages) do
       {:ok, all_events} ->
         Logger.info("""
 
