@@ -15,11 +15,16 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   Uses Ecto upserts for atomic operations.
   """
   def find_or_create_venue(attrs) do
-    with {:ok, normalized_attrs} <- normalize_venue_attrs(attrs),
-         {:ok, venue} <- find_by_proximity(normalized_attrs) ||
-                        find_by_name_and_city(normalized_attrs) ||
-                        create_venue(normalized_attrs) do
-      {:ok, venue}
+    with {:ok, normalized_attrs} <- normalize_venue_attrs(attrs) do
+      # Try each method in sequence, falling back to the next
+      case find_by_proximity(normalized_attrs) do
+        {:ok, venue} -> {:ok, venue}
+        _ ->
+          case find_by_name_and_city(normalized_attrs) do
+            {:ok, venue} -> {:ok, venue}
+            _ -> create_venue(normalized_attrs)
+          end
+      end
     else
       {:error, reason} = error ->
         Logger.error("Failed to find or create venue: #{inspect(reason)}")
@@ -35,36 +40,46 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
     lat_float = to_float(lat)
     lng_float = to_float(lng)
 
+    # Skip if coordinates couldn't be parsed
+    if is_nil(lat_float) or is_nil(lng_float) do
+      Logger.debug("Skipping proximity match due to invalid coordinates: #{inspect({lat, lng})}")
+      nil
+    else
+
     query = from v in Venue,
       where: v.city_id == ^city_id,
+      where: not is_nil(v.latitude) and not is_nil(v.longitude),
       where: fragment(
-        "ST_DWithin(?, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)",
-        v.location,
+        "ST_DWithin(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)",
+        v.longitude,
+        v.latitude,
         ^lng_float,
         ^lat_float,
         50  # meters
       ),
       order_by: fragment(
-        "ST_Distance(?, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography)",
-        v.location,
+        "ST_Distance(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography)",
+        v.longitude,
+        v.latitude,
         ^lng_float,
         ^lat_float
       ),
       limit: 1
 
-    case Repo.one(query) do
-      nil ->
-        Logger.debug("No venue found by proximity at (#{lat}, #{lng})")
-        nil
-      venue ->
-        # Check if names are similar enough
-        if similar_names?(venue.name, name) do
-          Logger.info("📍 Found venue by proximity: #{venue.name} (#{venue.id})")
-          update_venue_if_needed(venue, %{latitude: lat, longitude: lng})
-        else
-          Logger.info("Found different venue at same location: #{venue.name} != #{name}")
-          nil  # Different venue at same location
-        end
+      case Repo.one(query) do
+        nil ->
+          Logger.debug("No venue found by proximity at (#{lat}, #{lng})")
+          nil
+        venue ->
+          # Check if names are similar enough
+          if similar_names?(venue.name, name) do
+            Logger.info("📍 Found venue by proximity: #{venue.name} (#{venue.id})")
+            update_venue_if_needed(venue, %{latitude: lat, longitude: lng})
+          else
+            Logger.info("Found different venue at same location: #{venue.name} != #{name}")
+            nil  # Different venue at same location
+          end
+      end
     end
   end
   defp find_by_proximity(_), do: nil
@@ -261,10 +276,11 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   defp to_float(value) when is_binary(value) do
     case Float.parse(value) do
       {float, _} -> float
-      :error -> 0.0
+      :error -> nil
     end
   end
-  defp to_float(_), do: 0.0
+  defp to_float(nil), do: nil
+  defp to_float(_), do: nil
 
   defp update_venue_if_needed(venue, updates) do
     if should_update_venue?(venue, updates) do
@@ -282,9 +298,17 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   end
   defp should_update_venue?(_, _), do: false
 
+  defp coords_equal?(nil, _), do: false
+  defp coords_equal?(_, nil), do: false
   defp coords_equal?(coord1, coord2) do
     # Compare coordinates with small tolerance
-    abs(to_float(coord1) - to_float(coord2)) < 0.00001
+    f1 = to_float(coord1)
+    f2 = to_float(coord2)
+    if is_nil(f1) or is_nil(f2) do
+      false
+    else
+      abs(f1 - f2) < 0.00001
+    end
   end
 
   defp has_unique_violation?(changeset) do

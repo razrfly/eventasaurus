@@ -14,7 +14,6 @@ defmodule EventasaurusApp.Repo.Migrations.UpdateVenues do
       add :source, :string, default: "user"
       add :city_id, references(:cities, on_delete: :nilify_all)
       add :metadata, :map, default: %{}
-      add :location, :geometry
     end
 
     # Create normalization function for venues
@@ -51,12 +50,6 @@ defmodule EventasaurusApp.Repo.Migrations.UpdateVenues do
     EXECUTE FUNCTION venues_normalize_trigger();
     """
 
-    # Update location field for existing venues with coordinates
-    execute """
-    UPDATE venues
-    SET location = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)
-    WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
-    """
 
     # Create indexes
     create index(:venues, [:place_id])
@@ -64,16 +57,12 @@ defmodule EventasaurusApp.Repo.Migrations.UpdateVenues do
     create index(:venues, [:source])
     create index(:venues, [:normalized_name, :city_id])
     create unique_index(:venues, [:slug])
-    create unique_index(:venues, [:external_id])
-
-    # Spatial index for location
-    execute "CREATE INDEX venues_location_idx ON venues USING GIST (location);"
+    create unique_index(:venues, [:external_id, :source])
   end
 
   def down do
-    execute "DROP INDEX IF EXISTS venues_location_idx;"
     drop index(:venues, [:slug])
-    drop index(:venues, [:external_id])
+    drop index(:venues, [:external_id, :source])
     drop index(:venues, [:normalized_name, :city_id])
     drop index(:venues, [:source])
     drop index(:venues, [:city_id])
@@ -91,7 +80,6 @@ defmodule EventasaurusApp.Repo.Migrations.UpdateVenues do
       remove :source
       remove :city_id
       remove :metadata
-      remove :location
     end
   end
 end
