@@ -183,14 +183,20 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       source_id: source_id
     ) || %PublicEventSource{}
 
+    # Store priority in metadata if provided
+    metadata = if priority do
+      Map.put(data.metadata || %{}, :priority, priority)
+    else
+      data.metadata || %{}
+    end
+
     attrs = %{
       event_id: event.id,
       source_id: source_id,
       external_id: data.external_id,
-      priority: priority,
       source_url: data.source_url,
       last_seen_at: DateTime.utc_now(),
-      metadata: data.metadata
+      metadata: metadata
     }
 
     event_source
@@ -209,12 +215,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     |> Repo.delete_all()
 
     # Create new associations
-    associations = Enum.map(performers, fn performer ->
+    associations = Enum.with_index(performers, 1) |> Enum.map(fn {performer, index} ->
       %PublicEventPerformer{}
       |> PublicEventPerformer.changeset(%{
         event_id: event.id,
         performer_id: performer.id,
-        billing_order: 1
+        metadata: %{
+          billing_order: index,
+          is_headliner: index == 1
+        }
       })
       |> Repo.insert!()
     end)

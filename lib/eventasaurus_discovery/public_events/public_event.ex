@@ -29,7 +29,6 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     field :description, :string
     field :starts_at, :utc_datetime
     field :ends_at, :utc_datetime
-    field :source_id, :integer
     field :external_id, :string
     field :ticket_url, :string
     field :min_price, :decimal
@@ -51,7 +50,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   def changeset(public_event, attrs) do
     public_event
     |> cast(attrs, [:title, :description, :starts_at, :ends_at, :venue_id,
-                    :source_id, :external_id, :ticket_url, :min_price,
+                    :external_id, :ticket_url, :min_price,
                     :max_price, :currency, :metadata, :category_id])
     |> validate_required([:title, :starts_at], message: "An event must have both a title and start date - these are non-negotiable")
     |> validate_length(:currency, is: 3)
@@ -61,7 +60,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     |> validate_date_order()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
-    |> unique_constraint([:external_id, :source_id])
+    |> unique_constraint(:external_id)
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:category_id)
   end

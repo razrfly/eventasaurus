@@ -10,10 +10,8 @@ defmodule EventasaurusApp.Repo.Migrations.UpdateVenues do
       add :normalized_name, :string
       add :slug, :string
       add :place_id, :string
-      add :external_id, :string
       add :source, :string, default: "user"
       add :city_id, references(:cities, on_delete: :nilify_all)
-      add :metadata, :map, default: %{}
     end
 
     # Create normalization function for venues
@@ -57,12 +55,10 @@ defmodule EventasaurusApp.Repo.Migrations.UpdateVenues do
     create index(:venues, [:source])
     create index(:venues, [:normalized_name, :city_id])
     create unique_index(:venues, [:slug])
-    create unique_index(:venues, [:external_id, :source])
   end
 
   def down do
     drop index(:venues, [:slug])
-    drop index(:venues, [:external_id, :source])
     drop index(:venues, [:normalized_name, :city_id])
     drop index(:venues, [:source])
     drop index(:venues, [:city_id])
@@ -76,10 +72,8 @@ defmodule EventasaurusApp.Repo.Migrations.UpdateVenues do
       remove :normalized_name
       remove :slug
       remove :place_id
-      remove :external_id
       remove :source
       remove :city_id
-      remove :metadata
     end
   end
 end
