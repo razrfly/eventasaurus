@@ -24,6 +24,7 @@ defmodule EventasaurusDiscovery.Locations.Country do
     |> validate_required([:name, :code])
     |> validate_length(:code, is: 2)
     |> upcase_code()
+    |> validate_format(:code, ~r/^[A-Z]{2}$/, message: "must be a valid ISO 3166-1 alpha-2 code")
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:code)
     |> unique_constraint(:slug)

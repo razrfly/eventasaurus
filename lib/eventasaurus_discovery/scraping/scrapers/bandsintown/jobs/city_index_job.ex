@@ -88,35 +88,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
           case fetch_result do
             {:ok, events} ->
               process_events(events, source, job_id, limit)
-
-            {:error, :playwright_not_configured} ->
-              # Fallback to pagination API
-              Logger.warning("⚠️ Playwright not configured, using pagination API...")
-
-              case Client.fetch_all_city_events(latitude, longitude, bandsintown_slug, max_pages: max_pages) do
-                {:ok, events} ->
-                  process_events(events, source, job_id, limit)
-
-                {:error, reason} = error ->
-                  if job_id do
-                    JobMetadata.update_error(job_id, reason, context: %{
-                      city_id: city.id,
-                      city_name: city.name,
-                      coordinates: {latitude, longitude}
-                    })
-                  end
-                  error
-              end
-
-            {:error, reason} = error ->
-              if job_id do
-                JobMetadata.update_error(job_id, reason, context: %{
-                  city_id: city.id,
-                  city_name: city.name,
-                  coordinates: {latitude, longitude}
-                })
-              end
-              error
           end
         rescue
           e ->

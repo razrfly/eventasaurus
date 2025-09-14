@@ -100,15 +100,6 @@ defmodule Mix.Tasks.Scraper.PaginationTest do
           end
         end
 
-      {:error, reason} ->
-        Logger.error("""
-
-        =====================================
-        ❌ PAGINATION TEST FAILED
-        =====================================
-        Error: #{inspect(reason)}
-        =====================================
-        """)
     end
   end
 end
