@@ -56,8 +56,6 @@ defmodule EventasaurusApp.Venues.Venue do
     |> validate_place_id_source()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
-    |> unique_constraint([:normalized_name, :city_id])
-    |> unique_constraint(:place_id)
     |> foreign_key_constraint(:city_id)
   end
 
