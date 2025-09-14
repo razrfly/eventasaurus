@@ -5,7 +5,6 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEventPerformers do
     create table(:public_event_performers) do
       add :event_id, references(:public_events, on_delete: :delete_all), null: false
       add :performer_id, references(:performers, on_delete: :restrict), null: false
-      add :billing_order, :integer, default: 0
       add :metadata, :map, default: %{}
 
       timestamps()

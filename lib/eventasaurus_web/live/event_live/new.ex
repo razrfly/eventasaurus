@@ -613,7 +613,7 @@ defmodule EventasaurusWeb.EventLive.New do
               end,
               "venue_type" => Map.get(form_data, "venue_type", "venue"),
               "place_id" => Map.get(form_data, "venue_place_id"),  # Include Google Places ID
-              "source" => "google"  # Mark venues from Google Places as source: google
+              "source" => if(Map.get(form_data, "venue_place_id"), do: "google", else: "user")
             }
 
             # Try to find existing venue by address first

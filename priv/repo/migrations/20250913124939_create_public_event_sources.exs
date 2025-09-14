@@ -7,9 +7,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEventSources do
       add :source_id, references(:sources, on_delete: :restrict), null: false
       add :source_url, :string
       add :external_id, :string
-      add :first_seen_at, :utc_datetime, null: false
       add :last_seen_at, :utc_datetime, null: false
-      add :is_primary, :boolean, default: false
       add :metadata, :map, default: %{}
 
       timestamps()
