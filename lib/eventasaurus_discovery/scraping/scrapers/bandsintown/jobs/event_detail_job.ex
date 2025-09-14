@@ -253,8 +253,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       |> PublicEventSource.changeset(attrs)
 
     Repo.insert(changeset,
-      on_conflict: {:replace, [:source_url, :external_id, :last_seen_at, :metadata, :updated_at]},
-      conflict_target: [:event_id, :source_id],
+      on_conflict: {:replace, [:event_id, :source_url, :last_seen_at, :metadata, :updated_at]},
+      conflict_target: [:source_id, :external_id],
       returning: true
     )
   end
