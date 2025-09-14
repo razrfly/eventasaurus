@@ -112,15 +112,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       event_attrs = %{
         title: event_data["title"] || event_data["artist_name"],
         description: event_data["description"],
-        starts_at: parse_date(event_data["date"]),
-        ends_at: parse_date(event_data["end_date"]),
+        starts_at: parse_start_date(event_data["date"]),
+        ends_at: parse_end_date(event_data["end_date"]),
         venue_id: venue.id,
+        category_id: 2, # Concerts - Bandsintown is primarily a music/concert platform
         source_id: source_id,
         external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
         ticket_url: event_data["ticket_url"],
         min_price: parse_price(event_data["min_price"]),
         max_price: parse_price(event_data["max_price"]),
-        currency: event_data["currency"] || "USD",
+        currency: get_currency(event_data),
         metadata: %{
           image_url: event_data["image_url"],
           rsvp_count: event_data["rsvp_count"],
@@ -134,6 +135,18 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
 
       event = case upsert_event(event_attrs) do
         {:ok, e} -> e
+        {:error, %Ecto.Changeset{} = changeset} ->
+          # Check if this is a validation failure for required fields
+          errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+
+          if has_required_field_errors?(errors) do
+            Logger.warning("🚫 Rejecting event - missing required fields: #{inspect(errors)}")
+            Logger.warning("   Event data: title=#{event_attrs[:title]}, starts_at=#{event_attrs[:starts_at]}")
+            Repo.rollback({:validation_failure, :missing_required_fields})
+          else
+            Logger.error("Failed to store event: #{inspect(changeset)}")
+            Repo.rollback({:event_error, changeset})
+          end
         {:error, reason} ->
           Logger.error("Failed to store event: #{inspect(reason)}")
           Repo.rollback({:event_error, reason})
@@ -252,11 +265,93 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   end
   defp extract_id_from_url(_), do: nil
 
-  defp parse_date(date_string) when is_binary(date_string) do
-    case DateTime.from_iso8601(date_string) do
-      {:ok, datetime, _} -> datetime
-      _ -> nil
+  defp parse_start_date(date_string) when is_binary(date_string) do
+    cond do
+      # Full ISO 8601 datetime (e.g., "2025-09-14T16:00:00")
+      String.contains?(date_string, "T") ->
+        # Try with timezone first
+        case DateTime.from_iso8601(date_string) do
+          {:ok, datetime, _} ->
+            datetime
+          _ ->
+            # If no timezone, assume UTC and add Z
+            case DateTime.from_iso8601(date_string <> "Z") do
+              {:ok, datetime, _} -> datetime
+              _ ->
+                # Last resort: parse as NaiveDateTime and convert to UTC
+                case NaiveDateTime.from_iso8601(date_string) do
+                  {:ok, naive_dt} -> DateTime.from_naive!(naive_dt, "Etc/UTC")
+                  _ -> nil
+                end
+            end
+        end
+
+      # Date only (e.g., "2025-09-14") - convert to datetime at midnight UTC
+      Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, date_string) ->
+        case Date.from_iso8601(date_string) do
+          {:ok, date} -> DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+          _ -> nil
+        end
+
+      # Other formats - try comprehensive parsing
+      true ->
+        EventasaurusDiscovery.Scraping.Helpers.DateParser.parse_datetime(date_string)
     end
   end
-  defp parse_date(_), do: nil
+  defp parse_start_date(_), do: nil
+
+  defp parse_end_date(date_string) when is_binary(date_string) do
+    cond do
+      # Full ISO 8601 datetime (e.g., "2025-09-14T16:00:00")
+      String.contains?(date_string, "T") ->
+        # Try with timezone first
+        case DateTime.from_iso8601(date_string) do
+          {:ok, datetime, _} ->
+            datetime
+          _ ->
+            # If no timezone, assume UTC and add Z
+            case DateTime.from_iso8601(date_string <> "Z") do
+              {:ok, datetime, _} -> datetime
+              _ ->
+                # Last resort: parse as NaiveDateTime and convert to UTC
+                case NaiveDateTime.from_iso8601(date_string) do
+                  {:ok, naive_dt} -> DateTime.from_naive!(naive_dt, "Etc/UTC")
+                  _ -> nil
+                end
+            end
+        end
+
+      # Date only (e.g., "2025-09-14") - convert to END of day (23:59:59) UTC
+      Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, date_string) ->
+        case Date.from_iso8601(date_string) do
+          {:ok, date} -> DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
+          _ -> nil
+        end
+
+      # Other formats - try comprehensive parsing
+      true ->
+        EventasaurusDiscovery.Scraping.Helpers.DateParser.parse_datetime(date_string)
+    end
+  end
+  defp parse_end_date(_), do: nil
+
+  defp has_required_field_errors?(errors) do
+    # Check if errors contain missing title or starts_at
+    Enum.any?([:title, :starts_at], fn field ->
+      Map.has_key?(errors, field)
+    end)
+  end
+
+  defp get_currency(event_data) do
+    # Only set currency if we have actual price data
+    min_price = event_data["min_price"]
+    max_price = event_data["max_price"]
+
+    if min_price || max_price do
+      event_data["currency"] || "USD"
+    else
+      nil
+    end
+  end
+
 end

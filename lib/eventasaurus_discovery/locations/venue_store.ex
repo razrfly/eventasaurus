@@ -254,16 +254,6 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   end
   defp country_name_from_code(_), do: "Unknown"
 
-  defp to_decimal(value) when is_binary(value) do
-    case Decimal.parse(value) do
-      {decimal, _} -> decimal
-      :error -> nil
-    end
-  end
-  defp to_decimal(value) when is_float(value), do: Decimal.from_float(value)
-  defp to_decimal(value) when is_integer(value), do: Decimal.new(value)
-  defp to_decimal(%Decimal{} = value), do: value
-  defp to_decimal(_), do: nil
 
   defp to_float(%Decimal{} = value), do: Decimal.to_float(value)
   defp to_float(value) when is_float(value), do: value

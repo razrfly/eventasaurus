@@ -20,6 +20,8 @@ defmodule EventasaurusDiscovery.Sources.Source do
     source
     |> cast(attrs, [:name, :slug, :website_url, :priority, :is_active, :metadata])
     |> validate_required([:name, :slug])
+    |> update_change(:slug, &(&1 && String.downcase(&1)))
+    |> validate_format(:website_url, ~r/^https?:\/\/\S+$/i, message: "must start with http:// or https://")
     |> validate_number(:priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> unique_constraint(:slug)
   end
