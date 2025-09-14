@@ -48,14 +48,21 @@ defmodule EventasaurusWeb.EventLive.Edit do
             is_virtual = event.venue_id == nil
 
             # Load venue data if the event has a venue
-            {venue_name, venue_address, venue_city, venue_state, venue_country, venue_latitude, venue_longitude} =
+            {venue_name, venue_address, venue_city, venue_country, venue_latitude, venue_longitude} =
               if event.venue_id do
                 case Venues.get_venue(event.venue_id) do
-                  nil -> {nil, nil, nil, nil, nil, nil, nil}
-                  venue -> {venue.name, venue.address, venue.city, venue.state, venue.country, venue.latitude, venue.longitude}
+                  nil -> {nil, nil, nil, nil, nil, nil}
+                  venue -> {
+                    venue.name,
+                    venue.address,
+                    EventasaurusApp.Venues.Venue.city_name(venue),
+                    EventasaurusApp.Venues.Venue.country_name(venue),
+                    venue.latitude,
+                    venue.longitude
+                  }
                 end
               else
-                {nil, nil, nil, nil, nil, nil, nil}
+                {nil, nil, nil, nil, nil, nil}
               end
 
             # Legacy date polling data loading removed - using generic polling system
@@ -103,7 +110,6 @@ defmodule EventasaurusWeb.EventLive.Edit do
                 "venue_name" => venue_name,
                 "venue_address" => venue_address,
                 "venue_city" => venue_city,
-                "venue_state" => venue_state,
                 "venue_country" => venue_country,
                 "venue_latitude" => venue_latitude,
                 "venue_longitude" => venue_longitude,

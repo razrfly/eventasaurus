@@ -532,8 +532,8 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
       <div>
         <label for={"place-search-#{@id}"} class="block text-sm font-medium text-gray-700">
           Search for Place 
-          <%= if @event.venue && (@event.venue.city || @event.venue.name) do %>
-            <span class="text-xs text-gray-500 font-normal">(<%= @event.venue.city || @event.venue.name %>)</span>
+          <%= if @event.venue && (EventasaurusApp.Venues.Venue.city_name(@event.venue) || @event.venue.name) do %>
+            <span class="text-xs text-gray-500 font-normal">(<%= EventasaurusApp.Venues.Venue.city_name(@event.venue) || @event.venue.name %>)</span>
           <% end %>
           <span class="text-red-500">*</span>
         </label>
@@ -1006,7 +1006,7 @@ defmodule EventasaurusWeb.ActivityCreationComponent do
           lat: venue.latitude,
           lng: venue.longitude
         },
-        city: venue.city,
+        city: EventasaurusApp.Venues.Venue.city_name(venue),
         name: venue.name
       })
     else

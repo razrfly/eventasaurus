@@ -119,13 +119,12 @@ defmodule EventasaurusWeb.StaticMapComponent do
   defp format_address(venue) do
     parts = [
       venue.address,
-      venue.city,
-      venue.state,
-      venue.country
+      EventasaurusApp.Venues.Venue.city_name(venue),
+      EventasaurusApp.Venues.Venue.country_name(venue)
     ]
     |> Enum.filter(fn part -> is_binary(part) and String.trim(part) != "" end)
     |> Enum.join(", ")
-    
+
     parts
   end
   

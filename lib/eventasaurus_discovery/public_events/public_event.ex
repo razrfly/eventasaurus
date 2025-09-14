@@ -60,7 +60,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     |> validate_date_order()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
-    |> unique_constraint(:external_id)
+    # external_id can collide across sources; uniqueness enforced in PublicEventSource
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:category_id)
   end
