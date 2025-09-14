@@ -13,6 +13,7 @@ defmodule EventasaurusApp.Factory do
   alias EventasaurusApp.Groups.{Group, GroupUser}
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusApp.Accounts.User
+  alias EventasaurusDiscovery.Locations.{City, Country}
   alias Nanoid
 
   @doc """
@@ -38,15 +39,38 @@ defmodule EventasaurusApp.Factory do
   Factory for Venue schema
   """
   def venue_factory do
+    # Create a normalized city for the venue
+    country = insert(:country, %{name: "United States of America", code: "US"})
+    city = insert(:city, %{name: "Test City", country_id: country.id})
+
     %Venue{
       name: sequence(:venue_name, &"Test Venue #{&1}"),
       address: sequence(:address, &"#{&1} Test Street"),
-      city: "Test City",
-      state: "CA",
-      country: "USA",
+      city_id: city.id,
       latitude: 37.7749,
       longitude: -122.4194,
       venue_type: "venue"
+    }
+  end
+
+  @doc """
+  Factory for Country schema
+  """
+  def country_factory do
+    %Country{
+      name: sequence(:country_name, &"Country #{&1}"),
+      code: sequence(:country_code, &"C#{&1}")
+    }
+  end
+
+  @doc """
+  Factory for City schema
+  """
+  def city_factory do
+    %City{
+      name: sequence(:city_name, &"City #{&1}"),
+      slug: sequence(:city_slug, &"city-#{&1}"),
+      country: build(:country)
     }
   end
 
@@ -552,12 +576,20 @@ defmodule EventasaurusApp.Factory do
   end
 
   def realistic_venue_factory do
+    # Create a realistic normalized city for the venue
+    country = insert(:country, %{
+      name: Faker.Address.country(),
+      code: Faker.Address.country_code()
+    })
+    city = insert(:city, %{
+      name: Faker.Address.city(),
+      country_id: country.id
+    })
+
     %Venue{
       name: Faker.Company.name(),
       address: Faker.Address.street_address(),
-      city: Faker.Address.city(),
-      state: Faker.Address.state_abbr(),
-      country: Faker.Address.country(),
+      city_id: city.id,
       latitude: Faker.Address.latitude(),
       longitude: Faker.Address.longitude(),
       venue_type: Enum.random(["venue", "city", "region", "online", "tbd"])

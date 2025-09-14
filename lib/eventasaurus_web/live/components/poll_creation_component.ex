@@ -102,7 +102,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
             if venue.venue_type in ["venue", "city", "region"] && venue.latitude &&
                  venue.longitude do
               # Use venue name (or address if no name) as the search location display
-              search_location_display = venue.name || venue.address || venue.city
+              search_location_display = venue.name || venue.address || EventasaurusApp.Venues.Venue.city_name(venue)
 
               settings_with_location
               |> Map.put("search_location", search_location_display)
@@ -111,7 +111,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
                   "lat" => venue.latitude,
                   "lng" => venue.longitude
                 },
-                "city" => venue.city,
+                "city" => EventasaurusApp.Venues.Venue.city_name(venue),
                 "name" => venue.name || venue.address
               })
             else
@@ -803,7 +803,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
             "lat" => venue.latitude,
             "lng" => venue.longitude
           },
-          "city" => venue.city,
+          "city" => EventasaurusApp.Venues.Venue.city_name(venue),
           "name" => venue.name || venue.address
         })
       else
@@ -1011,7 +1011,7 @@ defmodule EventasaurusWeb.PollCreationComponent do
       search_location = get_search_location(changeset, nil)
 
       event.venue && search_location &&
-        (search_location == event.venue.city || search_location == event.venue.name)
+        (search_location == EventasaurusApp.Venues.Venue.city_name(event.venue) || search_location == event.venue.name)
     end
   end
 

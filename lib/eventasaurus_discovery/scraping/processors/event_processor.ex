@@ -184,11 +184,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     ) || %PublicEventSource{}
 
     # Store priority in metadata if provided
-    metadata = if priority do
-      Map.put(data.metadata || %{}, :priority, priority)
-    else
-      data.metadata || %{}
-    end
+    base = data.metadata || %{}
+    metadata =
+      case priority do
+        nil -> base
+        p -> Map.put(base, "priority", p)
+      end
 
     attrs = %{
       event_id: event.id,
@@ -221,8 +222,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         event_id: event.id,
         performer_id: performer.id,
         metadata: %{
-          billing_order: index,
-          is_headliner: index == 1
+          "billing_order" => index,
+          "is_headliner" => index == 1
         }
       })
       |> Repo.insert!()
