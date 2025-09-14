@@ -139,20 +139,19 @@ defmodule EventasaurusWeb.CalendarExport do
     cond do
       event.is_virtual && event.virtual_venue_url ->
         "Online Event: #{event.virtual_venue_url}"
-      
+
       venue && venue.name ->
         address_parts = [
           venue.name,
           venue.address,
-          venue.city,
-          venue.state,
-          venue.country
+          EventasaurusApp.Venues.Venue.city_name(venue),
+          EventasaurusApp.Venues.Venue.country_name(venue)
         ]
         |> Enum.filter(&(&1 && &1 != ""))
         |> Enum.join(", ")
-        
+
         address_parts
-      
+
       true ->
         "Location TBD"
     end
