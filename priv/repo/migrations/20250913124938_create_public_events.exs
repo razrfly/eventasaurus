@@ -6,7 +6,7 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEvents do
       add :title, :string, null: false
       add :slug, :string
       add :description, :text
-      add :starts_at, :utc_datetime
+      add :starts_at, :utc_datetime, null: false
       add :ends_at, :utc_datetime
       add :source_id, :integer
       add :external_id, :string
