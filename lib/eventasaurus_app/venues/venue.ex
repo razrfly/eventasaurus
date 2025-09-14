@@ -15,9 +15,9 @@ defmodule EventasaurusApp.Venues.Venue do
     field :source, :string, default: "user"
     field :metadata, :map, default: %{}
 
-    belongs_to :city_ref, EventasaurusApp.Locations.City, foreign_key: :city_id
+    belongs_to :city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id
     has_many :events, EventasaurusApp.Events.Event
-    has_many :public_events, EventasaurusApp.PublicEvents.PublicEvent
+    has_many :public_events, EventasaurusDiscovery.PublicEvents.PublicEvent
 
     timestamps()
   end
