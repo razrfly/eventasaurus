@@ -36,25 +36,27 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
 
   def parse_date(string) when is_binary(string) do
     formats = [
-      # ISO format
-      ~r/^(\d{4})-(\d{2})-(\d{2})$/,
-      # American format
-      ~r/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-      # European format
-      ~r/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/
+      {:iso, ~r/^(\d{4})-(\d{2})-(\d{2})$/},
+      {:us,  ~r/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/},
+      {:eu,  ~r/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/}
     ]
 
-    Enum.find_value(formats, fn format ->
-      case Regex.run(format, string) do
-        [_, y, m, d] when format == hd(formats) ->
-          create_datetime(y, m, d, "00", "00", "00")
-
-        [_, m, d, y] ->
-          create_datetime(y, m, d, "00", "00", "00")
-
-        _ ->
-          nil
-      end
+    Enum.find_value(formats, fn
+      {:iso, rx} ->
+        case Regex.run(rx, string) do
+          [_, y, m, d] -> create_datetime(y, m, d, "00", "00", "00")
+          _ -> nil
+        end
+      {:us, rx} ->
+        case Regex.run(rx, string) do
+          [_, m, d, y] -> create_datetime(y, m, d, "00", "00", "00")
+          _ -> nil
+        end
+      {:eu, rx} ->
+        case Regex.run(rx, string) do
+          [_, d, m, y] -> create_datetime(y, m, d, "00", "00", "00")
+          _ -> nil
+        end
     end)
   end
 
@@ -117,12 +119,25 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.DateParser do
   end
 
   defp parse_unix_timestamp(string) do
-    case Integer.parse(string) do
-      {timestamp, ""} when timestamp > 1_000_000_000 ->
-        {:ok, DateTime.from_unix!(timestamp)}
+    case Integer.parse(String.trim(string)) do
+      {ts, ""} ->
+        # Support seconds and milliseconds
+        unix =
+          cond do
+            ts >= 1_000_000_000_000 -> div(ts, 1_000)   # ms -> s
+            ts >= 1_000_000_000 -> ts                    # s
+            true -> nil
+          end
 
-      _ ->
-        {:error, :no_match}
+        case unix do
+          nil -> {:error, :no_match}
+          _ ->
+            case DateTime.from_unix(unix) do
+              {:ok, dt} -> {:ok, dt}
+              {:error, _} -> {:error, :no_match}
+            end
+        end
+      _ -> {:error, :no_match}
     end
   end
 

@@ -24,7 +24,7 @@ defmodule Mix.Tasks.Scraper.ApiTest do
       {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
       {"Accept", "application/json, text/javascript, */*; q=0.01"},
       {"Accept-Language", "en-US,en;q=0.5"},
-      {"Accept-Encoding", "gzip, deflate, br"},
+      {"Accept-Encoding", "gzip"},
       {"X-Requested-With", "XMLHttpRequest"},
       {"Referer", "https://www.bandsintown.com/c/krakow-poland"},
       {"DNT", "1"},

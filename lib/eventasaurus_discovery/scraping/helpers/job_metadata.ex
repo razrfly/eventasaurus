@@ -67,10 +67,15 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
   Records progress for long-running jobs.
   """
   def update_progress(job_id, current, total, message \\ nil) do
+    pct =
+      cond do
+        is_number(total) and total > 0 -> Float.round(current / total * 100, 2)
+        true -> 0.0
+      end
     metadata = %{
       progress_current: current,
       progress_total: total,
-      progress_percentage: Float.round(current / total * 100, 2),
+      progress_percentage: pct,
       last_update: DateTime.utc_now()
     }
 
