@@ -222,25 +222,14 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
   def fetch_all_city_events(latitude, longitude, city_slug, opts \\ []) do
     max_pages = Keyword.get(opts, :max_pages, 10)
 
-    Logger.info("🌐 Fetching all events for #{city_slug} at (#{latitude}, #{longitude}) (max #{max_pages} pages)")
+    Logger.info("🌐 Fetching all events at coordinates (#{latitude}, #{longitude}) - #{city_slug} (max #{max_pages} pages)")
 
-    # First get the initial page with the first 36 events
-    case fetch_city_page(city_slug, Keyword.put(opts, :use_playwright, false)) do
-      {:ok, initial_html} ->
-        # Extract initial events from the HTML
-        {:ok, initial_events} = EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor.extract_events_from_city_page(initial_html)
+    # Start directly with the API pagination - page 1
+    # No need to fetch the city page anymore since we have coordinates
+    all_events = fetch_additional_pages(latitude, longitude, [], 1, max_pages, opts)
 
-        Logger.info("📋 Got #{length(initial_events)} events from initial page")
-
-        # Now fetch additional pages
-        all_events = fetch_additional_pages(latitude, longitude, initial_events, 2, max_pages, opts)
-
-        Logger.info("✅ Total events collected: #{length(all_events)}")
-        {:ok, all_events}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Logger.info("✅ Total events collected: #{length(all_events)}")
+    {:ok, all_events}
   end
 
   defp fetch_additional_pages(latitude, longitude, acc_events, current_page, max_pages, opts) when current_page <= max_pages do

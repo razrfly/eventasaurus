@@ -4,14 +4,14 @@ defmodule Mix.Tasks.Scraper.Run do
 
   ## Usage
 
-      # Run scraper for Krakow
-      mix scraper.run bandsintown --city=krakow
+      # Run scraper for specific city with event limit
+      mix scraper.run bandsintown --city="Kraków" --max-events=20
 
-      # Run scraper with delay
-      mix scraper.run bandsintown --city=krakow --delay=60
+      # Run scraper for Warsaw
+      mix scraper.run bandsintown --city="Warsaw" --max-events=15
 
-      # Run multiple cities
-      mix scraper.run bandsintown --cities=krakow-poland,warsaw-poland,berlin-germany
+      # Run scraper for Katowice
+      mix scraper.run bandsintown --city="Katowice" --max-events=10
 
   """
 
@@ -19,7 +19,9 @@ defmodule Mix.Tasks.Scraper.Run do
   require Logger
 
   alias EventasaurusApp.Repo
+  alias EventasaurusDiscovery.Locations.City
   alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob
+  import Ecto.Query
 
   @shortdoc "Run scrapers through Oban"
 
@@ -31,14 +33,7 @@ defmodule Mix.Tasks.Scraper.Run do
     {opts, remaining_args, _} = OptionParser.parse(args,
       strict: [
         city: :string,
-        cities: :string,
-        delay: :integer,
-        playwright: :boolean
-      ],
-      aliases: [
-        c: :city,
-        d: :delay,
-        p: :playwright
+        max_events: :integer
       ]
     )
 
@@ -50,70 +45,64 @@ defmodule Mix.Tasks.Scraper.Run do
         run_bandsintown(opts)
 
       other ->
-        Logger.error("Unknown scraper: #{other}")
-        Logger.info("Available scrapers: bandsintown")
+        IO.puts("❌ Unknown scraper: #{other}")
+        IO.puts("Available scrapers: bandsintown")
+        System.halt(1)
     end
   end
 
   defp run_bandsintown(opts) do
-    use_playwright = Keyword.get(opts, :playwright, false)
-    delay = Keyword.get(opts, :delay, 0)
+    city_name = Keyword.get(opts, :city)
+    max_events = Keyword.get(opts, :max_events, 10)
 
-    # Get cities to process
-    cities = case {Keyword.get(opts, :cities), Keyword.get(opts, :city)} do
-      {nil, nil} -> ["krakow-poland"]
-      {nil, city} -> [city]
-      {cities_str, _} -> String.split(cities_str, ",")
+    # Validate required parameters
+    if is_nil(city_name) do
+      IO.puts("❌ Error: --city parameter is required")
+      IO.puts("Usage: mix scraper.run bandsintown --city=\"Kraków\" --max-events=20")
+      System.halt(1)
     end
 
-    Logger.info("""
+    # Find city in database
+    city = from(c in City,
+      where: ilike(c.name, ^city_name),
+      preload: :country
+    ) |> Repo.one()
 
-    =====================================
-    🚀 SCHEDULING BANDSINTOWN SCRAPER JOBS
-    =====================================
-    Cities: #{Enum.join(cities, ", ")}
-    Delay between jobs: #{delay}s
-    Playwright: #{use_playwright}
-    =====================================
-    """)
+    if is_nil(city) do
+      IO.puts("❌ Error: City '#{city_name}' not found in database")
+      IO.puts("Available cities:")
 
-    # Schedule jobs
-    jobs = Enum.with_index(cities, fn city, index ->
-      scheduled_at = DateTime.add(DateTime.utc_now(), index * delay, :second)
-
-      job_args = %{
-        "city_slug" => String.trim(city),
-        "use_playwright" => use_playwright
-      }
-
-      job = %{
-        queue: :scraper,
-        worker: "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob",
-        args: job_args,
-        scheduled_at: scheduled_at
-      }
-
-      case Oban.insert(CityIndexJob.new(job_args, scheduled_at: scheduled_at)) do
-        {:ok, job} ->
-          Logger.info("✅ Scheduled job for #{city} at #{scheduled_at}")
-          {:ok, job}
-
-        {:error, changeset} ->
-          Logger.error("❌ Failed to schedule job for #{city}: #{inspect(changeset.errors)}")
-          {:error, changeset}
+      available_cities = from(c in City, select: c.name, order_by: c.name) |> Repo.all()
+      for city_name <- Enum.take(available_cities, 10) do
+        IO.puts("  - #{city_name}")
       end
-    end)
 
-    success_count = Enum.count(jobs, fn {status, _} -> status == :ok end)
+      System.halt(1)
+    end
 
-    Logger.info("""
+    IO.puts("🌍 Found city: #{city.name} (#{city.latitude}, #{city.longitude})")
 
-    =====================================
-    SCHEDULING COMPLETE
-    =====================================
-    Successfully scheduled: #{success_count}/#{length(cities)} jobs
-    Check Oban dashboard or logs for progress
-    =====================================
-    """)
+    # Calculate max_pages from max_events (roughly 36 events per page)
+    max_pages = max(1, ceil(max_events / 36))
+
+    # Schedule CityIndexJob
+    job_args = %{
+      "city_id" => city.id,
+      "city_name" => city.name,
+      "latitude" => city.latitude,
+      "longitude" => city.longitude,
+      "max_pages" => max_pages
+    }
+
+    case CityIndexJob.new(job_args) |> Oban.insert() do
+      {:ok, job} ->
+        IO.puts("🚀 Scheduled scraping job for #{city.name} (max #{max_events} events)")
+        IO.puts("📋 Job ID: #{job.id} - Status: queued")
+        IO.puts("✅ Events will be scraped automatically. Check logs for progress.")
+
+      {:error, changeset} ->
+        IO.puts("❌ Failed to schedule job: #{inspect(changeset.errors)}")
+        System.halt(1)
+    end
   end
 end

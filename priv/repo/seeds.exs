@@ -10,8 +10,8 @@
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
-alias EventasaurusApp.{Repo, Accounts}
-alias EventasaurusApp.Auth.{Client, ServiceRoleHelper, SeedUserManager}
+alias EventasaurusApp.Auth.SeedUserManager
+alias EventasaurusApp.Auth.ServiceRoleHelper
 
 # Create Holden's personal login using the comprehensive user manager
 IO.puts("🌱 Setting up essential users...")

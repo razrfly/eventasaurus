@@ -1,10 +1,15 @@
+defmodule EventasaurusDiscovery.Locations.City.Slug do
+  use EctoAutoslugField.Slug, from: :name, to: :slug
+end
+
 defmodule EventasaurusDiscovery.Locations.City do
   use Ecto.Schema
   import Ecto.Changeset
+  alias EventasaurusDiscovery.Locations.City.Slug
 
   schema "cities" do
     field :name, :string
-    field :slug, :string
+    field :slug, Slug.Type
     field :latitude, :decimal
     field :longitude, :decimal
 
@@ -17,8 +22,9 @@ defmodule EventasaurusDiscovery.Locations.City do
   @doc false
   def changeset(city, attrs) do
     city
-    |> cast(attrs, [:name, :slug, :country_id, :latitude, :longitude])
-    |> validate_required([:name, :slug, :country_id])
+    |> cast(attrs, [:name, :country_id, :latitude, :longitude])
+    |> validate_required([:name, :country_id])
+    |> Slug.maybe_generate_slug()
     |> foreign_key_constraint(:country_id)
     |> unique_constraint([:country_id, :slug])
   end

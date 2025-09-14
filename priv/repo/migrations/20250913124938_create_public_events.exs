@@ -3,24 +3,27 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEvents do
 
   def change do
     create table(:public_events) do
-      add :external_id, :string
       add :title, :string, null: false
-      add :slug, :string, null: false
+      add :slug, :string
       add :description, :text
-      add :venue_id, references(:venues, on_delete: :nilify_all)
-      add :city_id, references(:cities, on_delete: :restrict), null: false
-      add :start_at, :utc_datetime, null: false
+      add :starts_at, :utc_datetime
       add :ends_at, :utc_datetime
-      add :status, :string, default: "active"
+      add :source_id, :integer
+      add :external_id, :string
+      add :ticket_url, :string
+      add :min_price, :decimal
+      add :max_price, :decimal
+      add :currency, :string
       add :metadata, :map, default: %{}
+      add :venue_id, references(:venues, on_delete: :nilify_all)
 
       timestamps()
     end
 
-    create index(:public_events, [:city_id])
     create index(:public_events, [:venue_id])
     create index(:public_events, [:external_id])
-    create index(:public_events, [:start_at])
-    create index(:public_events, [:city_id, :start_at])
+    create index(:public_events, [:starts_at])
+    create unique_index(:public_events, [:slug])
+    create unique_index(:public_events, [:external_id, :source_id])
   end
 end
