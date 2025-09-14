@@ -16,7 +16,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
     {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
     {"Accept-Language", "en-US,en;q=0.5"},
-    {"Accept-Encoding", "gzip, deflate, br"},
+    {"Accept-Encoding", "gzip"},
     {"DNT", "1"},
     {"Connection", "keep-alive"},
     {"Upgrade-Insecure-Requests", "1"}
@@ -157,7 +157,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
       {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
       {"Accept", "application/json, text/javascript, */*; q=0.01"},
       {"Accept-Language", "en-US,en;q=0.5"},
-      {"Accept-Encoding", "gzip, deflate, br"},
+      {"Accept-Encoding", "gzip"},
       {"X-Requested-With", "XMLHttpRequest"},
       {"Referer", "#{@base_url}"},
       {"DNT", "1"},
