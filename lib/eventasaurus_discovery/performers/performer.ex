@@ -18,7 +18,8 @@ defmodule EventasaurusDiscovery.Performers.Performer do
     field :source_id, :integer  # Reference to scraping source
 
     many_to_many :public_events, EventasaurusDiscovery.PublicEvents.PublicEvent,
-      join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer
+      join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
+      on_replace: :delete
 
     timestamps()
   end
