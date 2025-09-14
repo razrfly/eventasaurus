@@ -135,13 +135,13 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Extractor do
 
   defp extract_event_url(card) do
     # Try to find the event link
-    cond do
+    case card do
       # If the card itself is a link
-      {"a", attrs, _} = card ->
+      {"a", attrs, _} ->
         get_href(attrs)
 
-      # If there's a link inside the card
-      true ->
+      # If it's another element, look for a link inside
+      _ ->
         card
         |> Floki.find("a[href^='/e/']")
         |> List.first()

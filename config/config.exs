@@ -15,6 +15,10 @@ config :eventasaurus,
   use_supabase: true,
   ecto_repos: [EventasaurusApp.Repo]
 
+# Configure EventasaurusApp Repo with PostGIS types
+config :eventasaurus, EventasaurusApp.Repo,
+  types: EventasaurusApp.PostgresTypes
+
 # Configures the endpoint
 config :eventasaurus, EventasaurusWeb.Endpoint,
   url: [host: "localhost"],
@@ -92,6 +96,8 @@ config :eventasaurus, Oban,
     emails: 2,  # Max 2 concurrent jobs to respect Resend's 2/second limit
     # Scraper queue for event data ingestion
     scraper: 5,  # Limited concurrency for rate-limited external APIs
+    # Scraper detail queue for individual event processing
+    scraper_detail: 3,  # Limited concurrency for event detail scraping
     # Google API queue for places lookups
     google_lookup: 1,  # Single concurrency to respect Google's rate limits
     # Default queue for other background jobs
