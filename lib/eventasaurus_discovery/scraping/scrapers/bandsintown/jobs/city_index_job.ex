@@ -51,7 +51,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     case city do
       {:error, reason} ->
         if job_id do
-          JobMetadata.update_error(job_id, reason, context: %{city_id: city_id, city_slug: city_slug})
+          JobMetadata.update_error(job_id, reason, %{city_id: city_id, city_slug: city_slug})
         end
         {:error, reason}
 
@@ -93,7 +93,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
           e ->
             Logger.error("❌ City Index Job failed: #{Exception.message(e)}")
             if job_id do
-              JobMetadata.update_error(job_id, e, context: %{
+              JobMetadata.update_error(job_id, e, %{
                 city_id: city.id,
                 city_name: city.name,
                 coordinates: {latitude, longitude}
@@ -208,10 +208,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
 
   # Helper to extract city name from old-style slugs like "krakow-poland"
   defp extract_city_name(city_slug) when is_binary(city_slug) do
-    city_slug
-    |> String.split("-")
-    |> List.first()
-    |> String.downcase()
+    parts = city_slug |> String.downcase() |> String.split("-")
+    parts |> Enum.drop(-1) |> Enum.join("-")
   end
   defp extract_city_name(_), do: nil
 

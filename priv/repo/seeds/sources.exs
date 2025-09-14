@@ -9,7 +9,7 @@ sources = [
     slug: "bandsintown",
     website_url: "https://www.bandsintown.com",
     priority: 80,
-    config: %{
+    metadata: %{
       "rate_limit_seconds" => 3,
       "max_requests_per_hour" => 500,
       "user_agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -20,7 +20,7 @@ sources = [
     slug: "ticketmaster",
     website_url: "https://www.ticketmaster.com",
     priority: 70,
-    config: %{
+    metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 1000
     }
@@ -30,7 +30,7 @@ sources = [
     slug: "stubhub",
     website_url: "https://www.stubhub.com",
     priority: 60,
-    config: %{
+    metadata: %{
       "rate_limit_seconds" => 2,
       "max_requests_per_hour" => 800
     }
