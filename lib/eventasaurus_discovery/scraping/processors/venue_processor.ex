@@ -60,8 +60,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       country_name: data[:country] || data["country"],
       latitude: parse_coordinate(data[:latitude] || data["latitude"]),
       longitude: parse_coordinate(data[:longitude] || data["longitude"]),
-      place_id: data[:place_id] || data["place_id"],
-      metadata: data[:metadata] || data["metadata"] || %{}
+      place_id: data[:place_id] || data["place_id"]
     }
 
     if normalized.name do
@@ -189,8 +188,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       venue_type: "venue",
       place_id: data.place_id,
       source: source,
-      city_id: city.id,
-      metadata: data.metadata
+      city_id: city.id
     }
 
     %Venue{}

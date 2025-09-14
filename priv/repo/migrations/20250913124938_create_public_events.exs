@@ -8,7 +8,6 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEvents do
       add :description, :text
       add :starts_at, :utc_datetime, null: false
       add :ends_at, :utc_datetime
-      add :source_id, :integer
       add :external_id, :string
       add :ticket_url, :string
       add :min_price, :decimal
@@ -21,9 +20,8 @@ defmodule EventasaurusApp.Repo.Migrations.CreatePublicEvents do
     end
 
     create index(:public_events, [:venue_id])
-    create index(:public_events, [:external_id])
     create index(:public_events, [:starts_at])
     create unique_index(:public_events, [:slug])
-    create unique_index(:public_events, [:external_id, :source_id])
+    create unique_index(:public_events, [:external_id])
   end
 end
