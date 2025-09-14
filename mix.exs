@@ -130,7 +130,10 @@ defmodule Eventasaurus.MixProject do
       {:ecto_autoslug_field, "~> 3.1"},
 
       # Country codes and names
-      {:countries, "~> 1.6"}
+      {:countries, "~> 1.6"},
+
+      # Comprehensive date/time parsing and manipulation
+      {:timex, "~> 3.7"}
     ]
   end
 
