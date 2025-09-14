@@ -1301,6 +1301,8 @@ defmodule EventasaurusApp.Events do
         left_join: eu in EventUser, on: e.id == eu.event_id and eu.user_id == ^user.id,
         left_join: ep in EventParticipant, on: e.id == ep.event_id and ep.user_id == ^user.id,
         left_join: v in assoc(e, :venue),
+        left_join: c in assoc(v, :city_ref),
+        left_join: country in assoc(c, :country),
         where: is_nil(e.deleted_at),
         where: not is_nil(eu.id) or not is_nil(ep.id),
         select: %{
@@ -1344,9 +1346,9 @@ defmodule EventasaurusApp.Events do
             id: v.id,
             name: v.name,
             address: v.address,
-            city: v.city,
-            state: v.state,
-            country: v.country,
+            city: c.name,
+            state: nil,
+            country: country.name,
             latitude: v.latitude,
             longitude: v.longitude,
             venue_type: v.venue_type
@@ -1355,7 +1357,7 @@ defmodule EventasaurusApp.Events do
 
     # Apply group filter if provided
     base_with_group = if group_id do
-      from [e, eu, ep, v] in base_query,
+      from [e, eu, ep, v, c, country] in base_query,
         where: e.group_id == ^group_id
     else
       base_query
@@ -1363,29 +1365,29 @@ defmodule EventasaurusApp.Events do
 
     # Apply ownership filter
     filtered_query = case ownership_filter do
-      :created -> 
-        from [e, eu, ep, v] in base_with_group,
+      :created ->
+        from [e, eu, ep, v, c, country] in base_with_group,
           where: not is_nil(eu.id)
-      :participating -> 
-        from [e, eu, ep, v] in base_with_group,
+      :participating ->
+        from [e, eu, ep, v, c, country] in base_with_group,
           where: not is_nil(ep.id)
-      :all -> 
+      :all ->
         base_with_group
     end
 
     # Apply time filter
     time_filtered_query = case time_filter do
-      :upcoming -> 
-        from [e, eu, ep, v] in filtered_query,
+      :upcoming ->
+        from [e, eu, ep, v, c, country] in filtered_query,
           where: is_nil(e.start_at) or e.start_at > ^now
       :past ->
-        from [e, eu, ep, v] in filtered_query,
+        from [e, eu, ep, v, c, country] in filtered_query,
           where: not is_nil(e.start_at) and e.start_at <= ^now
       :archived ->
         # Archived events are handled separately in the LiveView
-        from [e, eu, ep, v] in filtered_query,
+        from [e, eu, ep, v, c, country] in filtered_query,
           where: false
-      :all -> 
+      :all ->
         filtered_query
     end
 
@@ -1395,11 +1397,11 @@ defmodule EventasaurusApp.Events do
     # For all: descending (most recent first)
     final_query = case time_filter do
       :upcoming ->
-        from [e, eu, ep, v] in time_filtered_query,
+        from [e, eu, ep, v, c, country] in time_filtered_query,
           order_by: [asc: coalesce(e.start_at, e.inserted_at)],
           limit: ^limit
       _ ->
-        from [e, eu, ep, v] in time_filtered_query,
+        from [e, eu, ep, v, c, country] in time_filtered_query,
           order_by: [desc: coalesce(e.start_at, e.inserted_at)],
           limit: ^limit
     end
@@ -3238,6 +3240,8 @@ defmodule EventasaurusApp.Events do
         query = from(eu in EventUser,
           join: e in Event, on: eu.event_id == e.id,
           left_join: v in Venue, on: e.venue_id == v.id,
+          left_join: c in assoc(v, :city_ref),
+          left_join: country in assoc(c, :country),
           where: eu.user_id == ^user_id and
                  e.id not in ^exclude_event_ids and
                  is_nil(e.virtual_venue_url) and
@@ -3246,9 +3250,9 @@ defmodule EventasaurusApp.Events do
             venue_id: e.venue_id,
             venue_name: v.name,
             venue_address: v.address,
-            venue_city: v.city,
-            venue_state: v.state,
-            venue_country: v.country,
+            venue_city: c.name,
+            venue_state: nil,
+            venue_country: country.name,
             virtual_venue_url: e.virtual_venue_url,
             event_created_at: e.inserted_at
           },
