@@ -9,7 +9,7 @@ defmodule EventasaurusWeb.PublicPollsLive do
   require Logger
 
   alias EventasaurusApp.Events
-  alias EventasaurusWeb.{PublicGenericPollComponent, AnonymousVoterComponent}
+  alias EventasaurusWeb.PublicGenericPollComponent
   alias EventasaurusWeb.ReservedSlugs
 
   import EventasaurusWeb.PollView, only: [poll_emoji: 1]

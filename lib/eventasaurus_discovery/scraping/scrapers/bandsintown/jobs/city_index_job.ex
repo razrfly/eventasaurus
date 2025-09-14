@@ -13,15 +13,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     max_attempts: 3
 
   require Logger
-  import Ecto.Query
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Sources.Source
   alias EventasaurusDiscovery.Locations.City
-  alias EventasaurusDiscovery.Scraping.RateLimiter
   alias EventasaurusDiscovery.Scraping.Helpers.JobMetadata
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.{Client, Extractor}
-  # alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob
+  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: args}) do
@@ -53,7 +50,9 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     # Handle early return if city not found
     case city do
       {:error, reason} ->
-        JobMetadata.update_error(job_id, reason, context: %{city_id: city_id, city_slug: city_slug})
+        if job_id do
+          JobMetadata.update_error(job_id, reason, context: %{city_id: city_id, city_slug: city_slug})
+        end
         {:error, reason}
 
       city ->
@@ -99,30 +98,36 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
                   process_events(events, source, job_id, limit)
 
                 {:error, reason} = error ->
-                  JobMetadata.update_error(job_id, reason, context: %{
-                    city_id: city.id,
-                    city_name: city.name,
-                    coordinates: {latitude, longitude}
-                  })
+                  if job_id do
+                    JobMetadata.update_error(job_id, reason, context: %{
+                      city_id: city.id,
+                      city_name: city.name,
+                      coordinates: {latitude, longitude}
+                    })
+                  end
                   error
               end
 
             {:error, reason} = error ->
-              JobMetadata.update_error(job_id, reason, context: %{
-                city_id: city.id,
-                city_name: city.name,
-                coordinates: {latitude, longitude}
-              })
+              if job_id do
+                JobMetadata.update_error(job_id, reason, context: %{
+                  city_id: city.id,
+                  city_name: city.name,
+                  coordinates: {latitude, longitude}
+                })
+              end
               error
           end
         rescue
           e ->
             Logger.error("❌ City Index Job failed: #{Exception.message(e)}")
-            JobMetadata.update_error(job_id, e, context: %{
-              city_id: city.id,
-              city_name: city.name,
-              coordinates: {latitude, longitude}
-            })
+            if job_id do
+              JobMetadata.update_error(job_id, e, context: %{
+                city_id: city.id,
+                city_name: city.name,
+                coordinates: {latitude, longitude}
+              })
+            end
             {:error, e}
         end
     end
@@ -160,7 +165,9 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
       completed_at: DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
-    JobMetadata.update_index_job(job_id, metadata)
+    if job_id do
+      JobMetadata.update_index_job(job_id, metadata)
+    end
 
     Logger.info("""
     ✅ City Index Job completed
@@ -172,24 +179,39 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
     {:ok, metadata}
   end
 
-  defp schedule_detail_jobs(events, _source_id) do
-    # For now, we'll just count them since EventDetailJob isn't implemented yet
-    Logger.info("📅 Would schedule #{length(events)} detail jobs")
+  defp schedule_detail_jobs(events, source_id) do
+    Logger.info("📅 Scheduling #{length(events)} detail jobs")
 
-    # TODO: Uncomment when EventDetailJob is implemented
-    # RateLimiter.schedule_detail_jobs(
-    #   events,
-    #   EventDetailJob,
-    #   fn event ->
-    #     %{
-    #       "url" => event.url,
-    #       "source_id" => source_id,
-    #       "event_data" => event
-    #     }
-    #   end
-    # )
+    # Schedule individual jobs for each event with rate limiting
+    scheduled_jobs = events
+    |> Enum.with_index()
+    |> Enum.map(fn {event, index} ->
+      # Add delay between jobs to respect rate limits
+      # Start immediately, then 5 seconds between each job
+      scheduled_at = DateTime.add(DateTime.utc_now(), index * 5, :second)
 
-    length(events)
+      job_args = %{
+        "url" => event.url || event[:url],
+        "source_id" => source_id,
+        "event_data" => event
+      }
+
+      # Create the job changeset
+      EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(job_args,
+        queue: "scraper_detail",
+        scheduled_at: scheduled_at
+      )
+      |> Oban.insert()
+    end)
+
+    # Count successful insertions
+    successful_count = Enum.count(scheduled_jobs, fn
+      {:ok, _} -> true
+      _ -> false
+    end)
+
+    Logger.info("✅ Successfully scheduled #{successful_count}/#{length(events)} detail jobs")
+    successful_count
   end
 
   defp get_or_create_source do

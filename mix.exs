@@ -117,7 +117,20 @@ defmodule Eventasaurus.MixProject do
       {:ecto_soft_delete, "~> 2.1"},
       
       # HTML helpers for text truncation and more
-      {:phoenix_html_simplified_helpers, "~> 2.1.0"}
+      {:phoenix_html_simplified_helpers, "~> 2.1.0"},
+
+      # Geo-spatial support for venue deduplication
+      {:geo, "~> 3.6"},
+      {:geo_postgis, "~> 3.6"},
+
+      # Fuzzy string matching for deduplication
+      {:akin, "~> 0.2.0"},
+
+      # Auto-generate slugs for models
+      {:ecto_autoslug_field, "~> 3.1"},
+
+      # Country codes and names
+      {:countries, "~> 1.6"}
     ]
   end
 
