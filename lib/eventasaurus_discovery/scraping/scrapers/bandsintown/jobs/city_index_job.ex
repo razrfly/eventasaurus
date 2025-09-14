@@ -209,7 +209,11 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.CityIndexJob 
   # Helper to extract city name from old-style slugs like "krakow-poland"
   defp extract_city_name(city_slug) when is_binary(city_slug) do
     parts = city_slug |> String.downcase() |> String.split("-")
-    parts |> Enum.drop(-1) |> Enum.join("-")
+    case parts do
+      [] -> nil
+      [single] -> single  # Return single-part slugs as-is (e.g., "krakow")
+      _ -> parts |> Enum.drop(-1) |> Enum.join("-")  # Remove country suffix for multi-part slugs
+    end
   end
   defp extract_city_name(_), do: nil
 

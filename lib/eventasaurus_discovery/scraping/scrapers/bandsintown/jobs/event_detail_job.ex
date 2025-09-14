@@ -21,7 +21,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   require Logger
 
   alias EventasaurusApp.Repo
-  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.{Client, DetailExtractor}
+  alias EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.{Client, DetailExtractor, DateParser}
   alias EventasaurusDiscovery.Locations.VenueStore
   alias EventasaurusDiscovery.Performers.PerformerStore
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
@@ -112,8 +112,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       event_attrs = %{
         title: event_data["title"] || event_data["artist_name"],
         description: event_data["description"],
-        starts_at: parse_start_date(event_data["date"]),
-        ends_at: parse_end_date(event_data["end_date"]),
+        starts_at: DateParser.parse_start_date(event_data["date"]),
+        ends_at: DateParser.parse_end_date(event_data["end_date"]),
         venue_id: venue.id,
         category_id: 2, # Concerts - Bandsintown is primarily a music/concert platform
         source_id: source_id,
@@ -265,75 +265,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   end
   defp extract_id_from_url(_), do: nil
 
-  defp parse_start_date(date_string) when is_binary(date_string) do
-    cond do
-      # Full ISO 8601 datetime (e.g., "2025-09-14T16:00:00")
-      String.contains?(date_string, "T") ->
-        # Try with timezone first
-        case DateTime.from_iso8601(date_string) do
-          {:ok, datetime, _} ->
-            datetime
-          _ ->
-            # If no timezone, assume UTC and add Z
-            case DateTime.from_iso8601(date_string <> "Z") do
-              {:ok, datetime, _} -> datetime
-              _ ->
-                # Last resort: parse as NaiveDateTime and convert to UTC
-                case NaiveDateTime.from_iso8601(date_string) do
-                  {:ok, naive_dt} -> DateTime.from_naive!(naive_dt, "Etc/UTC")
-                  _ -> nil
-                end
-            end
-        end
-
-      # Date only (e.g., "2025-09-14") - convert to datetime at midnight UTC
-      Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, date_string) ->
-        case Date.from_iso8601(date_string) do
-          {:ok, date} -> DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-          _ -> nil
-        end
-
-      # Other formats - try comprehensive parsing
-      true ->
-        EventasaurusDiscovery.Scraping.Helpers.DateParser.parse_datetime(date_string)
-    end
-  end
-  defp parse_start_date(_), do: nil
-
-  defp parse_end_date(date_string) when is_binary(date_string) do
-    cond do
-      # Full ISO 8601 datetime (e.g., "2025-09-14T16:00:00")
-      String.contains?(date_string, "T") ->
-        # Try with timezone first
-        case DateTime.from_iso8601(date_string) do
-          {:ok, datetime, _} ->
-            datetime
-          _ ->
-            # If no timezone, assume UTC and add Z
-            case DateTime.from_iso8601(date_string <> "Z") do
-              {:ok, datetime, _} -> datetime
-              _ ->
-                # Last resort: parse as NaiveDateTime and convert to UTC
-                case NaiveDateTime.from_iso8601(date_string) do
-                  {:ok, naive_dt} -> DateTime.from_naive!(naive_dt, "Etc/UTC")
-                  _ -> nil
-                end
-            end
-        end
-
-      # Date only (e.g., "2025-09-14") - convert to END of day (23:59:59) UTC
-      Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, date_string) ->
-        case Date.from_iso8601(date_string) do
-          {:ok, date} -> DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
-          _ -> nil
-        end
-
-      # Other formats - try comprehensive parsing
-      true ->
-        EventasaurusDiscovery.Scraping.Helpers.DateParser.parse_datetime(date_string)
-    end
-  end
-  defp parse_end_date(_), do: nil
 
   defp has_required_field_errors?(errors) do
     # Check if errors contain missing title or starts_at
