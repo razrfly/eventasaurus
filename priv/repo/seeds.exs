@@ -45,4 +45,16 @@ case SeedUserManager.get_or_create_user(holden_attrs) do
     end
 end
 
+# Seed locations (countries and cities)
+IO.puts("\n🌱 Seeding locations...")
+Code.eval_file("priv/repo/seeds/locations.exs")
+
+# Seed categories for public events
+IO.puts("\n🌱 Seeding categories...")
+Code.eval_file("priv/repo/seeds/categories.exs")
+
+# Seed sources for event scraping
+IO.puts("\n🌱 Seeding sources...")
+Code.eval_file("priv/repo/seeds/sources.exs")
+
 IO.puts("\n🌱 Seeds completed!")
