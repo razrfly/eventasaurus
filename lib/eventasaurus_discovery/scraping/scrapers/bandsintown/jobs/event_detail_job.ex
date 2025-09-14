@@ -155,26 +155,30 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       # Link performer to event
       link_performer_to_event(event, performer)
 
-      # Create or update public_event_source record
-      source_attrs = %{
-        event_id: event.id,
-        source_id: source_id,
-        source_url: event_data["url"],
-        external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
-        last_seen_at: DateTime.utc_now(),
-        metadata: %{
-          is_primary: true,  # Bandsintown is our primary source for now
-          scraper_version: "1.0",
-          job_id: event_data["job_id"] || nil
+      # Create or update public_event_source record (only if we know the source)
+      if is_nil(source_id) do
+        Logger.warning("Skipping event-source link: missing source_id for #{event_attrs[:title]}")
+      else
+        source_attrs = %{
+          event_id: event.id,
+          source_id: source_id,
+          source_url: event_data["url"],
+          external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
+          last_seen_at: DateTime.utc_now(),
+          metadata: %{
+            "is_primary" => true,
+            "scraper_version" => "1.0",
+            "job_id" => event_data["job_id"]
+          }
         }
-      }
 
-      case upsert_event_source(source_attrs) do
-        {:ok, _source} ->
-          Logger.info("✅ Successfully linked event to source")
-        {:error, reason} ->
-          Logger.error("Failed to create event source link: #{inspect(reason)}")
-          # Don't rollback - the event is still valid
+        case upsert_event_source(source_attrs) do
+          {:ok, _source} ->
+            Logger.info("✅ Successfully linked event to source")
+          {:error, reason} ->
+            Logger.error("Failed to create event source link: #{inspect(reason)}")
+            # Don't rollback - the event is still valid
+        end
       end
 
       Logger.info("✅ Successfully stored event: #{event.title} (#{event.id})")
@@ -244,23 +248,15 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   end
 
   defp upsert_event_source(attrs) do
-    # Check if source already exists for this event
-    existing = Repo.get_by(PublicEventSource,
-      event_id: attrs.event_id,
-      source_id: attrs.source_id
-    )
-
-    if existing do
-      # Update last_seen_at
-      existing
-      |> PublicEventSource.changeset(%{last_seen_at: attrs.last_seen_at})
-      |> Repo.update()
-    else
-      # Create new source link
+    changeset =
       %PublicEventSource{}
       |> PublicEventSource.changeset(attrs)
-      |> Repo.insert()
-    end
+
+    Repo.insert(changeset,
+      on_conflict: {:replace, [:source_url, :external_id, :last_seen_at, :metadata, :updated_at]},
+      conflict_target: [:event_id, :source_id],
+      returning: true
+    )
   end
 
   defp extract_country_code(country_name) when is_binary(country_name) do

@@ -23,5 +23,6 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventSource do
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:source_id)
     |> unique_constraint([:event_id, :source_id])
+    |> unique_constraint([:source_id, :external_id])
   end
 end

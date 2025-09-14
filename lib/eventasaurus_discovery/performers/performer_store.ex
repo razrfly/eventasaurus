@@ -6,6 +6,7 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Performers.Performer
+  alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   import Ecto.Query
   require Logger
 
@@ -45,8 +46,11 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
   end
 
   defp find_existing_performer(%{name: name}) do
-    # Generate the slug the same way the changeset would
-    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
+    # Generate slug using the shared Normalizer
+    slug =
+      name
+      |> Normalizer.normalize_text()
+      |> Normalizer.create_slug()
 
     query = from p in Performer,
       where: p.slug == ^slug,
