@@ -13,7 +13,7 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
   Get or create a source based on configuration
   """
   def get_or_create_source(config) when is_map(config) do
-    case Repo.get_by(Source, slug: config.slug) do
+    case Repo.get_by(Source, slug: config[:slug]) do
       nil -> create_source(config)
       source -> {:ok, source}
     end
@@ -22,15 +22,15 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
   defp create_source(config) do
     %Source{}
     |> Source.changeset(%{
-      name: config.name,
-      slug: config.slug,
+      name: config[:name],
+      slug: config[:slug],
       website_url: config[:website_url] || config[:base_url],
-      priority: config.priority,
+      priority: config[:priority],
       is_active: true,
       metadata: %{
-        rate_limit: config.rate_limit,
-        timeout: config.timeout,
-        max_retries: config.max_retries
+        rate_limit: config[:rate_limit],
+        timeout: config[:timeout],
+        max_retries: config[:max_retries]
       }
     })
     |> Repo.insert()
