@@ -31,12 +31,12 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Config do
 
   def api_key do
     System.get_env("TICKETMASTER_CONSUMER_KEY") ||
-      Application.get_env(:eventasaurus, :ticketmaster)[:api_key]
+      get_in(Application.get_env(:eventasaurus, :ticketmaster, []), [:api_key])
   end
 
   def api_secret do
     System.get_env("TICKETMASTER_CONSUMER_SECRET") ||
-      Application.get_env(:eventasaurus, :ticketmaster)[:api_secret]
+      get_in(Application.get_env(:eventasaurus, :ticketmaster, []), [:api_secret])
   end
 
   def build_url(endpoint) do

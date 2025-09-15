@@ -130,17 +130,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
   defp get_or_create_bandsintown_source do
     case Repo.get_by(Source, slug: "bandsintown") do
       nil ->
+        config = source_config()
         %Source{}
-        |> Source.changeset(%{
-          name: "Bandsintown",
-          slug: "bandsintown",
-          website_url: "https://www.bandsintown.com",
-          priority: 80,
-          config: %{
-            "rate_limit_seconds" => 3,
-            "max_requests_per_hour" => 500
-          }
-        })
+        |> Source.changeset(config)
         |> Repo.insert!()
 
       source ->

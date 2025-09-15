@@ -65,8 +65,10 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
         if length(all_events) >= limit do
           {:ok, Enum.take(all_events, limit)}
         else
-          # Rate limiting
-          Process.sleep(div(1000, Config.source_config().rate_limit))
+          # Rate limiting with safety checks
+          rate_limit = max(Config.source_config().rate_limit, 1)
+          sleep_ms = max(div(1000, rate_limit), 100)  # Minimum 100ms between requests
+          Process.sleep(sleep_ms)
           fetch_pages_recursive(city, radius, page + 1, max_pages, all_events, limit)
         end
 
