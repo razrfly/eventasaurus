@@ -49,6 +49,10 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           # Merge with initial data from index
           full_event_data = Map.merge(event_data, details)
 
+          Logger.info("🔀 Merged event data keys: #{inspect(Map.keys(full_event_data))}")
+          Logger.info("   Artist: #{full_event_data["artist_name"]}")
+          Logger.info("   Venue: #{full_event_data["venue_name"]}")
+
           # Store in database
           case store_event(full_event_data, source_id) do
             {:ok, event} ->
@@ -79,7 +83,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
     case Client.fetch_event_page(url) do
       {:ok, html} ->
         # Parse the event detail page
-        DetailExtractor.extract_event_details(html, url)
+        result = DetailExtractor.extract_event_details(html, url)
+
+        case result do
+          {:ok, details} ->
+            Logger.info("📄 DetailExtractor returned: #{inspect(Map.keys(details))}")
+            Logger.info("   Venue data: #{inspect(Map.take(details, ["venue_name", "venue_address", "venue_city", "venue_latitude", "venue_longitude"]))}")
+            {:ok, details}
+          error ->
+            error
+        end
 
       {:error, {:http_error, 404}} ->
         {:error, :not_found}
@@ -94,19 +107,26 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       # Extract and store venue
       venue_result = store_venue(event_data)
       venue = case venue_result do
-        {:ok, v} -> v
+        {:ok, v} ->
+          Logger.info("✅ Venue stored: #{v.name} (ID: #{v.id})")
+          v
         {:error, reason} ->
-          Logger.error("Failed to store venue: #{inspect(reason)}")
-          Repo.rollback({:venue_error, reason})
+          Logger.error("❌ Failed to store venue: #{inspect(reason)}")
+          # Don't rollback for missing venue - many events may not have complete venue data
+          # Instead, create a minimal venue or skip
+          nil
       end
 
       # Extract and store performer
       performer_result = store_performer(event_data, source_id)
       performer = case performer_result do
-        {:ok, p} -> p
+        {:ok, p} ->
+          Logger.info("✅ Performer stored: #{p.name} (ID: #{p.id})")
+          p
         {:error, reason} ->
-          Logger.error("Failed to store performer: #{inspect(reason)}")
-          Repo.rollback({:performer_error, reason})
+          Logger.error("❌ Failed to store performer: #{inspect(reason)}")
+          # Don't rollback for missing performer data
+          nil
       end
 
       # Create or update the event (without source_id)
@@ -115,7 +135,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         description: event_data["description"],
         starts_at: DateParser.parse_start_date(event_data["date"]),
         ends_at: DateParser.parse_end_date(event_data["end_date"]),
-        venue_id: venue.id,
+        venue_id: if(venue, do: venue.id, else: nil),
         category_id: 2, # Concerts - Bandsintown is primarily a music/concert platform
         external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
         ticket_url: event_data["ticket_url"],
@@ -133,8 +153,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         }
       }
 
+      Logger.info("📝 Attempting to upsert event with attrs: category_id=#{event_attrs.category_id}, venue_id=#{event_attrs.venue_id}")
+
       event = case upsert_event(event_attrs) do
-        {:ok, e} -> e
+        {:ok, e} ->
+          Logger.info("✅ Event created/updated: #{e.title} (ID: #{e.id}, category_id: #{e.category_id}, venue_id: #{e.venue_id})")
+          e
         {:error, %Ecto.Changeset{} = changeset} ->
           # Check if this is a validation failure for required fields
           errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
@@ -152,8 +176,18 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           Repo.rollback({:event_error, reason})
       end
 
-      # Link performer to event
-      link_performer_to_event(event, performer)
+      # Link performer to event (only if both exist)
+      if event && performer do
+        case link_performer_to_event(event, performer) do
+          {:ok, _} ->
+            Logger.info("✅ Linked performer #{performer.name} to event #{event.title}")
+          {:error, reason} ->
+            Logger.error("❌ Failed to link performer to event: #{inspect(reason)}")
+            # Don't fail the whole transaction for this
+        end
+      else
+        Logger.warning("⚠️ Skipping performer link: event=#{!is_nil(event)}, performer=#{!is_nil(performer)}")
+      end
 
       # Create or update public_event_source record (only if we know the source)
       if is_nil(source_id) do
@@ -196,6 +230,14 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       country_code: extract_country_code(event_data["venue_country"])
     }
 
+    Logger.info("🏢 Attempting to store venue: #{inspect(venue_attrs)}")
+
+    # Check if we have minimum required data
+    if is_nil(venue_attrs.name) or venue_attrs.name == "" do
+      Logger.error("❌ Venue name is missing! Event data keys: #{inspect(Map.keys(event_data))}")
+      Logger.error("   Full venue data: #{inspect(Map.take(event_data, ["venue_name", "venue_address", "venue_city", "venue_latitude", "venue_longitude"]))}")
+    end
+
     VenueStore.find_or_create_venue(venue_attrs)
   end
 
@@ -209,6 +251,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         social_links: event_data["artist_same_as"] || []
       }
     }
+
+    Logger.info("🎭 Attempting to store performer: #{inspect(performer_attrs.name)}")
+
+    if is_nil(performer_attrs.name) or performer_attrs.name == "" do
+      Logger.error("❌ Performer name is missing! Event data has artist_name: #{inspect(event_data["artist_name"])}")
+    end
 
     PerformerStore.find_or_create_performer(performer_attrs)
   end

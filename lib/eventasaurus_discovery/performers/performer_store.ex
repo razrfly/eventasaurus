@@ -113,8 +113,8 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     query
     |> Repo.all()
     |> Enum.filter(fn performer ->
-      # Use Akin for fuzzy matching on names directly
-      similarity = Akin.compare(
+      # Use String.jaro_distance for fuzzy matching
+      similarity = String.jaro_distance(
         String.downcase(performer.name),
         String.downcase(name)
       )
@@ -122,10 +122,11 @@ defmodule EventasaurusDiscovery.Performers.PerformerStore do
     end)
     |> Enum.sort_by(fn performer ->
       # Sort by similarity (highest first)
-      -Akin.compare(
+      similarity = String.jaro_distance(
         String.downcase(performer.name),
         String.downcase(name)
       )
+      -similarity
     end)
   end
 

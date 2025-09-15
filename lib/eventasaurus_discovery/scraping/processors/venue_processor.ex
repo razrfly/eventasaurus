@@ -257,7 +257,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
     end
   end
 
-  defp create_venue(data, city, source) do
+  defp create_venue(data, city, _source) do
+    # All discovery sources use "scraper" as the venue source
     attrs = %{
       name: data.name,
       address: data.address,
@@ -268,7 +269,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       longitude: data.longitude,
       venue_type: "venue",
       place_id: data.place_id,
-      source: source,
+      source: "scraper",
       city_id: city.id
     }
 
