@@ -59,7 +59,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       venue_data: data[:venue_data] || data["venue_data"],
       performer_names: data[:performer_names] || data["performer_names"] || [],
       metadata: data[:metadata] || data["metadata"] || %{},
-      source_url: data[:source_url] || data["source_url"]
+      source_url: data[:source_url] || data["source_url"],
+      category_id: data[:category_id] || data["category_id"]
     }
 
     cond do
@@ -139,7 +140,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       starts_at: data.start_at,  # Note: normalized data uses start_at, schema uses starts_at
       ends_at: data.ends_at,
       metadata: data.metadata,
-      external_id: data.external_id
+      external_id: data.external_id,
+      category_id: data.category_id
     }
 
     %PublicEvent{}
@@ -165,6 +167,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     updates = if is_nil(event.ends_at) && data.ends_at do
       [{:ends_at, data.ends_at} | updates]
+    else
+      updates
+    end
+
+    updates = if is_nil(event.category_id) && data.category_id do
+      [{:category_id, data.category_id} | updates]
     else
       updates
     end
@@ -236,18 +244,18 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp find_or_create_performer(name) do
     normalized_name = Normalizer.normalize_text(name)
-    slug = Normalizer.create_slug(normalized_name)
 
-    Repo.get_by(Performer, slug: slug) ||
-      create_performer(normalized_name, slug)
+    # Let the changeset auto-generate the slug for consistency
+    case Repo.get_by(Performer, name: normalized_name) do
+      nil -> create_performer(normalized_name)
+      performer -> performer
+    end
   end
 
-  defp create_performer(name, slug) do
+  defp create_performer(name) do
     %Performer{}
     |> Performer.changeset(%{
-      name: name,
-      slug: slug,
-      performer_type: "unknown"
+      name: name
     })
     |> Repo.insert!()
   end

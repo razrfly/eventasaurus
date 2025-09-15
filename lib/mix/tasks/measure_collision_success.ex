@@ -220,9 +220,4 @@ defmodule Mix.Tasks.MeasureCollisionSuccess do
     end
   end
 
-  defp clear_test_data do
-    Logger.info("🗑️  Clearing existing test data...")
-    # Optional: Clear data from both sources for clean test
-    # Be careful with this in production!
-  end
 end
