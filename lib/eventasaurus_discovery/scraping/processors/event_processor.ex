@@ -265,9 +265,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp create_performer(name) do
     slug = Normalizer.create_slug(name)
 
+    # Explicitly set the slug to ensure consistency
     changeset = %Performer{}
     |> Performer.changeset(%{
-      name: name
+      name: name,
+      slug: slug  # Pass slug to ensure it matches what we'll query by
     })
 
     # Handle race condition where performer might be created between check and insert
