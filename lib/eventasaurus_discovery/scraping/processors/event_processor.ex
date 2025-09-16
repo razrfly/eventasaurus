@@ -92,36 +92,73 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp find_or_create_event(data, venue, source_id) do
     slug = Normalizer.create_slug("#{data.title} #{format_date(data.start_at)}")
 
+    Logger.info("""
+    🔎 Processing event for collision detection:
+    Title: #{data.title}
+    External ID: #{data.external_id}
+    Source ID: #{source_id}
+    Start at: #{data.start_at}
+    Venue: #{if venue, do: "#{venue.name} (ID: #{venue.id})", else: "None"}
+    """)
+
     # First check if we have this event from this source
     case find_existing_event(data.external_id, source_id) do
       nil ->
+        Logger.info("📝 No existing event found from source #{source_id}, checking for similar events...")
         # Check if we have this event from another source (by slug/title/time)
         case find_similar_event(data.title, data.start_at, venue) do
-          nil -> create_event(data, venue, slug)
-          existing -> {:ok, existing}
+          nil ->
+            Logger.info("✨ No similar events found, creating new event")
+            create_event(data, venue, slug)
+          existing ->
+            Logger.info("🔗 Found similar event ##{existing.id}, linking to it")
+            {:ok, existing}
         end
 
       existing ->
+        Logger.info("📌 Found existing event ##{existing.id} from same source, updating if needed")
         maybe_update_event(existing, data, venue)
     end
   end
 
   defp find_similar_event(_title, start_at, venue) do
     # Focus on venue + time matching (ignore title as it's unreliable)
-    # Events at same venue within 2 hour window are likely the same
-    start_window = DateTime.add(start_at, -7200, :second)  # 2 hours before
-    end_window = DateTime.add(start_at, 7200, :second)     # 2 hours after
+    # Events at same venue within 4 hour window are likely the same
+    # Increased window to catch events with slightly different reported times
+    start_window = DateTime.add(start_at, -14400, :second)  # 4 hours before
+    end_window = DateTime.add(start_at, 14400, :second)     # 4 hours after
+
+    Logger.info("""
+    🕐 Checking for similar events:
+    Time window: #{start_window} to #{end_window}
+    Venue: #{if venue, do: "#{venue.name} (ID: #{venue.id})", else: "None"}
+    """)
 
     # If we have a venue, that's our strongest signal
     if venue do
-      from(pe in PublicEvent,
+      query = from(pe in PublicEvent,
         where: pe.venue_id == ^venue.id and
                pe.starts_at >= ^start_window and
                pe.starts_at <= ^end_window,
         limit: 1
       )
-      |> Repo.one()
+
+      case Repo.one(query) do
+        nil ->
+          Logger.info("❌ No similar events found in time window")
+          nil
+        found_event ->
+          # Log when we find a potential match for debugging
+          Logger.info("""
+          🔍 Found potential collision:
+          Existing event ##{found_event.id}: #{found_event.title}
+          Starts at: #{found_event.starts_at}
+          Venue ID: #{venue.id}
+          """)
+          found_event
+      end
     else
+      Logger.info("⚠️ No venue provided, cannot check for collisions")
       # Without venue, we can't reliably match
       # TODO: Could check performers + date as fallback
       nil
@@ -244,9 +281,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp find_or_create_performer(name) do
     normalized_name = Normalizer.normalize_text(name)
+    slug = Normalizer.create_slug(normalized_name)
 
-    # Let the changeset auto-generate the slug for consistency
-    case Repo.get_by(Performer, name: normalized_name) do
+    # Use slug-based lookup for better consistency
+    case Repo.get_by(Performer, slug: slug) do
       nil -> create_performer(normalized_name)
       performer -> performer
     end
