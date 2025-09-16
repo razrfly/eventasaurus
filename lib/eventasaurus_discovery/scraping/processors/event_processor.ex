@@ -253,7 +253,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp find_or_create_performer(name) do
     normalized_name = Normalizer.normalize_text(name)
-    slug = Normalizer.create_slug(normalized_name)
+    # Use Slug library to generate the same slug as the changeset
+    slug = Slug.slugify(normalized_name)
 
     # Use slug-based lookup for better consistency
     case Repo.get_by(Performer, slug: slug) do
@@ -263,13 +264,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp create_performer(name) do
-    slug = Normalizer.create_slug(name)
-
-    # Explicitly set the slug to ensure consistency
     changeset = %Performer{}
     |> Performer.changeset(%{
-      name: name,
-      slug: slug  # Pass slug to ensure it matches what we'll query by
+      name: name
     })
 
     # Handle race condition where performer might be created between check and insert
@@ -279,6 +276,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         performer
       {:ok, _} ->
         # Conflict occurred (on_conflict: :nothing) - fetch the existing performer
+        # Use Slug library to generate the same slug as the changeset
+        slug = Slug.slugify(name)
         Repo.get_by!(Performer, slug: slug)
       {:error, changeset} ->
         # Actual validation error - let it bubble up
