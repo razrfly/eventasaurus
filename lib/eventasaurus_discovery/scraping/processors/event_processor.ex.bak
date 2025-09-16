@@ -122,12 +122,49 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
+  defp find_similar_event(_title, start_at, venue) do
+    # Focus on venue + time matching (ignore title as it's unreliable)
+    # Events at same venue within 4 hour window are likely the same
+    # Increased window to catch events with slightly different reported times
+    start_window = DateTime.add(start_at, -14400, :second)  # 4 hours before
+    end_window = DateTime.add(start_at, 14400, :second)     # 4 hours after
 
-  defp find_similar_event(title, start_at, venue) do
-    # Delegate to shared CollisionDetector service
-    CollisionDetector.find_similar_event(venue, start_at, title)
+    Logger.info("""
+    🕐 Checking for similar events:
+    Time window: #{start_window} to #{end_window}
+    Venue: #{if venue, do: "#{venue.name} (ID: #{venue.id})", else: "None"}
+    """)
+
+    # If we have a venue, that's our strongest signal
+    if venue do
+      query = from(pe in PublicEvent,
+        where: pe.venue_id == ^venue.id and
+               pe.starts_at >= ^start_window and
+               pe.starts_at <= ^end_window,
+        limit: 1
+      )
+
+      case Repo.one(query) do
+        nil ->
+          Logger.info("❌ No similar events found in time window")
+          nil
+        found_event ->
+          # Log when we find a potential match for debugging
+          Logger.info("""
+          🔍 Found potential collision:
+          Existing event ##{found_event.id}: #{found_event.title}
+          Starts at: #{found_event.starts_at}
+          Venue ID: #{venue.id}
+          """)
+          found_event
+      end
+    else
+      Logger.info("⚠️ No venue provided, cannot check for collisions")
+      # Without venue, we can't reliably match
+      # TODO: Could check performers + date as fallback
+      nil
+    end
   end
-
 
   defp create_event(data, venue, slug) do
     city_id = if venue, do: venue.city_id, else: nil
