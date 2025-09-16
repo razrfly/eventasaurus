@@ -34,7 +34,7 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
 
     case make_request("/events.json", params) do
       {:ok, response} ->
-        events = response["_embedded"]["events"] || []
+        events = get_in(response, ["_embedded", "events"]) || []
         page_info = response["page"] || %{}
 
         Logger.info("✅ Found #{page_info["totalElements"] || 0} total events (fetched #{length(events)})")
@@ -159,7 +159,6 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Client do
     url = Config.build_url(endpoint)
 
     client = Tesla.client([
-      {Tesla.Middleware.BaseUrl, ""},
       {Tesla.Middleware.Query, params},
       Tesla.Middleware.JSON,
       {Tesla.Middleware.Timeout, timeout: Config.source_config().timeout},
