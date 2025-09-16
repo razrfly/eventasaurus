@@ -263,6 +263,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp create_performer(name) do
+    slug = Normalizer.create_slug(name)
+
     changeset = %Performer{}
     |> Performer.changeset(%{
       name: name
@@ -270,19 +272,15 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Handle race condition where performer might be created between check and insert
     case Repo.insert(changeset, on_conflict: :nothing, conflict_target: :slug) do
-      {:ok, performer} ->
+      {:ok, %Performer{id: id} = performer} when not is_nil(id) ->
+        # Successfully inserted new performer
         performer
-      {:error, _} ->
-        # If insert failed due to conflict, fetch the existing performer
-        slug = Normalizer.create_slug(name)
-        case Repo.get_by(Performer, slug: slug) do
-          nil ->
-            # This shouldn't happen, but handle gracefully
-            # Try one more time with insert_or_update
-            changeset |> Repo.insert!()
-          existing ->
-            existing
-        end
+      {:ok, _} ->
+        # Conflict occurred (on_conflict: :nothing) - fetch the existing performer
+        Repo.get_by!(Performer, slug: slug)
+      {:error, changeset} ->
+        # Actual validation error - let it bubble up
+        raise "Failed to create performer: #{inspect(changeset.errors)}"
     end
   end
 
