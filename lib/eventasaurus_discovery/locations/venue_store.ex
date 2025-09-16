@@ -85,7 +85,13 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
             updated_attrs
           end
 
-          update_venue_if_needed(venue, updated_attrs)
+          case update_venue_if_needed(venue, updated_attrs) do
+            {:ok, v} ->
+              {:ok, v}
+            {:error, changeset} ->
+              Logger.error("Failed to update proximity-matched venue #{venue.id}: #{inspect(changeset.errors)}")
+              {:ok, venue}  # Still return the found venue
+          end
       end
     end
   end
@@ -347,11 +353,26 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
     end
   end
 
-  defp should_update_venue?(venue, %{latitude: lat, longitude: lng}) do
-    is_nil(venue.latitude) || is_nil(venue.longitude) ||
-    !coords_equal?(venue.latitude, lat) || !coords_equal?(venue.longitude, lng)
+  defp should_update_venue?(venue, updates) do
+    # Check if name needs updating
+    name_change? =
+      case Map.fetch(updates, :name) do
+        {:ok, new_name} ->
+          normalize_for_comparison(new_name) != normalize_for_comparison(venue.name || "")
+        :error -> false
+      end
+
+    # Check if coordinates need updating
+    coord_change? =
+      case {Map.get(updates, :latitude), Map.get(updates, :longitude)} do
+        {lat, lng} when not is_nil(lat) and not is_nil(lng) ->
+          is_nil(venue.latitude) || is_nil(venue.longitude) ||
+          !coords_equal?(venue.latitude, lat) || !coords_equal?(venue.longitude, lng)
+        _ -> false
+      end
+
+    name_change? || coord_change?
   end
-  defp should_update_venue?(_, _), do: false
 
   defp coords_equal?(nil, _), do: false
   defp coords_equal?(_, nil), do: false
