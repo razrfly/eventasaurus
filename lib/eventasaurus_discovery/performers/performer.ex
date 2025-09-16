@@ -24,7 +24,7 @@ defmodule EventasaurusDiscovery.Performers.Performer do
   @doc false
   def changeset(performer, attrs) do
     performer
-    |> cast(attrs, [:name, :image_url, :metadata, :source_id])
+    |> cast(attrs, [:name, :slug, :image_url, :metadata, :source_id])
     |> validate_required([:name])
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
