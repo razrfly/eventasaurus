@@ -237,13 +237,27 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
           code: code
         })
         |> Repo.insert()
+        |> case do
+          {:ok, country} ->
+            {:ok, country}
+          {:error, %Ecto.Changeset{} = changeset} ->
+            # Handle race condition - another process may have created the country
+            case Repo.get_by(Country, code: code) do
+              nil -> {:error, changeset}
+              country -> {:ok, country}
+            end
+        end
       country ->
         {:ok, country}
     end
   end
 
   defp find_or_create_city_in_country(city_name, %Country{id: country_id}) do
-    case Repo.get_by(City, name: city_name, country_id: country_id) do
+    # Generate the slug that will be used
+    slug = Slug.slugify(city_name)
+
+    # Try to find by slug and country_id (the actual unique constraint)
+    case Repo.get_by(City, slug: slug, country_id: country_id) do
       nil ->
         %City{}
         |> City.changeset(%{
@@ -251,6 +265,23 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
           country_id: country_id
         })
         |> Repo.insert()
+        |> case do
+          {:ok, city} ->
+            {:ok, city}
+          {:error, %Ecto.Changeset{} = changeset} ->
+            # Handle race condition - another process may have created the city
+            # Try to fetch by slug which is what the unique constraint is on
+            case Repo.get_by(City, slug: slug, country_id: country_id) do
+              nil ->
+                # Also try by name as fallback
+                case Repo.get_by(City, name: city_name, country_id: country_id) do
+                  nil -> {:error, changeset}
+                  city -> {:ok, city}
+                end
+              city ->
+                {:ok, city}
+            end
+        end
       city ->
         {:ok, city}
     end

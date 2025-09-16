@@ -228,7 +228,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Create new associations
     associations = Enum.with_index(performers, 1) |> Enum.map(fn {performer, index} ->
-      %PublicEventPerformer{}
+      changeset = %PublicEventPerformer{}
       |> PublicEventPerformer.changeset(%{
         event_id: event.id,
         performer_id: performer.id,
@@ -237,8 +237,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
           "is_headliner" => index == 1
         }
       })
-      |> Repo.insert!()
+
+      # Handle potential conflicts gracefully
+      case Repo.insert(changeset) do
+        {:ok, association} -> association
+        {:error, _changeset} ->
+          # If it already exists, just return nil - we'll filter these out
+          nil
+      end
     end)
+    |> Enum.reject(&is_nil/1)  # Remove any failed insertions
 
     {:ok, associations}
   end
@@ -255,11 +263,27 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp create_performer(name) do
-    %Performer{}
+    changeset = %Performer{}
     |> Performer.changeset(%{
       name: name
     })
-    |> Repo.insert!()
+
+    # Handle race condition where performer might be created between check and insert
+    case Repo.insert(changeset, on_conflict: :nothing, conflict_target: :slug) do
+      {:ok, performer} ->
+        performer
+      {:error, _} ->
+        # If insert failed due to conflict, fetch the existing performer
+        slug = Normalizer.create_slug(name)
+        case Repo.get_by(Performer, slug: slug) do
+          nil ->
+            # This shouldn't happen, but handle gracefully
+            # Try one more time with insert_or_update
+            changeset |> Repo.insert!()
+          existing ->
+            existing
+        end
+    end
   end
 
   defp format_date(datetime) do

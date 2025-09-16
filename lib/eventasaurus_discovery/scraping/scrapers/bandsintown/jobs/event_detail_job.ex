@@ -262,8 +262,9 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           {:ok, _source} ->
             Logger.info("✅ Successfully linked event to source")
           {:error, reason} ->
-            Logger.error("Failed to create event source link: #{inspect(reason)}")
-            # Don't rollback - the event is still valid
+            Logger.warning("Event source link already exists or cannot be created: #{inspect(reason)}")
+            # Don't fail - the event is still valid and may already be linked
+            :ok
         end
       end
 
@@ -348,15 +349,57 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   end
 
   defp upsert_event_source(attrs) do
-    changeset =
-      %PublicEventSource{}
-      |> PublicEventSource.changeset(attrs)
-
-    Repo.insert(changeset,
-      on_conflict: {:replace, [:event_id, :source_url, :last_seen_at, :metadata, :updated_at]},
-      conflict_target: [:source_id, :external_id],
-      returning: true
+    # First check if a record already exists for this source and external_id
+    existing = Repo.get_by(PublicEventSource,
+      source_id: attrs.source_id,
+      external_id: attrs.external_id
     )
+
+    if existing do
+      # Update existing record if event_id changed (collision detection)
+      if existing.event_id != attrs.event_id do
+        Logger.info("Updating event source link from event #{existing.event_id} to #{attrs.event_id}")
+        existing
+        |> PublicEventSource.changeset(%{
+          event_id: attrs.event_id,
+          source_url: attrs.source_url,
+          last_seen_at: attrs.last_seen_at,
+          metadata: attrs.metadata
+        })
+        |> Repo.update()
+      else
+        # Just update the last_seen_at
+        existing
+        |> PublicEventSource.changeset(%{
+          last_seen_at: attrs.last_seen_at
+        })
+        |> Repo.update()
+      end
+    else
+      # Check if the event already has a link from this source (different external_id)
+      existing_by_event = Repo.get_by(PublicEventSource,
+        event_id: attrs.event_id,
+        source_id: attrs.source_id
+      )
+
+      if existing_by_event do
+        Logger.warning("Event #{attrs.event_id} already has a different link from source #{attrs.source_id}, updating external_id")
+        # Update the existing link with new external_id
+        existing_by_event
+        |> PublicEventSource.changeset(%{
+          external_id: attrs.external_id,
+          source_url: attrs.source_url,
+          last_seen_at: attrs.last_seen_at,
+          metadata: attrs.metadata
+        })
+        |> Repo.update()
+      else
+        # Create new link
+        %PublicEventSource{}
+        |> PublicEventSource.changeset(attrs)
+        |> Repo.insert()
+      end
+    end
   end
 
   defp extract_country_code(country_name) when is_binary(country_name) do
