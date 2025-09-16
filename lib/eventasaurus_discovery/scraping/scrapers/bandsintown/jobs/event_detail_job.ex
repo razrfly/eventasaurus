@@ -27,6 +27,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   alias EventasaurusDiscovery.PublicEvents.PublicEvent
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
+  alias EventasaurusDiscovery.Services.CollisionDetector
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: args}) do
@@ -129,51 +130,102 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           nil
       end
 
-      # Create or update the event (without source_id)
-      event_attrs = %{
-        title: event_data["title"] || event_data["artist_name"],
-        description: event_data["description"],
-        starts_at: DateParser.parse_start_date(event_data["date"]),
-        ends_at: DateParser.parse_end_date(event_data["end_date"]),
-        venue_id: if(venue, do: venue.id, else: nil),
-        category_id: 2, # Concerts - Bandsintown is primarily a music/concert platform
-        external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
-        ticket_url: event_data["ticket_url"],
-        min_price: parse_price(event_data["min_price"]),
-        max_price: parse_price(event_data["max_price"]),
-        currency: get_currency(event_data),
-        metadata: %{
-          image_url: event_data["image_url"],
-          rsvp_count: event_data["rsvp_count"],
-          interested_count: event_data["interested_count"],
-          tags: event_data["tags"] || [],
-          source_url: event_data["url"],
-          event_status: event_data["event_status"],
-          facebook_event: event_data["facebook_event"]
-        }
-      }
+      # Check for collision with existing events from other sources
+      starts_at = DateParser.parse_start_date(event_data["date"])
+      title = event_data["title"] || event_data["artist_name"]
 
-      Logger.info("📝 Attempting to upsert event with attrs: category_id=#{event_attrs.category_id}, venue_id=#{event_attrs.venue_id}")
+      existing_event = if venue && starts_at do
+        CollisionDetector.find_similar_event(venue, starts_at, title)
+      else
+        nil
+      end
 
-      event = case upsert_event(event_attrs) do
-        {:ok, e} ->
-          Logger.info("✅ Event created/updated: #{e.title} (ID: #{e.id}, category_id: #{e.category_id}, venue_id: #{e.venue_id})")
-          e
-        {:error, %Ecto.Changeset{} = changeset} ->
-          # Check if this is a validation failure for required fields
-          errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+      event = if existing_event do
+        Logger.info("""
+        🔄 Found existing event from another source!
+        Existing: #{existing_event.title} (ID: #{existing_event.id})
+        Will link BandsInTown data to existing event instead of creating duplicate.
+        """)
 
-          if has_required_field_errors?(errors) do
-            Logger.warning("🚫 Rejecting event - missing required fields: #{inspect(errors)}")
-            Logger.warning("   Event data: title=#{event_attrs[:title]}, starts_at=#{event_attrs[:starts_at]}")
-            Repo.rollback({:validation_failure, :missing_required_fields})
-          else
-            Logger.error("Failed to store event: #{inspect(changeset)}")
-            Repo.rollback({:event_error, changeset})
+        # Update existing event with any missing data from BandsInTown
+        updates = []
+        updates = if is_nil(existing_event.description) && event_data["description"] do
+          [{:description, event_data["description"]} | updates]
+        else
+          updates
+        end
+
+        updates = if is_nil(existing_event.ends_at) && event_data["end_date"] do
+          [{:ends_at, DateParser.parse_end_date(event_data["end_date"])} | updates]
+        else
+          updates
+        end
+
+        updates = if is_nil(existing_event.ticket_url) && event_data["ticket_url"] do
+          [{:ticket_url, event_data["ticket_url"]} | updates]
+        else
+          updates
+        end
+
+        if Enum.any?(updates) do
+          case existing_event |> PublicEvent.changeset(Map.new(updates)) |> Repo.update() do
+            {:ok, updated} ->
+              Logger.info("✅ Updated existing event with BandsInTown data")
+              updated
+            {:error, changeset} ->
+              Logger.error("Failed to update existing event: #{inspect(changeset)}")
+              existing_event
           end
-        {:error, reason} ->
-          Logger.error("Failed to store event: #{inspect(reason)}")
-          Repo.rollback({:event_error, reason})
+        else
+          existing_event
+        end
+      else
+        # No collision found, create new event
+        event_attrs = %{
+          title: title,
+          description: event_data["description"],
+          starts_at: starts_at,
+          ends_at: DateParser.parse_end_date(event_data["end_date"]),
+          venue_id: if(venue, do: venue.id, else: nil),
+          category_id: 2, # Concerts - Bandsintown is primarily a music/concert platform
+          external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
+          ticket_url: event_data["ticket_url"],
+          min_price: parse_price(event_data["min_price"]),
+          max_price: parse_price(event_data["max_price"]),
+          currency: get_currency(event_data),
+          metadata: %{
+            image_url: event_data["image_url"],
+            rsvp_count: event_data["rsvp_count"],
+            interested_count: event_data["interested_count"],
+            tags: event_data["tags"] || [],
+            source_url: event_data["url"],
+            event_status: event_data["event_status"],
+            facebook_event: event_data["facebook_event"]
+          }
+        }
+
+        Logger.info("📝 No collision found, creating new event with attrs: category_id=#{event_attrs.category_id}, venue_id=#{event_attrs.venue_id}")
+
+        case upsert_event(event_attrs) do
+          {:ok, e} ->
+            Logger.info("✅ Event created: #{e.title} (ID: #{e.id}, category_id: #{e.category_id}, venue_id: #{e.venue_id})")
+            e
+          {:error, %Ecto.Changeset{} = changeset} ->
+            # Check if this is a validation failure for required fields
+            errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+
+            if has_required_field_errors?(errors) do
+              Logger.warning("🚫 Rejecting event - missing required fields: #{inspect(errors)}")
+              Logger.warning("   Event data: title=#{event_attrs[:title]}, starts_at=#{event_attrs[:starts_at]}")
+              Repo.rollback({:validation_failure, :missing_required_fields})
+            else
+              Logger.error("Failed to store event: #{inspect(changeset)}")
+              Repo.rollback({:event_error, changeset})
+            end
+          {:error, reason} ->
+            Logger.error("Failed to store event: #{inspect(reason)}")
+            Repo.rollback({:event_error, reason})
+        end
       end
 
       # Link performer to event (only if both exist)
@@ -191,7 +243,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
 
       # Create or update public_event_source record (only if we know the source)
       if is_nil(source_id) do
-        Logger.warning("Skipping event-source link: missing source_id for #{event_attrs[:title]}")
+        Logger.warning("Skipping event-source link: missing source_id for event #{event.title}")
       else
         source_attrs = %{
           event_id: event.id,
