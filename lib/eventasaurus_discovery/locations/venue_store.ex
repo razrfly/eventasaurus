@@ -71,14 +71,21 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
           Logger.debug("No venue found by proximity at (#{lat}, #{lng})")
           nil
         venue ->
-          # Check if names are similar enough
-          if similar_names?(venue.name, name) do
-            Logger.info("📍 Found venue by proximity: #{venue.name} (#{venue.id})")
-            update_venue_if_needed(venue, %{latitude: lat, longitude: lng})
+          # ALWAYS accept coordinate matches! Coordinates are authoritative.
+          Logger.info("📍 Found venue by proximity: '#{venue.name}' (ID:#{venue.id}) matches incoming '#{name}' at (#{lat}, #{lng})")
+
+          # Decide if we should update the name based on quality
+          updated_attrs = %{latitude: lat_float, longitude: lng_float}
+
+          # Update name if the new one is significantly better
+          updated_attrs = if should_update_venue_name?(venue.name, name) do
+            Logger.info("🔄 Updating venue name from '#{venue.name}' to '#{name}' (better quality)")
+            Map.put(updated_attrs, :name, name)
           else
-            Logger.info("Found different venue at same location: #{venue.name} != #{name}")
-            nil  # Different venue at same location
+            updated_attrs
           end
+
+          update_venue_if_needed(venue, updated_attrs)
       end
     end
   end
@@ -164,19 +171,6 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
   end
   defp find_existing_venue(_), do: {:error, :invalid_venue_data}
 
-  # Check if two venue names are similar enough
-  defp similar_names?(name1, name2) do
-    n1 = normalize_for_comparison(name1)
-    n2 = normalize_for_comparison(name2)
-
-    # Exact match after normalization
-    n1 == n2 ||
-    # Fuzzy match with high threshold (using Akin library)
-    Akin.compare(n1, n2) > 0.85 ||
-    # One name contains the other (for "Arena" vs "Tauron Arena Kraków")
-    String.contains?(n1, n2) || String.contains?(n2, n1)
-  end
-
   defp normalize_for_comparison(name) when is_binary(name) do
     name
     |> String.downcase()
@@ -186,6 +180,36 @@ defmodule EventasaurusDiscovery.Locations.VenueStore do
     |> String.trim()
   end
   defp normalize_for_comparison(_), do: ""
+
+  # Intelligently decide if we should update venue name
+  defp should_update_venue_name?(existing_name, new_name) do
+    cond do
+      # Don't update if new name is nil or empty
+      is_nil(new_name) or new_name == "" ->
+        false
+
+      # Don't update if existing is clearly better (has venue type suffix)
+      has_venue_type_suffix?(existing_name) && !has_venue_type_suffix?(new_name) ->
+        false
+
+      # Update if new name is significantly longer and more descriptive
+      String.length(new_name) > String.length(existing_name) * 1.3 ->
+        true
+
+      # Update if new name has venue type suffix and existing doesn't
+      !has_venue_type_suffix?(existing_name) && has_venue_type_suffix?(new_name) ->
+        true
+
+      # Default: keep existing name
+      true ->
+        false
+    end
+  end
+
+  defp has_venue_type_suffix?(name) when is_binary(name) do
+    Regex.match?(~r/(Arena|Stadium|Club|Hall|Theater|Theatre|Center|Centre|Venue|Stage|Room|Space|Bar|Lounge|Pub|House)$/i, name)
+  end
+  defp has_venue_type_suffix?(_), do: false
 
   defp normalize_venue_attrs(attrs) do
     normalized = attrs
