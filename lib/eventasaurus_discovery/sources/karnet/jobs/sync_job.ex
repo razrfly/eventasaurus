@@ -181,8 +181,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
   end
 
   defp calculate_max_pages(limit) do
-    # Estimate pages based on ~20-30 events per page
-    pages = div(limit, 25)
-    if rem(limit, 25) > 0, do: pages + 1, else: pages
+    # Karnet has ~12 events per page
+    events_per_page = 12
+    pages = div(limit, events_per_page)
+    if rem(limit, events_per_page) > 0, do: pages + 1, else: pages
   end
 end

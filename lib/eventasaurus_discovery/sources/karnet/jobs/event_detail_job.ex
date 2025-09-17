@@ -40,31 +40,44 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
   end
 
   defp process_event_html(html, url, source_id, metadata) do
+    Logger.debug("🔍 Processing event HTML for URL: #{url}")
+
     # Extract event details
     case DetailExtractor.extract_event_details(html, url) do
       {:ok, event_data} ->
-        # Merge with metadata from index if available
-        enriched_data = merge_metadata(event_data, metadata)
+        Logger.debug("📋 Extracted event data - Title: #{event_data[:title]}, Venue: #{inspect(event_data[:venue_data])}")
 
-        # Parse dates
-        enriched_data = add_parsed_dates(enriched_data)
+        # Check if venue data is nil (events without venues should be rejected)
+        if is_nil(event_data[:venue_data]) do
+          Logger.warning("⚠️ Rejecting event without valid venue: #{url}")
+          {:error, :no_valid_venue}
+        else
+          # Merge with metadata from index if available
+          enriched_data = merge_metadata(event_data, metadata)
+          Logger.debug("📊 Enriched data - Date text: #{enriched_data[:date_text]}")
 
-        # Get source
-        source = Repo.get!(Source, source_id)
+          # Parse dates
+          enriched_data = add_parsed_dates(enriched_data)
+          Logger.debug("📅 Parsed dates - Start: #{inspect(enriched_data[:starts_at])}, End: #{inspect(enriched_data[:ends_at])}")
 
-        # Process through unified pipeline
-        case process_through_pipeline(enriched_data, source) do
-          {:ok, event} ->
-            Logger.info("✅ Successfully processed Karnet event: #{event.id} - #{event.title}")
-            {:ok, event}
+          # Get source
+          source = Repo.get!(Source, source_id)
 
-          {:error, reason} ->
-            Logger.error("Failed to process event through pipeline: #{inspect(reason)}")
-            {:error, reason}
+          # Process through unified pipeline
+          case process_through_pipeline(enriched_data, source) do
+            {:ok, event} ->
+              Logger.info("✅ Successfully processed Karnet event: #{event.id} - #{event.title}")
+              {:ok, event}
+
+            {:error, reason} ->
+              Logger.error("❌ Pipeline processing failed for #{url}: #{inspect(reason)}")
+              Logger.debug("🔍 Failed event data: #{inspect(enriched_data, limit: :infinity)}")
+              {:error, reason}
+          end
         end
 
       {:error, reason} ->
-        Logger.error("Failed to extract event details from #{url}: #{inspect(reason)}")
+        Logger.error("❌ Failed to extract event details from #{url}: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -110,12 +123,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
   end
 
   defp transform_for_processor(event_data) do
-    # Ensure we always have venue data (required by processor)
-    venue_data = event_data[:venue_data] || %{
-      name: "Kraków City Center",
-      city: "Kraków",
-      country: "Poland"
-    }
+    # Venue is required - no fallback
+    venue_data = event_data[:venue_data]
+
+    Logger.debug("🔄 Transforming for processor - Venue: #{inspect(venue_data)}, Start: #{inspect(event_data[:starts_at])}")
 
     %{
       # Required fields
