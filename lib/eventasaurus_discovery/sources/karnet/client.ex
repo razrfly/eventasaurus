@@ -144,9 +144,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
   end
 
   defp get_redirect_location(response) do
-    case List.keyfind(response.headers, "Location", 0) do
-      {"Location", location} -> {:ok, location}
-      _ -> :error
+    case get_header(response.headers, "Location") do
+      nil -> :error
+      location -> {:ok, location}
     end
   end
 

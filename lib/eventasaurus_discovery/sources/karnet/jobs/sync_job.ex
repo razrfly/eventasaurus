@@ -24,22 +24,34 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     max_pages = args["max_pages"] || calculate_max_pages(limit)
 
     # Get city (should be Kraków)
-    city = Repo.get!(City, city_id) |> Repo.preload(:country)
+    case Repo.get(City, city_id) do
+      nil ->
+        Logger.error("City not found: #{inspect(city_id)}")
+        {:error, :city_not_found}
 
-    # Verify it's Kraków (or allow other Polish cities in the future)
-    unless String.downcase(city.name) in ["kraków", "krakow", "cracow"] do
-      Logger.warning("⚠️ Karnet scraper is designed for Kraków but got: #{city.name}")
+      city ->
+        city = Repo.preload(city, :country)
+
+        # Verify it's Kraków (or allow other Polish cities in the future)
+        unless String.downcase(city.name) in ["kraków", "krakow", "cracow"] do
+          Logger.warning("⚠️ Karnet scraper is designed for Kraków but got: #{city.name}")
+        end
+
+        Logger.info("""
+        🎭 Starting Karnet Kraków inline sync
+        City: #{city.name}, #{city.country.name}
+        Limit: #{limit} events
+        Max pages: #{max_pages}
+        """)
+
+        continue_sync(city, source: get_or_create_karnet_source(), limit: limit, max_pages: max_pages)
     end
+  end
 
-    Logger.info("""
-    🎭 Starting Karnet Kraków inline sync
-    City: #{city.name}, #{city.country.name}
-    Limit: #{limit} events
-    Max pages: #{max_pages}
-    """)
-
-    # Get or create source
-    source = get_or_create_karnet_source()
+  defp continue_sync(_city, opts) do
+    source = opts[:source]
+    limit = opts[:limit]
+    max_pages = opts[:max_pages]
 
     # Fetch all index pages
     case Client.fetch_all_index_pages(max_pages) do
