@@ -131,26 +131,55 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   end
 
   defp extract_venue(document) do
-    # Look for venue section
-    venue_section = Floki.find(document, ".event-venue, .event-location, .event-place")
+    # Look for the "Miejsce wydarzenia" (Event Location) section
+    # The venue is in a link with data-name attribute or in an h3 tag
+    venue_links = Floki.find(document, "a.event-list-element[data-name]")
 
-    venue_data = if length(venue_section) > 0 do
-      section = List.first(venue_section)
+    venue_data = if length(venue_links) > 0 do
+      # Extract venue from the data-name attribute
+      venue_link = List.first(venue_links)
+      venue_name = Floki.attribute(venue_link, "data-name") |> List.first()
+
+      # Try to find address in the venue section
+      venue_address = case Floki.find(venue_link, ".data") do
+        [] ->
+          # Look for address in parent container
+          parent = Floki.find(document, ".event-list-element")
+          case Floki.find(parent, ".data") do
+            [] -> extract_venue_address_fallback(document)
+            [addr | _] -> Floki.text(addr) |> String.trim()
+          end
+        [addr | _] -> Floki.text(addr) |> String.trim()
+      end
 
       %{
-        name: extract_venue_name(section, document),
-        address: extract_venue_address(section, document),
-        city: "Kraków",  # Default to Kraków
-        country: "Poland"
-      }
-    else
-      # Try to find venue info in other places
-      %{
-        name: extract_venue_name_fallback(document),
-        address: extract_venue_address_fallback(document),
+        name: venue_name,
+        address: venue_address,
         city: "Kraków",
         country: "Poland"
       }
+    else
+      # Fallback: try to find venue in article content using pattern matching
+      article_content = Floki.find(document, ".article-content")
+
+      if length(article_content) > 0 do
+        content_text = Floki.text(article_content)
+        venue_name = extract_venue_from_text(content_text)
+
+        %{
+          name: venue_name,
+          address: extract_venue_address_fallback(document),
+          city: "Kraków",
+          country: "Poland"
+        }
+      else
+        %{
+          name: extract_venue_name_fallback(document),
+          address: extract_venue_address_fallback(document),
+          city: "Kraków",
+          country: "Poland"
+        }
+      end
     end
 
     # Check if we have a valid venue name (not generic placeholder)
@@ -161,29 +190,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     if valid_name do
       venue_data
     else
-      # Return a default venue for Kraków events without specific venue
-      %{
-        name: "Kraków City Center",  # Generic but valid venue
-        city: "Kraków",
-        country: "Poland",
-        address: venue_data.address
-      }
-    end
-  end
-
-  defp extract_venue_name(section, _document) do
-    # Look for venue name in the section
-    case Floki.find(section, "h3, h4, .venue-name, .location-name") do
-      [] ->
-        # Get text from the section itself
-        Floki.text(section)
-        |> String.split("\n")
-        |> List.first()
-        |> String.trim()
-
-      [elem | _] ->
-        Floki.text(elem)
-        |> String.trim()
+      # No fallback - events without valid venues will be rejected by processor
+      nil
     end
   end
 
@@ -216,23 +224,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     end
   end
 
-  defp extract_venue_address(section, _document) do
-    # Look for address in the section
-    case Floki.find(section, ".address, .adres, address, p") do
-      [] -> nil
-      elements ->
-        elements
-        |> Enum.map(&Floki.text/1)
-        |> Enum.map(&String.trim/1)
-        |> Enum.find(fn text ->
-          String.contains?(text, "ul.") ||
-          String.contains?(text, "al.") ||
-          String.contains?(text, "plac") ||
-          String.contains?(text, "Rynek")
-        end)
-    end
-  end
-
   defp extract_venue_address_fallback(document) do
     # Look for address patterns in the whole document
     Floki.find(document, "p, div")
@@ -244,6 +235,57 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
        String.contains?(text, "plac") ||
        String.contains?(text, "Rynek")) &&
       String.length(text) < 200  # Avoid long paragraphs
+    end)
+  end
+
+  defp extract_venue_from_text(text) do
+    # List of known Kraków venues
+    venue_patterns = [
+      # Museums and Galleries
+      {"Pałac.*Sztuki", "Pałac Sztuki"},
+      {"Muzeum Narodow", "Muzeum Narodowe"},
+      {"MOCAK", "MOCAK"},
+      {"Manggha", "Manggha"},
+      {"Cricoteka", "Cricoteka"},
+      {"Bunkier Sztuki", "Bunkier Sztuki"},
+      {"Galeria Krakowska", "Galeria Krakowska"},
+      {"Muzeum Historyczne", "Muzeum Historyczne Miasta Krakowa"},
+
+      # Theaters and Concert Halls
+      {"Teatr.*Słowackiego", "Teatr im. Juliusza Słowackiego"},
+      {"Teatr.*Stary", "Teatr Stary"},
+      {"Teatr.*Bagatela", "Teatr Bagatela"},
+      {"Teatr.*Łaźnia.*Nowa", "Teatr Łaźnia Nowa"},
+      {"Teatr.*KTO", "Teatr KTO"},
+      {"Filharmoni", "Filharmonia Krakowska"},
+      {"Opera Krakowska", "Opera Krakowska"},
+
+      # Cultural Centers
+      {"ICE Kraków", "ICE Kraków"},
+      {"Centrum Kongresowe", "ICE Kraków Congress Centre"},
+      {"Tauron Arena", "Tauron Arena"},
+      {"Nowohuckie Centrum Kultury", "Nowohuckie Centrum Kultury"},
+      {"NCK", "Nowohuckie Centrum Kultury"},
+
+      # Cinemas
+      {"Kino.*Pod Baranami", "Kino Pod Baranami"},
+      {"Kino.*Paradox", "Kino Paradox"},
+      {"Kino.*Mikro", "Kino Mikro"},
+      {"Kino.*Agrafka", "Kino Agrafka"},
+
+      # Other Venues
+      {"Rynek Główny", "Rynek Główny"},
+      {"Wawel", "Zamek Królewski na Wawelu"},
+      {"Fabryka Schindlera", "Fabryka Schindlera"},
+      {"Sukiennice", "Sukiennice"}
+    ]
+
+    # Try to find a venue match in the text
+    venue_patterns
+    |> Enum.find_value(fn {pattern, venue_name} ->
+      if Regex.match?(~r/#{pattern}/iu, text) do
+        venue_name
+      end
     end)
   end
 
