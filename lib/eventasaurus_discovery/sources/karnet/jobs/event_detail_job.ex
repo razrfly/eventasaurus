@@ -47,10 +47,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       {:ok, event_data} ->
         Logger.debug("📋 Extracted event data - Title: #{event_data[:title]}, Venue: #{inspect(event_data[:venue_data])}")
 
-        # Check if venue data is nil (events without venues should be rejected)
+        # Check if venue data is nil (events without venues should be discarded)
         if is_nil(event_data[:venue_data]) do
-          Logger.warning("⚠️ Rejecting event without valid venue: #{url}")
-          {:error, :no_valid_venue}
+          Logger.warning("⚠️ Discarding event without valid venue: #{url}")
+          {:discard, :no_valid_venue}
         else
           # Merge with metadata from index if available
           enriched_data = merge_metadata(event_data, metadata)

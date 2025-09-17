@@ -140,17 +140,27 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
       venue_link = List.first(venue_links)
       venue_name = Floki.attribute(venue_link, "data-name") |> List.first()
 
-      # Try to find address in the venue section
-      venue_address = case Floki.find(venue_link, ".data") do
-        [] ->
-          # Look for address in parent container
-          parent = Floki.find(document, ".event-list-element")
-          case Floki.find(parent, ".data") do
-            [] -> extract_venue_address_fallback(document)
-            [addr | _] -> Floki.text(addr) |> String.trim()
-          end
-        [addr | _] -> Floki.text(addr) |> String.trim()
-      end
+      # Try to find address near the selected link, scoped to its container
+      venue_address =
+        case Floki.find(venue_link, ".data") do
+          [addr | _] ->
+            Floki.text(addr) |> String.trim()
+          _ ->
+            # Find the specific container that contains this venue link
+            container =
+              Floki.find(document, ".event-list-element")
+              |> Enum.find(fn section ->
+                Floki.find(section, "a.event-list-element[data-name]")
+                |> Enum.any?(fn a ->
+                  Floki.attribute(a, "data-name") |> List.first() == venue_name
+                end)
+              end)
+
+            case container && Floki.find(container, ".data") do
+              [addr | _] -> Floki.text(addr) |> String.trim()
+              _ -> extract_venue_address_fallback(document)
+            end
+        end
 
       %{
         name: venue_name,
