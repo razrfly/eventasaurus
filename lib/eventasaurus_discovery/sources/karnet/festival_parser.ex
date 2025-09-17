@@ -76,67 +76,77 @@ defmodule EventasaurusDiscovery.Sources.Karnet.FestivalParser do
   defp extract_festival_venues(html) do
     # Since most Kraków festivals use known venues that are likely
     # already in our system from other sources, just extract venue names
-    {:ok, document} = Floki.parse_document(html)
+    case Floki.parse_document(html) do
+      {:ok, document} ->
+        venue_selectors = [
+          ".venue",
+          ".location",
+          ".miejsce",
+          "[class*='venue']",
+          "h3:fl-contains('Miejsce') ~ *"
+        ]
 
-    venue_selectors = [
-      ".venue",
-      ".location",
-      ".miejsce",
-      "[class*='venue']",
-      "h3:fl-contains('Miejsce') ~ *"
-    ]
+        venues = venue_selectors
+        |> Enum.flat_map(fn selector ->
+          Floki.find(document, selector)
+        end)
+        |> Enum.map(&Floki.text/1)
+        |> Enum.map(&String.trim/1)
+        |> Enum.filter(fn text ->
+          String.length(text) > 3 && String.length(text) < 200
+        end)
+        |> Enum.uniq()
 
-    venues = venue_selectors
-    |> Enum.flat_map(fn selector ->
-      Floki.find(document, selector)
-    end)
-    |> Enum.map(&Floki.text/1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.filter(fn text ->
-      String.length(text) > 3 && String.length(text) < 200
-    end)
-    |> Enum.uniq()
+        # Return simplified venue list
+        Enum.map(venues, fn venue_text ->
+          %{
+            name: venue_text,
+            city: "Kraków",
+            country: "Poland"
+          }
+        end)
 
-    # Return simplified venue list
-    Enum.map(venues, fn venue_text ->
-      %{
-        name: venue_text,
-        city: "Kraków",
-        country: "Poland"
-      }
-    end)
+      {:error, _reason} ->
+        Logger.warning("Failed to parse document for venue extraction")
+        []
+    end
   end
 
   defp extract_main_performers(html) do
     # Extract headliners/main performers only
     # Sub-events would be handled by more comprehensive scrapers
-    {:ok, document} = Floki.parse_document(html)
+    case Floki.parse_document(html) do
+      {:ok, document} ->
+        # Look for performer patterns
+        performer_selectors = [
+          ".performer",
+          ".artist",
+          ".wykonawca",
+          "strong",  # Often performers are in bold
+          "h4"       # Sometimes in subheadings
+        ]
 
-    # Look for performer patterns
-    performer_selectors = [
-      ".performer",
-      ".artist",
-      ".wykonawca",
-      "strong",  # Often performers are in bold
-      "h4"       # Sometimes in subheadings
-    ]
+        performers = performer_selectors
+        |> Enum.flat_map(fn selector ->
+          Floki.find(document, selector)
+        end)
+        |> Enum.map(&Floki.text/1)
+        |> Enum.map(&String.trim/1)
+        |> Enum.filter(fn text ->
+          # Basic filtering for likely performer names
+          String.length(text) > 2 &&
+          String.length(text) < 100 &&
+          not String.contains?(text, ["ul.", "al.", "Kraków", "bilety"])
+        end)
+        |> Enum.take(10)  # Limit to top 10 to avoid noise
+        |> Enum.uniq()
 
-    performers = performer_selectors
-    |> Enum.flat_map(fn selector ->
-      Floki.find(document, selector)
-    end)
-    |> Enum.map(&Floki.text/1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.filter(fn text ->
-      # Basic filtering for likely performer names
-      String.length(text) > 2 &&
-      String.length(text) < 100 &&
-      not String.contains?(text, ["ul.", "al.", "Kraków", "bilety"])
-    end)
-    |> Enum.take(10)  # Limit to top 10 to avoid noise
-    |> Enum.uniq()
+        performers
 
-    performers
+      {:error, _reason} ->
+        Logger.warning("Failed to parse document for performer extraction")
+        []
+    end
   end
 
   defp count_sub_events(html) do
