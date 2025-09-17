@@ -122,10 +122,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       title: event_data[:title] || "Untitled Event",
       source_url: event_data[:url],
 
-      # Dates
-      starts_at: event_data[:starts_at],
+      # CRITICAL: Processor expects 'start_at' not 'starts_at'!
+      start_at: event_data[:starts_at],  # Changed from 'starts_at' to 'start_at'
       ends_at: event_data[:ends_at],
-      date: event_data[:starts_at],  # Legacy field
 
       # Venue - will be processed by VenueProcessor
       venue_data: venue_data,
