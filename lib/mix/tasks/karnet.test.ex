@@ -144,12 +144,17 @@ defmodule Mix.Tasks.Karnet.Test do
           with_venues = Enum.count(events, & &1.venue_name)
           with_categories = Enum.count(events, & &1.category)
 
+          total_events = length(events)
+          date_percentage = if total_events > 0, do: round(with_dates / total_events * 100), else: 0
+          venue_percentage = if total_events > 0, do: round(with_venues / total_events * 100), else: 0
+          category_percentage = if total_events > 0, do: round(with_categories / total_events * 100), else: 0
+
           Logger.info("""
 
           Statistics:
-          - Events with dates: #{with_dates}/#{length(events)} (#{round(with_dates / length(events) * 100)}%)
-          - Events with venues: #{with_venues}/#{length(events)} (#{round(with_venues / length(events) * 100)}%)
-          - Events with categories: #{with_categories}/#{length(events)} (#{round(with_categories / length(events) * 100)}%)
+          - Events with dates: #{with_dates}/#{total_events} (#{date_percentage}%)
+          - Events with venues: #{with_venues}/#{total_events} (#{venue_percentage}%)
+          - Events with categories: #{with_categories}/#{total_events} (#{category_percentage}%)
           """)
 
           # Check for unique URLs
