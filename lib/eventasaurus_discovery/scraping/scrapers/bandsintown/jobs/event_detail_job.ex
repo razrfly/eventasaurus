@@ -28,6 +28,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
   alias EventasaurusDiscovery.PublicEvents.PublicEventPerformer
   alias EventasaurusDiscovery.PublicEvents.PublicEventSource
   alias EventasaurusDiscovery.Services.CollisionDetector
+  alias EventasaurusDiscovery.Categories.CategoryExtractor
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: args}) do
@@ -167,7 +168,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           updates
         end
 
-        if Enum.any?(updates) do
+        updated_event = if Enum.any?(updates) do
           case existing_event |> PublicEvent.changeset(Map.new(updates)) |> Repo.update() do
             {:ok, updated} ->
               Logger.info("✅ Updated existing event with BandsInTown data")
@@ -179,6 +180,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         else
           existing_event
         end
+
+        # Also ensure the existing event has categories assigned
+        CategoryExtractor.assign_categories_to_event(updated_event.id, "bandsintown", event_data)
+        Logger.info("🏷️ Categories assigned to existing event #{updated_event.id}")
+
+        updated_event
       else
         # No collision found, create new event
         event_attrs = %{
@@ -187,7 +194,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           starts_at: starts_at,
           ends_at: DateParser.parse_end_date(event_data["end_date"]),
           venue_id: if(venue, do: venue.id, else: nil),
-          category_id: 2, # Concerts - Bandsintown is primarily a music/concert platform
+          # Remove hardcoded category_id - will assign via new system
           external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
           ticket_url: event_data["ticket_url"],
           min_price: parse_price(event_data["min_price"]),
@@ -204,11 +211,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           }
         }
 
-        Logger.info("📝 No collision found, creating new event with attrs: category_id=#{event_attrs.category_id}, venue_id=#{event_attrs.venue_id}")
+        Logger.info("📝 No collision found, creating new event with venue_id=#{event_attrs.venue_id}")
 
         case upsert_event(event_attrs) do
           {:ok, e} ->
-            Logger.info("✅ Event created: #{e.title} (ID: #{e.id}, category_id: #{e.category_id}, venue_id: #{e.venue_id})")
+            Logger.info("✅ Event created: #{e.title} (ID: #{e.id}, venue_id: #{e.venue_id})")
+
+            # Assign categories using the new system
+            CategoryExtractor.assign_categories_to_event(e.id, "bandsintown", event_data)
+            Logger.info("🏷️ Categories assigned to Bandsintown event #{e.id}")
+
             e
           {:error, %Ecto.Changeset{} = changeset} ->
             # Check if this is a validation failure for required fields
