@@ -37,7 +37,15 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     field :metadata, :map, default: %{}
 
     belongs_to :venue, EventasaurusApp.Venues.Venue
+
+    # Keep old relationship for backward compatibility during transition
     belongs_to :category, EventasaurusDiscovery.Categories.Category
+
+    # New many-to-many relationship
+    many_to_many :categories, EventasaurusDiscovery.Categories.Category,
+      join_through: EventasaurusDiscovery.Categories.PublicEventCategory,
+      join_keys: [event_id: :id, category_id: :id],
+      on_replace: :delete
 
     many_to_many :performers, EventasaurusDiscovery.Performers.Performer,
       join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer,

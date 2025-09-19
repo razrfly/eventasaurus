@@ -1,0 +1,119 @@
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-6">Event Categories Demo</h1>
+
+  <!-- Language Switcher -->
+  <div class="mb-6 flex gap-4">
+    <a href="?locale=en" class={"px-3 py-1 rounded #{@locale == "en" && "bg-blue-500 text-white"}"}>
+      English
+    </a>
+    <a href="?locale=pl" class={"px-3 py-1 rounded #{@locale == "pl" && "bg-blue-500 text-white"}"}>
+      Polski
+    </a>
+  </div>
+
+  <!-- Category Filter -->
+  <div class="mb-8 p-4 bg-gray-50 rounded-lg">
+    <h2 class="text-lg font-semibold mb-3">Filter by Category:</h2>
+    <form method="get" class="flex flex-wrap gap-2">
+      <input type="hidden" name="locale" value={@locale} />
+      <%= for category <- @categories do %>
+        <label class="inline-flex items-center">
+          <input
+            type="checkbox"
+            name="categories[]"
+            value={category.slug}
+            checked={category.slug in @selected_categories}
+            class="mr-2"
+            onchange="this.form.submit()"
+          />
+          <span class={"px-2 py-1 rounded text-sm"} style={"background-color: #{category.color || "#6B7280"}20; color: #{category.color || "#6B7280"}"}>
+            <%= EventasaurusDiscovery.Categories.Category.get_name(category, @locale) %>
+          </span>
+        </label>
+      <% end %>
+      <button type="submit" class="px-3 py-1 bg-blue-500 text-white rounded text-sm">
+        Apply Filter
+      </button>
+      <a href={"?locale=#{@locale}"} class="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm">
+        Clear All
+      </a>
+    </form>
+  </div>
+
+  <!-- Events List -->
+  <div class="space-y-6">
+    <h2 class="text-2xl font-semibold">
+      <%= if Enum.empty?(@selected_categories) do %>
+        All Events
+      <% else %>
+        Filtered Events (<%= length(@selected_categories) %> categories selected)
+      <% end %>
+    </h2>
+
+    <%= if Enum.empty?(@events) do %>
+      <div class="p-8 bg-gray-50 rounded text-center text-gray-500">
+        No events found for the selected categories.
+      </div>
+    <% else %>
+      <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <%= for event <- @events do %>
+          <div class="border rounded-lg p-4 hover:shadow-lg transition-shadow">
+            <h3 class="text-xl font-semibold mb-2">
+              <a href={"/category-demo/#{event.id}?locale=#{@locale}"} class="text-blue-600 hover:underline">
+                <%= event.title %>
+              </a>
+            </h3>
+
+            <!-- Event Details -->
+            <div class="text-sm text-gray-600 mb-3 space-y-1">
+              <div>📅 <%= Calendar.strftime(event.starts_at, "%B %d, %Y at %I:%M %p") %></div>
+              <%= if event.venue do %>
+                <div>📍 <%= event.venue.name %></div>
+              <% end %>
+            </div>
+
+            <!-- Categories -->
+            <div class="mt-4">
+              <div class="text-xs text-gray-500 mb-1">Categories:</div>
+              <.category_badges event={event} locale={@locale} show_all={true} />
+            </div>
+
+            <!-- Debug Info -->
+            <details class="mt-4 text-xs text-gray-400">
+              <summary class="cursor-pointer">Debug Info</summary>
+              <div class="mt-2 p-2 bg-gray-50 rounded">
+                <div>Event ID: <%= event.id %></div>
+                <div>External ID: <%= event.external_id || "N/A" %></div>
+                <div>Categories: <%= inspect(Enum.map(event.categories || [], & &1.slug)) %></div>
+                <div>Old category_id: <%= event.category_id || "N/A" %></div>
+              </div>
+            </details>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <!-- Statistics -->
+  <div class="mt-12 p-6 bg-blue-50 rounded-lg">
+    <h2 class="text-xl font-semibold mb-4">Statistics</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div>
+        <div class="text-gray-600">Total Events:</div>
+        <div class="text-2xl font-bold"><%= length(@events) %></div>
+      </div>
+      <div>
+        <div class="text-gray-600">Total Categories:</div>
+        <div class="text-2xl font-bold"><%= length(@categories) %></div>
+      </div>
+      <div>
+        <div class="text-gray-600">Selected Categories:</div>
+        <div class="text-2xl font-bold"><%= length(@selected_categories) %></div>
+      </div>
+      <div>
+        <div class="text-gray-600">Current Language:</div>
+        <div class="text-2xl font-bold"><%= String.upcase(@locale) %></div>
+      </div>
+    </div>
+  </div>
+</div>
