@@ -15,6 +15,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   alias EventasaurusDiscovery.Scraping.Processors.VenueProcessor
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
   alias EventasaurusDiscovery.Services.CollisionDetector
+  alias EventasaurusDiscovery.Categories.CategoryExtractor
 
   import Ecto.Query
   require Logger
@@ -28,8 +29,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
          {:ok, venue} <- process_venue(normalized),
          {:ok, event} <- find_or_create_event(normalized, venue, source_id),
          {:ok, _source} <- update_event_source(event, source_id, source_priority, normalized),
-         {:ok, _performers} <- process_performers(event, normalized) do
-      {:ok, Repo.preload(event, [:venue, :performers])}
+         {:ok, _performers} <- process_performers(event, normalized),
+         {:ok, _categories} <- process_categories(event, normalized, source_id) do
+      {:ok, Repo.preload(event, [:venue, :performers, :categories])}
     else
       {:error, reason} = error ->
         Logger.error("Failed to process event: #{inspect(reason)}")
@@ -61,7 +63,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       performer_names: data[:performer_names] || data["performer_names"] || [],
       metadata: data[:metadata] || data["metadata"] || %{},
       source_url: data[:source_url] || data["source_url"],
-      category_id: data[:category_id] || data["category_id"]
+      # Keep old category_id for backward compatibility
+      category_id: data[:category_id] || data["category_id"],
+      # Add raw data for category extraction
+      raw_event_data: data[:raw_event_data] || data["raw_event_data"],
+      # Karnet category
+      category: data[:category] || data["category"]
     }
 
     cond do
@@ -282,6 +289,57 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       {:error, changeset} ->
         # Actual validation error - let it bubble up
         raise "Failed to create performer: #{inspect(changeset.errors)}"
+    end
+  end
+
+  defp process_categories(_event, %{raw_event_data: nil, category: nil}, _source_id), do: {:ok, []}
+  defp process_categories(event, data, source_id) do
+    # Determine source name from source_id
+    source_name = case source_id do
+      1 -> "ticketmaster"
+      2 -> "karnet"
+      _ -> "unknown"
+    end
+
+    # Extract and assign categories based on source
+    result = cond do
+      # Ticketmaster event with raw data
+      data.raw_event_data && source_name == "ticketmaster" ->
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          "ticketmaster",
+          data.raw_event_data
+        )
+
+      # Karnet event with category
+      data.category && source_name == "karnet" ->
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          "karnet",
+          %{category: data.category, url: data.source_url}
+        )
+
+      # Fallback to old category_id if present (backward compatibility)
+      data.category_id ->
+        # For backward compatibility, assign the old category as primary
+        EventasaurusDiscovery.Categories.assign_categories_to_event(
+          event.id,
+          [data.category_id],
+          primary_id: data.category_id,
+          source: "migration"
+        )
+
+      true ->
+        {:ok, []}
+    end
+
+    case result do
+      {:ok, categories} ->
+        Logger.info("Assigned #{length(categories)} categories to event ##{event.id}")
+        {:ok, categories}
+      {:error, reason} ->
+        Logger.warning("Failed to assign categories: #{inspect(reason)}")
+        {:ok, []}  # Don't fail the whole event processing
     end
   end
 

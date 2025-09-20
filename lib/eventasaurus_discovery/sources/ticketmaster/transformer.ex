@@ -20,6 +20,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       is_ticketed: true,  # All Ticketmaster events are ticketed
       venue_data: extract_venue(tm_event),
       performers: extract_performers(tm_event),
+      # Pass raw event data for category extraction
+      raw_event_data: tm_event,
+      # Keep category_id for backward compatibility but it won't be used
       category_id: extract_category_id(tm_event),
       metadata: extract_event_metadata(tm_event)
     }
