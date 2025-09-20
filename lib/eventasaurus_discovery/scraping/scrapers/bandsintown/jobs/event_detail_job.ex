@@ -58,7 +58,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           # Store in database
           case store_event(full_event_data, source_id) do
             {:ok, event} ->
-              Logger.info("✅ Successfully stored event: #{event.external_id}")
+              Logger.info("✅ Successfully stored event: #{event.title}")
               {:ok, event}
 
             {:error, reason} ->
@@ -204,20 +204,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           ends_at: DateParser.parse_end_date(event_data["end_date"]),
           venue_id: if(venue, do: venue.id, else: nil),
           # Remove hardcoded category_id - will assign via new system
-          external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
+          # external_id now stored only in public_event_sources
           ticket_url: event_data["ticket_url"],
           min_price: parse_price(event_data["min_price"]),
           max_price: parse_price(event_data["max_price"]),
-          currency: get_currency(event_data),
-          metadata: %{
-            image_url: event_data["image_url"],
-            rsvp_count: event_data["rsvp_count"],
-            interested_count: event_data["interested_count"],
-            tags: event_data["tags"] || [],
-            source_url: event_data["url"],
-            event_status: event_data["event_status"],
-            facebook_event: event_data["facebook_event"]
-          }
+          currency: get_currency(event_data)
+          # metadata now stored only in public_event_sources
         }
 
         Logger.info("📝 No collision found, creating new event with venue_id=#{event_attrs.venue_id}")
@@ -284,7 +276,14 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           metadata: %{
             "is_primary" => true,
             "scraper_version" => "1.0",
-            "job_id" => event_data["job_id"]
+            "job_id" => event_data["job_id"],
+            # Move event-specific metadata here
+            "image_url" => event_data["image_url"],
+            "rsvp_count" => event_data["rsvp_count"],
+            "interested_count" => event_data["interested_count"],
+            "tags" => event_data["tags"] || [],
+            "event_status" => event_data["event_status"],
+            "facebook_event" => event_data["facebook_event"]
           }
         }
 
@@ -348,11 +347,9 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
     changeset = %PublicEvent{}
     |> PublicEvent.changeset(attrs)
 
-    Repo.insert(changeset,
-      on_conflict: {:replace_all_except, [:id, :inserted_at]},
-      conflict_target: [:external_id],
-      returning: true
-    )
+    # Since external_id is no longer in public_events, we can't use it as conflict target
+    # Just insert the event, collision detection happens before this
+    Repo.insert(changeset)
   end
 
   defp link_performer_to_event(%PublicEvent{id: event_id}, %{id: performer_id}) do
@@ -464,7 +461,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
     end
   end
   defp extract_id_from_url(_), do: nil
-
 
   defp has_required_field_errors?(errors) do
     # Check if errors contain missing title or starts_at
