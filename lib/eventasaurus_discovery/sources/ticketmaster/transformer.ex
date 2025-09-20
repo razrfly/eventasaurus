@@ -10,10 +10,13 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   Transforms a Ticketmaster event to our standardized event data structure.
   """
   def transform_event(tm_event) when is_map(tm_event) do
+    title = tm_event["name"]
+    description = extract_description(tm_event)
     %{
       external_id: "tm_#{tm_event["id"]}",
-      title: tm_event["name"],
-      description: extract_description(tm_event),
+      title: title,
+      title_translations: extract_title_translations(title),
+      description_translations: extract_description_translations(description),
       start_at: parse_event_datetime(tm_event),
       ends_at: parse_event_end_datetime(tm_event),
       status: map_event_status(tm_event),
@@ -60,6 +63,46 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
   end
 
   # Private helper functions
+
+  defp extract_title_translations(title) when is_binary(title) do
+    # Detect language based on common Polish words and patterns
+    if polish_content?(title) do
+      %{"pl" => title}
+    else
+      %{"en" => title}
+    end
+  end
+  defp extract_title_translations(_), do: nil
+
+  defp extract_description_translations(description) when is_binary(description) do
+    # Use same Polish detection logic as titles for consistency
+    if polish_content?(description) do
+      %{"pl" => description}
+    else
+      %{"en" => description}
+    end
+  end
+  defp extract_description_translations(_), do: nil
+
+  defp polish_content?(title) do
+    # List of common Polish words and patterns found in event titles
+    polish_indicators = [
+      # Common Polish words in event titles
+      "koncert", "wystawa", "spektakl", "przedstawienie", "festiwal",
+      "teatr", "opera", "balet", "film", "kino", "muzeum",
+      # Polish prepositions and articles
+      " w ", " na ", " do ", " ze ", " przy ", " dla ",
+      # Polish venue/location indicators
+      "kraków", "warszawa", "gdańsk", "wrocław", "poznań",
+      # Polish diacritics
+      "ą", "ć", "ę", "ł", "ń", "ó", "ś", "ź", "ż"
+    ]
+
+    title_lower = String.downcase(title)
+    Enum.any?(polish_indicators, fn indicator ->
+      String.contains?(title_lower, String.downcase(indicator))
+    end)
+  end
 
   defp extract_description(event) do
     cond do
