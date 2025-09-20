@@ -460,42 +460,107 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
   end
 
   defp extract_image_url(document) do
-    # Look for main event image
-    image_selectors = [
-      ".event-image img",
-      ".main-image img",
-      ".featured-image img",
-      "article img",
-      "[class*='image'] img"
-    ]
+    # First, try to get og:image meta tag (usually the best quality)
+    og_image = extract_og_image(document)
 
-    img_url = Enum.find_value(image_selectors, fn selector ->
-      case Floki.find(document, selector) do
-        [] -> nil
-        images ->
-          img = List.first(images)
+    if og_image && valid_event_image?(og_image) do
+      og_image
+    else
+      # Fall back to finding images in the content
+      # Updated selectors to match Karnet's actual HTML structure
+      image_selectors = [
+        # Existing selectors for compatibility
+        ".event-image img",
+        ".main-image img",
+        ".featured-image img",
+        "article img",
+        "[class*='image'] img",
 
-          # Try src first, then data-src for lazy loading
+        # NEW: Find any img from media.krakow.travel (Karnet's image CDN)
+        "img[src*='media.krakow.travel']",
+
+        # NEW: Find any reasonably sized image as fallback
+        "img"
+      ]
+
+      # Collect all valid images and sort by quality
+      all_images = Enum.flat_map(image_selectors, fn selector ->
+        Floki.find(document, selector)
+        |> Enum.map(fn img ->
           src = Floki.attribute(img, "src") |> List.first()
           data_src = Floki.attribute(img, "data-src") |> List.first()
-
           url = src || data_src
 
-          if url do
+          if url && valid_event_image?(url) do
             # Make sure it's a full URL
-            if String.starts_with?(url, "http") do
+            full_url = if String.starts_with?(url, "http") do
               url
             else
               Config.build_event_url(url)
             end
+            {full_url, image_quality_score(full_url)}
           else
             nil
           end
-      end
-    end)
+        end)
+        |> Enum.reject(&is_nil/1)
+      end)
+      |> Enum.uniq_by(fn {url, _} -> url end)
+      |> Enum.sort_by(fn {_, score} -> score end, :desc)
 
-    img_url
+      case all_images do
+        [{best_url, _} | _] -> best_url
+        [] -> nil
+      end
+    end
   end
+
+  # Extract og:image meta tag
+  defp extract_og_image(document) do
+    case Floki.find(document, "meta[property='og:image']") do
+      [] -> nil
+      [meta | _] ->
+        Floki.attribute(meta, "content") |> List.first()
+    end
+  end
+
+  # Score images by quality (higher is better)
+  defp image_quality_score(url) when is_binary(url) do
+    cond do
+      # XXL images are best
+      String.contains?(url, "/xxl") -> 100
+      # XL images are great
+      String.contains?(url, "/xl") -> 90
+      # Large images are good
+      String.contains?(url, "/l.jpg") -> 80
+      # Medium images are okay
+      String.contains?(url, "/m.jpg") -> 70
+      # Small images are last resort
+      String.contains?(url, "/s.jpg") -> 30
+      # Thumbnails are worst
+      String.contains?(url, "/thumb/") -> 20
+      # Default score for unknown sizes
+      String.contains?(url, "media.krakow.travel") -> 60
+      true -> 40
+    end
+  end
+
+  # Helper function to validate if an image is a real event image
+  defp valid_event_image?(url) when is_binary(url) do
+    # Accept media.krakow.travel images (these are real event images)
+    String.contains?(url, "media.krakow.travel") ||
+    # Accept other large images but reject category icons
+    (not String.contains?(url, "/img/category/") &&
+     not String.contains?(url, "category") &&
+     # Prefer larger image sizes
+     (String.contains?(url, "/xxl") ||
+      String.contains?(url, "/xl") ||
+      String.contains?(url, "/l") ||
+      # If no size indicator, accept if it's not obviously a thumbnail
+      not String.contains?(url, "/s.jpg") &&
+      not String.contains?(url, "/thumb/")))
+  end
+  defp valid_event_image?(_), do: false
 
   defp check_if_free(document) do
     # Look for free event indicators

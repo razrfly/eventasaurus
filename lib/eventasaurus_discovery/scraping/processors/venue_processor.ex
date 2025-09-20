@@ -36,15 +36,58 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   @doc """
   Finds an existing venue by place_id, coordinates, or name/city combination.
+  GPS coordinates are prioritized for matching since venues exist at fixed physical locations.
   """
   def find_existing_venue(%{place_id: place_id}) when not is_nil(place_id) do
     Repo.get_by(Venue, place_id: place_id)
   end
 
+  # GPS-based matching with relaxed name similarity
+  def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id, name: name})
+      when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) and not is_nil(name) do
+    # First try tight GPS matching (within 50 meters)
+    gps_match = find_venue_by_coordinates(lat, lng, city_id, 50)
+
+    case gps_match do
+      nil ->
+        # No GPS match, try broader search (100m) then fall back to name-based
+        broader_match = find_venue_by_coordinates(lat, lng, city_id, 100)
+        if broader_match do
+          # Check name similarity for broader GPS match
+          similarity = calculate_similarity(broader_match.name, name)
+          if similarity > 0.5 do
+            Logger.info("🏛️📍 Found venue by GPS (100m): '#{broader_match.name}' for '#{name}' (similarity: #{similarity})")
+            broader_match
+          else
+            # GPS match but names too different, fall back to name search
+            find_existing_venue(%{name: name, city_id: city_id})
+          end
+        else
+          # No GPS match at all, use name-based search
+          find_existing_venue(%{name: name, city_id: city_id})
+        end
+
+      venue ->
+        # Found within 50 meters - verify with very relaxed name similarity (20%)
+        similarity = calculate_similarity(venue.name, name)
+        if similarity > 0.2 do
+          Logger.info("🏛️📍 Found venue by GPS (50m): '#{venue.name}' for '#{name}' (GPS match, similarity: #{similarity})")
+          venue
+        else
+          # GPS matches but names are completely different - log warning but accept it
+          Logger.warning("🏛️⚠️ GPS match but very low name similarity: '#{venue.name}' vs '#{name}' (similarity: #{similarity})")
+          # Still return the GPS match as venues at same coordinates are likely the same
+          venue
+        end
+    end
+  end
+
+  # Fallback to coordinates without name
   def find_existing_venue(%{latitude: lat, longitude: lng, city_id: city_id} = attrs)
       when not is_nil(lat) and not is_nil(lng) and not is_nil(city_id) do
-    # First try coordinates (within 100 meters)
-    venue = find_venue_by_coordinates(lat, lng, city_id, 100)
+    # Try coordinates (within 50 meters preferred, 100 meters fallback)
+    venue = find_venue_by_coordinates(lat, lng, city_id, 50) ||
+            find_venue_by_coordinates(lat, lng, city_id, 100)
 
     # If no coordinate match, try by name if available
     if is_nil(venue) and Map.has_key?(attrs, :name) do
@@ -55,14 +98,40 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   def find_existing_venue(%{name: name, city_id: city_id}) do
-    from(v in Venue,
+    # First try exact match
+    exact_match = from(v in Venue,
       where: v.name == ^name and v.city_id == ^city_id,
       limit: 1
     )
     |> Repo.one()
+
+    # If no exact match, try fuzzy match
+    if is_nil(exact_match) do
+      fuzzy_match = from(v in Venue,
+        where: v.city_id == ^city_id,
+        where: fragment("similarity(?, ?) > ?", v.name, ^name, 0.7),
+        order_by: [desc: fragment("similarity(?, ?)", v.name, ^name)],
+        limit: 1
+      )
+      |> Repo.one()
+
+      if fuzzy_match do
+        Logger.info("🏛️ Using similar venue: '#{fuzzy_match.name}' for '#{name}' (similarity: #{calculate_similarity(fuzzy_match.name, name)})")
+        fuzzy_match
+      else
+        nil
+      end
+    else
+      exact_match
+    end
   end
 
   def find_existing_venue(_), do: nil
+
+  defp calculate_similarity(name1, name2) do
+    # Use Elixir's String.jaro_distance for logging
+    Float.round(String.jaro_distance(name1, name2), 2)
+  end
 
   defp find_venue_by_coordinates(lat, lng, city_id, radius_meters) do
     # Convert to float if needed

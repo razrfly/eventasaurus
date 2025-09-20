@@ -27,8 +27,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   def process_event(event_data, source_id, source_priority \\ 10) do
     with {:ok, normalized} <- normalize_event_data(event_data),
          {:ok, venue} <- process_venue(normalized),
-         {:ok, event} <- find_or_create_event(normalized, venue, source_id),
-         {:ok, _source} <- update_event_source(event, source_id, source_priority, normalized),
+         {:ok, event, action} <- find_or_create_event(normalized, venue, source_id),
+         {:ok, _source} <- maybe_update_event_source(event, source_id, source_priority, normalized, action),
          {:ok, _performers} <- process_performers(event, normalized),
          {:ok, _categories} <- process_categories(event, normalized, source_id) do
       {:ok, Repo.preload(event, [:venue, :performers, :categories])}
@@ -36,6 +36,16 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       {:error, reason} = error ->
         Logger.error("Failed to process event: #{inspect(reason)}")
         error
+    end
+  end
+
+  defp maybe_update_event_source(event, source_id, source_priority, normalized, action) do
+    case action do
+      :consolidated ->
+        # Don't update source for consolidated events
+        {:ok, :skipped}
+      _ ->
+        update_event_source(event, source_id, source_priority, normalized)
     end
   end
 
@@ -64,6 +74,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       performer_names: data[:performer_names] || data["performer_names"] || [],
       metadata: data[:metadata] || data["metadata"] || %{},
       source_url: data[:source_url] || data["source_url"],
+      image_url: extract_primary_image_url(data),
       # Keep old category_id for backward compatibility
       category_id: data[:category_id] || data["category_id"],
       # Add raw data for category extraction
@@ -111,22 +122,62 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     """)
 
     # First check if we have this event from this source
-    case find_existing_event(data.external_id, source_id) do
-      nil ->
-        Logger.info("📝 No existing event found from source #{source_id}, checking for similar events...")
-        # Check if we have this event from another source (by slug/title/time)
+    existing_from_source = find_existing_event(data.external_id, source_id)
+
+    # Always check for recurring pattern first, regardless of whether event exists
+    Logger.info("🔄 Checking for recurring event pattern...")
+    recurring_parent = find_recurring_parent(data.title, venue, data.external_id, source_id)
+
+    case {existing_from_source, recurring_parent} do
+      # No existing event and no recurring parent - check for collision then create new
+      {nil, nil} ->
+        Logger.info("📝 No existing event or recurring parent, checking for similar events...")
         case find_similar_event(data.title, data.start_at, venue) do
           nil ->
-            Logger.info("✨ No similar events found, creating new event")
-            create_event(data, venue, slug)
+            Logger.info("✨ Creating new event")
+            result = create_event(data, venue, slug)
+            case result do
+              {:ok, event} -> {:ok, event, :created}
+              error -> error
+            end
           existing ->
-            Logger.info("🔗 Found similar event ##{existing.id}, linking to it")
-            {:ok, existing}
+            Logger.info("🔗 Found similar event ##{existing.id} at same time, linking to it")
+            {:ok, existing, :linked}
         end
 
-      existing ->
-        Logger.info("📌 Found existing event ##{existing.id} from same source, updating if needed")
-        maybe_update_event(existing, data, venue)
+      # Existing event but found a recurring parent - need to consolidate
+      {existing, parent} when existing != nil and parent != nil and existing.id != parent.id ->
+        Logger.info("🔄 Found recurring parent ##{parent.id} for existing event ##{existing.id}, consolidating...")
+        result = consolidate_into_parent(existing, parent, data)
+        case result do
+          {:ok, event} -> {:ok, event, :consolidated}
+          error -> error
+        end
+
+      # Existing event IS the recurring parent - just add occurrence
+      {existing, parent} when existing != nil and parent != nil and existing.id == parent.id ->
+        Logger.info("📅 Event ##{existing.id} is already the recurring parent, adding occurrence")
+        case add_occurrence_to_event(existing, data) do
+          {:ok, updated} -> {:ok, updated, :updated}
+          error -> error
+        end
+
+      # No existing event but found recurring parent - add to it
+      {nil, parent} when parent != nil ->
+        Logger.info("📅 Found recurring parent ##{parent.id}, adding occurrence")
+        case add_occurrence_to_event(parent, data) do
+          {:ok, updated} -> {:ok, updated, :consolidated}
+          error -> error
+        end
+
+      # Existing event, no recurring parent - just update
+      {existing, nil} when existing != nil ->
+        Logger.info("📌 Found existing event ##{existing.id} from same source, updating")
+        result = maybe_update_event(existing, data, venue)
+        case result do
+          {:ok, event} -> {:ok, event, :updated}
+          error -> error
+        end
     end
   end
 
@@ -150,12 +201,27 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       ends_at: data.ends_at,
       # Remove external_id and metadata from public_events
       # These will be stored only in public_event_sources
-      category_id: data.category_id
+      category_id: data.category_id,
+      # CRITICAL FIX: Always initialize occurrences for new events
+      occurrences: initialize_occurrence_with_source(data)
     }
 
     %PublicEvent{}
     |> PublicEvent.changeset(attrs)
     |> Repo.insert()
+  end
+
+  defp initialize_occurrence_with_source(data) do
+    %{
+      "type" => "explicit",
+      "dates" => [
+        %{
+          "date" => format_date_only(data.start_at),
+          "time" => format_time_only(data.start_at),
+          "external_id" => data.external_id
+        }
+      ]
+    }
   end
 
   defp maybe_update_event(event, data, venue) do
@@ -225,7 +291,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       source_url: data.source_url,
       last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second),
       metadata: metadata,
-      description_translations: data.description_translations
+      description_translations: data.description_translations,
+      image_url: data.image_url
     }
 
     event_source
@@ -374,5 +441,250 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp format_date(datetime) do
     Calendar.strftime(datetime, "%Y-%m-%d")
+  end
+
+  # Extract the primary image URL from event data
+  # Handles different sources which store images differently
+  defp extract_primary_image_url(data) do
+    # First check if image_url is directly provided (Bandsintown, Karnet)
+    direct_url = data[:image_url] || data["image_url"]
+
+    if direct_url do
+      direct_url
+    else
+      # Check metadata for Ticketmaster images array
+      metadata = data[:metadata] || data["metadata"] || %{}
+
+      # Ticketmaster stores images in metadata.ticketmaster_data.images array
+      case get_in(metadata, ["ticketmaster_data", "images"]) ||
+           get_in(metadata, [:ticketmaster_data, :images]) do
+        [%{"url" => url} | _] -> url
+        [%{url: url} | _] -> url
+        _ ->
+          # Final fallback: check if metadata has image_url directly
+          metadata["image_url"] || metadata[:image_url]
+      end
+    end
+  end
+
+  # Recurring event detection and management
+
+  # Title normalization for fuzzy matching
+  defp normalize_for_matching(title) do
+    title
+    |> String.downcase()
+    |> remove_marketing_suffixes()
+    |> normalize_punctuation()
+    |> remove_venue_suffix()
+    |> collapse_whitespace()
+    |> String.trim()
+  end
+
+  defp remove_marketing_suffixes(title) do
+    # Remove common suffixes that indicate same event
+    patterns = [
+      ~r/\s*\|\s*(enhanced|vip|premium|experience|exclusive|experiences).*/i,
+      ~r/\s*[-–]\s*(enhanced|vip|premium|experience|exclusive|experiences).*/i,
+      ~r/\s*\((enhanced|vip|premium|experience|exclusive|experiences)\).*/i
+    ]
+
+    Enum.reduce(patterns, title, fn pattern, acc ->
+      String.replace(acc, pattern, "")
+    end)
+  end
+
+  defp normalize_punctuation(title) do
+    title
+    |> String.replace(":", " ")
+    |> String.replace("-", " ")
+    |> String.replace("–", " ")
+    |> String.replace("/", " ")
+    |> String.replace("|", " ")
+  end
+
+  defp remove_venue_suffix(title) do
+    # Remove @ Venue Name patterns
+    String.replace(title, ~r/\s*@\s*.+$/, "")
+  end
+
+  defp collapse_whitespace(title) do
+    String.replace(title, ~r/\s+/, " ")
+  end
+
+  defp find_recurring_parent(title, venue, external_id, source_id) do
+    if venue do
+      # Normalize the incoming title for matching
+      normalized_title = normalize_for_matching(title)
+
+      # Step 1: Get all events at the same venue
+      same_venue_query = from(e in PublicEvent,
+        where: e.venue_id == ^venue.id,
+        order_by: [asc: e.starts_at]
+      )
+
+      same_venue_matches = Repo.all(same_venue_query)
+
+      # Step 2: Find similar venues and get events there too (for cross-venue matching)
+      similar_venue_ids = from(v in EventasaurusApp.Venues.Venue,
+        where: v.city_id == ^venue.city_id,
+        where: v.id != ^venue.id,
+        where: fragment("similarity(?, ?) > ?", v.name, ^venue.name, 0.7),
+        select: v.id
+      ) |> Repo.all()
+
+      similar_venue_matches = if length(similar_venue_ids) > 0 do
+        from(e in PublicEvent,
+          where: e.venue_id in ^similar_venue_ids,
+          where: fragment("similarity(?, ?) > ?", e.title, ^title, 0.85),
+          order_by: [asc: e.starts_at]
+        ) |> Repo.all()
+      else
+        []
+      end
+
+      # Combine all potential matches
+      all_potential_matches = same_venue_matches ++ similar_venue_matches
+
+      # Find the best match using fuzzy matching
+      # We want to find the BEST parent (earliest date with highest score)
+      # Don't exclude events from same source - we WANT to consolidate siblings
+      best_match = all_potential_matches
+        |> Enum.uniq_by(& &1.id)
+        |> Enum.map(fn event ->
+          # Check if this exact event is the one being processed
+          # Only skip if it's the exact same event (same external_id AND source)
+          is_exact_same = if external_id && source_id do
+            from(s in PublicEventSource,
+              where: s.event_id == ^event.id,
+              where: s.external_id == ^external_id,
+              where: s.source_id == ^source_id,
+              select: count(s.id)
+            )
+            |> Repo.one() > 0
+          else
+            false
+          end
+
+          # Calculate match score
+          normalized_event_title = normalize_for_matching(event.title)
+          score = String.jaro_distance(normalized_title, normalized_event_title)
+
+          # Bonus for same venue
+          venue_bonus = if event.venue_id == venue.id, do: 0.05, else: 0.0
+          final_score = score + venue_bonus
+
+          # We want high score matches, but not the exact same event instance
+          # Allow same-source siblings to match (different external_id)
+          if is_exact_same do
+            {event, 0.0}  # Skip only if it's the EXACT same event instance
+          else
+            {event, final_score}
+          end
+        end)
+        |> Enum.filter(fn {_, score} -> score >= 0.85 end)  # 85% similarity threshold
+        |> Enum.sort_by(fn {event, score} ->
+          # Sort by score (desc) then by date (asc) to get best, earliest match
+          {-score, event.starts_at}
+        end)
+        |> List.first()
+
+      case best_match do
+        {event, score} ->
+          Logger.info("🔍 Found fuzzy match for '#{title}' -> '#{event.title}' (score: #{Float.round(score, 2)})")
+          event
+        nil ->
+          nil
+      end
+    else
+      # Without venue, we can't reliably match recurring events
+      nil
+    end
+  end
+
+  defp consolidate_into_parent(existing_event, parent_event, data) do
+    # Add the existing event's date as an occurrence to the parent
+    case add_occurrence_to_event(parent_event, data) do
+      {:ok, updated_parent} ->
+        # Note: We keep the existing event for now, but it could be deleted or redirected later
+        Logger.info("🔄 Consolidated event ##{existing_event.id} into parent ##{parent_event.id}")
+        {:ok, updated_parent}
+      error ->
+        error
+    end
+  end
+
+  defp add_occurrence_to_event(parent_event, new_occurrence) do
+    # Initialize or get existing occurrences
+    current_occurrences = parent_event.occurrences || initialize_occurrences()
+
+    # Create new date entry
+    new_date = %{
+      "date" => format_date_only(new_occurrence.start_at),
+      "time" => format_time_only(new_occurrence.start_at)
+    }
+
+    # Add external_id if present
+    new_date = if new_occurrence.external_id do
+      Map.put(new_date, "external_id", new_occurrence.external_id)
+    else
+      new_date
+    end
+
+    # Update occurrences
+    updated_occurrences = update_in(
+      current_occurrences,
+      ["dates"],
+      fn dates ->
+        # Check if this date/time already exists
+        if Enum.any?(dates, fn d ->
+          d["date"] == new_date["date"] && d["time"] == new_date["time"]
+        end) do
+          dates  # Don't add duplicate
+        else
+          dates ++ [new_date]  # Add new occurrence
+        end
+      end
+    )
+
+    # Update the event with new occurrences and adjust end date
+    new_end_date = latest_date([parent_event.ends_at, new_occurrence.start_at])
+
+    parent_event
+    |> PublicEvent.changeset(%{
+      occurrences: updated_occurrences,
+      ends_at: new_end_date
+    })
+    |> Repo.update()
+  end
+
+  defp initialize_occurrences do
+    %{
+      "type" => "explicit",
+      "dates" => []
+    }
+  end
+
+  defp format_date_only(%DateTime{} = dt) do
+    dt
+    |> DateTime.to_date()
+    |> Date.to_string()
+  end
+  defp format_date_only(_), do: nil
+
+  defp format_time_only(%DateTime{} = dt) do
+    dt
+    |> DateTime.to_time()
+    |> Time.to_string()
+    |> String.slice(0..4)  # HH:MM format
+  end
+  defp format_time_only(_), do: nil
+
+  defp latest_date(dates) do
+    dates
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> nil
+      non_nil_dates -> Enum.max(non_nil_dates, DateTime)
+    end
   end
 end

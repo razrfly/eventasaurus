@@ -8,6 +8,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventSource do
     field :last_seen_at, :utc_datetime
     field :metadata, :map, default: %{}
     field :description_translations, :map
+    field :image_url, :string
 
     belongs_to :event, EventasaurusDiscovery.PublicEvents.PublicEvent
     belongs_to :source, EventasaurusDiscovery.Sources.Source
@@ -19,7 +20,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEventSource do
   def changeset(public_event_source, attrs) do
     public_event_source
     |> cast(attrs, [:event_id, :source_id, :source_url, :external_id,
-                    :last_seen_at, :metadata, :description_translations])
+                    :last_seen_at, :metadata, :description_translations, :image_url])
     |> validate_required([:event_id, :source_id, :last_seen_at])
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:source_id)
