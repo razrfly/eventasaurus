@@ -180,14 +180,14 @@ defmodule EventasaurusDiscovery.Categories do
 
   """
   def assign_categories_to_event(event_id, category_ids, opts \\ []) do
+    alias Ecto.Multi
+
     primary_id = Keyword.get(opts, :primary_id)
     source = Keyword.get(opts, :source, "manual")
+    category_ids = category_ids |> Enum.uniq()
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
-    # First, remove existing categories for this event
-    from(pec in PublicEventCategory, where: pec.event_id == ^event_id)
-    |> Repo.delete_all()
-
-    # Then insert new ones
+    # Build rows
     event_categories = Enum.map(category_ids, fn category_id ->
       %{
         event_id: event_id,
@@ -195,12 +195,42 @@ defmodule EventasaurusDiscovery.Categories do
         is_primary: category_id == primary_id,
         source: source,
         confidence: 1.0,
-        inserted_at: NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+        inserted_at: now
       }
     end)
 
-    {_count, results} = Repo.insert_all(PublicEventCategory, event_categories, returning: true)
-    {:ok, results}
+    multi =
+      Multi.new()
+      # Remove only prior assignments from the same source
+      |> Multi.delete_all(:delete_old,
+        from(pec in PublicEventCategory, where: pec.event_id == ^event_id and pec.source == ^source)
+      )
+      |> Multi.insert_all(
+        :upsert,
+        PublicEventCategory,
+        event_categories,
+        on_conflict: {:replace, [:is_primary, :source, :confidence]},
+        conflict_target: [:event_id, :category_id],
+        returning: true
+      )
+
+    case Repo.transaction(multi) do
+      {:ok, %{upsert: result}} ->
+        # Handle both single result and list of results
+        rows = case result do
+          {_count, rows} when is_list(rows) -> rows
+          rows when is_list(rows) -> rows
+          single_row -> [single_row]
+        end
+        {:ok, Enum.map(rows, fn row ->
+          case row do
+            %PublicEventCategory{} = cat -> cat
+            map when is_map(map) -> struct(PublicEventCategory, map)
+          end
+        end)}
+      {:error, _step, reason, _changes} ->
+        {:error, reason}
+    end
   end
 
   @doc """

@@ -368,8 +368,46 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
       end
     end)
 
+    # NEW: Extract from breadcrumbs if no category found
+    category = if is_nil(category) do
+      breadcrumbs = Floki.find(document, ".breadcrumb a, nav.breadcrumbs a, .breadcrumbs a")
+      Enum.find_value(breadcrumbs, fn link ->
+        href = Floki.attribute([link], "href") |> List.first()
+        text = Floki.text(link) |> String.trim() |> String.downcase()
+
+        # Check if this is a category breadcrumb
+        if href && String.contains?(href, "/wydarzenia/") do
+          # Extract from URL or use text
+          extract_category_from_wydarzenia_url(href) || text
+        end
+      end)
+    else
+      category
+    end
+
+    # NEW: Extract from canonical URL as last resort
+    category = if is_nil(category) do
+      canonical = Floki.find(document, "link[rel='canonical']")
+      |> Floki.attribute("href")
+      |> List.first()
+
+      if canonical do
+        extract_category_from_wydarzenia_url(canonical)
+      end
+    else
+      category
+    end
+
     # Normalize common categories to English
     normalize_category(category)
+  end
+
+  defp extract_category_from_wydarzenia_url(nil), do: nil
+  defp extract_category_from_wydarzenia_url(url) when is_binary(url) do
+    case Regex.run(~r{/wydarzenia/([^/,]+)}, url) do
+      [_, category] -> String.trim(category) |> String.downcase()
+      _ -> nil
+    end
   end
 
   defp normalize_category(nil), do: nil

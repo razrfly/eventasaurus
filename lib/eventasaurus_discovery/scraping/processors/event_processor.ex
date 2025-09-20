@@ -185,6 +185,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       updates
     end
 
+    # Update metadata if we have it
+    updates = if data.metadata && map_size(data.metadata) > 0 do
+      [{:metadata, data.metadata} | updates]
+    else
+      updates
+    end
+
     if Enum.any?(updates) do
       event
       |> PublicEvent.changeset(Map.new(updates))
@@ -295,9 +302,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp process_categories(_event, %{raw_event_data: nil, category: nil}, _source_id), do: {:ok, []}
   defp process_categories(event, data, source_id) do
     # Determine source name from source_id
+    # FIXED: Corrected source ID mapping based on actual database IDs
     source_name = case source_id do
-      1 -> "ticketmaster"
-      2 -> "karnet"
+      1 -> "bandsintown"   # ID 1 is Bandsintown (was wrongly "ticketmaster")
+      2 -> "ticketmaster"  # ID 2 is Ticketmaster (was wrongly "karnet")
+      3 -> "stubhub"       # ID 3 is StubHub (not currently used)
+      4 -> "karnet"        # ID 4 is Karnet (was wrongly ID 2)
       _ -> "unknown"
     end
 
@@ -311,7 +321,23 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
           data.raw_event_data
         )
 
-      # Karnet event with category
+      # Bandsintown event with raw data (all are concerts/music events)
+      data.raw_event_data && source_name == "bandsintown" ->
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          "bandsintown",
+          data.raw_event_data
+        )
+
+      # Karnet event with raw data
+      data.raw_event_data && source_name == "karnet" ->
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          "karnet",
+          data.raw_event_data
+        )
+
+      # Karnet event with category (backward compatibility)
       data.category && source_name == "karnet" ->
         CategoryExtractor.assign_categories_to_event(
           event.id,
