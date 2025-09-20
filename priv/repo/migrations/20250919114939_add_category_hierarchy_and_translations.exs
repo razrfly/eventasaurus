@@ -37,6 +37,10 @@ defmodule Eventasaurus.Repo.Migrations.AddCategoryHierarchyAndTranslations do
     create index(:public_event_categories, [:category_id])
     create index(:public_event_categories, [:is_primary])
     create index(:public_event_categories, [:source])
+    # Ensure only one primary category per event
+    create unique_index(:public_event_categories, [:event_id],
+      where: "is_primary = true",
+      name: "public_event_categories_single_primary")
 
     # Create external category mappings table
     create table(:category_mappings) do
@@ -50,7 +54,7 @@ defmodule Eventasaurus.Repo.Migrations.AddCategoryHierarchyAndTranslations do
       timestamps(type: :utc_datetime)
     end
 
-    create unique_index(:category_mappings, [:external_source, :external_type, :external_value])
+    create unique_index(:category_mappings, [:external_source, :external_type, :external_value, :external_locale])
     create index(:category_mappings, [:external_source])
     create index(:category_mappings, [:category_id])
     create index(:category_mappings, [:priority])
@@ -83,21 +87,8 @@ defmodule Eventasaurus.Repo.Migrations.AddCategoryHierarchyAndTranslations do
     """,
     "DROP VIEW IF EXISTS public_events_with_category"
 
-    # Add Polish translations to existing categories
-    execute """
-    UPDATE categories SET translations =
-    CASE slug
-      WHEN 'festivals' THEN '{"pl": {"name": "Festiwale", "description": "Festiwale muzyczne, kulturalne i wielodniowe wydarzenia"}}'::jsonb
-      WHEN 'concerts' THEN '{"pl": {"name": "Koncerty", "description": "Występy muzyczne na żywo i pokazy"}}'::jsonb
-      WHEN 'performances' THEN '{"pl": {"name": "Spektakle", "description": "Teatr, taniec, komedia i inne występy na żywo"}}'::jsonb
-      WHEN 'literature' THEN '{"pl": {"name": "Literatura", "description": "Czytania książek, spotkania autorskie i wydarzenia literackie"}}'::jsonb
-      WHEN 'film' THEN '{"pl": {"name": "Film", "description": "Pokazy filmowe, festiwale filmowe i wydarzenia kinowe"}}'::jsonb
-      WHEN 'exhibitions' THEN '{"pl": {"name": "Wystawy", "description": "Wystawy sztuki, pokazy muzealne i wydarzenia galeryjne"}}'::jsonb
-      ELSE '{}'::jsonb
-    END
-    WHERE slug IN ('festivals', 'concerts', 'performances', 'literature', 'film', 'exhibitions')
-    """,
-    ""
+    # Translations will be added dynamically as we encounter them from external sources
+    # No hardcoded translations - let the system learn from real data
 
     # Migrate existing category relationships to new join table
     # This preserves existing data while we transition
