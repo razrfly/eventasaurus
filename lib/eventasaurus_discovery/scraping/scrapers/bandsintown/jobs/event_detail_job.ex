@@ -149,12 +149,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         """)
 
         # Update existing event with any missing data from BandsInTown
+        # Note: description is now stored in public_event_sources, not public_events
         updates = []
-        updates = if is_nil(existing_event.description) && event_data["description"] do
-          [{:description, event_data["description"]} | updates]
-        else
-          updates
-        end
 
         updates = if is_nil(existing_event.ends_at) && event_data["end_date"] do
           [{:ends_at, DateParser.parse_end_date(event_data["end_date"])} | updates]
@@ -164,6 +160,13 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
 
         updates = if is_nil(existing_event.ticket_url) && event_data["ticket_url"] do
           [{:ticket_url, event_data["ticket_url"]} | updates]
+        else
+          updates
+        end
+
+        # Update title_translations if we have title and no translations yet
+        updates = if is_nil(existing_event.title_translations) && title do
+          [{:title_translations, detect_title_language(title)} | updates]
         else
           updates
         end
@@ -199,7 +202,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         # No collision found, create new event
         event_attrs = %{
           title: title,
-          description: event_data["description"],
+          title_translations: if(title, do: detect_title_language(title), else: nil),
           starts_at: starts_at,
           ends_at: DateParser.parse_end_date(event_data["end_date"]),
           venue_id: if(venue, do: venue.id, else: nil),
@@ -273,6 +276,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           source_url: event_data["url"],
           external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
           last_seen_at: DateTime.utc_now(),
+          description_translations: if(event_data["description"], do: detect_description_language(event_data["description"]), else: nil),
           metadata: %{
             "is_primary" => true,
             "scraper_version" => "1.0",
@@ -480,5 +484,59 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
       nil
     end
   end
+
+  defp detect_title_language(title) when is_binary(title) do
+    # Use same logic as Ticketmaster transformer for consistency
+    polish_indicators = [
+      # Common Polish words in event titles
+      "koncert", "wystawa", "spektakl", "przedstawienie", "festiwal",
+      "teatr", "opera", "balet", "film", "kino", "muzeum",
+      # Polish prepositions and articles
+      " w ", " na ", " do ", " ze ", " przy ", " dla ", " gościnnie", " wystąpi",
+      # Polish venue/location indicators
+      "kraków", "warszawa", "gdańsk", "wrocław", "poznań", "hala", "centrum",
+      # Polish diacritics
+      "ą", "ć", "ę", "ł", "ń", "ó", "ś", "ź", "ż"
+    ]
+
+    title_lower = String.downcase(title)
+    is_polish = Enum.any?(polish_indicators, fn indicator ->
+      String.contains?(title_lower, String.downcase(indicator))
+    end)
+
+    if is_polish do
+      %{"pl" => title}
+    else
+      %{"en" => title}
+    end
+  end
+  defp detect_title_language(_), do: nil
+
+  defp detect_description_language(description) when is_binary(description) do
+    # Use same logic as title detection for consistency
+    polish_indicators = [
+      # Common Polish words
+      "koncert", "wystawa", "spektakl", "przedstawienie", "festiwal",
+      "teatr", "opera", "balet", "film", "kino", "muzeum",
+      # Polish prepositions and articles
+      " w ", " na ", " do ", " ze ", " przy ", " dla ", " gościnnie", " wystąpi",
+      # Polish venue/location indicators
+      "kraków", "warszawa", "gdańsk", "wrocław", "poznań", "hala", "centrum",
+      # Polish diacritics
+      "ą", "ć", "ę", "ł", "ń", "ó", "ś", "ź", "ż"
+    ]
+
+    description_lower = String.downcase(description)
+    is_polish = Enum.any?(polish_indicators, fn indicator ->
+      String.contains?(description_lower, String.downcase(indicator))
+    end)
+
+    if is_polish do
+      %{"pl" => description}
+    else
+      %{"en" => description}
+    end
+  end
+  defp detect_description_language(_), do: nil
 
 end
