@@ -182,7 +182,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         end
 
         # Also ensure the existing event has categories assigned
-        CategoryExtractor.assign_categories_to_event(updated_event.id, "bandsintown", event_data)
+        # CRITICAL: Pass raw_event_data for CategoryExtractor
+        raw_event_data = %{
+          title: title,
+          artist_name: event_data["artist_name"],
+          description: event_data["description"],
+          url: event_data["url"],
+          tags: event_data["tags"] || [],
+          venue_name: event_data["venue_name"]
+        }
+        CategoryExtractor.assign_categories_to_event(updated_event.id, "bandsintown", raw_event_data)
         Logger.info("🏷️ Categories assigned to existing event #{updated_event.id}")
 
         updated_event
@@ -218,7 +227,16 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
             Logger.info("✅ Event created: #{e.title} (ID: #{e.id}, venue_id: #{e.venue_id})")
 
             # Assign categories using the new system
-            CategoryExtractor.assign_categories_to_event(e.id, "bandsintown", event_data)
+            # CRITICAL: Pass raw_event_data for CategoryExtractor
+            raw_event_data = %{
+              title: e.title,
+              artist_name: event_data["artist_name"],
+              description: event_data["description"],
+              url: event_data["url"],
+              tags: event_data["tags"] || [],
+              venue_name: event_data["venue_name"]
+            }
+            CategoryExtractor.assign_categories_to_event(e.id, "bandsintown", raw_event_data)
             Logger.info("🏷️ Categories assigned to Bandsintown event #{e.id}")
 
             e

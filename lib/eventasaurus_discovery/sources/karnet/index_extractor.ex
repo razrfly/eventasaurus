@@ -236,6 +236,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
   end
 
   defp extract_category(card) do
+    # First try existing selectors
     category_selectors = [
       ".category",
       ".kategoria",
@@ -246,7 +247,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
       ".label"
     ]
 
-    Enum.find_value(category_selectors, fn selector ->
+    category = Enum.find_value(category_selectors, fn selector ->
       case Floki.find(card, selector) do
         [] -> nil
         elements ->
@@ -259,6 +260,27 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
           end
       end
     end)
+
+    # NEW: If no category found, extract from event links within the card
+    category = if is_nil(category) do
+      links = Floki.find(card, "a[href*='/wydarzenia/']")
+      Enum.find_value(links, fn link ->
+        href = Floki.attribute([link], "href") |> List.first()
+        extract_category_from_wydarzenia_url(href)
+      end)
+    else
+      category
+    end
+
+    category
+  end
+
+  defp extract_category_from_wydarzenia_url(nil), do: nil
+  defp extract_category_from_wydarzenia_url(url) when is_binary(url) do
+    case Regex.run(~r{/wydarzenia/([^/,]+)}, url) do
+      [_, category] -> String.trim(category) |> String.downcase()
+      _ -> nil
+    end
   end
 
   defp extract_thumbnail(card) do
