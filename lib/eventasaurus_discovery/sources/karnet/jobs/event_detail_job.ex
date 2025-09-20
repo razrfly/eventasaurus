@@ -155,11 +155,21 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
       # Metadata
       external_id: extract_external_id(event_data[:url]),
-      source_metadata: %{
+      metadata: %{
         "url" => event_data[:url],
         "category" => event_data[:category],
         "date_text" => event_data[:date_text],
-        "extracted_at" => event_data[:extracted_at]
+        "extracted_at" => event_data[:extracted_at],
+        "source_url" => event_data[:url]
+      },
+
+      # CRITICAL FIX: Add raw_event_data for CategoryExtractor
+      # This allows the category system to extract and learn Polish translations
+      raw_event_data: %{
+        category: event_data[:category],
+        url: event_data[:url],
+        title: event_data[:title],
+        description: event_data[:description]
       }
     }
   end

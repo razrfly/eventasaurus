@@ -14,7 +14,13 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   Returns a list of {category_id, is_primary} tuples.
   """
   def extract_ticketmaster_categories(tm_event) when is_map(tm_event) do
-    classifications = tm_event["classifications"] || []
+    # Handle case where tm_event is the full metadata or just ticketmaster_data
+    ticketmaster_data = case tm_event do
+      %{"ticketmaster_data" => data} -> data
+      data -> data
+    end
+
+    classifications = ticketmaster_data["classifications"] || []
 
     # Extract all classification levels
     classifications_list = Enum.flat_map(classifications, fn class ->
@@ -36,7 +42,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
 
       # Get subGenre
       entries = if subgenre = get_in(class, ["subGenre", "name"]) do
-        [{"ticketmaster", "subGenre", subgenre} | entries]
+        [{"ticketmaster", "subgenre", subgenre} | entries]
       else
         entries
       end
@@ -75,6 +81,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
       category_values
     end
 
+    # Extract additional categories from title and description
+    category_values = extract_karnet_secondary_categories(event_data, category_values)
+
     # Map to internal categories
     map_to_categories("karnet", category_values)
   end
@@ -101,6 +110,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
       category_values
     end
 
+    # Add additional categories based on artist/venue context
+    category_values = extract_bandsintown_secondary_categories(event_data, category_values)
+
     # Map to internal categories
     map_to_categories("bandsintown", category_values)
   end
@@ -111,7 +123,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   """
   def map_to_categories(_source, []), do: []
 
-  def map_to_categories(_source, classifications) do
+  def map_to_categories(source, classifications) do
+    alias EventasaurusDiscovery.Categories.TranslationLearner
+
     # Build a dynamic where clause for all classifications
     # We need to build an OR condition between all the classifications
     conditions = Enum.map(classifications, fn {source, type, value} ->
@@ -140,23 +154,30 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
         end)
     end
 
-    # Now build the query with the combined condition
+    # Now build the query with the combined condition - also get mapping details for translation learning
     query = from m in CategoryMapping,
       join: c in assoc(m, :category),
       where: c.is_active == true,
       where: ^combined_condition,
       order_by: [desc: m.priority],
-      select: {c.id, m.priority}
+      select: {c.id, m.priority, m.external_value, m.external_locale, c.slug}
 
-    # Get all matched categories with their priorities
+    # Get all matched categories with their priorities and learn translations
     matched_categories = Repo.all(query)
+
+    # Learn translations dynamically from the mappings
+    Enum.each(matched_categories, fn {_cat_id, _priority, external_value, external_locale, category_slug} ->
+      if external_locale && external_locale != "en" do
+        TranslationLearner.learn_translation(category_slug, external_value, external_locale, source)
+      end
+    end)
 
     # Group by category ID and take the highest priority for each
     category_priorities = matched_categories
-    |> Enum.group_by(fn {cat_id, _} -> cat_id end)
+    |> Enum.group_by(fn {cat_id, _, _, _, _} -> cat_id end)
     |> Enum.map(fn {cat_id, priorities} ->
       max_priority = priorities
-      |> Enum.map(fn {_, p} -> p end)
+      |> Enum.map(fn {_, p, _, _, _} -> p end)
       |> Enum.max()
       {cat_id, max_priority}
     end)
@@ -235,10 +256,112 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
       where: m.external_source == "karnet",
       select: count(m.id))
 
+    bandsintown_count = Repo.one(from m in CategoryMapping,
+      where: m.external_source == "bandsintown",
+      select: count(m.id))
+
     %{
       ticketmaster_mappings: tm_count,
       karnet_mappings: karnet_count,
-      total_mappings: tm_count + karnet_count
+      bandsintown_mappings: bandsintown_count,
+      total_mappings: tm_count + karnet_count + bandsintown_count
     }
+  end
+
+  # Helper functions for extracting secondary categories
+
+  defp extract_karnet_secondary_categories(event_data, existing_categories) do
+    title = event_data[:title] || event_data["title"] || ""
+    description = event_data[:description] || event_data["description"] || ""
+    text = "#{title} #{description}" |> String.downcase()
+
+    secondary_patterns = [
+      {"festiwal", "festival"},
+      {"koncert", "concert"},
+      {"wystawa", "exhibition"},
+      {"spektakl", "performance"},
+      {"teatr", "performance"},
+      {"kino", "film"},
+      {"opera", "opera"},
+      {"balet", "dance"},
+      {"taniec", "dance"},
+      {"muzyka", "concert"},
+      {"dziecko", "family"},
+      {"dzieci", "family"},
+      {"warsztaty", "education"},
+      {"konferencja", "business"},
+      {"spotkanie", "community"},
+      {"kabaret", "comedy"},
+      {"komedia", "comedy"}
+    ]
+
+    additional_categories = secondary_patterns
+    |> Enum.filter(fn {pattern, _} -> String.contains?(text, pattern) end)
+    |> Enum.map(fn {_, category} -> {"karnet", nil, category} end)
+    |> Enum.uniq()
+
+    # Only add if not already present
+    existing_values = existing_categories |> Enum.map(fn {_, _, value} -> value end)
+    new_categories = additional_categories
+    |> Enum.reject(fn {_, _, value} -> value in existing_values end)
+
+    existing_categories ++ new_categories
+  end
+
+  defp extract_bandsintown_secondary_categories(event_data, existing_categories) do
+    # Extract genres from artist data or venue information
+    additional_categories = []
+
+    # Check venue type
+    additional_categories = if venue = event_data[:venue] || event_data["venue"] do
+      venue_name = venue[:name] || venue["name"] || ""
+      venue_type = venue[:type] || venue["type"] || ""
+      venue_text = "#{venue_name} #{venue_type}" |> String.downcase()
+
+      venue_categories = cond do
+        String.contains?(venue_text, "festival") -> [{"bandsintown", nil, "festival"}]
+        String.contains?(venue_text, "theater") or String.contains?(venue_text, "theatre") -> [{"bandsintown", nil, "performance"}]
+        String.contains?(venue_text, "club") or String.contains?(venue_text, "bar") -> [{"bandsintown", nil, "nightlife"}]
+        String.contains?(venue_text, "outdoor") or String.contains?(venue_text, "park") -> [{"bandsintown", nil, "festival"}]
+        true -> []
+      end
+
+      additional_categories ++ venue_categories
+    else
+      additional_categories
+    end
+
+    # Check artist genres
+    additional_categories = if artist = event_data[:artist] || event_data["artist"] do
+      genres = artist[:genres] || artist["genres"] || []
+
+      genre_categories = genres
+      |> Enum.filter(&is_binary/1)
+      |> Enum.flat_map(fn genre ->
+        genre_lower = String.downcase(genre)
+        cond do
+          String.contains?(genre_lower, "jazz") -> [{"bandsintown", nil, "arts"}]
+          String.contains?(genre_lower, "classical") -> [{"bandsintown", nil, "arts"}]
+          String.contains?(genre_lower, "opera") -> [{"bandsintown", nil, "arts"}]
+          String.contains?(genre_lower, "folk") -> [{"bandsintown", nil, "community"}]
+          String.contains?(genre_lower, "comedy") -> [{"bandsintown", nil, "comedy"}]
+          String.contains?(genre_lower, "electronic") -> [{"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "dance") -> [{"bandsintown", nil, "nightlife"}]
+          true -> []
+        end
+      end)
+
+      additional_categories ++ genre_categories
+    else
+      additional_categories
+    end
+
+    # Only add if not already present
+    existing_values = existing_categories |> Enum.map(fn {_, _, value} -> value end)
+    new_categories = additional_categories
+    |> Enum.reject(fn {_, _, value} -> value in existing_values end)
+    |> Enum.uniq()
+
+    existing_categories ++ new_categories
   end
 end

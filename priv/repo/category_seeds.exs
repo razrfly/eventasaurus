@@ -20,24 +20,30 @@ mappings = [
   %{external_source: "ticketmaster", external_type: "segment", external_value: "Arts & Theatre", category_slug: "performances", priority: 10},
   %{external_source: "ticketmaster", external_type: "genre", external_value: "Theatre", category_slug: "performances", priority: 8},
   %{external_source: "ticketmaster", external_type: "segment", external_value: "Film", category_slug: "film", priority: 10},
-  %{external_source: "ticketmaster", external_type: "segment", external_value: "Sports", category_slug: "concerts", priority: 3},
-  %{external_source: "ticketmaster", external_type: "subGenre", external_value: "Festival", category_slug: "festivals", priority: 9},
+  %{external_source: "ticketmaster", external_type: "segment", external_value: "Sports", category_slug: "sports", priority: 10},
+  %{external_source: "ticketmaster", external_type: "genre", external_value: "Football", category_slug: "sports", priority: 8},
+  %{external_source: "ticketmaster", external_type: "genre", external_value: "Basketball", category_slug: "sports", priority: 8},
+  %{external_source: "ticketmaster", external_type: "genre", external_value: "Baseball", category_slug: "sports", priority: 8},
+  %{external_source: "ticketmaster", external_type: "genre", external_value: "Hockey", category_slug: "sports", priority: 8},
+  %{external_source: "ticketmaster", external_type: "subgenre", external_value: "Festival", category_slug: "festivals", priority: 9},
+  %{external_source: "ticketmaster", external_type: "segment", external_value: "Miscellaneous", category_slug: "conferences", priority: 10},
+  %{external_source: "ticketmaster", external_type: "genre", external_value: "Conference", category_slug: "conferences", priority: 8},
 
-  # Karnet mappings (Polish)
-  %{external_source: "karnet", external_type: nil, external_value: "koncerty", category_slug: "concerts", priority: 10},
-  %{external_source: "karnet", external_type: nil, external_value: "festiwale", category_slug: "festivals", priority: 10},
-  %{external_source: "karnet", external_type: nil, external_value: "spektakle", category_slug: "performances", priority: 10},
-  %{external_source: "karnet", external_type: nil, external_value: "wystawy", category_slug: "exhibitions", priority: 10},
-  %{external_source: "karnet", external_type: nil, external_value: "literatura", category_slug: "literature", priority: 10},
-  %{external_source: "karnet", external_type: nil, external_value: "film", category_slug: "film", priority: 10},
-  %{external_source: "karnet", external_type: nil, external_value: "festival", category_slug: "festivals", priority: 10},
+  # Karnet mappings (Polish) - locale will trigger auto-translation learning
+  %{external_source: "karnet", external_type: nil, external_value: "koncerty", category_slug: "concerts", priority: 10, external_locale: "pl"},
+  %{external_source: "karnet", external_type: nil, external_value: "festiwale", category_slug: "festivals", priority: 10, external_locale: "pl"},
+  %{external_source: "karnet", external_type: nil, external_value: "spektakle", category_slug: "performances", priority: 10, external_locale: "pl"},
+  %{external_source: "karnet", external_type: nil, external_value: "wystawy", category_slug: "exhibitions", priority: 10, external_locale: "pl"},
+  %{external_source: "karnet", external_type: nil, external_value: "literatura", category_slug: "literature", priority: 10, external_locale: "pl"},
+  %{external_source: "karnet", external_type: nil, external_value: "film", category_slug: "film", priority: 10, external_locale: "pl"},
+  %{external_source: "karnet", external_type: nil, external_value: "festival", category_slug: "festivals", priority: 10, external_locale: "pl"},
 
   # Bandsintown mappings
   %{external_source: "bandsintown", external_type: nil, external_value: "concert", category_slug: "concerts", priority: 10},
   %{external_source: "bandsintown", external_type: nil, external_value: "music", category_slug: "concerts", priority: 10}
 ]
 
-created_mappings = 0
+created_mappings = 0  # Note: This will always show 0 due to Elixir immutability
 Enum.each(mappings, fn mapping ->
   category = Repo.get_by(Category, slug: mapping.category_slug)
 
@@ -46,9 +52,10 @@ Enum.each(mappings, fn mapping ->
       external_source: mapping.external_source,
       external_type: mapping.external_type,
       external_value: mapping.external_value,
+      external_locale: Map.get(mapping, :external_locale, "en"),
       category_id: category.id,
       priority: mapping.priority
-    }, on_conflict: :nothing, conflict_target: [:external_source, :external_type, :external_value]) do
+    }, on_conflict: :nothing, conflict_target: [:external_source, :external_type, :external_value, :external_locale]) do
       {:ok, _} ->
         IO.puts("  ✅ Created mapping: #{mapping.external_source}/#{mapping.external_value} → #{mapping.category_slug}")
         created_mappings = created_mappings + 1
