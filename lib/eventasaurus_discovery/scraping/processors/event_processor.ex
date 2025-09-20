@@ -147,8 +147,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       city_id: city_id,
       starts_at: data.start_at,  # Note: normalized data uses start_at, schema uses starts_at
       ends_at: data.ends_at,
-      metadata: data.metadata,
-      external_id: data.external_id,
+      # Remove external_id and metadata from public_events
+      # These will be stored only in public_event_sources
       category_id: data.category_id
     }
 
@@ -185,12 +185,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       updates
     end
 
-    # Update metadata if we have it
-    updates = if data.metadata && map_size(data.metadata) > 0 do
-      [{:metadata, data.metadata} | updates]
-    else
-      updates
-    end
+    # Note: metadata is now stored only in public_event_sources, not in public_events
 
     if Enum.any?(updates) do
       event
