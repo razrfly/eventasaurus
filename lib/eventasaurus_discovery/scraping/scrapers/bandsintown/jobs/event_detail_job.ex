@@ -165,8 +165,11 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
         end
 
         # Update title_translations if we have title and no translations yet
-        updates = if is_nil(existing_event.title_translations) && title do
-          [{:title_translations, detect_title_language(title)} | updates]
+        updates = if title do
+          merged =
+            (existing_event.title_translations || %{})
+            |> Map.merge(detect_title_language(title) || %{}, fn _k, old, new -> if new in [nil, ""], do: old, else: new end)
+          [{:title_translations, merged} | updates]
         else
           updates
         end
