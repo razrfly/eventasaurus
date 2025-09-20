@@ -36,7 +36,13 @@ defmodule EventasaurusApp.Repo.Migrations.UpdatePublicEventsWithSourceView do
       FROM public_event_sources
       WHERE event_id = pe.id
       ORDER BY
-        COALESCE((metadata->>'priority')::integer, 10) ASC,
+        COALESCE(
+          CASE
+            WHEN (metadata->>'priority') ~ '^[0-9]+$' THEN (metadata->>'priority')::integer
+            ELSE NULL
+          END,
+          10
+        ) ASC,
         last_seen_at DESC
       LIMIT 1
     ) pes ON true;
@@ -77,7 +83,13 @@ defmodule EventasaurusApp.Repo.Migrations.UpdatePublicEventsWithSourceView do
       FROM public_event_sources
       WHERE event_id = pe.id
       ORDER BY
-        COALESCE((metadata->>'priority')::integer, 10) ASC,
+        COALESCE(
+          CASE
+            WHEN (metadata->>'priority') ~ '^[0-9]+$' THEN (metadata->>'priority')::integer
+            ELSE NULL
+          END,
+          10
+        ) ASC,
         last_seen_at DESC
       LIMIT 1
     ) pes ON true;
