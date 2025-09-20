@@ -194,7 +194,7 @@ defmodule Mix.Tasks.Eventasaurus.RecategorizeEvents do
 
     IO.puts("\n📈 By Source:")
     Enum.each(stats.by_source, fn {source, source_stats} ->
-      coverage = Float.round(source_stats.total / 1 * 100, 1)
+      _coverage = Float.round(source_stats.total / 1 * 100, 1)
       multi_pct = if source_stats.total > 0 do
         Float.round(source_stats.multi / source_stats.total * 100, 1)
       else
