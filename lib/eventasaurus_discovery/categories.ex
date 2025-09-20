@@ -209,7 +209,7 @@ defmodule EventasaurusDiscovery.Categories do
         :upsert,
         PublicEventCategory,
         event_categories,
-        on_conflict: {:replace, [:is_primary, :source, :confidence]},
+        on_conflict: {:replace, [:is_primary, :confidence]},
         conflict_target: [:event_id, :category_id],
         returning: true
       )
