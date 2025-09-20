@@ -2,12 +2,12 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent.Slug do
   use EctoAutoslugField.Slug, to: :slug
 
   def get_sources(_changeset, _opts) do
-    # Use title as primary source, but also include external_id for uniqueness
-    [:title, :external_id]
+    # Use title as primary source for slug generation
+    [:title]
   end
 
   def build_slug(sources, changeset) do
-    # Get the default slug from title and external_id
+    # Get the default slug from title
     slug = super(sources, changeset)
 
     # Add some randomness to ensure uniqueness even for identical titles + external_ids
@@ -29,12 +29,12 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     field :description, :string
     field :starts_at, :utc_datetime
     field :ends_at, :utc_datetime
-    field :external_id, :string
+    # external_id moved to public_event_sources table
     field :ticket_url, :string
     field :min_price, :decimal
     field :max_price, :decimal
     field :currency, :string
-    field :metadata, :map, default: %{}
+    # metadata moved to public_event_sources table
 
     belongs_to :venue, EventasaurusApp.Venues.Venue
 
@@ -58,8 +58,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   def changeset(public_event, attrs) do
     public_event
     |> cast(attrs, [:title, :description, :starts_at, :ends_at, :venue_id,
-                    :external_id, :ticket_url, :min_price,
-                    :max_price, :currency, :metadata, :category_id])
+                    :ticket_url, :min_price,
+                    :max_price, :currency, :category_id])
     |> validate_required([:title, :starts_at], message: "An event must have both a title and start date - these are non-negotiable")
     |> validate_length(:currency, is: 3)
     |> validate_number(:min_price, greater_than_or_equal_to: 0)
