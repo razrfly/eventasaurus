@@ -74,6 +74,7 @@ defmodule EventasaurusWeb.Router do
     end
     plug :fetch_auth_user
     plug :assign_user_struct
+    plug EventasaurusWeb.Plugs.LanguagePlug
   end
 
   pipeline :api do
