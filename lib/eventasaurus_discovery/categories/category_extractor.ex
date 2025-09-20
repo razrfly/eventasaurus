@@ -50,8 +50,11 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
       entries
     end)
 
+    # Apply cross-classification rules to add more categories
+    enhanced_classifications = apply_ticketmaster_cross_classification(classifications_list, ticketmaster_data)
+
     # Map to internal categories
-    map_to_categories("ticketmaster", classifications_list)
+    map_to_categories("ticketmaster", enhanced_classifications)
   end
 
   @doc """
@@ -270,34 +273,124 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
 
   # Helper functions for extracting secondary categories
 
+  # Apply cross-classification rules for Ticketmaster to add more categories
+  defp apply_ticketmaster_cross_classification(classifications, event_data) do
+    # Extract the classifications into easier to work with format
+    segments = classifications |> Enum.filter(fn {_, type, _} -> type == "segment" end) |> Enum.map(fn {_, _, value} -> value end)
+    genres = classifications |> Enum.filter(fn {_, type, _} -> type == "genre" end) |> Enum.map(fn {_, _, value} -> value end)
+    subgenres = classifications |> Enum.filter(fn {_, type, _} -> type == "subgenre" end) |> Enum.map(fn {_, _, value} -> value end)
+
+    additional = []
+
+    # Cross-classification rules
+    # Music + Jazz = also Arts
+    additional = if "Music" in segments and "Jazz" in genres do
+      [{"ticketmaster", nil, "arts"} | additional]
+    else
+      additional
+    end
+
+    # Arts & Theatre + any Festival = also Festivals
+    additional = if "Arts & Theatre" in segments and ("Fairs & Festivals" in genres or "Festival" in subgenres) do
+      [{"ticketmaster", nil, "festivals"} | additional]
+    else
+      additional
+    end
+
+    # Rock/Metal/Electronic = also Nightlife
+    additional = if "Music" in segments and (
+      "Rock" in genres or "Metal" in genres or "Electronic" in genres or
+      "Hard Rock" in subgenres or "Heavy Metal" in subgenres or "Dance/Electronic" in subgenres
+    ) do
+      [{"ticketmaster", nil, "nightlife"} | additional]
+    else
+      additional
+    end
+
+    # Classical/Opera = also Arts
+    additional = if "Music" in segments and (
+      "Classical" in genres or "Opera" in genres or
+      "Classical" in subgenres or "Opera" in subgenres
+    ) do
+      [{"ticketmaster", nil, "arts"} | additional]
+    else
+      additional
+    end
+
+    # Comedy = also Nightlife (comedy shows are often in clubs/bars)
+    additional = if "Comedy" in genres or "Comedy" in subgenres do
+      [{"ticketmaster", nil, "nightlife"} | additional]
+    else
+      additional
+    end
+
+    # Family shows = also Community
+    additional = if "Family" in genres or "Children" in subgenres or "Family" in subgenres do
+      [{"ticketmaster", nil, "community"} | additional]
+    else
+      additional
+    end
+
+    # Theatre + Music = also Concerts (musicals)
+    additional = if "Arts & Theatre" in segments and "Musical" in subgenres do
+      [{"ticketmaster", nil, "concerts"} | additional]
+    else
+      additional
+    end
+
+    # Check event title for additional hints
+    title = event_data["name"] || ""
+    title_lower = String.downcase(title)
+
+    additional = cond do
+      String.contains?(title_lower, "festival") -> [{"ticketmaster", nil, "festivals"} | additional]
+      String.contains?(title_lower, "workshop") -> [{"ticketmaster", nil, "education"} | additional]
+      String.contains?(title_lower, "conference") -> [{"ticketmaster", nil, "business"} | additional]
+      String.contains?(title_lower, "gala") -> [{"ticketmaster", nil, "business"} | additional]
+      true -> additional
+    end
+
+    classifications ++ additional
+  end
+
   defp extract_karnet_secondary_categories(event_data, existing_categories) do
     title = event_data[:title] || event_data["title"] || ""
     description = event_data[:description] || event_data["description"] || ""
     text = "#{title} #{description}" |> String.downcase()
 
+    # Enhanced patterns that can add multiple categories
     secondary_patterns = [
-      {"festiwal", "festival"},
-      {"koncert", "concert"},
-      {"wystawa", "exhibition"},
-      {"spektakl", "performance"},
-      {"teatr", "performance"},
-      {"kino", "film"},
-      {"opera", "opera"},
-      {"balet", "dance"},
-      {"taniec", "dance"},
-      {"muzyka", "concert"},
-      {"dziecko", "family"},
-      {"dzieci", "family"},
-      {"warsztaty", "education"},
-      {"konferencja", "business"},
-      {"spotkanie", "community"},
-      {"kabaret", "comedy"},
-      {"komedia", "comedy"}
+      {"festiwal", ["festival", "concerts"]},  # Festivals are usually also concerts
+      {"koncert", ["concert", "nightlife"]},   # Concerts can be nightlife
+      {"wystawa", ["exhibition", "arts"]},     # Exhibitions are arts
+      {"spektakl", ["performance", "theatre"]},
+      {"teatr", ["performance", "theatre", "arts"]},
+      {"kino", ["film", "arts"]},
+      {"opera", ["opera", "arts", "theatre"]},
+      {"balet", ["dance", "arts", "theatre"]},
+      {"taniec", ["dance", "nightlife"]},      # Dance events often nightlife
+      {"muzyka", ["concert"]},
+      {"jazz", ["concert", "arts"]},           # Jazz is both music and arts
+      {"rock", ["concert", "nightlife"]},      # Rock concerts are nightlife
+      {"dziecko", ["family", "community"]},    # Kids events are community
+      {"dzieci", ["family", "community", "education"]},
+      {"warsztaty", ["education", "community"]},
+      {"konferencja", ["business", "education"]},
+      {"spotkanie", ["community"]},
+      {"kabaret", ["comedy", "nightlife", "theatre"]},
+      {"komedia", ["comedy", "theatre"]},
+      {"filmow", ["film", "festival"]},        # Film festivals
+      {"muzyczn", ["concert", "festival"]},    # Music festivals
+      {"plener", ["festival", "community"]},   # Outdoor events
+      {"wernisaż", ["exhibition", "arts", "community"]},  # Art openings
+      {"premiera", ["theatre", "arts"]},       # Premieres
     ]
 
     additional_categories = secondary_patterns
     |> Enum.filter(fn {pattern, _} -> String.contains?(text, pattern) end)
-    |> Enum.map(fn {_, category} -> {"karnet", nil, category} end)
+    |> Enum.flat_map(fn {_, categories} ->
+      categories |> Enum.map(fn cat -> {"karnet", nil, cat} end)
+    end)
     |> Enum.uniq()
 
     # Only add if not already present
@@ -312,17 +405,22 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
     # Extract genres from artist data or venue information
     additional_categories = []
 
-    # Check venue type
+    # All Bandsintown events are concerts, so always add nightlife as secondary
+    additional_categories = [{"bandsintown", nil, "nightlife"} | additional_categories]
+
+    # Check venue type for more categories
     additional_categories = if venue = event_data[:venue] || event_data["venue"] do
       venue_name = venue[:name] || venue["name"] || ""
       venue_type = venue[:type] || venue["type"] || ""
       venue_text = "#{venue_name} #{venue_type}" |> String.downcase()
 
       venue_categories = cond do
-        String.contains?(venue_text, "festival") -> [{"bandsintown", nil, "festival"}]
-        String.contains?(venue_text, "theater") or String.contains?(venue_text, "theatre") -> [{"bandsintown", nil, "performance"}]
+        String.contains?(venue_text, "festival") -> [{"bandsintown", nil, "festival"}, {"bandsintown", nil, "community"}]
+        String.contains?(venue_text, "theater") or String.contains?(venue_text, "theatre") -> [{"bandsintown", nil, "performance"}, {"bandsintown", nil, "arts"}]
         String.contains?(venue_text, "club") or String.contains?(venue_text, "bar") -> [{"bandsintown", nil, "nightlife"}]
-        String.contains?(venue_text, "outdoor") or String.contains?(venue_text, "park") -> [{"bandsintown", nil, "festival"}]
+        String.contains?(venue_text, "outdoor") or String.contains?(venue_text, "park") -> [{"bandsintown", nil, "festival"}, {"bandsintown", nil, "community"}]
+        String.contains?(venue_text, "arena") or String.contains?(venue_text, "stadium") -> [{"bandsintown", nil, "sports"}]  # Large venues
+        String.contains?(venue_text, "hall") or String.contains?(venue_text, "auditorium") -> [{"bandsintown", nil, "arts"}]
         true -> []
       end
 
@@ -340,13 +438,20 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
       |> Enum.flat_map(fn genre ->
         genre_lower = String.downcase(genre)
         cond do
-          String.contains?(genre_lower, "jazz") -> [{"bandsintown", nil, "arts"}]
-          String.contains?(genre_lower, "classical") -> [{"bandsintown", nil, "arts"}]
-          String.contains?(genre_lower, "opera") -> [{"bandsintown", nil, "arts"}]
-          String.contains?(genre_lower, "folk") -> [{"bandsintown", nil, "community"}]
-          String.contains?(genre_lower, "comedy") -> [{"bandsintown", nil, "comedy"}]
-          String.contains?(genre_lower, "electronic") -> [{"bandsintown", nil, "nightlife"}]
-          String.contains?(genre_lower, "dance") -> [{"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "jazz") -> [{"bandsintown", nil, "arts"}, {"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "classical") -> [{"bandsintown", nil, "arts"}, {"bandsintown", nil, "theatre"}]
+          String.contains?(genre_lower, "opera") -> [{"bandsintown", nil, "arts"}, {"bandsintown", nil, "theatre"}]
+          String.contains?(genre_lower, "folk") -> [{"bandsintown", nil, "community"}, {"bandsintown", nil, "arts"}]
+          String.contains?(genre_lower, "comedy") -> [{"bandsintown", nil, "comedy"}, {"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "electronic") -> [{"bandsintown", nil, "nightlife"}, {"bandsintown", nil, "festivals"}]
+          String.contains?(genre_lower, "dance") -> [{"bandsintown", nil, "nightlife"}, {"bandsintown", nil, "arts"}]
+          String.contains?(genre_lower, "rock") -> [{"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "metal") -> [{"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "punk") -> [{"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "hip") or String.contains?(genre_lower, "rap") -> [{"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "blues") -> [{"bandsintown", nil, "arts"}, {"bandsintown", nil, "nightlife"}]
+          String.contains?(genre_lower, "country") -> [{"bandsintown", nil, "community"}]
+          String.contains?(genre_lower, "reggae") -> [{"bandsintown", nil, "community"}, {"bandsintown", nil, "nightlife"}]
           true -> []
         end
       end)

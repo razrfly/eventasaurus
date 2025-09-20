@@ -20,7 +20,7 @@ defmodule EventasaurusDiscovery.Categories.PublicEventCategory do
     |> cast(attrs, [:event_id, :category_id, :is_primary, :source, :confidence])
     |> validate_required([:event_id, :category_id])
     |> validate_number(:confidence, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
-    |> validate_inclusion(:source, ["ticketmaster", "karnet", "manual", "migration", nil])
+    |> validate_inclusion(:source, ["ticketmaster", "bandsintown", "karnet", "manual", "migration", nil])
     |> unique_constraint([:event_id, :category_id])
     |> foreign_key_constraint(:event_id)
     |> foreign_key_constraint(:category_id)
