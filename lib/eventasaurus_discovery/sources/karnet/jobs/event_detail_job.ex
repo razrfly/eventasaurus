@@ -131,6 +131,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     %{
       # Required fields
       title: event_data[:title] || "Untitled Event",
+      title_translations: event_data[:title_translations],
+      description_translations: event_data[:description_translations],
       source_url: event_data[:url],
 
       # CRITICAL: Processor expects 'start_at' not 'starts_at'!
@@ -146,7 +148,6 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       performer_names: extract_performer_names(event_data[:performers]),
 
       # Additional fields
-      description: event_data[:description],
       ticket_url: event_data[:ticket_url],
       image_url: event_data[:image_url],
       category: event_data[:category],
@@ -169,7 +170,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
         category: event_data[:category],
         url: event_data[:url],
         title: event_data[:title],
-        description: event_data[:description]
+        description_translations: event_data[:description_translations]
       }
     }
   end

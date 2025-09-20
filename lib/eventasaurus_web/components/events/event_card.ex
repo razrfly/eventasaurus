@@ -10,6 +10,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   attr :event, :map, required: true
   attr :context, :atom, required: true, values: [:user_dashboard, :group_events]
   attr :layout, :atom, default: :desktop, values: [:desktop, :mobile]
+  attr :language, :string, default: "en"
 
   @impl true
   def render(assigns) do
@@ -19,20 +20,21 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     
     ~H"""
     <article class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow" role="article" aria-labelledby={"event-title-#{@unique_id}"}>
-      <a href={~p"/#{@event.slug}"} class="block" aria-label={"View #{@event.title}"}>
+      <a href={~p"/#{@event.slug}"} class="block" aria-label={"View #{get_event_title(@event, @language || "en")}"}>
         <div class={card_padding(@layout)}>
           <!-- Event Header with Image -->
           <div class={card_layout(@layout)}>
             <!-- Left Content -->
             <div class="flex-1">
               <h4 id={"event-title-#{@unique_id}"} class={title_size(@layout)}>
-                <%= @event.title %>
+                <%= get_event_title(@event, @language || "en") %>
               </h4>
-              
+
               <!-- Event Description -->
-              <%= if @event.description && @event.description != "" do %>
+              <% description = get_event_description(@event, @language || "en") %>
+              <%= if description && description != "" do %>
                 <p class="text-sm text-gray-600 line-clamp-2 mb-2">
-                  <%= @event.description %>
+                  <%= description %>
                 </p>
               <% end %>
               
