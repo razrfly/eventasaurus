@@ -100,6 +100,7 @@ defmodule EventasaurusWeb do
       # Custom helpers
       import EventasaurusWeb.Helpers.SupabaseHelper
       import EventasaurusWeb.Helpers.AvatarHelper
+      import EventasaurusWeb.Helpers.LanguageHelpers
 
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS

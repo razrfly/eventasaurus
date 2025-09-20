@@ -56,7 +56,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     normalized = %{
       external_id: data[:external_id] || data["external_id"],
       title: Normalizer.normalize_text(data[:title] || data["title"]),
-      description: data[:description] || data["description"],
+      title_translations: data[:title_translations] || data["title_translations"],
+      description_translations: data[:description_translations] || data["description_translations"],
       start_at: parse_datetime(data[:start_at] || data["start_at"]),
       ends_at: parse_datetime(data[:ends_at] || data["ends_at"]),
       venue_data: data[:venue_data] || data["venue_data"],
@@ -141,8 +142,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     attrs = %{
       title: data.title,
+      title_translations: data.title_translations,
       slug: slug,
-      description: data.description,
       venue_id: if(venue, do: venue.id, else: nil),
       city_id: city_id,
       starts_at: data.start_at,  # Note: normalized data uses start_at, schema uses starts_at
@@ -161,11 +162,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     updates = []
 
     # Only update if we have better data
-    updates = if is_nil(event.description) && data.description do
-      [{:description, data.description} | updates]
-    else
-      updates
-    end
+    # Note: description is now stored in public_event_sources, not public_events
 
     updates = if is_nil(event.venue_id) && venue do
       [{:venue_id, venue.id}, {:city_id, venue.city_id} | updates]
@@ -181,6 +178,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     updates = if is_nil(event.category_id) && data.category_id do
       [{:category_id, data.category_id} | updates]
+    else
+      updates
+    end
+
+    # Update title_translations if provided and different from current
+    updates = if data.title_translations && data.title_translations != event.title_translations do
+      [{:title_translations, data.title_translations} | updates]
     else
       updates
     end
@@ -217,7 +221,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       external_id: data.external_id,
       source_url: data.source_url,
       last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second),
-      metadata: metadata
+      metadata: metadata,
+      description_translations: data.description_translations
     }
 
     event_source

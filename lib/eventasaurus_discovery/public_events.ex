@@ -383,4 +383,138 @@ defmodule EventasaurusDiscovery.PublicEvents do
 
     primary || List.first(event.categories)
   end
+
+  # Language-aware helper functions for Phase III
+
+  @doc """
+  Gets the title for an event in the preferred language with fallback.
+
+  ## Options
+    * `:language` - Preferred language code (default: "en")
+    * `:fallback` - Fallback language code (default: opposite of preferred)
+
+  ## Examples
+
+      iex> PublicEvents.get_title(event, language: "pl")
+      "Koncert w Teatrze"
+
+      iex> PublicEvents.get_title(event, language: "fr", fallback: "en")
+      "Concert at Theater"  # Falls back to English if French not available
+  """
+  def get_title(%PublicEvent{} = event, opts \\ []) do
+    preferred = Keyword.get(opts, :language, "en")
+    fallback = Keyword.get(opts, :fallback, if(preferred == "en", do: "pl", else: "en"))
+
+    case event.title_translations do
+      %{^preferred => title} when is_binary(title) and title != "" -> title
+      %{^fallback => title} when is_binary(title) and title != "" -> title
+      _ -> event.title  # Final fallback to original title field
+    end
+  end
+
+  @doc """
+  Gets the description for an event in the preferred language with fallback.
+
+  Loads description from the event's sources if not already preloaded.
+
+  ## Options
+    * `:language` - Preferred language code (default: "en")
+    * `:fallback` - Fallback language code (default: opposite of preferred)
+    * `:source_priority` - Which source to prefer if multiple sources have descriptions
+
+  ## Examples
+
+      iex> PublicEvents.get_description(event, language: "pl")
+      "Opis wydarzenia w języku polskim"
+
+      iex> PublicEvents.get_description(event, language: "en")
+      "Event description in English"
+  """
+  def get_description(%PublicEvent{} = event, opts \\ []) do
+    preferred = Keyword.get(opts, :language, "en")
+    fallback = Keyword.get(opts, :fallback, if(preferred == "en", do: "pl", else: "en"))
+
+    # Preload sources if not already loaded
+    event = if Ecto.assoc_loaded?(event.sources) do
+      event
+    else
+      Repo.preload(event, [:sources])
+    end
+
+    # Find description from sources
+    description = event.sources
+    |> Enum.find_value(fn source ->
+      case source.description_translations do
+        %{^preferred => desc} when is_binary(desc) and desc != "" -> desc
+        _ -> nil
+      end
+    end)
+
+    # Try fallback language if preferred not found
+    description || event.sources
+    |> Enum.find_value(fn source ->
+      case source.description_translations do
+        %{^fallback => desc} when is_binary(desc) and desc != "" -> desc
+        _ -> nil
+      end
+    end)
+  end
+
+  @doc """
+  Gets available languages for an event's title.
+
+  ## Examples
+
+      iex> PublicEvents.get_title_languages(event)
+      ["pl", "en"]
+  """
+  def get_title_languages(%PublicEvent{title_translations: nil}), do: []
+  def get_title_languages(%PublicEvent{title_translations: translations}) do
+    Map.keys(translations)
+  end
+
+  @doc """
+  Gets available languages for an event's descriptions across all sources.
+
+  ## Examples
+
+      iex> PublicEvents.get_description_languages(event)
+      ["pl", "en"]
+  """
+  def get_description_languages(%PublicEvent{} = event) do
+    # Preload sources if not already loaded
+    event = if Ecto.assoc_loaded?(event.sources) do
+      event
+    else
+      Repo.preload(event, [:sources])
+    end
+
+    event.sources
+    |> Enum.flat_map(fn source ->
+      case source.description_translations do
+        nil -> []
+        translations when is_map(translations) -> Map.keys(translations)
+        _ -> []
+      end
+    end)
+    |> Enum.uniq()
+  end
+
+  @doc """
+  Checks if an event has content in a specific language.
+
+  ## Examples
+
+      iex> PublicEvents.has_language?(event, "pl")
+      true
+
+      iex> PublicEvents.has_language?(event, "fr")
+      false
+  """
+  def has_language?(%PublicEvent{} = event, language) when is_binary(language) do
+    title_langs = get_title_languages(event)
+    desc_langs = get_description_languages(event)
+
+    language in title_langs || language in desc_langs
+  end
 end

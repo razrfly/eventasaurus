@@ -25,8 +25,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
 
   schema "public_events" do
     field :title, :string
+    field :title_translations, :map
     field :slug, Slug.Type
-    field :description, :string
     field :starts_at, :utc_datetime
     field :ends_at, :utc_datetime
     # external_id moved to public_event_sources table
@@ -51,13 +51,17 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
       join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
       join_keys: [event_id: :id, performer_id: :id]
 
+    # Association to sources for description_translations access
+    has_many :sources, EventasaurusDiscovery.PublicEvents.PublicEventSource,
+      foreign_key: :event_id
+
     timestamps()
   end
 
   @doc false
   def changeset(public_event, attrs) do
     public_event
-    |> cast(attrs, [:title, :description, :starts_at, :ends_at, :venue_id,
+    |> cast(attrs, [:title, :title_translations, :starts_at, :ends_at, :venue_id,
                     :ticket_url, :min_price,
                     :max_price, :currency, :category_id])
     |> validate_required([:title, :starts_at], message: "An event must have both a title and start date - these are non-negotiable")

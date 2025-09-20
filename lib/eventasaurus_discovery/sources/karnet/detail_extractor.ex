@@ -25,7 +25,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
           url: url,
           source_url: url,
           title: extract_title(document),
-          description: extract_description(document),
+          title_translations: extract_title_translations(document),
+          description_translations: extract_description_translations(document),
           date_text: extract_date_text(document),
           venue_data: extract_venue(document),
           performers: extract_performers(document),
@@ -67,15 +68,47 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     end
   end
 
+  defp extract_title_translations(document) do
+    # Extract the title in Polish (primary language)
+    title = extract_title(document)
+
+    # For now, we only have Polish titles from Karnet
+    # Future enhancement could detect multiple languages or generate translations
+    if title && title != "Untitled Event" do
+      %{"pl" => title}
+    else
+      nil
+    end
+  end
+
+  defp extract_description_translations(document) do
+    # Extract the description in Polish (primary language)
+    description = extract_description(document)
+
+    # For now, we only have Polish descriptions from Karnet
+    # Future enhancement could detect multiple languages or generate translations
+    if description && String.length(description) > 0 do
+      %{"pl" => description}
+    else
+      nil
+    end
+  end
+
   defp extract_description(document) do
-    # Look for main description content
+    # Look for main description content with Polish-specific selectors
     selectors = [
       ".event-description",
       ".description",
       ".content article",
       ".event-content",
       ".opis",
-      "article p"
+      ".tresc",
+      ".artykul",
+      ".tekst",
+      "article p",
+      ".main-content p",
+      ".content p",
+      "main p"
     ]
 
     description = Enum.find_value(selectors, fn selector ->
@@ -87,7 +120,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
           |> Enum.join("\n")
           |> String.trim()
 
-          if String.length(text) > 50 do
+          # Reduced threshold from 50 to 20 characters for Polish content
+          if String.length(text) > 20 do
             text
           else
             nil

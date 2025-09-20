@@ -98,8 +98,13 @@ defmodule Mix.Tasks.Karnet.TestDetail do
               Logger.info("Venue: Not found")
             end
 
-            if event_data.description do
-              Logger.info("Description: #{String.slice(event_data.description, 0, 200)}...")
+            if event_data.description_translations do
+              desc_text = case event_data.description_translations do
+                %{"pl" => text} -> text
+                %{"en" => text} -> text
+                _ -> "No valid description"
+              end
+              Logger.info("Description: #{String.slice(desc_text, 0, 200)}...")
             else
               Logger.info("Description: Not found")
             end
