@@ -36,9 +36,10 @@ defmodule EventasaurusWeb.Helpers.LanguageHelpers do
   @doc """
   Check if an event has content in a specific language.
   """
-  def event_has_language?(event, language) do
+  def event_has_language?(event, language) when is_binary(language) do
     PublicEvents.has_language?(event, language)
   end
+  def event_has_language?(_event, _language), do: false
 
   @doc """
   Get language preference from socket assigns.

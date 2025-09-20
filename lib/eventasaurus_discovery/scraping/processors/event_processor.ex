@@ -184,7 +184,10 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
     # Update title_translations if provided and different from current
     updates = if data.title_translations && data.title_translations != event.title_translations do
-      [{:title_translations, data.title_translations} | updates]
+      merged =
+        (event.title_translations || %{})
+        |> Map.merge(data.title_translations, fn _k, old, new -> if new in [nil, ""], do: old, else: new end)
+      [{:title_translations, merged} | updates]
     else
       updates
     end
