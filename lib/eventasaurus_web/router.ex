@@ -7,16 +7,24 @@ defmodule EventasaurusWeb.Router do
   if Mix.env() == :dev do
     # Hot-reloading themes
     get "/themes/:theme_name", EventasaurusWeb.ThemeController, :show
-    
+
     # Import Oban Web UI router functions
     import Oban.Web.Router
-    
+
     # Development tools
     scope "/dev" do
       pipe_through :browser
-      
+
       # Oban Web UI for monitoring background jobs (dev - no auth)
       oban_dashboard("/oban")
+    end
+
+    # Category demo routes for testing
+    scope "/category-demo", EventasaurusWeb do
+      pipe_through :browser
+
+      get "/", CategoryDemoController, :index
+      get "/:id", CategoryDemoController, :show
     end
   end
 
