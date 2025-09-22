@@ -463,8 +463,13 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     # First, try to get og:image meta tag (usually the best quality)
     og_image = extract_og_image(document)
 
-    if og_image && valid_event_image?(og_image) do
-      og_image
+    if og_image do
+      full_og = normalize_image_url(og_image)
+      if full_og && valid_event_image?(full_og) do
+        full_og
+      else
+        nil
+      end
     else
       # Fall back to finding images in the content
       # Updated selectors to match Karnet's actual HTML structure
@@ -493,12 +498,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
 
           if url && valid_event_image?(url) do
             # Make sure it's a full URL
-            full_url = if String.starts_with?(url, "http") do
-              url
+            full_url = normalize_image_url(url)
+            if full_url do
+              {full_url, image_quality_score(full_url)}
             else
-              Config.build_event_url(url)
+              nil
             end
-            {full_url, image_quality_score(full_url)}
           else
             nil
           end
@@ -581,5 +586,15 @@ defmodule EventasaurusDiscovery.Sources.Karnet.DetailExtractor do
     String.contains?(text, "festiwal") ||
     String.contains?(text, "fest ") ||
     String.contains?(text, "festival")
+  end
+
+  # Helper to normalize image URLs
+  defp normalize_image_url(nil), do: nil
+  defp normalize_image_url(url) when is_binary(url) do
+    cond do
+      String.starts_with?(url, "http") -> url
+      String.starts_with?(url, "//") -> "https:" <> url
+      true -> Config.build_event_url(url)
+    end
   end
 end

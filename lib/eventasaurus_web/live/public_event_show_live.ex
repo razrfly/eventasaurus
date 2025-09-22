@@ -6,8 +6,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    # Get language from session or default to English
-    language = get_connect_params(socket)["locale"] || "en"
+    # Get language from connect params if connected; default to English
+    params = get_connect_params(socket) || %{}
+    language = params["locale"] || "en"
 
     socket =
       socket
@@ -78,7 +79,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           end
         _ -> 10
       end
-      {priority, source.last_seen_at}
+
+      # Newer timestamps first (negative for descending sort)
+      ts = case source.last_seen_at do
+        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+        _ -> 9_223_372_036_854_775_807
+      end
+
+      {priority, ts}
     end)
 
     case sorted_sources do
@@ -106,18 +114,20 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           end
         _ -> 10
       end
-      {priority, source.last_seen_at}
+
+      # Newer timestamps first (negative for descending sort)
+      ts = case source.last_seen_at do
+        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+        _ -> 9_223_372_036_854_775_807
+      end
+
+      {priority, ts}
     end)
 
-    # Try to extract image from sources
+    # Try to extract image from sources with URL sanitization
     Enum.find_value(sorted_sources, fn source ->
-      # First check the direct image_url field
-      if source.image_url do
-        source.image_url
-      else
-        # Fall back to metadata
-        extract_image_from_metadata(source.metadata)
-      end
+      url = source.image_url || extract_image_from_metadata(source.metadata)
+      normalize_http_url(url)
     end)
   end
 
@@ -275,7 +285,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       <%= gettext("About This Event") %>
                     </h2>
                     <div class="prose max-w-none text-gray-700">
-                      <%= raw(format_description(@event.display_description)) %>
+                      <%= format_description(@event.display_description) %>
                     </div>
                   </div>
                 <% end %>
@@ -358,45 +368,58 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp format_price_range(event) do
+    symbol = currency_symbol(event.currency)
     cond do
       event.min_price && event.max_price && event.min_price == event.max_price ->
-        "$#{event.min_price}"
+        "#{symbol}#{event.min_price}"
       event.min_price && event.max_price ->
-        "$#{event.min_price} - $#{event.max_price}"
+        "#{symbol}#{event.min_price} - #{symbol}#{event.max_price}"
       event.min_price ->
-        "From $#{event.min_price}"
+        gettext("From %{price}", price: "#{symbol}#{event.min_price}")
       event.max_price ->
-        "Up to $#{event.max_price}"
+        gettext("Up to %{price}", price: "#{symbol}#{event.max_price}")
       true ->
-        gettext("Free")
+        gettext("See details")
     end
   end
 
+  defp currency_symbol(nil), do: "$"
+  defp currency_symbol("USD"), do: "$"
+  defp currency_symbol("EUR"), do: "€"
+  defp currency_symbol("PLN"), do: "zł"
+  defp currency_symbol(_), do: "$"
+
+  defp format_description(nil), do: Phoenix.HTML.raw("")
   defp format_description(description) do
-    description
-    |> String.replace("\n\n", "</p><p>")
-    |> then(&"<p>#{&1}</p>")
+    # Escapes HTML and converts newlines to <br>, returning Safe HTML
+    Phoenix.HTML.Format.text_to_html(description, escape: true)
   end
 
   defp get_source_url(source) do
-    # Try to get URL from various metadata locations
-    cond do
-      # Ticketmaster stores URL in ticketmaster_data.url
-      url = get_in(source.metadata, ["ticketmaster_data", "url"]) ->
-        url
-      # Bandsintown might have it in event_url or url
-      url = source.metadata["event_url"] ->
-        url
-      url = source.metadata["url"] ->
-        url
-      # Karnet might have it in a different location
-      url = source.metadata["link"] ->
-        url
-      # Fallback to source_url if it exists
-      source.source_url ->
-        source.source_url
-      true ->
-        nil
+    # Guard against nil metadata and sanitize URLs
+    md = source.metadata || %{}
+    url =
+      cond do
+        # Ticketmaster stores URL in ticketmaster_data.url
+        url = get_in(md, ["ticketmaster_data", "url"]) -> url
+        # Bandsintown might have it in event_url or url
+        url = md["event_url"] -> url
+        url = md["url"] -> url
+        # Karnet might have it in a different location
+        url = md["link"] -> url
+        # Fallback to source_url if it exists
+        source.source_url -> source.source_url
+        true -> nil
+      end
+
+    normalize_http_url(url)
+  end
+
+  defp normalize_http_url(nil), do: nil
+  defp normalize_http_url(url) when is_binary(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme} = uri when scheme in ["http", "https"] -> URI.to_string(uri)
+      _ -> nil
     end
   end
 

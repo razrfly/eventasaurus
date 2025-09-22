@@ -93,13 +93,17 @@ defmodule EventasaurusDiscovery.Pagination do
   def paginate_cursor(query, repo, cursor, page_size \\ @default_page_size) do
     page_size = min(page_size || @default_page_size, @max_page_size)
 
-    query = if cursor do
-      from(q in query,
-        where: q.id > ^cursor
-      )
-    else
+    # Add explicit ordering to match cursor predicate
+    query =
       query
-    end
+      |> order_by(asc: :id)
+      |> then(fn q ->
+        if cursor do
+          from(q in q, where: q.id > ^cursor)
+        else
+          q
+        end
+      end)
 
     # Fetch one extra to determine if there are more
     entries =
