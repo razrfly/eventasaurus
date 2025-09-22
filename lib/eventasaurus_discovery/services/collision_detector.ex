@@ -42,26 +42,54 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
 
     # Venue + time is our strongest signal for collision detection
     if venue do
-      query = from(pe in PublicEvent,
+      # First check time window
+      time_match_query = from(pe in PublicEvent,
         where: pe.venue_id == ^venue.id and
                pe.starts_at >= ^start_window and
                pe.starts_at <= ^end_window,
         limit: 1
       )
 
-      case Repo.one(query) do
-        nil ->
-          Logger.info("❌ No similar events found in time window")
+      time_match = Repo.one(time_match_query)
+
+      # Also check fuzzy title matching at the same venue
+      fuzzy_match = if is_nil(time_match) && title do
+        from(pe in PublicEvent,
+          where: pe.venue_id == ^venue.id,
+          where: fragment("similarity(?, ?) > ?", pe.title, ^title, 0.85),
+          order_by: [desc: fragment("similarity(?, ?)", pe.title, ^title)],
+          limit: 1
+        )
+        |> Repo.one()
+      else
+        nil
+      end
+
+      # Return whichever match we found
+      case {time_match, fuzzy_match} do
+        {nil, nil} ->
+          Logger.info("❌ No similar events found in time window or by title")
           nil
 
-        found_event ->
+        {found_event, _} when not is_nil(found_event) ->
           # Log when we find a potential match
           Logger.info("""
-          🔍 Found potential collision:
+          🔍 Found potential collision by time:
           Existing event ##{found_event.id}: #{found_event.title}
           Starts at: #{found_event.starts_at}
           Venue ID: #{venue.id}
           Time difference: #{calculate_time_difference(starts_at, found_event.starts_at)} hours
+          """)
+          found_event
+
+        {_, found_event} when not is_nil(found_event) ->
+          # Log fuzzy match
+          Logger.info("""
+          🔍 Found potential collision by title similarity:
+          Existing event ##{found_event.id}: #{found_event.title}
+          Starts at: #{found_event.starts_at}
+          Venue ID: #{venue.id}
+          Title similarity: High (>85%)
           """)
           found_event
       end

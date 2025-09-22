@@ -35,6 +35,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     field :max_price, :decimal
     field :currency, :string
     # metadata moved to public_event_sources table
+    field :occurrences, :map
 
     belongs_to :venue, EventasaurusApp.Venues.Venue
 
@@ -63,7 +64,7 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     public_event
     |> cast(attrs, [:title, :title_translations, :starts_at, :ends_at, :venue_id,
                     :ticket_url, :min_price,
-                    :max_price, :currency, :category_id])
+                    :max_price, :currency, :category_id, :occurrences])
     |> validate_required([:title, :starts_at], message: "An event must have both a title and start date - these are non-negotiable")
     |> validate_length(:currency, is: 3)
     |> validate_number(:min_price, greater_than_or_equal_to: 0)

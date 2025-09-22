@@ -359,12 +359,18 @@ defmodule EventasaurusWeb.Router do
     scope "/", EventasaurusWeb do
       pipe_through :browser
 
+      # Public events discovery pages (scraped events)
+      live "/activities", PublicEventsIndexLive, :index
+      live "/activities/search", PublicEventsIndexLive, :search
+      live "/activities/category/:category", PublicEventsIndexLive, :category
+      live "/activities/:slug", PublicEventShowLive, :show
+
       # Guest-accessible checkout
       live "/events/:slug/checkout", CheckoutLive
 
       # Public polls page (must be before catch-all)
       live "/:slug/polls", PublicPollsLive
-      
+
       # Individual poll page
       live "/:slug/polls/:poll_id", PublicPollLive
 

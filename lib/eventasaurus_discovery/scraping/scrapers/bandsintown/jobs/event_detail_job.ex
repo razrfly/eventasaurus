@@ -280,12 +280,13 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           external_id: event_data["external_id"] || extract_id_from_url(event_data["url"]),
           last_seen_at: DateTime.utc_now(),
           description_translations: if(event_data["description"], do: detect_description_language(event_data["description"]), else: nil),
+          image_url: event_data["image_url"],  # Store directly in field
           metadata: %{
             "is_primary" => true,
             "scraper_version" => "1.0",
             "job_id" => event_data["job_id"],
             # Move event-specific metadata here
-            "image_url" => event_data["image_url"],
+            "image_url" => event_data["image_url"],  # Keep in metadata for backward compat
             "rsvp_count" => event_data["rsvp_count"],
             "interested_count" => event_data["interested_count"],
             "tags" => event_data["tags"] || [],
@@ -398,7 +399,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           event_id: attrs.event_id,
           source_url: attrs.source_url,
           last_seen_at: attrs.last_seen_at,
-          metadata: attrs.metadata
+          metadata: attrs.metadata,
+          image_url: attrs.image_url
         })
         |> Repo.update()
       else
@@ -424,7 +426,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJo
           external_id: attrs.external_id,
           source_url: attrs.source_url,
           last_seen_at: attrs.last_seen_at,
-          metadata: attrs.metadata
+          metadata: attrs.metadata,
+          image_url: attrs.image_url
         })
         |> Repo.update()
       else
