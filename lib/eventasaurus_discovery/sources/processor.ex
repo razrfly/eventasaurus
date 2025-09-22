@@ -21,21 +21,43 @@ defmodule EventasaurusDiscovery.Sources.Processor do
       process_single_event(event_data, source)
     end)
 
-    successful = Enum.filter(results, fn
-      {:ok, _} -> true
+    # Check if any events failed with critical GPS coordinate errors
+    critical_failures = Enum.filter(results, fn
+      {:error, {:discard, _}} -> true
       _ -> false
     end)
 
-    failed = Enum.filter(results, fn
-      {:error, _} -> true
-      _ -> false
-    end)
+    # If we have critical failures (missing GPS coordinates), fail the entire job
+    if length(critical_failures) > 0 do
+      failure_messages = Enum.map(critical_failures, fn {:error, {:discard, msg}} -> msg end)
+      combined_message = Enum.join(failure_messages, "; ")
 
-    if length(failed) > 0 do
-      Logger.warning("Failed to process #{length(failed)} events out of #{length(events)}")
+      Logger.error("""
+      🚫 CRITICAL: Job failed due to missing GPS coordinates for venues.
+      This job will be discarded to prevent creating venues without coordinates.
+      Failures: #{combined_message}
+      Total events affected: #{length(critical_failures)} out of #{length(events)}
+      """)
+
+      # Return error that will cause Oban to discard the job
+      {:discard, "GPS coordinate validation failed: #{combined_message}"}
+    else
+      successful = Enum.filter(results, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
+
+      failed = Enum.filter(results, fn
+        {:error, _} -> true
+        _ -> false
+      end)
+
+      if length(failed) > 0 do
+        Logger.warning("Failed to process #{length(failed)} events out of #{length(events)}")
+      end
+
+      {:ok, Enum.map(successful, fn {:ok, event} -> event end)}
     end
-
-    {:ok, Enum.map(successful, fn {:ok, event} -> event end)}
   end
 
   @doc """
@@ -51,6 +73,19 @@ defmodule EventasaurusDiscovery.Sources.Processor do
          {:ok, event} <- process_event(event_data, source, venue, performers) do
       {:ok, event}
     else
+      {:error, reason} = error when is_binary(reason) ->
+        # Check if this is a GPS coordinate error that should fail the job
+        if String.contains?(reason, "GPS coordinates required") do
+          Logger.error("🚫 Critical venue error - Missing GPS coordinates: #{reason}")
+          Logger.debug("Event data: #{inspect(event_data)}")
+          # Return a special error tuple that indicates job should be discarded
+          {:error, {:discard, reason}}
+        else
+          Logger.error("Failed to process event: #{reason}")
+          Logger.debug("Event data: #{inspect(event_data)}")
+          error
+        end
+
       {:error, reason} = error ->
         Logger.error("Failed to process event: #{inspect(reason)}")
         Logger.debug("Event data: #{inspect(event_data)}")
