@@ -32,6 +32,12 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
     # Normalize to NaiveDateTime for consistency with database
     starts_at = to_naive(starts_at)
 
+    # Guard against nil starts_at
+    unless starts_at do
+      Logger.warning("find_similar_event: invalid starts_at; skipping collision check")
+      nil
+    else
+
     # Calculate time window for collision detection
     start_window = NaiveDateTime.add(starts_at, -@collision_window_seconds, :second)
     end_window = NaiveDateTime.add(starts_at, @collision_window_seconds, :second)
@@ -102,6 +108,7 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
       # TODO: Future enhancement - check performers + date as fallback
       nil
     end
+    end  # End of unless starts_at
   end
 
   @doc """
@@ -131,7 +138,16 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
     # Normalize to NaiveDateTime for comparison
     dt1 = to_naive(event1.starts_at)
     dt2 = to_naive(event2.starts_at)
-    time_diff = NaiveDateTime.diff(dt1, dt2, :second) |> abs()
+
+    # Guard against nil dates
+    time_diff =
+      if is_nil(dt1) or is_nil(dt2) do
+        # If either date is nil, consider them not matching
+        @collision_window_seconds + 1
+      else
+        NaiveDateTime.diff(dt1, dt2, :second) |> abs()
+      end
+
     within_window = time_diff <= @collision_window_seconds
 
     same_venue && within_window
@@ -146,6 +162,7 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
     Float.round(diff_seconds / 3600, 1)  # Convert to hours with 1 decimal
   end
 
+  defp to_naive(nil), do: nil
   defp to_naive(%NaiveDateTime{} = dt), do: dt
   defp to_naive(%DateTime{} = dt), do: DateTime.to_naive(dt)
   defp to_naive(dt) when is_binary(dt) do
