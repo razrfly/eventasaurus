@@ -201,9 +201,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       ends_at: data.ends_at,
       # Remove external_id and metadata from public_events
       # These will be stored only in public_event_sources
-      category_id: data.category_id,
-      # CRITICAL FIX: Always initialize occurrences for new events
-      occurrences: initialize_occurrence_with_source(data)
+      category_id: data.category_id
+      # NOTE: Removed automatic occurrence initialization
+      # Only recurring events should have occurrences, not single events
     }
 
     %PublicEvent{}
@@ -211,18 +211,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     |> Repo.insert()
   end
 
-  defp initialize_occurrence_with_source(data) do
-    %{
-      "type" => "explicit",
-      "dates" => [
-        %{
-          "date" => format_date_only(data.start_at),
-          "time" => format_time_only(data.start_at),
-          "external_id" => data.external_id
-        }
-      ]
-    }
-  end
 
   defp maybe_update_event(event, data, venue) do
     updates = []
@@ -750,7 +738,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp add_occurrence_to_event(parent_event, new_occurrence) do
     # Initialize or get existing occurrences
-    current_occurrences = parent_event.occurrences || initialize_occurrences()
+    # If this is the first occurrence being added, include the parent event's original date
+    current_occurrences = case parent_event.occurrences do
+      nil ->
+        # First time consolidating - include both the parent's date and the new date
+        %{
+          "type" => "explicit",
+          "dates" => [
+            %{
+              "date" => format_date_only(parent_event.starts_at),
+              "time" => format_time_only(parent_event.starts_at)
+            }
+          ]
+        }
+      existing ->
+        existing
+    end
 
     # Create new date entry
     new_date = %{
@@ -792,12 +795,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     |> Repo.update()
   end
 
-  defp initialize_occurrences do
-    %{
-      "type" => "explicit",
-      "dates" => []
-    }
-  end
 
   defp format_date_only(%DateTime{} = dt) do
     dt
