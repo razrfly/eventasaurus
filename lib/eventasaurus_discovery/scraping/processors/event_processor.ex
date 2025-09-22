@@ -495,9 +495,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Ordinal dates: "23rd", "1st", "15th"
       ~r/\b\d{1,2}(st|nd|rd|th)\b/i,
       # Year patterns: "2024", "2025"
-      ~r/\b20\d{2}\b/,
-      # Written dates: "Twenty-Third", "First", etc.
-      ~r/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)\b/i
+      ~r/\b20\d{2}\b/
+      # Removed written dates pattern - too aggressive, would break band names like "First Aid Kit"
     ]
 
     Enum.reduce(patterns, title, fn pattern, acc ->
@@ -510,7 +509,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     patterns = [
       # Episode patterns: "Episode 2", "Ep. 5", etc.
       ~r/\s*(episode|ep\.?)\s*[\d]+/i,
-      # Part patterns: "Part III", "Part 2", etc.
+      # Part patterns: "Part III", "Part 2", etc. (includes roman numerals in context)
       ~r/\s*(part|pt\.?)\s*[ivx\d]+/i,
       # Volume patterns: "Vol. 3", "Volume 1", etc.
       ~r/\s*(vol\.?|volume)\s*[\d]+/i,
@@ -525,9 +524,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Hash number patterns: "#5", "#23", etc.
       ~r/\s*#\d+\b/,
       # Edition patterns: "3rd Edition", "5th Show", etc.
-      ~r/\b\d+(st|nd|rd|th)\s+(edition|show|night|performance)\b/i,
-      # Roman numerals
-      ~r/\b[IVX]+\b/
+      ~r/\b\d+(st|nd|rd|th)\s+(edition|show|night|performance)\b/i
+      # Removed generic Roman numerals - would break band names like "X", "V", etc.
     ]
 
     Enum.reduce(patterns, title, fn pattern, acc ->
@@ -731,7 +729,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   # NEW: Check if title indicates a recurring event
   defp is_recurring_event?(title) do
-    String.match?(title, ~r/(weekly|monthly|every|daily|annual|yearly|recurring)/i)
+    # More specific pattern for "every" - only match when followed by time periods
+    String.match?(
+      title,
+      ~r/\b(weekly|monthly|daily|annual|yearly|recurring|every\s+(mon(day)?|tue(sday)?|wed(nesday)?|thu(rsday)?|fri(day)?|sat(urday)?|sun(day)?|week|month|year|night|\d{1,2}(st|nd|rd|th)))\b/i
+    )
   end
 
   defp consolidate_into_parent(existing_event, parent_event, data) do
