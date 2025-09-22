@@ -456,8 +456,9 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      # Safe substitution without atom conversion
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
       end)
     end)
     |> Enum.map(fn {field, errors} ->

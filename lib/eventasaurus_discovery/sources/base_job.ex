@@ -47,15 +47,30 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
              {:ok, source} <- get_or_create_source(),
              {:ok, raw_events} <- fetch_events(city, limit, options),
              transformed_events <- transform_events(raw_events),
-             {:ok, processed} <- process_events(transformed_events, source) do
+             result <- process_events(transformed_events, source) do
 
-          Logger.info("""
-          ✅ Successfully synced #{length(processed)} events for #{city.name}
-          Source: #{source.name}
-          """)
+          case result do
+            {:ok, processed} ->
+              Logger.info("""
+              ✅ Successfully synced #{length(processed)} events for #{city.name}
+              Source: #{source.name}
+              """)
+              {:ok, %{events_processed: length(processed), city: city.name}}
 
-          {:ok, %{events_processed: length(processed), city: city.name}}
+            {:discard, reason} ->
+              # Propagate discard to Oban
+              Logger.error("Job discarded: #{reason}")
+              {:discard, reason}
+
+            other ->
+              other
+          end
         else
+          {:discard, reason} ->
+            # Propagate discard to Oban
+            Logger.error("Job discarded: #{reason}")
+            {:discard, reason}
+
           {:error, reason} = error ->
             Logger.error("Failed to sync events: #{inspect(reason)}")
             error
