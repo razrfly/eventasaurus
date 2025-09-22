@@ -682,9 +682,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp latest_date(dates) do
     dates
     |> Enum.reject(&is_nil/1)
-    |> case do
-      [] -> nil
-      non_nil_dates -> Enum.max(non_nil_dates, DateTime)
-    end
+    |> Enum.max_by(&DateTime.to_unix(&1, :second), fn -> nil end)
   end
 end

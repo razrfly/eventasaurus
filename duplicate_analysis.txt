@@ -1,9 +1,0 @@
-               normalized_title                | venue_id |         venue_name         | event_count | with_occurrences |    earliest_date    |     latest_date     |                                 all_events                                  
------------------------------------------------+----------+----------------------------+-------------+------------------+---------------------+---------------------+-----------------------------------------------------------------------------
- nutkosfera - cezik dzieciom                   |        5 | Nowohuckie Centrum Kultury |           3 |                0 | 2025-09-21 16:30:00 | 2025-09-23 17:00:00 | 34: NutkoSfera - CeZik Dzieciom @ Nowohuckie Centrum Kultury               +
-                                               |          |                            |             |                  |                     |                     |     40: NutkoSfera - CeZik Dzieciom @ Nowohuckie Centrum Kultury           +
-                                               |          |                            |             |                  |                     |                     |     42: NutkoSfera - CeZik Dzieciom @ Nowohuckie Centrum Kultury
- disturbed: the sickness 25th anniversary tour |        6 | TAURON Arena Kraków        |           2 |                0 | 2025-10-10 15:30:00 | 2025-10-10 20:00:00 | 9: Disturbed: The Sickness 25th Anniversary Tour                           +
-                                               |          |                            |             |                  |                     |                     |     8: Disturbed: The Sickness 25th Anniversary Tour | Enhanced Experiences
-(2 rows)
-
