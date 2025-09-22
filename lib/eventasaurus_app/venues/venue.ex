@@ -48,17 +48,51 @@ defmodule EventasaurusApp.Venues.Venue do
     venue
     |> cast(attrs, [:name, :address, :latitude, :longitude,
                     :venue_type, :place_id, :source, :city_id])
-    |> validate_required([:name, :venue_type])
+    |> validate_required([:name, :venue_type, :latitude, :longitude])
     |> validate_inclusion(:venue_type, @valid_venue_types, message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}")
     |> update_change(:source, fn s -> if is_binary(s), do: String.downcase(s), else: s end)
     |> validate_inclusion(:source, ["user", "scraper", "google"])
     |> validate_length(:place_id, max: 255)
+    |> validate_gps_coordinates()
     |> validate_place_id_source()
     |> Slug.maybe_generate_slug()
     |> unique_constraint(:slug)
     |> foreign_key_constraint(:city_id)
   end
 
+
+  defp validate_gps_coordinates(changeset) do
+    lat = get_change(changeset, :latitude) || get_field(changeset, :latitude)
+    lng = get_change(changeset, :longitude) || get_field(changeset, :longitude)
+
+    cond do
+      is_nil(lat) && is_nil(lng) ->
+        changeset
+        |> add_error(:latitude, "GPS coordinates are required for venues")
+        |> add_error(:longitude, "GPS coordinates are required for venues")
+
+      is_nil(lat) ->
+        add_error(changeset, :latitude, "is required when longitude is provided")
+
+      is_nil(lng) ->
+        add_error(changeset, :longitude, "is required when latitude is provided")
+
+      not is_number(lat) ->
+        add_error(changeset, :latitude, "must be a number")
+
+      not is_number(lng) ->
+        add_error(changeset, :longitude, "must be a number")
+
+      lat < -90 or lat > 90 ->
+        add_error(changeset, :latitude, "must be between -90 and 90 degrees")
+
+      lng < -180 or lng > 180 ->
+        add_error(changeset, :longitude, "must be between -180 and 180 degrees")
+
+      true ->
+        changeset
+    end
+  end
 
   defp validate_place_id_source(changeset) do
     source = get_field(changeset, :source)
