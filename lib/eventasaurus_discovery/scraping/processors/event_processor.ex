@@ -473,11 +473,84 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   defp normalize_for_matching(title) do
     title
     |> String.downcase()
+    |> remove_date_patterns()        # NEW: Remove date patterns
+    |> remove_episode_markers()      # NEW: Remove episode/series markers
+    |> remove_time_patterns()        # NEW: Remove time patterns
     |> remove_marketing_suffixes()
     |> normalize_punctuation()
     |> remove_venue_suffix()
     |> collapse_whitespace()
     |> String.trim()
+  end
+
+  # NEW: Remove date patterns from titles
+  defp remove_date_patterns(title) do
+    patterns = [
+      # Month day patterns: "Sept 23", "October 15", etc.
+      ~r/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(st|nd|rd|th)?\b/i,
+      # Numeric date patterns: "10/15", "9-26-2024", etc.
+      ~r/\b\d{1,2}[\/-]\d{1,2}([\/-]\d{2,4})?\b/,
+      # Day of week patterns: "Monday", "Thursday Night", etc.
+      ~r/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*(night|evening|morning|afternoon)?\b/i,
+      # Ordinal dates: "23rd", "1st", "15th"
+      ~r/\b\d{1,2}(st|nd|rd|th)\b/i,
+      # Year patterns: "2024", "2025"
+      ~r/\b20\d{2}\b/,
+      # Written dates: "Twenty-Third", "First", etc.
+      ~r/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)\b/i
+    ]
+
+    Enum.reduce(patterns, title, fn pattern, acc ->
+      String.replace(acc, pattern, "")
+    end)
+  end
+
+  # NEW: Remove episode and series markers
+  defp remove_episode_markers(title) do
+    patterns = [
+      # Episode patterns: "Episode 2", "Ep. 5", etc.
+      ~r/\s*(episode|ep\.?)\s*[\d]+/i,
+      # Part patterns: "Part III", "Part 2", etc.
+      ~r/\s*(part|pt\.?)\s*[ivx\d]+/i,
+      # Volume patterns: "Vol. 3", "Volume 1", etc.
+      ~r/\s*(vol\.?|volume)\s*[\d]+/i,
+      # Chapter patterns: "Chapter 4", etc.
+      ~r/\s*(chapter|ch\.?)\s*[\d]+/i,
+      # Session patterns: "Session 2", etc.
+      ~r/\s*(session)\s*[\d]+/i,
+      # Week patterns: "Week 1", etc.
+      ~r/\s*(week)\s*[\d]+/i,
+      # Day patterns: "Day 3", etc.
+      ~r/\s*(day)\s*[\d]+/i,
+      # Hash number patterns: "#5", "#23", etc.
+      ~r/\s*#\d+\b/,
+      # Edition patterns: "3rd Edition", "5th Show", etc.
+      ~r/\b\d+(st|nd|rd|th)\s+(edition|show|night|performance)\b/i,
+      # Roman numerals
+      ~r/\b[IVX]+\b/
+    ]
+
+    Enum.reduce(patterns, title, fn pattern, acc ->
+      String.replace(acc, pattern, "")
+    end)
+  end
+
+  # NEW: Remove time patterns
+  defp remove_time_patterns(title) do
+    patterns = [
+      # 12-hour format: "7pm", "8:30pm", "7:00 PM"
+      ~r/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i,
+      # 24-hour format: "19:00", "20:30"
+      ~r/\b\d{1,2}:\d{2}\b/,
+      # Door times: "doors 8pm", "doors at 7"
+      ~r/\bdoors?\s*(at)?\s*\d{1,2}(:\d{2})?\s*(am|pm)?\b/i,
+      # Show times: "show at 9", "showtime 8:30"
+      ~r/\b(show|showtime)\s*(at)?\s*\d{1,2}(:\d{2})?\s*(am|pm)?\b/i
+    ]
+
+    Enum.reduce(patterns, title, fn pattern, acc ->
+      String.replace(acc, pattern, "")
+    end)
   end
 
   defp remove_marketing_suffixes(title) do
@@ -516,6 +589,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Normalize the incoming title for matching
       normalized_title = normalize_for_matching(title)
 
+      # Extract series base for better matching
+      series_base = extract_series_base(title)
+
+      # Calculate dynamic threshold based on title patterns
+      similarity_threshold = calculate_similarity_threshold(title, venue)
+
       # Step 1: Get all events at the same venue
       same_venue_query = from(e in PublicEvent,
         where: e.venue_id == ^venue.id,
@@ -535,7 +614,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       similar_venue_matches = if length(similar_venue_ids) > 0 do
         from(e in PublicEvent,
           where: e.venue_id in ^similar_venue_ids,
-          where: fragment("similarity(?, ?) > ?", e.title, ^title, 0.85),
+          where: fragment("similarity(?, ?) > ?", e.title, ^title, ^similarity_threshold),
           order_by: [asc: e.starts_at]
         ) |> Repo.all()
       else
@@ -565,13 +644,24 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             false
           end
 
-          # Calculate match score
+          # Calculate match score with multiple strategies
           normalized_event_title = normalize_for_matching(event.title)
-          score = String.jaro_distance(normalized_title, normalized_event_title)
+          event_series_base = extract_series_base(event.title)
+
+          # Try multiple matching strategies
+          title_score = String.jaro_distance(normalized_title, normalized_event_title)
+          series_score = String.jaro_distance(series_base, event_series_base)
+
+          # Use the best score from either strategy
+          base_score = max(title_score, series_score)
 
           # Bonus for same venue
           venue_bonus = if event.venue_id == venue.id, do: 0.05, else: 0.0
-          final_score = score + venue_bonus
+
+          # Bonus for series patterns
+          series_bonus = if is_series_event?(title) && is_series_event?(event.title), do: 0.05, else: 0.0
+
+          final_score = base_score + venue_bonus + series_bonus
 
           # We want high score matches, but not the exact same event instance
           # Allow same-source siblings to match (different external_id)
@@ -581,7 +671,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
             {event, final_score}
           end
         end)
-        |> Enum.filter(fn {_, score} -> score >= 0.85 end)  # 85% similarity threshold
+        |> Enum.filter(fn {_, score} -> score >= similarity_threshold end)
         |> Enum.sort_by(fn {event, score} ->
           # Sort by score (desc) then by date (asc) to get best, earliest match
           {-score, event.starts_at}
@@ -590,7 +680,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
       case best_match do
         {event, score} ->
-          Logger.info("🔍 Found fuzzy match for '#{title}' -> '#{event.title}' (score: #{Float.round(score, 2)})")
+          Logger.info("🔍 Found fuzzy match for '#{title}' -> '#{event.title}' (score: #{Float.round(score, 2)}, threshold: #{similarity_threshold})")
           event
         nil ->
           nil
@@ -599,6 +689,49 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Without venue, we can't reliably match recurring events
       nil
     end
+  end
+
+  # NEW: Extract base title for series events
+  defp extract_series_base(title) do
+    title
+    |> String.downcase()
+    # Remove all series indicators to get the base event name
+    |> String.replace(~r/\s*(#\d+|episode\s+\d+|ep\.\s*\d+|part\s+[ivx\d]+|vol\.?\s*\d+|week\s+\d+|day\s+\d+|session\s+\d+).*$/i, "")
+    # Remove dates
+    |> String.replace(~r/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/i, "")
+    |> String.replace(~r/\b\d{1,2}[\/-]\d{1,2}([\/-]\d{2,4})?\b/, "")
+    # Remove time patterns
+    |> String.replace(~r/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i, "")
+    |> collapse_whitespace()
+    |> String.trim()
+  end
+
+  # NEW: Calculate dynamic similarity threshold based on event type
+  defp calculate_similarity_threshold(title, venue) do
+    cond do
+      # Series events with episode/part numbers get lower threshold
+      is_series_event?(title) -> 0.70
+
+      # Recurring events (weekly, monthly, etc.) get lower threshold
+      is_recurring_event?(title) -> 0.75
+
+      # Events at same venue get slightly lower threshold
+      venue != nil -> 0.80
+
+      # Default threshold
+      true -> 0.85
+    end
+  end
+
+  # NEW: Check if title indicates a series event
+  defp is_series_event?(title) do
+    # Check for series patterns but exclude simple week day names
+    String.match?(title, ~r/(episode|ep\.|part|vol\.|volume|chapter|session|week\s+\d+|day\s+\d+|#\d+|\d+(st|nd|rd|th)\s+(edition|show|night))/i)
+  end
+
+  # NEW: Check if title indicates a recurring event
+  defp is_recurring_event?(title) do
+    String.match?(title, ~r/(weekly|monthly|every|daily|annual|yearly|recurring)/i)
   end
 
   defp consolidate_into_parent(existing_event, parent_event, data) do
