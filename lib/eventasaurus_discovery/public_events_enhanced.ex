@@ -87,7 +87,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   Get events from the localized view with language preference.
   """
   def list_events_localized(opts \\ []) do
-    language = opts[:language] || "en"
+    # Validate and sanitize language parameter to prevent SQL injection
+    language =
+      case opts[:language] do
+        l when is_binary(l) ->
+          if String.match?(l, ~r/^[a-z]{2}$/) do
+            l
+          else
+            "en"
+          end
+        _ -> "en"
+      end
     limit = min(opts[:limit] || @default_limit, @max_limit)
     offset = opts[:offset] || 0
 
@@ -96,13 +106,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
       id,
       slug,
       COALESCE(
-        title_translations->>'#{language}',
-        title_translations->>'en',
+        jsonb_extract_path_text(title_translations, $3),
+        jsonb_extract_path_text(title_translations, 'en'),
         title
       ) as display_title,
       COALESCE(
-        description_translations->>'#{language}',
-        description_translations->>'en'
+        jsonb_extract_path_text(description_translations, $3),
+        jsonb_extract_path_text(description_translations, 'en')
       ) as display_description,
       starts_at,
       ends_at,
@@ -124,14 +134,17 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     LIMIT $1 OFFSET $2
     """
 
-    result = Ecto.Adapters.SQL.query!(Repo, query, [limit, offset])
+    result = Ecto.Adapters.SQL.query!(Repo, query, [limit, offset, language])
 
-    # Convert to maps
+    # Convert to maps with proper string keys
     Enum.map(result.rows, fn row ->
-      Enum.zip(result.columns, row)
+      m = result.columns
+      |> Enum.zip(row)
       |> Enum.into(%{})
-      |> Map.update(:starts_at, nil, &parse_datetime/1)
-      |> Map.update(:ends_at, nil, &parse_datetime/1)
+
+      m
+      |> Map.update("starts_at", nil, &parse_datetime/1)
+      |> Map.update("ends_at", nil, &parse_datetime/1)
     end)
   end
 
@@ -163,18 +176,23 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
   defp filter_by_price_range(query, nil, nil), do: query
   defp filter_by_price_range(query, min_price, nil) do
     from(pe in query,
-      where: is_nil(pe.min_price) or pe.max_price >= ^min_price
+      where:
+        not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
+        (pe.min_price >= ^min_price or pe.max_price >= ^min_price)
     )
   end
   defp filter_by_price_range(query, nil, max_price) do
     from(pe in query,
-      where: is_nil(pe.min_price) or pe.min_price <= ^max_price
+      where:
+        not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
+        (pe.min_price <= ^max_price or pe.max_price <= ^max_price)
     )
   end
   defp filter_by_price_range(query, min_price, max_price) do
     from(pe in query,
-      where: (is_nil(pe.min_price) and is_nil(pe.max_price)) or
-             (pe.max_price >= ^min_price and pe.min_price <= ^max_price)
+      where:
+        not (is_nil(pe.min_price) and is_nil(pe.max_price)) and
+        (pe.max_price >= ^min_price and pe.min_price <= ^max_price)
     )
   end
 
@@ -291,6 +309,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp get_localized_description(event, language) do
     # Sort sources by priority and take the first one's description
+    # Fix: Sort by newest last_seen_at first (negative timestamp)
     sorted_sources = event.sources
     |> Enum.sort_by(fn source ->
       priority = case source.metadata do
@@ -302,7 +321,14 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           end
         _ -> 10
       end
-      {priority, source.last_seen_at}
+
+      # Newer timestamps first (negative for descending sort)
+      ts = case source.last_seen_at do
+        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+        _ -> 9_223_372_036_854_775_807
+      end
+
+      {priority, ts}
     end)
 
     case sorted_sources do
@@ -319,6 +345,7 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
 
   defp get_cover_image_url(event) do
     # Sort sources by priority and try to get the first available image
+    # Fix: Sort by newest last_seen_at first (negative timestamp)
     sorted_sources = event.sources
     |> Enum.sort_by(fn source ->
       priority = case source.metadata do
@@ -330,7 +357,14 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
           end
         _ -> 10
       end
-      {priority, source.last_seen_at}
+
+      # Newer timestamps first (negative for descending sort)
+      ts = case source.last_seen_at do
+        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+        _ -> 9_223_372_036_854_775_807
+      end
+
+      {priority, ts}
     end)
 
     # Try to extract image from sources
