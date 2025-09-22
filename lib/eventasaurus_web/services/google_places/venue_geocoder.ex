@@ -47,31 +47,30 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
   Prioritizes specific address if available, falls back to venue name + location.
   """
   def build_geocoding_query(venue_data) do
-    parts = []
+    # Helper to get value from map with both atom and string keys
+    get_value = fn map, key ->
+      Map.get(map, key) || Map.get(map, to_string(key))
+    end
 
-    # Add venue name for context (helps with landmark venues)
-    parts = if venue_data[:name], do: [venue_data[:name] | parts], else: parts
+    # Helper to clean and validate string values
+    clean_value = fn
+      nil -> nil
+      "" -> nil
+      value when is_binary(value) -> String.trim(value)
+      value -> to_string(value)
+    end
 
-    # Add street address if available
-    parts = if venue_data[:address] && venue_data[:address] != "",
-            do: [venue_data[:address] | parts],
-            else: parts
-
-    # Add city
-    parts = if venue_data[:city_name], do: [venue_data[:city_name] | parts], else: parts
-
-    # Add state/province if available
-    parts = if venue_data[:state] && venue_data[:state] != "",
-            do: [venue_data[:state] | parts],
-            else: parts
-
-    # Add country
-    parts = if venue_data[:country_name], do: [venue_data[:country_name] | parts], else: parts
-
-    # Join all parts with commas
-    parts
-    |> Enum.reverse()
-    |> Enum.filter(&(&1 && &1 != ""))
+    # Extract and clean all components
+    [
+      get_value.(venue_data, :name),
+      get_value.(venue_data, :address),
+      get_value.(venue_data, :city_name),
+      get_value.(venue_data, :state),
+      get_value.(venue_data, :country_name)
+    ]
+    |> Enum.map(clean_value)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reject(&(&1 == ""))
     |> Enum.join(", ")
   end
 
@@ -81,7 +80,8 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
     if api_key do
       url = build_url(query, api_key)
 
-      Logger.info("Geocoding venue: #{query}")
+      # Log without exposing full address for privacy
+      Logger.debug("Geocoding venue: #{String.slice(query || "", 0, 50)}#{if String.length(query || "") > 50, do: "...", else: ""}")
 
       case Client.get_json(url) do
         {:ok, %{"results" => [result | _], "status" => "OK"}} ->
@@ -94,7 +94,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
               longitude: location["lng"]
             }
 
-            Logger.info("Successfully geocoded venue '#{venue_data[:name]}': #{inspect(coordinates)}")
+            Logger.debug("Successfully geocoded venue '#{venue_data[:name] || venue_data["name"]}'")
             {:ok, coordinates}
           else
             Logger.warning("No location data in geocoding result for: #{query}")

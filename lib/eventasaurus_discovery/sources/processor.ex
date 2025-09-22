@@ -14,7 +14,10 @@ defmodule EventasaurusDiscovery.Sources.Processor do
   @doc """
   Process a list of events from any source.
 
-  Returns {:ok, processed_events} or {:error, reason}
+  Returns:
+    - {:ok, processed_events} - Successfully processed events
+    - {:error, reason} - Processing failed with retryable error
+    - {:discard, reason} - Critical failure, job should be discarded (e.g., missing GPS coordinates)
   """
   def process_source_data(events, source) when is_list(events) do
     results = Enum.map(events, fn event_data ->
@@ -32,12 +35,8 @@ defmodule EventasaurusDiscovery.Sources.Processor do
       failure_messages = Enum.map(critical_failures, fn {:error, {:discard, msg}} -> msg end)
       combined_message = Enum.join(failure_messages, "; ")
 
-      Logger.error("""
-      🚫 CRITICAL: Job failed due to missing GPS coordinates for venues.
-      This job will be discarded to prevent creating venues without coordinates.
-      Failures: #{combined_message}
-      Total events affected: #{length(critical_failures)} out of #{length(events)}
-      """)
+      # Log summary without exposing full address details
+      Logger.error("🚫 CRITICAL: Discarding job due to missing GPS coordinates. failures=#{length(critical_failures)}/#{length(events)}")
 
       # Return error that will cause Oban to discard the job
       {:discard, "GPS coordinate validation failed: #{combined_message}"}
@@ -75,14 +74,18 @@ defmodule EventasaurusDiscovery.Sources.Processor do
     else
       {:error, reason} = error when is_binary(reason) ->
         # Check if this is a GPS coordinate error that should fail the job
-        if String.contains?(reason, "GPS coordinates required") do
-          Logger.error("🚫 Critical venue error - Missing GPS coordinates: #{reason}")
-          Logger.debug("Event data: #{inspect(event_data)}")
+        # More robust matching for GPS-related errors
+        if String.contains?(String.downcase(reason), "gps coordinates") or
+           String.contains?(String.downcase(reason), "latitude") or
+           String.contains?(String.downcase(reason), "longitude") do
+          Logger.error("🚫 Critical venue error - Missing GPS coordinates")
+          # Log limited event data to avoid PII exposure
+          event_summary = Map.take(event_data, [:external_id, :title])
+          Logger.debug("Event summary: #{inspect(event_summary)}")
           # Return a special error tuple that indicates job should be discarded
           {:error, {:discard, reason}}
         else
-          Logger.error("Failed to process event: #{reason}")
-          Logger.debug("Event data: #{inspect(event_data)}")
+          Logger.error("Failed to process event: #{String.slice(reason, 0, 200)}")
           error
         end
 
