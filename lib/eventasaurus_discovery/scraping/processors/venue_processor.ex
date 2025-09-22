@@ -14,6 +14,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   alias EventasaurusApp.Venues.Venue
   alias EventasaurusDiscovery.Locations.{City, Country}
   alias EventasaurusDiscovery.Scraping.Helpers.Normalizer
+  alias EventasaurusWeb.Services.GooglePlaces.VenueGeocoder
 
   import Ecto.Query
   require Logger
@@ -327,6 +328,32 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
   end
 
   defp create_venue(data, city, _source) do
+    # Check if we need to geocode missing coordinates
+    {latitude, longitude} =
+      if is_nil(data.latitude) || is_nil(data.longitude) do
+        # Try to get coordinates from Google Maps
+        geocoding_data = %{
+          name: data.name,
+          address: data.address,
+          city_name: city.name,
+          state: data.state,
+          country_name: data.country_name
+        }
+
+        case VenueGeocoder.geocode_venue(geocoding_data) do
+          {:ok, %{latitude: lat, longitude: lng}} ->
+            Logger.info("🗺️ Successfully geocoded venue '#{data.name}' using Google Maps fallback")
+            {lat, lng}
+
+          {:error, reason} ->
+            Logger.error("🗺️❌ Failed to geocode venue '#{data.name}': #{inspect(reason)} - Venue creation will fail due to missing GPS coordinates")
+            {nil, nil}
+        end
+      else
+        # Use provided coordinates
+        {data.latitude, data.longitude}
+      end
+
     # All discovery sources use "scraper" as the venue source
     attrs = %{
       name: data.name,
@@ -334,17 +361,29 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       city: city.name,
       state: data.state,
       country: data.country_name,
-      latitude: data.latitude,
-      longitude: data.longitude,
+      latitude: latitude,
+      longitude: longitude,
       venue_type: "venue",
       place_id: data.place_id,
       source: "scraper",
       city_id: city.id
     }
 
-    %Venue{}
-    |> Venue.changeset(attrs)
-    |> Repo.insert()
+    case Venue.changeset(%Venue{}, attrs) |> Repo.insert() do
+      {:ok, venue} ->
+        {:ok, venue}
+
+      {:error, changeset} ->
+        errors = format_changeset_errors(changeset)
+        Logger.error("❌ Failed to create venue '#{data.name}': #{errors}")
+
+        # If it's specifically a GPS coordinate error, provide clear message for Oban
+        if has_coordinate_errors?(changeset) do
+          {:error, "GPS coordinates required but unavailable for venue '#{data.name}' in #{city.name}. Geocoding failed or returned no results."}
+        else
+          {:error, "Failed to create venue: #{errors}"}
+        end
+    end
   end
 
   defp maybe_update_venue(venue, data) do
@@ -356,24 +395,81 @@ defmodule EventasaurusDiscovery.Scraping.Processors.VenueProcessor do
       updates
     end
 
-    updates = if is_nil(venue.latitude) && data.latitude do
-      [{:latitude, data.latitude}, {:longitude, data.longitude} | updates]
+    # Check if we need to geocode or use provided coordinates
+    updates = if is_nil(venue.latitude) || is_nil(venue.longitude) do
+      if data.latitude && data.longitude do
+        # Use provided coordinates
+        [{:latitude, data.latitude}, {:longitude, data.longitude} | updates]
+      else
+        # Try to geocode if we don't have coordinates from either source
+        geocoding_data = %{
+          name: venue.name,
+          address: venue.address || data.address,
+          city_name: venue.city,
+          state: venue.state || data.state,
+          country_name: venue.country || data.country_name
+        }
+
+        case VenueGeocoder.geocode_venue(geocoding_data) do
+          {:ok, %{latitude: lat, longitude: lng}} ->
+            Logger.info("🗺️ Successfully geocoded existing venue '#{venue.name}' using Google Maps fallback")
+            [{:latitude, lat}, {:longitude, lng} | updates]
+
+          {:error, reason} ->
+            Logger.error("🗺️❌ Cannot update venue '#{venue.name}' without GPS coordinates: #{inspect(reason)}")
+            # Return error immediately if we can't get coordinates
+            # This will prevent the venue from being updated without required coordinates
+            {:error, "GPS coordinates required but unavailable for venue '#{venue.name}'. Geocoding failed: #{inspect(reason)}"}
+        end
+      end
     else
       updates
     end
 
-    updates = if is_nil(venue.address) && data.address do
-      [{:address, data.address} | updates]
-    else
-      updates
-    end
+    # Only proceed with updates if we didn't encounter an error above
+    case updates do
+      {:error, _} = error ->
+        error
 
-    if Enum.any?(updates) do
-      venue
-      |> Venue.changeset(Map.new(updates))
-      |> Repo.update()
-    else
-      {:ok, venue}
+      _ ->
+        updates = if is_nil(venue.address) && data.address do
+          [{:address, data.address} | updates]
+        else
+          updates
+        end
+
+        if Enum.any?(updates) do
+          case Venue.changeset(venue, Map.new(updates)) |> Repo.update() do
+            {:ok, venue} ->
+              {:ok, venue}
+
+            {:error, changeset} ->
+              errors = format_changeset_errors(changeset)
+              Logger.error("❌ Failed to update venue '#{venue.name}': #{errors}")
+              {:error, "Failed to update venue: #{errors}"}
+          end
+        else
+          {:ok, venue}
+        end
     end
+  end
+
+  defp format_changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
+    |> Enum.map(fn {field, errors} ->
+      "#{field}: #{Enum.join(errors, ", ")}"
+    end)
+    |> Enum.join("; ")
+  end
+
+  defp has_coordinate_errors?(changeset) do
+    errors = changeset.errors
+    Enum.any?(errors, fn {field, _} ->
+      field in [:latitude, :longitude]
+    end)
   end
 end
