@@ -29,9 +29,12 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
   - %PublicEvent{} if a similar event exists
   """
   def find_similar_event(venue, starts_at, title \\ nil) do
+    # Normalize to NaiveDateTime for consistency with database
+    starts_at = to_naive(starts_at)
+
     # Calculate time window for collision detection
-    start_window = DateTime.add(starts_at, -@collision_window_seconds, :second)
-    end_window = DateTime.add(starts_at, @collision_window_seconds, :second)
+    start_window = NaiveDateTime.add(starts_at, -@collision_window_seconds, :second)
+    end_window = NaiveDateTime.add(starts_at, @collision_window_seconds, :second)
 
     Logger.info("""
     🕐 Checking for similar events:
@@ -125,7 +128,10 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
   def events_match?(event1, event2) do
     same_venue = event1.venue_id == event2.venue_id
 
-    time_diff = DateTime.diff(event1.starts_at, event2.starts_at, :second) |> abs()
+    # Normalize to NaiveDateTime for comparison
+    dt1 = to_naive(event1.starts_at)
+    dt2 = to_naive(event2.starts_at)
+    time_diff = NaiveDateTime.diff(dt1, dt2, :second) |> abs()
     within_window = time_diff <= @collision_window_seconds
 
     same_venue && within_window
@@ -134,7 +140,22 @@ defmodule EventasaurusDiscovery.Services.CollisionDetector do
   # Private helpers
 
   defp calculate_time_difference(datetime1, datetime2) do
-    diff_seconds = DateTime.diff(datetime1, datetime2, :second) |> abs()
+    dt1 = to_naive(datetime1)
+    dt2 = to_naive(datetime2)
+    diff_seconds = NaiveDateTime.diff(dt1, dt2, :second) |> abs()
     Float.round(diff_seconds / 3600, 1)  # Convert to hours with 1 decimal
+  end
+
+  defp to_naive(%NaiveDateTime{} = dt), do: dt
+  defp to_naive(%DateTime{} = dt), do: DateTime.to_naive(dt)
+  defp to_naive(dt) when is_binary(dt) do
+    case DateTime.from_iso8601(dt) do
+      {:ok, datetime, _} -> DateTime.to_naive(datetime)
+      _ ->
+        case NaiveDateTime.from_iso8601(dt) do
+          {:ok, naive} -> naive
+          _ -> nil
+        end
+    end
   end
 end
