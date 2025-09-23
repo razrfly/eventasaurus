@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:language, language)
       |> assign(:event, nil)
       |> assign(:loading, true)
+      |> assign(:selected_occurrence, nil)
 
     {:ok, socket}
   end
@@ -52,8 +53,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           |> Map.put(:display_title, get_localized_title(event, language))
           |> Map.put(:display_description, get_localized_description(event, language))
           |> Map.put(:cover_image_url, get_cover_image_url(event))
+          |> Map.put(:occurrence_list, parse_occurrences(event))
 
-        assign(socket, :event, enriched_event)
+        socket
+        |> assign(:event, enriched_event)
+        |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
     end
   end
 
@@ -151,6 +155,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
+  def handle_event("select_occurrence", %{"index" => index}, socket) do
+    occurrence_index = String.to_integer(index)
+    occurrence_list = socket.assigns.event.occurrence_list || []
+
+    selected = Enum.at(occurrence_list, occurrence_index)
+
+    {:noreply, assign(socket, :selected_occurrence, selected)}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gray-50">
@@ -224,12 +238,16 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                       <span class="font-medium"><%= gettext("Date & Time") %></span>
                     </div>
                     <p class="text-gray-900">
-                      <%= format_event_datetime(@event.starts_at) %>
-                      <%= if @event.ends_at do %>
-                        <br />
-                        <span class="text-sm text-gray-600">
-                          <%= gettext("Until") %> <%= format_event_datetime(@event.ends_at) %>
-                        </span>
+                      <%= if @selected_occurrence do %>
+                        <%= format_occurrence_datetime(@selected_occurrence) %>
+                      <% else %>
+                        <%= format_event_datetime(@event.starts_at) %>
+                        <%= if @event.ends_at do %>
+                          <br />
+                          <span class="text-sm text-gray-600">
+                            <%= gettext("Until") %> <%= format_event_datetime(@event.ends_at) %>
+                          </span>
+                        <% end %>
                       <% end %>
                     </p>
                   </div>
@@ -277,6 +295,90 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     </div>
                   <% end %>
                 </div>
+
+                <!-- Multiple Occurrences Selection -->
+                <%= if @event.occurrence_list && length(@event.occurrence_list) > 1 do %>
+                  <div class="mb-8 p-6 bg-gray-50 rounded-lg">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Heroicons.calendar_days class="w-5 h-5 mr-2" />
+                      <%= case occurrence_display_type(@event.occurrence_list) do %>
+                        <% :daily_show -> %>
+                          <%= gettext("Daily Shows Available") %>
+                        <% :same_day_multiple -> %>
+                          <%= gettext("Select a Time") %>
+                        <% :multi_day -> %>
+                          <%= gettext("Multiple Dates Available") %>
+                        <% _ -> %>
+                          <%= gettext("Select Date & Time") %>
+                      <% end %>
+                    </h3>
+
+                    <%= case occurrence_display_type(@event.occurrence_list) do %>
+                      <% :daily_show -> %>
+                        <!-- Calendar-like view for events with many dates -->
+                        <div class="mb-4">
+                          <p class="text-sm text-gray-600 mb-4">
+                            <%= gettext("%{count} shows from %{start} to %{end}",
+                                count: length(@event.occurrence_list),
+                                start: format_date_only(List.first(@event.occurrence_list).datetime),
+                                end: format_date_only(List.last(@event.occurrence_list).datetime)) %>
+                          </p>
+                          <div class="grid grid-cols-7 gap-2 max-h-96 overflow-y-auto">
+                            <%= for {occurrence, index} <- Enum.with_index(@event.occurrence_list) do %>
+                              <button
+                                phx-click="select_occurrence"
+                                phx-value-index={index}
+                                class={"px-3 py-2 text-sm rounded-lg transition #{if @selected_occurrence == occurrence, do: "bg-blue-600 text-white", else: "bg-white border border-gray-200 hover:bg-gray-50"}"}
+                              >
+                                <%= format_short_date(occurrence.datetime) %>
+                              </button>
+                            <% end %>
+                          </div>
+                        </div>
+
+                      <% :same_day_multiple -> %>
+                        <!-- Time selection for same day events -->
+                        <div class="space-y-2">
+                          <%= for {occurrence, index} <- Enum.with_index(@event.occurrence_list) do %>
+                            <button
+                              phx-click="select_occurrence"
+                              phx-value-index={index}
+                              class={"w-full text-left px-4 py-3 rounded-lg border transition #{if @selected_occurrence == occurrence, do: "border-blue-600 bg-blue-50", else: "border-gray-200 hover:bg-gray-50"}"}
+                            >
+                              <span class="font-medium"><%= format_time_only(occurrence.datetime) %></span>
+                              <%= if occurrence.label do %>
+                                <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
+                              <% end %>
+                            </button>
+                          <% end %>
+                        </div>
+
+                      <% _ -> %>
+                        <!-- List view for small number of dates -->
+                        <div class="space-y-2">
+                          <%= for {occurrence, index} <- Enum.with_index(@event.occurrence_list) do %>
+                            <button
+                              phx-click="select_occurrence"
+                              phx-value-index={index}
+                              class={"w-full text-left px-4 py-3 rounded-lg border transition #{if @selected_occurrence == occurrence, do: "border-blue-600 bg-blue-50", else: "border-gray-200 hover:bg-gray-50"}"}
+                            >
+                              <span class="font-medium"><%= format_occurrence_datetime(occurrence) %></span>
+                              <%= if occurrence.label do %>
+                                <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
+                              <% end %>
+                            </button>
+                          <% end %>
+                        </div>
+                    <% end %>
+
+                    <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                      <p class="text-sm text-blue-900">
+                        <span class="font-medium"><%= gettext("Selected:") %></span>
+                        <%= format_occurrence_datetime(@selected_occurrence || List.first(@event.occurrence_list)) %>
+                      </p>
+                    </div>
+                  </div>
+                <% end %>
 
                 <!-- Description -->
                 <%= if @event.display_description do %>
@@ -441,5 +543,90 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       diff < 604800 -> gettext("%{count} days ago", count: div(diff, 86400))
       true -> Calendar.strftime(datetime, "%b %d, %Y")
     end
+  end
+
+  # Occurrence helper functions
+  defp parse_occurrences(%{occurrences: nil}), do: nil
+  defp parse_occurrences(%{occurrences: %{"dates" => dates}}) when is_list(dates) do
+    dates
+    |> Enum.map(fn date_info ->
+      with {:ok, date} <- Date.from_iso8601(date_info["date"]),
+           {:ok, time} <- parse_time(date_info["time"]) do
+        datetime = DateTime.new!(date, time, "Etc/UTC")
+
+        %{
+          datetime: datetime,
+          date: date,
+          time: time,
+          external_id: date_info["external_id"],
+          label: date_info["label"]
+        }
+      else
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.sort_by(& &1.datetime, DateTime)
+  end
+  defp parse_occurrences(_), do: nil
+
+  defp parse_time(nil), do: {:ok, ~T[20:00:00]}
+  defp parse_time(time_str) when is_binary(time_str) do
+    case String.split(time_str, ":") do
+      [h, m] -> Time.new(String.to_integer(h), String.to_integer(m), 0)
+      [h, m, s] -> Time.new(String.to_integer(h), String.to_integer(m), String.to_integer(s))
+      _ -> {:ok, ~T[20:00:00]}
+    end
+  end
+  defp parse_time(_), do: {:ok, ~T[20:00:00]}
+
+  defp select_default_occurrence(%{occurrence_list: nil}), do: nil
+  defp select_default_occurrence(%{occurrence_list: []}), do: nil
+  defp select_default_occurrence(%{occurrence_list: occurrences}) do
+    now = DateTime.utc_now()
+    # Find the next upcoming occurrence, or the first if all are in the past
+    Enum.find(occurrences, List.first(occurrences), fn occ ->
+      DateTime.compare(occ.datetime, now) == :gt
+    end)
+  end
+
+  defp occurrence_display_type(nil), do: :none
+  defp occurrence_display_type([]), do: :none
+  defp occurrence_display_type(occurrences) do
+    cond do
+      # More than 20 dates - daily show
+      length(occurrences) > 20 ->
+        :daily_show
+
+      # All on same day - time selection
+      all_same_day?(occurrences) ->
+        :same_day_multiple
+
+      # Default - multi day
+      true ->
+        :multi_day
+    end
+  end
+
+  defp all_same_day?(occurrences) do
+    dates = Enum.map(occurrences, & &1.date) |> Enum.uniq()
+    length(dates) == 1
+  end
+
+  defp format_occurrence_datetime(nil), do: gettext("Select a date")
+  defp format_occurrence_datetime(%{datetime: datetime}) do
+    Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
+  end
+
+  defp format_date_only(%DateTime{} = datetime) do
+    Calendar.strftime(datetime, "%B %d, %Y")
+  end
+
+  defp format_time_only(%DateTime{} = datetime) do
+    Calendar.strftime(datetime, "%I:%M %p")
+  end
+
+  defp format_short_date(%DateTime{} = datetime) do
+    Calendar.strftime(datetime, "%b %d")
   end
 end
