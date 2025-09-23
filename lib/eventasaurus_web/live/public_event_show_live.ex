@@ -437,24 +437,38 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     <%= gettext("Event Sources") %>
                   </h3>
                   <div class="flex flex-wrap gap-4">
-                    <%= for source <- @event.sources do %>
-                      <% source_url = get_source_url(source) %>
-                      <% source_name = get_source_name(source) %>
+                    <!-- For multi-occurrence events with selected occurrence -->
+                    <%= if @selected_occurrence && @selected_occurrence[:source_url] do %>
                       <div class="text-sm">
-                        <%= if source_url do %>
-                          <a href={source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
-                            <%= source_name %>
-                            <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
-                          </a>
-                        <% else %>
-                          <span class="font-medium text-gray-700">
-                            <%= source_name %>
-                          </span>
-                        <% end %>
+                        <a href={@selected_occurrence.source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
+                          <%= @selected_occurrence[:source_name] || "View Source" %>
+                          <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
+                        </a>
                         <span class="text-gray-500 ml-2">
-                          <%= gettext("Last updated") %> <%= format_relative_time(source.last_seen_at) %>
+                          <%= gettext("For selected date") %>
                         </span>
                       </div>
+                    <% else %>
+                      <!-- Fall back to showing all sources -->
+                      <%= for source <- @event.sources do %>
+                        <% source_url = get_source_url(source) %>
+                        <% source_name = get_source_name(source) %>
+                        <div class="text-sm">
+                          <%= if source_url do %>
+                            <a href={source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
+                              <%= source_name %>
+                              <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
+                            </a>
+                          <% else %>
+                            <span class="font-medium text-gray-700">
+                              <%= source_name %>
+                            </span>
+                          <% end %>
+                          <span class="text-gray-500 ml-2">
+                            <%= gettext("Last updated") %> <%= format_relative_time(source.last_seen_at) %>
+                          </span>
+                        </div>
+                      <% end %>
                     <% end %>
                   </div>
                 </div>
@@ -577,8 +591,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
            {:ok, time} <- parse_time(date_info["time"]) do
         datetime = DateTime.new!(date, time, "Etc/UTC")
 
-        # Try to find source info for better labeling
-        source_info = find_source_for_occurrence(date_info["external_id"], sources)
+        # Pass the full date_info to find_source_for_occurrence for improved lookup
+        source_info = find_source_for_occurrence(date_info, sources)
         label = determine_occurrence_label(date_info, source_info, time)
 
         %{
@@ -586,8 +600,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           date: date,
           time: time,
           external_id: date_info["external_id"],
+          source_id: date_info["source_id"],  # Include source_id in occurrence data
           label: label,
-          source_name: source_info[:name]
+          source_name: source_info[:name],
+          source_url: source_info[:url]  # Include source URL for each occurrence
         }
       else
         _ -> nil
@@ -636,18 +652,35 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  defp find_source_for_occurrence(nil, _sources), do: %{name: "Unknown"}
-  defp find_source_for_occurrence(external_id, sources) do
-    source = Enum.find(sources, fn s -> s.external_id == external_id end)
+  defp find_source_for_occurrence(nil, _sources), do: %{name: "Unknown", url: nil}
+  defp find_source_for_occurrence(date_info, sources) when is_map(date_info) do
+    # First try to find by source_id (more reliable)
+    source = if date_info["source_id"] do
+      Enum.find(sources, fn s -> s.source_id == date_info["source_id"] end)
+    else
+      nil
+    end
+
+    # Fall back to external_id matching if source_id lookup fails
+    source = source || if date_info["external_id"] do
+      Enum.find(sources, fn s -> s.external_id == date_info["external_id"] end)
+    else
+      nil
+    end
 
     case source do
-      nil -> %{name: "Unknown"}
+      nil -> %{name: "Unknown", url: nil}
       source ->
         %{
           name: get_source_name(source),
-          metadata: source.metadata
+          metadata: source.metadata,
+          url: source.source_url  # Include the source URL
         }
     end
+  end
+  # Backward compatibility for old calls with just external_id
+  defp find_source_for_occurrence(external_id, sources) when is_binary(external_id) do
+    find_source_for_occurrence(%{"external_id" => external_id}, sources)
   end
 
   defp determine_occurrence_label(date_info, source_info, time) do

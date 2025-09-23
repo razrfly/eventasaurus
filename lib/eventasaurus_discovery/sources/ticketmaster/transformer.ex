@@ -27,7 +27,9 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Transformer do
       raw_event_data: tm_event,
       # Keep category_id for backward compatibility but it won't be used
       category_id: extract_category_id(tm_event),
-      metadata: extract_event_metadata(tm_event)
+      metadata: extract_event_metadata(tm_event),
+      # Add source_url directly like other scrapers do
+      source_url: tm_event["url"]
     }
   end
 
