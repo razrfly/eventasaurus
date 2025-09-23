@@ -124,7 +124,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   Map external category classifications to internal category IDs.
   Returns a list of {category_id, is_primary} tuples with highest priority first.
   """
-  def map_to_categories(_source, []), do: []
+  def map_to_categories(_source, []), do: get_other_fallback_category()
 
   def map_to_categories(source, classifications) do
     alias EventasaurusDiscovery.Categories.TranslationLearner
@@ -187,8 +187,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
     |> Enum.sort_by(fn {_, priority} -> -priority end)
 
     # Return all categories - first is primary, rest are secondary
+    # If no categories matched, return the "Other" fallback
     case category_priorities do
-      [] -> []
+      [] -> get_other_fallback_category()
       [{primary_id, _} | rest] ->
         [{primary_id, true}] ++ Enum.map(rest, fn {id, _} -> {id, false} end)
     end
@@ -219,8 +220,36 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
         source: source
       )
     else
-      {:ok, []}
+      # No categories found - use "Other" fallback
+      other_category = get_other_category_id()
+      if other_category do
+        Categories.assign_categories_to_event(
+          event_id,
+          [other_category],
+          primary_id: other_category,
+          source: source
+        )
+      else
+        {:ok, []}
+      end
     end
+  end
+
+  # Helper to get the "Other" fallback category
+  defp get_other_fallback_category do
+    case get_other_category_id() do
+      nil -> []
+      id -> [{id, true}]
+    end
+  end
+
+  defp get_other_category_id do
+    query = from c in EventasaurusDiscovery.Categories.Category,
+      where: c.slug == "other" and c.is_active == true,
+      select: c.id,
+      limit: 1
+
+    Repo.one(query)
   end
 
   # Helper to extract category from Karnet URL patterns
