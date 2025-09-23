@@ -139,7 +139,7 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
     end
   end
 
-  defp parse_datetime_string(datetime_string, timezone) do
+  defp parse_datetime_string(datetime_string, venue_timezone) do
     cond do
       # Check if it's already a valid datetime with timezone
       String.contains?(datetime_string, "T") ->
@@ -147,14 +147,9 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
           {:ok, datetime, _offset} ->
             datetime
           {:error, :missing_offset} ->
-            # Try with Z suffix for UTC
-            case DateTime.from_iso8601(datetime_string <> "Z") do
-              {:ok, datetime, _offset} ->
-                datetime
-              _ ->
-                Logger.warning("Could not parse datetime: #{datetime_string}")
-                nil
-            end
+            # Parse as local time in venue timezone
+            # Ticketmaster sends local times without timezone indicators
+            parse_as_local_time(datetime_string, venue_timezone)
           _ ->
             Logger.warning("Could not parse datetime: #{datetime_string}")
             nil
@@ -164,20 +159,47 @@ defmodule EventasaurusDiscovery.Apis.Ticketmaster.Transformer do
       true ->
         case Date.from_iso8601(datetime_string) do
           {:ok, date} ->
-            # Default to 8 PM in the venue's timezone or UTC
+            # Default to 8 PM in the venue's timezone
             time = ~T[20:00:00]
-            _tz = timezone || "UTC"
+            timezone = venue_timezone || "Europe/Warsaw"
 
             # Create a NaiveDateTime first
             naive_datetime = NaiveDateTime.new!(date, time)
 
-            # Convert to UTC datetime (we'll store everything as UTC)
-            # For now, just assume the timezone offset
-            DateTime.from_naive!(naive_datetime, "Etc/UTC")
+            # Convert to DateTime in the venue's timezone
+            convert_to_utc(naive_datetime, timezone)
           _ ->
             Logger.warning("Could not parse date: #{datetime_string}")
             nil
         end
+    end
+  end
+
+  defp parse_as_local_time(datetime_string, venue_timezone) do
+    # Default to Poland timezone for events in Poland
+    timezone = venue_timezone || "Europe/Warsaw"
+
+    with {:ok, naive_dt} <- NaiveDateTime.from_iso8601(datetime_string) do
+      convert_to_utc(naive_dt, timezone)
+    else
+      _ ->
+        Logger.warning("Could not parse local datetime: #{datetime_string} with timezone: #{timezone}")
+        nil
+    end
+  end
+
+  defp convert_to_utc(naive_datetime, timezone) do
+    # Use Timex to convert from local timezone to UTC
+    case Timex.to_datetime(naive_datetime, timezone) do
+      {:error, _} ->
+        Logger.warning("Could not convert to timezone: #{timezone}, falling back to UTC")
+        DateTime.from_naive!(naive_datetime, "Etc/UTC")
+      %DateTime{} = dt ->
+        # Convert to UTC for storage
+        Timex.to_datetime(dt, "Etc/UTC")
+      _ ->
+        Logger.warning("Unexpected result from timezone conversion")
+        DateTime.from_naive!(naive_datetime, "Etc/UTC")
     end
   end
 
