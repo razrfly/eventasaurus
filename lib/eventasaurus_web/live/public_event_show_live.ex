@@ -47,6 +47,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> push_navigate(to: ~p"/activities")
 
       event ->
+        # Get primary category ID once to avoid multiple queries
+        primary_category_id = get_primary_category_id(event.id)
+
         # Enrich with display fields
         enriched_event =
           event
@@ -54,6 +57,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           |> Map.put(:display_description, get_localized_description(event, language))
           |> Map.put(:cover_image_url, get_cover_image_url(event))
           |> Map.put(:occurrence_list, parse_occurrences(event))
+          |> Map.put(:primary_category_id, primary_category_id)
 
         socket
         |> assign(:event, enriched_event)
@@ -532,14 +536,14 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Helper Functions
   defp get_primary_category(event) do
-    case get_primary_category_id(event.id) do
+    case event[:primary_category_id] do
       nil -> nil
       cat_id -> Enum.find(event.categories, &(&1.id == cat_id))
     end
   end
 
   defp get_secondary_categories(event) do
-    case get_primary_category_id(event.id) do
+    case event[:primary_category_id] do
       nil ->
         # If no primary found, treat all but first as secondary
         case event.categories do
