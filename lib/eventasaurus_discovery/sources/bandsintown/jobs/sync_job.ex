@@ -19,6 +19,9 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
+    # Ensure HTTPoison is started
+    HTTPoison.start()
+
     city_id = args["city_id"]
     limit = args["limit"] || 100
     max_pages = calculate_max_pages(limit)
@@ -44,13 +47,10 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     longitude = Decimal.to_float(city.longitude)
 
     # Fetch events from API
-    # Note: Client.fetch_all_city_events always returns {:ok, events}, even on error (returns empty list)
     {:ok, events} = Client.fetch_all_city_events(latitude, longitude, bandsintown_slug, max_pages: max_pages)
 
     # Apply limit
     events_to_process = if limit, do: Enum.take(events, limit), else: events
-
-    Logger.info("📋 Found #{length(events_to_process)} BandsInTown events to process")
 
     # Schedule individual jobs for each event with rate limiting
     enqueued_count = schedule_detail_jobs(events_to_process, source.id)
@@ -91,8 +91,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
   end
 
   defp schedule_detail_jobs(events, source_id) do
-    Logger.info("📅 Scheduling #{length(events)} detail jobs")
-
     # Schedule individual jobs for each event with rate limiting
     scheduled_jobs = events
     |> Enum.with_index()
@@ -107,12 +105,20 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
         "event_data" => event
       }
 
-      # Create the job changeset
-      EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(job_args,
+      # Create the job using the module's new function
+      result = EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(
+        job_args,
         queue: "scraper_detail",
         scheduled_at: scheduled_at
       )
       |> Oban.insert()
+
+      case result do
+        {:error, reason} -> Logger.error("Failed to insert job: #{inspect(reason)}")
+        _ -> nil
+      end
+
+      result
     end)
 
     # Count successful insertions
@@ -121,7 +127,6 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
       _ -> false
     end)
 
-    Logger.info("✅ Successfully scheduled #{successful_count}/#{length(events)} detail jobs")
     successful_count
   end
 

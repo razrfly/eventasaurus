@@ -151,8 +151,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
   def fetch_next_events_page(latitude, longitude, page \\ 2, opts \\ []) do
     url = "#{@base_url}/all-dates/fetch-next/upcomingEvents?page=#{page}&longitude=#{longitude}&latitude=#{latitude}"
 
-    Logger.info("📄 Fetching page #{page} of events: #{url}")
-
     headers = [
       {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
       {"Accept", "application/json, text/javascript, */*; q=0.01"},
@@ -165,15 +163,14 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     ]
 
     options = [
-      timeout: Keyword.get(opts, :timeout, 30_000),
-      recv_timeout: Keyword.get(opts, :recv_timeout, 30_000),
+      timeout: Keyword.get(opts, :timeout, 10_000),
+      recv_timeout: Keyword.get(opts, :recv_timeout, 10_000),
       follow_redirect: true,
       max_redirect: 3
     ]
 
     case HTTPoison.get(url, headers, options) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body, headers: response_headers}} ->
-        Logger.info("✅ Successfully fetched page #{page}")
 
         # Check if response is gzipped and decompress if needed
         body =
@@ -219,16 +216,12 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     - city_slug: The city slug for fetching the initial page
     - opts: Additional options including :max_pages
   """
-  def fetch_all_city_events(latitude, longitude, city_slug, opts \\ []) do
+  def fetch_all_city_events(latitude, longitude, _city_slug, opts \\ []) do
     max_pages = Keyword.get(opts, :max_pages, 10)
 
-    Logger.info("🌐 Fetching all events at coordinates (#{latitude}, #{longitude}) - #{city_slug} (max #{max_pages} pages)")
-
     # Start directly with the API pagination - page 1
-    # No need to fetch the city page anymore since we have coordinates
     all_events = fetch_additional_pages(latitude, longitude, [], 1, max_pages, opts)
 
-    Logger.info("✅ Total events collected: #{length(all_events)}")
     {:ok, all_events}
   end
 
@@ -242,10 +235,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
         new_events = extract_events_from_json_response(json_data)
 
         if length(new_events) > 0 do
-          Logger.info("📋 Got #{length(new_events)} events from page #{current_page}")
           fetch_additional_pages(latitude, longitude, acc_events ++ new_events, current_page + 1, max_pages, opts)
         else
-          Logger.info("📭 No more events found on page #{current_page}")
           acc_events
         end
 
@@ -254,7 +245,6 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
         acc_events
 
       {:error, {:http_error, 404}} ->
-        Logger.info("📭 Reached end at page #{current_page}")
         acc_events
 
       {:error, reason} ->
@@ -263,8 +253,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Client do
     end
   end
 
-  defp fetch_additional_pages(_latitude, _longitude, acc_events, _current_page, max_pages, _opts) do
-    Logger.info("📊 Reached max pages limit (#{max_pages})")
+  defp fetch_additional_pages(_latitude, _longitude, acc_events, _current_page, _max_pages, _opts) do
     acc_events
   end
 
