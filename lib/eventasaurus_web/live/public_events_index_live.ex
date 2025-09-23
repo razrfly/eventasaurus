@@ -172,9 +172,24 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   defp apply_params_to_filters(socket, params) do
+    # Handle both singular category (slug from route) and plural categories (IDs from query)
+    category_ids = case params do
+      %{"category" => slug} when is_binary(slug) and slug != "" ->
+        # Single category slug from route like /activities/category/concerts
+        case Categories.get_category_by_slug(slug) do
+          nil -> []
+          category -> [category.id]
+        end
+      %{"categories" => ids} ->
+        # Multiple category IDs from query params
+        parse_id_list(ids)
+      _ ->
+        []
+    end
+
     filters = %{
       search: params["search"],
-      categories: parse_id_list(params["categories"]),
+      categories: category_ids,
       start_date: parse_date(params["start_date"]),
       end_date: parse_date(params["end_date"]),
       min_price: parse_decimal(params["min_price"]),
