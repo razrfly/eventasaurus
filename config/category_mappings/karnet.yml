@@ -1,0 +1,71 @@
+# Karnet Category Mappings
+# Maps Karnet (Polish) categories to our internal category system
+
+mappings:
+  # Direct mappings from Polish to internal categories
+  koncerty: concerts
+  koncert: concerts
+  festiwale: festivals
+  festiwal: festivals
+  spektakle: theatre
+  spektakl: theatre
+  teatr: theatre
+  wystawa: arts
+  wystawy: arts
+  film: film
+  kino: film
+  literatura: education
+  spotkanie: community
+  spotkania: community
+  warsztaty: education
+  warsztat: education
+  konferencja: business
+  konferencje: business
+  opera: arts
+  balet: arts
+  taniec: arts
+  kabaret: comedy
+  komedia: comedy
+  performance: theatre
+  exhibition: arts
+  concert: concerts
+  festival: festivals
+  inne: other
+  w-gminach-metropolii: community
+
+  # Additional Polish categories we might encounter
+  muzyka: concerts
+  muzyczne: concerts
+  jazzowe: concerts
+  rockowe: concerts
+  klasyczne: arts
+  symfoniczne: arts
+  kameralne: arts
+  plenerowe: festivals
+  dla-dzieci: family
+  rodzinne: family
+  edukacyjne: education
+  sportowe: sports
+  kultura: arts
+  sztuka: arts
+  galeria: arts
+  muzeum: arts
+
+# Pattern-based mappings (optional - for more complex matching)
+patterns:
+  - match: "jazz"
+    categories: [concerts, arts]
+  - match: "rock|metal|punk"
+    categories: [concerts, nightlife]
+  - match: "dzieci|dziecko|rodzin"
+    categories: [family, education]
+  - match: "klasycz|symfon|kamer"
+    categories: [concerts, arts]
+  - match: "plener|outdoor|open.?air"
+    categories: [festivals, community]
+  - match: "edukac|warsztat|kurs"
+    categories: [education]
+  - match: "biznes|networking|startup"
+    categories: [business]
+  - match: "stand.?up|komedi"
+    categories: [comedy, nightlife]
