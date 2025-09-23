@@ -57,7 +57,7 @@ mappings:
 
   # Family & Festivals
   "Children's Theatre": family
-  "Family": family
+  # "Family": family  # Already defined above on line 11
   "Fairs & Festivals": festivals
   "Festival": festivals
   "Food & Wine": food-drink
