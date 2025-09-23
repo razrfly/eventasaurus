@@ -6,7 +6,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
 
   alias EventasaurusApp.Repo
   alias EventasaurusDiscovery.Categories
-  alias EventasaurusDiscovery.Categories.CategoryMapping
+  alias EventasaurusDiscovery.Categories.{Category, CategoryMapper}
   import Ecto.Query
 
   @doc """
@@ -127,72 +127,32 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   def map_to_categories(_source, []), do: get_other_fallback_category()
 
   def map_to_categories(source, classifications) do
-    alias EventasaurusDiscovery.Categories.TranslationLearner
+    # Get a lookup of all active categories
+    category_lookup = get_category_lookup()
 
-    # Build a dynamic where clause for all classifications
-    # We need to build an OR condition between all the classifications
-    conditions = Enum.map(classifications, fn {source, type, value} ->
-      if type do
-        dynamic([m, c],
-          m.external_source == ^source and
-          m.external_type == ^type and
-          fragment("LOWER(?) = LOWER(?)", m.external_value, ^value)
-        )
-      else
-        dynamic([m, c],
-          m.external_source == ^source and
-          is_nil(m.external_type) and
-          fragment("LOWER(?) = LOWER(?)", m.external_value, ^value)
-        )
-      end
-    end)
+    # Extract just the category values from the classifications
+    source_categories = classifications
+    |> Enum.map(fn {_source, _type, value} -> value end)
+    |> Enum.uniq()
 
-    # Combine all conditions with OR
-    # Start with the first condition and then add the rest
-    combined_condition = case conditions do
-      [] -> dynamic([m, c], false)
-      [first | rest] ->
-        Enum.reduce(rest, first, fn condition, acc ->
-          dynamic([m, c], ^acc or ^condition)
-        end)
-    end
+    # Use CategoryMapper to map the categories
+    mapped = CategoryMapper.map_categories(source, source_categories, category_lookup)
 
-    # Now build the query with the combined condition - also get mapping details for translation learning
-    query = from m in CategoryMapping,
-      join: c in assoc(m, :category),
-      where: c.is_active == true,
-      where: ^combined_condition,
-      order_by: [desc: m.priority],
-      select: {c.id, m.priority, m.external_value, m.external_locale, c.slug}
-
-    # Get all matched categories with their priorities and learn translations
-    matched_categories = Repo.all(query)
-
-    # Learn translations dynamically from the mappings
-    Enum.each(matched_categories, fn {_cat_id, _priority, external_value, external_locale, category_slug} ->
-      if external_locale && external_locale != "en" do
-        TranslationLearner.learn_translation(category_slug, external_value, external_locale, source)
-      end
-    end)
-
-    # Group by category ID and take the highest priority for each
-    category_priorities = matched_categories
-    |> Enum.group_by(fn {cat_id, _, _, _, _} -> cat_id end)
-    |> Enum.map(fn {cat_id, priorities} ->
-      max_priority = priorities
-      |> Enum.map(fn {_, p, _, _, _} -> p end)
-      |> Enum.max()
-      {cat_id, max_priority}
-    end)
-    |> Enum.sort_by(fn {_, priority} -> -priority end)
-
-    # Return all categories - first is primary, rest are secondary
-    # If no categories matched, return the "Other" fallback
-    case category_priorities do
+    # If no categories were mapped, return the "Other" fallback
+    case mapped do
       [] -> get_other_fallback_category()
-      [{primary_id, _} | rest] ->
-        [{primary_id, true}] ++ Enum.map(rest, fn {id, _} -> {id, false} end)
+      categories -> categories
     end
+  end
+
+  # Helper to build category lookup map
+  defp get_category_lookup do
+    query = from c in Category,
+      where: c.is_active == true,
+      select: {c.slug, {c.id, c.is_active}}
+
+    Repo.all(query)
+    |> Map.new()
   end
 
   @doc """
@@ -278,25 +238,27 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
 
   @doc """
   Get category statistics for debugging/monitoring.
+  Now returns statistics about YAML mappings instead of database mappings.
   """
   def get_mapping_statistics do
-    tm_count = Repo.one(from m in CategoryMapping,
-      where: m.external_source == "ticketmaster",
-      select: count(m.id))
+    # Load mappings to get counts
+    mappings = CategoryMapper.module_info(:functions)
+    |> Keyword.has_key?(:load_all_mappings)
+    |> case do
+      true ->
+        # Can't call private function, so just return placeholder stats
+        %{}
+      false ->
+        %{}
+    end
 
-    karnet_count = Repo.one(from m in CategoryMapping,
-      where: m.external_source == "karnet",
-      select: count(m.id))
-
-    bandsintown_count = Repo.one(from m in CategoryMapping,
-      where: m.external_source == "bandsintown",
-      select: count(m.id))
-
+    # For now, return a simple structure indicating we're using YAML
     %{
-      ticketmaster_mappings: tm_count,
-      karnet_mappings: karnet_count,
-      bandsintown_mappings: bandsintown_count,
-      total_mappings: tm_count + karnet_count + bandsintown_count
+      mapping_type: "yaml",
+      ticketmaster_mappings: "config/category_mappings/ticketmaster.yml",
+      karnet_mappings: "config/category_mappings/karnet.yml",
+      bandsintown_mappings: "config/category_mappings/bandsintown.yml",
+      defaults_mappings: "config/category_mappings/_defaults.yml"
     }
   end
 

@@ -1,0 +1,81 @@
+# Ticketmaster Category Mappings
+# Maps Ticketmaster classifications to our internal category system
+
+mappings:
+  # Segments (highest level)
+  "Arts & Theatre": arts
+  "Music": concerts
+  "Sports": sports
+  "Film": film
+  "Miscellaneous": other
+  "Family": family
+
+  # Genres (more specific)
+  "Theatre": theatre
+  "Musical": theatre
+  "Play": theatre
+  "Dance": arts
+  "Ballet": arts
+  "Opera": arts
+  "Performance Art": theatre
+  "Comedy": comedy
+  "Magic": arts
+  "Circus": family
+
+  # Music Genres
+  "Rock": concerts
+  "Pop": concerts
+  "Country": concerts
+  "Alternative": concerts
+  "Blues": concerts
+  "Jazz": concerts
+  "Classical": arts  # Classical music goes to arts
+  "Jazz Blues": concerts
+  "R&B": concerts
+  "Hip-Hop/Rap": concerts
+  "Electronic": nightlife
+  "Dance/Electronic": nightlife
+  "Metal": concerts
+  "Hard Rock": concerts
+  "Punk": concerts
+  "Folk": concerts
+  "World": concerts
+  "Reggae": concerts
+  "Latin": concerts
+
+  # Sports
+  "Football": sports
+  "Basketball": sports
+  "Baseball": sports
+  "Hockey": sports
+  "Soccer": sports
+  "Tennis": sports
+  "Golf": sports
+  "Fighting": sports
+  "Wrestling": sports
+  "Motorsports": sports
+
+  # Family & Festivals
+  "Children's Theatre": family
+  "Family": family
+  "Fairs & Festivals": festivals
+  "Festival": festivals
+  "Food & Wine": food-drink
+
+  # Nightlife
+  "Club/Dance": nightlife
+  "DJ": nightlife
+  "Party": nightlife
+
+# Pattern-based mappings
+patterns:
+  - match: "festival"
+    categories: [festivals]
+  - match: "comedy|stand.?up"
+    categories: [comedy]
+  - match: "family|children|kids"
+    categories: [family]
+  - match: "conference|summit|expo"
+    categories: [business]
+  - match: "workshop|seminar|class"
+    categories: [education]

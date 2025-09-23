@@ -1,0 +1,84 @@
+# Default Category Mappings
+# Fallback mappings for any source when specific mappings aren't found
+
+mappings:
+  # Common English terms
+  concert: concerts
+  concerts: concerts
+  music: concerts
+  theatre: theatre
+  theater: theatre
+  play: theatre
+  musical: theatre
+  opera: arts
+  ballet: arts
+  dance: arts
+  art: arts
+  arts: arts
+  exhibition: arts
+  gallery: arts
+  museum: arts
+  film: film
+  movie: film
+  cinema: film
+  sports: sports
+  sport: sports
+  game: sports
+  match: sports
+  comedy: comedy
+  standup: comedy
+  festival: festivals
+  fest: festivals
+  fair: festivals
+  family: family
+  kids: family
+  children: family
+  food: food-drink
+  drink: food-drink
+  wine: food-drink
+  beer: food-drink
+  tasting: food-drink
+  nightlife: nightlife
+  club: nightlife
+  party: nightlife
+  community: community
+  local: community
+  education: education
+  workshop: education
+  class: education
+  course: education
+  seminar: education
+  business: business
+  conference: business
+  networking: business
+  expo: business
+  summit: business
+  other: other
+  misc: other
+  miscellaneous: other
+  general: other
+
+# Universal patterns that apply to all sources
+patterns:
+  - match: "festival|fest"
+    categories: [festivals]
+  - match: "concert|musik|music"
+    categories: [concerts]
+  - match: "theater|theatre|play|musical"
+    categories: [theatre]
+  - match: "gallery|exhibition|museum|art"
+    categories: [arts]
+  - match: "comedy|stand.?up|cabaret"
+    categories: [comedy]
+  - match: "child|kid|family|rodzin"
+    categories: [family]
+  - match: "workshop|class|education|learn"
+    categories: [education]
+  - match: "conference|business|network|summit"
+    categories: [business]
+  - match: "club|party|dj|nightlife"
+    categories: [nightlife]
+  - match: "food|drink|wine|beer|tasting"
+    categories: [food-drink]
+  - match: "sport|game|match|race"
+    categories: [sports]
