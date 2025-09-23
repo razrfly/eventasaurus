@@ -73,6 +73,36 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
   end
 
   @impl true
+  def handle_event("clear_search", _params, socket) do
+    filters = Map.put(socket.assigns.filters, :search, nil)
+
+    socket =
+      socket
+      |> assign(:filters, filters)
+      |> fetch_events()
+      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)}))
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("remove_category", %{"id" => category_id}, socket) do
+    category_id = String.to_integer(category_id)
+    current_categories = socket.assigns.filters.categories || []
+    updated_categories = Enum.reject(current_categories, &(&1 == category_id))
+
+    filters = Map.put(socket.assigns.filters, :categories, updated_categories)
+
+    socket =
+      socket
+      |> assign(:filters, filters)
+      |> fetch_events()
+      |> push_patch(to: build_path(%{socket | assigns: Map.put(socket.assigns, :filters, filters)}))
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("clear_filters", _params, socket) do
     cleared_filters = default_filters()
 
