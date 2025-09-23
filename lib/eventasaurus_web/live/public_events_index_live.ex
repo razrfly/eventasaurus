@@ -604,7 +604,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
             <Heroicons.calendar class="w-4 h-4 mr-1" />
             <%= if PublicEvent.recurring?(@event) do %>
               <span class="text-green-600 font-medium">
-                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(@event.starts_at) %>
+                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(PublicEvent.next_occurrence_date(@event)) %>
               </span>
             <% else %>
               <%= format_datetime(@event.starts_at) %>
@@ -685,7 +685,7 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
                 <Heroicons.calendar class="w-4 h-4 mr-1" />
                 <%= if PublicEvent.recurring?(@event) do %>
                   <span class="text-green-600 font-medium">
-                    <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(@event.starts_at) %>
+                    <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(PublicEvent.next_occurrence_date(@event)) %>
                   </span>
                 <% else %>
                   <%= format_datetime(@event.starts_at) %>
