@@ -216,15 +216,22 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
   end
 
   defp initialize_occurrence_with_source(data) do
+    date_entry = %{
+      "date" => format_date_only(data.start_at),
+      "time" => format_time_only(data.start_at),
+      "external_id" => data.external_id
+    }
+
+    # Add source_id if available
+    date_entry = if data[:source_id] || Map.get(data, :source_id) do
+      Map.put(date_entry, "source_id", data[:source_id] || Map.get(data, :source_id))
+    else
+      date_entry
+    end
+
     %{
       "type" => "explicit",
-      "dates" => [
-        %{
-          "date" => format_date_only(data.start_at),
-          "time" => format_time_only(data.start_at),
-          "external_id" => data.external_id
-        }
-      ]
+      "dates" => [date_entry]
     }
   end
 
@@ -770,6 +777,13 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       new_date
     end
 
+    # Add source_id if present - this will help with more reliable source lookup
+    new_date = if new_occurrence[:source_id] || new_occurrence["source_id"] do
+      Map.put(new_date, "source_id", new_occurrence[:source_id] || new_occurrence["source_id"])
+    else
+      new_date
+    end
+
     # Update occurrences
     updated_occurrences = update_in(
       current_occurrences,
@@ -846,7 +860,7 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     %PublicEventSource{}
     |> PublicEventSource.changeset(source_attrs)
     |> Repo.insert(
-      on_conflict: {:replace, [:last_seen_at, :metadata, :description_translations, :image_url]},
+      on_conflict: {:replace, [:last_seen_at, :metadata, :description_translations, :image_url, :source_url]},
       conflict_target: [:event_id, :source_id]
     )
   end
