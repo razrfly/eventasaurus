@@ -148,7 +148,8 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # Existing event but found a recurring parent - need to consolidate
       {existing, parent} when existing != nil and parent != nil and existing.id != parent.id ->
         Logger.info("🔄 Found recurring parent ##{parent.id} for existing event ##{existing.id}, consolidating...")
-        result = consolidate_into_parent(existing, parent, data)
+        enriched_data = Map.put(data, :source_id, source_id)
+        result = consolidate_into_parent(existing, parent, enriched_data)
         case result do
           {:ok, event} -> {:ok, event, :consolidated}
           error -> error
@@ -165,8 +166,11 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
       # No existing event but found recurring parent - add to it
       {nil, parent} when parent != nil ->
         Logger.info("📅 Found recurring parent ##{parent.id}, adding occurrence")
-        case add_occurrence_to_event(parent, data) do
-          {:ok, updated} -> {:ok, updated, :consolidated}
+        enriched_data = Map.put(data, :source_id, source_id)
+        with {:ok, updated} <- add_occurrence_to_event(parent, enriched_data),
+             {:ok, _source} <- create_occurrence_source_record(parent, enriched_data) do
+          {:ok, updated, :consolidated}
+        else
           error -> error
         end
 
@@ -738,11 +742,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
 
   defp consolidate_into_parent(existing_event, parent_event, data) do
     # Add the existing event's date as an occurrence to the parent
-    case add_occurrence_to_event(parent_event, data) do
-      {:ok, updated_parent} ->
-        # Note: We keep the existing event for now, but it could be deleted or redirected later
-        Logger.info("🔄 Consolidated event ##{existing_event.id} into parent ##{parent_event.id}")
-        {:ok, updated_parent}
+    with {:ok, updated_parent} <- add_occurrence_to_event(parent_event, data),
+         # IMPORTANT: Also create a source record for the merged occurrence
+         {:ok, _source} <- create_occurrence_source_record(parent_event, data) do
+      Logger.info("🔄 Consolidated event ##{existing_event.id} into parent ##{parent_event.id}")
+      {:ok, updated_parent}
+    else
       error ->
         error
     end
@@ -818,5 +823,31 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     dates
     |> Enum.reject(&is_nil/1)
     |> Enum.max_by(&DateTime.to_unix(&1, :second), fn -> nil end)
+  end
+
+  defp create_occurrence_source_record(parent_event, occurrence_data) do
+    # Create a source record for the occurrence being added
+    # This ensures we can track where each occurrence came from
+    source_attrs = %{
+      event_id: parent_event.id,
+      source_id: occurrence_data[:source_id] || occurrence_data["source_id"],
+      external_id: occurrence_data.external_id,
+      source_url: occurrence_data[:source_url] || occurrence_data["source_url"],
+      image_url: occurrence_data[:image_url] || occurrence_data["image_url"],
+      description_translations: occurrence_data[:description_translations] || occurrence_data["description_translations"],
+      metadata: %{
+        "occurrence" => true,
+        "merged_at" => DateTime.utc_now(),
+        "original_metadata" => occurrence_data[:metadata] || occurrence_data["metadata"] || %{}
+      },
+      last_seen_at: DateTime.utc_now()
+    }
+
+    %PublicEventSource{}
+    |> PublicEventSource.changeset(source_attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:last_seen_at, :metadata, :description_translations, :image_url]},
+      conflict_target: [:event_id, :source_id]
+    )
   end
 end
