@@ -380,7 +380,6 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
     end
   end
 
-  defp process_categories(_event, %{raw_event_data: nil, category: nil}, _source_id), do: {:ok, []}
   defp process_categories(event, data, source_id) do
     # Determine source name from source_id
     # FIXED: Corrected source ID mapping based on actual database IDs
@@ -437,7 +436,12 @@ defmodule EventasaurusDiscovery.Scraping.Processors.EventProcessor do
         )
 
       true ->
-        {:ok, []}
+        # No category data available - use CategoryExtractor fallback to "Other"
+        CategoryExtractor.assign_categories_to_event(
+          event.id,
+          source_name,
+          %{}
+        )
     end
 
     case result do
