@@ -241,24 +241,13 @@ defmodule EventasaurusDiscovery.Categories.CategoryExtractor do
   Now returns statistics about YAML mappings instead of database mappings.
   """
   def get_mapping_statistics do
-    # Load mappings to get counts
-    mappings = CategoryMapper.module_info(:functions)
-    |> Keyword.has_key?(:load_all_mappings)
-    |> case do
-      true ->
-        # Can't call private function, so just return placeholder stats
-        %{}
-      false ->
-        %{}
-    end
-
     # For now, return a simple structure indicating we're using YAML
     %{
       mapping_type: "yaml",
-      ticketmaster_mappings: "config/category_mappings/ticketmaster.yml",
-      karnet_mappings: "config/category_mappings/karnet.yml",
-      bandsintown_mappings: "config/category_mappings/bandsintown.yml",
-      defaults_mappings: "config/category_mappings/_defaults.yml"
+      ticketmaster_mappings: "priv/category_mappings/ticketmaster.yml",
+      karnet_mappings: "priv/category_mappings/karnet.yml",
+      bandsintown_mappings: "priv/category_mappings/bandsintown.yml",
+      defaults_mappings: "priv/category_mappings/_defaults.yml"
     }
   end
 

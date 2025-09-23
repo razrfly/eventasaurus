@@ -315,10 +315,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                   </div>
 
                   <!-- Ticket Link -->
-                  <%= if @event.ticket_url do %>
+                  <% ticket_url = get_best_ticket_url(@event, @selected_occurrence) %>
+                  <%= if ticket_url do %>
                     <div>
                       <a
-                        href={@event.ticket_url}
+                        href={ticket_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
@@ -471,38 +472,33 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     <%= gettext("Event Sources") %>
                   </h3>
                   <div class="flex flex-wrap gap-4">
-                    <!-- For multi-occurrence events with selected occurrence -->
-                    <%= if @selected_occurrence && @selected_occurrence[:source_url] do %>
+                    <!-- Always show all sources -->
+                    <%= for source <- @event.sources do %>
+                      <% source_url = get_source_url(source) %>
+                      <% source_name = get_source_name(source) %>
+                      <% is_selected_source = @selected_occurrence && (
+                          (@selected_occurrence[:source_id] && source.source_id == @selected_occurrence[:source_id]) ||
+                          (@selected_occurrence[:external_id] && source.external_id == @selected_occurrence[:external_id])
+                        ) %>
                       <div class="text-sm">
-                        <a href={@selected_occurrence.source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
-                          <%= @selected_occurrence[:source_name] || "View Source" %>
-                          <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
-                        </a>
+                        <%= if source_url do %>
+                          <a href={source_url} target="_blank" rel="noopener noreferrer" class={"font-medium #{if is_selected_source, do: "text-blue-700 font-semibold", else: "text-blue-600"} hover:text-blue-800"}>
+                            <%= source_name %>
+                            <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
+                          </a>
+                        <% else %>
+                          <span class={"font-medium #{if is_selected_source, do: "text-gray-900 font-semibold", else: "text-gray-700"}"}>
+                            <%= source_name %>
+                          </span>
+                        <% end %>
                         <span class="text-gray-500 ml-2">
-                          <%= gettext("For selected date") %>
+                          <%= if is_selected_source do %>
+                            <span class="text-blue-600 font-medium"><%= gettext("• Selected date") %></span>
+                          <% else %>
+                            <%= gettext("Last updated") %> <%= format_relative_time(source.last_seen_at) %>
+                          <% end %>
                         </span>
                       </div>
-                    <% else %>
-                      <!-- Fall back to showing all sources -->
-                      <%= for source <- @event.sources do %>
-                        <% source_url = get_source_url(source) %>
-                        <% source_name = get_source_name(source) %>
-                        <div class="text-sm">
-                          <%= if source_url do %>
-                            <a href={source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
-                              <%= source_name %>
-                              <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
-                            </a>
-                          <% else %>
-                            <span class="font-medium text-gray-700">
-                              <%= source_name %>
-                            </span>
-                          <% end %>
-                          <span class="text-gray-500 ml-2">
-                            <%= gettext("Last updated") %> <%= format_relative_time(source.last_seen_at) %>
-                          </span>
-                        </div>
-                      <% end %>
                     <% end %>
                   </div>
                 </div>
@@ -536,30 +532,32 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Helper Functions
   defp get_primary_category(event) do
-    # Check if categories are preloaded with the join table info
-    Enum.find(event.categories, fn category ->
-      # Query the join table to check if this category is primary
-      result = Repo.one(
-        from pec in "public_event_categories",
-        where: pec.event_id == ^event.id and pec.category_id == ^category.id,
-        select: pec.is_primary
-      )
-      result == true
-    end)
+    case get_primary_category_id(event.id) do
+      nil -> nil
+      cat_id -> Enum.find(event.categories, &(&1.id == cat_id))
+    end
   end
 
   defp get_secondary_categories(event) do
-    # Get all non-primary categories
-    primary = get_primary_category(event)
-    if primary do
-      Enum.reject(event.categories, fn cat -> cat.id == primary.id end)
-    else
-      # If no primary found, treat all but first as secondary
-      case event.categories do
-        [_first | rest] -> rest
-        _ -> []
-      end
+    case get_primary_category_id(event.id) do
+      nil ->
+        # If no primary found, treat all but first as secondary
+        case event.categories do
+          [_first | rest] -> rest
+          _ -> []
+        end
+      primary_id ->
+        Enum.reject(event.categories, &(&1.id == primary_id))
     end
+  end
+
+  defp get_primary_category_id(event_id) do
+    Repo.one(
+      from pec in "public_event_categories",
+      where: pec.event_id == ^event_id and pec.is_primary == true,
+      select: pec.category_id,
+      limit: 1
+    )
   end
 
   defp format_event_datetime(nil), do: gettext("TBD")
@@ -613,6 +611,23 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       end
 
     normalize_http_url(url)
+  end
+
+  defp get_best_ticket_url(event, selected_occurrence) do
+    # First priority: if there's a selected occurrence with a source URL, use it
+    if selected_occurrence && selected_occurrence[:source_url] do
+      selected_occurrence[:source_url]
+    else
+      # Second priority: use the event's ticket_url if available
+      if event.ticket_url do
+        event.ticket_url
+      else
+        # Third priority: find the first source with a valid URL
+        event.sources
+        |> Enum.map(&get_source_url/1)
+        |> Enum.find(&(&1 != nil))
+      end
+    end
   end
 
   defp normalize_http_url(nil), do: nil
