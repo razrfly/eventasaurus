@@ -256,7 +256,11 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
     case socket.assigns[:live_action] do
       :search -> ~p"/activities/search?#{params}"
-      :category -> ~p"/activities/category/#{socket.assigns[:category]}?#{params}"
+      :category ->
+        case socket.assigns[:category] do
+          nil -> ~p"/activities?#{params}"
+          category -> ~p"/activities/category/#{category}?#{params}"
+        end
       _ -> ~p"/activities?#{params}"
     end
   end
@@ -520,9 +524,11 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   # Component: Event Card
   defp event_card(assigns) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
     ~H"""
     <.link navigate={~p"/activities/#{@event.slug}"} class="block">
-      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
+      <div class={"bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow #{if PublicEvent.recurring?(@event), do: "ring-2 ring-green-500 ring-offset-2", else: ""}"}>
         <!-- Event Image -->
         <div class="h-48 bg-gray-200 rounded-t-lg relative overflow-hidden">
           <%= if Map.get(@event, :cover_image_url) do %>
@@ -546,6 +552,16 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
               </div>
             <% end %>
           <% end %>
+
+          <!-- Recurring Event Badge -->
+          <%= if PublicEvent.recurring?(@event) do %>
+            <div class="absolute top-3 right-3 bg-green-500 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center">
+              <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+              </svg>
+              <%= PublicEvent.occurrence_count(@event) %> dates
+            </div>
+          <% end %>
         </div>
 
         <!-- Event Details -->
@@ -556,7 +572,13 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
           <div class="mt-2 flex items-center text-sm text-gray-600">
             <Heroicons.calendar class="w-4 h-4 mr-1" />
-            <%= format_datetime(@event.starts_at) %>
+            <%= if PublicEvent.recurring?(@event) do %>
+              <span class="text-green-600 font-medium">
+                <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(@event.starts_at) %>
+              </span>
+            <% else %>
+              <%= format_datetime(@event.starts_at) %>
+            <% end %>
           </div>
 
           <div class="mt-1 flex items-center text-sm text-gray-600">
@@ -585,13 +607,15 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
 
   # Component: Event List Item
   defp event_list_item(assigns) do
+    alias EventasaurusDiscovery.PublicEvents.PublicEvent
+
     ~H"""
     <.link navigate={~p"/activities/#{@event.slug}"} class="block">
-      <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6">
+      <div class={"bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 #{if PublicEvent.recurring?(@event), do: "border-l-4 border-green-500", else: ""}"}>
         <div class="flex gap-6">
           <!-- Event Image -->
           <div class="flex-shrink-0">
-            <div class="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden">
+            <div class="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden relative">
               <%= if Map.get(@event, :cover_image_url) do %>
                 <img src={Map.get(@event, :cover_image_url)} alt={@event.title} class="w-full h-full object-cover" loading="lazy">
               <% else %>
@@ -601,18 +625,41 @@ defmodule EventasaurusWeb.PublicEventsIndexLive do
                   </svg>
                 </div>
               <% end %>
+
+              <!-- Stacked effect for recurring events -->
+              <%= if PublicEvent.recurring?(@event) do %>
+                <div class="absolute -bottom-1 -right-1 w-full h-full bg-white rounded-lg shadow -z-10"></div>
+                <div class="absolute -bottom-2 -right-2 w-full h-full bg-white rounded-lg shadow -z-20"></div>
+              <% end %>
             </div>
           </div>
 
           <div class="flex-1">
-            <h3 class="text-xl font-semibold text-gray-900">
-              <%= @event.display_title || @event.title %>
-            </h3>
+            <div class="flex items-start justify-between">
+              <h3 class="text-xl font-semibold text-gray-900">
+                <%= @event.display_title || @event.title %>
+              </h3>
+
+              <%= if PublicEvent.recurring?(@event) do %>
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                  </svg>
+                  <%= PublicEvent.occurrence_count(@event) %> dates
+                </span>
+              <% end %>
+            </div>
 
             <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
               <div class="flex items-center">
                 <Heroicons.calendar class="w-4 h-4 mr-1" />
-                <%= format_datetime(@event.starts_at) %>
+                <%= if PublicEvent.recurring?(@event) do %>
+                  <span class="text-green-600 font-medium">
+                    <%= PublicEvent.frequency_label(@event) %> • Next: <%= format_datetime(@event.starts_at) %>
+                  </span>
+                <% else %>
+                  <%= format_datetime(@event.starts_at) %>
+                <% end %>
               </div>
 
               <div class="flex items-center">
