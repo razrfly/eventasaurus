@@ -345,7 +345,21 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                               phx-value-index={index}
                               class={"w-full text-left px-4 py-3 rounded-lg border transition #{if @selected_occurrence == occurrence, do: "border-blue-600 bg-blue-50", else: "border-gray-200 hover:bg-gray-50"}"}
                             >
-                              <span class="font-medium"><%= format_time_only(occurrence.datetime) %></span>
+                              <div class="flex items-center justify-between">
+                                <div>
+                                  <span class="font-medium"><%= format_time_only(occurrence.datetime) %></span>
+                                  <%= if occurrence.label do %>
+                                    <span class="ml-2 text-sm text-gray-600">
+                                      <%= occurrence.label %>
+                                    </span>
+                                  <% end %>
+                                </div>
+                                <%= if occurrence.source_name do %>
+                                  <span class="text-xs text-gray-500">
+                                    via <%= occurrence.source_name %>
+                                  </span>
+                                <% end %>
+                              </div>
                               <%= if occurrence.label do %>
                                 <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
                               <% end %>
@@ -362,10 +376,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                               phx-value-index={index}
                               class={"w-full text-left px-4 py-3 rounded-lg border transition #{if @selected_occurrence == occurrence, do: "border-blue-600 bg-blue-50", else: "border-gray-200 hover:bg-gray-50"}"}
                             >
-                              <span class="font-medium"><%= format_occurrence_datetime(occurrence) %></span>
-                              <%= if occurrence.label do %>
-                                <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
-                              <% end %>
+                              <div class="flex items-center justify-between">
+                                <div>
+                                  <span class="font-medium"><%= format_occurrence_datetime(occurrence) %></span>
+                                  <%= if occurrence.label do %>
+                                    <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
+                                  <% end %>
+                                </div>
+                                <%= if occurrence.source_name && occurrence.source_name != "Unknown" do %>
+                                  <span class="text-xs text-gray-500">
+                                    via <%= occurrence.source_name %>
+                                  </span>
+                                <% end %>
+                              </div>
                             </button>
                           <% end %>
                         </div>
@@ -547,19 +570,24 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   # Occurrence helper functions
   defp parse_occurrences(%{occurrences: nil}), do: nil
-  defp parse_occurrences(%{occurrences: %{"dates" => dates}}) when is_list(dates) do
+  defp parse_occurrences(%{occurrences: %{"dates" => dates}, sources: sources}) when is_list(dates) do
     dates
     |> Enum.map(fn date_info ->
       with {:ok, date} <- Date.from_iso8601(date_info["date"]),
            {:ok, time} <- parse_time(date_info["time"]) do
         datetime = DateTime.new!(date, time, "Etc/UTC")
 
+        # Try to find source info for better labeling
+        source_info = find_source_for_occurrence(date_info["external_id"], sources)
+        label = determine_occurrence_label(date_info, source_info, time)
+
         %{
           datetime: datetime,
           date: date,
           time: time,
           external_id: date_info["external_id"],
-          label: date_info["label"]
+          label: label,
+          source_name: source_info[:name]
         }
       else
         _ -> nil
@@ -592,7 +620,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp occurrence_display_type(nil), do: :none
   defp occurrence_display_type([]), do: :none
-  defp occurrence_display_type(occurrences) do
+  defp occurrence_display_type(occurrences) when is_list(occurrences) do
     cond do
       # More than 20 dates - daily show
       length(occurrences) > 20 ->
@@ -605,6 +633,49 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       # Default - multi day
       true ->
         :multi_day
+    end
+  end
+
+  defp find_source_for_occurrence(nil, _sources), do: %{name: "Unknown"}
+  defp find_source_for_occurrence(external_id, sources) do
+    source = Enum.find(sources, fn s -> s.external_id == external_id end)
+
+    case source do
+      nil -> %{name: "Unknown"}
+      source ->
+        %{
+          name: get_source_name(source),
+          metadata: source.metadata
+        }
+    end
+  end
+
+  defp determine_occurrence_label(date_info, source_info, time) do
+    cond do
+      # If there's an explicit label in the occurrence data, use it
+      date_info["label"] -> date_info["label"]
+
+      # Check if this is a special time that might indicate a different type
+      is_early_show?(time) -> "Matinee / VIP Experience"
+
+      # Check source metadata for ticket type info
+      ticket_type = get_in(source_info, [:metadata, "ticket_type"]) -> ticket_type
+
+      # Default based on time
+      true -> format_show_type(time)
+    end
+  end
+
+  defp is_early_show?(time) do
+    time.hour < 17  # Before 5 PM
+  end
+
+  defp format_show_type(time) do
+    cond do
+      time.hour < 12 -> "Morning Show"
+      time.hour < 17 -> "Afternoon Show"
+      time.hour < 20 -> "Early Evening Show"
+      true -> "Evening Show"
     end
   end
 
