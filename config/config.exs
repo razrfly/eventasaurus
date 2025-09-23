@@ -100,6 +100,8 @@ config :eventasaurus, Oban,
     scraper_detail: 3,  # Limited concurrency for event detail scraping
     # Discovery queue for unified sync jobs
     discovery: 3,  # Limited concurrency for discovery source sync
+    # Discovery sync queue for admin dashboard operations
+    discovery_sync: 2,  # Limited concurrency for admin-triggered syncs
     # Google API queue for places lookups
     google_lookup: 1,  # Single concurrency to respect Google's rate limits
     # Default queue for other background jobs
