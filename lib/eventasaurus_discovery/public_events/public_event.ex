@@ -102,4 +102,62 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
         changeset
     end
   end
+
+  @doc """
+  Returns the count of occurrences for an event.
+  """
+  def occurrence_count(%__MODULE__{occurrences: nil}), do: 0
+  def occurrence_count(%__MODULE__{occurrences: %{"dates" => dates}}) when is_list(dates) do
+    length(dates)
+  end
+  def occurrence_count(_), do: 0
+
+  @doc """
+  Checks if an event is recurring (has multiple occurrences).
+  """
+  def recurring?(%__MODULE__{} = event) do
+    occurrence_count(event) > 1
+  end
+
+  @doc """
+  Returns a human-readable description of the event frequency.
+  """
+  def frequency_label(%__MODULE__{} = event) do
+    count = occurrence_count(event)
+
+    cond do
+      count == 0 -> nil
+      count == 1 -> nil  # Single events don't need a label
+      count <= 7 -> "#{count} dates available"
+      count <= 30 -> "Multiple dates"
+      count <= 60 -> "Daily event"
+      true -> "#{count} dates available"
+    end
+  end
+
+  @doc """
+  Returns the next upcoming date for an event with occurrences.
+  """
+  def next_occurrence_date(%__MODULE__{occurrences: nil, starts_at: starts_at}), do: starts_at
+  def next_occurrence_date(%__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at}) when is_list(dates) do
+    now = DateTime.utc_now()
+
+    # Parse dates and find the next upcoming one
+    upcoming = dates
+      |> Enum.map(fn %{"date" => date_str, "time" => time_str} ->
+        with {:ok, date} <- Date.from_iso8601(date_str),
+             {:ok, time} <- Time.from_iso8601(time_str <> ":00") do
+          DateTime.new!(date, time, "Etc/UTC")
+        else
+          _ -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&(DateTime.compare(&1, now) == :gt))
+      |> Enum.sort(&(DateTime.compare(&1, &2) == :lt))
+      |> List.first()
+
+    upcoming || starts_at
+  end
+  def next_occurrence_date(%__MODULE__{starts_at: starts_at}), do: starts_at
 end
