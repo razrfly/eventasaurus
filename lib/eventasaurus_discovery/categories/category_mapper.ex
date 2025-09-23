@@ -5,8 +5,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
   """
 
   require Logger
+  import Ecto.Query, warn: false
+  alias EventasaurusApp.Repo
 
-  @config_dir "config/category_mappings"
   @defaults_file "_defaults.yml"
 
   @doc """
@@ -49,7 +50,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
   # Private functions
 
   defp load_all_mappings do
-    config_path = Path.join([File.cwd!(), @config_dir])
+    # Use priv directory for production compatibility
+    priv_dir = :code.priv_dir(:eventasaurus)
+    config_path = Path.join(priv_dir, "category_mappings")
 
     if File.dir?(config_path) do
       config_path
@@ -169,24 +172,61 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
   end
 
   defp matches_pattern?(text, pattern) do
-    # Convert the pattern to a regex
-    # The patterns in YAML can use simple wildcards or regex syntax
-    regex_pattern = pattern
-    |> String.replace(".", "\\.")  # Escape dots
-    |> String.replace("?", ".")    # ? matches single character
-    |> String.replace("*", ".*")   # * matches any characters
+    # Try compiling as a regex first (for patterns like "comedy|stand.?up")
+    case Regex.compile(pattern, "i") do
+      {:ok, regex} ->
+        Regex.match?(regex, text)
+      {:error, _} ->
+        # Fallback: treat as glob pattern with * and ?
+        glob_pattern =
+          pattern
+          |> Regex.escape()
+          |> String.replace(~r/\\\*/, ".*")
+          |> String.replace(~r/\\\?/, ".")
 
-    case Regex.compile(regex_pattern, "i") do
-      {:ok, regex} -> Regex.match?(regex, text)
-      _ -> false
+        case Regex.compile(glob_pattern, "i") do
+          {:ok, regex} -> Regex.match?(regex, text)
+          _ -> false
+        end
     end
   end
 
   defp mark_primary_category([]), do: []
 
-  defp mark_primary_category([first | rest]) do
-    # Mark the first category as primary
-    [{id, _is_primary} | _] = [first | rest]
-    [{id, true} | Enum.map(rest, fn {id, _} -> {id, false} end)]
+  defp mark_primary_category(categories) do
+    # Get the "Other" category ID
+    other_id = get_other_category_id()
+
+    # Separate "Other" categories from real categories
+    {real_categories, other_categories} =
+      Enum.split_with(categories, fn {id, _} -> id != other_id end)
+
+    case real_categories do
+      [] ->
+        # Only "Other" categories exist, mark the first as primary
+        case other_categories do
+          [{id, _} | rest] ->
+            [{id, true} | Enum.map(rest, fn {id, _} -> {id, false} end)]
+          [] ->
+            []
+        end
+      [{first_id, _} | rest_real] ->
+        # Real categories exist, mark the first real category as primary
+        # and all others (including "Other") as secondary
+        primary_and_real = [{first_id, true} | Enum.map(rest_real, fn {id, _} -> {id, false} end)]
+        all_others = Enum.map(other_categories, fn {id, _} -> {id, false} end)
+        primary_and_real ++ all_others
+    end
+  end
+
+  defp get_other_category_id do
+    # Query for the "Other" category ID
+    # Using the same query pattern as in CategoryExtractor
+    query = from c in EventasaurusDiscovery.Categories.Category,
+      where: c.slug == "other" and c.is_active == true,
+      select: c.id,
+      limit: 1
+
+    Repo.one(query)
   end
 end

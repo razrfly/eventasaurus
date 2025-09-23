@@ -28,7 +28,8 @@ events_with_categories = Repo.one(
 )
 IO.puts("Events with Categories: #{events_with_categories}")
 IO.puts("Events without Categories: #{total_events - events_with_categories}")
-IO.puts("Coverage: #{Float.round(events_with_categories / total_events * 100, 2)}%")
+coverage = if total_events > 0, do: Float.round(events_with_categories / total_events * 100, 2), else: 0
+IO.puts("Coverage: #{coverage}%")
 
 # 2. Category Distribution by Source
 IO.puts("\n📈 CATEGORY DISTRIBUTION BY SOURCE")
@@ -98,7 +99,8 @@ if other_category do
   IO.puts("'Other' category ID: #{other_category.id}")
   IO.puts("Total assignments: #{other_count}")
   IO.puts("As primary category: #{other_as_primary}")
-  IO.puts("Percentage of all events: #{Float.round(other_count / total_events * 100, 2)}%")
+  other_pct = if total_events > 0, do: Float.round(other_count / total_events * 100, 2), else: 0
+  IO.puts("Percentage of all events: #{other_pct}%")
 else
   IO.puts("WARNING: 'Other' category not found!")
 end
@@ -184,6 +186,16 @@ end
 IO.puts("\n🌈 EVENTS WITH MULTIPLE CATEGORIES")
 IO.puts(String.duplicate("-", 40))
 
+# Get the actual total count of multi-category events
+multi_cat_total = Repo.one(
+  from pe in PublicEvent,
+  join: pec in "public_event_categories", on: pec.event_id == pe.id,
+  group_by: pe.id,
+  having: count(pec.id) > 1,
+  select: count(pe.id, :distinct)
+) || 0
+
+# Get samples for display
 multi_cat_events = Repo.all(
   from pe in PublicEvent,
   join: pec in "public_event_categories", on: pec.event_id == pe.id,
@@ -193,7 +205,7 @@ multi_cat_events = Repo.all(
   limit: 10
 )
 
-IO.puts("Events with multiple categories: #{length(multi_cat_events)}")
+IO.puts("Events with multiple categories: #{multi_cat_total}")
 if length(multi_cat_events) > 0 do
   IO.puts("\nExamples:")
   for {event_id, cat_count} <- Enum.take(multi_cat_events, 5) do
@@ -264,8 +276,8 @@ IO.puts("🎓 FINAL GRADE")
 IO.puts(String.duplicate("=", 80))
 
 # Calculate grade based on metrics
-coverage_score = events_with_categories / total_events * 100
-other_percentage = if other_category do
+coverage_score = if total_events > 0, do: events_with_categories / total_events * 100, else: 0
+other_percentage = if other_category && total_events > 0 do
   other_count = Repo.one(
     from pec in "public_event_categories",
     where: pec.category_id == ^other_category.id,
@@ -273,10 +285,14 @@ other_percentage = if other_category do
   )
   other_count / total_events * 100
 else
-  100 # Worst case if Other doesn't exist
+  if other_category, do: 0, else: 100 # Worst case if Other doesn't exist
 end
 
-multi_cat_percentage = length(multi_cat_events) / events_with_categories * 100
+multi_cat_percentage = if events_with_categories > 0 do
+  multi_cat_total / events_with_categories * 100
+else
+  0
+end
 
 grade = cond do
   coverage_score == 100 and other_percentage < 5 and multi_cat_percentage > 20 -> "A+"

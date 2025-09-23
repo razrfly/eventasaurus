@@ -25,7 +25,7 @@ Successfully implemented a comprehensive category normalization system for Event
 ## Key Components
 
 ### 1. YAML Mapping Files
-Location: `config/category_mappings/`
+Location: `priv/category_mappings/`
 
 Each file contains:
 - Direct mappings (e.g., "koncerty" -> "concerts")
@@ -90,6 +90,6 @@ When reloading data:
 - lib/eventasaurus_discovery/categories/category_extractor.ex
 - lib/eventasaurus_discovery/categories/category_mapper.ex (NEW)
 - lib/eventasaurus_discovery/scraping/processors/event_processor.ex
-- config/category_mappings/*.yml (NEW)
+- priv/category_mappings/*.yml (NEW - stored in priv for release compatibility)
 - mix.exs (added yaml_elixir dependency)
 - priv/repo/migrations/20250923114356_add_other_fallback_category.exs (NEW)
