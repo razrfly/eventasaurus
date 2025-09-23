@@ -212,15 +212,49 @@ defmodule EventasaurusWeb.PublicEventShowLive do
               <div class="p-8">
                 <!-- Categories -->
                 <%= if @event.categories && @event.categories != [] do %>
-                  <div class="mb-4 flex flex-wrap gap-2">
-                    <%= for category <- @event.categories do %>
-                      <span
-                        class="px-3 py-1 rounded-full text-sm font-medium text-white"
-                        style={"background-color: #{category.color || "#6B7280"}"}
-                      >
-                        <%= category.name %>
-                      </span>
-                    <% end %>
+                  <div class="mb-4">
+                    <!-- Primary Category -->
+                    <% primary_category = get_primary_category(@event) %>
+                    <% secondary_categories = get_secondary_categories(@event) %>
+
+                    <div class="flex flex-wrap gap-2 items-center">
+                      <!-- Primary category - larger and emphasized -->
+                      <%= if primary_category do %>
+                        <.link
+                          navigate={~p"/activities?category=#{primary_category.slug}"}
+                          class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition"
+                          style={"background-color: #{primary_category.color || "#6B7280"}"}
+                        >
+                          <%= if primary_category.icon do %>
+                            <span class="mr-1"><%= primary_category.icon %></span>
+                          <% end %>
+                          <%= primary_category.name %>
+                        </.link>
+                      <% end %>
+
+                      <!-- Secondary categories - smaller and less emphasized -->
+                      <%= if secondary_categories != [] do %>
+                        <span class="text-gray-400 mx-1">•</span>
+                        <%= for category <- secondary_categories do %>
+                          <.link
+                            navigate={~p"/activities?category=#{category.slug}"}
+                            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
+                          >
+                            <%= category.name %>
+                          </.link>
+                        <% end %>
+                      <% end %>
+                    </div>
+
+                    <!-- Category hint text -->
+                    <p class="mt-2 text-xs text-gray-500">
+                      <%= if secondary_categories != [] do %>
+                        <%= gettext("Also filed under: %{categories}",
+                            categories: Enum.map_join(secondary_categories, ", ", & &1.name)) %>
+                      <% else %>
+                        <%= gettext("Click category to see related events") %>
+                      <% end %>
+                    </p>
                   </div>
                 <% end %>
 
@@ -501,6 +535,33 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   # Helper Functions
+  defp get_primary_category(event) do
+    # Check if categories are preloaded with the join table info
+    Enum.find(event.categories, fn category ->
+      # Query the join table to check if this category is primary
+      result = Repo.one(
+        from pec in "public_event_categories",
+        where: pec.event_id == ^event.id and pec.category_id == ^category.id,
+        select: pec.is_primary
+      )
+      result == true
+    end)
+  end
+
+  defp get_secondary_categories(event) do
+    # Get all non-primary categories
+    primary = get_primary_category(event)
+    if primary do
+      Enum.reject(event.categories, fn cat -> cat.id == primary.id end)
+    else
+      # If no primary found, treat all but first as secondary
+      case event.categories do
+        [_first | rest] -> rest
+        _ -> []
+      end
+    end
+  end
+
   defp format_event_datetime(nil), do: gettext("TBD")
   defp format_event_datetime(datetime) do
     Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")

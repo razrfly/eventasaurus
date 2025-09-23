@@ -133,7 +133,10 @@ defmodule Eventasaurus.MixProject do
       {:countries, "~> 1.6"},
 
       # Comprehensive date/time parsing and manipulation
-      {:timex, "~> 3.7"}
+      {:timex, "~> 3.7"},
+
+      # YAML parsing for category mappings
+      {:yaml_elixir, "~> 2.11"}
     ]
   end
 

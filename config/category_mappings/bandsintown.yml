@@ -1,0 +1,53 @@
+# Bandsintown Category Mappings
+# All Bandsintown events are music/concert events
+# But we can map based on genre tags if available
+
+mappings:
+  # Default mapping for all Bandsintown events
+  concert: concerts
+  music: concerts
+  live: concerts
+  show: concerts
+  performance: concerts
+  gig: concerts
+
+  # Genre mappings (if genre data is available)
+  jazz: concerts
+  blues: concerts
+  rock: concerts
+  metal: concerts
+  punk: concerts
+  pop: concerts
+  electronic: nightlife
+  dance: nightlife
+  dj: nightlife
+  house: nightlife
+  techno: nightlife
+  edm: nightlife
+  classical: arts
+  opera: arts
+  symphony: arts
+  chamber: arts
+  folk: concerts
+  country: concerts
+  reggae: concerts
+  hip-hop: concerts
+  rap: concerts
+  r&b: concerts
+  soul: concerts
+  funk: concerts
+  latin: concerts
+  world: concerts
+
+# Pattern-based mappings for venue or artist names
+patterns:
+  - match: "dj|club|dance|electronic"
+    categories: [concerts, nightlife]
+  - match: "jazz|blues"
+    categories: [concerts, arts]
+  - match: "classical|symphony|philharmonic|chamber"
+    categories: [concerts, arts]
+  - match: "festival"
+    categories: [concerts, festivals]
+  - match: "comedy|stand.?up"
+    categories: [comedy]  # Rare but possible for comedy music acts
