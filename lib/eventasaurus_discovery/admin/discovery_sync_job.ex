@@ -40,15 +40,14 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     Limit: #{limit} events
     """)
 
-    # Build job arguments based on source
-    options = build_source_options(source, args)
-
     # Handle different source types
     case source do
       "all" ->
-        sync_all_sources(city, limit, options)
+        sync_all_sources(city, limit, args)
 
       source when is_map_key(@sources, source) ->
+        # Build job arguments based on source (single source path only)
+        options = build_source_options(source, args)
         sync_single_source(source, city, limit, options)
 
       _ ->
@@ -92,7 +91,7 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     end
   end
 
-  defp sync_all_sources(city, limit, options) do
+  defp sync_all_sources(city, limit, args) do
     Logger.info("""
     📊 Admin Dashboard: Syncing from ALL sources
     City: #{city.name}
@@ -100,14 +99,19 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     """)
 
     # Divide limit among sources
-    source_limit = div(limit, map_size(@sources))
+    source_limit =
+      cond do
+        limit <= 0 -> 0
+        true -> max(1, div(limit, map_size(@sources)))
+      end
 
     # Queue jobs for each source
     results = Enum.map(@sources, fn {source_name, job_module} ->
+      per_source_options = build_source_options(source_name, args)
       job_args = %{
         "city_id" => city.id,
         "limit" => source_limit,
-        "options" => options
+        "options" => per_source_options
       }
 
       case job_module.new(job_args) |> Oban.insert() do
