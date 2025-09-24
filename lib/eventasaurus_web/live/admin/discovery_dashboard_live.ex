@@ -98,9 +98,16 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       {:noreply, socket}
     else
       # Queue the discovery sync job
+      # Parse city_id to integer if it's a numeric string
+      city_id_val =
+        case Integer.parse(to_string(city_id)) do
+          {i, _} -> i
+          :error -> city_id
+        end
+
       job_args = %{
         "source" => source,
-        "city_id" => city_id,
+        "city_id" => city_id_val,
         "limit" => limit,
         "radius" => radius
       }
