@@ -164,14 +164,13 @@ defmodule EventasaurusDiscovery.PublicEventsEnhanced do
     # By default, exclude past events
     # An event is considered active/upcoming if:
     # - It has an end date that hasn't passed yet, OR
-    # - It has no end date and started recently (within 24 hours)
+    # - It has no end date and hasn't started yet
     current_time = DateTime.utc_now()
-    twenty_four_hours_ago = DateTime.add(current_time, -24, :hour)
 
     from(pe in query,
       where:
         (not is_nil(pe.ends_at) and pe.ends_at > ^current_time) or
-          (is_nil(pe.ends_at) and pe.starts_at > ^twenty_four_hours_ago)
+          (is_nil(pe.ends_at) and pe.starts_at > ^current_time)
     )
   end
 

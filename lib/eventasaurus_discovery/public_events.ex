@@ -51,7 +51,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
       where:
         ilike(c.name, ^"%#{city_name}%") and
           ((not is_nil(pe.ends_at) and pe.ends_at > ^now) or
-             (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))),
+             (is_nil(pe.ends_at) and pe.starts_at > ^now)),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       offset: ^offset
@@ -97,7 +97,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
       where:
         ilike(country.name, ^"%#{country_name}%") and
           ((not is_nil(pe.ends_at) and pe.ends_at > ^now) or
-             (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))),
+             (is_nil(pe.ends_at) and pe.starts_at > ^now)),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       offset: ^offset
@@ -136,7 +136,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
     from(pe in PublicEvent,
       where:
         (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
-          (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour)),
+          (is_nil(pe.ends_at) and pe.starts_at > ^now),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       offset: ^offset
@@ -183,7 +183,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
           query,
           [pe],
           (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
-            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+            (is_nil(pe.ends_at) and pe.starts_at > ^now)
         )
       else
         query
@@ -239,7 +239,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
           query,
           [pe],
           (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
-            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+            (is_nil(pe.ends_at) and pe.starts_at > ^now)
         )
       else
         query
@@ -322,7 +322,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
           query,
           [pe],
           (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
-            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+            (is_nil(pe.ends_at) and pe.starts_at > ^now)
         )
       else
         query
@@ -369,7 +369,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
     from(pe in PublicEvent,
       where:
         (not is_nil(pe.ends_at) and pe.ends_at > ^DateTime.utc_now()) or
-          (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(DateTime.utc_now(), -24, :hour)),
+          (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.utc_now()),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       preload: [:categories, :venue]
@@ -416,7 +416,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
           query,
           [pe],
           (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
-            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+            (is_nil(pe.ends_at) and pe.starts_at > ^now)
         )
       else
         query
