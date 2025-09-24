@@ -58,7 +58,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
     socket =
       case progress.status do
         :started ->
-          assign(socket, :import_progress, "Starting import...")
+          socket
+          |> assign(:import_running, true)
+          |> assign(:import_progress, "Starting import...")
 
         :completed ->
           socket
@@ -68,7 +70,9 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
           |> load_data()
 
         :progress ->
-          assign(socket, :import_progress, format_progress(progress))
+          socket
+          |> assign(:import_running, true)
+          |> assign(:import_progress, format_progress(progress))
 
         :error ->
           socket
@@ -86,30 +90,35 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
   @impl true
   def handle_event("start_import", %{"source" => source} = params, socket) do
     city_id = params["city_id"]
-    limit = String.to_integer(params["limit"] || "100")
-    radius = String.to_integer(params["radius"] || "50")
+    limit = parse_int(params["limit"], 100)
+    radius = parse_int(params["radius"], 50)
 
-    # Queue the discovery sync job
-    job_args = %{
-      "source" => source,
-      "city_id" => city_id,
-      "limit" => limit,
-      "radius" => radius
-    }
+    if (is_nil(source) or source == "") or (is_nil(city_id) or city_id == "") do
+      socket = put_flash(socket, :error, "Please select a source and city before starting an import")
+      {:noreply, socket}
+    else
+      # Queue the discovery sync job
+      job_args = %{
+        "source" => source,
+        "city_id" => city_id,
+        "limit" => limit,
+        "radius" => radius
+      }
 
-    case DiscoverySyncJob.new(job_args) |> Oban.insert() do
-      {:ok, job} ->
-        socket =
-          socket
-          |> put_flash(:info, "Queued import job ##{job.id} for #{source}")
-          |> assign(:import_running, true)
-          |> assign(:import_progress, "Queued...")
+      case DiscoverySyncJob.new(job_args) |> Oban.insert() do
+        {:ok, job} ->
+          socket =
+            socket
+            |> put_flash(:info, "Queued import job ##{job.id} for #{source}")
+            |> assign(:import_running, true)
+            |> assign(:import_progress, "Queued...")
 
-        {:noreply, socket}
+          {:noreply, socket}
 
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to queue import: #{inspect(reason)}")
-        {:noreply, socket}
+        {:error, reason} ->
+          socket = put_flash(socket, :error, "Failed to queue import: #{inspect(reason)}")
+          {:noreply, socket}
+      end
     end
   end
 
@@ -198,13 +207,13 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   @impl true
   def handle_event("update_limit", %{"limit" => limit}, socket) do
-    socket = assign(socket, :import_limit, String.to_integer(limit))
+    socket = assign(socket, :import_limit, parse_int(limit, socket.assigns.import_limit))
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("update_radius", %{"radius" => radius}, socket) do
-    socket = assign(socket, :import_radius, String.to_integer(radius))
+    socket = assign(socket, :import_radius, parse_int(radius, socket.assigns.import_radius))
     {:noreply, socket}
   end
 
@@ -235,14 +244,19 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
     # Get upcoming vs past events
     today = DateTime.utc_now()
-    upcoming_count = Repo.aggregate(
-      from(e in PublicEvent, where: e.starts_at >= ^today),
-      :count
-    )
-    past_count = Repo.aggregate(
-      from(e in PublicEvent, where: e.starts_at < ^today),
-      :count
-    )
+    upcoming_count =
+      Repo.aggregate(
+        from(e in PublicEvent, where: e.starts_at >= ^today),
+        :count,
+        :id
+      )
+
+    past_count =
+      Repo.aggregate(
+        from(e in PublicEvent, where: e.starts_at < ^today),
+        :count,
+        :id
+      )
 
     socket
     |> assign(:stats, stats)
@@ -316,19 +330,22 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
       available =
         Repo.aggregate(
           from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "available"),
-          :count
+          :count,
+          :id
         )
 
       executing =
         Repo.aggregate(
           from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "executing"),
-          :count
+          :count,
+          :id
         )
 
       completed =
         Repo.aggregate(
           from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "completed"),
-          :count
+          :count,
+          :id
         )
 
       %{
@@ -351,14 +368,28 @@ defmodule EventasaurusWeb.Admin.DiscoveryDashboardLive do
 
   defp format_progress(progress) do
     case progress do
-      %{current: current, total: total} ->
+      %{current: current, total: total} when is_integer(total) and total > 0 ->
         "Processing: #{current}/#{total} (#{round(current / total * 100)}%)"
+
+      %{current: current, total: total} ->
+        "Processing: #{current}/#{total}"
 
       %{message: message} ->
         message
 
       _ ->
         "Processing..."
+    end
+  end
+
+  # Safe integer parsing with default
+  defp parse_int(nil, default), do: default
+  defp parse_int("", default), do: default
+  defp parse_int(v, _default) when is_integer(v), do: v
+  defp parse_int(v, default) when is_binary(v) do
+    case Integer.parse(v) do
+      {i, _} -> i
+      :error -> default
     end
   end
 
