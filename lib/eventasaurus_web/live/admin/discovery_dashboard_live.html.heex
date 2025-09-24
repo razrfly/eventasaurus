@@ -136,7 +136,12 @@
           <button
             type="submit"
             class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={!@selected_source || !@selected_city || @import_running}
+            phx-disable-with="Starting..."
+            disabled={
+              (is_nil(@selected_source) or @selected_source == "") or
+              (is_nil(@selected_city) or @selected_city == "") or
+              @import_running
+            }
           >
             <%= if @import_running do %>
               Import Running...
