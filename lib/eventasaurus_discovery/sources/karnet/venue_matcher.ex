@@ -71,14 +71,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
   defp normalize_venue_name(name) do
     name
     |> String.downcase()
-    |> String.replace(~r/[^\w\s]/u, "")  # Remove punctuation
-    |> String.replace(~r/\s+/, " ")       # Normalize spaces
+    # Remove punctuation
+    |> String.replace(~r/[^\w\s]/u, "")
+    # Normalize spaces
+    |> String.replace(~r/\s+/, " ")
     |> String.trim()
   end
 
   defp clean_venue_name(name) do
     name
-    |> String.split(",")      # Take first part if address included
+    # Take first part if address included
+    |> String.split(",")
     |> List.first()
     |> String.trim()
   end
@@ -86,10 +89,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
   defp extract_address(text) do
     # Common Polish street prefixes
     street_patterns = [
-      ~r/ul\.\s+[^,]+/,      # ul. (ulica - street)
-      ~r/al\.\s+[^,]+/,      # al. (aleja - avenue)
-      ~r/plac\s+[^,]+/i,     # plac (square)
-      ~r/rynek\s+[^,]+/i     # rynek (market square)
+      # ul. (ulica - street)
+      ~r/ul\.\s+[^,]+/,
+      # al. (aleja - avenue)
+      ~r/al\.\s+[^,]+/,
+      # plac (square)
+      ~r/plac\s+[^,]+/i,
+      # rynek (market square)
+      ~r/rynek\s+[^,]+/i
     ]
 
     Enum.find_value(street_patterns, fn pattern ->
@@ -137,15 +144,17 @@ defmodule EventasaurusDiscovery.Sources.Karnet.VenueMatcher do
     }
 
     # Add optional fields if available
-    venue = if venue_data[:address] || venue_data["address"] do
-      Map.put(base_venue, :address, venue_data[:address] || venue_data["address"])
-    else
-      base_venue
-    end
+    venue =
+      if venue_data[:address] || venue_data["address"] do
+        Map.put(base_venue, :address, venue_data[:address] || venue_data["address"])
+      else
+        base_venue
+      end
 
     # Add coordinates if available for known venues
     if coords = get_venue_coordinates(base_venue.name) do
       {lat, lng} = coords
+
       venue
       |> Map.put(:latitude, lat)
       |> Map.put(:longitude, lng)

@@ -5,11 +5,12 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
 
   describe "GPS coordinate validation" do
     test "requires both latitude and longitude" do
-      changeset = Venue.changeset(%Venue{}, %{
-        name: "Test Venue",
-        venue_type: "venue",
-        source: "scraper"
-      })
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Test Venue",
+          venue_type: "venue",
+          source: "scraper"
+        })
 
       refute changeset.valid?
       assert {:latitude, {"GPS coordinates are required for venues", []}} in changeset.errors
@@ -17,38 +18,43 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
     end
 
     test "accepts valid coordinates" do
-      changeset = Venue.changeset(%Venue{}, %{
-        name: "Test Venue",
-        venue_type: "venue",
-        source: "scraper",
-        latitude: 50.0619,
-        longitude: 19.9368
-      })
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Test Venue",
+          venue_type: "venue",
+          source: "scraper",
+          latitude: 50.0619,
+          longitude: 19.9368
+        })
 
       assert changeset.valid?
     end
 
     test "rejects latitude outside valid range" do
-      changeset = Venue.changeset(%Venue{}, %{
-        name: "Test Venue",
-        venue_type: "venue",
-        source: "scraper",
-        latitude: 91.0,  # Invalid - > 90
-        longitude: 19.9368
-      })
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Test Venue",
+          venue_type: "venue",
+          source: "scraper",
+          # Invalid - > 90
+          latitude: 91.0,
+          longitude: 19.9368
+        })
 
       refute changeset.valid?
       assert {:latitude, {"must be between -90 and 90 degrees", []}} in changeset.errors
     end
 
     test "rejects longitude outside valid range" do
-      changeset = Venue.changeset(%Venue{}, %{
-        name: "Test Venue",
-        venue_type: "venue",
-        source: "scraper",
-        latitude: 50.0619,
-        longitude: 181.0  # Invalid - > 180
-      })
+      changeset =
+        Venue.changeset(%Venue{}, %{
+          name: "Test Venue",
+          venue_type: "venue",
+          source: "scraper",
+          latitude: 50.0619,
+          # Invalid - > 180
+          longitude: 181.0
+        })
 
       refute changeset.valid?
       assert {:longitude, {"must be between -180 and 180 degrees", []}} in changeset.errors
@@ -56,37 +62,40 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
 
     test "requires both coordinates together" do
       # Only latitude provided
-      changeset1 = Venue.changeset(%Venue{}, %{
-        name: "Test Venue",
-        venue_type: "venue",
-        source: "scraper",
-        latitude: 50.0619
-      })
+      changeset1 =
+        Venue.changeset(%Venue{}, %{
+          name: "Test Venue",
+          venue_type: "venue",
+          source: "scraper",
+          latitude: 50.0619
+        })
 
       refute changeset1.valid?
       assert {:longitude, {"is required when latitude is provided", []}} in changeset1.errors
 
       # Only longitude provided
-      changeset2 = Venue.changeset(%Venue{}, %{
-        name: "Test Venue",
-        venue_type: "venue",
-        source: "scraper",
-        longitude: 19.9368
-      })
+      changeset2 =
+        Venue.changeset(%Venue{}, %{
+          name: "Test Venue",
+          venue_type: "venue",
+          source: "scraper",
+          longitude: 19.9368
+        })
 
       refute changeset2.valid?
       assert {:latitude, {"is required when longitude is provided", []}} in changeset2.errors
     end
 
     test "prevents insertion of venue without coordinates" do
-      {:error, changeset} = %Venue{}
-      |> Venue.changeset(%{
-        name: "Venue Without Coordinates",
-        venue_type: "venue",
-        source: "scraper",
-        address: "123 Main St"
-      })
-      |> Repo.insert()
+      {:error, changeset} =
+        %Venue{}
+        |> Venue.changeset(%{
+          name: "Venue Without Coordinates",
+          venue_type: "venue",
+          source: "scraper",
+          address: "123 Main St"
+        })
+        |> Repo.insert()
 
       refute changeset.valid?
       assert {:latitude, {"GPS coordinates are required for venues", []}} in changeset.errors
@@ -94,16 +103,17 @@ defmodule EventasaurusApp.Venues.VenueValidationTest do
     end
 
     test "allows insertion of venue with valid coordinates" do
-      {:ok, venue} = %Venue{}
-      |> Venue.changeset(%{
-        name: "Venue With Coordinates",
-        venue_type: "venue",
-        source: "scraper",
-        latitude: 50.0619,
-        longitude: 19.9368,
-        address: "123 Main St"
-      })
-      |> Repo.insert()
+      {:ok, venue} =
+        %Venue{}
+        |> Venue.changeset(%{
+          name: "Venue With Coordinates",
+          venue_type: "venue",
+          source: "scraper",
+          latitude: 50.0619,
+          longitude: 19.9368,
+          address: "123 Main St"
+        })
+        |> Repo.insert()
 
       assert venue.latitude == 50.0619
       assert venue.longitude == 19.9368

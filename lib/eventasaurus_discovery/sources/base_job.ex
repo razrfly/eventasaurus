@@ -48,13 +48,13 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
              {:ok, raw_events} <- fetch_events(city, limit, options),
              transformed_events <- transform_events(raw_events),
              result <- process_events(transformed_events, source) do
-
           case result do
             {:ok, processed} ->
               Logger.info("""
               ✅ Successfully synced #{length(processed)} events for #{city.name}
               Source: #{source.name}
               """)
+
               {:ok, %{events_processed: length(processed), city: city.name}}
 
             {:discard, reason} ->
@@ -95,7 +95,7 @@ defmodule EventasaurusDiscovery.Sources.BaseJob do
       # Sources must implement source_config/0
       # We don't define it here to avoid conflicts
 
-      defoverridable [perform: 1]
+      defoverridable perform: 1
     end
   end
 end

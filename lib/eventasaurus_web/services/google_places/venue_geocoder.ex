@@ -8,7 +8,8 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
   require Logger
 
   @base_url "https://maps.googleapis.com/maps/api/geocode/json"
-  @cache_ttl :timer.hours(24)  # Cache geocoding results for 24 hours
+  # Cache geocoding results for 24 hours
+  @cache_ttl :timer.hours(24)
 
   @doc """
   Geocodes a venue address to get latitude and longitude coordinates.
@@ -81,7 +82,9 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
       url = build_url(query, api_key)
 
       # Log without exposing full address for privacy
-      Logger.debug("Geocoding venue: #{String.slice(query || "", 0, 50)}#{if String.length(query || "") > 50, do: "...", else: ""}")
+      Logger.debug(
+        "Geocoding venue: #{String.slice(query || "", 0, 50)}#{if String.length(query || "") > 50, do: "...", else: ""}"
+      )
 
       case Client.get_json(url) do
         {:ok, %{"results" => [result | _], "status" => "OK"}} ->
@@ -94,7 +97,10 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
               longitude: location["lng"]
             }
 
-            Logger.debug("Successfully geocoded venue '#{venue_data[:name] || venue_data["name"]}'")
+            Logger.debug(
+              "Successfully geocoded venue '#{venue_data[:name] || venue_data["name"]}'"
+            )
+
             {:ok, coordinates}
           else
             Logger.warning("No location data in geocoding result for: #{query}")
@@ -141,7 +147,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.VenueGeocoder do
   """
   def valid_coordinates?(lat, lng) do
     is_number(lat) && is_number(lng) &&
-    lat >= -90 && lat <= 90 &&
-    lng >= -180 && lng <= 180
+      lat >= -90 && lat <= 90 &&
+      lng >= -180 && lng <= 180
   end
 end

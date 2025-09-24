@@ -66,6 +66,7 @@ defmodule EventasaurusWeb.AdminTicketLive do
           case Ticketing.delete_ticket(ticket) do
             {:ok, _} ->
               updated_tickets = Ticketing.list_tickets_for_event(socket.assigns.event.id)
+
               {:noreply,
                socket
                |> assign(:tickets, updated_tickets)

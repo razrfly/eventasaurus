@@ -36,7 +36,8 @@ defmodule EventasaurusWeb.Components.GuestInvitationModal do
   attr :current_email_input, :string, default: ""
   attr :bulk_email_input, :string, default: ""
   attr :selected_suggestions, :list, default: []
-  attr :add_mode, :string, default: "invite"  # "invite" or "direct"
+  # "invite" or "direct"
+  attr :add_mode, :string, default: "invite"
   attr :on_close, :any, required: true
   attr :on_invite_selected, :any, default: nil
   attr :on_add_directly, :any, default: nil

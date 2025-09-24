@@ -25,24 +25,24 @@ defmodule EventasaurusApp.Auth.ServiceRoleHelper do
   """
   def setup_instructions do
     """
-    
+
     ⚠️  SUPABASE SERVICE ROLE KEY NOT FOUND
-    
+
     To enable authenticated user creation in seeds:
-    
+
     1. Get the service role key:
        $ supabase status | grep "service_role key"
-    
+
     2. Export it for your current session:
        $ export SUPABASE_SERVICE_ROLE_KEY_LOCAL="<your-key>"
-    
+
     3. Or add to your .env file:
        SUPABASE_SERVICE_ROLE_KEY_LOCAL=<your-key>
-    
+
     4. Run seeds again:
        $ mix run priv/repo/seeds.exs
        $ mix seed.dev
-    
+
     Without the service role key, seeded users cannot log in.
     """
   end
@@ -68,7 +68,7 @@ defmodule EventasaurusApp.Auth.ServiceRoleHelper do
       nil ->
         raise """
         #{setup_instructions()}
-        
+
         Cannot proceed without service role key.
         """
 

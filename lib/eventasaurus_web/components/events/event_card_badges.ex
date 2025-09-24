@@ -1,6 +1,6 @@
 defmodule EventasaurusWeb.Components.Events.EventCardBadges do
   use EventasaurusWeb, :live_component
-  
+
   alias EventasaurusWeb.Helpers.EventStatusHelpers
 
   attr :event, :map, required: true
@@ -77,5 +77,4 @@ defmodule EventasaurusWeb.Components.Events.EventCardBadges do
   defp role_badge_text("organizer"), do: "Organizer"
   defp role_badge_text("participant"), do: "Attending"
   defp role_badge_text(role), do: String.capitalize(role)
-
 end

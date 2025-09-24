@@ -44,7 +44,11 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         Max pages: #{max_pages}
         """)
 
-        continue_sync(city, source: get_or_create_karnet_source(), limit: limit, max_pages: max_pages)
+        continue_sync(city,
+          source: get_or_create_karnet_source(),
+          limit: limit,
+          max_pages: max_pages
+        )
     end
   end
 
@@ -64,7 +68,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
 
         # Apply limit
         events_to_process = if limit, do: Enum.take(events, limit), else: events
-        Logger.info("🎯 Processing #{length(events_to_process)} events (limit: #{limit || "none"})")
+
+        Logger.info(
+          "🎯 Processing #{length(events_to_process)} events (limit: #{limit || "none"})"
+        )
 
         # Schedule individual detail jobs
         enqueued_count = schedule_detail_jobs(events_to_process, source.id)
@@ -76,11 +83,12 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
         Detail jobs enqueued: #{enqueued_count}
         """)
 
-        {:ok, %{
-          found: length(events),
-          processed: length(events_to_process),
-          enqueued: enqueued_count
-        }}
+        {:ok,
+         %{
+           found: length(events),
+           processed: length(events_to_process),
+           enqueued: enqueued_count
+         }}
 
       {:error, reason} ->
         Logger.error("❌ Failed to fetch index pages: #{inspect(reason)}")
@@ -120,48 +128,50 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     Logger.info("📅 Scheduling #{length(events)} detail jobs")
 
     # Schedule individual jobs for each event with rate limiting
-    scheduled_jobs = events
-    |> Enum.with_index()
-    |> Enum.map(fn {event, index} ->
-      # Add delay between jobs to respect rate limits
-      # Start immediately, then rate_limit seconds between each job
-      scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
+    scheduled_jobs =
+      events
+      |> Enum.with_index()
+      |> Enum.map(fn {event, index} ->
+        # Add delay between jobs to respect rate limits
+        # Start immediately, then rate_limit seconds between each job
+        scheduled_at = DateTime.add(DateTime.utc_now(), index * Config.rate_limit(), :second)
 
-      job_args = %{
-        "url" => event.url,
-        "source_id" => source_id,
-        "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category])
-      }
+        job_args = %{
+          "url" => event.url,
+          "source_id" => source_id,
+          "event_metadata" => Map.take(event, [:title, :date_text, :venue_name, :category])
+        }
 
-      # For now, we'll create a placeholder - EventDetailJob will be implemented in Phase 2
-      # Using a dummy module name that we'll implement later
-      %{
-        module: EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob,
-        args: job_args,
-        queue: "scraper_detail",
-        scheduled_at: scheduled_at
-      }
-      |> then(fn job_spec ->
-        # Check if the module exists before trying to insert
-        if Code.ensure_loaded?(job_spec.module) do
-          job_spec.module.new(job_args,
-            queue: job_spec.queue,
-            scheduled_at: job_spec.scheduled_at
-          )
-          |> Oban.insert()
-        else
-          # For now, just log that we would schedule this job
-          Logger.debug("Would schedule detail job for: #{event.url}")
-          {:ok, :placeholder}
-        end
+        # For now, we'll create a placeholder - EventDetailJob will be implemented in Phase 2
+        # Using a dummy module name that we'll implement later
+        %{
+          module: EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob,
+          args: job_args,
+          queue: "scraper_detail",
+          scheduled_at: scheduled_at
+        }
+        |> then(fn job_spec ->
+          # Check if the module exists before trying to insert
+          if Code.ensure_loaded?(job_spec.module) do
+            job_spec.module.new(job_args,
+              queue: job_spec.queue,
+              scheduled_at: job_spec.scheduled_at
+            )
+            |> Oban.insert()
+          else
+            # For now, just log that we would schedule this job
+            Logger.debug("Would schedule detail job for: #{event.url}")
+            {:ok, :placeholder}
+          end
+        end)
       end)
-    end)
 
     # Count successful insertions
-    successful_count = Enum.count(scheduled_jobs, fn
-      {:ok, _} -> true
-      _ -> false
-    end)
+    successful_count =
+      Enum.count(scheduled_jobs, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
 
     Logger.info("✅ Successfully scheduled #{successful_count}/#{length(events)} detail jobs")
     successful_count
@@ -171,6 +181,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob do
     case Repo.get_by(Source, slug: "karnet") do
       nil ->
         config = source_config()
+
         %Source{}
         |> Source.changeset(config)
         |> Repo.insert!()

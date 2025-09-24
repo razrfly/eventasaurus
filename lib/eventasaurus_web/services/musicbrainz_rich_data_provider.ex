@@ -28,12 +28,13 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
   @impl true
   def search(query, options \\ %{}) do
     Logger.info("MusicBrainz backend search for: \"#{query}\"")
-    
+
     case perform_musicbrainz_search(query, options) do
-      {:ok, results} -> 
+      {:ok, results} ->
         Logger.info("MusicBrainz search returned #{length(results)} results")
         {:ok, results}
-      {:error, reason} -> 
+
+      {:error, reason} ->
         Logger.error("MusicBrainz search failed: #{inspect(reason)}")
         {:ok, []}
     end
@@ -92,6 +93,7 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
     case type do
       :track ->
         {:ok, normalize_track_data(raw_data)}
+
       _ ->
         {:error, "Unsupported content type for normalization: #{type}"}
     end
@@ -106,37 +108,39 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
     base_url = "https://musicbrainz.org/ws/2/recording"
     sanitized = sanitize_query(query)
     search_query = "recording:\"#{sanitized}\""
-    
+
     # Build request URL with proper parameters
     url =
-      "#{base_url}?"
-      <> URI.encode_query(%{
-        "query" => search_query,
-        "limit" => to_string(Map.get(options, :limit, 8)),
-        "fmt" => "json",
-        "inc" => "artist-credits+releases"
-      })
-    
+      "#{base_url}?" <>
+        URI.encode_query(%{
+          "query" => search_query,
+          "limit" => to_string(Map.get(options, :limit, 8)),
+          "fmt" => "json",
+          "inc" => "artist-credits+releases"
+        })
+
     headers = [
       {"User-Agent", "Eventasaurus/1.0.0 ( https://eventasaurus.com )"},
       {"Accept", "application/json"}
     ]
-    
-    case HTTPoison.get(url, headers, [timeout: 10_000, recv_timeout: 10_000]) do
+
+    case HTTPoison.get(url, headers, timeout: 10_000, recv_timeout: 10_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         case Jason.decode(body) do
           {:ok, %{"recordings" => recordings}} ->
             results = Enum.map(recordings, &format_musicbrainz_result/1)
             {:ok, results}
+
           {:ok, _} ->
             {:ok, []}
+
           {:error, _} ->
             {:error, "Failed to parse MusicBrainz response"}
         end
-      
+
       {:ok, %HTTPoison.Response{status_code: status}} ->
         {:error, "MusicBrainz API returned status #{status}"}
-        
+
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, "HTTP request failed: #{reason}"}
     end
@@ -145,25 +149,32 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
   defp format_musicbrainz_result(recording) do
     # Extract artist info
     artist_credits = recording["artist-credit"] || []
-    artists = Enum.map(artist_credits, fn credit -> 
-      credit["artist"]["name"] || "Unknown Artist"
-    end)
+
+    artists =
+      Enum.map(artist_credits, fn credit ->
+        credit["artist"]["name"] || "Unknown Artist"
+      end)
+
     artist_name = Enum.join(artists, " & ")
-    
+
     # Extract release info if available
     releases = recording["releases"] || []
-    release_title = case releases do
-      [first_release | _] -> first_release["title"]
-      [] -> nil
-    end
-    
+
+    release_title =
+      case releases do
+        [first_release | _] -> first_release["title"]
+        [] -> nil
+      end
+
     # Format title and description
     title = recording["title"] || "Unknown Track"
-    description = case {artist_name, release_title} do
-      {artist, nil} -> "by #{artist}"
-      {artist, release} -> "by #{artist} (#{release})"
-    end
-    
+
+    description =
+      case {artist_name, release_title} do
+        {artist, nil} -> "by #{artist}"
+        {artist, release} -> "by #{artist} (#{release})"
+      end
+
     %{
       id: recording["id"],
       type: :track,
@@ -199,13 +210,16 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
       external_urls: %{
         musicbrainz: "https://musicbrainz.org/recording/#{id}"
       },
-      cast: [], # Not applicable to music tracks
-      crew: [], # Not applicable to music tracks
+      # Not applicable to music tracks
+      cast: [],
+      # Not applicable to music tracks
+      crew: [],
       media: %{
         audio_features: %{}
       },
       additional_data: %{
-        note: "Track search and details are handled by frontend JavaScript using musicbrainz-api package"
+        note:
+          "Track search and details are handled by frontend JavaScript using musicbrainz-api package"
       }
     }
   end
@@ -223,8 +237,10 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
       external_urls: %{
         musicbrainz: "https://musicbrainz.org/recording/#{get_nested_value(raw_data, ["id"])}"
       },
-      cast: [], # Not applicable to music tracks
-      crew: [], # Not applicable to music tracks
+      # Not applicable to music tracks
+      cast: [],
+      # Not applicable to music tracks
+      crew: [],
       media: %{
         audio_features: get_nested_value(raw_data, ["metadata", "audio_features"], %{})
       },
@@ -245,5 +261,6 @@ defmodule EventasaurusWeb.Services.MusicBrainzRichDataProvider do
   defp sanitize_query(query) when is_binary(query) do
     query |> String.replace("\"", "\\\"") |> String.trim()
   end
+
   defp sanitize_query(other), do: to_string(other)
 end

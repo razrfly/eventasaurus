@@ -10,24 +10,29 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Config do
   @behaviour EventasaurusDiscovery.Sources.SourceConfig
 
   @base_url "https://karnet.krakowculture.pl"
-  @rate_limit 4  # Conservative rate limit (4 seconds between requests)
-  @timeout 20_000  # Longer timeout for slower site
+  # Conservative rate limit (4 seconds between requests)
+  @rate_limit 4
+  # Longer timeout for slower site
+  @timeout 20_000
 
   @impl EventasaurusDiscovery.Sources.SourceConfig
   def source_config do
     EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
       name: "Karnet Kraków",
       slug: "karnet",
-      priority: 70,  # Lower priority than Ticketmaster and BandsInTown
+      # Lower priority than Ticketmaster and BandsInTown
+      priority: 70,
       rate_limit: @rate_limit,
       timeout: @timeout,
       max_retries: 3,
       queue: :discovery,
       base_url: @base_url,
-      api_key: nil,  # No API key needed for HTML scraping
+      # No API key needed for HTML scraping
+      api_key: nil,
       api_secret: nil,
       metadata: %{
-        "language" => "pl",  # Primary language is Polish
+        # Primary language is Polish
+        "language" => "pl",
         "encoding" => "UTF-8",
         "supports_pagination" => true,
         "supports_filters" => true,
@@ -61,8 +66,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Config do
     cond do
       String.starts_with?(event_path, "http") ->
         event_path
+
       String.starts_with?(event_path, "/") ->
         "#{@base_url}#{event_path}"
+
       true ->
         "#{@base_url}/#{event_path}"
     end

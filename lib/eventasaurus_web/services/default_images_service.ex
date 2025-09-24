@@ -25,7 +25,7 @@ defmodule EventasaurusWeb.Services.DefaultImagesService do
     |> to_string()
     |> ImageManifest.get_images_for_category()
   end
-  
+
   def get_images_for_category(category) do
     ImageManifest.get_images_for_category(category)
   end

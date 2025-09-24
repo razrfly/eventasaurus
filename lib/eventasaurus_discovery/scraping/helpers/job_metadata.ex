@@ -38,11 +38,12 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
   Records an error in job metadata.
   """
   def update_error(job_id, error, context \\ %{}) do
-    error_message = case error do
-      %{message: msg} -> msg
-      msg when is_binary(msg) -> msg
-      other -> inspect(other)
-    end
+    error_message =
+      case error do
+        %{message: msg} -> msg
+        msg when is_binary(msg) -> msg
+        other -> inspect(other)
+      end
 
     update_job_metadata(job_id, %{
       status: "failed",
@@ -72,6 +73,7 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
         is_number(total) and total > 0 -> Float.round(current / total * 100, 2)
         true -> 0.0
       end
+
     metadata = %{
       progress_current: current,
       progress_total: total,
@@ -79,11 +81,12 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
       last_update: DateTime.utc_now()
     }
 
-    metadata = if message do
-      Map.put(metadata, :progress_message, message)
-    else
-      metadata
-    end
+    metadata =
+      if message do
+        Map.put(metadata, :progress_message, message)
+      else
+        metadata
+      end
 
     update_job_metadata(job_id, metadata)
   end
@@ -92,9 +95,11 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
   Gets metadata for a specific job.
   """
   def get_job_metadata(job_id) do
-    query = from j in Oban.Job,
-      where: j.id == ^job_id,
-      select: j.meta
+    query =
+      from(j in Oban.Job,
+        where: j.id == ^job_id,
+        select: j.meta
+      )
 
     case Repo.one(query) do
       nil -> %{}
@@ -109,18 +114,21 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
     start_date = start_date || DateTime.add(DateTime.utc_now(), -7 * 24 * 3600, :second)
     end_date = end_date || DateTime.utc_now()
 
-    query = from j in Oban.Job,
-      where: j.queue == "scraper",
-      where: j.inserted_at >= ^start_date and j.inserted_at <= ^end_date,
-      where: fragment("? @> ?", j.args, ^%{source_id: source_id}),
-      select: %{
-        state: j.state,
-        count: count(j.id)
-      },
-      group_by: j.state
+    query =
+      from(j in Oban.Job,
+        where: j.queue == "scraper",
+        where: j.inserted_at >= ^start_date and j.inserted_at <= ^end_date,
+        where: fragment("? @> ?", j.args, ^%{source_id: source_id}),
+        select: %{
+          state: j.state,
+          count: count(j.id)
+        },
+        group_by: j.state
+      )
 
-    stats = Repo.all(query)
-    |> Enum.into(%{}, fn %{state: state, count: count} -> {state, count} end)
+    stats =
+      Repo.all(query)
+      |> Enum.into(%{}, fn %{state: state, count: count} -> {state, count} end)
 
     %{
       completed: Map.get(stats, "completed", 0),
@@ -136,9 +144,11 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
   def cleanup_old_metadata(days_to_keep \\ 30) do
     cutoff_date = DateTime.add(DateTime.utc_now(), -days_to_keep * 24 * 3600, :second)
 
-    query = from j in Oban.Job,
-      where: j.completed_at < ^cutoff_date or j.discarded_at < ^cutoff_date,
-      where: j.queue == "scraper"
+    query =
+      from(j in Oban.Job,
+        where: j.completed_at < ^cutoff_date or j.discarded_at < ^cutoff_date,
+        where: j.queue == "scraper"
+      )
 
     {deleted_count, _} = Repo.delete_all(query)
 
@@ -148,8 +158,10 @@ defmodule EventasaurusDiscovery.Scraping.Helpers.JobMetadata do
 
   # Private helper to update job metadata
   defp update_job_metadata(job_id, new_metadata) do
-    query = from j in Oban.Job,
-      where: j.id == ^job_id
+    query =
+      from(j in Oban.Job,
+        where: j.id == ^job_id
+      )
 
     case Repo.one(query) do
       nil ->

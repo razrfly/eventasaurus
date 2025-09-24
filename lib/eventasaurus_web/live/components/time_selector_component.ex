@@ -53,11 +53,15 @@ defmodule EventasaurusWeb.TimeSelectorComponent do
     10..23
     |> Enum.flat_map(fn hour ->
       [
-        %{value: TimeUtils.format_time_value(hour, 0), display: TimeUtils.format_time_display(hour, 0)},
-        %{value: TimeUtils.format_time_value(hour, 30), display: TimeUtils.format_time_display(hour, 30)}
+        %{
+          value: TimeUtils.format_time_value(hour, 0),
+          display: TimeUtils.format_time_display(hour, 0)
+        },
+        %{
+          value: TimeUtils.format_time_value(hour, 30),
+          display: TimeUtils.format_time_display(hour, 30)
+        }
       ]
     end)
   end
-
-
 end

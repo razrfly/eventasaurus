@@ -59,23 +59,26 @@ defmodule EventasaurusWeb.Components.Events.ParticipantAvatars do
 
   defp calculate_participant_data(event) do
     # Calculate the actual participant count from available data
-    actual_count = cond do
-      # If we have participant_count, use it as the source of truth
-      is_integer(Map.get(event, :participant_count)) && Map.get(event, :participant_count) >= 0 -> 
-        Map.get(event, :participant_count)
-      # If we have participants array, use its length as fallback
-      is_list(Map.get(event, :participants)) -> 
-        length(Map.get(event, :participants, []))
-      # Otherwise default to 0
-      true -> 
-        0
-    end
-    
+    actual_count =
+      cond do
+        # If we have participant_count, use it as the source of truth
+        is_integer(Map.get(event, :participant_count)) && Map.get(event, :participant_count) >= 0 ->
+          Map.get(event, :participant_count)
+
+        # If we have participants array, use its length as fallback
+        is_list(Map.get(event, :participants)) ->
+          length(Map.get(event, :participants, []))
+
+        # Otherwise default to 0
+        true ->
+          0
+      end
+
     # Determine how many more participants there are beyond what's shown
     participants_list = Map.get(event, :participants, [])
     shown_count = min(length(participants_list), 3)
     more_count = max(actual_count - shown_count, 0)
-    
+
     %{
       actual_count: actual_count,
       participants_list: participants_list,

@@ -31,15 +31,18 @@ defmodule EventasaurusWeb.EventLive.EditTest do
         "event[tagline]" => "Updated tagline",
         "event[visibility]" => "private",
         "event[start_date]" => "2025-12-15",
-        "event[start_time]" => "20:00",  # Use valid time format
+        # Use valid time format
+        "event[start_time]" => "20:00",
         "event[ends_date]" => "2025-12-15",
-        "event[ends_time]" => "23:00",   # Use valid time format
+        # Use valid time format
+        "event[ends_time]" => "23:00",
         "event[timezone]" => "America/New_York"
       }
 
-      _html = view
-      |> form("form[data-test-id='event-form']", updated_data)
-      |> render_submit()
+      _html =
+        view
+        |> form("form[data-test-id='event-form']", updated_data)
+        |> render_submit()
 
       # Should redirect to updated event show page
       assert_redirected(view, "/events/#{event.slug}")
@@ -69,15 +72,17 @@ defmodule EventasaurusWeb.EventLive.EditTest do
 
       # Validation prevents update
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", invalid_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", invalid_data)
+          |> render_submit()
 
         case result do
           {:error, {:redirect, _}} ->
             # Validation prevented update
             reloaded_event = EventasaurusApp.Repo.reload!(event)
             assert reloaded_event.title == "Original Title"
+
           html when is_binary(html) ->
             # Stayed on form - validation prevented submission
             assert has_element?(view, "form[data-test-id='event-form']")
@@ -103,14 +108,16 @@ defmodule EventasaurusWeb.EventLive.EditTest do
 
       # Server-side validation prevents update
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", invalid_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", invalid_data)
+          |> render_submit()
 
         case result do
           {:error, {:redirect, _}} ->
             # Validation prevented update
             assert true
+
           html when is_binary(html) ->
             # Form remains active
             assert has_element?(view, "form[data-test-id='event-form']")
@@ -130,22 +137,27 @@ defmodule EventasaurusWeb.EventLive.EditTest do
 
       # Mix valid and invalid data
       mixed_data = %{
-        "event[title]" => "",                  # Invalid
-        "event[tagline]" => "Updated Tagline", # Valid
-        "event[description]" => "Updated Description"  # Valid
+        # Invalid
+        "event[title]" => "",
+        # Valid
+        "event[tagline]" => "Updated Tagline",
+        # Valid
+        "event[description]" => "Updated Description"
       }
 
       # Test validation behavior
       capture_log(fn ->
-        result = view
-        |> form("form[data-test-id='event-form']", mixed_data)
-        |> render_submit()
+        result =
+          view
+          |> form("form[data-test-id='event-form']", mixed_data)
+          |> render_submit()
 
         case result do
           {:error, {:redirect, _}} ->
             # Validation prevented update
             reloaded_event = EventasaurusApp.Repo.reload!(event)
             assert reloaded_event.title == "Original Title"
+
           html when is_binary(html) ->
             # Form may preserve some data
             assert has_element?(view, "form[data-test-id='event-form']")
@@ -167,13 +179,16 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       # Update only the title field
       updated_data = %{
         "event[title]" => "Only Title Changed",
-        "event[start_time]" => "14:00",  # Use valid time format (was "14:40")
-        "event[ends_time]" => "16:00"    # Use valid time format
+        # Use valid time format (was "14:40")
+        "event[start_time]" => "14:00",
+        # Use valid time format
+        "event[ends_time]" => "16:00"
       }
 
-      _html = view
-      |> form("form[data-test-id='event-form']", updated_data)
-      |> render_submit()
+      _html =
+        view
+        |> form("form[data-test-id='event-form']", updated_data)
+        |> render_submit()
 
       # Should redirect to event show page
       assert_redirected(view, "/events/#{event.slug}")
@@ -181,7 +196,8 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       # Verify only title changed, other data preserved
       updated_event = EventasaurusApp.Repo.get!(EventasaurusApp.Events.Event, event.id)
       assert updated_event.title == "Only Title Changed"
-      assert updated_event.tagline == "Original Tagline"  # Should be preserved
+      # Should be preserved
+      assert updated_event.tagline == "Original Tagline"
     end
 
     test "edit form shows correct state for events with date polling", %{conn: conn} do
@@ -195,8 +211,11 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       event_attrs = %{
         title: "Polling Event for Edit Test",
         description: "An event to test edit functionality",
-        start_at: DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
-        ends_at: DateTime.new!(week_later, ~T[16:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        start_at:
+          DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        ends_at:
+          DateTime.new!(week_later, ~T[16:00:00], "America/New_York")
+          |> DateTime.shift_zone!("UTC"),
         timezone: "America/New_York",
         status: :polling,
         polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second),
@@ -208,8 +227,11 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       {:ok, event} = EventasaurusApp.Events.create_event_with_organizer(event_attrs, user)
 
       # Create date poll and options
-      {:ok, poll} = EventasaurusApp.Events.create_event_date_poll(event, user, %{voting_deadline: nil})
-      {:ok, _options} = EventasaurusApp.Events.create_date_options_from_range(poll, tomorrow, week_later)
+      {:ok, poll} =
+        EventasaurusApp.Events.create_event_date_poll(event, user, %{voting_deadline: nil})
+
+      {:ok, _options} =
+        EventasaurusApp.Events.create_date_options_from_range(poll, tomorrow, week_later)
 
       # Load the edit page
       conn = log_in_user(conn, user)
@@ -247,8 +269,11 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       event_attrs = %{
         title: "Test Vote Preservation",
         description: "Testing that votes are preserved during edits",
-        start_at: DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
-        ends_at: DateTime.new!(day_three, ~T[16:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        start_at:
+          DateTime.new!(tomorrow, ~T[14:00:00], "America/New_York") |> DateTime.shift_zone!("UTC"),
+        ends_at:
+          DateTime.new!(day_three, ~T[16:00:00], "America/New_York")
+          |> DateTime.shift_zone!("UTC"),
         timezone: "America/New_York",
         status: :polling,
         polling_deadline: DateTime.add(DateTime.utc_now(), 7 * 24 * 60 * 60, :second),
@@ -259,13 +284,17 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       {:ok, event} = EventasaurusApp.Events.create_event_with_organizer(event_attrs, user)
 
       # Create date poll and initial options (tomorrow and day_after)
-      {:ok, poll} = EventasaurusApp.Events.create_event_date_poll(event, user, %{voting_deadline: nil})
+      {:ok, poll} =
+        EventasaurusApp.Events.create_event_date_poll(event, user, %{voting_deadline: nil})
+
       {:ok, option1} = EventasaurusApp.Events.create_event_date_option(poll, tomorrow)
       {:ok, option2} = EventasaurusApp.Events.create_event_date_option(poll, day_after)
 
       # Create votes on the initial options
       {:ok, vote1} = EventasaurusApp.Events.create_event_date_vote(option1, other_user, :yes)
-      {:ok, vote2} = EventasaurusApp.Events.create_event_date_vote(option2, other_user, :if_need_be)
+
+      {:ok, vote2} =
+        EventasaurusApp.Events.create_event_date_vote(option2, other_user, :if_need_be)
 
       # Verify initial votes exist
       initial_vote1 = EventasaurusApp.Events.get_event_date_vote!(vote1.id)
@@ -277,7 +306,7 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       conn = log_in_user(conn, user)
       {:ok, edit_live, _html} = live(conn, ~p"/events/#{event.slug}/edit")
 
-            # First, click on the new date in the calendar component to add it
+      # First, click on the new date in the calendar component to add it
       # This simulates the user clicking on day_three in the calendar
       day_three_string = Date.to_iso8601(day_three)
 
@@ -295,9 +324,10 @@ defmodule EventasaurusWeb.EventLive.EditTest do
       }
 
       # Submit the form to save the event with the newly added date option
-      _html = edit_live
-      |> form("form[data-test-id='event-form']", updated_data)
-      |> render_submit()
+      _html =
+        edit_live
+        |> form("form[data-test-id='event-form']", updated_data)
+        |> render_submit()
 
       # Should redirect to event show page
       assert_redirected(edit_live, "/events/#{event.slug}")
@@ -323,17 +353,20 @@ defmodule EventasaurusWeb.EventLive.EditTest do
   describe "access control" do
     test "non-organizer cannot edit event", %{conn: conn} do
       event = insert(:event)
-      {conn, _user} = register_and_log_in_user(conn)  # Different user, not organizer
+      # Different user, not organizer
+      {conn, _user} = register_and_log_in_user(conn)
 
       # Should redirect with permission error
-      assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/events/#{event.slug}/edit")
+      assert {:error, {:redirect, %{to: "/dashboard"}}} =
+               live(conn, ~p"/events/#{event.slug}/edit")
     end
 
     test "unauthenticated user redirects to login", %{conn: conn} do
       event = insert(:event)
 
       # Should redirect to login
-      assert {:error, {:redirect, %{to: "/auth/login"}}} = live(conn, ~p"/events/#{event.slug}/edit")
+      assert {:error, {:redirect, %{to: "/auth/login"}}} =
+               live(conn, ~p"/events/#{event.slug}/edit")
     end
   end
 end

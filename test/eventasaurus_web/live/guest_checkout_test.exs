@@ -24,7 +24,10 @@ defmodule EventasaurusWeb.GuestCheckoutTest do
 
       # Update guest form with empty name and valid email
       view |> element("#guest_name") |> render_keyup(%{value: "", field: "name"})
-      view |> element("#guest_email") |> render_keyup(%{value: "john@example.com", field: "email"})
+
+      view
+      |> element("#guest_email")
+      |> render_keyup(%{value: "john@example.com", field: "email"})
 
       # Try to proceed with checkout
       html = view |> element("button", "Proceed to Payment") |> render_click()
@@ -50,15 +53,23 @@ defmodule EventasaurusWeb.GuestCheckoutTest do
     # 2. Supabase Auth API validation (server-side)
     # No custom server-side regex validation needed
 
-    test "processes multiple ticket types successfully", %{conn: conn, event: event, ticket: ticket} do
+    test "processes multiple ticket types successfully", %{
+      conn: conn,
+      event: event,
+      ticket: ticket
+    } do
       # Create another ticket type
       ticket2 = insert(:ticket, event: event, title: "VIP Admission", base_price_cents: 5000)
 
-      {:ok, view, _html} = live(conn, "/events/#{event.slug}/checkout?#{ticket.id}=1&#{ticket2.id}=1")
+      {:ok, view, _html} =
+        live(conn, "/events/#{event.slug}/checkout?#{ticket.id}=1&#{ticket2.id}=1")
 
       # Update guest form with valid data
       view |> element("#guest_name") |> render_keyup(%{value: "John Doe", field: "name"})
-      view |> element("#guest_email") |> render_keyup(%{value: "john@example.com", field: "email"})
+
+      view
+      |> element("#guest_email")
+      |> render_keyup(%{value: "john@example.com", field: "email"})
 
       # Proceed with checkout - should now handle multiple ticket types
       view |> element("button", "Proceed to Payment") |> render_click()
@@ -73,7 +84,10 @@ defmodule EventasaurusWeb.GuestCheckoutTest do
 
       # Update guest form with valid data
       view |> element("#guest_name") |> render_keyup(%{value: "John Doe", field: "name"})
-      view |> element("#guest_email") |> render_keyup(%{value: "john@example.com", field: "email"})
+
+      view
+      |> element("#guest_email")
+      |> render_keyup(%{value: "john@example.com", field: "email"})
 
       # Proceed with checkout - this should redirect to Stripe
       view |> element("button", "Proceed to Payment") |> render_click()

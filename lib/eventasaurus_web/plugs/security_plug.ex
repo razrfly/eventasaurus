@@ -91,7 +91,8 @@ defmodule EventasaurusWeb.Plugs.SecurityPlug do
 
   # Request Size Validation
   defp validate_request_size(conn, opts) do
-    max_size = Keyword.get(opts, :max_request_size, 10_000_000)  # 10MB default
+    # 10MB default
+    max_size = Keyword.get(opts, :max_request_size, 10_000_000)
 
     case get_req_header(conn, "content-length") do
       [size_str] ->

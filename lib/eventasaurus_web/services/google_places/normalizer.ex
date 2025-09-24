@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
     description = build_description(place_data)
     content_type = determine_content_type(place_data)
     image_url = Photos.extract_first_image_url(place_data)
-    
+
     %{
       id: place_id,
       type: content_type,
@@ -42,18 +42,19 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
   def normalize_autocomplete_prediction(prediction) do
     place_id = Map.get(prediction, "place_id")
     description = Map.get(prediction, "description", "")
-    
+
     # Extract main text (usually city name) and secondary text (region/country)
     structured = Map.get(prediction, "structured_formatting", %{})
     main_text = Map.get(structured, "main_text", description)
     secondary_text = Map.get(structured, "secondary_text", "")
-    
+
     %{
       id: place_id,
       type: :city,
       title: main_text,
       description: secondary_text,
-      image_url: nil,  # Autocomplete doesn't provide images
+      # Autocomplete doesn't provide images
+      image_url: nil,
       metadata: %{
         place_id: place_id,
         full_description: description,
@@ -69,25 +70,27 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
     place_id = Map.get(result, "place_id")
     formatted_address = Map.get(result, "formatted_address", "")
     types = Map.get(result, "types", [])
-    
+
     # Determine the administrative level
-    content_type = cond do
-      "country" in types -> :country
-      "administrative_area_level_1" in types -> :region
-      "administrative_area_level_2" in types -> :region
-      true -> :location
-    end
-    
+    content_type =
+      cond do
+        "country" in types -> :country
+        "administrative_area_level_1" in types -> :region
+        "administrative_area_level_2" in types -> :region
+        true -> :location
+      end
+
     # Extract components for better display
     components = Map.get(result, "address_components", [])
     name = extract_name_from_components(components, types)
-    
+
     %{
       id: place_id,
       type: content_type,
       title: name || formatted_address,
       description: formatted_address,
-      image_url: nil,  # Geocoding doesn't provide images
+      # Geocoding doesn't provide images
+      image_url: nil,
       metadata: %{
         place_id: place_id,
         formatted_address: formatted_address,
@@ -156,10 +159,18 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
     types = Map.get(place_data, "types", [])
 
     cond do
-      Enum.any?(types, &(&1 in ["restaurant", "food", "meal_takeaway", "meal_delivery", "cafe", "bar"])) ->
+      Enum.any?(
+        types,
+        &(&1 in ["restaurant", "food", "meal_takeaway", "meal_delivery", "cafe", "bar"])
+      ) ->
         :restaurant
-      Enum.any?(types, &(&1 in ["tourist_attraction", "amusement_park", "zoo", "museum", "park", "stadium"])) ->
+
+      Enum.any?(
+        types,
+        &(&1 in ["tourist_attraction", "amusement_park", "zoo", "museum", "park", "stadium"])
+      ) ->
         :activity
+
       true ->
         :venue
     end
@@ -168,7 +179,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
   defp build_description(place_data) do
     vicinity = Map.get(place_data, "vicinity")
     formatted_address = Map.get(place_data, "formatted_address")
-    
+
     vicinity || formatted_address || ""
   end
 
@@ -187,7 +198,8 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
     case {business_status, is_open} do
       {"OPERATIONAL", true} -> "open"
       {"OPERATIONAL", false} -> "closed"
-      {"OPERATIONAL", nil} -> "open"  # Assume open if status unknown
+      # Assume open if status unknown
+      {"OPERATIONAL", nil} -> "open"
       {"CLOSED_TEMPORARILY", _} -> "closed"
       {"CLOSED_PERMANENTLY", _} -> "closed"
       _ -> "unknown"
@@ -212,18 +224,20 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
   defp build_external_urls(place_data) do
     urls = %{}
 
-    urls = if website = Map.get(place_data, "website") do
-      Map.put(urls, :official, website)
-    else
-      urls
-    end
+    urls =
+      if website = Map.get(place_data, "website") do
+        Map.put(urls, :official, website)
+      else
+        urls
+      end
 
-    urls = if place_id = Map.get(place_data, "place_id") do
-      google_maps_url = "https://www.google.com/maps/place/?q=place_id:#{place_id}"
-      Map.put(urls, :maps, google_maps_url)
-    else
-      urls
-    end
+    urls =
+      if place_id = Map.get(place_data, "place_id") do
+        google_maps_url = "https://www.google.com/maps/place/?q=place_id:#{place_id}"
+        Map.put(urls, :maps, google_maps_url)
+      else
+        urls
+      end
 
     urls
   end
@@ -291,6 +305,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
 
     if include_reviews do
       reviews = Map.get(place_data, "reviews", [])
+
       %{
         reviews: format_reviews(reviews |> Enum.take(5)),
         overall_rating: Map.get(place_data, "rating"),
@@ -308,6 +323,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
   end
 
   defp format_price_level(nil), do: nil
+
   defp format_price_level(level) do
     String.duplicate("$", level)
   end
@@ -318,6 +334,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
       formatted: Enum.join(weekday_text, "\n")
     }
   end
+
   defp format_opening_hours(_), do: nil
 
   defp format_reviews(reviews) when is_list(reviews) do
@@ -331,28 +348,34 @@ defmodule EventasaurusWeb.Services.GooglePlaces.Normalizer do
       }
     end)
   end
+
   defp format_reviews(_), do: []
 
   defp extract_name_from_components(components, types) do
     cond do
       "country" in types ->
         find_component_name(components, "country")
+
       "administrative_area_level_1" in types ->
         find_component_name(components, "administrative_area_level_1")
+
       "administrative_area_level_2" in types ->
         find_component_name(components, "administrative_area_level_2")
+
       "locality" in types ->
         find_component_name(components, "locality")
+
       true ->
         nil
     end
   end
 
   defp find_component_name(components, type) do
-    component = Enum.find(components, fn c ->
-      type in Map.get(c, "types", [])
-    end)
-    
+    component =
+      Enum.find(components, fn c ->
+        type in Map.get(c, "types", [])
+      end)
+
     if component do
       Map.get(component, "long_name")
     end

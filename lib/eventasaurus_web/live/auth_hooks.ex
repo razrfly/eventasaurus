@@ -50,7 +50,9 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       |> assign_auth_user(session)
       |> assign_new(:user, fn ->
         case socket.assigns[:auth_user] do
-          nil -> nil
+          nil ->
+            nil
+
           auth_user ->
             case ensure_user_struct(auth_user) do
               {:ok, user} -> user
@@ -76,12 +78,13 @@ defmodule EventasaurusWeb.Live.AuthHooks do
 
       _auth_user ->
         # Also assign the processed user for convenience
-        socket = assign_new(socket, :user, fn ->
-          case ensure_user_struct(socket.assigns.auth_user) do
-            {:ok, user} -> user
-            {:error, _} -> nil
-          end
-        end)
+        socket =
+          assign_new(socket, :user, fn ->
+            case ensure_user_struct(socket.assigns.auth_user) do
+              {:ok, user} -> user
+              {:error, _} -> nil
+            end
+          end)
 
         {:cont, socket}
     end
@@ -93,7 +96,9 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       |> assign_auth_user(session)
       |> assign_new(:user, fn ->
         case socket.assigns[:auth_user] do
-          nil -> nil
+          nil ->
+            nil
+
           auth_user ->
             case ensure_user_struct(auth_user) do
               {:ok, user} -> user
@@ -113,9 +118,11 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       if dev_mode?() && session["dev_mode_login"] == true && session["current_user_id"] do
         # Dev mode: directly load the user from database
         user_id = session["current_user_id"]
+
         case EventasaurusApp.Repo.get(EventasaurusApp.Accounts.User, user_id) do
           nil -> nil
-          user -> user  # Return the User struct directly for dev mode
+          # Return the User struct directly for dev mode
+          user -> user
         end
       else
         # Normal production authentication flow
@@ -131,7 +138,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
               {:ok, auth_data} ->
                 # Token refreshed successfully, extract and use the new token
                 new_access_token = get_token_value(auth_data, "access_token")
-                
+
                 if new_access_token do
                   # Use the NEW token to get user data
                   Logger.debug("Token refreshed successfully in LiveView, using new token")
@@ -141,7 +148,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
                   Logger.warning("Failed to extract new access token from refresh response")
                   get_user_with_token(token)
                 end
-                
+
               {:error, reason} ->
                 # Refresh failed, token is likely expired or invalid
                 Logger.warning("Token refresh failed in LiveView: #{inspect(reason)}")
@@ -159,7 +166,7 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       end
     end)
   end
-  
+
   defp get_user_with_token(token) do
     # Use the AuthHelper for all tokens (both test and real)
     # The AuthHelper will delegate to TestClient in test environment
@@ -168,29 +175,34 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       _ -> nil
     end
   end
-  
+
   defp should_refresh_token?(expires_at_iso) when is_binary(expires_at_iso) do
     case DateTime.from_iso8601(expires_at_iso) do
       {:ok, expires_at, _} ->
         # Refresh if token expires in next 10 minutes
         refresh_threshold = DateTime.utc_now() |> DateTime.add(600, :second)
         DateTime.compare(refresh_threshold, expires_at) == :gt
+
       _ ->
         # If we can't parse the expiry, don't try to refresh
         false
     end
   end
+
   defp should_refresh_token?(_), do: false
-  
+
   # Helper to extract token value from various response formats
   defp get_token_value(auth_data, key) do
     cond do
       is_map(auth_data) && Map.has_key?(auth_data, key) ->
         Map.get(auth_data, key)
+
       is_map(auth_data) && Map.has_key?(auth_data, String.to_atom(key)) ->
         Map.get(auth_data, String.to_atom(key))
+
       is_map(auth_data) && key == "access_token" && Map.has_key?(auth_data, "token") ->
         Map.get(auth_data, "token")
+
       true ->
         nil
     end
@@ -207,10 +219,10 @@ defmodule EventasaurusWeb.Live.AuthHooks do
       nil ->
         # Create new user if doesn't exist
         case Accounts.create_user(%{
-          supabase_id: supabase_id,
-          email: email,
-          name: name
-        }) do
+               supabase_id: supabase_id,
+               email: email,
+               name: name
+             }) do
           {:ok, user} -> {:ok, user}
           {:error, _} -> {:error, :user_creation_failed}
         end

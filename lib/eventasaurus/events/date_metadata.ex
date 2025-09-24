@@ -14,32 +14,32 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
   @primary_key false
   embedded_schema do
-    field :date, :string
-    field :display_date, :string
-    field :date_type, :string, default: "single_date"
-    field :created_at, :string
-    field :updated_at, :string
+    field(:date, :string)
+    field(:display_date, :string)
+    field(:date_type, :string, default: "single_date")
+    field(:created_at, :string)
+    field(:updated_at, :string)
 
     # NEW: Time support fields
-    field :time_enabled, :boolean, default: false
-    field :all_day, :boolean, default: true
-    field :duration_minutes, :integer
-    field :flexible_duration, :boolean, default: false
+    field(:time_enabled, :boolean, default: false)
+    field(:all_day, :boolean, default: true)
+    field(:duration_minutes, :integer)
+    field(:flexible_duration, :boolean, default: false)
 
     embeds_one :date_components, DateComponents, primary_key: false do
-      field :year, :integer
-      field :month, :integer
-      field :day, :integer
-      field :day_of_week, :integer
-      field :day_name, :string
+      field(:year, :integer)
+      field(:month, :integer)
+      field(:day, :integer)
+      field(:day_of_week, :integer)
+      field(:day_name, :string)
     end
 
     # NEW: Time slots embedded schema
     embeds_many :time_slots, TimeSlot, primary_key: false do
-      field :start_time, :string
-      field :end_time, :string
-      field :timezone, :string, default: "UTC"
-      field :display, :string
+      field(:start_time, :string)
+      field(:end_time, :string)
+      field(:timezone, :string, default: "UTC")
+      field(:display, :string)
     end
   end
 
@@ -52,8 +52,17 @@ defmodule EventasaurusApp.Events.DateMetadata do
   """
   def changeset(date_metadata, attrs) do
     date_metadata
-    |> cast(attrs, [:date, :display_date, :date_type, :created_at, :updated_at,
-                    :time_enabled, :all_day, :duration_minutes, :flexible_duration])
+    |> cast(attrs, [
+      :date,
+      :display_date,
+      :date_type,
+      :created_at,
+      :updated_at,
+      :time_enabled,
+      :all_day,
+      :duration_minutes,
+      :flexible_duration
+    ])
     |> cast_embed(:date_components, with: &date_components_changeset/2)
     |> cast_embed(:time_slots, with: &time_slot_changeset/2)
     |> validate_required([:date, :display_date, :date_type])
@@ -87,11 +96,15 @@ defmodule EventasaurusApp.Events.DateMetadata do
   """
   def time_slot_changeset(time_slot, attrs) do
     # Handle case where Ecto passes an empty map for new embedded structs
-    time_slot_struct = case time_slot do
-      %__MODULE__.TimeSlot{} -> time_slot  # Already a proper struct
-      %{} -> %__MODULE__.TimeSlot{}  # Empty map, create proper struct
-      _ -> time_slot  # Other cases (shouldn't happen but be defensive)
-    end
+    time_slot_struct =
+      case time_slot do
+        # Already a proper struct
+        %__MODULE__.TimeSlot{} -> time_slot
+        # Empty map, create proper struct
+        %{} -> %__MODULE__.TimeSlot{}
+        # Other cases (shouldn't happen but be defensive)
+        _ -> time_slot
+      end
 
     time_slot_struct
     |> cast(attrs, [:start_time, :end_time, :timezone, :display])
@@ -107,7 +120,9 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
   defp validate_date_format(changeset) do
     case get_field(changeset, :date) do
-      nil -> changeset
+      nil ->
+        changeset
+
       date_string ->
         case Date.from_iso8601(date_string) do
           {:ok, _date} -> changeset
@@ -118,7 +133,9 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
   defp validate_timestamp_format(changeset, field) do
     case get_field(changeset, field) do
-      nil -> changeset
+      nil ->
+        changeset
+
       timestamp_string ->
         case DateTime.from_iso8601(timestamp_string) do
           {:ok, _datetime, _} -> changeset
@@ -132,8 +149,12 @@ defmodule EventasaurusApp.Events.DateMetadata do
     date_components = get_field(changeset, :date_components)
 
     case {date_string, date_components} do
-      {nil, _} -> changeset
-      {_, nil} -> changeset
+      {nil, _} ->
+        changeset
+
+      {_, nil} ->
+        changeset
+
       {date_str, components} ->
         case Date.from_iso8601(date_str) do
           {:ok, date} ->
@@ -142,7 +163,10 @@ defmodule EventasaurusApp.Events.DateMetadata do
             else
               add_error(changeset, :date_components, "do not match the date value")
             end
-          {:error, _} -> changeset  # Already handled by validate_date_format
+
+          # Already handled by validate_date_format
+          {:error, _} ->
+            changeset
         end
     end
   end
@@ -158,15 +182,23 @@ defmodule EventasaurusApp.Events.DateMetadata do
         case Date.new(y, m, d) do
           {:ok, date} ->
             actual_dow = Date.day_of_week(date)
+
             if actual_dow == dow do
               changeset
             else
-              add_error(changeset, :day_of_week, "does not match the calculated day of week for #{y}-#{m}-#{d}")
+              add_error(
+                changeset,
+                :day_of_week,
+                "does not match the calculated day of week for #{y}-#{m}-#{d}"
+              )
             end
+
           {:error, _} ->
             add_error(changeset, :day, "invalid date combination: #{y}-#{m}-#{d}")
         end
-      _ -> changeset
+
+      _ ->
+        changeset
     end
   end
 
@@ -179,8 +211,10 @@ defmodule EventasaurusApp.Events.DateMetadata do
     case {time_enabled, all_day} do
       {true, true} ->
         add_error(changeset, :all_day, "cannot be true when time_enabled is true")
+
       {false, false} ->
         add_error(changeset, :all_day, "must be true when time_enabled is false")
+
       _ ->
         changeset
     end
@@ -192,11 +226,22 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
     case {time_enabled, time_slots} do
       {true, []} ->
-        add_error(changeset, :time_slots, "must have at least one time slot when time_enabled is true")
+        add_error(
+          changeset,
+          :time_slots,
+          "must have at least one time slot when time_enabled is true"
+        )
+
       {true, nil} ->
-        add_error(changeset, :time_slots, "must have at least one time slot when time_enabled is true")
+        add_error(
+          changeset,
+          :time_slots,
+          "must have at least one time slot when time_enabled is true"
+        )
+
       {false, slots} when is_list(slots) and length(slots) > 0 ->
         add_error(changeset, :time_slots, "should be empty when time_enabled is false")
+
       _ ->
         changeset
     end
@@ -204,18 +249,22 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
   defp validate_duration_constraints(changeset) do
     changeset
-    |> validate_number(:duration_minutes, greater_than: 0, less_than: 1440) # Max 24 hours
+    # Max 24 hours
+    |> validate_number(:duration_minutes, greater_than: 0, less_than: 1440)
   end
 
   defp validate_time_format(changeset, field) do
     case get_field(changeset, field) do
-      nil -> changeset
+      nil ->
+        changeset
+
       time_string when is_binary(time_string) ->
         if Regex.match?(~r/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, time_string) do
           changeset
         else
           add_error(changeset, field, "must be in HH:MM format (24-hour)")
         end
+
       _ ->
         add_error(changeset, field, "must be a string in HH:MM format")
     end
@@ -223,16 +272,23 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
   defp validate_timezone(changeset) do
     case get_field(changeset, :timezone) do
-      nil -> changeset
+      nil ->
+        changeset
+
       timezone when is_binary(timezone) ->
         # Basic timezone validation - accept UTC, common timezones, and IANA format
         if timezone in ["UTC"] or
-           Regex.match?(~r/^[A-Z][a-z]+\/[A-Z][a-z_]+$/, timezone) or
-           Regex.match?(~r/^[+-]\d{2}:\d{2}$/, timezone) do
+             Regex.match?(~r/^[A-Z][a-z]+\/[A-Z][a-z_]+$/, timezone) or
+             Regex.match?(~r/^[+-]\d{2}:\d{2}$/, timezone) do
           changeset
         else
-          add_error(changeset, :timezone, "must be a valid timezone (UTC, IANA format, or offset like +05:30)")
+          add_error(
+            changeset,
+            :timezone,
+            "must be a valid timezone (UTC, IANA format, or offset like +05:30)"
+          )
         end
+
       _ ->
         add_error(changeset, :timezone, "must be a string")
     end
@@ -251,9 +307,12 @@ defmodule EventasaurusApp.Events.DateMetadata do
             else
               add_error(changeset, :end_time, "must be after start_time")
             end
+
           _ ->
-            changeset  # Time format errors will be caught by validate_time_format
+            # Time format errors will be caught by validate_time_format
+            changeset
         end
+
       _ ->
         changeset
     end
@@ -265,7 +324,7 @@ defmodule EventasaurusApp.Events.DateMetadata do
     display = get_field(changeset, :display)
 
     # Auto-generate display if not provided
-    if is_nil(display) and start_time && end_time do
+    if (is_nil(display) and start_time) && end_time do
       generated_display = generate_time_display(start_time, end_time)
       put_change(changeset, :display, generated_display)
     else
@@ -277,9 +336,9 @@ defmodule EventasaurusApp.Events.DateMetadata do
 
   defp components_match_date?(date, components) do
     date.year == components.year &&
-    date.month == components.month &&
-    date.day == components.day &&
-    Date.day_of_week(date) == components.day_of_week
+      date.month == components.month &&
+      date.day == components.day &&
+      Date.day_of_week(date) == components.day_of_week
   end
 
   defp parse_time_to_minutes(time_string) do
@@ -287,11 +346,13 @@ defmodule EventasaurusApp.Events.DateMetadata do
       [_, hour_str, minute_str] ->
         hour = String.to_integer(hour_str)
         minute = String.to_integer(minute_str)
+
         if hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 do
           {:ok, hour * 60 + minute}
         else
           {:error, "invalid time range"}
         end
+
       _ ->
         {:error, "invalid time format"}
     end
@@ -307,19 +368,21 @@ defmodule EventasaurusApp.Events.DateMetadata do
         hour = div(minutes, 60)
         minute = rem(minutes, 60)
 
-        {display_hour, period} = if hour == 0 do
-          {12, "AM"}
-        else
-          if hour < 12 do
-            {hour, "AM"}
+        {display_hour, period} =
+          if hour == 0 do
+            {12, "AM"}
           else
-            display_hour = if hour == 12, do: 12, else: hour - 12
-            {display_hour, "PM"}
+            if hour < 12 do
+              {hour, "AM"}
+            else
+              display_hour = if hour == 12, do: 12, else: hour - 12
+              {display_hour, "PM"}
+            end
           end
-        end
 
         minute_str = ":#{String.pad_leading("#{minute}", 2, "0")}"
         "#{display_hour}#{minute_str} #{period}"
+
       _ ->
         time_string
     end
@@ -341,6 +404,7 @@ defmodule EventasaurusApp.Events.DateMetadata do
       [] ->
         # Additional validation for time-enabled polls
         validate_time_structure(metadata)
+
       keys ->
         {:error, "missing required keys: #{Enum.join(keys, ", ")}"}
     end
@@ -357,10 +421,13 @@ defmodule EventasaurusApp.Events.DateMetadata do
       cond do
         not is_list(time_slots) ->
           {:error, "time_slots must be a list when time_enabled is true"}
+
         length(time_slots) == 0 ->
           {:error, "time_slots must have at least one slot when time_enabled is true"}
+
         not valid_time_slots_structure?(time_slots) ->
           {:error, "time_slots have invalid structure"}
+
         true ->
           :ok
       end
@@ -372,10 +439,10 @@ defmodule EventasaurusApp.Events.DateMetadata do
   defp valid_time_slots_structure?(time_slots) do
     Enum.all?(time_slots, fn slot ->
       is_map(slot) and
-      Map.has_key?(slot, "start_time") and
-      Map.has_key?(slot, "end_time") and
-      is_binary(slot["start_time"]) and
-      is_binary(slot["end_time"])
+        Map.has_key?(slot, "start_time") and
+        Map.has_key?(slot, "end_time") and
+        is_binary(slot["start_time"]) and
+        is_binary(slot["end_time"])
     end)
   end
 
@@ -387,14 +454,17 @@ defmodule EventasaurusApp.Events.DateMetadata do
   Enhanced to support time slot metadata.
   """
   def build_date_metadata(date, opts \\ []) do
-    parsed_date = case date do
-      %Date{} = d -> d
-      date_string when is_binary(date_string) ->
-        case Date.from_iso8601(date_string) do
-          {:ok, d} -> d
-          {:error, _} -> raise ArgumentError, "Invalid date: #{date_string}"
-        end
-    end
+    parsed_date =
+      case date do
+        %Date{} = d ->
+          d
+
+        date_string when is_binary(date_string) ->
+          case Date.from_iso8601(date_string) do
+            {:ok, d} -> d
+            {:error, _} -> raise ArgumentError, "Invalid date: #{date_string}"
+          end
+      end
 
     now = DateTime.utc_now() |> DateTime.to_iso8601()
     time_enabled = Keyword.get(opts, :time_enabled, false)
@@ -418,24 +488,26 @@ defmodule EventasaurusApp.Events.DateMetadata do
     }
 
     # Add time slots if time is enabled
-    metadata_with_time = if time_enabled do
-      time_slots = Keyword.get(opts, :time_slots, [])
-      duration_minutes = Keyword.get(opts, :duration_minutes)
-      flexible_duration = Keyword.get(opts, :flexible_duration, false)
+    metadata_with_time =
+      if time_enabled do
+        time_slots = Keyword.get(opts, :time_slots, [])
+        duration_minutes = Keyword.get(opts, :duration_minutes)
+        flexible_duration = Keyword.get(opts, :flexible_duration, false)
 
-      enhanced_metadata = Map.merge(base_metadata, %{
-        "time_slots" => time_slots,
-        "flexible_duration" => flexible_duration
-      })
+        enhanced_metadata =
+          Map.merge(base_metadata, %{
+            "time_slots" => time_slots,
+            "flexible_duration" => flexible_duration
+          })
 
-      if duration_minutes do
-        Map.put(enhanced_metadata, "duration_minutes", duration_minutes)
+        if duration_minutes do
+          Map.put(enhanced_metadata, "duration_minutes", duration_minutes)
+        else
+          enhanced_metadata
+        end
       else
-        enhanced_metadata
+        base_metadata
       end
-    else
-      base_metadata
-    end
 
     metadata_with_time
   end
@@ -471,7 +543,12 @@ defmodule EventasaurusApp.Events.DateMetadata do
         acc
       else
         Enum.reduce(slot_changeset.errors, acc, fn {field, {message, opts}}, changeset_acc ->
-          Ecto.Changeset.add_error(changeset_acc, :time_slots, "slot #{index + 1} #{field} #{message}", opts)
+          Ecto.Changeset.add_error(
+            changeset_acc,
+            :time_slots,
+            "slot #{index + 1} #{field} #{message}",
+            opts
+          )
         end)
       end
     end)

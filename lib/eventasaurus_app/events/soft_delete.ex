@@ -1,7 +1,7 @@
 defmodule EventasaurusApp.Events.SoftDelete do
   @moduledoc """
   Handles soft deletion of events and cascade soft deletion of associated records.
-  
+
   Soft deletion preserves all data while marking records as deleted. This allows for
   data recovery and maintains referential integrity.
   """
@@ -15,12 +15,12 @@ defmodule EventasaurusApp.Events.SoftDelete do
 
   @doc """
   Soft deletes an event and all its associated records.
-  
+
   ## Parameters
     - event_id: ID of the event to be soft deleted
     - reason: String explaining why the event is being deleted
     - user_id: ID of the user performing the deletion
-  
+
   ## Returns
     - {:ok, event} on successful deletion
     - {:error, reason} on failure
@@ -31,12 +31,11 @@ defmodule EventasaurusApp.Events.SoftDelete do
            :ok <- validate_can_soft_delete(event),
            {:ok, deleted_event} <- do_soft_delete_event(event, reason, user_id),
            :ok <- cascade_soft_delete(event, reason, user_id) do
-        
         # Log the soft deletion
         log_soft_deletion(event, user_id, reason)
         deleted_event
       else
-        {:error, reason} -> 
+        {:error, reason} ->
           Logger.error("Soft delete failed for event #{event_id}: #{reason}")
           Repo.rollback(reason)
       end
@@ -45,11 +44,11 @@ defmodule EventasaurusApp.Events.SoftDelete do
 
   @doc """
   Restores a soft-deleted event and all its associated records.
-  
+
   ## Parameters
     - event_id: ID of the event to be restored
     - user_id: ID of the user performing the restoration
-  
+
   ## Returns
     - {:ok, event} on successful restoration
     - {:error, reason} on failure
@@ -59,12 +58,11 @@ defmodule EventasaurusApp.Events.SoftDelete do
       with {:ok, event} <- get_deleted_event_safely(event_id),
            {:ok, restored_event} <- do_restore_event(event, user_id),
            :ok <- cascade_restore(event, user_id) do
-        
         # Log the restoration
         log_restoration(event, user_id)
         restored_event
       else
-        {:error, reason} -> 
+        {:error, reason} ->
           Logger.error("Restore failed for event #{event_id}: #{reason}")
           Repo.rollback(reason)
       end
@@ -105,12 +103,12 @@ defmodule EventasaurusApp.Events.SoftDelete do
     cond do
       event.deleted_at != nil ->
         {:error, :already_deleted}
-      
+
       # Add other business rules as needed
       # For example, you might not allow soft deletion of events that are currently active
       # event.status == :confirmed and event.start_at < DateTime.utc_now() ->
       #   {:error, :event_already_started}
-      
+
       true ->
         :ok
     end
@@ -168,9 +166,12 @@ defmodule EventasaurusApp.Events.SoftDelete do
   defp delete_associated_polls(event_id, reason, user_id) do
     # First soft delete poll votes
     from(pv in PollVote,
-         join: po in PollOption, on: pv.poll_option_id == po.id,
-         join: p in Poll, on: po.poll_id == p.id,
-         where: p.event_id == ^event_id and is_nil(pv.deleted_at))
+      join: po in PollOption,
+      on: pv.poll_option_id == po.id,
+      join: p in Poll,
+      on: po.poll_id == p.id,
+      where: p.event_id == ^event_id and is_nil(pv.deleted_at)
+    )
     |> Repo.soft_delete_all(
       deletion_reason: reason,
       deleted_by_user_id: user_id
@@ -178,16 +179,19 @@ defmodule EventasaurusApp.Events.SoftDelete do
 
     # Then soft delete poll options  
     from(po in PollOption,
-         join: p in Poll, on: po.poll_id == p.id,
-         where: p.event_id == ^event_id and is_nil(po.deleted_at))
+      join: p in Poll,
+      on: po.poll_id == p.id,
+      where: p.event_id == ^event_id and is_nil(po.deleted_at)
+    )
     |> Repo.soft_delete_all(
       deletion_reason: reason,
       deleted_by_user_id: user_id
     )
 
     # Finally soft delete polls
-    from(p in Poll, 
-         where: p.event_id == ^event_id and is_nil(p.deleted_at))
+    from(p in Poll,
+      where: p.event_id == ^event_id and is_nil(p.deleted_at)
+    )
     |> Repo.soft_delete_all(
       deletion_reason: reason,
       deleted_by_user_id: user_id
@@ -198,34 +202,46 @@ defmodule EventasaurusApp.Events.SoftDelete do
 
   defp restore_associated_polls(event_id, _user_id) do
     # Restore polls
-    from(p in Poll, 
-         where: p.event_id == ^event_id and not is_nil(p.deleted_at))
-    |> Repo.update_all(set: [
-      deleted_at: nil,
-      deletion_reason: nil,
-      deleted_by_user_id: nil
-    ])
+    from(p in Poll,
+      where: p.event_id == ^event_id and not is_nil(p.deleted_at)
+    )
+    |> Repo.update_all(
+      set: [
+        deleted_at: nil,
+        deletion_reason: nil,
+        deleted_by_user_id: nil
+      ]
+    )
 
     # Restore poll options
     from(po in PollOption,
-         join: p in Poll, on: po.poll_id == p.id,
-         where: p.event_id == ^event_id and not is_nil(po.deleted_at))
-    |> Repo.update_all(set: [
-      deleted_at: nil,
-      deletion_reason: nil,
-      deleted_by_user_id: nil
-    ])
+      join: p in Poll,
+      on: po.poll_id == p.id,
+      where: p.event_id == ^event_id and not is_nil(po.deleted_at)
+    )
+    |> Repo.update_all(
+      set: [
+        deleted_at: nil,
+        deletion_reason: nil,
+        deleted_by_user_id: nil
+      ]
+    )
 
     # Restore poll votes
     from(pv in PollVote,
-         join: po in PollOption, on: pv.poll_option_id == po.id,
-         join: p in Poll, on: po.poll_id == p.id,
-         where: p.event_id == ^event_id and not is_nil(pv.deleted_at))
-    |> Repo.update_all(set: [
-      deleted_at: nil,
-      deletion_reason: nil,
-      deleted_by_user_id: nil
-    ])
+      join: po in PollOption,
+      on: pv.poll_option_id == po.id,
+      join: p in Poll,
+      on: po.poll_id == p.id,
+      where: p.event_id == ^event_id and not is_nil(pv.deleted_at)
+    )
+    |> Repo.update_all(
+      set: [
+        deleted_at: nil,
+        deletion_reason: nil,
+        deleted_by_user_id: nil
+      ]
+    )
 
     :ok
   end
@@ -233,8 +249,9 @@ defmodule EventasaurusApp.Events.SoftDelete do
   # Ticket-related soft deletion
 
   defp delete_associated_tickets(event_id, reason, user_id) do
-    from(t in Ticket, 
-         where: t.event_id == ^event_id and is_nil(t.deleted_at))
+    from(t in Ticket,
+      where: t.event_id == ^event_id and is_nil(t.deleted_at)
+    )
     |> Repo.soft_delete_all(
       deletion_reason: reason,
       deleted_by_user_id: user_id
@@ -244,13 +261,16 @@ defmodule EventasaurusApp.Events.SoftDelete do
   end
 
   defp restore_associated_tickets(event_id, _user_id) do
-    from(t in Ticket, 
-         where: t.event_id == ^event_id and not is_nil(t.deleted_at))
-    |> Repo.update_all(set: [
-      deleted_at: nil,
-      deletion_reason: nil,
-      deleted_by_user_id: nil
-    ])
+    from(t in Ticket,
+      where: t.event_id == ^event_id and not is_nil(t.deleted_at)
+    )
+    |> Repo.update_all(
+      set: [
+        deleted_at: nil,
+        deletion_reason: nil,
+        deleted_by_user_id: nil
+      ]
+    )
 
     :ok
   end
@@ -258,8 +278,9 @@ defmodule EventasaurusApp.Events.SoftDelete do
   # Order-related soft deletion
 
   defp delete_associated_orders(event_id, reason, user_id) do
-    from(o in Order, 
-         where: o.event_id == ^event_id and is_nil(o.deleted_at))
+    from(o in Order,
+      where: o.event_id == ^event_id and is_nil(o.deleted_at)
+    )
     |> Repo.soft_delete_all(
       deletion_reason: reason,
       deleted_by_user_id: user_id
@@ -269,13 +290,16 @@ defmodule EventasaurusApp.Events.SoftDelete do
   end
 
   defp restore_associated_orders(event_id, _user_id) do
-    from(o in Order, 
-         where: o.event_id == ^event_id and not is_nil(o.deleted_at))
-    |> Repo.update_all(set: [
-      deleted_at: nil,
-      deletion_reason: nil,
-      deleted_by_user_id: nil
-    ])
+    from(o in Order,
+      where: o.event_id == ^event_id and not is_nil(o.deleted_at)
+    )
+    |> Repo.update_all(
+      set: [
+        deleted_at: nil,
+        deletion_reason: nil,
+        deleted_by_user_id: nil
+      ]
+    )
 
     :ok
   end
@@ -283,8 +307,9 @@ defmodule EventasaurusApp.Events.SoftDelete do
   # Participant-related soft deletion
 
   defp delete_associated_participants(event_id, reason, user_id) do
-    from(p in EventParticipant, 
-         where: p.event_id == ^event_id and is_nil(p.deleted_at))
+    from(p in EventParticipant,
+      where: p.event_id == ^event_id and is_nil(p.deleted_at)
+    )
     |> Repo.soft_delete_all(
       deletion_reason: reason,
       deleted_by_user_id: user_id
@@ -294,13 +319,16 @@ defmodule EventasaurusApp.Events.SoftDelete do
   end
 
   defp restore_associated_participants(event_id, _user_id) do
-    from(p in EventParticipant, 
-         where: p.event_id == ^event_id and not is_nil(p.deleted_at))
-    |> Repo.update_all(set: [
-      deleted_at: nil,
-      deletion_reason: nil,
-      deleted_by_user_id: nil
-    ])
+    from(p in EventParticipant,
+      where: p.event_id == ^event_id and not is_nil(p.deleted_at)
+    )
+    |> Repo.update_all(
+      set: [
+        deleted_at: nil,
+        deletion_reason: nil,
+        deleted_by_user_id: nil
+      ]
+    )
 
     :ok
   end
@@ -308,8 +336,9 @@ defmodule EventasaurusApp.Events.SoftDelete do
   # Event user-related soft deletion
 
   defp delete_associated_event_users(event_id, reason, user_id) do
-    from(eu in EventUser, 
-         where: eu.event_id == ^event_id and is_nil(eu.deleted_at))
+    from(eu in EventUser,
+      where: eu.event_id == ^event_id and is_nil(eu.deleted_at)
+    )
     |> Repo.soft_delete_all(
       deletion_reason: reason,
       deleted_by_user_id: user_id
@@ -319,13 +348,16 @@ defmodule EventasaurusApp.Events.SoftDelete do
   end
 
   defp restore_associated_event_users(event_id, _user_id) do
-    from(eu in EventUser, 
-         where: eu.event_id == ^event_id and not is_nil(eu.deleted_at))
-    |> Repo.update_all(set: [
-      deleted_at: nil,
-      deletion_reason: nil,
-      deleted_by_user_id: nil
-    ])
+    from(eu in EventUser,
+      where: eu.event_id == ^event_id and not is_nil(eu.deleted_at)
+    )
+    |> Repo.update_all(
+      set: [
+        deleted_at: nil,
+        deletion_reason: nil,
+        deleted_by_user_id: nil
+      ]
+    )
 
     :ok
   end
@@ -369,32 +401,37 @@ defmodule EventasaurusApp.Events.SoftDelete do
   end
 
   defp get_deleted_events_count(cutoff_date) do
-    from(e in Event, 
-         where: not is_nil(e.deleted_at) and e.deleted_at >= ^cutoff_date)
+    from(e in Event,
+      where: not is_nil(e.deleted_at) and e.deleted_at >= ^cutoff_date
+    )
     |> Repo.aggregate(:count, :id)
   end
 
   defp get_deleted_tickets_count(cutoff_date) do
-    from(t in Ticket, 
-         where: not is_nil(t.deleted_at) and t.deleted_at >= ^cutoff_date)
+    from(t in Ticket,
+      where: not is_nil(t.deleted_at) and t.deleted_at >= ^cutoff_date
+    )
     |> Repo.aggregate(:count, :id)
   end
 
   defp get_deleted_orders_count(cutoff_date) do
-    from(o in Order, 
-         where: not is_nil(o.deleted_at) and o.deleted_at >= ^cutoff_date)
+    from(o in Order,
+      where: not is_nil(o.deleted_at) and o.deleted_at >= ^cutoff_date
+    )
     |> Repo.aggregate(:count, :id)
   end
 
   defp get_deleted_participants_count(cutoff_date) do
-    from(p in EventParticipant, 
-         where: not is_nil(p.deleted_at) and p.deleted_at >= ^cutoff_date)
+    from(p in EventParticipant,
+      where: not is_nil(p.deleted_at) and p.deleted_at >= ^cutoff_date
+    )
     |> Repo.aggregate(:count, :id)
   end
 
   defp get_deleted_polls_count(cutoff_date) do
-    from(p in Poll, 
-         where: not is_nil(p.deleted_at) and p.deleted_at >= ^cutoff_date)
+    from(p in Poll,
+      where: not is_nil(p.deleted_at) and p.deleted_at >= ^cutoff_date
+    )
     |> Repo.aggregate(:count, :id)
   end
 end

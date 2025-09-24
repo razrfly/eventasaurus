@@ -22,15 +22,27 @@ defmodule EventasaurusApp.Factory do
   def user_factory do
     %User{
       name: Faker.Person.name(),
-      email: sequence(:email, fn n -> "#{Faker.Internet.user_name()}#{n}@#{Faker.Internet.domain_name()}" end),
-      supabase_id: Ecto.UUID.generate(),  # Use proper UUID instead of fake prefix
+      email:
+        sequence(:email, fn n ->
+          "#{Faker.Internet.user_name()}#{n}@#{Faker.Internet.domain_name()}"
+        end),
+      # Use proper UUID instead of fake prefix
+      supabase_id: Ecto.UUID.generate(),
       username: sequence(:username, fn n -> "#{Faker.Internet.user_name()}#{n}" end),
       bio: Faker.Lorem.paragraph(2),
       website_url: if(Enum.random([true, false]), do: Faker.Internet.url(), else: nil),
       profile_public: Enum.random([true, false]),
       instagram_handle: if(Enum.random([true, false]), do: Faker.Internet.user_name(), else: nil),
       x_handle: if(Enum.random([true, false]), do: Faker.Internet.user_name(), else: nil),
-      timezone: Enum.random(["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Asia/Tokyo"]),
+      timezone:
+        Enum.random([
+          "America/New_York",
+          "America/Chicago",
+          "America/Denver",
+          "America/Los_Angeles",
+          "Europe/London",
+          "Asia/Tokyo"
+        ]),
       default_currency: Enum.random(["USD", "EUR", "GBP", "CAD"])
     }
   end
@@ -184,7 +196,11 @@ defmodule EventasaurusApp.Factory do
   def event_date_poll_factory do
     %EventasaurusApp.Events.EventDatePoll{
       voting_deadline: DateTime.utc_now() |> DateTime.add(7, :day),
-      event: build(:event, %{status: :polling, polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day)}),
+      event:
+        build(:event, %{
+          status: :polling,
+          polling_deadline: DateTime.utc_now() |> DateTime.add(7, :day)
+        }),
       created_by: build(:user)
     }
   end
@@ -404,7 +420,7 @@ defmodule EventasaurusApp.Factory do
   end
 
   # ===== New Dev Seed Factories with Faker =====
-  
+
   @doc """
   Factory for Group schema with realistic data
   """
@@ -414,7 +430,8 @@ defmodule EventasaurusApp.Factory do
       description: Faker.Lorem.paragraph(3),
       slug: sequence(:group_slug, &"group-#{&1}"),
       avatar_url: "https://picsum.photos/200/200?random=#{System.unique_integer([:positive])}",
-      cover_image_url: "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
+      cover_image_url:
+        "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
       created_by: build(:user)
     }
   end
@@ -480,6 +497,7 @@ defmodule EventasaurusApp.Factory do
   """
   def poll_vote_factory do
     poll_option = build(:poll_option)
+
     %PollVote{
       poll_option: poll_option,
       poll: poll_option.poll,
@@ -494,8 +512,17 @@ defmodule EventasaurusApp.Factory do
   """
   def event_activity_factory do
     %EventActivity{
-      activity_type: Enum.random(["movie_watched", "tv_watched", "game_played", "book_read", 
-                                  "restaurant_visited", "place_visited", "activity_completed", "custom"]),
+      activity_type:
+        Enum.random([
+          "movie_watched",
+          "tv_watched",
+          "game_played",
+          "book_read",
+          "restaurant_visited",
+          "place_visited",
+          "activity_completed",
+          "custom"
+        ]),
       metadata: %{
         "title" => Faker.Lorem.sentence(Enum.random(2..5)),
         "rating" => Enum.random([1, 2, 3, 4, 5]),
@@ -510,13 +537,12 @@ defmodule EventasaurusApp.Factory do
     }
   end
 
-
   # Enhanced factories with real data (no Lorem ipsum!)
   def realistic_event_factory do
     themes = [:minimal, :cosmic, :velocity, :retro, :celebration, :nature, :professional]
-    
+
     # Try to load curated data if available, otherwise use defaults
-    {base_title, tagline, description} = 
+    {base_title, tagline, description} =
       if Code.ensure_loaded?(DevSeeds.CuratedData) do
         # Module already loaded, use it
         title = apply(DevSeeds.CuratedData, :generate_realistic_event_title, [])
@@ -526,6 +552,7 @@ defmodule EventasaurusApp.Factory do
       else
         try do
           Code.require_file("priv/repo/dev_seeds/curated_data.exs")
+
           if Code.ensure_loaded?(DevSeeds.CuratedData) do
             title = apply(DevSeeds.CuratedData, :generate_realistic_event_title, [])
             tag = apply(DevSeeds.CuratedData, :random_tagline, [])
@@ -537,39 +564,52 @@ defmodule EventasaurusApp.Factory do
         rescue
           _ ->
             # Fallback to realistic titles without Lorem ipsum
-            title = Enum.random([
-              "Movie Night: The Dark Knight",
-              "Dinner at Italian Kitchen",
-              "Board Game Night",
-              "Concert at the Arena",
-              "Hiking Adventure",
-              "Wine Tasting Evening"
-            ])
+            title =
+              Enum.random([
+                "Movie Night: The Dark Knight",
+                "Dinner at Italian Kitchen",
+                "Board Game Night",
+                "Concert at the Arena",
+                "Hiking Adventure",
+                "Wine Tasting Evening"
+              ])
+
             tag = Enum.random(["Join us!", "Don't miss out!", "Limited spots!", "RSVP now!"])
-            desc = "Join us for this exciting event! It's going to be a great time with friends and fun activities. Please RSVP to secure your spot."
+
+            desc =
+              "Join us for this exciting event! It's going to be a great time with friends and fun activities. Please RSVP to secure your spot."
+
             {title, tag, desc}
         end
       end
-    
+
     %Event{
       title: sequence(:title, fn n -> "#{base_title} ##{n}" end),
       tagline: tagline,
       description: description,
       start_at: Faker.DateTime.forward(60),
       ends_at: Faker.DateTime.forward(90),
-      timezone: Enum.random(["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles"]),
+      timezone:
+        Enum.random([
+          "America/New_York",
+          "America/Chicago",
+          "America/Denver",
+          "America/Los_Angeles"
+        ]),
       visibility: Enum.random([:public, :private]),
       # Remove explicit slug to allow automatic generation
       status: Enum.random([:draft, :polling, :confirmed, :canceled]),
       theme: Enum.random(themes),
-      is_virtual: Enum.random([true, false, false]), # Favor non-virtual
+      # Favor non-virtual
+      is_virtual: Enum.random([true, false, false]),
       # Set all events as free (no ticketing) for now
       is_ticketed: false,
       taxation_type: "ticketless",
       threshold_count: Enum.random([nil, 5, 10, 20]),
       polling_deadline: Faker.DateTime.forward(7),
       venue: if(Enum.random([true, false]), do: build(:realistic_venue), else: nil),
-      cover_image_url: "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
+      cover_image_url:
+        "https://picsum.photos/800/400?random=#{System.unique_integer([:positive])}",
       theme_customizations: %{},
       rich_external_data: %{}
     }
@@ -577,14 +617,17 @@ defmodule EventasaurusApp.Factory do
 
   def realistic_venue_factory do
     # Create a realistic normalized city for the venue
-    country = insert(:country, %{
-      name: Faker.Address.country(),
-      code: Faker.Address.country_code()
-    })
-    city = insert(:city, %{
-      name: Faker.Address.city(),
-      country_id: country.id
-    })
+    country =
+      insert(:country, %{
+        name: Faker.Address.country(),
+        code: Faker.Address.country_code()
+      })
+
+    city =
+      insert(:city, %{
+        name: Faker.Address.city(),
+        country_id: country.id
+      })
 
     %Venue{
       name: Faker.Company.name(),

@@ -12,11 +12,16 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
 
   # Default configuration
   @defaults %{
-    job_delay_interval: 2,           # seconds between jobs
-    max_attempts: 5,                  # max retry attempts
-    priority: 3,                       # job priority (lower = higher priority)
-    skip_if_updated_within_days: 7,   # skip recently updated events
-    max_jobs_per_hour: 100            # max jobs per hour per source
+    # seconds between jobs
+    job_delay_interval: 2,
+    # max retry attempts
+    max_attempts: 5,
+    # job priority (lower = higher priority)
+    priority: 3,
+    # skip recently updated events
+    skip_if_updated_within_days: 7,
+    # max jobs per hour per source
+    max_jobs_per_hour: 100
   }
 
   @doc """
@@ -76,6 +81,7 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
           if rem(index, 10) == 0 or index == length(items) - 1 do
             Logger.info("✅ Scheduled job #{index + 1}/#{length(items)}")
           end
+
           count + 1
 
         {:error, error} ->
@@ -96,7 +102,8 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
   ## Returns
   The number of successfully scheduled jobs.
   """
-  def schedule_detail_jobs(items, job_module, args_fn) when is_list(items) and is_function(args_fn, 1) do
+  def schedule_detail_jobs(items, job_module, args_fn)
+      when is_list(items) and is_function(args_fn, 1) do
     schedule_jobs_with_delay(items, fn item, _index, delay ->
       args = args_fn.(item)
       job_module.new(args, schedule_in: delay)
@@ -138,7 +145,7 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
       seconds_per_job = floor(3600 / jobs_per_hour)
 
       # Calculate total delay
-      delay_seconds = (hour * 3600) + (position_in_hour * seconds_per_job)
+      delay_seconds = hour * 3600 + position_in_hour * seconds_per_job
 
       # Create and schedule the job
       args = args_fn.(item)
@@ -148,8 +155,12 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
         {:ok, _job} ->
           if rem(index, 50) == 0 or index == total_items - 1 do
             scheduled_time = DateTime.utc_now() |> DateTime.add(delay_seconds, :second)
-            Logger.info("📅 Scheduled job #{index + 1}/#{total_items} for #{Calendar.strftime(scheduled_time, "%H:%M")}")
+
+            Logger.info(
+              "📅 Scheduled job #{index + 1}/#{total_items} for #{Calendar.strftime(scheduled_time, "%H:%M")}"
+            )
           end
+
           count + 1
 
         {:error, error} ->
@@ -176,12 +187,17 @@ defmodule EventasaurusDiscovery.Scraping.RateLimiter do
   Calculates appropriate delay based on source-specific rate limits.
   """
   def calculate_delay(source_slug, index \\ 0) do
-    base_delay = case source_slug do
-      "bandsintown" -> 3      # More conservative for Bandsintown
-      "ticketmaster" -> 2     # Standard delay for Ticketmaster
-      "stubhub" -> 2          # Standard delay for StubHub
-      _ -> job_delay_interval()  # Default delay
-    end
+    base_delay =
+      case source_slug do
+        # More conservative for Bandsintown
+        "bandsintown" -> 3
+        # Standard delay for Ticketmaster
+        "ticketmaster" -> 2
+        # Standard delay for StubHub
+        "stubhub" -> 2
+        # Default delay
+        _ -> job_delay_interval()
+      end
 
     base_delay * index
   end

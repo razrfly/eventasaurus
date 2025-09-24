@@ -24,37 +24,40 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   alias EventasaurusDiscovery.PublicEvents.PublicEvent.Slug
 
   schema "public_events" do
-    field :title, :string
-    field :title_translations, :map
-    field :slug, Slug.Type
-    field :starts_at, :utc_datetime
-    field :ends_at, :utc_datetime
+    field(:title, :string)
+    field(:title_translations, :map)
+    field(:slug, Slug.Type)
+    field(:starts_at, :utc_datetime)
+    field(:ends_at, :utc_datetime)
     # external_id moved to public_event_sources table
-    field :ticket_url, :string
-    field :min_price, :decimal
-    field :max_price, :decimal
-    field :currency, :string
+    field(:ticket_url, :string)
+    field(:min_price, :decimal)
+    field(:max_price, :decimal)
+    field(:currency, :string)
     # metadata moved to public_event_sources table
-    field :occurrences, :map
+    field(:occurrences, :map)
 
-    belongs_to :venue, EventasaurusApp.Venues.Venue
+    belongs_to(:venue, EventasaurusApp.Venues.Venue)
 
     # Keep old relationship for backward compatibility during transition
-    belongs_to :category, EventasaurusDiscovery.Categories.Category
+    belongs_to(:category, EventasaurusDiscovery.Categories.Category)
 
     # New many-to-many relationship
-    many_to_many :categories, EventasaurusDiscovery.Categories.Category,
+    many_to_many(:categories, EventasaurusDiscovery.Categories.Category,
       join_through: EventasaurusDiscovery.Categories.PublicEventCategory,
       join_keys: [event_id: :id, category_id: :id],
       on_replace: :delete
+    )
 
-    many_to_many :performers, EventasaurusDiscovery.Performers.Performer,
+    many_to_many(:performers, EventasaurusDiscovery.Performers.Performer,
       join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
       join_keys: [event_id: :id, performer_id: :id]
+    )
 
     # Association to sources for description_translations access
-    has_many :sources, EventasaurusDiscovery.PublicEvents.PublicEventSource,
+    has_many(:sources, EventasaurusDiscovery.PublicEvents.PublicEventSource,
       foreign_key: :event_id
+    )
 
     timestamps()
   end
@@ -62,10 +65,22 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   @doc false
   def changeset(public_event, attrs) do
     public_event
-    |> cast(attrs, [:title, :title_translations, :starts_at, :ends_at, :venue_id,
-                    :ticket_url, :min_price,
-                    :max_price, :currency, :category_id, :occurrences])
-    |> validate_required([:title, :starts_at], message: "An event must have both a title and start date - these are non-negotiable")
+    |> cast(attrs, [
+      :title,
+      :title_translations,
+      :starts_at,
+      :ends_at,
+      :venue_id,
+      :ticket_url,
+      :min_price,
+      :max_price,
+      :currency,
+      :category_id,
+      :occurrences
+    ])
+    |> validate_required([:title, :starts_at],
+      message: "An event must have both a title and start date - these are non-negotiable"
+    )
     |> validate_length(:currency, is: 3)
     |> validate_number(:min_price, greater_than_or_equal_to: 0)
     |> validate_number(:max_price, greater_than_or_equal_to: 0)
@@ -96,8 +111,10 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
     cond do
       is_nil(starts_at) or is_nil(ends_at) ->
         changeset
+
       DateTime.compare(ends_at, starts_at) == :lt ->
         add_error(changeset, :ends_at, "must be after start date")
+
       true ->
         changeset
     end
@@ -107,9 +124,11 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   Returns the count of occurrences for an event.
   """
   def occurrence_count(%__MODULE__{occurrences: nil}), do: 0
+
   def occurrence_count(%__MODULE__{occurrences: %{"dates" => dates}}) when is_list(dates) do
     length(dates)
   end
+
   def occurrence_count(_), do: 0
 
   @doc """
@@ -127,7 +146,8 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
 
     cond do
       count == 0 -> nil
-      count == 1 -> nil  # Single events don't need a label
+      # Single events don't need a label
+      count == 1 -> nil
       count <= 7 -> "#{count} dates available"
       count <= 30 -> "Multiple dates"
       count <= 60 -> "Daily event"
@@ -139,11 +159,14 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
   Returns the next upcoming date for an event with occurrences.
   """
   def next_occurrence_date(%__MODULE__{occurrences: nil, starts_at: starts_at}), do: starts_at
-  def next_occurrence_date(%__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at}) when is_list(dates) do
+
+  def next_occurrence_date(%__MODULE__{occurrences: %{"dates" => dates}, starts_at: starts_at})
+      when is_list(dates) do
     now = DateTime.utc_now()
 
     # Parse dates and find the next upcoming one
-    upcoming = dates
+    upcoming =
+      dates
       |> Enum.map(fn %{"date" => date_str, "time" => time_str} ->
         with {:ok, date} <- Date.from_iso8601(date_str),
              {:ok, time} <- Time.from_iso8601(time_str <> ":00") do
@@ -159,5 +182,6 @@ defmodule EventasaurusDiscovery.PublicEvents.PublicEvent do
 
     upcoming || starts_at
   end
+
   def next_occurrence_date(%__MODULE__{starts_at: starts_at}), do: starts_at
 end

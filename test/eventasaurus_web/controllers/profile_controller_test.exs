@@ -5,12 +5,13 @@ defmodule EventasaurusWeb.ProfileControllerTest do
 
   describe "GET /user/:username" do
     test "shows public profile for existing user", %{conn: conn} do
-      user = user_fixture(%{
-        username: "publicuser",
-        name: "Public User",
-        bio: "This is my bio",
-        profile_public: true
-      })
+      user =
+        user_fixture(%{
+          username: "publicuser",
+          name: "Public User",
+          bio: "This is my bio",
+          profile_public: true
+        })
 
       conn = get(conn, ~p"/user/publicuser")
 
@@ -20,11 +21,12 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "shows own private profile when authenticated", %{conn: conn} do
-      user = user_fixture(%{
-        username: "privateuser",
-        name: "Private User",
-        profile_public: false
-      })
+      user =
+        user_fixture(%{
+          username: "privateuser",
+          name: "Private User",
+          profile_public: false
+        })
 
       # Properly authenticate user for viewing their own profile
       conn = log_in_user(conn, user)
@@ -36,11 +38,12 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "returns 404 for private profile when not authenticated", %{conn: conn} do
-      user = user_fixture(%{
-        username: "privateuser",
-        name: "Private User",
-        profile_public: false
-      })
+      user =
+        user_fixture(%{
+          username: "privateuser",
+          name: "Private User",
+          profile_public: false
+        })
 
       conn = get(conn, ~p"/user/privateuser")
 
@@ -48,16 +51,18 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "returns 404 for private profile when authenticated as different user", %{conn: conn} do
-      _private_user = user_fixture(%{
-        username: "privateuser",
-        name: "Private User",
-        profile_public: false
-      })
+      _private_user =
+        user_fixture(%{
+          username: "privateuser",
+          name: "Private User",
+          profile_public: false
+        })
 
-      other_user = user_fixture(%{
-        username: "otheruser",
-        name: "Other User"
-      })
+      other_user =
+        user_fixture(%{
+          username: "otheruser",
+          name: "Other User"
+        })
 
       # Authenticate as different user trying to view private profile
       conn = log_in_user(conn, other_user)
@@ -73,11 +78,12 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "redirects to canonical username for case variations", %{conn: conn} do
-      user = user_fixture(%{
-        username: "casetest",
-        name: "Case Test User",
-        profile_public: true
-      })
+      user =
+        user_fixture(%{
+          username: "casetest",
+          name: "Case Test User",
+          profile_public: true
+        })
 
       # Test uppercase - should redirect to canonical lowercase
       conn = get(conn, ~p"/user/CASETEST")
@@ -93,11 +99,12 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "redirects ID-based access to canonical username URL", %{conn: conn} do
-      user = user_fixture(%{
-        username: "john123",
-        name: "John Doe",
-        profile_public: true
-      })
+      user =
+        user_fixture(%{
+          username: "john123",
+          name: "John Doe",
+          profile_public: true
+        })
 
       # Access via ID should redirect to canonical username
       conn = get(conn, ~p"/user/#{user.id}")
@@ -109,14 +116,15 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "displays social media links when present", %{conn: conn} do
-      user = user_fixture(%{
-        username: "socialuser",
-        name: "Social User",
-        profile_public: true,
-        instagram_handle: "myinstagram",
-        x_handle: "mytwitter",
-        website_url: "https://example.com"
-      })
+      user =
+        user_fixture(%{
+          username: "socialuser",
+          name: "Social User",
+          profile_public: true,
+          instagram_handle: "myinstagram",
+          x_handle: "mytwitter",
+          website_url: "https://example.com"
+        })
 
       conn = get(conn, ~p"/user/socialuser")
       response = html_response(conn, 200)
@@ -129,11 +137,12 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "shows private profile notice for own private profile", %{conn: conn} do
-      user = user_fixture(%{
-        username: "privateowner",
-        name: "Private Owner",
-        profile_public: false
-      })
+      user =
+        user_fixture(%{
+          username: "privateowner",
+          name: "Private Owner",
+          profile_public: false
+        })
 
       conn = log_in_user(conn, user)
       conn = get(conn, ~p"/user/privateowner")
@@ -146,21 +155,25 @@ defmodule EventasaurusWeb.ProfileControllerTest do
 
   describe "GET /u/:username" do
     test "redirects to full profile URL for existing public user", %{conn: conn} do
-      user = user_fixture(%{
-        username: "redirectuser",
-        profile_public: true
-      })
+      user =
+        user_fixture(%{
+          username: "redirectuser",
+          profile_public: true
+        })
 
       conn = get(conn, ~p"/u/redirectuser")
 
       assert redirected_to(conn, 302) == "/user/redirectuser"
     end
 
-    test "redirects to full profile URL for existing private user when authenticated", %{conn: conn} do
-      user = user_fixture(%{
-        username: "redirectprivate",
-        profile_public: false
-      })
+    test "redirects to full profile URL for existing private user when authenticated", %{
+      conn: conn
+    } do
+      user =
+        user_fixture(%{
+          username: "redirectprivate",
+          profile_public: false
+        })
 
       conn = log_in_user(conn, user)
       conn = get(conn, ~p"/u/redirectprivate")
@@ -175,10 +188,11 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "returns 404 for private user when not authenticated", %{conn: conn} do
-      user = user_fixture(%{
-        username: "privateredirect",
-        profile_public: false
-      })
+      user =
+        user_fixture(%{
+          username: "privateredirect",
+          profile_public: false
+        })
 
       conn = get(conn, ~p"/u/privateredirect")
 
@@ -186,10 +200,11 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "redirects ID-based short URL to canonical username", %{conn: conn} do
-      user = user_fixture(%{
-        username: "alice456",
-        profile_public: true
-      })
+      user =
+        user_fixture(%{
+          username: "alice456",
+          profile_public: true
+        })
 
       # Access short URL via ID should redirect to canonical username
       conn = get(conn, ~p"/u/#{user.id}")
@@ -197,11 +212,12 @@ defmodule EventasaurusWeb.ProfileControllerTest do
     end
 
     test "handles users without usernames correctly", %{conn: conn} do
-      user = user_fixture(%{
-        name: "No Username User",
-        profile_public: true
-        # No username set
-      })
+      user =
+        user_fixture(%{
+          name: "No Username User",
+          profile_public: true
+          # No username set
+        })
 
       # Access via ID should redirect to canonical user-{id} slug
       conn = get(conn, ~p"/user/#{user.id}")

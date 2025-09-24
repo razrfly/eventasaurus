@@ -21,6 +21,7 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
     case slug do
       nil ->
         {:error, :invalid_config_slug}
+
       slug ->
         case Repo.get_by(Source, slug: slug) do
           nil -> create_source(config, slug)
@@ -46,7 +47,7 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
       slug: slug,
       website_url:
         get_val(config, :website_url) ||
-        get_val(config, :base_url),
+          get_val(config, :base_url),
       priority: get_val(config, :priority),
       is_active: true,
       metadata: metadata
@@ -55,6 +56,7 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
     |> case do
       {:ok, source} ->
         {:ok, source}
+
       {:error, %Ecto.Changeset{} = changeset} ->
         # If another process inserted the same slug concurrently, fetch and return it
         if has_unique_constraint_error?(changeset, :slug) do
@@ -75,10 +77,12 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
 
   # Normalize blank values to nil
   defp normalize_blank(nil), do: nil
+
   defp normalize_blank(v) when is_binary(v) do
     v = String.trim(v)
     if v == "", do: nil, else: v
   end
+
   defp normalize_blank(v) when is_atom(v), do: v |> Atom.to_string() |> normalize_blank()
   defp normalize_blank(v), do: v |> to_string() |> normalize_blank()
 
@@ -87,6 +91,7 @@ defmodule EventasaurusDiscovery.Sources.SourceStore do
     Enum.any?(changeset.errors, fn
       {^field, {_msg, opts}} ->
         Keyword.get(opts, :constraint) == :unique
+
       _ ->
         false
     end)

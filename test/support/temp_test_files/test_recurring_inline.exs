@@ -8,7 +8,9 @@ import Ecto.Query
 
 # First, check the current state
 before_count = Repo.aggregate(PublicEvent, :count, :id)
-before_with_occurrences = from(e in PublicEvent, where: not is_nil(e.occurrences)) |> Repo.aggregate(:count, :id)
+
+before_with_occurrences =
+  from(e in PublicEvent, where: not is_nil(e.occurrences)) |> Repo.aggregate(:count, :id)
 
 Logger.info("""
 📊 Before running scraper:
@@ -17,10 +19,12 @@ Logger.info("""
 """)
 
 # Check for Muzeum Banksy before
-muzeum_before = from(e in PublicEvent,
-  where: ilike(e.title, "%muzeum banksy%"),
-  select: {e.id, e.title, e.occurrences}
-) |> Repo.all()
+muzeum_before =
+  from(e in PublicEvent,
+    where: ilike(e.title, "%muzeum banksy%"),
+    select: {e.id, e.title, e.occurrences}
+  )
+  |> Repo.all()
 
 Logger.info("Muzeum Banksy events before: #{length(muzeum_before)}")
 
@@ -34,7 +38,9 @@ Process.sleep(2000)
 
 # Check the state after
 after_count = Repo.aggregate(PublicEvent, :count, :id)
-after_with_occurrences = from(e in PublicEvent, where: not is_nil(e.occurrences)) |> Repo.aggregate(:count, :id)
+
+after_with_occurrences =
+  from(e in PublicEvent, where: not is_nil(e.occurrences)) |> Repo.aggregate(:count, :id)
 
 Logger.info("""
 
@@ -46,10 +52,12 @@ Logger.info("""
 """)
 
 # Check Muzeum Banksy specifically
-muzeum_after = from(e in PublicEvent,
-  where: ilike(e.title, "%muzeum banksy%"),
-  select: {e.id, e.title, e.occurrences}
-) |> Repo.all()
+muzeum_after =
+  from(e in PublicEvent,
+    where: ilike(e.title, "%muzeum banksy%"),
+    select: {e.id, e.title, e.occurrences}
+  )
+  |> Repo.all()
 
 Logger.info("\n🎨 Muzeum Banksy events after: #{length(muzeum_after)}")
 
@@ -62,6 +70,7 @@ Enum.each(muzeum_after, fn {id, title, occ} ->
     |> Enum.each(fn date ->
       Logger.info("    - #{date["date"]} at #{date["time"]}")
     end)
+
     if length(occ["dates"]) > 3 do
       Logger.info("    ... and #{length(occ["dates"]) - 3} more dates")
     end

@@ -30,7 +30,8 @@ defmodule EventasaurusWeb.Features.WallabySetupTest do
       try do
         session
         |> visit("/")
-        |> assert_has(Query.css("html"))  # Just verify the page loads
+        # Just verify the page loads
+        |> assert_has(Query.css("html"))
       rescue
         RuntimeError ->
           # Skip test if Chrome/chromedriver version mismatch
@@ -44,7 +45,8 @@ defmodule EventasaurusWeb.Features.WallabySetupTest do
       try do
         session
         |> visit("/auth/login")
-        |> assert_has(Query.css("body"))  # Just verify the page loads
+        # Just verify the page loads
+        |> assert_has(Query.css("body"))
       rescue
         RuntimeError ->
           # Skip test if Chrome/chromedriver version mismatch

@@ -24,19 +24,19 @@ defmodule EventasaurusApp.Venues.Venue do
   alias EventasaurusApp.Venues.Venue.Slug
 
   schema "venues" do
-    field :name, :string
-    field :normalized_name, :string
-    field :slug, Slug.Type
-    field :address, :string
-    field :latitude, :float
-    field :longitude, :float
-    field :venue_type, :string, default: "venue"
-    field :place_id, :string
-    field :source, :string, default: "user"
+    field(:name, :string)
+    field(:normalized_name, :string)
+    field(:slug, Slug.Type)
+    field(:address, :string)
+    field(:latitude, :float)
+    field(:longitude, :float)
+    field(:venue_type, :string, default: "venue")
+    field(:place_id, :string)
+    field(:source, :string, default: "user")
 
-    belongs_to :city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id
-    has_many :events, EventasaurusApp.Events.Event
-    has_many :public_events, EventasaurusDiscovery.PublicEvents.PublicEvent
+    belongs_to(:city_ref, EventasaurusDiscovery.Locations.City, foreign_key: :city_id)
+    has_many(:events, EventasaurusApp.Events.Event)
+    has_many(:public_events, EventasaurusDiscovery.PublicEvents.PublicEvent)
 
     timestamps()
   end
@@ -46,10 +46,20 @@ defmodule EventasaurusApp.Venues.Venue do
   @doc false
   def changeset(venue, attrs) do
     venue
-    |> cast(attrs, [:name, :address, :latitude, :longitude,
-                    :venue_type, :place_id, :source, :city_id])
+    |> cast(attrs, [
+      :name,
+      :address,
+      :latitude,
+      :longitude,
+      :venue_type,
+      :place_id,
+      :source,
+      :city_id
+    ])
     |> validate_required([:name, :venue_type, :latitude, :longitude])
-    |> validate_inclusion(:venue_type, @valid_venue_types, message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}")
+    |> validate_inclusion(:venue_type, @valid_venue_types,
+      message: "must be one of: #{Enum.join(@valid_venue_types, ", ")}"
+    )
     |> update_change(:source, fn s -> if is_binary(s), do: String.downcase(s), else: s end)
     |> validate_inclusion(:source, ["user", "scraper", "google"])
     |> validate_length(:place_id, max: 255)
@@ -59,7 +69,6 @@ defmodule EventasaurusApp.Venues.Venue do
     |> unique_constraint(:slug)
     |> foreign_key_constraint(:city_id)
   end
-
 
   defp validate_gps_coordinates(changeset) do
     lat = get_change(changeset, :latitude) || get_field(changeset, :latitude)
@@ -101,8 +110,10 @@ defmodule EventasaurusApp.Venues.Venue do
     cond do
       source == "google" and is_nil(place_id) ->
         add_error(changeset, :place_id, "is required when source is 'google'")
+
       not is_nil(place_id) and source == "user" ->
         add_error(changeset, :source, "cannot be 'user' when place_id is present")
+
       true ->
         changeset
     end
@@ -141,6 +152,7 @@ defmodule EventasaurusApp.Venues.Venue do
       _ -> nil
     end
   end
+
   def country_name(_), do: nil
 
   @doc """
@@ -150,9 +162,10 @@ defmodule EventasaurusApp.Venues.Venue do
     city = city_name(venue)
     country = country_name(venue)
 
-    parts = [city, country]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.reject(&(&1 == ""))
+    parts =
+      [city, country]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.reject(&(&1 == ""))
 
     case parts do
       [] -> nil

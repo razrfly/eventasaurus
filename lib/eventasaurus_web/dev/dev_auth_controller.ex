@@ -18,12 +18,12 @@ defmodule EventasaurusWeb.Dev.DevAuthController do
           |> DevAuth.create_dev_session(user)
           |> put_flash(:info, "🚧 DEV: Logged in as #{user.name || user.email}")
           |> redirect(to: ~p"/dashboard")
-        
+
         {:error, :user_not_found} ->
           conn
           |> put_flash(:error, "User not found")
           |> redirect(to: ~p"/auth/login")
-        
+
         {:error, _} ->
           conn
           |> put_flash(:error, "Quick login failed")

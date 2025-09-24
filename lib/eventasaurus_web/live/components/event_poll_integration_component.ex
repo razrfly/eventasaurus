@@ -1287,15 +1287,17 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
 
   @impl true
   def handle_event("filter_polls", params, socket) do
-    poll_filter = case Map.get(params, "poll_filter") do
-      "" -> "all"
-      filter -> filter
-    end
+    poll_filter =
+      case Map.get(params, "poll_filter") do
+        "" -> "all"
+        filter -> filter
+      end
 
-    poll_sort = case Map.get(params, "poll_sort") do
-      "" -> "newest"
-      sort -> sort
-    end
+    poll_sort =
+      case Map.get(params, "poll_sort") do
+        "" -> "newest"
+        sort -> sort
+      end
 
     {:noreply,
      socket
@@ -1337,7 +1339,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
            |> assign(:reorder_mode, false)
            |> assign(:reordered_polls, [])
            |> assign(:success_message, "Poll order saved successfully!")}
-        
+
         {:error, _} ->
           {:noreply,
            socket
@@ -1356,15 +1358,15 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   def handle_event("move_poll_up", %{"poll_id" => poll_id}, socket) do
     poll_id = String.to_integer(poll_id)
     polls = socket.assigns.reordered_polls || socket.assigns.polls || []
-    
+
     index = Enum.find_index(polls, &(&1.id == poll_id))
-    
+
     if index && index > 0 do
-      updated_polls = 
+      updated_polls =
         polls
         |> List.delete_at(index)
         |> List.insert_at(index - 1, Enum.at(polls, index))
-      
+
       {:noreply, assign(socket, :reordered_polls, updated_polls)}
     else
       {:noreply, socket}
@@ -1375,15 +1377,15 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   def handle_event("move_poll_down", %{"poll_id" => poll_id}, socket) do
     poll_id = String.to_integer(poll_id)
     polls = socket.assigns.reordered_polls || socket.assigns.polls || []
-    
+
     index = Enum.find_index(polls, &(&1.id == poll_id))
-    
+
     if index && index < length(polls) - 1 do
-      updated_polls = 
+      updated_polls =
         polls
         |> List.delete_at(index)
         |> List.insert_at(index + 1, Enum.at(polls, index))
-      
+
       {:noreply, assign(socket, :reordered_polls, updated_polls)}
     else
       {:noreply, socket}
@@ -1535,7 +1537,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         if poll.id == poll_id do
           # Add the new option to the poll's options
           new_option = message.option
-          updated_options = [new_option | (poll.poll_options || [])]
+          updated_options = [new_option | poll.poll_options || []]
           %{poll | poll_options: updated_options}
         else
           poll
@@ -1639,7 +1641,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     # Reload polls from the database to get the updated list
     event = socket.assigns.event
     polls = Events.list_polls(event)
-    
+
     # Smart redirect: After poll creation, redirect to poll details view
     # This makes option addition more discoverable
     # Only redirect for new polls (not edited polls)
@@ -1681,10 +1683,10 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
     if socket.assigns.event.id == event_id do
       # Reload polls from database to get the new order
       polls = Events.list_polls(socket.assigns.event)
-      
+
       # Recalculate stats with the new poll order - use the same pattern as other handlers
       integration_stats = calculate_integration_stats_with_polls(polls, socket.assigns.event)
-      
+
       {:noreply,
        socket
        |> assign(:polls, polls)
@@ -1924,15 +1926,15 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
   defp save_poll_order(socket) do
     polls = socket.assigns.reordered_polls || []
     event_id = socket.assigns.event.id
-    
+
     # Create the poll orders list with new indices
-    poll_orders = 
+    poll_orders =
       polls
       |> Enum.with_index()
       |> Enum.map(fn {poll, index} ->
         %{poll_id: poll.id, order_index: index}
       end)
-    
+
     # Call the Events context function to save the new order
     Events.reorder_polls(event_id, poll_orders)
   end
@@ -1972,7 +1974,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         polls
     end
   end
-  
+
   defp get_filtered_polls(_, _), do: []
 
   # Sorting helper functions
@@ -2000,7 +2002,7 @@ defmodule EventasaurusWeb.EventPollIntegrationComponent do
         polls
     end
   end
-  
+
   defp get_sorted_polls(_, _), do: []
 
   # Helper function to format time for display

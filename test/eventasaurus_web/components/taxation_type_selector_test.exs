@@ -264,7 +264,11 @@ defmodule EventasaurusWeb.Components.TaxationTypeSelectorTest do
     end
 
     test "displays multiple error messages" do
-      field = create_mock_field("taxation_type", "ticketed_event", [{"can't be blank", []}, {"is invalid", []}])
+      field =
+        create_mock_field("taxation_type", "ticketed_event", [
+          {"can't be blank", []},
+          {"is invalid", []}
+        ])
 
       assigns = %{
         field: field,
@@ -280,7 +284,9 @@ defmodule EventasaurusWeb.Components.TaxationTypeSelectorTest do
 
       # Check for transformed error messages (not raw text)
       assert html =~ "Please select a taxation type for your event"
-      assert html =~ "Please choose either Ticketless Event, Ticketed Event, or Contribution Collection"
+
+      assert html =~
+               "Please choose either Ticketless Event, Ticketed Event, or Contribution Collection"
 
       # Check for help text in errors
       assert html =~ "Need help deciding? Click"

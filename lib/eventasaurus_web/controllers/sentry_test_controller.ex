@@ -9,6 +9,7 @@ defmodule EventasaurusWeb.SentryTestController do
     rescue
       my_exception ->
         Sentry.capture_exception(my_exception, stacktrace: __STACKTRACE__)
+
         conn
         |> put_status(:internal_server_error)
         |> json(%{error: "Test error sent to Sentry"})
@@ -17,7 +18,7 @@ defmodule EventasaurusWeb.SentryTestController do
 
   def test_message(conn, _params) do
     Sentry.capture_message("Test message from Eventasaurus", level: :info)
-    
+
     conn
     |> put_status(:ok)
     |> json(%{message: "Test message sent to Sentry"})
@@ -27,13 +28,13 @@ defmodule EventasaurusWeb.SentryTestController do
     # Only allow in production with specific header for security
     if Mix.env() == :prod and get_req_header(conn, "x-sentry-test") == ["production-test"] do
       # Audit log the production test request
-      Logger.info("Production Sentry test triggered", 
+      Logger.info("Production Sentry test triggered",
         remote_ip: format_ip(conn.remote_ip),
         user_agent: get_req_header(conn, "user-agent") |> List.first(),
         user_id: get_user_id(conn),
         timestamp: DateTime.utc_now()
       )
-      
+
       try do
         # Simulate a production error
         raise "Production Sentry Test Error - #{DateTime.utc_now()}"
@@ -41,11 +42,11 @@ defmodule EventasaurusWeb.SentryTestController do
         exception ->
           case Sentry.capture_exception(exception, stacktrace: __STACKTRACE__) do
             {:ok, event_id} ->
-              Logger.info("Production Sentry test completed successfully", 
+              Logger.info("Production Sentry test completed successfully",
                 event_id: event_id,
                 timestamp: DateTime.utc_now()
               )
-              
+
               conn
               |> put_status(:ok)
               |> json(%{
@@ -55,13 +56,13 @@ defmodule EventasaurusWeb.SentryTestController do
                 timestamp: DateTime.utc_now(),
                 environment: Mix.env()
               })
-            
+
             {:error, reason} ->
-              Logger.error("Failed to send production test error to Sentry", 
+              Logger.error("Failed to send production test error to Sentry",
                 reason: reason,
                 timestamp: DateTime.utc_now()
               )
-              
+
               conn
               |> put_status(:internal_server_error)
               |> json(%{
@@ -73,13 +74,13 @@ defmodule EventasaurusWeb.SentryTestController do
       end
     else
       # Log unauthorized access attempts
-      Logger.warning("Unauthorized access attempt to production Sentry test endpoint", 
+      Logger.warning("Unauthorized access attempt to production Sentry test endpoint",
         remote_ip: format_ip(conn.remote_ip),
         user_agent: get_req_header(conn, "user-agent") |> List.first(),
         headers: get_req_header(conn, "x-sentry-test"),
         environment: Mix.env()
       )
-      
+
       conn
       |> put_status(:forbidden)
       |> json(%{error: "Production test endpoint requires proper environment and headers"})
@@ -87,11 +88,12 @@ defmodule EventasaurusWeb.SentryTestController do
   end
 
   def health_check(conn, _params) do
-    sentry_configured = case Application.get_env(:sentry, :dsn) do
-      nil -> false
-      "" -> false
-      _dsn -> true
-    end
+    sentry_configured =
+      case Application.get_env(:sentry, :dsn) do
+        nil -> false
+        "" -> false
+        _dsn -> true
+      end
 
     conn
     |> put_status(:ok)

@@ -32,8 +32,7 @@ config :eventasaurus, :turnstile,
   secret_key: System.get_env("TURNSTILE_SECRET_KEY")
 
 # Configure Mapbox for static maps
-config :eventasaurus, :mapbox,
-  access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
+config :eventasaurus, :mapbox, access_token: System.get_env("MAPBOX_ACCESS_TOKEN")
 
 # Configure Sentry for all environments (dev/test/prod)
 # Using runtime.exs ensures File.cwd() runs at startup, not compile time

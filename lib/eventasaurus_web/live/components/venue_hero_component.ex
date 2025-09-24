@@ -13,7 +13,10 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
   def update(assigns, socket) do
     if Application.get_env(:eventasaurus, :env) == :dev do
       require Logger
-      Logger.debug("VenueHeroComponent update called with rich_data: #{inspect(assigns[:rich_data])}")
+
+      Logger.debug(
+        "VenueHeroComponent update called with rich_data: #{inspect(assigns[:rich_data])}"
+      )
     end
 
     {:ok,
@@ -205,72 +208,87 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     rich_data = socket.assigns.rich_data
 
     # Support both old format (for backward compatibility) and new standardized format
-    title = case rich_data do
-      %{title: title} when is_binary(title) -> title
-      %{"title" => title} when is_binary(title) -> title
-      _ -> "Unknown Place"
-    end
+    title =
+      case rich_data do
+        %{title: title} when is_binary(title) -> title
+        %{"title" => title} when is_binary(title) -> title
+        _ -> "Unknown Place"
+      end
 
     # Extract address from standardized format or fallback to old format
-    address = case rich_data do
-      %{sections: %{hero: %{subtitle: subtitle}}} -> subtitle
-      %{description: description} when is_binary(description) -> description
-      %{"metadata" => %{"address" => address}} -> address
-      _ -> nil
-    end
+    address =
+      case rich_data do
+        %{sections: %{hero: %{subtitle: subtitle}}} -> subtitle
+        %{description: description} when is_binary(description) -> description
+        %{"metadata" => %{"address" => address}} -> address
+        _ -> nil
+      end
 
     # Extract rating from standardized format or fallback to old format
-    rating_value = case rich_data do
-      %{rating: %{value: value}} -> value
-      %{"metadata" => %{"rating" => rating}} -> rating
-      _ -> nil
-    end
+    rating_value =
+      case rich_data do
+        %{rating: %{value: value}} -> value
+        %{"metadata" => %{"rating" => rating}} -> rating
+        _ -> nil
+      end
 
     # Extract user ratings total from standardized format or fallback to old format
-    user_ratings_total = case rich_data do
-      %{rating: %{count: count}} -> count
-      %{"metadata" => %{"user_ratings_total" => total}} -> total
-      _ -> nil
-    end
+    user_ratings_total =
+      case rich_data do
+        %{rating: %{count: count}} -> count
+        %{"metadata" => %{"user_ratings_total" => total}} -> total
+        _ -> nil
+      end
 
     # Extract price level from standardized format or fallback to old format
-    price_level = case rich_data do
-      %{sections: %{hero: %{price_level: price_level}}} -> price_level
-      %{"metadata" => %{"price_level" => price_level}} -> price_level
-      _ -> nil
-    end
+    price_level =
+      case rich_data do
+        %{sections: %{hero: %{price_level: price_level}}} -> price_level
+        %{"metadata" => %{"price_level" => price_level}} -> price_level
+        _ -> nil
+      end
 
     # Extract business status from standardized format or fallback to old format
-    business_status = case rich_data do
-      %{status: status} when is_binary(status) ->
-        case status do
-          "open" -> "OPERATIONAL"
-          "closed" -> "CLOSED_TEMPORARILY"
-          _ -> status |> String.upcase()
-        end
-      %{sections: %{hero: %{status: status}}} -> status
-      %{"metadata" => %{"business_status" => status}} -> status
-      _ -> nil
-    end
+    business_status =
+      case rich_data do
+        %{status: status} when is_binary(status) ->
+          case status do
+            "open" -> "OPERATIONAL"
+            "closed" -> "CLOSED_TEMPORARILY"
+            _ -> status |> String.upcase()
+          end
+
+        %{sections: %{hero: %{status: status}}} ->
+          status
+
+        %{"metadata" => %{"business_status" => status}} ->
+          status
+
+        _ ->
+          nil
+      end
 
     # Extract categories/types from standardized format or fallback to old format
-    types = case rich_data do
-      %{categories: categories} when is_list(categories) -> categories
-      %{sections: %{hero: %{categories: categories}}} when is_list(categories) -> categories
-      %{"metadata" => %{"types" => types}} when is_list(types) -> types
-      _ -> []
-    end
+    types =
+      case rich_data do
+        %{categories: categories} when is_list(categories) -> categories
+        %{sections: %{hero: %{categories: categories}}} when is_list(categories) -> categories
+        %{"metadata" => %{"types" => types}} when is_list(types) -> types
+        _ -> []
+      end
 
     # Extract images from standardized format or fallback to old format
-    primary_image = case rich_data do
-      %{primary_image: %{url: url}} -> %{"url" => url}
-      _ -> nil
-    end
+    primary_image =
+      case rich_data do
+        %{primary_image: %{url: url}} -> %{"url" => url}
+        _ -> nil
+      end
 
-    secondary_image = case rich_data do
-      %{secondary_image: %{url: url}} -> %{"url" => url}
-      _ -> nil
-    end
+    secondary_image =
+      case rich_data do
+        %{secondary_image: %{url: url}} -> %{"url" => url}
+        _ -> nil
+      end
 
     _images = [primary_image, secondary_image] |> Enum.filter(& &1)
 
@@ -288,14 +306,13 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     |> assign(:secondary_photo_url, if(secondary_image, do: secondary_image["url"], else: nil))
   end
 
-
-
   defp format_rating(rating) when is_number(rating) do
     :erlang.float_to_binary(rating, decimals: 1)
   end
+
   defp format_rating(_), do: "N/A"
 
-    defp format_ratings_count(count) when is_integer(count) do
+  defp format_ratings_count(count) when is_integer(count) do
     formatted_count = format_number_with_commas(count)
 
     cond do
@@ -336,6 +353,7 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     |> Enum.reject(&(&1 in ["establishment", "point_of_interest"]))
     |> Enum.take(4)
   end
+
   defp filter_relevant_types(_), do: []
 
   defp format_place_type(type) when is_binary(type) do
@@ -345,6 +363,7 @@ defmodule EventasaurusWeb.Live.Components.VenueHeroComponent do
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
   end
+
   defp format_place_type(_), do: ""
 
   defp get_rating_aria_label(rating, user_ratings_total) do

@@ -4,14 +4,14 @@ defmodule EventasaurusApp.Events.EventUser do
   import Ecto.SoftDelete.Schema
 
   schema "event_users" do
-    field :role, :string
+    field(:role, :string)
 
-    belongs_to :event, EventasaurusApp.Events.Event
-    belongs_to :user, EventasaurusApp.Accounts.User
+    belongs_to(:event, EventasaurusApp.Events.Event)
+    belongs_to(:user, EventasaurusApp.Accounts.User)
 
     # Deletion metadata fields
-    field :deletion_reason, :string
-    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+    field(:deletion_reason, :string)
+    belongs_to(:deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id)
 
     timestamps()
     soft_delete_schema()

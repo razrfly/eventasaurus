@@ -8,15 +8,17 @@ defmodule EventasaurusDiscovery.Performers.Performer do
   alias EventasaurusDiscovery.Performers.Performer.Slug
 
   schema "performers" do
-    field :name, :string
-    field :slug, Slug.Type
-    field :image_url, :string
-    field :metadata, :map, default: %{}
-    field :source_id, :integer  # Reference to scraping source
+    field(:name, :string)
+    field(:slug, Slug.Type)
+    field(:image_url, :string)
+    field(:metadata, :map, default: %{})
+    # Reference to scraping source
+    field(:source_id, :integer)
 
-    many_to_many :public_events, EventasaurusDiscovery.PublicEvents.PublicEvent,
+    many_to_many(:public_events, EventasaurusDiscovery.PublicEvents.PublicEvent,
       join_through: EventasaurusDiscovery.PublicEvents.PublicEventPerformer,
       on_replace: :delete
+    )
 
     timestamps()
   end

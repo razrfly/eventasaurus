@@ -209,6 +209,7 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
   end
 
   defp format_date(nil), do: "Unknown"
+
   defp format_date(date_string) do
     case Date.from_iso8601(date_string) do
       {:ok, date} -> Calendar.strftime(date, "%B %d, %Y")
@@ -217,6 +218,7 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
   end
 
   defp format_runtime(nil), do: "Unknown"
+
   defp format_runtime(minutes) when is_integer(minutes) do
     hours = div(minutes, 60)
     mins = rem(minutes, 60)
@@ -228,29 +230,36 @@ defmodule EventasaurusWeb.Live.Components.MovieDetailsComponent do
       true -> "Unknown"
     end
   end
+
   defp format_runtime(_), do: "Unknown"
 
   defp format_currency(nil), do: "Unknown"
+
   defp format_currency(amount) when is_integer(amount) and amount > 0 do
     # Format as millions for readability
     cond do
       amount >= 1_000_000_000 ->
         "$#{Float.round(amount / 1_000_000_000, 1)}B"
+
       amount >= 1_000_000 ->
         "$#{Float.round(amount / 1_000_000, 1)}M"
+
       amount >= 1_000 ->
         "$#{trunc(amount / 1_000)}K"
+
       true ->
         "$#{amount}"
     end
   end
+
   defp format_currency(_), do: "Unknown"
 
   defp has_external_links?(external_ids) when is_map(external_ids) do
     external_ids["imdb_id"] ||
-    external_ids["facebook_id"] ||
-    external_ids["twitter_id"] ||
-    external_ids["instagram_id"]
+      external_ids["facebook_id"] ||
+      external_ids["twitter_id"] ||
+      external_ids["instagram_id"]
   end
+
   defp has_external_links?(_), do: false
 end

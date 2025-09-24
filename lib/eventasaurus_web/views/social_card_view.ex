@@ -33,10 +33,12 @@ defmodule EventasaurusWeb.SocialCardView do
 
     # Split title into words and group into lines
     words = String.split(safe_title, " ")
-    lines = split_into_lines(words, 18)  # ~18 chars per line max
+    # ~18 chars per line max
+    lines = split_into_lines(words, 18)
 
     Enum.at(lines, line_number, "")
   end
+
   def format_title(_, _), do: ""
 
   @doc """
@@ -54,6 +56,7 @@ defmodule EventasaurusWeb.SocialCardView do
       true -> "24"
     end
   end
+
   def calculate_font_size(_), do: "48"
 
   @doc """
@@ -80,7 +83,8 @@ defmodule EventasaurusWeb.SocialCardView do
       {lines, ""} -> lines
       {lines, last_line} -> lines ++ [last_line]
     end
-    |> Enum.take(3)  # Max 3 lines
+    # Max 3 lines
+    |> Enum.take(3)
   end
 
   @doc """
@@ -106,6 +110,7 @@ defmodule EventasaurusWeb.SocialCardView do
     sanitized_url = Sanitizer.validate_image_url(url)
     sanitized_url != nil
   end
+
   def has_image?(_), do: false
 
   @doc """
@@ -115,6 +120,7 @@ defmodule EventasaurusWeb.SocialCardView do
   def safe_image_url(%{cover_image_url: url}) do
     Sanitizer.validate_image_url(url)
   end
+
   def safe_image_url(_), do: nil
 
   @doc """
@@ -124,7 +130,9 @@ defmodule EventasaurusWeb.SocialCardView do
   """
   def local_image_path(%{cover_image_url: url}) do
     case Sanitizer.validate_image_url(url) do
-      nil -> nil
+      nil ->
+        nil
+
       valid_url ->
         if String.starts_with?(valid_url, "/") do
           # Handle local static file path with security validation
@@ -138,7 +146,7 @@ defmodule EventasaurusWeb.SocialCardView do
           canonical_static_path = Path.expand(static_path)
 
           if String.starts_with?(canonical_static_path, canonical_static_dir <> "/") and
-             File.exists?(canonical_static_path) do
+               File.exists?(canonical_static_path) do
             canonical_static_path
           else
             nil
@@ -152,6 +160,7 @@ defmodule EventasaurusWeb.SocialCardView do
         end
     end
   end
+
   def local_image_path(_), do: nil
 
   @doc """
@@ -161,19 +170,23 @@ defmodule EventasaurusWeb.SocialCardView do
   """
   def local_image_data_url(%{cover_image_url: url}) do
     case local_image_path(%{cover_image_url: url}) do
-      nil -> nil
+      nil ->
+        nil
+
       local_path ->
         case File.read(local_path) do
           {:ok, image_data} ->
             # Determine MIME type from file extension
-            mime_type = case Path.extname(local_path) |> String.downcase() do
-              ".png" -> "image/png"
-              ".jpg" -> "image/jpeg"
-              ".jpeg" -> "image/jpeg"
-              ".gif" -> "image/gif"
-              ".webp" -> "image/webp"
-              _ -> "image/png"  # Default fallback
-            end
+            mime_type =
+              case Path.extname(local_path) |> String.downcase() do
+                ".png" -> "image/png"
+                ".jpg" -> "image/jpeg"
+                ".jpeg" -> "image/jpeg"
+                ".gif" -> "image/gif"
+                ".webp" -> "image/webp"
+                # Default fallback
+                _ -> "image/png"
+              end
 
             # Convert to base64 and create data URL
             base64_data = Base.encode64(image_data)
@@ -182,17 +195,20 @@ defmodule EventasaurusWeb.SocialCardView do
             # Clean up temporary downloaded files (but not static files)
             if String.contains?(local_path, "social_card_img_") do
               Task.start(fn ->
-                Process.sleep(1000)  # Small delay to ensure data URL is used
+                # Small delay to ensure data URL is used
+                Process.sleep(1000)
                 File.rm(local_path)
               end)
             end
 
             data_url
 
-          {:error, _reason} -> nil
+          {:error, _reason} ->
+            nil
         end
     end
   end
+
   def local_image_data_url(_), do: nil
 
   @doc """
@@ -204,7 +220,9 @@ defmodule EventasaurusWeb.SocialCardView do
   """
   def http_image_url(%{cover_image_url: url}) do
     case Sanitizer.validate_image_url(url) do
-      nil -> nil
+      nil ->
+        nil
+
       valid_url ->
         if String.starts_with?(valid_url, "/") do
           # For local static files, return the web-accessible URL
@@ -227,7 +245,8 @@ defmodule EventasaurusWeb.SocialCardView do
 
                   # Schedule cleanup of the static temp file
                   Task.start(fn ->
-                    Process.sleep(30_000)  # 30 seconds delay
+                    # 30 seconds delay
+                    Process.sleep(30_000)
                     File.rm(static_path)
                   end)
 
@@ -235,15 +254,18 @@ defmodule EventasaurusWeb.SocialCardView do
                   "/images/temp/#{filename}"
 
                 {:error, _reason} ->
-                  File.rm(local_path)  # Clean up on failure
+                  # Clean up on failure
+                  File.rm(local_path)
                   nil
               end
 
-            {:error, _reason} -> nil
+            {:error, _reason} ->
+              nil
           end
         end
     end
   end
+
   def http_image_url(_), do: nil
 
   @doc """
@@ -254,7 +276,9 @@ defmodule EventasaurusWeb.SocialCardView do
   """
   def local_file_path_for_svg(%{cover_image_url: url}) do
     case Sanitizer.validate_image_url(url) do
-      nil -> nil
+      nil ->
+        nil
+
       valid_url ->
         if String.starts_with?(valid_url, "/") do
           # For local static files, return the absolute path
@@ -267,7 +291,7 @@ defmodule EventasaurusWeb.SocialCardView do
           canonical_static_path = Path.expand(static_path)
 
           if String.starts_with?(canonical_static_path, canonical_static_dir <> "/") and
-             File.exists?(canonical_static_path) do
+               File.exists?(canonical_static_path) do
             canonical_static_path
           else
             nil
@@ -292,15 +316,18 @@ defmodule EventasaurusWeb.SocialCardView do
                   Path.expand(static_path)
 
                 {:error, _reason} ->
-                  File.rm(local_path)  # Clean up on failure
+                  # Clean up on failure
+                  File.rm(local_path)
                   nil
               end
 
-            {:error, _reason} -> nil
+            {:error, _reason} ->
+              nil
           end
         end
     end
   end
+
   def local_file_path_for_svg(_), do: nil
 
   @doc """
@@ -310,7 +337,9 @@ defmodule EventasaurusWeb.SocialCardView do
   """
   def optimized_external_image_data_url(%{cover_image_url: url}) do
     case Sanitizer.validate_image_url(url) do
-      nil -> nil
+      nil ->
+        nil
+
       valid_url ->
         unless String.starts_with?(valid_url, "/") do
           # For external images only
@@ -322,14 +351,16 @@ defmodule EventasaurusWeb.SocialCardView do
               case File.read(resized_path || local_path) do
                 {:ok, image_data} ->
                   # Determine MIME type
-                  mime_type = case Path.extname(resized_path || local_path) |> String.downcase() do
-                    ".png" -> "image/png"
-                    ".jpg" -> "image/jpeg"
-                    ".jpeg" -> "image/jpeg"
-                    ".gif" -> "image/gif"
-                    ".webp" -> "image/webp"
-                    _ -> "image/jpeg"  # Default for external images
-                  end
+                  mime_type =
+                    case Path.extname(resized_path || local_path) |> String.downcase() do
+                      ".png" -> "image/png"
+                      ".jpg" -> "image/jpeg"
+                      ".jpeg" -> "image/jpeg"
+                      ".gif" -> "image/gif"
+                      ".webp" -> "image/webp"
+                      # Default for external images
+                      _ -> "image/jpeg"
+                    end
 
                   # Convert to base64 and create data URL
                   base64_data = Base.encode64(image_data)
@@ -347,13 +378,16 @@ defmodule EventasaurusWeb.SocialCardView do
                   nil
               end
 
-            {:error, _reason} -> nil
+            {:error, _reason} ->
+              nil
           end
         else
-          nil  # Not an external image
+          # Not an external image
+          nil
         end
     end
   end
+
   def optimized_external_image_data_url(_), do: nil
 
   # Resizes an image to optimize it for social card use.
@@ -364,20 +398,31 @@ defmodule EventasaurusWeb.SocialCardView do
       resized_path = image_path <> "_resized"
 
       # Try to resize to 400x400 max with quality 85 to reduce file size
-      {_output, exit_code} = System.cmd("convert", [
-        image_path,
-        "-resize", "400x400>",  # Only resize if larger than 400x400
-        "-quality", "85",       # Reduce quality slightly
-        resized_path
-      ], stderr_to_stdout: true)
+      {_output, exit_code} =
+        System.cmd(
+          "convert",
+          [
+            image_path,
+            # Only resize if larger than 400x400
+            "-resize",
+            "400x400>",
+            # Reduce quality slightly
+            "-quality",
+            "85",
+            resized_path
+          ],
+          stderr_to_stdout: true
+        )
 
       if exit_code == 0 && File.exists?(resized_path) do
         resized_path
       else
-        nil  # Fallback to original if resize fails
+        # Fallback to original if resize fails
+        nil
       end
     rescue
-      _ -> nil  # ImageMagick not available or other error
+      # ImageMagick not available or other error
+      _ -> nil
     end
   end
 
@@ -411,7 +456,7 @@ defmodule EventasaurusWeb.SocialCardView do
     HashGenerator.generate_url_path(event)
   end
 
-    # Logo constants for consistent positioning
+  # Logo constants for consistent positioning
   @logo_x 32
   @logo_y 16
   @logo_width 280
@@ -426,19 +471,26 @@ defmodule EventasaurusWeb.SocialCardView do
   """
   def title_line_y_position(line_number, font_size) when line_number >= 0 do
     font_size_int = if is_binary(font_size), do: String.to_integer(font_size), else: font_size
-    @title_base_y + (line_number * (font_size_int + @title_line_spacing))
+    @title_base_y + line_number * (font_size_int + @title_line_spacing)
   end
 
   # Pre-load and encode logo at compile time for better performance
-  @logo_path Path.join([:code.priv_dir(:eventasaurus), "static", "images", "logos", "general.png"])
+  @logo_path Path.join([
+               :code.priv_dir(:eventasaurus),
+               "static",
+               "images",
+               "logos",
+               "general.png"
+             ])
   @logo_data (case File.read(@logo_path) do
-    {:ok, image_data} ->
-      base64_data = Base.encode64(image_data)
-      data_url = "data:image/png;base64,#{base64_data}"
-      {:ok, data_url}
-    {:error, _reason} ->
-      {:error, :file_not_found}
-  end)
+                {:ok, image_data} ->
+                  base64_data = Base.encode64(image_data)
+                  data_url = "data:image/png;base64,#{base64_data}"
+                  {:ok, data_url}
+
+                {:error, _reason} ->
+                  {:error, :file_not_found}
+              end)
 
   @doc """
   Gets the logo as an SVG element with base64 data URL for reliable rendering.
@@ -457,7 +509,8 @@ defmodule EventasaurusWeb.SocialCardView do
       {:error, :file_not_found} ->
         # Fallback with consistent positioning and background
         fallback_center_x = @logo_x + div(@logo_width, 2)
-        fallback_center_y = @logo_y + div(@logo_height, 2) + 12  # Offset for text baseline
+        # Offset for text baseline
+        fallback_center_y = @logo_y + div(@logo_height, 2) + 12
 
         """
         <rect x="#{@logo_x}" y="#{@logo_y}" width="#{@logo_width}" height="#{@logo_height}" rx="8" ry="8" fill="#10b981"/>

@@ -141,7 +141,8 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
     """
   end
 
-  defp link_icon(%{type: type} = assigns) when type in [:facebook_url, :twitter_url, :instagram_url] do
+  defp link_icon(%{type: type} = assigns)
+       when type in [:facebook_url, :twitter_url, :instagram_url] do
     case type do
       :facebook_url -> ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-blue-600' />"
       :twitter_url -> ~H"<.icon name='hero-globe-alt' class='h-4 w-4 text-blue-400' />"
@@ -168,19 +169,25 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
   end
 
   defp get_writers(nil), do: []
+
   defp get_writers(crew) when is_list(crew) do
     crew
     |> Enum.filter(&(&1["job"] in ["Writer", "Screenplay", "Story"]))
-    |> Enum.take(3) # Limit to 3 writers
+    # Limit to 3 writers
+    |> Enum.take(3)
   end
+
   defp get_writers(_), do: []
 
   defp get_producers(nil), do: []
+
   defp get_producers(crew) when is_list(crew) do
     crew
     |> Enum.filter(&(&1["job"] in ["Producer", "Executive Producer"]))
-    |> Enum.take(2) # Limit to 2 producers
+    # Limit to 2 producers
+    |> Enum.take(2)
   end
+
   defp get_producers(_), do: []
 
   defp has_key_personnel?(rich_data) do
@@ -188,16 +195,21 @@ defmodule EventasaurusWeb.Live.Components.MovieOverviewComponent do
     crew = rich_data["crew"] || []
 
     director != nil ||
-    Enum.any?(crew, &(&1["job"] in ["Writer", "Screenplay", "Story", "Producer", "Executive Producer"]))
+      Enum.any?(
+        crew,
+        &(&1["job"] in ["Writer", "Screenplay", "Story", "Producer", "Executive Producer"])
+      )
   end
 
   defp get_filtered_external_links(nil), do: %{}
+
   defp get_filtered_external_links(links) when is_map(links) do
     # Only include non-empty links, prioritize the most relevant ones
     links
     |> Enum.filter(fn {_key, value} -> value && value != "" end)
     |> Enum.into(%{})
   end
+
   defp get_filtered_external_links(_), do: %{}
 
   defp format_link_text(:tmdb_url), do: "TMDB"

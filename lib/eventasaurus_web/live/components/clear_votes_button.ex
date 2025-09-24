@@ -1,10 +1,10 @@
 defmodule EventasaurusWeb.ClearVotesButton do
   @moduledoc """
   A standardized component for clearing votes across all poll types.
-  
+
   Provides consistent labeling, styling, and confirmation dialogs for
   the "Clear All Votes" functionality throughout the polling system.
-  
+
   ## Attributes:
   - id: Unique identifier for the button (required)
   - target: Phoenix LiveView target for the click event (required)
@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.ClearVotesButton do
   - anonymous_mode: Whether in anonymous voting mode (default: false)
   - variant: Button style variant - "text" or "button" (default: "text")
   - class: Additional CSS classes (optional)
-  
+
   ## Usage:
       <.clear_votes_button
         id="clear-votes-poll-123"
@@ -23,9 +23,9 @@ defmodule EventasaurusWeb.ClearVotesButton do
         anonymous_mode={@anonymous_mode}
       />
   """
-  
+
   use Phoenix.Component
-  
+
   @doc """
   Renders a standardized clear votes button with confirmation dialog.
   """
@@ -36,7 +36,7 @@ defmodule EventasaurusWeb.ClearVotesButton do
   attr :anonymous_mode, :boolean, default: false
   attr :variant, :string, default: "text", values: ["text", "button"]
   attr :class, :string, default: ""
-  
+
   def clear_votes_button(assigns) do
     ~H"""
     <%= if @has_votes and not @loading do %>
@@ -59,7 +59,7 @@ defmodule EventasaurusWeb.ClearVotesButton do
     <% end %>
     """
   end
-  
+
   @doc """
   Renders an inline clear votes link for compact displays.
   """
@@ -69,7 +69,7 @@ defmodule EventasaurusWeb.ClearVotesButton do
   attr :loading, :boolean, default: false
   attr :anonymous_mode, :boolean, default: false
   attr :class, :string, default: ""
-  
+
   def clear_votes_link(assigns) do
     ~H"""
     <%= if @has_votes and not @loading do %>
@@ -86,16 +86,16 @@ defmodule EventasaurusWeb.ClearVotesButton do
     <% end %>
     """
   end
-  
+
   # Private helpers
-  
+
   defp button_classes("text", custom_class) do
     [
       "text-sm text-red-600 hover:text-red-900 font-medium transition-colors",
       custom_class
     ]
   end
-  
+
   defp button_classes("button", custom_class) do
     [
       "inline-flex items-center px-3 py-2 border border-gray-300",
@@ -106,14 +106,14 @@ defmodule EventasaurusWeb.ClearVotesButton do
       custom_class
     ]
   end
-  
+
   defp button_label(true = _anonymous_mode), do: "Clear Temporary Votes"
   defp button_label(false = _anonymous_mode), do: "Clear All Votes"
-  
+
   defp confirmation_message(true = _anonymous_mode) do
     "Are you sure you want to clear all your temporary votes? This action cannot be undone."
   end
-  
+
   defp confirmation_message(false = _anonymous_mode) do
     "Are you sure you want to clear all your votes? This action cannot be undone."
   end

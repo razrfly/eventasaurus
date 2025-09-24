@@ -13,20 +13,26 @@ defmodule EventasaurusWeb.EventSocialCardController do
   Provides cache busting through hash-based URLs.
   """
   def generate_card_by_slug(conn, %{"slug" => slug, "hash" => hash, "rest" => rest}) do
-    Logger.info("Social card requested for event slug: #{slug}, hash: #{hash}, rest: #{inspect(rest)}")
+    Logger.info(
+      "Social card requested for event slug: #{slug}, hash: #{hash}, rest: #{inspect(rest)}"
+    )
 
     # The hash should be clean now, but check if rest contains .png
-    final_hash = if rest == ["png"] do
-      hash  # Hash is clean, rest contains the extension
-    else
-      # Fallback: extract hash from combined parameter
-      combined = if is_list(rest) and length(rest) > 0 do
-        "#{hash}.#{Enum.join(rest, ".")}"
-      else
+    final_hash =
+      if rest == ["png"] do
+        # Hash is clean, rest contains the extension
         hash
+      else
+        # Fallback: extract hash from combined parameter
+        combined =
+          if is_list(rest) and length(rest) > 0 do
+            "#{hash}.#{Enum.join(rest, ".")}"
+          else
+            hash
+          end
+
+        String.replace_suffix(combined, ".png", "")
       end
-      String.replace_suffix(combined, ".png", "")
-    end
 
     case Events.get_event_by_slug(slug) do
       nil ->
@@ -50,42 +56,58 @@ defmodule EventasaurusWeb.EventSocialCardController do
 
                 # Convert SVG to PNG
                 case SvgConverter.svg_to_png(svg_content, event.slug, sanitized_event) do
-              {:ok, png_path} ->
-                # Read the PNG file and serve it
-                case File.read(png_path) do
-                  {:ok, png_data} ->
-                    Logger.info("Successfully generated social card PNG for slug #{slug} (#{byte_size(png_data)} bytes)")
+                  {:ok, png_path} ->
+                    # Read the PNG file and serve it
+                    case File.read(png_path) do
+                      {:ok, png_data} ->
+                        Logger.info(
+                          "Successfully generated social card PNG for slug #{slug} (#{byte_size(png_data)} bytes)"
+                        )
 
-                    # Clean up the temporary file
-                    SvgConverter.cleanup_temp_file(png_path)
+                        # Clean up the temporary file
+                        SvgConverter.cleanup_temp_file(png_path)
 
-                    conn
-                    |> put_resp_content_type("image/png")
-                    |> put_resp_header("cache-control", "public, max-age=31536000")  # Cache for 1 year since hash ensures freshness
-                    |> put_resp_header("etag", "\"#{final_hash}\"")
-                    |> send_resp(200, png_data)
+                        conn
+                        |> put_resp_content_type("image/png")
+                        # Cache for 1 year since hash ensures freshness
+                        |> put_resp_header("cache-control", "public, max-age=31536000")
+                        |> put_resp_header("etag", "\"#{final_hash}\"")
+                        |> send_resp(200, png_data)
+
+                      {:error, reason} ->
+                        Logger.error(
+                          "Failed to read PNG file for slug #{slug}: #{inspect(reason)}"
+                        )
+
+                        SvgConverter.cleanup_temp_file(png_path)
+                        send_resp(conn, 500, "Failed to generate social card")
+                    end
 
                   {:error, reason} ->
-                    Logger.error("Failed to read PNG file for slug #{slug}: #{inspect(reason)}")
-                    SvgConverter.cleanup_temp_file(png_path)
-                    send_resp(conn, 500, "Failed to generate social card")
-                end
+                    Logger.error(
+                      "Failed to convert SVG to PNG for slug #{slug}: #{inspect(reason)}"
+                    )
 
-                  {:error, reason} ->
-                    Logger.error("Failed to convert SVG to PNG for slug #{slug}: #{inspect(reason)}")
                     send_resp(conn, 500, "Failed to generate social card")
                 end
 
               {:error, :command_not_found} ->
-                Logger.error("rsvg-convert command not found - social card generation unavailable. Install librsvg2-bin package.")
+                Logger.error(
+                  "rsvg-convert command not found - social card generation unavailable. Install librsvg2-bin package."
+                )
 
                 conn
                 |> put_resp_content_type("text/plain")
-                |> send_resp(503, "Social card generation temporarily unavailable - missing system dependency")
+                |> send_resp(
+                  503,
+                  "Social card generation temporarily unavailable - missing system dependency"
+                )
             end
 
           false ->
-            Logger.warning("Hash mismatch for event #{slug}. Expected: #{HashGenerator.generate_hash(event)}, Got: #{final_hash}")
+            Logger.warning(
+              "Hash mismatch for event #{slug}. Expected: #{HashGenerator.generate_hash(event)}, Got: #{final_hash}"
+            )
 
             # Redirect to current URL with correct hash
             current_url = HashGenerator.generate_url_path(event)
@@ -97,86 +119,114 @@ defmodule EventasaurusWeb.EventSocialCardController do
     end
   end
 
-    # Private helper to render SVG template with proper context
+  # Private helper to render SVG template with proper context
   defp render_svg_template(event) do
     # Get theme colors from event's theme with error handling
-    theme_colors = case get_theme_colors(event.theme || :minimal) do
-      %{primary: primary, secondary: secondary} = colors when is_binary(primary) and is_binary(secondary) ->
-        colors
-      _ ->
-        Logger.warning("Failed to get valid theme colors for theme: #{inspect(event.theme)}, using defaults")
-        %{primary: "#1a1a1a", secondary: "#333333"}
-    end
+    theme_colors =
+      case get_theme_colors(event.theme || :minimal) do
+        %{primary: primary, secondary: secondary} = colors
+        when is_binary(primary) and is_binary(secondary) ->
+          colors
+
+        _ ->
+          Logger.warning(
+            "Failed to get valid theme colors for theme: #{inspect(event.theme)}, using defaults"
+          )
+
+          %{primary: "#1a1a1a", secondary: "#333333"}
+      end
+
     theme = %{color1: theme_colors.primary, color2: theme_colors.secondary}
 
     # Build image section - use different approaches for local vs external images
-    image_section = if has_image?(event) do
-      # Check if this is a local static file or external URL
-      if String.starts_with?(event.cover_image_url, "/") do
-        # Local static file - use base64 data URL (this works)
-        case local_image_data_url(event) do
-          nil ->
-            # Fallback to "No Image" if image processing fails
-            """
-            <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
-            <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
-            """
-          data_url ->
-            """
-            <image href="#{data_url}"
-                   x="418" y="32"
-                   width="350" height="350"
-                   clip-path="url(#imageClip)"
-                   preserveAspectRatio="xMidYMid slice"/>
-            """
+    image_section =
+      if has_image?(event) do
+        # Check if this is a local static file or external URL
+        if String.starts_with?(event.cover_image_url, "/") do
+          # Local static file - use base64 data URL (this works)
+          case local_image_data_url(event) do
+            nil ->
+              # Fallback to "No Image" if image processing fails
+              """
+              <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+              <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+              """
+
+            data_url ->
+              """
+              <image href="#{data_url}"
+                     x="418" y="32"
+                     width="350" height="350"
+                     clip-path="url(#imageClip)"
+                     preserveAspectRatio="xMidYMid slice"/>
+              """
+          end
+        else
+          # External URL - download, optimize, and use base64 data URL
+          case optimized_external_image_data_url(event) do
+            nil ->
+              # Fallback to "No Image" if download/optimization fails
+              """
+              <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+              <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+              """
+
+            data_url ->
+              """
+              <image href="#{data_url}"
+                     x="418" y="32"
+                     width="350" height="350"
+                     clip-path="url(#imageClip)"
+                     preserveAspectRatio="xMidYMid slice"/>
+              """
+          end
         end
       else
-        # External URL - download, optimize, and use base64 data URL
-        case optimized_external_image_data_url(event) do
-          nil ->
-            # Fallback to "No Image" if download/optimization fails
-            """
-            <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
-            <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
-            """
-          data_url ->
-            """
-            <image href="#{data_url}"
-                   x="418" y="32"
-                   width="350" height="350"
-                   clip-path="url(#imageClip)"
-                   preserveAspectRatio="xMidYMid slice"/>
-            """
-        end
+        """
+        <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
+        <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
+        """
       end
-    else
-      """
-      <rect x="418" y="32" width="350" height="350" rx="24" ry="24" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="2"/>
-      <text x="593" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#9ca3af">No Image</text>
-      """
-    end
 
     # Build title sections - positioned lower for better balance
-    title_line_1 = if format_title(event.title, 0) != "" do
-      y_pos = EventasaurusWeb.SocialCardView.title_line_y_position(0, calculate_font_size(event.title))
-      ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 0)}</tspan>)
-    else
-      ""
-    end
+    title_line_1 =
+      if format_title(event.title, 0) != "" do
+        y_pos =
+          EventasaurusWeb.SocialCardView.title_line_y_position(
+            0,
+            calculate_font_size(event.title)
+          )
 
-    title_line_2 = if format_title(event.title, 1) != "" do
-      y_pos = EventasaurusWeb.SocialCardView.title_line_y_position(1, calculate_font_size(event.title))
-      ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 1)}</tspan>)
-    else
-      ""
-    end
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 0)}</tspan>)
+      else
+        ""
+      end
 
-    title_line_3 = if format_title(event.title, 2) != "" do
-      y_pos = EventasaurusWeb.SocialCardView.title_line_y_position(2, calculate_font_size(event.title))
-      ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 2)}</tspan>)
-    else
-      ""
-    end
+    title_line_2 =
+      if format_title(event.title, 1) != "" do
+        y_pos =
+          EventasaurusWeb.SocialCardView.title_line_y_position(
+            1,
+            calculate_font_size(event.title)
+          )
+
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 1)}</tspan>)
+      else
+        ""
+      end
+
+    title_line_3 =
+      if format_title(event.title, 2) != "" do
+        y_pos =
+          EventasaurusWeb.SocialCardView.title_line_y_position(
+            2,
+            calculate_font_size(event.title)
+          )
+
+        ~s(<tspan x="32" y="#{y_pos}">#{format_title(event.title, 2)}</tspan>)
+      else
+        ""
+      end
 
     # Create the complete SVG
     """
@@ -229,11 +279,13 @@ defmodule EventasaurusWeb.EventSocialCardController do
   defp get_theme_colors(theme) do
     try do
       theme_config = EventasaurusApp.Themes.get_default_customizations(theme)
-      colors = if is_map(theme_config) do
-        Map.get(theme_config, "colors", %{})
-      else
-        %{}
-      end
+
+      colors =
+        if is_map(theme_config) do
+          Map.get(theme_config, "colors", %{})
+        else
+          %{}
+        end
 
       %{
         primary: validate_color_or_default(Map.get(colors, "primary"), "#1a1a1a"),
@@ -248,8 +300,9 @@ defmodule EventasaurusWeb.EventSocialCardController do
     end
   end
 
-    defp validate_color_or_default(color, default) when is_binary(color) do
+  defp validate_color_or_default(color, default) when is_binary(color) do
     if Regex.match?(~r/^#[0-9A-Fa-f]{3,8}$/i, color), do: color, else: default
   end
+
   defp validate_color_or_default(_, default), do: default
 end

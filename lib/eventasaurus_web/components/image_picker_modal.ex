@@ -3,7 +3,7 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
 
   @doc """
   A reusable image picker modal component that can be used for events, groups, or any other entity requiring image selection.
-  
+
   Required assigns:
   - id: unique identifier for the modal
   - show: boolean to control modal visibility
@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
   - error: error message if any
   - supabase_access_token: token for image upload
   - on_close: event to close modal
-  
+
   Optional assigns:
   - title: modal title (defaults to "Choose a Cover Image")
   - context: context for the picker (e.g., "event", "group") for event naming
@@ -24,6 +24,7 @@ defmodule EventasaurusWeb.Components.ImagePickerModal do
   def image_picker_modal(assigns) do
     assigns = assign_new(assigns, :title, fn -> "Choose a Cover Image" end)
     assigns = assign_new(assigns, :context, fn -> "image" end)
+
     ~H"""
     <%= if @show do %>
       <div

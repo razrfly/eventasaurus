@@ -8,7 +8,6 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
 
   @default_similarity_threshold 0.8
 
-
   @doc """
   Analyzes a new poll option suggestion for potential duplicates.
 
@@ -92,6 +91,7 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
 
   defp check_external_id_duplicate(_options, nil), do: :not_found
   defp check_external_id_duplicate(_options, ""), do: :not_found
+
   defp check_external_id_duplicate(options, external_id) do
     case Enum.find(options, fn option -> option.external_id == external_id end) do
       nil -> :not_found
@@ -122,7 +122,9 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
       similar = find_similar_titles(remaining_options, option.title, threshold)
 
       case similar do
-        [] -> acc
+        [] ->
+          acc
+
         matches ->
           group = [%{option: option, similarity_score: 1.0} | matches]
           [group | acc]
@@ -135,8 +137,10 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
     title
     |> String.downcase()
     |> String.trim()
-    |> String.replace(~r/[^\w\s]/, "")  # Remove special characters
-    |> String.replace(~r/\s+/, " ")     # Normalize whitespace
+    # Remove special characters
+    |> String.replace(~r/[^\w\s]/, "")
+    # Normalize whitespace
+    |> String.replace(~r/\s+/, " ")
   end
 
   # Simplified Jaro-Winkler implementation
@@ -172,7 +176,7 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
 
       # Add Winkler prefix bonus (up to 0.1)
       prefix_length = common_prefix_length(str1, str2, 4)
-      jaro + (prefix_length * 0.1 * (1 - jaro))
+      jaro + prefix_length * 0.1 * (1 - jaro)
     end
   end
 
@@ -182,13 +186,15 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
     {matches1, matches2, _} =
       chars1
       |> Enum.with_index()
-      |> Enum.reduce({[], [], chars2}, fn {char1, i}, {acc_matches1, acc_matches2, remaining_chars2} ->
+      |> Enum.reduce({[], [], chars2}, fn {char1, i},
+                                          {acc_matches1, acc_matches2, remaining_chars2} ->
         start_pos = max(0, i - match_window)
         end_pos = min(len2 - 1, i + match_window)
 
         case find_and_remove_match(char1, remaining_chars2, start_pos, end_pos, 0) do
           {:found, char, new_remaining} ->
             {[char1 | acc_matches1], [char | acc_matches2], new_remaining}
+
           :not_found ->
             {acc_matches1, acc_matches2, remaining_chars2}
         end
@@ -198,11 +204,18 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
   end
 
   defp find_and_remove_match(_char, [], _start, _end, _current_pos), do: :not_found
+
   defp find_and_remove_match(char, [h | t], start_pos, end_pos, current_pos) do
     cond do
-      current_pos > end_pos -> :not_found
-      current_pos < start_pos -> find_and_remove_match(char, t, start_pos, end_pos, current_pos + 1)
-      char == h -> {:found, h, t}
+      current_pos > end_pos ->
+        :not_found
+
+      current_pos < start_pos ->
+        find_and_remove_match(char, t, start_pos, end_pos, current_pos + 1)
+
+      char == h ->
+        {:found, h, t}
+
       true ->
         case find_and_remove_match(char, t, start_pos, end_pos, current_pos + 1) do
           {:found, found_char, remaining} -> {:found, found_char, [h | remaining]}
@@ -254,10 +267,18 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
 
   defp suggest_best_description(option1, option2) do
     case {option1.description, option2.description} do
-      {nil, desc2} -> desc2
-      {desc1, nil} -> desc1
-      {"", desc2} -> desc2
-      {desc1, ""} -> desc1
+      {nil, desc2} ->
+        desc2
+
+      {desc1, nil} ->
+        desc1
+
+      {"", desc2} ->
+        desc2
+
+      {desc1, ""} ->
+        desc1
+
       {desc1, desc2} ->
         if String.length(desc1) >= String.length(desc2), do: desc1, else: desc2
     end
@@ -290,10 +311,16 @@ defmodule EventasaurusApp.Services.DuplicateDetectionService do
 
   defp data_richness_score(option) do
     score = 0
-    score = if option.description && String.trim(option.description) != "", do: score + 1, else: score
+
+    score =
+      if option.description && String.trim(option.description) != "", do: score + 1, else: score
+
     score = if option.image_url && String.trim(option.image_url) != "", do: score + 1, else: score
     score = if has_external_data?(option), do: score + 2, else: score
-    score = if option.external_id && String.trim(option.external_id) != "", do: score + 1, else: score
+
+    score =
+      if option.external_id && String.trim(option.external_id) != "", do: score + 1, else: score
+
     score
   end
 

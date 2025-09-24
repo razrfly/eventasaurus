@@ -15,7 +15,7 @@ defmodule EventasaurusApp.Events do
 
   # Generic polling system aliases
   alias EventasaurusApp.Events.{Poll, PollOption, PollVote}
-  
+
   # Event activity tracking
   alias EventasaurusApp.Events.EventActivity
 
@@ -28,7 +28,7 @@ defmodule EventasaurusApp.Events do
     if Keyword.get(opts, :include_deleted, false) do
       query
     else
-      from e in query, where: is_nil(e.deleted_at)
+      from(e in query, where: is_nil(e.deleted_at))
     end
   end
 
@@ -48,11 +48,13 @@ defmodule EventasaurusApp.Events do
 
   """
   def list_events(opts \\ []) do
-    query = from e in Event,
-            preload: [:venue, :users]
-    
+    query =
+      from(e in Event,
+        preload: [:venue, :users]
+      )
+
     query = apply_soft_delete_filter(query, opts)
-    
+
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
   end
@@ -62,9 +64,11 @@ defmodule EventasaurusApp.Events do
   Excludes soft-deleted events by default.
   """
   def list_active_events(opts \\ []) do
-    query = from e in Event,
-            where: e.status != ^:canceled and (is_nil(e.ends_at) or e.ends_at > ^DateTime.utc_now()),
-            preload: [:venue, :users]
+    query =
+      from(e in Event,
+        where: e.status != ^:canceled and (is_nil(e.ends_at) or e.ends_at > ^DateTime.utc_now()),
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -79,11 +83,14 @@ defmodule EventasaurusApp.Events do
   def list_polling_events(opts \\ []) do
     current_time = DateTime.utc_now()
 
-    query = from e in Event,
-            where: e.status == :polling and
-                   not is_nil(e.polling_deadline) and
-                   e.polling_deadline > ^current_time,
-            preload: [:venue, :users]
+    query =
+      from(e in Event,
+        where:
+          e.status == :polling and
+            not is_nil(e.polling_deadline) and
+            e.polling_deadline > ^current_time,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -96,9 +103,11 @@ defmodule EventasaurusApp.Events do
   Excludes soft-deleted events by default.
   """
   def list_ticketed_events(opts \\ []) do
-    query = from e in Event,
-            where: e.status == :confirmed,
-            preload: [:venue, :users]
+    query =
+      from(e in Event,
+        where: e.status == :confirmed,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -114,11 +123,14 @@ defmodule EventasaurusApp.Events do
   def list_ended_events(opts \\ []) do
     current_time = DateTime.utc_now()
 
-    query = from e in Event,
-            where: not is_nil(e.ends_at) and e.ends_at < ^current_time,
-            preload: [:venue, :users]
-    
+    query =
+      from(e in Event,
+        where: not is_nil(e.ends_at) and e.ends_at < ^current_time,
+        preload: [:venue, :users]
+      )
+
     query = apply_soft_delete_filter(query, opts)
+
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
   end
@@ -128,9 +140,11 @@ defmodule EventasaurusApp.Events do
   Excludes soft-deleted events by default.
   """
   def list_threshold_events(opts \\ []) do
-    query = from e in Event,
-            where: e.status == :threshold,
-            preload: [:venue, :users]
+    query =
+      from(e in Event,
+        where: e.status == :threshold,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -144,10 +158,13 @@ defmodule EventasaurusApp.Events do
   ## Parameters
   - threshold_type: "attendee_count", "revenue", or "both"
   """
-  def list_events_by_threshold_type(threshold_type, opts \\ []) when threshold_type in ["attendee_count", "revenue", "both"] do
-    query = from e in Event,
-            where: e.threshold_type == ^threshold_type,
-            preload: [:venue, :users]
+  def list_events_by_threshold_type(threshold_type, opts \\ [])
+      when threshold_type in ["attendee_count", "revenue", "both"] do
+    query =
+      from(e in Event,
+        where: e.threshold_type == ^threshold_type,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -179,12 +196,16 @@ defmodule EventasaurusApp.Events do
   ## Parameters
   - min_revenue_cents: Minimum revenue threshold in cents
   """
-  def list_events_by_min_revenue(min_revenue_cents, opts \\ []) when is_integer(min_revenue_cents) do
-    query = from e in Event,
-            where: e.threshold_type in ["revenue", "both"] and
-                   not is_nil(e.threshold_revenue_cents) and
-                   e.threshold_revenue_cents >= ^min_revenue_cents,
-            preload: [:venue, :users]
+  def list_events_by_min_revenue(min_revenue_cents, opts \\ [])
+      when is_integer(min_revenue_cents) do
+    query =
+      from(e in Event,
+        where:
+          e.threshold_type in ["revenue", "both"] and
+            not is_nil(e.threshold_revenue_cents) and
+            e.threshold_revenue_cents >= ^min_revenue_cents,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -194,13 +215,13 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Returns the list of public events with optional search.
-  
+
   ## Options
     - search: Search term to filter by title or description
     - include_ended: if true, includes events that have ended (default: false)
     
   ## Examples
-  
+
       iex> list_public_events()
       [%Event{}, ...]
       
@@ -211,40 +232,49 @@ defmodule EventasaurusApp.Events do
     search_term = Keyword.get(opts, :search, "")
     include_ended = Keyword.get(opts, :include_ended, false)
     current_time = DateTime.utc_now()
-    
-    query = from e in Event,
-            where: e.visibility == :public,
-            order_by: [asc: e.start_at],
-            preload: [:venue, :users]
-    
+
+    query =
+      from(e in Event,
+        where: e.visibility == :public,
+        order_by: [asc: e.start_at],
+        preload: [:venue, :users]
+      )
+
     # Apply soft delete filter using the helper
     query = apply_soft_delete_filter(query, opts)
-    
+
     # Filter out ended and canceled events unless explicitly included
     # An event is considered active/upcoming if:
     # - It's not canceled, AND
     # - It has no end date and hasn't started yet, OR
     # - It has an end date that hasn't passed yet
-    query = if include_ended do
-      # Even when including ended events, exclude canceled ones
-      from e in query,
-        where: e.status != ^:canceled
-    else
-      from e in query,
-        where: e.status != ^:canceled and
-               ((is_nil(e.ends_at) and e.start_at > ^current_time) or 
-                (not is_nil(e.ends_at) and e.ends_at > ^current_time))
-    end
-    
+    query =
+      if include_ended do
+        # Even when including ended events, exclude canceled ones
+        from(e in query,
+          where: e.status != ^:canceled
+        )
+      else
+        from(e in query,
+          where:
+            e.status != ^:canceled and
+              ((is_nil(e.ends_at) and e.start_at > ^current_time) or
+                 (not is_nil(e.ends_at) and e.ends_at > ^current_time))
+        )
+      end
+
     # Apply search filter if provided
-    query = if search_term != "" do
-      search_pattern = "%#{search_term}%"
-      from e in query,
-        where: ilike(e.title, ^search_pattern) or ilike(e.description, ^search_pattern)
-    else
-      query
-    end
-    
+    query =
+      if search_term != "" do
+        search_pattern = "%#{search_term}%"
+
+        from(e in query,
+          where: ilike(e.title, ^search_pattern) or ilike(e.description, ^search_pattern)
+        )
+      else
+        query
+      end
+
     Repo.all(query)
     |> Enum.map(&Event.with_computed_fields/1)
   end
@@ -255,12 +285,16 @@ defmodule EventasaurusApp.Events do
   ## Parameters
   - min_attendee_count: Minimum attendee count threshold
   """
-  def list_events_by_min_attendee_count(min_attendee_count, opts \\ []) when is_integer(min_attendee_count) do
-    query = from e in Event,
-            where: e.threshold_type in ["attendee_count", "both"] and
-                   not is_nil(e.threshold_count) and
-                   e.threshold_count >= ^min_attendee_count,
-            preload: [:venue, :users]
+  def list_events_by_min_attendee_count(min_attendee_count, opts \\ [])
+      when is_integer(min_attendee_count) do
+    query =
+      from(e in Event,
+        where:
+          e.threshold_type in ["attendee_count", "both"] and
+            not is_nil(e.threshold_count) and
+            e.threshold_count >= ^min_attendee_count,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -270,7 +304,7 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Returns the list of events for a specific group with proper ordering.
-  
+
   This function now uses the unified event fetching logic to ensure consistent
   ordering and filtering across the application.
 
@@ -282,60 +316,73 @@ defmodule EventasaurusApp.Events do
     - :limit - maximum number of results (default: 50)
     - :include_deleted - whether to include soft-deleted events (default: false)
   """
-  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, %User{} = user, opts) when not is_nil(group_id) and is_list(opts) do
+  def list_events_for_group(
+        %EventasaurusApp.Groups.Group{id: group_id} = _group,
+        %User{} = user,
+        opts
+      )
+      when not is_nil(group_id) and is_list(opts) do
     # Use the unified function with group_id filter
-    list_unified_events_for_user_optimized(user, 
-      Keyword.merge(opts, [
+    list_unified_events_for_user_optimized(
+      user,
+      Keyword.merge(opts,
         group_id: group_id,
-        ownership_filter: :all  # Show all events in the group regardless of user's role
-      ])
+        # Show all events in the group regardless of user's role
+        ownership_filter: :all
+      )
     )
   end
-  
+
   # Header for list_events_for_group/2 with default parameter
   def list_events_for_group(group, opts_or_user \\ [])
-  
-  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = group, %User{} = user) when not is_nil(group_id) do
+
+  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = group, %User{} = user)
+      when not is_nil(group_id) do
     list_events_for_group(group, user, [])
   end
-  
+
   @doc """
   Legacy version of list_events_for_group for backward compatibility.
-  
+
   @deprecated Use list_events_for_group/3 with user parameter instead.
   """
-  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, opts) when not is_nil(group_id) do
-    query = from e in Event,
-            where: e.group_id == ^group_id,
-            preload: [:venue, :users]
+  def list_events_for_group(%EventasaurusApp.Groups.Group{id: group_id} = _group, opts)
+      when not is_nil(group_id) do
+    query =
+      from(e in Event,
+        where: e.group_id == ^group_id,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
-    results = Repo.all(query)
-    |> Enum.map(&Event.with_computed_fields/1)
-    
+    results =
+      Repo.all(query)
+      |> Enum.map(&Event.with_computed_fields/1)
+
     # Get event IDs for participant loading
     event_ids = results |> Enum.map(& &1.id) |> Enum.uniq()
-    
+
     # Load participants for each event in a single query
-    participants_by_event = if length(event_ids) > 0 do
-      from(ep in EventParticipant,
-        where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
-        order_by: [asc: ep.event_id, desc: ep.inserted_at],
-        preload: [:user]
-      )
-      |> Repo.all()
-      |> Enum.group_by(& &1.event_id)
-    else
-      %{}
-    end
+    participants_by_event =
+      if length(event_ids) > 0 do
+        from(ep in EventParticipant,
+          where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
+          order_by: [asc: ep.event_id, desc: ep.inserted_at],
+          preload: [:user]
+        )
+        |> Repo.all()
+        |> Enum.group_by(& &1.event_id)
+      else
+        %{}
+      end
 
     # Add participant data to results
     results
     |> Enum.map(fn event ->
       participants = Map.get(participants_by_event, event.id, [])
       participant_count = length(participants)
-      
+
       Map.merge(event, %{
         participants: participants,
         participant_count: participant_count
@@ -349,9 +396,11 @@ defmodule EventasaurusApp.Events do
   Raises `Ecto.NoResultsError` if the Event does not exist or is soft-deleted.
   """
   def get_event!(id) do
-    query = from e in Event,
-            where: e.id == ^id and is_nil(e.deleted_at)
-    
+    query =
+      from(e in Event,
+        where: e.id == ^id and is_nil(e.deleted_at)
+      )
+
     Repo.one!(query) |> Repo.preload([:venue, :users]) |> Event.with_computed_fields()
   end
 
@@ -364,15 +413,17 @@ defmodule EventasaurusApp.Events do
   Returns nil if the Event does not exist or is soft-deleted (unless include_deleted: true).
   """
   def get_event(id, opts \\ []) do
-    query = from e in Event, where: e.id == ^id
-    
+    query = from(e in Event, where: e.id == ^id)
+
     query = apply_soft_delete_filter(query, opts)
-    
+
     Repo.one(query) |> maybe_preload()
   end
 
   defp maybe_preload(nil), do: nil
-  defp maybe_preload(event), do: Repo.preload(event, [:venue, :users]) |> Event.with_computed_fields()
+
+  defp maybe_preload(event),
+    do: Repo.preload(event, [:venue, :users]) |> Event.with_computed_fields()
 
   @doc """
   Gets a single event by slug, excluding soft-deleted ones by default.
@@ -383,10 +434,10 @@ defmodule EventasaurusApp.Events do
   Returns nil if the Event does not exist or is soft-deleted (unless include_deleted: true).
   """
   def get_event_by_slug(slug, opts \\ []) do
-    query = from e in Event, where: e.slug == ^slug
-    
+    query = from(e in Event, where: e.slug == ^slug)
+
     query = apply_soft_delete_filter(query, opts)
-    
+
     Repo.one(query)
     |> maybe_preload()
   end
@@ -406,9 +457,11 @@ defmodule EventasaurusApp.Events do
 
   """
   def get_event_by_slug!(slug) do
-    query = from e in Event,
-            where: e.slug == ^slug and is_nil(e.deleted_at)
-    
+    query =
+      from(e in Event,
+        where: e.slug == ^slug and is_nil(e.deleted_at)
+      )
+
     Repo.one!(query)
     |> Repo.preload([:venue, :users])
   end
@@ -428,11 +481,13 @@ defmodule EventasaurusApp.Events do
 
   """
   def get_event_by_title(title, opts \\ []) do
-    query = from e in Event,
-            where: e.title == ^title
-    
+    query =
+      from(e in Event,
+        where: e.title == ^title
+      )
+
     query = apply_soft_delete_filter(query, opts)
-    
+
     case Repo.one(query) do
       nil -> nil
       event -> Repo.preload(event, [:venue, :users])
@@ -448,30 +503,37 @@ defmodule EventasaurusApp.Events do
   """
   def create_event(attrs \\ %{}) do
     # Use changeset with inferred status for automatic state management
-    result = %Event{}
-    |> Event.changeset_with_inferred_status(attrs)
-    |> Repo.insert()
+    result =
+      %Event{}
+      |> Event.changeset_with_inferred_status(attrs)
+      |> Repo.insert()
 
     case result do
       {:ok, event} ->
-        event = event
-        |> Repo.preload([:venue, :users])
-        |> Event.with_computed_fields()
-        
+        event =
+          event
+          |> Repo.preload([:venue, :users])
+          |> Event.with_computed_fields()
+
         # Sync existing participants if event is added to a group
         if event.group_id do
           Task.start(fn ->
             case EventasaurusApp.Groups.get_group(event.group_id) do
               nil ->
-                Logger.warning("Failed to sync participants: Group #{event.group_id} not found for event #{event.id}")
+                Logger.warning(
+                  "Failed to sync participants: Group #{event.group_id} not found for event #{event.id}"
+                )
+
               group ->
                 EventasaurusApp.Groups.sync_event_participants_to_group(group, event)
             end
           end)
         end
-        
+
         {:ok, event}
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -488,24 +550,30 @@ defmodule EventasaurusApp.Events do
 
     case result do
       {:ok, updated_event} ->
-        updated_event = updated_event
-        |> Repo.preload([:venue, :users])
-        |> Event.with_computed_fields()
-        
+        updated_event =
+          updated_event
+          |> Repo.preload([:venue, :users])
+          |> Event.with_computed_fields()
+
         # Sync participants if event is newly added to a group
         if updated_event.group_id && event.group_id != updated_event.group_id do
           Task.start(fn ->
             case EventasaurusApp.Groups.get_group(updated_event.group_id) do
               nil ->
-                Logger.warning("Failed to sync participants: Group #{updated_event.group_id} not found for event #{updated_event.id}")
+                Logger.warning(
+                  "Failed to sync participants: Group #{updated_event.group_id} not found for event #{updated_event.id}"
+                )
+
               group ->
                 EventasaurusApp.Groups.sync_event_participants_to_group(group, updated_event)
             end
           end)
         end
-        
+
         {:ok, updated_event}
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -546,7 +614,6 @@ defmodule EventasaurusApp.Events do
     EventasaurusApp.Events.SoftDelete.soft_delete_event(event_id, reason, user_id)
   end
 
-
   @doc """
   Checks if an event can be soft deleted.
   """
@@ -564,7 +631,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Unified deletion function that automatically determines whether to perform
   a hard or soft deletion based on event criteria.
-  
+
   ## Parameters
     - event_id: ID of the event to delete
     - user_id: ID of the user performing the deletion
@@ -581,7 +648,7 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Determines the appropriate deletion method for an event.
-  
+
   Returns :hard if the event is eligible for hard deletion, :soft otherwise.
   """
   def deletion_method(event, user) do
@@ -600,7 +667,7 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Restores a soft-deleted event and all its associated records.
-  
+
   ## Parameters
     - event_id: ID of the soft-deleted event to restore
     - user_id: ID of the user performing the restoration
@@ -615,7 +682,7 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Checks if an event is eligible for restoration.
-  
+
   Returns {:ok, event} if eligible, {:error, reason} if not.
   """
   def eligible_for_restoration?(event_id) do
@@ -624,7 +691,7 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Gets restoration statistics for reporting purposes.
-  
+
   ## Options
     - days_back: Number of days to look back (default: 30)
   """
@@ -637,10 +704,13 @@ defmodule EventasaurusApp.Events do
   """
   def count_orders_for_event(event_id) do
     alias EventasaurusApp.Events.Order
-    
+
     Repo.aggregate(
-      from(o in Order, 
-           where: o.event_id == ^event_id and o.status in ["confirmed", "pending"] and is_nil(o.deleted_at)),
+      from(o in Order,
+        where:
+          o.event_id == ^event_id and o.status in ["confirmed", "pending"] and
+            is_nil(o.deleted_at)
+      ),
       :count,
       :id
     )
@@ -652,14 +722,16 @@ defmodule EventasaurusApp.Events do
   def count_sold_tickets_for_event(event_id) do
     alias EventasaurusApp.Events.Ticket
     alias EventasaurusApp.Ticketing
-    
+
     # Get all ticket IDs for this event (excluding soft-deleted)
-    ticket_ids = Repo.all(
-      from(t in Ticket, 
-           where: t.event_id == ^event_id and is_nil(t.deleted_at), 
-           select: t.id)
-    )
-    
+    ticket_ids =
+      Repo.all(
+        from(t in Ticket,
+          where: t.event_id == ^event_id and is_nil(t.deleted_at),
+          select: t.id
+        )
+      )
+
     # Sum up sold tickets across all ticket types
     Enum.reduce(ticket_ids, 0, fn ticket_id, acc ->
       acc + Ticketing.count_sold_tickets(ticket_id)
@@ -673,7 +745,7 @@ defmodule EventasaurusApp.Events do
     Event.changeset(event, attrs)
   end
 
-      @doc """
+  @doc """
   Manually transition an event to a new status.
 
   This function bypasses automatic status inference and directly sets
@@ -694,7 +766,9 @@ defmodule EventasaurusApp.Events do
       case update_event(event, %{status: new_status}) do
         {:ok, updated_event} ->
           Event.with_computed_fields(updated_event)
-        {:error, reason} -> Repo.rollback(reason)
+
+        {:error, reason} ->
+          Repo.rollback(reason)
       end
     end)
   end
@@ -726,16 +800,19 @@ defmodule EventasaurusApp.Events do
       corrected_attrs = %{status: inferred_status}
 
       # Add required fields based on inferred status
-      corrected_attrs = case inferred_status do
-        :canceled -> Map.put(corrected_attrs, :canceled_at, DateTime.utc_now())
-        _ -> Map.delete(corrected_attrs, :canceled_at)  # Clear canceled_at when moving away from canceled
-      end
+      corrected_attrs =
+        case inferred_status do
+          :canceled -> Map.put(corrected_attrs, :canceled_at, DateTime.utc_now())
+          # Clear canceled_at when moving away from canceled
+          _ -> Map.delete(corrected_attrs, :canceled_at)
+        end
 
       case event
            |> Event.changeset(corrected_attrs)
            |> Repo.update() do
         {:ok, updated_event} ->
           {:ok, Event.with_computed_fields(updated_event)}
+
         {:error, changeset} ->
           {:error, changeset}
       end
@@ -746,10 +823,13 @@ defmodule EventasaurusApp.Events do
   Returns the list of events by a specific user.
   """
   def list_events_by_user(%User{} = user, opts \\ []) do
-    query = from e in Event,
-            join: eu in EventUser, on: e.id == eu.event_id,
-            where: eu.user_id == ^user.id,
-            preload: [:venue, :users]
+    query =
+      from(e in Event,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        where: eu.user_id == ^user.id,
+        preload: [:venue, :users]
+      )
 
     query = apply_soft_delete_filter(query, opts)
 
@@ -762,14 +842,18 @@ defmodule EventasaurusApp.Events do
   """
   def list_deleted_events_by_user(%User{} = user) do
     ninety_days_ago = DateTime.utc_now() |> DateTime.add(-90, :day)
-    
-    query = from e in Event,
-            join: eu in EventasaurusApp.Events.EventUser, on: e.id == eu.event_id,
-            where: eu.user_id == ^user.id and
-                   not is_nil(e.deleted_at) and
-                   e.deleted_at > ^ninety_days_ago,
-            preload: [:users, :venue, :tickets],
-            order_by: [desc: e.deleted_at]
+
+    query =
+      from(e in Event,
+        join: eu in EventasaurusApp.Events.EventUser,
+        on: e.id == eu.event_id,
+        where:
+          eu.user_id == ^user.id and
+            not is_nil(e.deleted_at) and
+            e.deleted_at > ^ninety_days_ago,
+        preload: [:users, :venue, :tickets],
+        order_by: [desc: e.deleted_at]
+      )
 
     Repo.all(query)
   end
@@ -801,10 +885,12 @@ defmodule EventasaurusApp.Events do
   """
   def add_organizers_to_event(%Event{} = event, user_ids) when is_list(user_ids) do
     # Get existing organizer user IDs for this event
-    existing_organizer_ids = from(eu in EventUser,
-                                  where: eu.event_id == ^event.id,
-                                  select: eu.user_id)
-                            |> Repo.all()
+    existing_organizer_ids =
+      from(eu in EventUser,
+        where: eu.event_id == ^event.id,
+        select: eu.user_id
+      )
+      |> Repo.all()
 
     # Filter out user IDs that are already organizers and deduplicate
     new_user_ids =
@@ -815,18 +901,22 @@ defmodule EventasaurusApp.Events do
     # Prepare organizer records for bulk insert
     timestamp = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
-    organizer_records = Enum.map(new_user_ids, fn user_id ->
-      %{
-        event_id: event.id,
-        user_id: user_id,
-        role: nil,
-        inserted_at: timestamp,
-        updated_at: timestamp
-      }
-    end)
+    organizer_records =
+      Enum.map(new_user_ids, fn user_id ->
+        %{
+          event_id: event.id,
+          user_id: user_id,
+          role: nil,
+          inserted_at: timestamp,
+          updated_at: timestamp
+        }
+      end)
 
     case organizer_records do
-      [] -> 0  # No new organizers to add
+      # No new organizers to add
+      [] ->
+        0
+
       records ->
         # Use insert_all with conflict handling for better performance and safety
         {count, _} =
@@ -836,6 +926,7 @@ defmodule EventasaurusApp.Events do
             on_conflict: :nothing,
             conflict_target: [:event_id, :user_id]
           )
+
         count
     end
   end
@@ -844,9 +935,12 @@ defmodule EventasaurusApp.Events do
   Lists all organizers of an event.
   """
   def list_event_organizers(%Event{} = event) do
-    query = from u in User,
-            join: eu in EventUser, on: u.id == eu.user_id,
-            where: eu.event_id == ^event.id
+    query =
+      from(u in User,
+        join: eu in EventUser,
+        on: u.id == eu.user_id,
+        where: eu.event_id == ^event.id
+      )
 
     Repo.all(query)
   end
@@ -855,9 +949,11 @@ defmodule EventasaurusApp.Events do
   Checks if a user is an organizer of an event.
   """
   def user_is_organizer?(%Event{} = event, %User{} = user) do
-    query = from eu in EventUser,
-            where: eu.event_id == ^event.id and eu.user_id == ^user.id,
-            select: count(eu.id)
+    query =
+      from(eu in EventUser,
+        where: eu.event_id == ^event.id and eu.user_id == ^user.id,
+        select: count(eu.id)
+      )
 
     Repo.one(query) > 0
   end
@@ -911,28 +1007,37 @@ defmodule EventasaurusApp.Events do
   Creates an event participant.
   """
   def create_event_participant(attrs \\ %{}) do
-    result = %EventParticipant{}
-    |> EventParticipant.changeset(attrs)
-    |> Repo.insert()
-    
+    result =
+      %EventParticipant{}
+      |> EventParticipant.changeset(attrs)
+      |> Repo.insert()
+
     case result do
       {:ok, participant} ->
         # Sync participant to group if event belongs to a group
         event_id = Map.get(attrs, :event_id) || Map.get(attrs, "event_id")
         user_id = Map.get(attrs, :user_id) || Map.get(attrs, "user_id")
-        
+
         if event_id && user_id do
           Task.start(fn ->
             case get_event(event_id) do
               nil ->
                 Logger.warning("Failed to sync participant to group: Event #{event_id} not found")
+
               event ->
                 if event.group_id do
-                  case {EventasaurusApp.Groups.get_group(event.group_id), EventasaurusApp.Accounts.get_user(user_id)} do
+                  case {EventasaurusApp.Groups.get_group(event.group_id),
+                        EventasaurusApp.Accounts.get_user(user_id)} do
                     {nil, _} ->
-                      Logger.warning("Failed to sync participant to group: Group #{event.group_id} not found")
+                      Logger.warning(
+                        "Failed to sync participant to group: Group #{event.group_id} not found"
+                      )
+
                     {_, nil} ->
-                      Logger.warning("Failed to sync participant to group: User #{user_id} not found")
+                      Logger.warning(
+                        "Failed to sync participant to group: User #{user_id} not found"
+                      )
+
                     {group, user} ->
                       EventasaurusApp.Groups.add_user_to_group(group, user, "member")
                   end
@@ -940,12 +1045,15 @@ defmodule EventasaurusApp.Events do
             end
           end)
         end
+
         {:ok, participant}
-      error -> error
+
+      error ->
+        error
     end
   end
 
-      @doc """
+  @doc """
   Creates or updates an event participant for ticket purchase.
 
   This function implements the design pattern where:
@@ -957,48 +1065,51 @@ defmodule EventasaurusApp.Events do
   def create_or_upgrade_participant_for_order(%{event_id: event_id, user_id: user_id} = attrs) do
     # For upsert, we need to handle metadata merging at the database level
     # Since PostgreSQL doesn't have easy metadata merging in upsert, we'll use a transaction
-    result = Repo.transaction(fn ->
-      # Check for active (non-deleted) participant only
-      existing_query = from(ep in EventParticipant,
-        where: ep.event_id == ^event_id and ep.user_id == ^user_id and is_nil(ep.deleted_at),
-        limit: 1
-      )
-      
-      case Repo.one(existing_query) do
-        nil ->
-          # No existing participant, create new one
-          participant_attrs = Map.merge(attrs, %{
-            status: :confirmed_with_order,
-            role: :ticket_holder
-          })
+    result =
+      Repo.transaction(fn ->
+        # Check for active (non-deleted) participant only
+        existing_query =
+          from(ep in EventParticipant,
+            where: ep.event_id == ^event_id and ep.user_id == ^user_id and is_nil(ep.deleted_at),
+            limit: 1
+          )
 
-          case %EventParticipant{}
-               |> EventParticipant.changeset(participant_attrs)
-               |> Repo.insert() do
-            {:ok, participant} -> participant
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
+        case Repo.one(existing_query) do
+          nil ->
+            # No existing participant, create new one
+            participant_attrs =
+              Map.merge(attrs, %{
+                status: :confirmed_with_order,
+                role: :ticket_holder
+              })
 
-        existing_participant ->
-          # Participant exists, upgrade their status and merge metadata
-          new_metadata = Map.get(attrs, :metadata, %{})
-          merged_metadata = Map.merge(existing_participant.metadata || %{}, new_metadata)
+            case %EventParticipant{}
+                 |> EventParticipant.changeset(participant_attrs)
+                 |> Repo.insert() do
+              {:ok, participant} -> participant
+              {:error, changeset} -> Repo.rollback(changeset)
+            end
 
-          upgrade_attrs = %{
-            status: :confirmed_with_order,
-            role: :ticket_holder,
-            metadata: merged_metadata
-          }
+          existing_participant ->
+            # Participant exists, upgrade their status and merge metadata
+            new_metadata = Map.get(attrs, :metadata, %{})
+            merged_metadata = Map.merge(existing_participant.metadata || %{}, new_metadata)
 
-          case existing_participant
-               |> EventParticipant.changeset(upgrade_attrs)
-               |> Repo.update() do
-            {:ok, participant} -> participant
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-      end
-    end)
-    
+            upgrade_attrs = %{
+              status: :confirmed_with_order,
+              role: :ticket_holder,
+              metadata: merged_metadata
+            }
+
+            case existing_participant
+                 |> EventParticipant.changeset(upgrade_attrs)
+                 |> Repo.update() do
+              {:ok, participant} -> participant
+              {:error, changeset} -> Repo.rollback(changeset)
+            end
+        end
+      end)
+
     # After successful transaction, sync to group if needed
     case result do
       {:ok, _participant} ->
@@ -1006,21 +1117,32 @@ defmodule EventasaurusApp.Events do
           case get_event(event_id) do
             nil ->
               Logger.warning("Failed to sync participant to group: Event #{event_id} not found")
+
             event ->
               if event.group_id do
-                case {EventasaurusApp.Groups.get_group(event.group_id), EventasaurusApp.Accounts.get_user(user_id)} do
+                case {EventasaurusApp.Groups.get_group(event.group_id),
+                      EventasaurusApp.Accounts.get_user(user_id)} do
                   {nil, _} ->
-                    Logger.warning("Failed to sync participant to group: Group #{event.group_id} not found")
+                    Logger.warning(
+                      "Failed to sync participant to group: Group #{event.group_id} not found"
+                    )
+
                   {_, nil} ->
-                    Logger.warning("Failed to sync participant to group: User #{user_id} not found")
+                    Logger.warning(
+                      "Failed to sync participant to group: User #{user_id} not found"
+                    )
+
                   {group, user} ->
                     EventasaurusApp.Groups.add_user_to_group(group, user, "member")
                 end
               end
           end
         end)
+
         result
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -1037,7 +1159,11 @@ defmodule EventasaurusApp.Events do
   Updates a participant's status with admin permission checking.
   Only event organizers can change participant status.
   """
-  def admin_update_participant_status(%EventParticipant{} = participant, new_status, %User{} = admin_user) do
+  def admin_update_participant_status(
+        %EventParticipant{} = participant,
+        new_status,
+        %User{} = admin_user
+      ) do
     # Load the event with preloaded organizers to check permissions
     event = get_event!(participant.event_id)
 
@@ -1067,9 +1193,11 @@ defmodule EventasaurusApp.Events do
   Lists all participants for an event.
   """
   def list_event_participants_for_event(%Event{} = event) do
-    query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
-            preload: [:user, :invited_by_user]
+    query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
+        preload: [:user, :invited_by_user]
+      )
 
     Repo.all(query)
   end
@@ -1085,11 +1213,14 @@ defmodule EventasaurusApp.Events do
   Lists all events a user is participating in.
   """
   def list_events_with_participation(%User{} = user, opts \\ []) do
-    query = from e in Event,
-            join: ep in EventParticipant, on: e.id == ep.event_id,
-            where: ep.user_id == ^user.id,
-            preload: [:venue, :users]
-    
+    query =
+      from(e in Event,
+        join: ep in EventParticipant,
+        on: e.id == ep.event_id,
+        where: ep.user_id == ^user.id,
+        preload: [:venue, :users]
+      )
+
     query = apply_soft_delete_filter(query, opts)
     Repo.all(query)
   end
@@ -1104,9 +1235,10 @@ defmodule EventasaurusApp.Events do
     limit = Keyword.get(opts, :limit, 50)
 
     # Base queries for organizer and participant events
-    organizer_query = 
-      from e in Event,
-        join: eu in EventUser, on: e.id == eu.event_id,
+    organizer_query =
+      from(e in Event,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
         where: eu.user_id == ^user.id,
         select: %{
           id: e.id,
@@ -1127,10 +1259,12 @@ defmodule EventasaurusApp.Events do
           user_status: fragment("'confirmed'"),
           can_manage: fragment("true")
         }
+      )
 
     participant_query =
-      from e in Event,
-        join: ep in EventParticipant, on: e.id == ep.event_id,
+      from(e in Event,
+        join: ep in EventParticipant,
+        on: e.id == ep.event_id,
         where: ep.user_id == ^user.id,
         select: %{
           id: e.id,
@@ -1151,94 +1285,117 @@ defmodule EventasaurusApp.Events do
           user_status: ep.status,
           can_manage: fragment("false")
         }
+      )
 
     # Apply ownership filter
-    {organizer_query, participant_query} = case ownership_filter do
-      :created -> 
-        # Return empty participant query but with same structure
-        empty_participant_query = from e in Event,
-          join: ep in EventParticipant, on: e.id == ep.event_id,
-          where: false,
-          select: %{
-            id: e.id,
-            title: e.title,
-            slug: e.slug,
-            description: e.description,
-            start_at: e.start_at,
-            ends_at: e.ends_at,
-            timezone: e.timezone,
-            status: e.status,
-            taxation_type: e.taxation_type,
-            venue_id: e.venue_id,
-            group_id: e.group_id,
-            cover_image_url: e.cover_image_url,
-            inserted_at: e.inserted_at,
-            updated_at: e.updated_at,
-            user_role: fragment("'participant'"),
-            user_status: ep.status,
-            can_manage: fragment("false")
-          }
-        {organizer_query, empty_participant_query}
-      :participating -> 
-        # Return empty organizer query but with same structure
-        empty_organizer_query = from e in Event,
-          join: eu in EventUser, on: e.id == eu.event_id,
-          where: false,
-          select: %{
-            id: e.id,
-            title: e.title,
-            slug: e.slug,
-            description: e.description,
-            start_at: e.start_at,
-            ends_at: e.ends_at,
-            timezone: e.timezone,
-            status: e.status,
-            taxation_type: e.taxation_type,
-            venue_id: e.venue_id,
-            group_id: e.group_id,
-            cover_image_url: e.cover_image_url,
-            inserted_at: e.inserted_at,
-            updated_at: e.updated_at,
-            user_role: fragment("'organizer'"),
-            user_status: fragment("'confirmed'"),
-            can_manage: fragment("true")
-          }
-        {empty_organizer_query, participant_query}
-      :all -> {organizer_query, participant_query}
-    end
+    {organizer_query, participant_query} =
+      case ownership_filter do
+        :created ->
+          # Return empty participant query but with same structure
+          empty_participant_query =
+            from(e in Event,
+              join: ep in EventParticipant,
+              on: e.id == ep.event_id,
+              where: false,
+              select: %{
+                id: e.id,
+                title: e.title,
+                slug: e.slug,
+                description: e.description,
+                start_at: e.start_at,
+                ends_at: e.ends_at,
+                timezone: e.timezone,
+                status: e.status,
+                taxation_type: e.taxation_type,
+                venue_id: e.venue_id,
+                group_id: e.group_id,
+                cover_image_url: e.cover_image_url,
+                inserted_at: e.inserted_at,
+                updated_at: e.updated_at,
+                user_role: fragment("'participant'"),
+                user_status: ep.status,
+                can_manage: fragment("false")
+              }
+            )
+
+          {organizer_query, empty_participant_query}
+
+        :participating ->
+          # Return empty organizer query but with same structure
+          empty_organizer_query =
+            from(e in Event,
+              join: eu in EventUser,
+              on: e.id == eu.event_id,
+              where: false,
+              select: %{
+                id: e.id,
+                title: e.title,
+                slug: e.slug,
+                description: e.description,
+                start_at: e.start_at,
+                ends_at: e.ends_at,
+                timezone: e.timezone,
+                status: e.status,
+                taxation_type: e.taxation_type,
+                venue_id: e.venue_id,
+                group_id: e.group_id,
+                cover_image_url: e.cover_image_url,
+                inserted_at: e.inserted_at,
+                updated_at: e.updated_at,
+                user_role: fragment("'organizer'"),
+                user_status: fragment("'confirmed'"),
+                can_manage: fragment("true")
+              }
+            )
+
+          {empty_organizer_query, participant_query}
+
+        :all ->
+          {organizer_query, participant_query}
+      end
 
     # Apply soft delete filter to both queries - exclude deleted events for unified view
-    organizer_query = from e in organizer_query, where: is_nil(e.deleted_at)
-    participant_query = from e in participant_query, where: is_nil(e.deleted_at)
+    organizer_query = from(e in organizer_query, where: is_nil(e.deleted_at))
+    participant_query = from(e in participant_query, where: is_nil(e.deleted_at))
 
     # Union the queries
     union_query = union_all(organizer_query, ^participant_query)
 
     # Apply time filter to union query before finalizing
-    time_filtered_query = case time_filter do
-      :upcoming -> 
-        now = DateTime.utc_now()
-        from e in subquery(union_query), 
-          where: is_nil(e.start_at) or e.start_at > ^now,
-          order_by: [asc: coalesce(e.start_at, e.inserted_at)],
-          limit: ^limit
-      :past ->
-        now = DateTime.utc_now()
-        from e in subquery(union_query), 
-          where: not is_nil(e.start_at) and e.start_at <= ^now,
-          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
-          limit: ^limit
-      :archived ->
-        # Archived events are handled separately in the LiveView
-        from e in subquery(union_query),
-          where: false,
-          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
-          limit: ^limit
-      :all -> 
-        from e in subquery(union_query),
-          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
-          limit: ^limit
-    end
+    time_filtered_query =
+      case time_filter do
+        :upcoming ->
+          now = DateTime.utc_now()
+
+          from(e in subquery(union_query),
+            where: is_nil(e.start_at) or e.start_at > ^now,
+            order_by: [asc: coalesce(e.start_at, e.inserted_at)],
+            limit: ^limit
+          )
+
+        :past ->
+          now = DateTime.utc_now()
+
+          from(e in subquery(union_query),
+            where: not is_nil(e.start_at) and e.start_at <= ^now,
+            order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+            limit: ^limit
+          )
+
+        :archived ->
+          # Archived events are handled separately in the LiveView
+          from(e in subquery(union_query),
+            where: false,
+            order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+            limit: ^limit
+          )
+
+        :all ->
+          from(e in subquery(union_query),
+            order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+            limit: ^limit
+          )
+      end
 
     # Use with_deleted option to bypass automatic soft delete filtering from Ecto.SoftDelete.Repo
     events = Repo.all(time_filtered_query, with_deleted: true)
@@ -1247,29 +1404,31 @@ defmodule EventasaurusApp.Events do
     event_ids = Enum.map(events, & &1.id)
     venues = get_venues_for_events(event_ids)
     participants = get_participants_for_events(event_ids)
-    
+
     # Load groups
-    group_ids = events 
+    group_ids =
+      events
       |> Enum.map(& &1.group_id)
-      |> Enum.filter(&(&1))
+      |> Enum.filter(& &1)
       |> Enum.uniq()
-    
-    groups = if length(group_ids) > 0 do
-      from(g in EventasaurusApp.Groups.Group,
-        where: g.id in ^group_ids,
-        select: %{id: g.id, name: g.name, slug: g.slug}
-      )
-      |> Repo.all()
-    else
-      []
-    end
+
+    groups =
+      if length(group_ids) > 0 do
+        from(g in EventasaurusApp.Groups.Group,
+          where: g.id in ^group_ids,
+          select: %{id: g.id, name: g.name, slug: g.slug}
+        )
+        |> Repo.all()
+      else
+        []
+      end
 
     events
     |> Enum.map(fn event ->
       venue = Enum.find(venues, &(&1.id == event.venue_id))
       event_participants = Enum.filter(participants, &(&1.event_id == event.id))
       group = if event.group_id, do: Enum.find(groups, &(&1.id == event.group_id)), else: nil
-      
+
       event
       |> Map.put(:venue, venue)
       |> Map.put(:participants, event_participants)
@@ -1281,7 +1440,7 @@ defmodule EventasaurusApp.Events do
   @doc """
   Optimized version of list_unified_events_for_user that uses a single query with LEFT JOINs
   instead of UNION to improve performance. This reduces database round trips from 3+ to 1.
-  
+
   Options:
     - :time_filter - :all, :upcoming, :past, :archived (default: :all)
     - :ownership_filter - :all, :created, :participating (default: :all)
@@ -1296,10 +1455,12 @@ defmodule EventasaurusApp.Events do
     now = DateTime.utc_now()
 
     # Build the base query with LEFT JOINs
-    base_query = 
-      from e in Event,
-        left_join: eu in EventUser, on: e.id == eu.event_id and eu.user_id == ^user.id,
-        left_join: ep in EventParticipant, on: e.id == ep.event_id and ep.user_id == ^user.id,
+    base_query =
+      from(e in Event,
+        left_join: eu in EventUser,
+        on: e.id == eu.event_id and eu.user_id == ^user.id,
+        left_join: ep in EventParticipant,
+        on: e.id == ep.event_id and ep.user_id == ^user.id,
         left_join: v in assoc(e, :venue),
         left_join: c in assoc(v, :city_ref),
         left_join: country in assoc(c, :country),
@@ -1323,24 +1484,27 @@ defmodule EventasaurusApp.Events do
           inserted_at: e.inserted_at,
           updated_at: e.updated_at,
           deleted_at: e.deleted_at,
-          
+
           # User relationship fields
-          user_role: fragment("CASE WHEN ? IS NOT NULL THEN 'organizer' ELSE 'participant' END", eu.id),
+          user_role:
+            fragment("CASE WHEN ? IS NOT NULL THEN 'organizer' ELSE 'participant' END", eu.id),
           user_status: fragment("COALESCE(?, 'confirmed')", ep.status),
           can_manage: fragment("? IS NOT NULL", eu.id),
-          
+
           # Participant count calculated in DB
-          participant_count: fragment(
-            "(SELECT COUNT(*) FROM event_participants WHERE event_id = ? AND deleted_at IS NULL)",
-            e.id
-          ),
-          
+          participant_count:
+            fragment(
+              "(SELECT COUNT(*) FROM event_participants WHERE event_id = ? AND deleted_at IS NULL)",
+              e.id
+            ),
+
           # Poll count calculated in DB
-          poll_count: fragment(
-            "(SELECT COUNT(*) FROM polls WHERE event_id = ? AND deleted_at IS NULL)",
-            e.id
-          ),
-          
+          poll_count:
+            fragment(
+              "(SELECT COUNT(*) FROM polls WHERE event_id = ? AND deleted_at IS NULL)",
+              e.id
+            ),
+
           # Venue fields (flattened)
           venue: %{
             id: v.id,
@@ -1354,116 +1518,139 @@ defmodule EventasaurusApp.Events do
             venue_type: v.venue_type
           }
         }
+      )
 
     # Apply group filter if provided
-    base_with_group = if group_id do
-      from [e, eu, ep, v, c, country] in base_query,
-        where: e.group_id == ^group_id
-    else
-      base_query
-    end
+    base_with_group =
+      if group_id do
+        from([e, eu, ep, v, c, country] in base_query,
+          where: e.group_id == ^group_id
+        )
+      else
+        base_query
+      end
 
     # Apply ownership filter
-    filtered_query = case ownership_filter do
-      :created ->
-        from [e, eu, ep, v, c, country] in base_with_group,
-          where: not is_nil(eu.id)
-      :participating ->
-        from [e, eu, ep, v, c, country] in base_with_group,
-          where: not is_nil(ep.id)
-      :all ->
-        base_with_group
-    end
+    filtered_query =
+      case ownership_filter do
+        :created ->
+          from([e, eu, ep, v, c, country] in base_with_group,
+            where: not is_nil(eu.id)
+          )
+
+        :participating ->
+          from([e, eu, ep, v, c, country] in base_with_group,
+            where: not is_nil(ep.id)
+          )
+
+        :all ->
+          base_with_group
+      end
 
     # Apply time filter
-    time_filtered_query = case time_filter do
-      :upcoming ->
-        from [e, eu, ep, v, c, country] in filtered_query,
-          where: is_nil(e.start_at) or e.start_at > ^now
-      :past ->
-        from [e, eu, ep, v, c, country] in filtered_query,
-          where: not is_nil(e.start_at) and e.start_at <= ^now
-      :archived ->
-        # Archived events are handled separately in the LiveView
-        from [e, eu, ep, v, c, country] in filtered_query,
-          where: false
-      :all ->
-        filtered_query
-    end
+    time_filtered_query =
+      case time_filter do
+        :upcoming ->
+          from([e, eu, ep, v, c, country] in filtered_query,
+            where: is_nil(e.start_at) or e.start_at > ^now
+          )
+
+        :past ->
+          from([e, eu, ep, v, c, country] in filtered_query,
+            where: not is_nil(e.start_at) and e.start_at <= ^now
+          )
+
+        :archived ->
+          # Archived events are handled separately in the LiveView
+          from([e, eu, ep, v, c, country] in filtered_query,
+            where: false
+          )
+
+        :all ->
+          filtered_query
+      end
 
     # Apply ordering and limit
     # For upcoming events: ascending (soonest first)
     # For past events: descending (most recent first)
     # For all: descending (most recent first)
-    final_query = case time_filter do
-      :upcoming ->
-        from [e, eu, ep, v, c, country] in time_filtered_query,
-          order_by: [asc: coalesce(e.start_at, e.inserted_at)],
-          limit: ^limit
-      _ ->
-        from [e, eu, ep, v, c, country] in time_filtered_query,
-          order_by: [desc: coalesce(e.start_at, e.inserted_at)],
-          limit: ^limit
-    end
+    final_query =
+      case time_filter do
+        :upcoming ->
+          from([e, eu, ep, v, c, country] in time_filtered_query,
+            order_by: [asc: coalesce(e.start_at, e.inserted_at)],
+            limit: ^limit
+          )
+
+        _ ->
+          from([e, eu, ep, v, c, country] in time_filtered_query,
+            order_by: [desc: coalesce(e.start_at, e.inserted_at)],
+            limit: ^limit
+          )
+      end
 
     # Execute the single query
     results = Repo.all(final_query, with_deleted: true)
 
     # Get event IDs for participant loading
     event_ids = results |> Enum.map(& &1.id) |> Enum.uniq()
-    
-    # Load first 4 participants for each event in a single query
-    participants_by_event = if length(event_ids) > 0 do
-      from(ep in EventParticipant,
-        where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
-        order_by: [asc: ep.event_id, desc: ep.inserted_at],
-        preload: [:user]
-      )
-      |> Repo.all()
-      |> Enum.group_by(& &1.event_id)
-      |> Enum.map(fn {event_id, participants} ->
-        # Take only first 4 participants per event for avatar display
-        {event_id, Enum.take(participants, 4)}
-      end)
-      |> Enum.into(%{})
-    else
-      %{}
-    end
 
-    # Load groups for events that have them
-    groups_by_id = if length(event_ids) > 0 do
-      group_ids = results 
-        |> Enum.map(& &1.group_id)
-        |> Enum.filter(&(&1))
-        |> Enum.uniq()
-      
-      if length(group_ids) > 0 do
-        from(g in EventasaurusApp.Groups.Group,
-          where: g.id in ^group_ids,
-          select: %{id: g.id, name: g.name, slug: g.slug}
+    # Load first 4 participants for each event in a single query
+    participants_by_event =
+      if length(event_ids) > 0 do
+        from(ep in EventParticipant,
+          where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
+          order_by: [asc: ep.event_id, desc: ep.inserted_at],
+          preload: [:user]
         )
         |> Repo.all()
-        |> Enum.map(fn group -> {group.id, group} end)
+        |> Enum.group_by(& &1.event_id)
+        |> Enum.map(fn {event_id, participants} ->
+          # Take only first 4 participants per event for avatar display
+          {event_id, Enum.take(participants, 4)}
+        end)
         |> Enum.into(%{})
       else
         %{}
       end
-    else
-      %{}
-    end
+
+    # Load groups for events that have them
+    groups_by_id =
+      if length(event_ids) > 0 do
+        group_ids =
+          results
+          |> Enum.map(& &1.group_id)
+          |> Enum.filter(& &1)
+          |> Enum.uniq()
+
+        if length(group_ids) > 0 do
+          from(g in EventasaurusApp.Groups.Group,
+            where: g.id in ^group_ids,
+            select: %{id: g.id, name: g.name, slug: g.slug}
+          )
+          |> Repo.all()
+          |> Enum.map(fn group -> {group.id, group} end)
+          |> Enum.into(%{})
+        else
+          %{}
+        end
+      else
+        %{}
+      end
 
     # Transform results to match expected format
     results
     |> Enum.map(fn result ->
       # Get participants for this event (first 4 only)
       event_participants = Map.get(participants_by_event, result.id, [])
-      
+
       # Get group if event has one
-      group = if result.group_id do
-        Map.get(groups_by_id, result.group_id)
-      else
-        nil
-      end
+      group =
+        if result.group_id do
+          Map.get(groups_by_id, result.group_id)
+        else
+          nil
+        end
 
       result
       |> Map.put(:participants, event_participants)
@@ -1475,62 +1662,86 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Efficiently calculates all filter counts in a single query to avoid multiple database hits.
-  
+
   Returns a map with counts for:
   - upcoming: count of upcoming events
   - past: count of past events  
   - archived: count of archived events
   - created: count of events where user is organizer
   - participating: count of events where user is participant
-  
+
   This replaces 5 separate count queries with 1 optimized query.
   """
   def get_dashboard_filter_counts(%User{} = user) do
     now = DateTime.utc_now()
-    archived_cutoff = DateTime.add(now, -90, :day)  # 90 days ago
+    # 90 days ago
+    archived_cutoff = DateTime.add(now, -90, :day)
 
     # Single query to get all counts using conditional aggregation
-    result = Repo.one(
-      from e in Event,
-        left_join: eu in EventUser, on: e.id == eu.event_id and eu.user_id == ^user.id,
-        left_join: ep in EventParticipant, on: e.id == ep.event_id and ep.user_id == ^user.id,
-        where: is_nil(e.deleted_at) and (not is_nil(eu.id) or not is_nil(ep.id)),
-        select: %{
-          # Time-based counts for active events
-          upcoming: fragment("COUNT(CASE WHEN ? IS NULL OR ? > ? THEN 1 END)", e.start_at, e.start_at, ^now),
-          past: fragment("COUNT(CASE WHEN ? IS NOT NULL AND ? <= ? THEN 1 END)", e.start_at, e.start_at, ^now),
-          
-          # Role-based counts (all active events)
-          created: fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", eu.id),
-          participating: fragment("COUNT(CASE WHEN ? IS NOT NULL AND ? IS NULL THEN 1 END)", ep.id, eu.id)
-        }
-    )
+    result =
+      Repo.one(
+        from(e in Event,
+          left_join: eu in EventUser,
+          on: e.id == eu.event_id and eu.user_id == ^user.id,
+          left_join: ep in EventParticipant,
+          on: e.id == ep.event_id and ep.user_id == ^user.id,
+          where: is_nil(e.deleted_at) and (not is_nil(eu.id) or not is_nil(ep.id)),
+          select: %{
+            # Time-based counts for active events
+            upcoming:
+              fragment(
+                "COUNT(CASE WHEN ? IS NULL OR ? > ? THEN 1 END)",
+                e.start_at,
+                e.start_at,
+                ^now
+              ),
+            past:
+              fragment(
+                "COUNT(CASE WHEN ? IS NOT NULL AND ? <= ? THEN 1 END)",
+                e.start_at,
+                e.start_at,
+                ^now
+              ),
+
+            # Role-based counts (all active events)
+            created: fragment("COUNT(CASE WHEN ? IS NOT NULL THEN 1 END)", eu.id),
+            participating:
+              fragment("COUNT(CASE WHEN ? IS NOT NULL AND ? IS NULL THEN 1 END)", ep.id, eu.id)
+          }
+        )
+      )
 
     # Get archived count separately since it's from a different table condition
-    archived_count = Repo.one(
-      from e in Event,
-        inner_join: eu in EventUser, on: e.id == eu.event_id,
-        where: eu.user_id == ^user.id and 
-               not is_nil(e.deleted_at) and 
-               e.deleted_at > ^archived_cutoff,
-        select: count(e.id)
-    )
+    archived_count =
+      Repo.one(
+        from(e in Event,
+          inner_join: eu in EventUser,
+          on: e.id == eu.event_id,
+          where:
+            eu.user_id == ^user.id and
+              not is_nil(e.deleted_at) and
+              e.deleted_at > ^archived_cutoff,
+          select: count(e.id)
+        )
+      )
 
     Map.put(result, :archived, archived_count)
   end
 
   # Helper functions for preloading
   defp get_venues_for_events([]), do: []
+
   defp get_venues_for_events(event_ids) do
-    from(v in Venue, where: v.id in subquery(
-      from e in Event, where: e.id in ^event_ids, select: e.venue_id
-    ))
+    from(v in Venue,
+      where: v.id in subquery(from(e in Event, where: e.id in ^event_ids, select: e.venue_id))
+    )
     |> Repo.all()
   end
 
   defp get_participants_for_events([]), do: []
+
   defp get_participants_for_events(event_ids) do
-    from(ep in EventParticipant, 
+    from(ep in EventParticipant,
       where: ep.event_id in ^event_ids and is_nil(ep.deleted_at),
       preload: [:user]
     )
@@ -1577,24 +1788,26 @@ defmodule EventasaurusApp.Events do
   """
   def register_user_for_event(event_id, name, email) do
     alias EventasaurusApp.Services.UserRegistrationService
-    
+
     # Validate event exists first
     case get_event(event_id) do
       nil ->
         Logger.error("Event not found", %{event_id: event_id})
         {:error, :event_not_found}
-        
+
       _event ->
         # Delegate to the unified registration service
-        case UserRegistrationService.register_user(email, name, :event_registration, event_id: event_id) do
+        case UserRegistrationService.register_user(email, name, :event_registration,
+               event_id: event_id
+             ) do
           {:ok, %{registration_type: :already_registered, participant: participant}} ->
             # Return the format that callers expect for existing users
             {:ok, :existing_user_registered, participant}
-            
+
           {:ok, %{registration_type: registration_type, participant: participant}} ->
             # Map to the original return format for backward compatibility
             {:ok, registration_type, participant}
-            
+
           {:error, reason} ->
             {:error, reason}
         end
@@ -1603,62 +1816,76 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Register a user for voting.
-  
+
   This function handles user registration when voting on a poll,
   ensuring the user is created and their votes are saved.
-  
+
   ## Parameters
-  
+
   - poll_id: ID of the poll being voted on
   - name: User's name
   - email: User's email address
   - votes: Map of votes to save
   - opts: Additional options (event_id, poll_options, etc.)
-  
+
   ## Returns
-  
+
   - {:ok, result} - User registered and votes saved
   - {:error, reason} - Registration or vote saving failed
   """
   def register_voter(poll_id, name, email, votes, opts \\ []) do
     alias EventasaurusApp.Services.UserRegistrationService
-    
+
     # Add poll_id and votes to options
-    registration_opts = Keyword.merge(opts, [
-      poll_id: poll_id,
-      votes: votes
-    ])
-    
+    registration_opts =
+      Keyword.merge(opts,
+        poll_id: poll_id,
+        votes: votes
+      )
+
     # Delegate to the unified registration service
     UserRegistrationService.register_user(email, name, :voting, registration_opts)
   end
-  
+
   @doc """
   Get registration status for a user and event.
   Returns one of: :not_registered, :registered, :cancelled, :organizer
   """
   def get_user_registration_status(%Event{} = event, user) do
     # Handle both User structs and Supabase user data
-    local_user = case user do
-      %User{} = u -> u
-      %{"id" => _supabase_id} = supabase_user ->
-        # Use shared function to find or create user
-        case Accounts.find_or_create_from_supabase(supabase_user) do
-          {:ok, user} -> user
-          {:error, reason} ->
-            require Logger
-            Logger.error("Failed to create user for registration status check", %{
-              reason: inspect(reason),
-              supabase_id: supabase_user["id"]
-            })
-            :error
-        end
-      _ -> nil
-    end
+    local_user =
+      case user do
+        %User{} = u ->
+          u
+
+        %{"id" => _supabase_id} = supabase_user ->
+          # Use shared function to find or create user
+          case Accounts.find_or_create_from_supabase(supabase_user) do
+            {:ok, user} ->
+              user
+
+            {:error, reason} ->
+              require Logger
+
+              Logger.error("Failed to create user for registration status check", %{
+                reason: inspect(reason),
+                supabase_id: supabase_user["id"]
+              })
+
+              :error
+          end
+
+        _ ->
+          nil
+      end
 
     case local_user do
-      nil -> :not_registered
-      :error -> :error
+      nil ->
+        :not_registered
+
+      :error ->
+        :error
+
       user ->
         # First check if user is an organizer/admin
         if user_is_organizer?(event, user) do
@@ -1679,7 +1906,9 @@ defmodule EventasaurusApp.Events do
   """
   def cancel_user_registration(%Event{} = event, %User{} = user) do
     case get_event_participant_by_event_and_user(event, user) do
-      nil -> {:error, :not_registered}
+      nil ->
+        {:error, :not_registered}
+
       participant ->
         updated_metadata = Map.put(participant.metadata || %{}, :cancelled_at, DateTime.utc_now())
         update_event_participant(participant, %{status: :cancelled, metadata: updated_metadata})
@@ -1793,6 +2022,7 @@ defmodule EventasaurusApp.Events do
                     has_email: !is_nil(supabase_user["email"]),
                     user_keys: Map.keys(supabase_user)
                   })
+
                   {:error, :invalid_user_data}
                 else
                   {:ok, supabase_user}
@@ -1800,12 +2030,20 @@ defmodule EventasaurusApp.Events do
 
               {:ok, nil} ->
                 # User still doesn't exist - this might happen due to timing or confirmation requirements
-                Logger.warning("User not found after OTP creation - email confirmation may be required")
+                Logger.warning(
+                  "User not found after OTP creation - email confirmation may be required"
+                )
+
                 {:error, :user_confirmation_required}
+
               {:error, reason} ->
-                Logger.error("Failed to retrieve user after OTP creation", %{reason: inspect(reason)})
+                Logger.error("Failed to retrieve user after OTP creation", %{
+                  reason: inspect(reason)
+                })
+
                 {:error, reason}
             end
+
           {:error, reason} ->
             Logger.error("Failed to create passwordless user", %{reason: inspect(reason)})
             {:error, reason}
@@ -1817,6 +2055,7 @@ defmodule EventasaurusApp.Events do
           supabase_user_id: supabase_user["id"],
           email_domain: email |> String.split("@") |> List.last()
         })
+
         {:ok, supabase_user}
 
       {:error, reason} ->
@@ -1851,7 +2090,8 @@ defmodule EventasaurusApp.Events do
   @doc """
   Updates an event's theme customizations.
   """
-  def update_event_theme_customizations(%Event{} = event, customizations) when is_map(customizations) do
+  def update_event_theme_customizations(%Event{} = event, customizations)
+      when is_map(customizations) do
     case Themes.validate_customizations(customizations) do
       {:ok, valid_customizations} ->
         merged_customizations = Themes.merge_customizations(event.theme, valid_customizations)
@@ -1895,10 +2135,17 @@ defmodule EventasaurusApp.Events do
         event
         |> Event.changeset(%{status: new_state})
         |> Repo.update()
+
       {:error, reason} ->
         # Create an error changeset for invalid transitions
         changeset = Event.changeset(event, %{})
-        {:error, Ecto.Changeset.add_error(changeset, :status, "invalid transition from '#{event.status}' to '#{new_state}': #{reason}")}
+
+        {:error,
+         Ecto.Changeset.add_error(
+           changeset,
+           :status,
+           "invalid transition from '#{event.status}' to '#{new_state}': #{reason}"
+         )}
     end
   end
 
@@ -1927,7 +2174,6 @@ defmodule EventasaurusApp.Events do
       _ -> []
     end
   end
-
 
   ## Action-Driven Setup Functions
 
@@ -1970,11 +2216,12 @@ defmodule EventasaurusApp.Events do
     changeset = Event.changeset_with_inferred_status(event, attrs)
 
     # Add custom validation for polling deadline
-    changeset = if DateTime.compare(polling_deadline, DateTime.utc_now()) == :gt do
-      changeset
-    else
-      Ecto.Changeset.add_error(changeset, :polling_deadline, "must be in the future")
-    end
+    changeset =
+      if DateTime.compare(polling_deadline, DateTime.utc_now()) == :gt do
+        changeset
+      else
+        Ecto.Changeset.add_error(changeset, :polling_deadline, "must be in the future")
+      end
 
     case Repo.update(changeset) do
       {:ok, updated_event} -> {:ok, Event.with_computed_fields(updated_event)}
@@ -1982,11 +2229,12 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-    @doc """
+  @doc """
   Sets a threshold count for an event.
   This will transition the event to :threshold status.
   """
-  def set_threshold(%Event{} = event, threshold_count) when is_integer(threshold_count) and threshold_count > 0 do
+  def set_threshold(%Event{} = event, threshold_count)
+      when is_integer(threshold_count) and threshold_count > 0 do
     attrs = %{
       threshold_count: threshold_count,
       status: :threshold
@@ -2029,7 +2277,17 @@ defmodule EventasaurusApp.Events do
   """
   def add_details(%Event{} = event, details) do
     # Filter to only allowed detail fields
-    allowed_fields = [:title, :description, :tagline, :cover_image_url, :external_image_data, :theme, :theme_customizations, :taxation_type]
+    allowed_fields = [
+      :title,
+      :description,
+      :tagline,
+      :cover_image_url,
+      :external_image_data,
+      :theme,
+      :theme_customizations,
+      :taxation_type
+    ]
+
     attrs = Map.take(details, allowed_fields)
 
     # Use regular changeset since we don't want to change status
@@ -2067,20 +2325,24 @@ defmodule EventasaurusApp.Events do
   Only returns events that have participants (to avoid empty suggestion lists).
   """
   def list_organizer_events_with_participants(%User{} = user, opts \\ []) do
-    query = from e in Event,
-            join: eu in EventUser, on: e.id == eu.event_id,
-            join: ep in EventParticipant, on: e.id == ep.event_id,
-            where: eu.user_id == ^user.id,
-            group_by: [e.id, e.title, e.start_at, e.status, e.deleted_at],
-            select: %{
-              id: e.id,
-              title: e.title,
-              start_at: e.start_at,
-              status: e.status,
-              participant_count: count(ep.id, :distinct)
-            },
-            order_by: [desc: e.start_at]
-    
+    query =
+      from(e in Event,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        join: ep in EventParticipant,
+        on: e.id == ep.event_id,
+        where: eu.user_id == ^user.id,
+        group_by: [e.id, e.title, e.start_at, e.status, e.deleted_at],
+        select: %{
+          id: e.id,
+          title: e.title,
+          start_at: e.start_at,
+          status: e.status,
+          participant_count: count(ep.id, :distinct)
+        },
+        order_by: [desc: e.start_at]
+      )
+
     query = apply_soft_delete_filter(query, opts)
     Repo.all(query)
   end
@@ -2107,11 +2369,12 @@ defmodule EventasaurusApp.Events do
     organizer_event_ids = get_organizer_event_ids_basic(organizer.id)
 
     # Apply exclude_event_ids filter
-    filtered_event_ids = if exclude_event_ids != [] do
-      organizer_event_ids -- exclude_event_ids
-    else
-      organizer_event_ids
-    end
+    filtered_event_ids =
+      if exclude_event_ids != [] do
+        organizer_event_ids -- exclude_event_ids
+      else
+        organizer_event_ids
+      end
 
     # Early return if no events
     if filtered_event_ids == [] do
@@ -2129,40 +2392,52 @@ defmodule EventasaurusApp.Events do
     limit = Keyword.get(opts, :limit, 50)
 
     # Query to get unique participants with their participation history
-    query = from p in EventParticipant,
-            join: e in Event, on: p.event_id == e.id,
-            join: eu in EventUser, on: e.id == eu.event_id,
-            join: u in User, on: p.user_id == u.id,
-            where: eu.user_id == ^organizer.id and
-                   p.user_id != ^organizer.id and  # Exclude organizer from suggestions
-                   is_nil(e.deleted_at),  # Exclude soft-deleted events
-            group_by: [u.id, u.name, u.email, u.username],
-            select: %{
-              user_id: u.id,
-              name: u.name,
-              email: u.email,
-              username: u.username,
-              participation_count: count(p.id),
-              last_participation: max(e.start_at),
-              event_ids: fragment("array_agg(DISTINCT ?)", e.id)
-            },
-            order_by: [desc: count(p.id), desc: max(e.start_at)]
+    query =
+      from(p in EventParticipant,
+        join: e in Event,
+        on: p.event_id == e.id,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        join: u in User,
+        on: p.user_id == u.id,
+        # Exclude organizer from suggestions
+        # Exclude soft-deleted events
+        where:
+          eu.user_id == ^organizer.id and
+            p.user_id != ^organizer.id and
+            is_nil(e.deleted_at),
+        group_by: [u.id, u.name, u.email, u.username],
+        select: %{
+          user_id: u.id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          participation_count: count(p.id),
+          last_participation: max(e.start_at),
+          event_ids: fragment("array_agg(DISTINCT ?)", e.id)
+        },
+        order_by: [desc: count(p.id), desc: max(e.start_at)]
+      )
 
     # Apply exclude_event_ids filter if provided
-    query = if exclude_event_ids != [] do
-      from [p, e, eu, u] in query,
-           where: e.id not in ^exclude_event_ids
-    else
-      query
-    end
+    query =
+      if exclude_event_ids != [] do
+        from([p, e, eu, u] in query,
+          where: e.id not in ^exclude_event_ids
+        )
+      else
+        query
+      end
 
     # Apply exclude_user_ids filter if provided
-    query = if exclude_user_ids != [] do
-      from [p, e, eu, u] in query,
-           where: u.id not in ^exclude_user_ids
-    else
-      query
-    end
+    query =
+      if exclude_user_ids != [] do
+        from([p, e, eu, u] in query,
+          where: u.id not in ^exclude_user_ids
+        )
+      else
+        query
+      end
 
     query
     |> limit(^limit)
@@ -2174,10 +2449,13 @@ defmodule EventasaurusApp.Events do
   @doc false
   defp get_organizer_event_ids_basic(organizer_id) do
     # Basic query for organizer's event IDs, excluding soft-deleted events
-    query = from eu in EventUser,
-            join: e in Event, on: eu.event_id == e.id,
-            where: eu.user_id == ^organizer_id and is_nil(e.deleted_at),
-            select: eu.event_id
+    query =
+      from(eu in EventUser,
+        join: e in Event,
+        on: eu.event_id == e.id,
+        where: eu.user_id == ^organizer_id and is_nil(e.deleted_at),
+        select: eu.event_id
+      )
 
     Repo.all(query)
   end
@@ -2185,31 +2463,40 @@ defmodule EventasaurusApp.Events do
   @doc false
   defp get_participants_for_events(event_ids, exclude_user_ids, organizer_id, limit) do
     # Build base query for participants in the specified events
-    query = from p in EventParticipant,
-            join: e in Event, on: p.event_id == e.id,
-            join: u in User, on: p.user_id == u.id,
-            where: p.event_id in ^event_ids and
-                   p.user_id != ^organizer_id and  # Exclude organizer from suggestions
-                   is_nil(e.deleted_at),  # Exclude soft-deleted events
-            group_by: [u.id, u.name, u.email, u.username],
-            select: %{
-              user_id: u.id,
-              name: u.name,
-              email: u.email,
-              username: u.username,
-              participation_count: count(p.id),
-              last_participation: max(e.start_at),
-              event_ids: fragment("array_agg(DISTINCT ?)", e.id)
-            },
-            order_by: [desc: count(p.id), desc: max(e.start_at)]
+    query =
+      from(p in EventParticipant,
+        join: e in Event,
+        on: p.event_id == e.id,
+        join: u in User,
+        on: p.user_id == u.id,
+        # Exclude organizer from suggestions
+        # Exclude soft-deleted events
+        where:
+          p.event_id in ^event_ids and
+            p.user_id != ^organizer_id and
+            is_nil(e.deleted_at),
+        group_by: [u.id, u.name, u.email, u.username],
+        select: %{
+          user_id: u.id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          participation_count: count(p.id),
+          last_participation: max(e.start_at),
+          event_ids: fragment("array_agg(DISTINCT ?)", e.id)
+        },
+        order_by: [desc: count(p.id), desc: max(e.start_at)]
+      )
 
     # Apply exclude_user_ids filter if provided
-    query = if exclude_user_ids != [] do
-      from [p, e, u] in query,
-           where: u.id not in ^exclude_user_ids
-    else
-      query
-    end
+    query =
+      if exclude_user_ids != [] do
+        from([p, e, u] in query,
+          where: u.id not in ^exclude_user_ids
+        )
+      else
+        query
+      end
 
     query
     |> limit(^limit)
@@ -2236,19 +2523,22 @@ defmodule EventasaurusApp.Events do
     frequency_weight = Keyword.get(opts, :frequency_weight, 0.6)
     recency_weight = Keyword.get(opts, :recency_weight, 0.4)
 
-    participants = get_historical_participants(organizer,
-      exclude_event_ids: exclude_event_ids,
-      exclude_user_ids: exclude_user_ids,
-      limit: limit * 2  # Get more to have better selection after scoring
-    )
+    participants =
+      get_historical_participants(organizer,
+        exclude_event_ids: exclude_event_ids,
+        exclude_user_ids: exclude_user_ids,
+        # Get more to have better selection after scoring
+        limit: limit * 2
+      )
 
-         # Use the dedicated scoring module
-     config = GuestInvitations.create_config(
-       frequency_weight: frequency_weight,
-       recency_weight: recency_weight
-     )
+    # Use the dedicated scoring module
+    config =
+      GuestInvitations.create_config(
+        frequency_weight: frequency_weight,
+        recency_weight: recency_weight
+      )
 
-     GuestInvitations.score_participants(participants, config, limit: limit)
+    GuestInvitations.score_participants(participants, config, limit: limit)
   end
 
   @doc """
@@ -2269,14 +2559,16 @@ defmodule EventasaurusApp.Events do
     # Get total count for pagination metadata
     total_count = count_historical_participants(organizer, exclude_event_ids: exclude_event_ids)
 
-         # Get the actual data using the scoring module
-     participants = get_historical_participants(organizer,
-       exclude_event_ids: exclude_event_ids,
-       limit: per_page * 3  # Get extra for scoring
-     )
-     |> GuestInvitations.score_participants()
-     |> Enum.drop(offset)
-     |> Enum.take(per_page)
+    # Get the actual data using the scoring module
+    participants =
+      get_historical_participants(organizer,
+        exclude_event_ids: exclude_event_ids,
+        # Get extra for scoring
+        limit: per_page * 3
+      )
+      |> GuestInvitations.score_participants()
+      |> Enum.drop(offset)
+      |> Enum.take(per_page)
 
     %{
       participants: participants,
@@ -2295,25 +2587,30 @@ defmodule EventasaurusApp.Events do
   def count_historical_participants(%User{} = organizer, opts \\ []) do
     exclude_event_ids = Keyword.get(opts, :exclude_event_ids, [])
 
-    query = from p in EventParticipant,
-            join: e in Event, on: p.event_id == e.id,
-            join: eu in EventUser, on: e.id == eu.event_id,
-            where: eu.user_id == ^organizer.id and
-                   p.user_id != ^organizer.id,
-            select: count(p.user_id, :distinct)
+    query =
+      from(p in EventParticipant,
+        join: e in Event,
+        on: p.event_id == e.id,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        where:
+          eu.user_id == ^organizer.id and
+            p.user_id != ^organizer.id,
+        select: count(p.user_id, :distinct)
+      )
 
     # Apply exclude_event_ids filter if provided
-    query = if exclude_event_ids != [] do
-      from [p, e, eu] in query,
-           where: e.id not in ^exclude_event_ids
-    else
-      query
-    end
+    query =
+      if exclude_event_ids != [] do
+        from([p, e, eu] in query,
+          where: e.id not in ^exclude_event_ids
+        )
+      else
+        query
+      end
 
     Repo.one(query) || 0
   end
-
-
 
   # Participant Aggregation Functions
 
@@ -2322,14 +2619,16 @@ defmodule EventasaurusApp.Events do
   Returns counts by status and role for invitation management.
   """
   def get_event_participant_stats(%Event{} = event) do
-    query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id,
-            group_by: [ep.status, ep.role],
-            select: %{
-              status: ep.status,
-              role: ep.role,
-              count: count(ep.id)
-            }
+    query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id,
+        group_by: [ep.status, ep.role],
+        select: %{
+          status: ep.status,
+          role: ep.role,
+          count: count(ep.id)
+        }
+      )
 
     stats = Repo.all(query)
 
@@ -2348,17 +2647,21 @@ defmodule EventasaurusApp.Events do
   """
   def get_organizer_events_participant_stats(%User{} = organizer, event_ids \\ nil) do
     # Get all events organized by user or filter by specific event_ids
-    base_query = from e in Event,
-                 join: eu in EventUser, on: e.id == eu.event_id,
-                 where: eu.user_id == ^organizer.id,
-                 select: e.id
+    base_query =
+      from(e in Event,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        where: eu.user_id == ^organizer.id,
+        select: e.id
+      )
 
-    event_ids = if event_ids do
-      from([e, eu] in base_query, where: e.id in ^event_ids)
-      |> Repo.all()
-    else
-      Repo.all(base_query)
-    end
+    event_ids =
+      if event_ids do
+        from([e, eu] in base_query, where: e.id in ^event_ids)
+        |> Repo.all()
+      else
+        Repo.all(base_query)
+      end
 
     # Get participant stats for each event
     Enum.reduce(event_ids, %{}, fn event_id, acc ->
@@ -2377,37 +2680,42 @@ defmodule EventasaurusApp.Events do
     status_filter = Keyword.get(opts, :status)
     role_filter = Keyword.get(opts, :role)
 
-    query = from ep in EventParticipant,
-            join: u in User, on: ep.user_id == u.id,
-            where: ep.event_id == ^event.id,
-            select: %{
-              participant_id: ep.id,
-              user_id: u.id,
-              name: u.name,
-              email: u.email,
-              username: u.username,
-              status: ep.status,
-              role: ep.role,
-              invited_at: ep.invited_at,
-              invitation_message: ep.invitation_message,
-              invited_by_user_id: ep.invited_by_user_id,
-              metadata: ep.metadata,
-              inserted_at: ep.inserted_at
-            },
-            order_by: [desc: ep.inserted_at]
+    query =
+      from(ep in EventParticipant,
+        join: u in User,
+        on: ep.user_id == u.id,
+        where: ep.event_id == ^event.id,
+        select: %{
+          participant_id: ep.id,
+          user_id: u.id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          status: ep.status,
+          role: ep.role,
+          invited_at: ep.invited_at,
+          invitation_message: ep.invitation_message,
+          invited_by_user_id: ep.invited_by_user_id,
+          metadata: ep.metadata,
+          inserted_at: ep.inserted_at
+        },
+        order_by: [desc: ep.inserted_at]
+      )
 
     # Apply filters if provided
-    query = if status_filter do
-      from ep in query, where: ep.status == ^status_filter
-    else
-      query
-    end
+    query =
+      if status_filter do
+        from(ep in query, where: ep.status == ^status_filter)
+      else
+        query
+      end
 
-    query = if role_filter do
-      from ep in query, where: ep.role == ^role_filter
-    else
-      query
-    end
+    query =
+      if role_filter do
+        from(ep in query, where: ep.role == ^role_filter)
+      else
+        query
+      end
 
     query
     |> limit(^limit)
@@ -2422,44 +2730,54 @@ defmodule EventasaurusApp.Events do
     days_back = Keyword.get(opts, :days_back, 90)
     cutoff_date = DateTime.add(DateTime.utc_now(), -days_back * 24 * 60 * 60, :second)
 
-    query = from ep in EventParticipant,
-            join: e in Event, on: ep.event_id == e.id,
-            join: eu in EventUser, on: e.id == eu.event_id,
-            left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
-            where: eu.user_id == ^organizer.id and
-                   not is_nil(ep.invited_at) and
-                   ep.invited_at >= ^cutoff_date and
-                   is_nil(e.deleted_at),  # Exclude soft-deleted events
-            group_by: [ep.invited_by_user_id, inviter.name, ep.status],
-            select: %{
-              invited_by_user_id: ep.invited_by_user_id,
-              inviter_name: inviter.name,
-              status: ep.status,
-              count: count(ep.id)
-            }
+    query =
+      from(ep in EventParticipant,
+        join: e in Event,
+        on: ep.event_id == e.id,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        left_join: inviter in User,
+        on: ep.invited_by_user_id == inviter.id,
+        # Exclude soft-deleted events
+        where:
+          eu.user_id == ^organizer.id and
+            not is_nil(ep.invited_at) and
+            ep.invited_at >= ^cutoff_date and
+            is_nil(e.deleted_at),
+        group_by: [ep.invited_by_user_id, inviter.name, ep.status],
+        select: %{
+          invited_by_user_id: ep.invited_by_user_id,
+          inviter_name: inviter.name,
+          status: ep.status,
+          count: count(ep.id)
+        }
+      )
 
     stats = Repo.all(query)
 
     # Aggregate invitation success rates
-    invitation_summary = stats
-    |> Enum.group_by(& &1.invited_by_user_id)
-    |> Enum.map(fn {inviter_id, invitations} ->
-      total = Enum.sum(Enum.map(invitations, & &1.count))
-      accepted = invitations
-                 |> Enum.filter(& &1.status in [:accepted, :confirmed_with_order])
-                 |> Enum.sum_by(& &1.count)
+    invitation_summary =
+      stats
+      |> Enum.group_by(& &1.invited_by_user_id)
+      |> Enum.map(fn {inviter_id, invitations} ->
+        total = Enum.sum(Enum.map(invitations, & &1.count))
 
-      success_rate = if total > 0, do: accepted / total * 100, else: 0
+        accepted =
+          invitations
+          |> Enum.filter(&(&1.status in [:accepted, :confirmed_with_order]))
+          |> Enum.sum_by(& &1.count)
 
-      %{
-        inviter_user_id: inviter_id,
-        inviter_name: List.first(invitations).inviter_name,
-        total_invitations: total,
-        accepted_invitations: accepted,
-        success_rate: Float.round(success_rate, 1)
-      }
-    end)
-    |> Enum.sort_by(& &1.total_invitations, :desc)
+        success_rate = if total > 0, do: accepted / total * 100, else: 0
+
+        %{
+          inviter_user_id: inviter_id,
+          inviter_name: List.first(invitations).inviter_name,
+          total_invitations: total,
+          accepted_invitations: accepted,
+          success_rate: Float.round(success_rate, 1)
+        }
+      end)
+      |> Enum.sort_by(& &1.total_invitations, :desc)
 
     %{
       period_days: days_back,
@@ -2474,19 +2792,22 @@ defmodule EventasaurusApp.Events do
   Returns invitation details if found.
   """
   def get_user_invitation_status(%Event{} = event, %User{} = user) do
-    query = from ep in EventParticipant,
-            left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
-            where: ep.event_id == ^event.id and ep.user_id == ^user.id,
-            select: %{
-              participant_id: ep.id,
-              status: ep.status,
-              role: ep.role,
-              invited_at: ep.invited_at,
-              invitation_message: ep.invitation_message,
-              invited_by_user_id: ep.invited_by_user_id,
-              inviter_name: inviter.name,
-              metadata: ep.metadata
-            }
+    query =
+      from(ep in EventParticipant,
+        left_join: inviter in User,
+        on: ep.invited_by_user_id == inviter.id,
+        where: ep.event_id == ^event.id and ep.user_id == ^user.id,
+        select: %{
+          participant_id: ep.id,
+          status: ep.status,
+          role: ep.role,
+          invited_at: ep.invited_at,
+          invitation_message: ep.invitation_message,
+          invited_by_user_id: ep.invited_by_user_id,
+          inviter_name: inviter.name,
+          metadata: ep.metadata
+        }
+      )
 
     case Repo.one(query) do
       nil -> {:not_invited, nil}
@@ -2503,27 +2824,35 @@ defmodule EventasaurusApp.Events do
     limit = Keyword.get(opts, :limit, 20)
     cutoff_date = DateTime.add(DateTime.utc_now(), -days_back * 24 * 60 * 60, :second)
 
-    query = from ep in EventParticipant,
-            join: e in Event, on: ep.event_id == e.id,
-            join: eu in EventUser, on: e.id == eu.event_id,
-            join: u in User, on: ep.user_id == u.id,
-            left_join: inviter in User, on: ep.invited_by_user_id == inviter.id,
-            where: eu.user_id == ^organizer.id and
-                   not is_nil(ep.invited_at) and
-                   ep.invited_at >= ^cutoff_date and
-                   is_nil(e.deleted_at),  # Exclude soft-deleted events
-            select: %{
-              event_id: e.id,
-              event_title: e.title,
-              participant_name: u.name,
-              participant_email: u.email,
-              status: ep.status,
-              invited_at: ep.invited_at,
-              inviter_name: inviter.name,
-              invitation_message: ep.invitation_message
-            },
-            order_by: [desc: ep.invited_at],
-            limit: ^limit
+    query =
+      from(ep in EventParticipant,
+        join: e in Event,
+        on: ep.event_id == e.id,
+        join: eu in EventUser,
+        on: e.id == eu.event_id,
+        join: u in User,
+        on: ep.user_id == u.id,
+        left_join: inviter in User,
+        on: ep.invited_by_user_id == inviter.id,
+        # Exclude soft-deleted events
+        where:
+          eu.user_id == ^organizer.id and
+            not is_nil(ep.invited_at) and
+            ep.invited_at >= ^cutoff_date and
+            is_nil(e.deleted_at),
+        select: %{
+          event_id: e.id,
+          event_title: e.title,
+          participant_name: u.name,
+          participant_email: u.email,
+          status: ep.status,
+          invited_at: ep.invited_at,
+          inviter_name: inviter.name,
+          invitation_message: ep.invitation_message
+        },
+        order_by: [desc: ep.invited_at],
+        limit: ^limit
+      )
 
     Repo.all(query)
   end
@@ -2567,41 +2896,87 @@ defmodule EventasaurusApp.Events do
     }
 
     # Process suggestion invitations
-    result_after_suggestions = Enum.reduce(suggestion_structs, result, fn suggestion, acc ->
-      case process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time, mode) do
-        {:ok, :created} ->
-          %{acc | successful_invitations: acc.successful_invitations + 1}
-        {:ok, :already_exists} ->
-          %{acc | skipped_duplicates: acc.skipped_duplicates + 1}
-        {:error, reason} ->
-          error_msg = "Failed to invite #{get_suggestion_identifier(suggestion)}: #{format_error(reason)}"
-          %{acc | failed_invitations: acc.failed_invitations + 1, errors: [error_msg | acc.errors]}
-      end
-    end)
+    result_after_suggestions =
+      Enum.reduce(suggestion_structs, result, fn suggestion, acc ->
+        case process_suggestion_invitation(
+               event,
+               organizer,
+               suggestion,
+               invitation_message,
+               current_time,
+               mode
+             ) do
+          {:ok, :created} ->
+            %{acc | successful_invitations: acc.successful_invitations + 1}
+
+          {:ok, :already_exists} ->
+            %{acc | skipped_duplicates: acc.skipped_duplicates + 1}
+
+          {:error, reason} ->
+            error_msg =
+              "Failed to invite #{get_suggestion_identifier(suggestion)}: #{format_error(reason)}"
+
+            %{
+              acc
+              | failed_invitations: acc.failed_invitations + 1,
+                errors: [error_msg | acc.errors]
+            }
+        end
+      end)
 
     # Process manual email invitations
     Enum.reduce(manual_emails, result_after_suggestions, fn email, acc ->
-      case process_email_invitation(event, organizer, email, invitation_message, current_time, mode) do
+      case process_email_invitation(
+             event,
+             organizer,
+             email,
+             invitation_message,
+             current_time,
+             mode
+           ) do
         {:ok, :created} ->
           %{acc | successful_invitations: acc.successful_invitations + 1}
+
         {:ok, :already_exists} ->
           %{acc | skipped_duplicates: acc.skipped_duplicates + 1}
+
         {:error, reason} ->
           error_msg = "Failed to invite #{email}: #{format_error(reason)}"
-          %{acc | failed_invitations: acc.failed_invitations + 1, errors: [error_msg | acc.errors]}
+
+          %{
+            acc
+            | failed_invitations: acc.failed_invitations + 1,
+              errors: [error_msg | acc.errors]
+          }
       end
     end)
   end
 
   # Process a single suggestion invitation
-  defp process_suggestion_invitation(event, organizer, suggestion, invitation_message, current_time, mode) do
+  defp process_suggestion_invitation(
+         event,
+         organizer,
+         suggestion,
+         invitation_message,
+         current_time,
+         mode
+       ) do
     case EventasaurusApp.Accounts.get_user(suggestion.user_id) do
       %User{} = user ->
-        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
-          invitation_method: get_invitation_method(mode, "historical_suggestion"),
-          recommendation_level: Map.get(suggestion, :recommendation_level, "unknown"),
-          score: Map.get(suggestion, :total_score, 0.0)
-        }, mode)
+        create_invitation_participant(
+          event,
+          organizer,
+          user,
+          invitation_message,
+          current_time,
+          %{
+            invitation_method: get_invitation_method(mode, "historical_suggestion"),
+            recommendation_level: Map.get(suggestion, :recommendation_level, "unknown"),
+            score: Map.get(suggestion, :total_score, 0.0)
+          },
+          mode
+        )
+
       nil ->
         {:error, :user_not_found}
     end
@@ -2611,20 +2986,46 @@ defmodule EventasaurusApp.Events do
   defp process_email_invitation(event, organizer, email, invitation_message, current_time, mode) do
     case EventasaurusApp.Accounts.find_or_create_guest_user(email) do
       {:ok, user} ->
-        create_invitation_participant(event, organizer, user, invitation_message, current_time, %{
-          invitation_method: get_invitation_method(mode, "manual_email"),
-          email_provided: email
-        }, mode)
+        create_invitation_participant(
+          event,
+          organizer,
+          user,
+          invitation_message,
+          current_time,
+          %{
+            invitation_method: get_invitation_method(mode, "manual_email"),
+            email_provided: email
+          },
+          mode
+        )
+
       {:error, reason} ->
         {:error, reason}
     end
   end
 
   # Create an event participant with invitation tracking
-  defp create_invitation_participant(event, organizer, user, invitation_message, current_time, metadata, mode) do
+  defp create_invitation_participant(
+         event,
+         organizer,
+         user,
+         invitation_message,
+         current_time,
+         metadata,
+         mode
+       ) do
     case get_event_participant_by_event_and_user(event, user) do
       nil ->
-        participant_attrs = build_participant_attrs(event, organizer, user, invitation_message, current_time, metadata, mode)
+        participant_attrs =
+          build_participant_attrs(
+            event,
+            organizer,
+            user,
+            invitation_message,
+            current_time,
+            metadata,
+            mode
+          )
 
         case create_event_participant(participant_attrs) do
           {:ok, participant} ->
@@ -2632,14 +3033,21 @@ defmodule EventasaurusApp.Events do
               case queue_invitation_email(user, event, invitation_message, organizer) do
                 {:ok, _job} ->
                   :ok
+
                 {:error, reason} ->
-                  failed = EventParticipant.mark_email_failed(participant, format_email_error(reason))
+                  failed =
+                    EventParticipant.mark_email_failed(participant, format_email_error(reason))
+
                   _ = update_event_participant(participant, %{metadata: failed.metadata})
               end
             end
+
             {:ok, :created}
-          {:error, changeset} -> {:error, changeset}
+
+          {:error, changeset} ->
+            {:error, changeset}
         end
+
       _existing_participant ->
         {:ok, :already_exists}
     end
@@ -2666,7 +3074,15 @@ defmodule EventasaurusApp.Events do
     |> EmailInvitationJob.new(
       unique: [
         keys: [:user_id, :event_id],
-        states: [:available, :scheduled, :executing, :retryable, :completed, :cancelled, :discarded],
+        states: [
+          :available,
+          :scheduled,
+          :executing,
+          :retryable,
+          :completed,
+          :cancelled,
+          :discarded
+        ],
         period: 3600
       ]
     )
@@ -2674,12 +3090,22 @@ defmodule EventasaurusApp.Events do
   end
 
   # Queue a single participant email using Oban
-  def queue_single_participant_email(%EventParticipant{} = participant, %Event{} = event, organizer \\ nil) do
+  def queue_single_participant_email(
+        %EventParticipant{} = participant,
+        %Event{} = event,
+        organizer \\ nil
+      ) do
     organizer_id =
       case organizer do
-        %User{id: id} -> id
-        %{id: id} when is_integer(id) -> id
-        id when is_integer(id) -> id
+        %User{id: id} ->
+          id
+
+        %{id: id} when is_integer(id) ->
+          id
+
+        id when is_integer(id) ->
+          id
+
         _ ->
           case get_event_organizer(event) do
             %User{id: id} -> id
@@ -2696,13 +3122,20 @@ defmodule EventasaurusApp.Events do
     |> EmailInvitationJob.new(
       unique: [
         keys: [:user_id, :event_id],
-        states: [:available, :scheduled, :executing, :retryable, :completed, :cancelled, :discarded],
+        states: [
+          :available,
+          :scheduled,
+          :executing,
+          :retryable,
+          :completed,
+          :cancelled,
+          :discarded
+        ],
         period: 3600
       ]
     )
     |> Oban.insert()
   end
-
 
   # Helper function to format error messages for storage
   def format_email_error(reason) do
@@ -2717,14 +3150,17 @@ defmodule EventasaurusApp.Events do
   # Get event with venue preloaded for email templates
   def get_event_with_venue(event_id) do
     case Repo.one(
-      from e in Event,
-      where: e.id == ^event_id,
-      preload: [:venue]
-    ) do
+           from(e in Event,
+             where: e.id == ^event_id,
+             preload: [:venue]
+           )
+         ) do
       nil ->
         Logger.error("Event not found for email sending", event_id: event_id)
         nil
-      event -> event
+
+      event ->
+        event
     end
   end
 
@@ -2737,8 +3173,16 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-    # Build participant attributes based on mode
-  defp build_participant_attrs(event, organizer, user, invitation_message, current_time, metadata, mode) do
+  # Build participant attributes based on mode
+  defp build_participant_attrs(
+         event,
+         organizer,
+         user,
+         invitation_message,
+         current_time,
+         metadata,
+         mode
+       ) do
     base_attrs = %{
       event_id: event.id,
       user_id: user.id,
@@ -2792,19 +3236,25 @@ defmodule EventasaurusApp.Events do
 
   defp format_error(:user_not_found), do: "User not found"
   defp format_error(:invalid_email), do: "Invalid email address"
+
   defp format_error(changeset) when is_struct(changeset) do
     case changeset do
       %Ecto.Changeset{errors: [_ | _] = errors} ->
-        error_messages = Enum.map(errors, fn {field, {message, _opts}} ->
-          "#{field}: #{message}"
-        end)
+        error_messages =
+          Enum.map(errors, fn {field, {message, _opts}} ->
+            "#{field}: #{message}"
+          end)
+
         "Validation failed: #{Enum.join(error_messages, ", ")}"
+
       %Ecto.Changeset{} ->
         "Validation failed: Unknown error"
+
       _ ->
         "Could not create user account"
     end
   end
+
   defp format_error(reason), do: inspect(reason)
 
   # Private helper for aggregating stats by field
@@ -2817,7 +3267,7 @@ defmodule EventasaurusApp.Events do
     |> Enum.into(%{})
   end
 
-    @doc """
+  @doc """
   Gets the count of participants for a specific event.
   """
   def count_event_participants(event) do
@@ -2835,15 +3285,18 @@ defmodule EventasaurusApp.Events do
     limit = Keyword.get(opts, :limit, nil)
     offset = Keyword.get(opts, :offset, 0)
 
-    query = from p in EventParticipant,
-            where: p.event_id == ^event.id and is_nil(p.deleted_at),
-            preload: [:user]
+    query =
+      from(p in EventParticipant,
+        where: p.event_id == ^event.id and is_nil(p.deleted_at),
+        preload: [:user]
+      )
 
-    query = if limit do
-      query |> limit(^limit) |> offset(^offset)
-    else
-      query
-    end
+    query =
+      if limit do
+        query |> limit(^limit) |> offset(^offset)
+      else
+        query
+      end
 
     Repo.all(query)
   end
@@ -2854,9 +3307,11 @@ defmodule EventasaurusApp.Events do
   Lists event participants filtered by email status.
   """
   def list_event_participants_by_email_status(%Event{} = event, status) do
-    query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
-            preload: [:user, :invited_by_user]
+    query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
+        preload: [:user, :invited_by_user]
+      )
 
     query
     |> EventParticipant.by_email_status(status)
@@ -2867,9 +3322,11 @@ defmodule EventasaurusApp.Events do
   Lists event participants with failed emails.
   """
   def list_event_participants_with_failed_emails(%Event{} = event) do
-    query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
-            preload: [:user, :invited_by_user]
+    query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
+        preload: [:user, :invited_by_user]
+      )
 
     query
     |> EventParticipant.with_failed_emails()
@@ -2880,9 +3337,11 @@ defmodule EventasaurusApp.Events do
   Lists event participants without any email status (never sent).
   """
   def list_event_participants_without_email_status(%Event{} = event) do
-    query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
-            preload: [:user, :invited_by_user]
+    query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id and is_nil(ep.deleted_at),
+        preload: [:user, :invited_by_user]
+      )
 
     query
     |> EventParticipant.without_email_status()
@@ -2901,8 +3360,10 @@ defmodule EventasaurusApp.Events do
   Gets email delivery statistics for an event.
   """
   def get_email_delivery_stats(%Event{} = event) do
-    base_query = from ep in EventParticipant,
-                 where: ep.event_id == ^event.id
+    base_query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id
+      )
 
     stats = %{
       total_participants: Repo.aggregate(base_query, :count, :id),
@@ -2915,15 +3376,16 @@ defmodule EventasaurusApp.Events do
     }
 
     # Get counts for each status
-    status_counts = from(ep in base_query,
-      select: {
-        fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata),
-        count(ep.id)
-      },
-      group_by: fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata)
-    )
-    |> Repo.all()
-    |> Map.new()
+    status_counts =
+      from(ep in base_query,
+        select: {
+          fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata),
+          count(ep.id)
+        },
+        group_by: fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata)
+      )
+      |> Repo.all()
+      |> Map.new()
 
     # Merge the counts into our stats map
     Map.merge(stats, status_counts)
@@ -2936,35 +3398,41 @@ defmodule EventasaurusApp.Events do
     limit = Keyword.get(opts, :limit, 100)
     status_filter = Keyword.get(opts, :email_status)
 
-    query = from ep in EventParticipant,
-            join: u in User, on: ep.user_id == u.id,
-            where: ep.event_id == ^event.id,
-            select: %{
-              participant_id: ep.id,
-              user_id: u.id,
-              name: u.name,
-              email: u.email,
-              username: u.username,
-              status: ep.status,
-              role: ep.role,
-              invited_at: ep.invited_at,
-              email_status: fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata),
-              email_last_sent_at: fragment("?->>'email_last_sent_at'", ep.metadata),
-              email_attempts: fragment("COALESCE((?->>'email_attempts')::integer, 0)", ep.metadata),
-              email_last_error: fragment("?->>'email_last_error'", ep.metadata),
-              email_delivery_id: fragment("?->>'email_delivery_id'", ep.metadata),
-              metadata: ep.metadata,
-              inserted_at: ep.inserted_at
-            },
-            order_by: [desc: ep.inserted_at]
+    query =
+      from(ep in EventParticipant,
+        join: u in User,
+        on: ep.user_id == u.id,
+        where: ep.event_id == ^event.id,
+        select: %{
+          participant_id: ep.id,
+          user_id: u.id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          status: ep.status,
+          role: ep.role,
+          invited_at: ep.invited_at,
+          email_status: fragment("COALESCE(?->>'email_status', 'not_sent')", ep.metadata),
+          email_last_sent_at: fragment("?->>'email_last_sent_at'", ep.metadata),
+          email_attempts: fragment("COALESCE((?->>'email_attempts')::integer, 0)", ep.metadata),
+          email_last_error: fragment("?->>'email_last_error'", ep.metadata),
+          email_delivery_id: fragment("?->>'email_delivery_id'", ep.metadata),
+          metadata: ep.metadata,
+          inserted_at: ep.inserted_at
+        },
+        order_by: [desc: ep.inserted_at]
+      )
 
     # Apply email status filter if provided
-    query = if status_filter do
-      from ep in query,
-           where: fragment("COALESCE(?->>'email_status', 'not_sent') = ?", ep.metadata, ^status_filter)
-    else
-      query
-    end
+    query =
+      if status_filter do
+        from(ep in query,
+          where:
+            fragment("COALESCE(?->>'email_status', 'not_sent') = ?", ep.metadata, ^status_filter)
+        )
+      else
+        query
+      end
 
     query
     |> limit(^limit)
@@ -2987,9 +3455,10 @@ defmodule EventasaurusApp.Events do
     delay_seconds = Keyword.get(opts, :delay_seconds, 300)
 
     # Get candidates for retry
-    candidates = list_email_retry_candidates(event, max_attempts)
-                |> filter_by_retry_delay(delay_seconds)
-                |> Enum.take(batch_size)
+    candidates =
+      list_email_retry_candidates(event, max_attempts)
+      |> filter_by_retry_delay(delay_seconds)
+      |> Enum.take(batch_size)
 
     results = %{
       attempted: 0,
@@ -2999,18 +3468,24 @@ defmodule EventasaurusApp.Events do
     }
 
     if length(candidates) > 0 do
-      Logger.info("Retrying failed emails for event #{event.id}, #{length(candidates)} candidates")
+      Logger.info(
+        "Retrying failed emails for event #{event.id}, #{length(candidates)} candidates"
+      )
 
       Enum.reduce(candidates, results, fn participant, acc ->
         case retry_single_email(participant, event) do
           :ok ->
             %{acc | attempted: acc.attempted + 1, successful: acc.successful + 1}
+
           {:error, reason} ->
-            error_msg = "Failed to retry email for user #{participant.user_id}: #{format_email_error(reason)}"
-            %{acc |
-              attempted: acc.attempted + 1,
-              failed: acc.failed + 1,
-              errors: [error_msg | acc.errors]
+            error_msg =
+              "Failed to retry email for user #{participant.user_id}: #{format_email_error(reason)}"
+
+            %{
+              acc
+              | attempted: acc.attempted + 1,
+                failed: acc.failed + 1,
+                errors: [error_msg | acc.errors]
             }
         end
       end)
@@ -3030,10 +3505,10 @@ defmodule EventasaurusApp.Events do
     else
       # Get the event organizer
       organizer = get_event_organizer(event)
-      
+
       # Mark as retrying before queueing the job
       retrying_participant = EventParticipant.update_email_status(participant, "retrying")
-      
+
       case update_event_participant(participant, %{metadata: retrying_participant.metadata}) do
         {:ok, _} ->
           # Queue the retry using Oban (same as single participant email)
@@ -3041,6 +3516,7 @@ defmodule EventasaurusApp.Events do
             {:ok, _job} ->
               Logger.info("Email retry queued for participant #{participant.id}")
               :ok
+
             {:error, reason} ->
               # Mark as failed if we couldn't even queue the job
               error_message = format_email_error(reason)
@@ -3048,6 +3524,7 @@ defmodule EventasaurusApp.Events do
               update_event_participant(participant, %{metadata: failed_participant.metadata})
               {:error, reason}
           end
+
         {:error, changeset_error} ->
           {:error, changeset_error}
       end
@@ -3067,21 +3544,25 @@ defmodule EventasaurusApp.Events do
 
     Logger.info("Found #{length(events_with_failed_emails)} events with failed emails to retry")
 
-    results = Enum.map(events_with_failed_emails, fn event ->
-      result = retry_failed_emails(event,
-        max_attempts: max_attempts,
-        batch_size: batch_size_per_event
-      )
+    results =
+      Enum.map(events_with_failed_emails, fn event ->
+        result =
+          retry_failed_emails(event,
+            max_attempts: max_attempts,
+            batch_size: batch_size_per_event
+          )
 
-      {event.id, result}
-    end)
+        {event.id, result}
+      end)
 
     # Log summary
     total_attempted = results |> Enum.map(fn {_, result} -> result.attempted end) |> Enum.sum()
     total_successful = results |> Enum.map(fn {_, result} -> result.successful end) |> Enum.sum()
     total_failed = results |> Enum.map(fn {_, result} -> result.failed end) |> Enum.sum()
 
-    Logger.info("Email retry summary: #{total_attempted} attempted, #{total_successful} successful, #{total_failed} failed")
+    Logger.info(
+      "Email retry summary: #{total_attempted} attempted, #{total_successful} successful, #{total_failed} failed"
+    )
 
     %{
       events_processed: length(events_with_failed_emails),
@@ -3101,11 +3582,14 @@ defmodule EventasaurusApp.Events do
       email_status = EventParticipant.get_email_status(participant)
 
       case email_status.last_sent_at do
-        nil -> true
+        nil ->
+          true
+
         timestamp_string ->
           case DateTime.from_iso8601(timestamp_string) do
             {:ok, timestamp, _} -> DateTime.compare(timestamp, cutoff_time) == :lt
-            _ -> true  # If we can't parse the timestamp, allow retry
+            # If we can't parse the timestamp, allow retry
+            _ -> true
           end
       end
     end)
@@ -3113,12 +3597,16 @@ defmodule EventasaurusApp.Events do
 
   defp get_events_with_failed_emails(max_attempts) do
     # Find events that have participants with failed emails within retry limits
-    query = from e in Event,
-            join: ep in EventParticipant, on: e.id == ep.event_id,
-            where: fragment("(?->>'email_status') IN ('failed', 'bounced')", ep.metadata),
-            where: fragment("COALESCE((?->>'email_attempts')::integer, 0) < ?", ep.metadata, ^max_attempts),
-            group_by: e.id,
-            select: e
+    query =
+      from(e in Event,
+        join: ep in EventParticipant,
+        on: e.id == ep.event_id,
+        where: fragment("(?->>'email_status') IN ('failed', 'bounced')", ep.metadata),
+        where:
+          fragment("COALESCE((?->>'email_attempts')::integer, 0) < ?", ep.metadata, ^max_attempts),
+        group_by: e.id,
+        select: e
+      )
 
     Repo.all(query)
   end
@@ -3127,13 +3615,17 @@ defmodule EventasaurusApp.Events do
     # Return the first organizer/admin user
     List.first(users)
   end
+
   defp get_event_organizer(%Event{} = event) do
     # If users aren't preloaded, load the first organizer
-    query = from eu in EventUser,
-            join: u in User, on: eu.user_id == u.id,
-            where: eu.event_id == ^event.id,
-            limit: 1,
-            select: u
+    query =
+      from(eu in EventUser,
+        join: u in User,
+        on: eu.user_id == u.id,
+        where: eu.event_id == ^event.id,
+        limit: 1,
+        select: u
+      )
 
     Repo.one(query)
   end
@@ -3225,8 +3717,10 @@ defmodule EventasaurusApp.Events do
 
     # Validate all exclude_event_ids are positive integers
     invalid_ids = Enum.reject(exclude_event_ids, &(is_integer(&1) and &1 > 0))
+
     if not Enum.empty?(invalid_ids) do
-      raise ArgumentError, "exclude_event_ids must contain only positive integers, invalid: #{inspect(invalid_ids)}"
+      raise ArgumentError,
+            "exclude_event_ids must contain only positive integers, invalid: #{inspect(invalid_ids)}"
     end
 
     # Check if user exists (graceful handling for non-existent users)
@@ -3235,29 +3729,34 @@ defmodule EventasaurusApp.Events do
         # Return empty list for non-existent users rather than raising error
         # This provides better UX when user accounts are deleted
         []
+
       _user ->
         # Optimized query with proper indexing and selective fields
-        query = from(eu in EventUser,
-          join: e in Event, on: eu.event_id == e.id,
-          left_join: v in Venue, on: e.venue_id == v.id,
-          left_join: c in assoc(v, :city_ref),
-          left_join: country in assoc(c, :country),
-          where: eu.user_id == ^user_id and
-                 e.id not in ^exclude_event_ids and
-                 is_nil(e.virtual_venue_url) and
-                 not is_nil(e.venue_id),
-          select: %{
-            venue_id: e.venue_id,
-            venue_name: v.name,
-            venue_address: v.address,
-            venue_city: c.name,
-            venue_state: nil,
-            venue_country: country.name,
-            virtual_venue_url: e.virtual_venue_url,
-            event_created_at: e.inserted_at
-          },
-          order_by: [desc: e.inserted_at]
-        )
+        query =
+          from(eu in EventUser,
+            join: e in Event,
+            on: eu.event_id == e.id,
+            left_join: v in Venue,
+            on: e.venue_id == v.id,
+            left_join: c in assoc(v, :city_ref),
+            left_join: country in assoc(c, :country),
+            where:
+              eu.user_id == ^user_id and
+                e.id not in ^exclude_event_ids and
+                is_nil(e.virtual_venue_url) and
+                not is_nil(e.venue_id),
+            select: %{
+              venue_id: e.venue_id,
+              venue_name: v.name,
+              venue_address: v.address,
+              venue_city: c.name,
+              venue_state: nil,
+              venue_country: country.name,
+              virtual_venue_url: e.virtual_venue_url,
+              event_created_at: e.inserted_at
+            },
+            order_by: [desc: e.inserted_at]
+          )
 
         query
         |> Repo.all()
@@ -3336,10 +3835,11 @@ defmodule EventasaurusApp.Events do
         # Update existing participant to new status
         update_event_participant(existing_participant, %{
           status: status,
-          metadata: Map.merge(existing_participant.metadata || %{}, %{
-            "#{status}_at" => DateTime.utc_now(),
-            previous_status: existing_participant.status
-          })
+          metadata:
+            Map.merge(existing_participant.metadata || %{}, %{
+              "#{status}_at" => DateTime.utc_now(),
+              previous_status: existing_participant.status
+            })
         })
     end
   end
@@ -3358,11 +3858,15 @@ defmodule EventasaurusApp.Events do
   def remove_participant_status(%Event{} = event, %User{} = user, status_filter \\ nil) do
     case get_event_participant_by_event_and_user(event, user) do
       %EventParticipant{status: current_status} = participant ->
-        should_remove = case status_filter do
-          nil -> true  # Remove any participation
-          ^current_status -> true  # Status matches filter
-          _ -> false  # Status doesn't match filter
-        end
+        should_remove =
+          case status_filter do
+            # Remove any participation
+            nil -> true
+            # Status matches filter
+            ^current_status -> true
+            # Status doesn't match filter
+            _ -> false
+          end
 
         if should_remove do
           case delete_event_participant(participant) do
@@ -3398,10 +3902,12 @@ defmodule EventasaurusApp.Events do
   Only accessible to event organizers.
   """
   def list_participants_by_status(%Event{} = event, status) when is_atom(status) do
-    query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and ep.status == ^status and is_nil(ep.deleted_at),
-            preload: [:user],
-            order_by: [desc: ep.inserted_at]
+    query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id and ep.status == ^status and is_nil(ep.deleted_at),
+        preload: [:user],
+        order_by: [desc: ep.inserted_at]
+      )
 
     Repo.all(query)
   end
@@ -3412,15 +3918,18 @@ defmodule EventasaurusApp.Events do
   Returns list of EventParticipant structs with preloaded users.
   Only accessible to event organizers.
   """
-  def list_participants_by_status(%Event{} = event, status, page, per_page) when is_atom(status) and is_integer(page) and is_integer(per_page) do
+  def list_participants_by_status(%Event{} = event, status, page, per_page)
+      when is_atom(status) and is_integer(page) and is_integer(per_page) do
     offset = (page - 1) * per_page
 
-    query = from ep in EventParticipant,
-            where: ep.event_id == ^event.id and ep.status == ^status and is_nil(ep.deleted_at),
-            preload: [:user],
-            order_by: [desc: ep.inserted_at],
-            limit: ^per_page,
-            offset: ^offset
+    query =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id and ep.status == ^status and is_nil(ep.deleted_at),
+        preload: [:user],
+        order_by: [desc: ep.inserted_at],
+        limit: ^per_page,
+        offset: ^offset
+      )
 
     Repo.all(query)
   end
@@ -3446,13 +3955,14 @@ defmodule EventasaurusApp.Events do
   """
   def get_participant_analytics(%Event{} = event) do
     # Get counts for all possible statuses
-    status_counts = from(ep in EventParticipant,
-      where: ep.event_id == ^event.id,
-      group_by: ep.status,
-      select: {ep.status, count(ep.id)}
-    )
-    |> Repo.all()
-    |> Enum.into(%{})
+    status_counts =
+      from(ep in EventParticipant,
+        where: ep.event_id == ^event.id,
+        group_by: ep.status,
+        select: {ep.status, count(ep.id)}
+      )
+      |> Repo.all()
+      |> Enum.into(%{})
 
     # Calculate totals
     total_participants = Enum.sum(Map.values(status_counts))
@@ -3607,26 +4117,30 @@ defmodule EventasaurusApp.Events do
   Returns the list of polls for an event.
   """
   def list_polls(%Event{} = event) do
-    ordered_options = from po in PollOption,
-                         where: po.status == "active" and is_nil(po.deleted_at),
-                         order_by: [asc: po.order_index, asc: po.inserted_at],
-                         preload: [:suggested_by, :votes]
-    
-    query = from p in Poll,
-            where: p.event_id == ^event.id,
-            order_by: [asc: p.order_index, asc: p.inserted_at],
-            preload: [:created_by, poll_options: ^ordered_options]
+    ordered_options =
+      from(po in PollOption,
+        where: po.status == "active" and is_nil(po.deleted_at),
+        order_by: [asc: po.order_index, asc: po.inserted_at],
+        preload: [:suggested_by, :votes]
+      )
+
+    query =
+      from(p in Poll,
+        where: p.event_id == ^event.id,
+        order_by: [asc: p.order_index, asc: p.inserted_at],
+        preload: [:created_by, poll_options: ^ordered_options]
+      )
 
     Repo.all(query)
   end
 
   @doc """
   Counts the number of polls for a given event.
-  
+
   This is more efficient than loading all polls just to count them.
-  
+
   ## Examples
-  
+
       iex> count_polls_for_event(event)
       5
   """
@@ -3639,19 +4153,22 @@ defmodule EventasaurusApp.Events do
   Returns the list of active polls (not closed) for an event.
   """
   def list_active_polls(%Event{} = event) do
-    query = from p in Poll,
-            where: p.event_id == ^event.id and p.phase != "closed",
-            order_by: [asc: p.order_index, asc: p.inserted_at],
-            preload: [:created_by]
+    query =
+      from(p in Poll,
+        where: p.event_id == ^event.id and p.phase != "closed",
+        order_by: [asc: p.order_index, asc: p.inserted_at],
+        preload: [:created_by]
+      )
 
     polls = Repo.all(query)
-    
+
     # Load poll options with proper ordering for each poll
     Enum.map(polls, fn poll ->
-      poll_options_query = if poll.poll_type == "date_selection" do
-        from po in PollOption,
-          where: po.poll_id == ^poll.id,
-          order_by: [asc: fragment("
+      poll_options_query =
+        if poll.poll_type == "date_selection" do
+          from(po in PollOption,
+            where: po.poll_id == ^poll.id,
+            order_by: [asc: fragment("
             CASE 
               WHEN ?->'date' IS NOT NULL THEN 
                 CASE 
@@ -3661,14 +4178,16 @@ defmodule EventasaurusApp.Events do
               ELSE '9999-12-31'::date
             END
           ", po.metadata, po.metadata, po.metadata)],
-          preload: [:suggested_by, :votes]
-      else
-        from po in PollOption,
-          where: po.poll_id == ^poll.id,
-          order_by: [asc: po.order_index],
-          preload: [:suggested_by, :votes]
-      end
-      
+            preload: [:suggested_by, :votes]
+          )
+        else
+          from(po in PollOption,
+            where: po.poll_id == ^poll.id,
+            order_by: [asc: po.order_index],
+            preload: [:suggested_by, :votes]
+          )
+        end
+
       poll_options = Repo.all(poll_options_query)
       Map.put(poll, :poll_options, poll_options)
     end)
@@ -3676,26 +4195,27 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Gets a single poll.
-  
+
   Returns nil if poll not found.
   """
   def get_poll(id) do
     Repo.get(Poll, id)
   end
-  
+
   @doc """
   Gets a single poll.
-  
+
   Raises if poll not found.
   """
   def get_poll!(id) do
     poll = Repo.get!(Poll, id)
-    
+
     # For date_selection polls, we need to order the options chronologically
-    poll_options_query = if poll.poll_type == "date_selection" do
-      from po in PollOption,
-        where: po.poll_id == ^poll.id,
-        order_by: [asc: fragment("
+    poll_options_query =
+      if poll.poll_type == "date_selection" do
+        from(po in PollOption,
+          where: po.poll_id == ^poll.id,
+          order_by: [asc: fragment("
           CASE 
             WHEN ?->'date' IS NOT NULL THEN 
               CASE 
@@ -3705,17 +4225,19 @@ defmodule EventasaurusApp.Events do
             ELSE '9999-12-31'::date
           END
         ", po.metadata, po.metadata, po.metadata)],
-        preload: [:suggested_by, :votes]
-    else
-      # For other poll types, use the regular order_index
-      from po in PollOption,
-        where: po.poll_id == ^poll.id,
-        order_by: [asc: po.order_index],
-        preload: [:suggested_by, :votes]
-    end
-    
+          preload: [:suggested_by, :votes]
+        )
+      else
+        # For other poll types, use the regular order_index
+        from(po in PollOption,
+          where: po.poll_id == ^poll.id,
+          order_by: [asc: po.order_index],
+          preload: [:suggested_by, :votes]
+        )
+      end
+
     poll_options = Repo.all(poll_options_query)
-    
+
     poll
     |> Repo.preload([:event, :created_by])
     |> Map.put(:poll_options, poll_options)
@@ -3726,26 +4248,35 @@ defmodule EventasaurusApp.Events do
   """
   def get_event_poll(%Event{} = event, poll_type, opts \\ []) do
     include_deleted = Keyword.get(opts, :include_deleted, false)
-    
-    query = from p in Poll,
-            join: e in Event, on: p.event_id == e.id,
-            where: p.event_id == ^event.id and p.poll_type == ^poll_type
-    
-    query = if include_deleted do
-      query
-    else
-      from [p, e] in query,
-        where: is_nil(e.deleted_at) and is_nil(p.deleted_at)
-    end
-    
-    ordered_options = from po in PollOption,
-                         where: po.status == "active" and is_nil(po.deleted_at),
-                         order_by: [asc: po.order_index, asc: po.inserted_at],
-                         preload: [:suggested_by, :votes]
-    
-    query = from [p, e] in query,
-            preload: [:created_by, poll_options: ^ordered_options]
-    
+
+    query =
+      from(p in Poll,
+        join: e in Event,
+        on: p.event_id == e.id,
+        where: p.event_id == ^event.id and p.poll_type == ^poll_type
+      )
+
+    query =
+      if include_deleted do
+        query
+      else
+        from([p, e] in query,
+          where: is_nil(e.deleted_at) and is_nil(p.deleted_at)
+        )
+      end
+
+    ordered_options =
+      from(po in PollOption,
+        where: po.status == "active" and is_nil(po.deleted_at),
+        order_by: [asc: po.order_index, asc: po.inserted_at],
+        preload: [:suggested_by, :votes]
+      )
+
+    query =
+      from([p, e] in query,
+        preload: [:created_by, poll_options: ^ordered_options]
+      )
+
     Repo.one(query)
   end
 
@@ -3753,9 +4284,10 @@ defmodule EventasaurusApp.Events do
   Creates a poll.
   """
   def create_poll(attrs \\ %{}) do
-    result = %Poll{}
-    |> Poll.creation_changeset(attrs)
-    |> Repo.insert()
+    result =
+      %Poll{}
+      |> Poll.creation_changeset(attrs)
+      |> Repo.insert()
 
     case result do
       {:ok, poll} ->
@@ -3765,19 +4297,21 @@ defmodule EventasaurusApp.Events do
           metadata = %{
             event_id: poll.event_id,
             poll_type: poll.voting_system,
-            options_count: 0,  # New polls don't have options yet
-            is_anonymous: false  # All users must be authenticated - no anonymous functionality
+            # New polls don't have options yet
+            options_count: 0,
+            # All users must be authenticated - no anonymous functionality
+            is_anonymous: false
           }
-          
+
           Eventasaurus.Services.PollAnalyticsService.track_poll_created(
             to_string(poll.created_by_id),
             to_string(poll.id),
             metadata
           )
         end
-        
+
         {:ok, poll}
-        
+
       error ->
         error
     end
@@ -3803,68 +4337,84 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Reorders polls within an event.
-  
+
   ## Examples
       
       iex> reorder_polls(event_id, [%{poll_id: 1, order_index: 0}, %{poll_id: 2, order_index: 1}])
       {:ok, [%Poll{}, %Poll{}]}
   """
   def reorder_polls(event_id, poll_orders) when is_list(poll_orders) do
-    result = Repo.transaction(fn ->
-      # Get all polls for the event to verify they belong to it
-      polls_query = from p in Poll,
-                    where: p.event_id == ^event_id,
-                    select: %{id: p.id}
-      
-      valid_poll_ids =
-        polls_query
-        |> lock("FOR UPDATE")
-        |> Repo.all()
-        |> Enum.map(& &1.id)
-        |> MapSet.new()
-      
-      # Validate all poll_ids in the request belong to this event
-      requested_poll_ids = Enum.map(poll_orders, & &1.poll_id)
-      
-      # Check for duplicates first
-      if length(Enum.uniq(requested_poll_ids)) != length(requested_poll_ids) do
-        Repo.rollback(:duplicate_poll_ids)
-      else
-        # Validate all poll_ids belong to this event
-        if Enum.all?(requested_poll_ids, fn id -> MapSet.member?(valid_poll_ids, id) end) do
-          # Bulk-load all polls to avoid N+1 queries
-          polls_by_id =
-            from(p in Poll, where: p.event_id == ^event_id and p.id in ^requested_poll_ids)
-            |> lock("FOR UPDATE")
-            |> Repo.all()
-            |> Map.new(&{&1.id, &1})
-          
-          # Update each poll's order_index and stop on first error
-          case Enum.reduce_while(poll_orders, {:ok, []}, fn %{poll_id: poll_id, order_index: new_index}, {:ok, acc} ->
-            case Map.fetch(polls_by_id, poll_id) do
-              :error ->
-                {:halt, Repo.rollback(:invalid_poll_ids)}
-              {:ok, poll} ->
-                case poll |> Poll.order_changeset(new_index) |> Repo.update() do
-                  {:ok, updated} -> {:cont, {:ok, [updated | acc]}}
-                  {:error, changeset} -> {:halt, Repo.rollback({:update_failed, changeset})}
-                end
-            end
-          end) do
-            {:ok, updated} -> Enum.reverse(updated)
-            other -> other
-          end
+    result =
+      Repo.transaction(fn ->
+        # Get all polls for the event to verify they belong to it
+        polls_query =
+          from(p in Poll,
+            where: p.event_id == ^event_id,
+            select: %{id: p.id}
+          )
+
+        valid_poll_ids =
+          polls_query
+          |> lock("FOR UPDATE")
+          |> Repo.all()
+          |> Enum.map(& &1.id)
+          |> MapSet.new()
+
+        # Validate all poll_ids in the request belong to this event
+        requested_poll_ids = Enum.map(poll_orders, & &1.poll_id)
+
+        # Check for duplicates first
+        if length(Enum.uniq(requested_poll_ids)) != length(requested_poll_ids) do
+          Repo.rollback(:duplicate_poll_ids)
         else
-          Repo.rollback(:invalid_poll_ids)
+          # Validate all poll_ids belong to this event
+          if Enum.all?(requested_poll_ids, fn id -> MapSet.member?(valid_poll_ids, id) end) do
+            # Bulk-load all polls to avoid N+1 queries
+            polls_by_id =
+              from(p in Poll, where: p.event_id == ^event_id and p.id in ^requested_poll_ids)
+              |> lock("FOR UPDATE")
+              |> Repo.all()
+              |> Map.new(&{&1.id, &1})
+
+            # Update each poll's order_index and stop on first error
+            case Enum.reduce_while(poll_orders, {:ok, []}, fn %{
+                                                                poll_id: poll_id,
+                                                                order_index: new_index
+                                                              },
+                                                              {:ok, acc} ->
+                   case Map.fetch(polls_by_id, poll_id) do
+                     :error ->
+                       {:halt, Repo.rollback(:invalid_poll_ids)}
+
+                     {:ok, poll} ->
+                       case poll |> Poll.order_changeset(new_index) |> Repo.update() do
+                         {:ok, updated} ->
+                           {:cont, {:ok, [updated | acc]}}
+
+                         {:error, changeset} ->
+                           {:halt, Repo.rollback({:update_failed, changeset})}
+                       end
+                   end
+                 end) do
+              {:ok, updated} -> Enum.reverse(updated)
+              other -> other
+            end
+          else
+            Repo.rollback(:invalid_poll_ids)
+          end
         end
-      end
-    end)
-    
+      end)
+
     # Broadcast the reordering if successful
     case result do
       {:ok, updated_polls} ->
-        EventasaurusWeb.Services.PollPubSubService.broadcast_polls_reordered(event_id, updated_polls)
+        EventasaurusWeb.Services.PollPubSubService.broadcast_polls_reordered(
+          event_id,
+          updated_polls
+        )
+
         {:ok, updated_polls}
+
       error ->
         error
     end
@@ -3883,21 +4433,31 @@ defmodule EventasaurusApp.Events do
   Finalizes a poll with selected options.
   """
   def finalize_poll(%Poll{} = poll, option_ids, finalized_date \\ nil) do
-    with {:ok, updated_poll} <- poll
-                                |> Poll.finalization_changeset(option_ids, finalized_date)
-                                |> Repo.update() do
+    with {:ok, updated_poll} <-
+           poll
+           |> Poll.finalization_changeset(option_ids, finalized_date)
+           |> Repo.update() do
       # Create activity if this is a supported poll type and has winning options
-      if option_ids != [] and updated_poll.poll_type in ["movie", "game", "places", "venue_selection"] do
+      if option_ids != [] and
+           updated_poll.poll_type in ["movie", "game", "places", "venue_selection"] do
         # Get the first winning option (for now, support single winner)
         winning_option_id = List.first(option_ids)
+
         if winning_option_id do
           # Use the poll's event creator as the activity creator
           updated_poll = Repo.preload(updated_poll, [:event, :created_by])
-          case create_activity_from_poll(updated_poll, winning_option_id, updated_poll.created_by_id) do
+
+          case create_activity_from_poll(
+                 updated_poll,
+                 winning_option_id,
+                 updated_poll.created_by_id
+               ) do
             {:ok, _activity} ->
               :ok
+
             {:error, reason} ->
               require Logger
+
               Logger.warning("Failed to create activity from poll finalization",
                 poll_id: updated_poll.id,
                 option_id: winning_option_id,
@@ -3906,7 +4466,7 @@ defmodule EventasaurusApp.Events do
           end
         end
       end
-      
+
       {:ok, updated_poll}
     end
   end
@@ -3926,10 +4486,12 @@ defmodule EventasaurusApp.Events do
   Returns the list of options for a poll.
   """
   def list_poll_options(%Poll{} = poll) do
-    query = from po in PollOption,
-            where: po.poll_id == ^poll.id and po.status == "active",
-            order_by: [asc: po.order_index, asc: po.inserted_at],
-            preload: [:suggested_by, :votes]
+    query =
+      from(po in PollOption,
+        where: po.poll_id == ^poll.id and po.status == "active",
+        order_by: [asc: po.order_index, asc: po.inserted_at],
+        preload: [:suggested_by, :votes]
+      )
 
     Repo.all(query)
   end
@@ -3938,10 +4500,12 @@ defmodule EventasaurusApp.Events do
   Returns all options for a poll (including hidden/removed).
   """
   def list_all_poll_options(%Poll{} = poll) do
-    query = from po in PollOption,
-            where: po.poll_id == ^poll.id,
-            order_by: [asc: po.order_index, asc: po.inserted_at],
-            preload: [:suggested_by, :votes]
+    query =
+      from(po in PollOption,
+        where: po.poll_id == ^poll.id,
+        order_by: [asc: po.order_index, asc: po.inserted_at],
+        preload: [:suggested_by, :votes]
+      )
 
     Repo.all(query)
   end
@@ -3951,10 +4515,12 @@ defmodule EventasaurusApp.Events do
   Only returns active options and filters out any missing records safely.
   """
   def list_poll_options_by_ids(option_ids, preloads \\ []) when is_list(option_ids) do
-    query = from po in PollOption,
-            where: po.id in ^option_ids and po.status == "active",
-            order_by: [asc: po.order_index, asc: po.inserted_at],
-            preload: ^preloads
+    query =
+      from(po in PollOption,
+        where: po.id in ^option_ids and po.status == "active",
+        order_by: [asc: po.order_index, asc: po.inserted_at],
+        preload: ^preloads
+      )
 
     Repo.all(query)
   end
@@ -3985,53 +4551,60 @@ defmodule EventasaurusApp.Events do
     poll_id = attrs["poll_id"] || attrs[:poll_id]
     title = attrs["title"] || attrs[:title]
     suggested_by_id = attrs["suggested_by_id"] || attrs[:suggested_by_id]
-    
+
     # Extract place_id from external_data if it's a place
-    place_id = case attrs["external_data"] || attrs[:external_data] do
-      data when is_map(data) -> data["place_id"] || data[:place_id]
-      _ -> nil
-    end
-    
-    # Auto-assign order_index if not provided (new items go to top)
-    attrs_with_order = if is_nil(attrs["order_index"]) && is_nil(attrs[:order_index]) && poll_id do
-      max_order_index = from(po in PollOption, 
-                           where: po.poll_id == ^poll_id,
-                           select: max(po.order_index)) 
-                      |> Repo.one()
-      
-      # If there are no existing options, start at 0, otherwise use max + 1
-      new_order_index = if max_order_index, do: max_order_index + 1, else: 0
-      
-      # Normalize the attrs map format and add order_index
-      if is_map(attrs) && Map.has_key?(attrs, "poll_id") do
-        Map.put(attrs, "order_index", new_order_index)
-      else
-        Map.put(attrs, :order_index, new_order_index)
+    place_id =
+      case attrs["external_data"] || attrs[:external_data] do
+        data when is_map(data) -> data["place_id"] || data[:place_id]
+        _ -> nil
       end
-    else
-      attrs
-    end
-    
+
+    # Auto-assign order_index if not provided (new items go to top)
+    attrs_with_order =
+      if is_nil(attrs["order_index"]) && is_nil(attrs[:order_index]) && poll_id do
+        max_order_index =
+          from(po in PollOption,
+            where: po.poll_id == ^poll_id,
+            select: max(po.order_index)
+          )
+          |> Repo.one()
+
+        # If there are no existing options, start at 0, otherwise use max + 1
+        new_order_index = if max_order_index, do: max_order_index + 1, else: 0
+
+        # Normalize the attrs map format and add order_index
+        if is_map(attrs) && Map.has_key?(attrs, "poll_id") do
+          Map.put(attrs, "order_index", new_order_index)
+        else
+          Map.put(attrs, :order_index, new_order_index)
+        end
+      else
+        attrs
+      end
+
     # Check for duplicates using place_id (for places) or title (for non-places)
     if poll_id && title && suggested_by_id do
       case check_duplicate_option(poll_id, title, place_id, suggested_by_id) do
         {:ok, :unique} ->
-          result = %PollOption{}
-          |> PollOption.creation_changeset(attrs_with_order, opts)
-          |> Repo.insert()
-          
+          result =
+            %PollOption{}
+            |> PollOption.creation_changeset(attrs_with_order, opts)
+            |> Repo.insert()
+
           case result do
             {:ok, option} ->
               # Track poll suggestion analytics if it's a user suggestion
               if suggested_by_id do
                 poll = get_poll!(poll_id)
+
                 metadata = %{
                   event_id: poll.event_id,
                   poll_type: poll.voting_system,
                   option_title: option.title,
-                  is_approved: false  # New suggestions are not approved yet
+                  # New suggestions are not approved yet
+                  is_approved: false
                 }
-                
+
                 Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_created(
                   to_string(suggested_by_id),
                   to_string(poll_id),
@@ -4039,29 +4612,35 @@ defmodule EventasaurusApp.Events do
                   metadata
                 )
               end
-              
+
               {:ok, option}
-              
+
             error ->
               error
           end
-        
+
         {:error, :duplicate_by_same_user} ->
-          changeset = %PollOption{}
-          |> PollOption.creation_changeset(attrs_with_order, opts)
-          |> add_error(:title, "You have already suggested this option")
+          changeset =
+            %PollOption{}
+            |> PollOption.creation_changeset(attrs_with_order, opts)
+            |> add_error(:title, "You have already suggested this option")
+
           {:error, changeset}
-        
+
         {:error, :duplicate_by_other_user} ->
-          changeset = %PollOption{}
-          |> PollOption.creation_changeset(attrs_with_order, opts)
-          |> add_error(:title, "This option has already been suggested by another user")
+          changeset =
+            %PollOption{}
+            |> PollOption.creation_changeset(attrs_with_order, opts)
+            |> add_error(:title, "This option has already been suggested by another user")
+
           {:error, changeset}
-        
+
         {:error, error_message} when is_binary(error_message) ->
-          changeset = %PollOption{}
-          |> PollOption.creation_changeset(attrs_with_order, opts)
-          |> add_error(:base, error_message)
+          changeset =
+            %PollOption{}
+            |> PollOption.creation_changeset(attrs_with_order, opts)
+            |> add_error(:base, error_message)
+
           {:error, changeset}
       end
     else
@@ -4076,42 +4655,53 @@ defmodule EventasaurusApp.Events do
     # Safely convert poll_id and current_user_id to integers
     with {:ok, poll_id_int} <- safe_to_integer(poll_id, :poll_id),
          {:ok, user_id_int} <- safe_to_integer(current_user_id, :user_id) do
-      
       # Build the query based on whether we have a non-empty (trimmed) place_id
-      trimmed_place_id = 
+      trimmed_place_id =
         case place_id do
           id when is_binary(id) -> String.trim(id)
           _ -> nil
         end
+
       place_id_valid = is_binary(trimmed_place_id) and byte_size(trimmed_place_id) > 0
-      query = if place_id_valid do
-        # For places, check only by place_id (title-agnostic)
-        from po in PollOption,
-          where: po.poll_id == ^poll_id_int and 
-                 po.status == "active" and
-                 is_nil(po.deleted_at) and
-                 fragment("?->>'place_id' = ?", po.external_data, ^trimmed_place_id)
-      else
-        # For non-places, check by case-insensitive title per user
-        downcased = String.downcase(String.trim(to_string(title || "")))
-        from po in PollOption,
-          where: po.poll_id == ^poll_id_int and 
-                 po.suggested_by_id == ^user_id_int and
-                 fragment("lower(?) = ?", po.title, ^downcased) and 
-                 po.status == "active" and
-                 is_nil(po.deleted_at)
-      end
-      
+
+      query =
+        if place_id_valid do
+          # For places, check only by place_id (title-agnostic)
+          from(po in PollOption,
+            where:
+              po.poll_id == ^poll_id_int and
+                po.status == "active" and
+                is_nil(po.deleted_at) and
+                fragment("?->>'place_id' = ?", po.external_data, ^trimmed_place_id)
+          )
+        else
+          # For non-places, check by case-insensitive title per user
+          downcased = String.downcase(String.trim(to_string(title || "")))
+
+          from(po in PollOption,
+            where:
+              po.poll_id == ^poll_id_int and
+                po.suggested_by_id == ^user_id_int and
+                fragment("lower(?) = ?", po.title, ^downcased) and
+                po.status == "active" and
+                is_nil(po.deleted_at)
+          )
+        end
+
       case Repo.one(query) do
-        nil -> {:ok, :unique}
+        nil ->
+          {:ok, :unique}
+
         %PollOption{suggested_by_id: ^user_id_int} ->
           {:error, :duplicate_by_same_user}
+
         %PollOption{suggested_by_id: _other_user_id} ->
           {:error, :duplicate_by_other_user}
       end
     else
       {:error, :invalid_poll_id} ->
         {:error, "Invalid poll ID provided"}
+
       {:error, :invalid_user_id} ->
         {:error, "Invalid user ID provided"}
     end
@@ -4120,14 +4710,20 @@ defmodule EventasaurusApp.Events do
   # Helper function for safe integer conversion
   defp safe_to_integer(value, field_type) do
     case value do
-      nil -> {:error, :"invalid_#{field_type}"}
-      id when is_integer(id) -> {:ok, id}
+      nil ->
+        {:error, :"invalid_#{field_type}"}
+
+      id when is_integer(id) ->
+        {:ok, id}
+
       id when is_binary(id) ->
         case Integer.parse(id) do
           {parsed_int, ""} -> {:ok, parsed_int}
           _ -> {:error, :"invalid_#{field_type}"}
         end
-      _ -> {:error, :"invalid_#{field_type}"}
+
+      _ ->
+        {:error, :"invalid_#{field_type}"}
     end
   end
 
@@ -4135,7 +4731,8 @@ defmodule EventasaurusApp.Events do
   Count active poll options for a specific user in a poll.
   This queries the database directly to ensure accurate counts.
   """
-  @spec count_user_poll_suggestions(integer() | String.t(), integer() | String.t()) :: non_neg_integer()
+  @spec count_user_poll_suggestions(integer() | String.t(), integer() | String.t()) ::
+          non_neg_integer()
   def count_user_poll_suggestions(poll_id, user_id) do
     {poll_id_int, user_id_int} =
       case {safe_to_integer(poll_id, :poll_id), safe_to_integer(user_id, :user_id)} do
@@ -4145,10 +4742,11 @@ defmodule EventasaurusApp.Events do
       end
 
     from(po in PollOption,
-      where: po.poll_id == ^poll_id_int and
-             po.suggested_by_id == ^user_id_int and
-             po.status == "active" and
-             is_nil(po.deleted_at)
+      where:
+        po.poll_id == ^poll_id_int and
+          po.suggested_by_id == ^user_id_int and
+          po.status == "active" and
+          is_nil(po.deleted_at)
     )
     |> Repo.aggregate(:count, :id)
   end
@@ -4159,25 +4757,27 @@ defmodule EventasaurusApp.Events do
   def update_poll_option(%PollOption{} = poll_option, attrs, opts \\ []) do
     # Check if this is a suggestion approval (status changing to active)
     was_active = poll_option.status == "active"
-    
-    result = poll_option
-    |> PollOption.changeset(attrs, opts)
-    |> Repo.update()
-    
+
+    result =
+      poll_option
+      |> PollOption.changeset(attrs, opts)
+      |> Repo.update()
+
     case result do
       {:ok, updated_option} ->
         # Track suggestion approval if status changed to active
         is_now_active = updated_option.status == "active"
-        
+
         if !was_active && is_now_active && updated_option.suggested_by_id do
           # Use get_poll instead of get_poll! to avoid crashes
           case get_poll(updated_option.poll_id) do
-            nil -> 
+            nil ->
               # Poll was deleted, skip analytics
               :ok
+
             poll ->
               approver_id = Map.get(opts, :approver_id) || Map.get(opts, :current_user_id)
-              
+
               if approver_id do
                 metadata = %{
                   event_id: poll.event_id,
@@ -4185,7 +4785,7 @@ defmodule EventasaurusApp.Events do
                   option_title: updated_option.title,
                   suggested_by_id: updated_option.suggested_by_id
                 }
-                
+
                 Eventasaurus.Services.PollAnalyticsService.track_poll_suggestion_approved(
                   to_string(approver_id),
                   to_string(updated_option.poll_id),
@@ -4195,9 +4795,9 @@ defmodule EventasaurusApp.Events do
               end
           end
         end
-        
+
         {:ok, updated_option}
-        
+
       error ->
         error
     end
@@ -4233,7 +4833,8 @@ defmodule EventasaurusApp.Events do
   - {:ok, updated_poll} on success
   - {:error, reason} on failure
   """
-  def reorder_poll_option(dragged_option_id, target_option_id, direction) when direction in ["before", "after"] do
+  def reorder_poll_option(dragged_option_id, target_option_id, direction)
+      when direction in ["before", "after"] do
     Repo.transaction(fn ->
       # Get both options and validate they exist and belong to the same poll
       dragged_option = Repo.get!(PollOption, dragged_option_id)
@@ -4244,13 +4845,16 @@ defmodule EventasaurusApp.Events do
       end
 
       # Get all poll options ordered by current order_index
-      all_options = from(po in PollOption,
-                         where: po.poll_id == ^dragged_option.poll_id,
-                         order_by: [asc: po.order_index, asc: po.id])
-                    |> Repo.all()
+      all_options =
+        from(po in PollOption,
+          where: po.poll_id == ^dragged_option.poll_id,
+          order_by: [asc: po.order_index, asc: po.id]
+        )
+        |> Repo.all()
 
       # Calculate new order indices
-      {new_orders, updated_count} = calculate_new_order_indices(all_options, dragged_option, target_option, direction)
+      {new_orders, updated_count} =
+        calculate_new_order_indices(all_options, dragged_option, target_option, direction)
 
       # Update the order indices in the database
       if updated_count > 0 do
@@ -4310,21 +4914,21 @@ defmodule EventasaurusApp.Events do
 
   @doc """
   Checks if a user can delete their own poll suggestion within the 5-minute window.
-  
+
   Returns true if:
   - The user is the one who suggested the option
   - The option was created less than 5 minutes ago
   """
   def can_delete_own_suggestion?(%PollOption{} = poll_option, %User{} = user) do
     poll_option.suggested_by_id == user.id &&
-    NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) < 300
+      NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) < 300
   end
 
   def can_delete_own_suggestion?(_, _), do: false
 
   @doc """
   Checks if a user can delete their own poll option based on the poll's configured removal settings.
-  
+
   Returns true if:
   - The user is the one who suggested the option
   - The poll's removal strategy allows deletion (not "disabled")
@@ -4349,23 +4953,28 @@ defmodule EventasaurusApp.Events do
   # Private helper to check if poll strategy allows deletion
   defp check_removal_strategy_allows_deletion?(%Poll{} = poll, %PollOption{} = poll_option) do
     case Poll.get_option_removal_strategy(poll) do
-      "disabled" -> 
+      "disabled" ->
         false
-      
+
       "time_based" ->
         time_limit_minutes = Poll.get_option_removal_time_limit(poll)
+
         time_limit_seconds =
           if is_integer(time_limit_minutes) and time_limit_minutes > 0,
             do: time_limit_minutes * 60,
             else: 0
-        NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) < time_limit_seconds
-      
+
+        NaiveDateTime.diff(NaiveDateTime.utc_now(), poll_option.inserted_at, :second) <
+          time_limit_seconds
+
       "vote_based" ->
         # Check if any votes exist on this option
-        vote_count = from(v in PollVote, where: v.poll_option_id == ^poll_option.id)
-        |> Repo.aggregate(:count, :id)
+        vote_count =
+          from(v in PollVote, where: v.poll_option_id == ^poll_option.id)
+          |> Repo.aggregate(:count, :id)
+
         vote_count == 0
-      
+
       _ ->
         false
     end
@@ -4397,7 +5006,12 @@ defmodule EventasaurusApp.Events do
       iex> create_date_poll_option(poll, user, ~D[2024-12-25], title: "Christmas Day")
       {:ok, %PollOption{}}
   """
-  def create_date_poll_option(%Poll{poll_type: "date_selection"} = poll, %User{} = user, date, opts \\ []) do
+  def create_date_poll_option(
+        %Poll{poll_type: "date_selection"} = poll,
+        %User{} = user,
+        date,
+        opts \\ []
+      ) do
     alias EventasaurusApp.Events.DateMetadata
 
     # Use the new DateMetadata.build_date_metadata function for proper structure
@@ -4405,10 +5019,11 @@ defmodule EventasaurusApp.Events do
       metadata = DateMetadata.build_date_metadata(date, opts)
 
       # Use custom title or generate from date
-      parsed_date = case date do
-        %Date{} = d -> d
-        date_string -> Date.from_iso8601!(date_string)
-      end
+      parsed_date =
+        case date do
+          %Date{} = d -> d
+          date_string -> Date.from_iso8601!(date_string)
+        end
 
       title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
       description = Keyword.get(opts, :description)
@@ -4426,8 +5041,10 @@ defmodule EventasaurusApp.Events do
       create_poll_option(attrs, poll_type: "date_selection")
     rescue
       e in ArgumentError ->
-        changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
-        |> Ecto.Changeset.add_error(:metadata, "Invalid date: #{e.message}")
+        changeset =
+          PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
+          |> Ecto.Changeset.add_error(:metadata, "Invalid date: #{e.message}")
+
         {:error, changeset}
     end
   end
@@ -4446,11 +5063,16 @@ defmodule EventasaurusApp.Events do
   - {:ok, [poll_options]} on success for all dates
   - {:error, reason} on failure
   """
-  def create_date_range_poll_options(%Poll{poll_type: "date_selection"} = poll, %User{} = user, start_date, end_date, opts \\ []) do
+  def create_date_range_poll_options(
+        %Poll{poll_type: "date_selection"} = poll,
+        %User{} = user,
+        start_date,
+        end_date,
+        opts \\ []
+      ) do
     with {:ok, parsed_start} <- parse_date_input(start_date),
          {:ok, parsed_end} <- parse_date_input(end_date),
          :ok <- validate_date_range(parsed_start, parsed_end) do
-
       date_range = Date.range(parsed_start, parsed_end)
 
       Repo.transaction(fn ->
@@ -4477,7 +5099,13 @@ defmodule EventasaurusApp.Events do
   - {:ok, [poll_options]} on success for all dates
   - {:error, reason} on failure
   """
-  def create_date_list_poll_options(%Poll{poll_type: "date_selection"} = poll, %User{} = user, dates, opts \\ []) when is_list(dates) do
+  def create_date_list_poll_options(
+        %Poll{poll_type: "date_selection"} = poll,
+        %User{} = user,
+        dates,
+        opts \\ []
+      )
+      when is_list(dates) do
     Repo.transaction(fn ->
       Enum.map(dates, fn date ->
         case create_date_poll_option(poll, user, date, opts) do
@@ -4514,21 +5142,29 @@ defmodule EventasaurusApp.Events do
 
     try do
       # Build new metadata using the validated structure
-      new_metadata = DateMetadata.build_date_metadata(new_date, [
-        created_at: get_in(poll_option.metadata, ["created_at"]) || DateTime.utc_now() |> DateTime.to_iso8601()
-      ] ++ opts)
+      new_metadata =
+        DateMetadata.build_date_metadata(
+          new_date,
+          [
+            created_at:
+              get_in(poll_option.metadata, ["created_at"]) ||
+                DateTime.utc_now() |> DateTime.to_iso8601()
+          ] ++ opts
+        )
 
       # Extract parsed date from metadata instead of redundantly parsing
-      parsed_date = case new_metadata do
-        %{"date" => date_string} when is_binary(date_string) ->
-          Date.from_iso8601!(date_string)
-        _ ->
-          # Fallback: parse the original input if metadata doesn't contain expected format
-          case new_date do
-            %Date{} = d -> d
-            date_string -> Date.from_iso8601!(date_string)
-          end
-      end
+      parsed_date =
+        case new_metadata do
+          %{"date" => date_string} when is_binary(date_string) ->
+            Date.from_iso8601!(date_string)
+
+          _ ->
+            # Fallback: parse the original input if metadata doesn't contain expected format
+            case new_date do
+              %Date{} = d -> d
+              date_string -> Date.from_iso8601!(date_string)
+            end
+        end
 
       # Update title if provided, otherwise use new date display
       attrs = %{
@@ -4537,18 +5173,21 @@ defmodule EventasaurusApp.Events do
       }
 
       # Add description if provided
-      attrs = if description = Keyword.get(opts, :description) do
-        Map.put(attrs, "description", description)
-      else
-        attrs
-      end
+      attrs =
+        if description = Keyword.get(opts, :description) do
+          Map.put(attrs, "description", description)
+        else
+          attrs
+        end
 
       # The PollOption changeset will validate the new metadata structure
       update_poll_option(poll_option, attrs, poll_type: "date_selection")
     rescue
       e in ArgumentError ->
-        changeset = PollOption.changeset(poll_option, %{}, poll_type: "date_selection")
-        |> Ecto.Changeset.add_error(:metadata, "Invalid date: #{e.message}")
+        changeset =
+          PollOption.changeset(poll_option, %{}, poll_type: "date_selection")
+          |> Ecto.Changeset.add_error(:metadata, "Invalid date: #{e.message}")
+
         {:error, changeset}
     end
   end
@@ -4561,15 +5200,20 @@ defmodule EventasaurusApp.Events do
   - {:error, reason} if no valid date found
   """
   def get_date_from_poll_option(%PollOption{metadata: nil}), do: {:error, "No metadata found"}
+
   def get_date_from_poll_option(%PollOption{metadata: metadata}) do
     case Map.get(metadata, "date") do
-      nil -> {:error, "No date found in metadata"}
+      nil ->
+        {:error, "No date found in metadata"}
+
       date_string when is_binary(date_string) ->
         case Date.from_iso8601(date_string) do
           {:ok, date} -> {:ok, date}
           {:error, _} -> {:error, "Invalid date format in metadata"}
         end
-      _ -> {:error, "Date metadata is not a string"}
+
+      _ ->
+        {:error, "Date metadata is not a string"}
     end
   end
 
@@ -4594,8 +5238,6 @@ defmodule EventasaurusApp.Events do
 
   defp parse_date_input(_), do: {:error, "Invalid date input type"}
 
-
-
   defp format_date_for_display(%Date{} = date) do
     # Format as "December 25, 2024" (without day name to match existing dates)
     Calendar.strftime(date, "%B %-d, %Y")
@@ -4609,18 +5251,23 @@ defmodule EventasaurusApp.Events do
   end
 
   defp has_date_metadata?(%PollOption{metadata: nil}), do: false
+
   defp has_date_metadata?(%PollOption{metadata: metadata}) do
     Map.has_key?(metadata, "date") && is_binary(Map.get(metadata, "date"))
   end
 
   defp sort_date_options_by_date(options) do
     options
-    |> Enum.sort_by(fn option ->
-      case get_date_from_poll_option(option) do
-        {:ok, date} -> date
-        {:error, _} -> ~D[9999-12-31]  # Put invalid dates at the end
-      end
-    end, Date)
+    |> Enum.sort_by(
+      fn option ->
+        case get_date_from_poll_option(option) do
+          {:ok, date} -> date
+          # Put invalid dates at the end
+          {:error, _} -> ~D[9999-12-31]
+        end
+      end,
+      Date
+    )
   end
 
   @doc """
@@ -4630,19 +5277,23 @@ defmodule EventasaurusApp.Events do
   any existing poll options that don't meet the new validation standards.
   """
   def validate_existing_date_poll_options(poll_id) do
-    query = from po in PollOption,
-            join: p in Poll, on: po.poll_id == p.id,
-            where: p.id == ^poll_id and p.poll_type == "date_selection",
-            preload: [:poll]
+    query =
+      from(po in PollOption,
+        join: p in Poll,
+        on: po.poll_id == p.id,
+        where: p.id == ^poll_id and p.poll_type == "date_selection",
+        preload: [:poll]
+      )
 
     options = Repo.all(query)
 
-    results = Enum.map(options, fn option ->
-      case EventasaurusWeb.Adapters.DatePollAdapter.validate_date_metadata(option) do
-        {:ok, _} -> {:valid, option, nil}
-        {:error, reason} -> {:invalid, option, reason}
-      end
-    end)
+    results =
+      Enum.map(options, fn option ->
+        case EventasaurusWeb.Adapters.DatePollAdapter.validate_date_metadata(option) do
+          {:ok, _} -> {:valid, option, nil}
+          {:error, reason} -> {:invalid, option, reason}
+        end
+      end)
 
     valid_count = Enum.count(results, fn {status, _, _} -> status == :valid end)
     invalid_results = Enum.filter(results, fn {status, _, _} -> status == :invalid end)
@@ -4665,25 +5316,32 @@ defmodule EventasaurusApp.Events do
     alias EventasaurusApp.Events.DateMetadata
 
     # Try to extract date from existing metadata or title
-    date_result = case option.metadata do
-      %{"date" => date_string} when is_binary(date_string) ->
-        Date.from_iso8601(date_string)
-      _ ->
-        # Try to parse from title (legacy format)
-        if option.title && Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, option.title) do
-          Date.from_iso8601(option.title)
-        else
-          {:error, "No valid date found"}
-        end
-    end
+    date_result =
+      case option.metadata do
+        %{"date" => date_string} when is_binary(date_string) ->
+          Date.from_iso8601(date_string)
+
+        _ ->
+          # Try to parse from title (legacy format)
+          if option.title && Regex.match?(~r/^\d{4}-\d{2}-\d{2}$/, option.title) do
+            Date.from_iso8601(option.title)
+          else
+            {:error, "No valid date found"}
+          end
+      end
 
     case date_result do
       {:ok, date} ->
         # Build properly structured metadata
-        valid_metadata = DateMetadata.build_date_metadata(date, [
-          created_at: get_in(option.metadata, ["created_at"]) || option.inserted_at |> DateTime.to_iso8601(),
-          updated_at: get_in(option.metadata, ["updated_at"]) || option.updated_at |> DateTime.to_iso8601()
-        ])
+        valid_metadata =
+          DateMetadata.build_date_metadata(date,
+            created_at:
+              get_in(option.metadata, ["created_at"]) ||
+                option.inserted_at |> DateTime.to_iso8601(),
+            updated_at:
+              get_in(option.metadata, ["updated_at"]) ||
+                option.updated_at |> DateTime.to_iso8601()
+          )
 
         update_poll_option(option, %{"metadata" => valid_metadata}, poll_type: "date_selection")
 
@@ -4702,31 +5360,34 @@ defmodule EventasaurusApp.Events do
     # Find all date_selection polls
     date_polls = from(p in Poll, where: p.poll_type == "date_selection") |> Repo.all()
 
-    results = Enum.map(date_polls, fn poll ->
-      validation_result = validate_existing_date_poll_options(poll.id)
+    results =
+      Enum.map(date_polls, fn poll ->
+        validation_result = validate_existing_date_poll_options(poll.id)
 
-      fixed_count = if validation_result.invalid > 0 do
-        # Attempt to fix invalid options
-        fixed = validation_result.invalid_options
-        |> Enum.map(fn {:invalid, option, _reason} ->
-          case fix_invalid_date_metadata(option) do
-            {:ok, _} -> :fixed
-            {:error, _} -> :failed
+        fixed_count =
+          if validation_result.invalid > 0 do
+            # Attempt to fix invalid options
+            fixed =
+              validation_result.invalid_options
+              |> Enum.map(fn {:invalid, option, _reason} ->
+                case fix_invalid_date_metadata(option) do
+                  {:ok, _} -> :fixed
+                  {:error, _} -> :failed
+                end
+              end)
+              |> Enum.count(&(&1 == :fixed))
+
+            fixed
+          else
+            0
           end
-        end)
-        |> Enum.count(& &1 == :fixed)
 
-        fixed
-      else
-        0
-      end
-
-      %{
-        poll_id: poll.id,
-        validation_result: validation_result,
-        fixed_count: fixed_count
-      }
-    end)
+        %{
+          poll_id: poll.id,
+          validation_result: validation_result,
+          fixed_count: fixed_count
+        }
+      end)
 
     %{
       polls_processed: length(results),
@@ -4742,10 +5403,12 @@ defmodule EventasaurusApp.Events do
   Returns the list of votes for a poll option.
   """
   def list_poll_votes(%PollOption{} = poll_option) do
-    query = from pv in PollVote,
-            where: pv.poll_option_id == ^poll_option.id,
-            order_by: [desc: pv.voted_at],
-            preload: [:voter]
+    query =
+      from(pv in PollVote,
+        where: pv.poll_option_id == ^poll_option.id,
+        order_by: [desc: pv.voted_at],
+        preload: [:voter]
+      )
 
     Repo.all(query)
   end
@@ -4754,9 +5417,11 @@ defmodule EventasaurusApp.Events do
   Returns the votes for a poll option by a specific user.
   """
   def get_user_poll_vote(%PollOption{} = poll_option, %User{} = user) do
-    query = from pv in PollVote,
-            where: pv.poll_option_id == ^poll_option.id and pv.voter_id == ^user.id,
-            preload: [:voter]
+    query =
+      from(pv in PollVote,
+        where: pv.poll_option_id == ^poll_option.id and pv.voter_id == ^user.id,
+        preload: [:voter]
+      )
 
     Repo.one(query)
   end
@@ -4765,10 +5430,13 @@ defmodule EventasaurusApp.Events do
   Returns all votes by a user for a poll.
   """
   def list_user_poll_votes(%Poll{} = poll, %User{} = user) do
-    query = from pv in PollVote,
-            join: po in PollOption, on: pv.poll_option_id == po.id,
-            where: po.poll_id == ^poll.id and pv.voter_id == ^user.id,
-            preload: [:poll_option, :voter]
+    query =
+      from(pv in PollVote,
+        join: po in PollOption,
+        on: pv.poll_option_id == po.id,
+        where: po.poll_id == ^poll.id and pv.voter_id == ^user.id,
+        preload: [:poll_option, :voter]
+      )
 
     Repo.all(query)
   end
@@ -4784,39 +5452,49 @@ defmodule EventasaurusApp.Events do
     case poll_option_with_poll.poll do
       nil ->
         # Return a proper changeset error instead of string
-        changeset = PollVote.changeset(%PollVote{}, %{})
-        |> Ecto.Changeset.add_error(:poll_id, "Poll not found for this option")
+        changeset =
+          PollVote.changeset(%PollVote{}, %{})
+          |> Ecto.Changeset.add_error(:poll_id, "Poll not found for this option")
+
         {:error, changeset}
 
       poll ->
-        attrs = Map.merge(vote_data, %{
-          poll_option_id: poll_option.id,
-          voter_id: user.id,
-          poll_id: poll.id
-        })
+        attrs =
+          Map.merge(vote_data, %{
+            poll_option_id: poll_option.id,
+            voter_id: user.id,
+            poll_id: poll.id
+          })
 
-        changeset = case voting_system do
-          "binary" -> PollVote.binary_vote_changeset(%PollVote{}, attrs)
-          "approval" -> PollVote.approval_vote_changeset(%PollVote{}, attrs)
-          "ranked" -> PollVote.ranked_vote_changeset(%PollVote{}, attrs)
-          "star" -> PollVote.star_vote_changeset(%PollVote{}, attrs)
-          _ -> PollVote.changeset(%PollVote{}, attrs)
-        end
+        changeset =
+          case voting_system do
+            "binary" -> PollVote.binary_vote_changeset(%PollVote{}, attrs)
+            "approval" -> PollVote.approval_vote_changeset(%PollVote{}, attrs)
+            "ranked" -> PollVote.ranked_vote_changeset(%PollVote{}, attrs)
+            "star" -> PollVote.star_vote_changeset(%PollVote{}, attrs)
+            _ -> PollVote.changeset(%PollVote{}, attrs)
+          end
 
         case Repo.insert(changeset) do
           {:ok, vote} ->
             # Invalidate cache for performance
             EventasaurusApp.Events.PollStatsCache.invalidate(poll.id)
-            
+
             # Track poll vote analytics
             metadata = %{
               event_id: poll.event_id,
               poll_type: voting_system,
               vote_value: Map.get(vote_data, :vote_value) || Map.get(vote_data, "vote_value"),
               rank: Map.get(vote_data, :vote_rank) || Map.get(vote_data, "vote_rank"),
-              rating: if(vote_numeric = Map.get(vote_data, :vote_numeric) || Map.get(vote_data, "vote_numeric"), do: Decimal.to_float(vote_numeric), else: nil)
+              rating:
+                if(
+                  vote_numeric =
+                    Map.get(vote_data, :vote_numeric) || Map.get(vote_data, "vote_numeric"),
+                  do: Decimal.to_float(vote_numeric),
+                  else: nil
+                )
             }
-            
+
             Eventasaurus.Services.PollAnalyticsService.track_poll_vote(
               to_string(user.id),
               to_string(poll.id),
@@ -4824,9 +5502,11 @@ defmodule EventasaurusApp.Events do
               voting_system,
               metadata
             )
-            
+
             {:ok, vote}
-          error -> error
+
+          error ->
+            error
         end
     end
   end
@@ -4847,7 +5527,7 @@ defmodule EventasaurusApp.Events do
     # Load the poll to enable broadcasting
     poll_vote = Repo.preload(poll_vote, poll_option: :poll)
     poll = poll_vote.poll_option.poll
-    
+
     case Repo.delete(poll_vote) do
       {:ok, deleted_vote} ->
         # Invalidate cache for performance
@@ -4856,7 +5536,9 @@ defmodule EventasaurusApp.Events do
         broadcast_poll_update(poll, :votes_updated)
         broadcast_poll_stats_update(poll)
         {:ok, deleted_vote}
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -4868,28 +5550,30 @@ defmodule EventasaurusApp.Events do
   Gets vote counts and statistics for a poll.
   """
   def get_poll_analytics(%Poll{} = poll) do
-    poll_with_options = Repo.preload(poll, [poll_options: :votes])
+    poll_with_options = Repo.preload(poll, poll_options: :votes)
 
-    vote_counts = poll_with_options.poll_options
-    |> Enum.map(fn option ->
-      votes = option.votes
-      total_votes = length(votes)
+    vote_counts =
+      poll_with_options.poll_options
+      |> Enum.map(fn option ->
+        votes = option.votes
+        total_votes = length(votes)
 
-      vote_breakdown = case poll.voting_system do
-        "binary" -> count_binary_votes(votes)
-        "approval" -> %{selected: total_votes}
-        "ranked" -> count_ranked_votes(votes)
-        "star" -> count_star_votes(votes)
-      end
+        vote_breakdown =
+          case poll.voting_system do
+            "binary" -> count_binary_votes(votes)
+            "approval" -> %{selected: total_votes}
+            "ranked" -> count_ranked_votes(votes)
+            "star" -> count_star_votes(votes)
+          end
 
-      %{
-        option_id: option.id,
-        option_title: option.title,
-        total_votes: total_votes,
-        vote_breakdown: vote_breakdown,
-        average_score: calculate_average_score(votes)
-      }
-    end)
+        %{
+          option_id: option.id,
+          option_title: option.title,
+          total_votes: total_votes,
+          vote_breakdown: vote_breakdown,
+          average_score: calculate_average_score(votes)
+        }
+      end)
 
     %{
       poll_id: poll.id,
@@ -4934,9 +5618,10 @@ defmodule EventasaurusApp.Events do
     if length(votes) == 0 do
       0.0
     else
-      total_score = votes
-      |> Enum.map(&PollVote.vote_score/1)
-      |> Enum.sum()
+      total_score =
+        votes
+        |> Enum.map(&PollVote.vote_score/1)
+        |> Enum.sum()
 
       total_score / length(votes)
     end
@@ -4954,18 +5639,17 @@ defmodule EventasaurusApp.Events do
   # Poll Authorization & Lifecycle
   # =================
 
-    @doc """
+  @doc """
   Checks if a user can create polls for an event.
   """
   def can_create_poll?(%User{} = user, %Event{} = event) do
     # Event organizers can create polls
-    user_is_organizer?(event, user) ||
-
     # Event participants with appropriate permissions can create polls
-    case get_event_participant_by_event_and_user(event, user) do
-      nil -> false
-      participant -> participant.role in [:organizer, :co_organizer]
-    end
+    user_is_organizer?(event, user) ||
+      case get_event_participant_by_event_and_user(event, user) do
+        nil -> false
+        participant -> participant.role in [:organizer, :co_organizer]
+      end
   end
 
   @doc """
@@ -4980,8 +5664,6 @@ defmodule EventasaurusApp.Events do
       {:error, "Poll is not in list_building phase"}
     end
   end
-
-
 
   @doc """
   Transitions a poll from list_building to voting only (suggestions disabled).
@@ -5005,14 +5687,15 @@ defmodule EventasaurusApp.Events do
     |> Repo.update()
   end
 
-  def disable_poll_suggestions(%Poll{phase: "voting"} = poll) do  # Legacy support
+  # Legacy support
+  def disable_poll_suggestions(%Poll{phase: "voting"} = poll) do
     poll
     |> Poll.phase_transition_changeset("voting_only")
     |> Repo.update()
   end
 
-  def disable_poll_suggestions(%Poll{}), do:
-    {:error, "Poll is not in a phase that allows disabling suggestions"}
+  def disable_poll_suggestions(%Poll{}),
+    do: {:error, "Poll is not in a phase that allows disabling suggestions"}
 
   @doc """
   Finalizes a poll (single-argument version for LiveView component).
@@ -5021,7 +5704,8 @@ defmodule EventasaurusApp.Events do
     # Determine winner(s) from votes via a single grouped query
     votes_by_option =
       from(v in PollVote,
-        join: po in PollOption, on: v.poll_option_id == po.id,
+        join: po in PollOption,
+        on: v.poll_option_id == po.id,
         where: po.poll_id == ^poll.id,
         group_by: v.poll_option_id,
         select: {v.poll_option_id, count(v.id)}
@@ -5056,7 +5740,6 @@ defmodule EventasaurusApp.Events do
   """
   def cast_binary_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, vote_value)
       when vote_value in ["yes", "maybe", "no"] do
-
     if poll.voting_system != "binary" do
       {:error, "Poll does not support binary voting"}
     else
@@ -5067,7 +5750,12 @@ defmodule EventasaurusApp.Events do
   @doc """
   Casts an approval vote (selecting/deselecting an option) with validation.
   """
-  def cast_approval_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, selected \\ true) do
+  def cast_approval_vote(
+        %Poll{} = poll,
+        %PollOption{} = poll_option,
+        %User{} = user,
+        selected \\ true
+      ) do
     if poll.voting_system != "approval" do
       {:error, "Poll does not support approval voting"}
     else
@@ -5097,17 +5785,20 @@ defmodule EventasaurusApp.Events do
         clear_user_poll_votes(poll, user)
 
         # Then add votes for selected options
-        poll_options = from(po in PollOption,
-                           where: po.poll_id == ^poll.id and po.id in ^option_ids,
-                           preload: [:poll])
-                      |> Repo.all()
+        poll_options =
+          from(po in PollOption,
+            where: po.poll_id == ^poll.id and po.id in ^option_ids,
+            preload: [:poll]
+          )
+          |> Repo.all()
 
-        results = for option <- poll_options do
-          case create_poll_vote(option, user, %{vote_value: "selected"}, "approval") do
-            {:ok, vote} -> vote
-            {:error, changeset} -> Repo.rollback(changeset)
+        results =
+          for option <- poll_options do
+            case create_poll_vote(option, user, %{vote_value: "selected"}, "approval") do
+              {:ok, vote} -> vote
+              {:error, changeset} -> Repo.rollback(changeset)
+            end
           end
-        end
 
         # Broadcast updates
         broadcast_poll_update(poll, :votes_updated)
@@ -5122,18 +5813,21 @@ defmodule EventasaurusApp.Events do
   """
   def cast_ranked_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, rank)
       when is_integer(rank) and rank > 0 do
-
     if poll.voting_system != "ranked" do
       {:error, "Poll does not support ranked voting"}
     else
       Repo.transaction(fn ->
         # Check if user already has a vote with this rank for this poll
-        existing_vote_with_rank = from(pv in PollVote,
-                                      join: po in PollOption, on: pv.poll_option_id == po.id,
-                                      where: po.poll_id == ^poll.id and
-                                             pv.voter_id == ^user.id and
-                                             pv.vote_rank == ^rank)
-                                 |> Repo.one()
+        existing_vote_with_rank =
+          from(pv in PollVote,
+            join: po in PollOption,
+            on: pv.poll_option_id == po.id,
+            where:
+              po.poll_id == ^poll.id and
+                pv.voter_id == ^user.id and
+                pv.vote_rank == ^rank
+          )
+          |> Repo.one()
 
         # If there's an existing vote with this rank, remove it first
         if existing_vote_with_rank do
@@ -5146,6 +5840,7 @@ defmodule EventasaurusApp.Events do
             broadcast_poll_update(poll, :votes_updated)
             broadcast_poll_stats_update(poll)
             vote
+
           {:error, changeset} ->
             Repo.rollback(changeset)
         end
@@ -5156,7 +5851,8 @@ defmodule EventasaurusApp.Events do
   @doc """
   Casts multiple ranked votes at once (full ballot).
   """
-    def cast_ranked_votes(%Poll{} = poll, ranked_options, %User{} = user) when is_list(ranked_options) do
+  def cast_ranked_votes(%Poll{} = poll, ranked_options, %User{} = user)
+      when is_list(ranked_options) do
     if poll.voting_system != "ranked" do
       {:error, "Poll does not support ranked voting"}
     else
@@ -5166,25 +5862,29 @@ defmodule EventasaurusApp.Events do
 
         # Validate that ranks are unique and sequential
         ranks = Enum.map(ranked_options, fn {_option_id, rank} -> rank end)
+
         if length(ranks) != length(Enum.uniq(ranks)) do
           Repo.rollback("Duplicate ranks not allowed")
         end
 
         # Cast votes for each ranked option
-        results = for {option_id, rank} <- ranked_options do
-          case Repo.get(PollOption, option_id) do
-            nil -> Repo.rollback("Option with ID #{option_id} not found")
-            option ->
-              case create_poll_vote(option, user, %{vote_rank: rank}, "ranked") do
-                {:ok, vote} -> vote
-                {:error, changeset} -> Repo.rollback(changeset)
-              end
+        results =
+          for {option_id, rank} <- ranked_options do
+            case Repo.get(PollOption, option_id) do
+              nil ->
+                Repo.rollback("Option with ID #{option_id} not found")
+
+              option ->
+                case create_poll_vote(option, user, %{vote_rank: rank}, "ranked") do
+                  {:ok, vote} -> vote
+                  {:error, changeset} -> Repo.rollback(changeset)
+                end
+            end
           end
-        end
 
         # Invalidate IRV cache since votes changed
         EventasaurusApp.Events.RankedChoiceVoting.invalidate_cache(poll.id)
-        
+
         broadcast_poll_update(poll, :votes_updated)
         broadcast_poll_stats_update(poll)
         results
@@ -5197,49 +5897,50 @@ defmodule EventasaurusApp.Events do
   """
   def cast_star_vote(%Poll{} = poll, %PollOption{} = poll_option, %User{} = user, rating)
       when is_number(rating) and rating >= 1 and rating <= 5 do
-
     if poll.voting_system != "star" do
       {:error, "Poll does not support star rating"}
     else
-      vote_numeric = if is_integer(rating), do: Decimal.new(rating), else: Decimal.from_float(rating)
+      vote_numeric =
+        if is_integer(rating), do: Decimal.new(rating), else: Decimal.from_float(rating)
+
       cast_vote_with_transaction(poll, poll_option, user, %{vote_numeric: vote_numeric}, "star")
     end
   end
-
-
 
   @doc """
   Clears all votes by a user for a specific poll.
   """
   def clear_user_poll_votes(%Poll{} = poll, %User{} = user) do
-    query = from(pv in PollVote,
-                join: po in PollOption, on: pv.poll_option_id == po.id,
-                where: po.poll_id == ^poll.id and pv.voter_id == ^user.id)
+    query =
+      from(pv in PollVote,
+        join: po in PollOption,
+        on: pv.poll_option_id == po.id,
+        where: po.poll_id == ^poll.id and pv.voter_id == ^user.id
+      )
 
     {count, _} = Repo.delete_all(query)
-    
+
     # Invalidate IRV cache since votes changed
     if poll.voting_system == "ranked" do
       EventasaurusApp.Events.RankedChoiceVoting.invalidate_cache(poll.id)
     end
-    
+
     broadcast_poll_update(poll, :votes_updated)
     broadcast_poll_stats_update(poll)
     {:ok, count}
   end
-
-
 
   @doc """
   Checks if a user can vote on a poll based on current phase and permissions.
   """
   def can_user_vote?(%Poll{} = poll, %User{} = user) do
     # Must be in any voting phase (including new phases)
-    Poll.voting?(poll) and
     # Must be within voting deadline (if set)
-    (is_nil(poll.voting_deadline) or DateTime.compare(DateTime.utc_now(), poll.voting_deadline) == :lt) and
     # User must be a participant in the event
-    user_can_participate?(poll, user)
+    Poll.voting?(poll) and
+      (is_nil(poll.voting_deadline) or
+         DateTime.compare(DateTime.utc_now(), poll.voting_deadline) == :lt) and
+      user_can_participate?(poll, user)
   end
 
   @doc """
@@ -5251,6 +5952,7 @@ defmodule EventasaurusApp.Events do
     case poll.voting_system do
       "binary" ->
         votes_by_option = Enum.group_by(user_votes, & &1.poll_option_id)
+
         %{
           voting_system: "binary",
           votes_cast: length(user_votes),
@@ -5259,6 +5961,7 @@ defmodule EventasaurusApp.Events do
 
       "approval" ->
         selected_options = Enum.map(user_votes, & &1.poll_option_id)
+
         %{
           voting_system: "approval",
           votes_cast: length(user_votes),
@@ -5266,9 +5969,11 @@ defmodule EventasaurusApp.Events do
         }
 
       "ranked" ->
-        ranked_votes = user_votes
-                      |> Enum.sort_by(& &1.vote_rank)
-                      |> Enum.map(fn vote -> {vote.poll_option_id, vote.vote_rank} end)
+        ranked_votes =
+          user_votes
+          |> Enum.sort_by(& &1.vote_rank)
+          |> Enum.map(fn vote -> {vote.poll_option_id, vote.vote_rank} end)
+
         %{
           voting_system: "ranked",
           votes_cast: length(user_votes),
@@ -5276,11 +5981,13 @@ defmodule EventasaurusApp.Events do
         }
 
       "star" ->
-        ratings_by_option = user_votes
-                           |> Enum.map(fn vote ->
-                             {vote.poll_option_id, Decimal.to_float(vote.vote_numeric)}
-                           end)
-                           |> Enum.into(%{})
+        ratings_by_option =
+          user_votes
+          |> Enum.map(fn vote ->
+            {vote.poll_option_id, Decimal.to_float(vote.vote_numeric)}
+          end)
+          |> Enum.into(%{})
+
         %{
           voting_system: "star",
           votes_cast: length(user_votes),
@@ -5298,8 +6005,10 @@ defmodule EventasaurusApp.Events do
       # For binary and star voting, remove existing vote first (replace behavior)
       if voting_system in ["binary", "star"] do
         case get_user_poll_vote(poll_option, user) do
-          nil -> :ok
-          existing_vote -> 
+          nil ->
+            :ok
+
+          existing_vote ->
             case delete_poll_vote(existing_vote) do
               {:ok, _} -> :ok
               {:error, reason} -> Repo.rollback(reason)
@@ -5313,6 +6022,7 @@ defmodule EventasaurusApp.Events do
           # Broadcast enhanced statistics update
           broadcast_poll_stats_update(poll)
           vote
+
         {:error, changeset} ->
           Repo.rollback(changeset)
       end
@@ -5325,12 +6035,16 @@ defmodule EventasaurusApp.Events do
 
     # Check if user is event organizer or participant
     user_is_organizer?(event, user) or
-    get_event_participant_by_event_and_user(event, user) != nil
+      get_event_participant_by_event_and_user(event, user) != nil
   end
 
   defp broadcast_poll_update(poll, event_type) do
     # Use BroadcastThrottler for efficient real-time updates
-    EventasaurusWeb.Services.BroadcastThrottler.throttle_poll_update_broadcast(poll.id, event_type, poll.event_id)
+    EventasaurusWeb.Services.BroadcastThrottler.throttle_poll_update_broadcast(
+      poll.id,
+      event_type,
+      poll.event_id
+    )
   end
 
   # =================
@@ -5352,7 +6066,9 @@ defmodule EventasaurusApp.Events do
       {:ok, updated_poll} ->
         broadcast_poll_update(updated_poll, :status_updated)
         {:ok, updated_poll}
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -5360,9 +6076,12 @@ defmodule EventasaurusApp.Events do
   Clears all votes for a poll (used by moderation).
   """
   def clear_all_poll_votes(poll_id) do
-    from(v in PollVote, where: v.poll_option_id in subquery(
-      from(o in PollOption, where: o.poll_id == ^poll_id, select: o.id)
-    ))
+    from(v in PollVote,
+      where:
+        v.poll_option_id in subquery(
+          from(o in PollOption, where: o.poll_id == ^poll_id, select: o.id)
+        )
+    )
     |> Repo.delete_all()
     |> case do
       {deleted_count, _} ->
@@ -5388,10 +6107,11 @@ defmodule EventasaurusApp.Events do
     if not can_create_poll?(creator, event) do
       {:error, "User does not have permission to create polls for this event"}
     else
-      poll_attrs = Map.merge(attrs, %{
-        event_id: event.id,
-        created_by_id: creator.id
-      })
+      poll_attrs =
+        Map.merge(attrs, %{
+          event_id: event.id,
+          created_by_id: creator.id
+        })
 
       Repo.transaction(fn ->
         case create_poll(poll_attrs) do
@@ -5430,7 +6150,8 @@ defmodule EventasaurusApp.Events do
           broadcast_event_poll_activity(event, :poll_updated, updated_poll, updater)
           {:ok, updated_poll}
 
-        error -> error
+        error ->
+          error
       end
     end
   end
@@ -5475,7 +6196,8 @@ defmodule EventasaurusApp.Events do
           broadcast_event_poll_activity(event, :poll_deleted, deleted_poll, deleter)
           {:ok, deleted_poll}
 
-        error -> error
+        error ->
+          error
       end
     end
   end
@@ -5496,9 +6218,15 @@ defmodule EventasaurusApp.Events do
 
     %{
       total_polls: length(polls),
-      active_polls: length(Enum.filter(polls, & &1.phase != "closed")),
-      polls_by_type: Enum.group_by(polls, & &1.poll_type) |> Enum.map(fn {type, polls} -> {type, length(polls)} end) |> Enum.into(%{}),
-      polls_by_phase: Enum.group_by(polls, & &1.phase) |> Enum.map(fn {phase, polls} -> {phase, length(polls)} end) |> Enum.into(%{}),
+      active_polls: length(Enum.filter(polls, &(&1.phase != "closed"))),
+      polls_by_type:
+        Enum.group_by(polls, & &1.poll_type)
+        |> Enum.map(fn {type, polls} -> {type, length(polls)} end)
+        |> Enum.into(%{}),
+      polls_by_phase:
+        Enum.group_by(polls, & &1.phase)
+        |> Enum.map(fn {phase, polls} -> {phase, length(polls)} end)
+        |> Enum.into(%{}),
       total_participants: count_unique_poll_participants(polls)
     }
   end
@@ -5536,7 +6264,13 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  defp handle_poll_phase_transition(%Event{} = event, %Poll{} = poll, old_phase, new_phase, %User{} = user) do
+  defp handle_poll_phase_transition(
+         %Event{} = event,
+         %Poll{} = poll,
+         old_phase,
+         new_phase,
+         %User{} = user
+       ) do
     Logger.info("Poll phase transition", %{
       event_id: event.id,
       poll_id: poll.id,
@@ -5616,6 +6350,7 @@ defmodule EventasaurusApp.Events do
       "threshold_interest" ->
         # Check if threshold was met to auto-transition event
         analytics = get_poll_analytics(poll)
+
         if threshold_met_from_poll?(poll, analytics) do
           transition_event(event, :confirmed)
         end
@@ -5640,7 +6375,11 @@ defmodule EventasaurusApp.Events do
   - {:ok, {updated_poll, updated_event}} on success
   - {:error, reason} on failure
   """
-  def finalize_date_selection_poll(%Poll{poll_type: "date_selection"} = poll, %User{} = finalizer, opts \\ []) do
+  def finalize_date_selection_poll(
+        %Poll{poll_type: "date_selection"} = poll,
+        %User{} = finalizer,
+        opts \\ []
+      ) do
     strategy = Keyword.get(opts, :finalization_strategy, :highest_votes)
     preserve_time = Keyword.get(opts, :preserve_time, true)
 
@@ -5674,6 +6413,7 @@ defmodule EventasaurusApp.Events do
                     event_id: event.id,
                     reason: reason
                   })
+
                   Repo.rollback(reason)
               end
 
@@ -5693,11 +6433,16 @@ defmodule EventasaurusApp.Events do
   @doc """
   Determines winning date options based on voting results and strategy.
   """
-  def determine_winning_date_options(%Poll{poll_type: "date_selection"} = poll, strategy, opts \\ []) do
+  def determine_winning_date_options(
+        %Poll{poll_type: "date_selection"} = poll,
+        strategy,
+        opts \\ []
+      ) do
     case strategy do
       :manual ->
         # Manual selection - use provided option IDs
         selected_ids = Keyword.get(opts, :selected_option_ids, [])
+
         if length(selected_ids) > 0 do
           {:ok, selected_ids}
         else
@@ -5727,29 +6472,36 @@ defmodule EventasaurusApp.Events do
       case extract_date_from_option(option) do
         {:ok, selected_date} ->
           # Convert date to datetime, preserving existing time if requested
-          new_datetime = if preserve_time && event.start_at do
-            DateTime.new!(selected_date, DateTime.to_time(event.start_at), event.timezone || "UTC")
-          else
-            # Default to 6 PM if no existing time
-            DateTime.new!(selected_date, ~T[18:00:00], event.timezone || "UTC")
-          end
+          new_datetime =
+            if preserve_time && event.start_at do
+              DateTime.new!(
+                selected_date,
+                DateTime.to_time(event.start_at),
+                event.timezone || "UTC"
+              )
+            else
+              # Default to 6 PM if no existing time
+              DateTime.new!(selected_date, ~T[18:00:00], event.timezone || "UTC")
+            end
 
           # Update event with new date and confirmed status
           attrs = %{
             start_at: new_datetime,
             status: :confirmed,
-            polling_deadline: nil  # Clear polling deadline
+            # Clear polling deadline
+            polling_deadline: nil
           }
 
           # Preserve existing end time if it exists
-          attrs = if event.ends_at do
-            # Calculate duration and apply to new date
-            duration = DateTime.diff(event.ends_at, event.start_at, :second)
-            new_ends_at = DateTime.add(new_datetime, duration, :second)
-            Map.put(attrs, :ends_at, new_ends_at)
-          else
-            attrs
-          end
+          attrs =
+            if event.ends_at do
+              # Calculate duration and apply to new date
+              duration = DateTime.diff(event.ends_at, event.start_at, :second)
+              new_ends_at = DateTime.add(new_datetime, duration, :second)
+              Map.put(attrs, :ends_at, new_ends_at)
+            else
+              attrs
+            end
 
           changeset = Event.changeset_with_inferred_status(event, attrs)
           Repo.update(changeset)
@@ -5763,6 +6515,7 @@ defmodule EventasaurusApp.Events do
         event_id: event.id,
         selected_options: winning_option_ids
       })
+
       {:ok, event}
     end
   end
@@ -5816,13 +6569,14 @@ defmodule EventasaurusApp.Events do
 
   defp determine_highest_voted_date_options(%Poll{} = poll) do
     # Get all poll options with their vote counts
-    options_with_votes = poll
-    |> list_poll_options()
-    |> Enum.map(fn option ->
-      vote_count = length(option.votes || [])
-      {option.id, vote_count}
-    end)
-    |> Enum.sort_by(fn {_id, count} -> count end, :desc)
+    options_with_votes =
+      poll
+      |> list_poll_options()
+      |> Enum.map(fn option ->
+        vote_count = length(option.votes || [])
+        {option.id, vote_count}
+      end)
+      |> Enum.sort_by(fn {_id, count} -> count end, :desc)
 
     case options_with_votes do
       [] ->
@@ -5831,9 +6585,10 @@ defmodule EventasaurusApp.Events do
       [{top_option_id, top_count} | rest] ->
         if top_count > 0 do
           # Find all options with the highest vote count (handles ties)
-          winning_options = Enum.take_while([{top_option_id, top_count} | rest], fn {_id, count} ->
-            count == top_count
-          end)
+          winning_options =
+            Enum.take_while([{top_option_id, top_count} | rest], fn {_id, count} ->
+              count == top_count
+            end)
 
           winning_ids = Enum.map(winning_options, fn {id, _count} -> id end)
           {:ok, winning_ids}
@@ -5845,14 +6600,17 @@ defmodule EventasaurusApp.Events do
 
   defp determine_most_yes_voted_date_options(%Poll{voting_system: "binary"} = poll) do
     # For binary voting system, count "yes" votes specifically
-    options_with_yes_votes = poll
-    |> list_poll_options()
-    |> Enum.map(fn option ->
-      yes_count = option.votes
-      |> Enum.count(fn vote -> vote.vote_value == "yes" end)
-      {option.id, yes_count}
-    end)
-    |> Enum.sort_by(fn {_id, count} -> count end, :desc)
+    options_with_yes_votes =
+      poll
+      |> list_poll_options()
+      |> Enum.map(fn option ->
+        yes_count =
+          option.votes
+          |> Enum.count(fn vote -> vote.vote_value == "yes" end)
+
+        {option.id, yes_count}
+      end)
+      |> Enum.sort_by(fn {_id, count} -> count end, :desc)
 
     case options_with_yes_votes do
       [] ->
@@ -5861,9 +6619,10 @@ defmodule EventasaurusApp.Events do
       [{top_option_id, top_count} | rest] ->
         if top_count > 0 do
           # Find all options with the highest "yes" vote count
-          winning_options = Enum.take_while([{top_option_id, top_count} | rest], fn {_id, count} ->
-            count == top_count
-          end)
+          winning_options =
+            Enum.take_while([{top_option_id, top_count} | rest], fn {_id, count} ->
+              count == top_count
+            end)
 
           winning_ids = Enum.map(winning_options, fn {id, _count} -> id end)
           {:ok, winning_ids}
@@ -5889,6 +6648,7 @@ defmodule EventasaurusApp.Events do
       case extract_venue_from_option(option) do
         {:ok, venue_id} ->
           update_event(event, %{venue_id: venue_id})
+
           Logger.info("Event venue updated from poll finalization", %{
             event_id: event.id,
             venue_id: venue_id
@@ -5910,6 +6670,7 @@ defmodule EventasaurusApp.Events do
 
     if threshold_met_from_poll?(poll, analytics) do
       transition_event(event, :confirmed)
+
       Logger.info("Event confirmed from threshold poll results", %{
         event_id: event.id,
         poll_id: poll.id
@@ -5922,7 +6683,12 @@ defmodule EventasaurusApp.Events do
     end
   end
 
-  defp broadcast_event_poll_activity(%Event{} = event, activity_type, %Poll{} = poll, %User{} = user) do
+  defp broadcast_event_poll_activity(
+         %Event{} = event,
+         activity_type,
+         %Poll{} = poll,
+         %User{} = user
+       ) do
     # Broadcast to event-specific channel for event page updates
     Phoenix.PubSub.broadcast(
       Eventasaurus.PubSub,
@@ -6039,17 +6805,25 @@ defmodule EventasaurusApp.Events do
       iex> extract_time_slots_from_option(all_day_option)
       {:ok, []}
   """
-  def extract_time_slots_from_option(%PollOption{metadata: nil}), do: {:error, "No metadata found"}
+  def extract_time_slots_from_option(%PollOption{metadata: nil}),
+    do: {:error, "No metadata found"}
+
   def extract_time_slots_from_option(%PollOption{metadata: metadata}) do
     case {Map.get(metadata, "time_enabled"), Map.get(metadata, "time_slots")} do
       {true, time_slots} when is_list(time_slots) and length(time_slots) > 0 ->
         {:ok, time_slots}
+
       {true, _} ->
         {:error, "Time enabled but no valid time slots found"}
+
       {false, _} ->
-        {:ok, []}  # All-day event
+        # All-day event
+        {:ok, []}
+
       {nil, _} ->
-        {:ok, []}  # Legacy date-only format (backward compatibility)
+        # Legacy date-only format (backward compatibility)
+        {:ok, []}
+
       _ ->
         {:error, "Invalid time metadata structure"}
     end
@@ -6074,9 +6848,11 @@ defmodule EventasaurusApp.Events do
     case extract_time_slots_from_option(%PollOption{metadata: metadata}) do
       {:ok, []} ->
         "#{date_display} (All day)"
+
       {:ok, time_slots} ->
         time_displays = Enum.map(time_slots, &Map.get(&1, "display", "Unknown Time"))
         "#{date_display} - #{Enum.join(time_displays, ", ")}"
+
       {:error, _} ->
         "#{date_display} (Time information unavailable)"
     end
@@ -6103,7 +6879,9 @@ defmodule EventasaurusApp.Events do
     alias EventasaurusApp.Events.DateMetadata
 
     case DateMetadata.validate_time_slots(time_slots) do
-      %Ecto.Changeset{valid?: true} -> :ok
+      %Ecto.Changeset{valid?: true} ->
+        :ok
+
       %Ecto.Changeset{errors: errors} ->
         error_messages = Enum.map(errors, fn {_field, {message, _opts}} -> message end)
         {:error, error_messages}
@@ -6133,6 +6911,7 @@ defmodule EventasaurusApp.Events do
         else
           {:error, "Invalid time format"}
         end
+
       _ ->
         {:error, "Invalid time format"}
     end
@@ -6174,21 +6953,26 @@ defmodule EventasaurusApp.Events do
         hour = div(minutes, 60)
         minute = rem(minutes, 60)
 
-        {display_hour, period} = if hour == 0 do
-          {12, "AM"}
-        else
-          if hour < 12 do
-            {hour, "AM"}
+        {display_hour, period} =
+          if hour == 0 do
+            {12, "AM"}
           else
-            display_hour = if hour == 12, do: 12, else: hour - 12
-            {display_hour, "PM"}
+            if hour < 12 do
+              {hour, "AM"}
+            else
+              display_hour = if hour == 12, do: 12, else: hour - 12
+              {display_hour, "PM"}
+            end
           end
-        end
 
-        minute_str = if minute == 0, do: ":00", else: ":#{String.pad_leading("#{minute}", 2, "0")}"
+        minute_str =
+          if minute == 0, do: ":00", else: ":#{String.pad_leading("#{minute}", 2, "0")}"
+
         "#{display_hour}#{minute_str} #{period}"
+
       {:error, _} ->
-        time_string  # Return original if parsing fails
+        # Return original if parsing fails
+        time_string
     end
   end
 
@@ -6226,7 +7010,8 @@ defmodule EventasaurusApp.Events do
       # Two time slots overlap if one starts before the other ends
       start1_min < end2_min and start2_min < end1_min
     else
-      _ -> false  # If any time parsing fails, assume no overlap
+      # If any time parsing fails, assume no overlap
+      _ -> false
     end
   end
 
@@ -6242,36 +7027,49 @@ defmodule EventasaurusApp.Events do
   """
   def merge_overlapping_time_slots(time_slots) when is_list(time_slots) do
     # Sort by start time
-    sorted_slots = Enum.sort_by(time_slots, fn slot ->
-      case time_to_minutes(slot["start_time"]) do
-        {:ok, minutes} -> minutes
-        _ -> 9999  # Put invalid times at the end
-      end
-    end)
+    sorted_slots =
+      Enum.sort_by(time_slots, fn slot ->
+        case time_to_minutes(slot["start_time"]) do
+          {:ok, minutes} -> minutes
+          # Put invalid times at the end
+          _ -> 9999
+        end
+      end)
 
     # Merge overlapping slots
-    merged = Enum.reduce(sorted_slots, [], fn slot, acc ->
-      case acc do
-        [] ->
-          [slot]
-        [last_slot | rest] ->
-          if time_slots_overlap?(last_slot["start_time"], last_slot["end_time"],
-                                 slot["start_time"], slot["end_time"]) do
-            # Merge the slots
-            merged_slot = %{
-              "start_time" => last_slot["start_time"],
-              "end_time" => latest_end_time(last_slot["end_time"], slot["end_time"]),
-              "timezone" => last_slot["timezone"] || slot["timezone"] || "UTC"
-            }
-            merged_slot = Map.put(merged_slot, "display",
-              generate_time_range_display(merged_slot["start_time"], merged_slot["end_time"]))
+    merged =
+      Enum.reduce(sorted_slots, [], fn slot, acc ->
+        case acc do
+          [] ->
+            [slot]
 
-            [merged_slot | rest]
-          else
-            [slot | acc]
-          end
-      end
-    end)
+          [last_slot | rest] ->
+            if time_slots_overlap?(
+                 last_slot["start_time"],
+                 last_slot["end_time"],
+                 slot["start_time"],
+                 slot["end_time"]
+               ) do
+              # Merge the slots
+              merged_slot = %{
+                "start_time" => last_slot["start_time"],
+                "end_time" => latest_end_time(last_slot["end_time"], slot["end_time"]),
+                "timezone" => last_slot["timezone"] || slot["timezone"] || "UTC"
+              }
+
+              merged_slot =
+                Map.put(
+                  merged_slot,
+                  "display",
+                  generate_time_range_display(merged_slot["start_time"], merged_slot["end_time"])
+                )
+
+              [merged_slot | rest]
+            else
+              [slot | acc]
+            end
+        end
+      end)
 
     Enum.reverse(merged)
   end
@@ -6300,7 +7098,12 @@ defmodule EventasaurusApp.Events do
       ...> )
       {:ok, %PollOption{}}
   """
-  def create_date_time_poll_option(%Poll{poll_type: "date_selection"} = poll, %User{} = user, date, opts \\ []) do
+  def create_date_time_poll_option(
+        %Poll{poll_type: "date_selection"} = poll,
+        %User{} = user,
+        date,
+        opts \\ []
+      ) do
     alias EventasaurusApp.Events.DateMetadata
 
     # Extract time options
@@ -6312,21 +7115,26 @@ defmodule EventasaurusApp.Events do
     # Validate time slots if time is enabled - return early on error
     with :ok <- validate_time_slots_if_enabled(time_enabled, time_slots) do
       # Build enhanced metadata with time support
-      enhanced_opts = opts
-      |> Keyword.put(:time_enabled, time_enabled)
-      |> Keyword.put(:time_slots, time_slots)
-      |> Keyword.put(:all_day, all_day)
+      enhanced_opts =
+        opts
+        |> Keyword.put(:time_enabled, time_enabled)
+        |> Keyword.put(:time_slots, time_slots)
+        |> Keyword.put(:all_day, all_day)
 
       # Ensure time slots have proper timezone and display
-      enhanced_time_slots = if time_enabled and length(time_slots) > 0 do
-        Enum.map(time_slots, fn slot ->
-          slot
-          |> Map.put_new("timezone", timezone)
-          |> Map.put_new("display", generate_time_range_display(slot["start_time"], slot["end_time"]))
-        end)
-      else
-        []
-      end
+      enhanced_time_slots =
+        if time_enabled and length(time_slots) > 0 do
+          Enum.map(time_slots, fn slot ->
+            slot
+            |> Map.put_new("timezone", timezone)
+            |> Map.put_new(
+              "display",
+              generate_time_range_display(slot["start_time"], slot["end_time"])
+            )
+          end)
+        else
+          []
+        end
 
       final_opts = Keyword.put(enhanced_opts, :time_slots, enhanced_time_slots)
 
@@ -6334,22 +7142,25 @@ defmodule EventasaurusApp.Events do
         metadata = DateMetadata.build_date_metadata(date, final_opts)
 
         # Parse date for title generation
-        parsed_date = case date do
-          %Date{} = d -> d
-          date_string -> Date.from_iso8601!(date_string)
-        end
+        parsed_date =
+          case date do
+            %Date{} = d -> d
+            date_string -> Date.from_iso8601!(date_string)
+          end
 
         # Generate enhanced title including time information
-        title = if time_enabled and length(enhanced_time_slots) > 0 do
-          time_display = enhanced_time_slots
-          |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
-          |> Enum.join(", ")
+        title =
+          if time_enabled and length(enhanced_time_slots) > 0 do
+            time_display =
+              enhanced_time_slots
+              |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
+              |> Enum.join(", ")
 
-          base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
-          "#{base_title} - #{time_display}"
-        else
-          Keyword.get(opts, :title, format_date_for_display(parsed_date))
-        end
+            base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
+            "#{base_title} - #{time_display}"
+          else
+            Keyword.get(opts, :title, format_date_for_display(parsed_date))
+          end
 
         description = Keyword.get(opts, :description)
 
@@ -6365,8 +7176,10 @@ defmodule EventasaurusApp.Events do
         create_poll_option(attrs, poll_type: "date_selection")
       rescue
         e in ArgumentError ->
-          changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
-          |> Ecto.Changeset.add_error(:metadata, "Invalid date or time: #{e.message}")
+          changeset =
+            PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
+            |> Ecto.Changeset.add_error(:metadata, "Invalid date or time: #{e.message}")
+
           {:error, changeset}
       end
     else
@@ -6377,12 +7190,20 @@ defmodule EventasaurusApp.Events do
   # Helper function for conditional time slot validation
   defp validate_time_slots_if_enabled(false, _), do: :ok
   defp validate_time_slots_if_enabled(true, []), do: :ok
+
   defp validate_time_slots_if_enabled(true, time_slots) do
     case validate_time_slots(time_slots) do
-      :ok -> :ok
+      :ok ->
+        :ok
+
       {:error, reasons} ->
-        changeset = PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
-        |> Ecto.Changeset.add_error(:metadata, "Invalid time slots: #{Enum.join(reasons, ", ")}")
+        changeset =
+          PollOption.changeset(%PollOption{}, %{}, poll_type: "date_selection")
+          |> Ecto.Changeset.add_error(
+            :metadata,
+            "Invalid time slots: #{Enum.join(reasons, ", ")}"
+          )
+
         {:error, changeset}
     end
   end
@@ -6421,19 +7242,23 @@ defmodule EventasaurusApp.Events do
         new_metadata = DateMetadata.build_date_metadata(parsed_date, final_opts)
 
         # Update title if time information changed
-        time_enabled = Keyword.get(opts, :time_enabled, Map.get(current_metadata, "time_enabled", false))
+        time_enabled =
+          Keyword.get(opts, :time_enabled, Map.get(current_metadata, "time_enabled", false))
+
         time_slots = Keyword.get(opts, :time_slots, Map.get(current_metadata, "time_slots", []))
 
-        new_title = if time_enabled and length(time_slots) > 0 do
-          time_display = time_slots
-          |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
-          |> Enum.join(", ")
+        new_title =
+          if time_enabled and length(time_slots) > 0 do
+            time_display =
+              time_slots
+              |> Enum.map(&Map.get(&1, "display", "Unknown Time"))
+              |> Enum.join(", ")
 
-          base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
-          "#{base_title} - #{time_display}"
-        else
-          Keyword.get(opts, :title, poll_option.title)
-        end
+            base_title = Keyword.get(opts, :title, format_date_for_display(parsed_date))
+            "#{base_title} - #{time_display}"
+          else
+            Keyword.get(opts, :title, poll_option.title)
+          end
 
         attrs = %{
           "metadata" => new_metadata,
@@ -6441,17 +7266,20 @@ defmodule EventasaurusApp.Events do
         }
 
         # Add description if provided
-        attrs = if description = Keyword.get(opts, :description) do
-          Map.put(attrs, "description", description)
-        else
-          attrs
-        end
+        attrs =
+          if description = Keyword.get(opts, :description) do
+            Map.put(attrs, "description", description)
+          else
+            attrs
+          end
 
         update_poll_option(poll_option, attrs, poll_type: "date_selection")
       rescue
         e in ArgumentError ->
-          changeset = PollOption.changeset(poll_option, %{}, poll_type: "date_selection")
-          |> Ecto.Changeset.add_error(:metadata, "Invalid time information: #{e.message}")
+          changeset =
+            PollOption.changeset(poll_option, %{}, poll_type: "date_selection")
+            |> Ecto.Changeset.add_error(:metadata, "Invalid time information: #{e.message}")
+
           {:error, changeset}
       end
     else
@@ -6465,8 +7293,10 @@ defmodule EventasaurusApp.Events do
     case {time_to_minutes(end_time1), time_to_minutes(end_time2)} do
       {{:ok, minutes1}, {:ok, minutes2}} ->
         if minutes1 > minutes2, do: end_time1, else: end_time2
+
       _ ->
-        end_time1  # Fallback to first time if parsing fails
+        # Fallback to first time if parsing fails
+        end_time1
     end
   end
 
@@ -6496,25 +7326,28 @@ defmodule EventasaurusApp.Events do
   Similar to legacy get_poll_vote_tallies() but with rich statistics for all poll types.
   """
   def get_enhanced_poll_vote_tallies(%Poll{} = poll) do
-    poll_with_options = Repo.preload(poll, [poll_options: :votes])
+    poll_with_options = Repo.preload(poll, poll_options: :votes)
 
-    options_with_tallies = poll_with_options.poll_options
-    |> Enum.map(fn option ->
-      %{
-        option: option,
-        tally: get_poll_option_vote_tally(option)
-      }
-    end)
+    options_with_tallies =
+      poll_with_options.poll_options
+      |> Enum.map(fn option ->
+        %{
+          option: option,
+          tally: get_poll_option_vote_tally(option)
+        }
+      end)
 
     # Sort by score (highest first) for all poll types
-    sorted_options = case poll.voting_system do
-      "ranked" ->
-        # For ranked voting, sort by average rank (lower is better)
-        Enum.sort_by(options_with_tallies, & &1.tally.average_rank, :asc)
-      _ ->
-        # For other types, sort by score (higher is better)
-        Enum.sort_by(options_with_tallies, & &1.tally.score, :desc)
-    end
+    sorted_options =
+      case poll.voting_system do
+        "ranked" ->
+          # For ranked voting, sort by average rank (lower is better)
+          Enum.sort_by(options_with_tallies, & &1.tally.average_rank, :asc)
+
+        _ ->
+          # For other types, sort by score (higher is better)
+          Enum.sort_by(options_with_tallies, & &1.tally.score, :desc)
+      end
 
     %{
       poll_id: poll.id,
@@ -6528,32 +7361,34 @@ defmodule EventasaurusApp.Events do
   # Helper functions for different voting system tallies
 
   defp get_binary_option_tally(votes) do
-    tally = Enum.reduce(votes, %{yes: 0, maybe: 0, no: 0, total: 0}, fn vote, acc ->
-      vote_type = case vote.vote_value do
-        "yes" -> :yes
-        "maybe" -> :maybe
-        "no" -> :no
-        _ -> :unknown
-      end
+    tally =
+      Enum.reduce(votes, %{yes: 0, maybe: 0, no: 0, total: 0}, fn vote, acc ->
+        vote_type =
+          case vote.vote_value do
+            "yes" -> :yes
+            "maybe" -> :maybe
+            "no" -> :no
+            _ -> :unknown
+          end
 
-      if vote_type != :unknown do
-        acc
-        |> Map.update!(vote_type, &(&1 + 1))
-        |> Map.update!(:total, &(&1 + 1))
-      else
-        acc
-      end
-    end)
+        if vote_type != :unknown do
+          acc
+          |> Map.update!(vote_type, &(&1 + 1))
+          |> Map.update!(:total, &(&1 + 1))
+        else
+          acc
+        end
+      end)
 
     # Calculate weighted score (yes: 1.0, maybe: 0.5, no: 0.0) - same as legacy
     score = tally.yes * 1.0 + tally.maybe * 0.5
     max_possible_score = if tally.total > 0, do: tally.total * 1.0, else: 1.0
-    percentage = if tally.total > 0, do: (score / max_possible_score) * 100, else: 0.0
+    percentage = if tally.total > 0, do: score / max_possible_score * 100, else: 0.0
 
     # Calculate individual percentages
-    yes_percentage = if tally.total > 0, do: (tally.yes / tally.total) * 100, else: 0.0
-    maybe_percentage = if tally.total > 0, do: (tally.maybe / tally.total) * 100, else: 0.0
-    no_percentage = if tally.total > 0, do: (tally.no / tally.total) * 100, else: 0.0
+    yes_percentage = if tally.total > 0, do: tally.yes / tally.total * 100, else: 0.0
+    maybe_percentage = if tally.total > 0, do: tally.maybe / tally.total * 100, else: 0.0
+    no_percentage = if tally.total > 0, do: tally.no / tally.total * 100, else: 0.0
 
     Map.merge(tally, %{
       score: score,
@@ -6571,17 +7406,20 @@ defmodule EventasaurusApp.Events do
 
   defp get_approval_option_tally(votes) do
     total = length(votes)
-    selected = total  # In approval voting, all votes are "selected"
+    # In approval voting, all votes are "selected"
+    selected = total
 
     # Score is simply the number of selections
     score = selected
+
     # Percentage is how many people selected this option (calculated later relative to total poll voters)
 
     %{
       selected: selected,
       total: total,
       score: score,
-      percentage: 100.0,  # Will be recalculated relative to total poll voters
+      # Will be recalculated relative to total poll voters
+      percentage: 100.0,
       vote_distribution: [
         %{type: "selected", count: selected, percentage: 100.0}
       ]
@@ -6602,32 +7440,37 @@ defmodule EventasaurusApp.Events do
       }
     else
       # Group votes by rating
-      rating_counts = Enum.reduce(votes, %{}, fn vote, acc ->
-        rating = vote.vote_numeric |> Decimal.to_float() |> round()
-        Map.update(acc, rating, 1, &(&1 + 1))
-      end)
+      rating_counts =
+        Enum.reduce(votes, %{}, fn vote, acc ->
+          rating = vote.vote_numeric |> Decimal.to_float() |> round()
+          Map.update(acc, rating, 1, &(&1 + 1))
+        end)
 
       # Calculate average rating
-      total_rating_sum = Enum.reduce(votes, 0, fn vote, sum ->
-        rating = vote.vote_numeric |> Decimal.to_float()
-        sum + rating
-      end)
+      total_rating_sum =
+        Enum.reduce(votes, 0, fn vote, sum ->
+          rating = vote.vote_numeric |> Decimal.to_float()
+          sum + rating
+        end)
+
       average_rating = total_rating_sum / total
 
       # Calculate score (0-100 based on average rating out of 5)
-      score = (average_rating / 5.0) * 100
+      score = average_rating / 5.0 * 100
       percentage = score
 
       # Build rating distribution
-      rating_distribution = for rating <- 1..5 do
-        count = Map.get(rating_counts, rating, 0)
-        rating_percentage = if total > 0, do: (count / total) * 100, else: 0.0
-        %{rating: rating, count: count, percentage: Float.round(rating_percentage, 1)}
-      end
+      rating_distribution =
+        for rating <- 1..5 do
+          count = Map.get(rating_counts, rating, 0)
+          rating_percentage = if total > 0, do: count / total * 100, else: 0.0
+          %{rating: rating, count: count, percentage: Float.round(rating_percentage, 1)}
+        end
 
-      vote_distribution = Enum.map(rating_distribution, fn %{rating: rating, count: count, percentage: perc} ->
-        %{type: "#{rating}_star", count: count, percentage: perc}
-      end)
+      vote_distribution =
+        Enum.map(rating_distribution, fn %{rating: rating, count: count, percentage: perc} ->
+          %{type: "#{rating}_star", count: count, percentage: perc}
+        end)
 
       %{
         total: total,
@@ -6648,39 +7491,47 @@ defmodule EventasaurusApp.Events do
         total: 0,
         score: 0.0,
         percentage: 0.0,
-        average_rank: 999.0,  # High number for unranked
+        # High number for unranked
+        average_rank: 999.0,
         rank_distribution: [],
         vote_distribution: []
       }
     else
       # Group votes by rank
-      rank_counts = Enum.reduce(votes, %{}, fn vote, acc ->
-        rank = vote.vote_rank
-        Map.update(acc, rank, 1, &(&1 + 1))
-      end)
+      rank_counts =
+        Enum.reduce(votes, %{}, fn vote, acc ->
+          rank = vote.vote_rank
+          Map.update(acc, rank, 1, &(&1 + 1))
+        end)
 
       # Calculate average rank (lower is better)
-      total_rank_sum = Enum.reduce(votes, 0, fn vote, sum ->
-        sum + vote.vote_rank
-      end)
+      total_rank_sum =
+        Enum.reduce(votes, 0, fn vote, sum ->
+          sum + vote.vote_rank
+        end)
+
       average_rank = total_rank_sum / total
 
       # Calculate score (inverse of average rank - higher rank = lower score)
       # Score is 100 / average_rank, so rank 1 = 100 points, rank 2 = 50 points, etc.
-      score = if average_rank > 0, do: (100.0 / average_rank), else: 0.0
-      percentage = min(score, 100.0)  # Cap at 100%
+      score = if average_rank > 0, do: 100.0 / average_rank, else: 0.0
+      # Cap at 100%
+      percentage = min(score, 100.0)
 
       # Build rank distribution
       max_rank = Map.keys(rank_counts) |> Enum.max()
-      rank_distribution = for rank <- 1..max_rank do
-        count = Map.get(rank_counts, rank, 0)
-        rank_percentage = if total > 0, do: (count / total) * 100, else: 0.0
-        %{rank: rank, count: count, percentage: Float.round(rank_percentage, 1)}
-      end
 
-      vote_distribution = Enum.map(rank_distribution, fn %{rank: rank, count: count, percentage: perc} ->
-        %{type: "rank_#{rank}", count: count, percentage: perc}
-      end)
+      rank_distribution =
+        for rank <- 1..max_rank do
+          count = Map.get(rank_counts, rank, 0)
+          rank_percentage = if total > 0, do: count / total * 100, else: 0.0
+          %{rank: rank, count: count, percentage: Float.round(rank_percentage, 1)}
+        end
+
+      vote_distribution =
+        Enum.map(rank_distribution, fn %{rank: rank, count: count, percentage: perc} ->
+          %{type: "rank_#{rank}", count: count, percentage: perc}
+        end)
 
       %{
         total: total,
@@ -6715,36 +7566,46 @@ defmodule EventasaurusApp.Events do
     total_voters = enhanced_tallies.total_unique_voters
 
     # Calculate relative percentages for approval voting
-    options_with_stats = Enum.map(enhanced_tallies.options_with_tallies, fn %{option: option, tally: tally} ->
-      relative_tally = case poll.voting_system do
-        "approval" ->
-          # For approval voting, calculate percentage relative to total poll voters
-          selection_percentage = if total_voters > 0, do: (tally.selected / total_voters) * 100, else: 0.0
-          Map.merge(tally, %{
-            percentage: Float.round(selection_percentage, 1),
-            vote_distribution: [
-              %{type: "selected", count: tally.selected, percentage: Float.round(selection_percentage, 1)}
-            ]
-          })
-        _ ->
-          tally
-      end
+    options_with_stats =
+      Enum.map(enhanced_tallies.options_with_tallies, fn %{option: option, tally: tally} ->
+        relative_tally =
+          case poll.voting_system do
+            "approval" ->
+              # For approval voting, calculate percentage relative to total poll voters
+              selection_percentage =
+                if total_voters > 0, do: tally.selected / total_voters * 100, else: 0.0
 
-      %{
-        option_id: option.id,
-        option_title: option.title,
-        option_description: option.description,
-        tally: relative_tally
-      }
-    end)
+              Map.merge(tally, %{
+                percentage: Float.round(selection_percentage, 1),
+                vote_distribution: [
+                  %{
+                    type: "selected",
+                    count: tally.selected,
+                    percentage: Float.round(selection_percentage, 1)
+                  }
+                ]
+              })
+
+            _ ->
+              tally
+          end
+
+        %{
+          option_id: option.id,
+          option_title: option.title,
+          option_description: option.description,
+          tally: relative_tally
+        }
+      end)
 
     # Add IRV results for ranked choice polls
-    irv_results = if poll.voting_system == "ranked" do
-      alias EventasaurusApp.Events.RankedChoiceVoting
-      RankedChoiceVoting.calculate_irv_winner(poll)
-    else
-      nil
-    end
+    irv_results =
+      if poll.voting_system == "ranked" do
+        alias EventasaurusApp.Events.RankedChoiceVoting
+        RankedChoiceVoting.calculate_irv_winner(poll)
+      else
+        nil
+      end
 
     base_stats = %{
       poll_id: poll.id,
@@ -6771,52 +7632,62 @@ defmodule EventasaurusApp.Events do
     stats = get_poll_voting_stats(poll)
 
     # Use BroadcastThrottler for efficient real-time updates
-    EventasaurusWeb.Services.BroadcastThrottler.throttle_poll_stats_broadcast(poll.id, stats, poll.event_id)
+    EventasaurusWeb.Services.BroadcastThrottler.throttle_poll_stats_broadcast(
+      poll.id,
+      stats,
+      poll.event_id
+    )
 
     stats
   end
 
   # Event Activity Tracking Functions
-  
+
   @doc """
   Lists activities for an event.
   """
   def list_event_activities(%Event{} = event, opts \\ []) do
-    query = from a in EventActivity,
-      where: a.event_id == ^event.id,
-      order_by: [desc: a.occurred_at, desc: a.inserted_at],
-      preload: [:created_by]
-    
+    query =
+      from(a in EventActivity,
+        where: a.event_id == ^event.id,
+        order_by: [desc: a.occurred_at, desc: a.inserted_at],
+        preload: [:created_by]
+      )
+
     query = if limit = opts[:limit], do: limit(query, ^limit), else: query
-    
+
     Repo.all(query)
   end
-  
+
   @doc """
   Lists activities for a group.
   """
   def list_group_activities(group_id, opts \\ []) do
-    query = from a in EventActivity,
-      where: a.group_id == ^group_id,
-      order_by: [desc: a.occurred_at, desc: a.inserted_at],
-      preload: [:created_by, :event]
-    
-    query = if activity_type = opts[:activity_type] do
-      where(query, [a], a.activity_type == ^activity_type)
-    else
-      query
-    end
-    
+    query =
+      from(a in EventActivity,
+        where: a.group_id == ^group_id,
+        order_by: [desc: a.occurred_at, desc: a.inserted_at],
+        preload: [:created_by, :event]
+      )
+
+    query =
+      if activity_type = opts[:activity_type] do
+        where(query, [a], a.activity_type == ^activity_type)
+      else
+        query
+      end
+
     query = if limit = opts[:limit], do: limit(query, ^limit), else: query
-    
+
     Repo.all(query)
   end
-  
+
   @doc """
   Gets a single event activity.
   """
-  def get_event_activity!(id), do: Repo.get!(EventActivity, id) |> Repo.preload([:event, :created_by])
-  
+  def get_event_activity!(id),
+    do: Repo.get!(EventActivity, id) |> Repo.preload([:event, :created_by])
+
   @doc """
   Creates an event activity.
   """
@@ -6824,23 +7695,27 @@ defmodule EventasaurusApp.Events do
     # If event_id is provided but group_id is not, try to get group_id from event
     event_id = Map.get(attrs, :event_id) || Map.get(attrs, "event_id")
     group_id = Map.get(attrs, :group_id) || Map.get(attrs, "group_id")
-    attrs = case {event_id, group_id} do
-      {event_id, nil} when not is_nil(event_id) ->
-        case get_event(event_id) do
-          %Event{group_id: group_id} when not is_nil(group_id) ->
-            Map.put(attrs, :group_id, group_id)
-          _ ->
-            attrs
-        end
-      _ ->
-        attrs
-    end
-    
+
+    attrs =
+      case {event_id, group_id} do
+        {event_id, nil} when not is_nil(event_id) ->
+          case get_event(event_id) do
+            %Event{group_id: group_id} when not is_nil(group_id) ->
+              Map.put(attrs, :group_id, group_id)
+
+            _ ->
+              attrs
+          end
+
+        _ ->
+          attrs
+      end
+
     %EventActivity{}
     |> EventActivity.changeset(attrs)
     |> Repo.insert()
   end
-  
+
   @doc """
   Updates an event activity.
   """
@@ -6849,14 +7724,14 @@ defmodule EventasaurusApp.Events do
     |> EventActivity.changeset(attrs)
     |> Repo.update()
   end
-  
+
   @doc """
   Deletes an event activity.
   """
   def delete_event_activity(%EventActivity{} = activity) do
     Repo.delete(activity)
   end
-  
+
   @doc """
   Creates an activity from a poll winner.
   Automatically called when a poll is finalized.
@@ -6864,7 +7739,7 @@ defmodule EventasaurusApp.Events do
   def create_activity_from_poll(%Poll{} = poll, winning_option_id, user_id) do
     with %PollOption{} = option <- Repo.get(PollOption, winning_option_id) do
       metadata = build_activity_metadata_from_poll_option(poll.poll_type, option)
-      
+
       create_event_activity(%{
         event_id: poll.event_id,
         activity_type: poll_type_to_activity_type(poll.poll_type),
@@ -6875,13 +7750,13 @@ defmodule EventasaurusApp.Events do
       })
     end
   end
-  
+
   defp poll_type_to_activity_type("movie"), do: "movie_watched"
   defp poll_type_to_activity_type("game"), do: "game_played"
   defp poll_type_to_activity_type("places"), do: "place_visited"
   defp poll_type_to_activity_type("venue_selection"), do: "place_visited"
   defp poll_type_to_activity_type(_), do: "activity_completed"
-  
+
   defp build_activity_metadata_from_poll_option("movie", %PollOption{} = option) do
     # Extract movie data from external_data
     case option.external_data do
@@ -6893,18 +7768,19 @@ defmodule EventasaurusApp.Events do
           "poster_url" => data["poster_url"],
           "rating" => data["rating"]
         }
+
       _ ->
         %{"title" => option.title, "description" => option.description}
     end
   end
-  
+
   defp build_activity_metadata_from_poll_option(_, %PollOption{} = option) do
     # Generic metadata for other poll types
     metadata = %{
       "title" => option.title,
       "description" => option.description
     }
-    
+
     # Include external_data if present
     if option.external_data && map_size(option.external_data) > 0 do
       Map.merge(metadata, option.external_data)
@@ -6912,7 +7788,7 @@ defmodule EventasaurusApp.Events do
       metadata
     end
   end
-  
+
   @doc """
   Counts activities by type for a group.
   """
@@ -6925,7 +7801,7 @@ defmodule EventasaurusApp.Events do
     |> Repo.all()
     |> Enum.into(%{})
   end
-  
+
   @doc """
   Checks if an activity already exists (to avoid duplicates).
   """

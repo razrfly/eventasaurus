@@ -17,22 +17,22 @@ defmodule EventasaurusWeb.Services.GooglePlaces.TextSearch do
 
     if api_key do
       url = build_url(query, api_key, options)
-      
+
       case Client.get_json(url) do
         {:ok, %{"results" => results, "status" => "OK"}} ->
           {:ok, results}
-        
+
         {:ok, %{"results" => [], "status" => "ZERO_RESULTS"}} ->
           {:ok, []}
-        
+
         {:ok, %{"status" => status, "error_message" => message}} ->
           Logger.error("Google Places Text Search API error: #{status} - #{message}")
           {:error, "API error: #{status}"}
-        
+
         {:ok, %{"status" => status}} ->
           Logger.error("Google Places Text Search API returned status: #{status}")
           {:error, "API returned status: #{status}"}
-        
+
         {:error, reason} ->
           Logger.error("Google Places Text Search failed: #{inspect(reason)}")
           {:error, reason}
@@ -43,7 +43,7 @@ defmodule EventasaurusWeb.Services.GooglePlaces.TextSearch do
   end
 
   defp build_url(query, api_key, options) do
-    params = 
+    params =
       %{
         query: query,
         key: api_key
@@ -60,10 +60,10 @@ defmodule EventasaurusWeb.Services.GooglePlaces.TextSearch do
 
     "#{@base_url}?#{URI.encode_query(params)}"
   end
-  
+
   defp maybe_put(map, _k, nil), do: map
   defp maybe_put(map, k, v), do: Map.put(map, k, v)
-  
+
   defp format_location({lat, lng}) when is_number(lat) and is_number(lng), do: "#{lat},#{lng}"
   defp format_location(_), do: nil
 end

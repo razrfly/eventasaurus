@@ -1,14 +1,14 @@
 defmodule EventasaurusApp.Events.Restore do
   @moduledoc """
   Handles restoration of soft-deleted events and their associated records.
-  
+
   This module provides functionality to restore soft-deleted events back to active status,
   including all related records (participants, polls, tickets, orders, etc.).
   Includes eligibility validation, conflict resolution, and authorization checks.
   """
 
   import Ecto.Query
-  
+
   alias EventasaurusApp.{Repo, Events}
   alias EventasaurusApp.Events.{Event, EventParticipant, EventUser, Poll, PollOption, PollVote}
   alias EventasaurusApp.Events.{Ticket, Order}
@@ -19,7 +19,7 @@ defmodule EventasaurusApp.Events.Restore do
 
   @doc """
   Restores a soft-deleted event and all its associated records.
-  
+
   ## Parameters
     - event_id: ID of the soft-deleted event to restore
     - user_id: ID of the user performing the restoration
@@ -29,7 +29,7 @@ defmodule EventasaurusApp.Events.Restore do
     - {:error, reason} - Restoration failed
     
   ## Examples
-  
+
       iex> Restore.restore_event(123, 456)
       {:ok, %Event{}}
       
@@ -45,7 +45,6 @@ defmodule EventasaurusApp.Events.Restore do
            :ok <- validate_restoration_eligibility(event),
            :ok <- check_conflicts(event),
            {:ok, restored_event} <- perform_restoration(event, user) do
-        
         log_restoration_attempt(event, user, :success)
         restored_event
       else
@@ -62,10 +61,11 @@ defmodule EventasaurusApp.Events.Restore do
 
   @doc """
   Checks if an event is eligible for restoration.
-  
+
   Returns {:ok, event} if eligible, {:error, reason} if not.
   """
-  @spec eligible_for_restoration?(integer() | String.t()) :: {:ok, Event.t()} | {:error, atom() | String.t()}
+  @spec eligible_for_restoration?(integer() | String.t()) ::
+          {:ok, Event.t()} | {:error, atom() | String.t()}
   def eligible_for_restoration?(event_id) do
     with {:ok, event} <- get_soft_deleted_event(event_id),
          :ok <- validate_restoration_eligibility(event) do
@@ -75,14 +75,14 @@ defmodule EventasaurusApp.Events.Restore do
 
   @doc """
   Gets restoration statistics.
-  
+
   Returns information about restored events for reporting purposes.
   """
   @spec get_restoration_stats(keyword()) :: map()
   def get_restoration_stats(opts \\ []) do
     days_back = Keyword.get(opts, :days_back, 30)
     cutoff_date = DateTime.add(DateTime.utc_now(), -days_back * 24 * 60 * 60, :second)
-    
+
     # This would track restoration events in a dedicated audit table
     # For now, return basic stats structure
     %{
@@ -99,10 +99,10 @@ defmodule EventasaurusApp.Events.Restore do
     case Events.get_event(event_id, include_deleted: true) do
       %Event{deleted_at: nil} ->
         {:error, :event_not_deleted}
-      
+
       %Event{deleted_at: deleted_at} = event when not is_nil(deleted_at) ->
         {:ok, event}
-      
+
       nil ->
         {:error, :event_not_found}
     end
@@ -130,7 +130,7 @@ defmodule EventasaurusApp.Events.Restore do
       # Check if event was deleted too long ago (e.g., 90 days)
       restoration_window_expired?(event) ->
         {:error, :restoration_window_expired}
-      
+
       # Add other eligibility checks here if needed
       true ->
         :ok
@@ -151,7 +151,7 @@ defmodule EventasaurusApp.Events.Restore do
       %Event{id: id} when id != event.id -> {:error, :slug_conflict}
       _ -> :ok
     end
-    
+
     # Could add more conflict checks here:
     # - Title conflicts within same user
     # - Date conflicts for venue
@@ -164,101 +164,128 @@ defmodule EventasaurusApp.Events.Restore do
       user_id: user.id,
       event_title: event.title
     })
-    
+
     # Restore the main event
-    {:ok, restored_event} = event
-    |> Event.changeset(%{})
-    |> Ecto.Changeset.put_change(:deleted_at, nil)
-    |> Ecto.Changeset.put_change(:deletion_reason, nil)
-    |> Ecto.Changeset.put_change(:deleted_by_user_id, nil)
-    |> Repo.update()
-    
+    {:ok, restored_event} =
+      event
+      |> Event.changeset(%{})
+      |> Ecto.Changeset.put_change(:deleted_at, nil)
+      |> Ecto.Changeset.put_change(:deletion_reason, nil)
+      |> Ecto.Changeset.put_change(:deleted_by_user_id, nil)
+      |> Repo.update()
+
     # Restore associated records
     restore_associated_records(event.id)
-    
+
     Logger.info("Event restored successfully", %{
       event_id: event.id,
       user_id: user.id
     })
-    
+
     {:ok, restored_event}
   end
 
   defp restore_associated_records(event_id) do
     # Restore EventParticipants
-    {restore_count, _} = Repo.update_all(
-      from(ep in EventParticipant, 
-           where: ep.event_id == ^event_id and not is_nil(ep.deleted_at)),
-      set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
-    )
+    {restore_count, _} =
+      Repo.update_all(
+        from(ep in EventParticipant,
+          where: ep.event_id == ^event_id and not is_nil(ep.deleted_at)
+        ),
+        set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
+      )
+
     Logger.debug("Restored #{restore_count} event participants")
 
     # Restore EventUsers  
-    {restore_count, _} = Repo.update_all(
-      from(eu in EventUser,
-           where: eu.event_id == ^event_id and not is_nil(eu.deleted_at)),
-      set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
-    )
+    {restore_count, _} =
+      Repo.update_all(
+        from(eu in EventUser,
+          where: eu.event_id == ^event_id and not is_nil(eu.deleted_at)
+        ),
+        set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
+      )
+
     Logger.debug("Restored #{restore_count} event users")
 
     # Restore Polls
-    {restore_count, _} = Repo.update_all(
-      from(p in Poll,
-           where: p.event_id == ^event_id and not is_nil(p.deleted_at)),
-      set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
-    )
+    {restore_count, _} =
+      Repo.update_all(
+        from(p in Poll,
+          where: p.event_id == ^event_id and not is_nil(p.deleted_at)
+        ),
+        set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
+      )
+
     Logger.debug("Restored #{restore_count} polls")
 
     # Restore PollOptions (for polls belonging to this event)
-    {restore_count, _} = Repo.update_all(
-      from(po in PollOption,
-           join: p in Poll, on: po.poll_id == p.id,
-           where: p.event_id == ^event_id and not is_nil(po.deleted_at)),
-      set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
-    )
+    {restore_count, _} =
+      Repo.update_all(
+        from(po in PollOption,
+          join: p in Poll,
+          on: po.poll_id == p.id,
+          where: p.event_id == ^event_id and not is_nil(po.deleted_at)
+        ),
+        set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
+      )
+
     Logger.debug("Restored #{restore_count} poll options")
 
     # Restore PollVotes (for poll options belonging to polls of this event)
-    {restore_count, _} = Repo.update_all(
-      from(pv in PollVote,
-           join: po in PollOption, on: pv.poll_option_id == po.id,
-           join: p in Poll, on: po.poll_id == p.id,
-           where: p.event_id == ^event_id and not is_nil(pv.deleted_at)),
-      set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
-    )
+    {restore_count, _} =
+      Repo.update_all(
+        from(pv in PollVote,
+          join: po in PollOption,
+          on: pv.poll_option_id == po.id,
+          join: p in Poll,
+          on: po.poll_id == p.id,
+          where: p.event_id == ^event_id and not is_nil(pv.deleted_at)
+        ),
+        set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
+      )
+
     Logger.debug("Restored #{restore_count} poll votes")
 
     # Restore Tickets
-    {restore_count, _} = Repo.update_all(
-      from(t in Ticket,
-           where: t.event_id == ^event_id and not is_nil(t.deleted_at)),
-      set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
-    )
+    {restore_count, _} =
+      Repo.update_all(
+        from(t in Ticket,
+          where: t.event_id == ^event_id and not is_nil(t.deleted_at)
+        ),
+        set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
+      )
+
     Logger.debug("Restored #{restore_count} tickets")
 
     # Restore Orders
-    {restore_count, _} = Repo.update_all(
-      from(o in Order,
-           where: o.event_id == ^event_id and not is_nil(o.deleted_at)),
-      set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
-    )
+    {restore_count, _} =
+      Repo.update_all(
+        from(o in Order,
+          where: o.event_id == ^event_id and not is_nil(o.deleted_at)
+        ),
+        set: [deleted_at: nil, deletion_reason: nil, deleted_by_user_id: nil]
+      )
+
     Logger.debug("Restored #{restore_count} orders")
-    
+
     :ok
   end
 
   # Audit logging functions
 
   defp log_restoration_attempt(event_or_id, user_or_id, result) do
-    event_id = case event_or_id do
-      %Event{id: id} -> id
-      id when is_integer(id) or is_binary(id) -> id
-    end
+    event_id =
+      case event_or_id do
+        %Event{id: id} -> id
+        id when is_integer(id) or is_binary(id) -> id
+      end
 
-    user_id = case user_or_id do
-      %User{id: id} -> id
-      id when is_integer(id) or is_binary(id) -> id
-    end
+    user_id =
+      case user_or_id do
+        %User{id: id} -> id
+        id when is_integer(id) or is_binary(id) -> id
+      end
 
     log_entry = %{
       event_id: event_id,
@@ -270,7 +297,7 @@ defmodule EventasaurusApp.Events.Restore do
     case result do
       :success ->
         Logger.info("Event restoration attempt successful", log_entry)
-      
+
       {:error, _} ->
         Logger.error("Event restoration attempt failed", log_entry)
     end

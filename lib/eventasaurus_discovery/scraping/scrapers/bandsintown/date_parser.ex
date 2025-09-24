@@ -25,6 +25,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
   def parse_start_date(date_string) when is_binary(date_string) do
     parse_date_with_default_time(date_string, ~T[00:00:00])
   end
+
   def parse_start_date(_), do: nil
 
   @doc """
@@ -44,6 +45,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
   def parse_end_date(date_string) when is_binary(date_string) do
     parse_date_with_default_time(date_string, ~T[23:59:59])
   end
+
   def parse_end_date(_), do: nil
 
   # Private helper function that handles the actual parsing logic
@@ -60,7 +62,11 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
       # Other formats - try comprehensive parsing
       true ->
         # Fall back to general date parser if available
-        if function_exported?(EventasaurusDiscovery.Scraping.Helpers.DateParser, :parse_datetime, 1) do
+        if function_exported?(
+             EventasaurusDiscovery.Scraping.Helpers.DateParser,
+             :parse_datetime,
+             1
+           ) do
           EventasaurusDiscovery.Scraping.Helpers.DateParser.parse_datetime(date_string)
         else
           nil
@@ -73,16 +79,19 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
     case DateTime.from_iso8601(datetime_string) do
       {:ok, datetime, _} ->
         datetime
+
       _ ->
         # If no timezone, assume UTC and add Z
         case DateTime.from_iso8601(datetime_string <> "Z") do
           {:ok, datetime, _} ->
             datetime
+
           _ ->
             # Last resort: parse as NaiveDateTime and convert to UTC
             case NaiveDateTime.from_iso8601(datetime_string) do
               {:ok, naive_dt} ->
                 DateTime.from_naive!(naive_dt, "Etc/UTC")
+
               _ ->
                 nil
             end
@@ -94,6 +103,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DateParser do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
         DateTime.new!(date, default_time, "Etc/UTC")
+
       _ ->
         nil
     end

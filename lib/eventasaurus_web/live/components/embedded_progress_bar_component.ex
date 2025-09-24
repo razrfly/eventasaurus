@@ -1,10 +1,10 @@
 defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
   @moduledoc """
   A reusable component for displaying embedded progress bars within poll voting interfaces.
-  
+
   This component provides visual indicators for voting statistics directly within
   the voting interface, supporting all voting systems (binary, approval, ranked, star).
-  
+
   ## Attributes:
   - poll_stats: Poll statistics data structure (required)
   - option_id: ID of the poll option to display stats for (required)
@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
   - show_labels: Whether to show vote labels (default: true)
   - show_counts: Whether to show vote counts (default: true)
   - anonymous_mode: Whether in anonymous voting mode (default: false)
-  
+
   ## Usage:
       <.live_component
         module={EventasaurusWeb.EmbeddedProgressBarComponent}
@@ -29,7 +29,7 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
   """
 
   use EventasaurusWeb, :live_component
-  
+
   alias EventasaurusWeb.Helpers.PollStatsHelper
   alias EventasaurusWeb.Helpers.VoteDisplayHelper
   alias EventasaurusWeb.Helpers.VoteCountHelper, as: VC
@@ -37,40 +37,48 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
   @impl true
   def update(assigns, socket) do
     # Extract simplified statistics for this option
-    stats = PollStatsHelper.get_simplified_option_stats(
-      assigns.poll_stats,
-      assigns.option_id,
-      assigns.voting_system
-    )
-    
+    stats =
+      PollStatsHelper.get_simplified_option_stats(
+        assigns.poll_stats,
+        assigns.option_id,
+        assigns.voting_system
+      )
+
     # Pre-calculate breakdown data to avoid variables in templates
-    breakdown_data = case assigns.voting_system do
-      "binary" -> 
-        breakdown = PollStatsHelper.get_binary_breakdown(assigns.poll_stats, assigns.option_id)
-        %{
-          yes_percentage: breakdown.yes_percentage || 0.0,
-          maybe_percentage: breakdown.maybe_percentage || 0.0,
-          no_percentage: breakdown.no_percentage || 0.0
-        }
-      "star" ->
-        breakdown = PollStatsHelper.get_star_breakdown(assigns.poll_stats, assigns.option_id)
-        %{
-          one_star_percentage: breakdown.one_star_percentage || 0.0,
-          two_star_percentage: breakdown.two_star_percentage || 0.0,
-          three_star_percentage: breakdown.three_star_percentage || 0.0,
-          four_star_percentage: breakdown.four_star_percentage || 0.0,
-          five_star_percentage: breakdown.five_star_percentage || 0.0
-        }
-      "ranked" ->
-        average_rank = stats.average_rank || 0.0
-        %{
-          rank_quality_percentage: PollStatsHelper.get_rank_quality_percentage(average_rank),
-          rank_color_class: PollStatsHelper.get_rank_color_class(average_rank)
-        }
-      _ ->
-        %{}
-    end
-    
+    breakdown_data =
+      case assigns.voting_system do
+        "binary" ->
+          breakdown = PollStatsHelper.get_binary_breakdown(assigns.poll_stats, assigns.option_id)
+
+          %{
+            yes_percentage: breakdown.yes_percentage || 0.0,
+            maybe_percentage: breakdown.maybe_percentage || 0.0,
+            no_percentage: breakdown.no_percentage || 0.0
+          }
+
+        "star" ->
+          breakdown = PollStatsHelper.get_star_breakdown(assigns.poll_stats, assigns.option_id)
+
+          %{
+            one_star_percentage: breakdown.one_star_percentage || 0.0,
+            two_star_percentage: breakdown.two_star_percentage || 0.0,
+            three_star_percentage: breakdown.three_star_percentage || 0.0,
+            four_star_percentage: breakdown.four_star_percentage || 0.0,
+            five_star_percentage: breakdown.five_star_percentage || 0.0
+          }
+
+        "ranked" ->
+          average_rank = stats.average_rank || 0.0
+
+          %{
+            rank_quality_percentage: PollStatsHelper.get_rank_quality_percentage(average_rank),
+            rank_color_class: PollStatsHelper.get_rank_color_class(average_rank)
+          }
+
+        _ ->
+          %{}
+      end
+
     {:ok,
      socket
      |> assign(assigns)
@@ -240,6 +248,4 @@ defmodule EventasaurusWeb.EmbeddedProgressBarComponent do
     </div>
     """
   end
-
-
 end

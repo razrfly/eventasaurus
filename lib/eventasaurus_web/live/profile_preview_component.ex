@@ -166,7 +166,9 @@ defmodule EventasaurusWeb.ProfilePreviewComponent do
       youtube_handle: Map.get(form_data, "youtube_handle", user.youtube_handle),
       tiktok_handle: Map.get(form_data, "tiktok_handle", user.tiktok_handle),
       linkedin_handle: Map.get(form_data, "linkedin_handle", user.linkedin_handle),
-      profile_public: Map.get(form_data, "profile_public", user.profile_public) == "true" || Map.get(form_data, "profile_public", user.profile_public) == true
+      profile_public:
+        Map.get(form_data, "profile_public", user.profile_public) == "true" ||
+          Map.get(form_data, "profile_public", user.profile_public) == true
     }
 
     assign(socket, :preview_data, preview_data)

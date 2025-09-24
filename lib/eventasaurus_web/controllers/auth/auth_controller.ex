@@ -11,6 +11,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
       [local, domain] ->
         masked_local = String.slice(local, 0, 2) <> "***"
         "#{masked_local}@#{domain}"
+
       _ ->
         "***@invalid"
     end
@@ -22,25 +23,29 @@ defmodule EventasaurusWeb.Auth.AuthController do
   def login(conn, params) do
     require Logger
     Logger.debug("Login action - params: #{inspect(params)}")
-    
+
     # Store return URL if provided in query params (voluntary login)
-    conn = case params["return_to"] do
-      nil -> 
-        Logger.debug("No return_to parameter provided")
-        conn
-      return_to when is_binary(return_to) ->
-        Logger.debug("return_to parameter: #{return_to}")
-        # Validate the URL before storing
-        if valid_internal_url?(return_to) do
-          Logger.debug("Valid return URL, storing in session: #{return_to}")
-          put_session(conn, :user_return_to, return_to)
-        else
-          Logger.warning("Invalid return URL rejected: #{return_to}")
+    conn =
+      case params["return_to"] do
+        nil ->
+          Logger.debug("No return_to parameter provided")
           conn
-        end
-      _ -> conn
-    end
-    
+
+        return_to when is_binary(return_to) ->
+          Logger.debug("return_to parameter: #{return_to}")
+          # Validate the URL before storing
+          if valid_internal_url?(return_to) do
+            Logger.debug("Valid return URL, storing in session: #{return_to}")
+            put_session(conn, :user_return_to, return_to)
+          else
+            Logger.warning("Invalid return URL rejected: #{return_to}")
+            conn
+          end
+
+        _ ->
+          conn
+      end
+
     render(conn, :login)
   end
 
@@ -52,10 +57,12 @@ defmodule EventasaurusWeb.Auth.AuthController do
     Logger.debug("Attempting login for email: #{email}")
 
     # Extract remember_me preference, defaulting to true for better UX
-    remember_me = case Map.get(user_params, "remember_me") do
-      "false" -> false
-      _ -> true  # Default to true - most users prefer to stay logged in
-    end
+    remember_me =
+      case Map.get(user_params, "remember_me") do
+        "false" -> false
+        # Default to true - most users prefer to stay logged in
+        _ -> true
+      end
 
     Logger.debug("Remember me preference: #{remember_me}")
 
@@ -72,7 +79,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
             # Check for stored return URL using the standard session key
             return_to = get_session(conn, :user_return_to)
             Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
-            
+
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
@@ -81,6 +88,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           {:error, reason} ->
             Logger.error("Failed to store session: #{inspect(reason)}")
+
             conn
             |> put_flash(:error, "Error storing session data. Please contact support.")
             |> render(:login)
@@ -97,12 +105,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
             |> render(:login)
 
           user ->
-            Logger.info("Found existing user with email #{mask_email(email)}, logging in directly")
-            
+            Logger.info(
+              "Found existing user with email #{mask_email(email)}, logging in directly"
+            )
+
             # Check for stored return URL using the standard session key
             return_to = get_session(conn, :user_return_to)
             Logger.debug("Retrieved user_return_to from session: #{inspect(return_to)}")
-            
+
             conn
             |> assign(:auth_user, user)
             |> put_flash(:info, "You have been logged in successfully.")
@@ -112,12 +122,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       {:error, reason} ->
         Logger.error("Authentication failed: #{inspect(reason)}")
-        error_message = case reason do
-          %{message: message} when is_binary(message) -> message
-          %{status: 401} -> "Invalid email or password. Please try again."
-          %{status: 404} -> "User not found. Please check your email or create an account."
-          _ -> "An error occurred during login. Please try again."
-        end
+
+        error_message =
+          case reason do
+            %{message: message} when is_binary(message) -> message
+            %{status: 401} -> "Invalid email or password. Please try again."
+            %{status: 404} -> "User not found. Please check your email or create an account."
+            _ -> "An error occurred during login. Please try again."
+          end
 
         conn
         |> put_flash(:error, error_message)
@@ -127,7 +139,9 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
   # Fallback for flat parameters (backward compatibility)
   def authenticate(conn, %{"email" => email, "password" => password}) do
-    authenticate(conn, %{"user" => %{"email" => email, "password" => password, "remember_me" => "true"}})
+    authenticate(conn, %{
+      "user" => %{"email" => email, "password" => password, "remember_me" => "true"}
+    })
   end
 
   @doc """
@@ -135,26 +149,33 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def register(conn, params) do
     # Store return URL if provided in query params
-    conn = case params["return_to"] do
-      nil -> conn
-      return_to when is_binary(return_to) ->
-        if valid_internal_url?(return_to) do
-          put_session(conn, :user_return_to, return_to)
-        else
+    conn =
+      case params["return_to"] do
+        nil ->
           conn
-        end
-      _ -> conn
-    end
+
+        return_to when is_binary(return_to) ->
+          if valid_internal_url?(return_to) do
+            put_session(conn, :user_return_to, return_to)
+          else
+            conn
+          end
+
+        _ ->
+          conn
+      end
 
     # Handle event-based signup (Phase I implementation - INVITE ONLY)
     {conn, event} =
       case params["event_id"] do
         nil ->
           Logger.info("Direct signup attempt blocked - invite-only mode")
+
           conn =
             conn
             |> redirect(to: ~p"/invite-only")
             |> Plug.Conn.halt()
+
           {conn, nil}
 
         event_id when is_binary(event_id) ->
@@ -163,11 +184,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
               case EventasaurusApp.Events.get_event(int_id) do
                 nil ->
                   Logger.warning("Signup attempted for non-existent event: #{event_id}")
+
                   conn =
                     conn
                     |> put_flash(:error, "Invalid event invitation link.")
                     |> redirect(to: ~p"/invite-only")
                     |> Plug.Conn.halt()
+
                   {conn, nil}
 
                 event ->
@@ -176,12 +199,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
               end
 
             _ ->
-              Logger.warning("Signup attempted with invalid event_id format: #{inspect(event_id)}")
+              Logger.warning(
+                "Signup attempted with invalid event_id format: #{inspect(event_id)}"
+              )
+
               conn =
                 conn
                 |> put_flash(:error, "Invalid event invitation link.")
                 |> redirect(to: ~p"/invite-only")
                 |> Plug.Conn.halt()
+
               {conn, nil}
           end
 
@@ -190,12 +217,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
             conn
             |> redirect(to: ~p"/invite-only")
             |> Plug.Conn.halt()
+
           {conn, nil}
       end
-    
+
     # If we got a redirect (no event_id), return it immediately
     case conn do
-      %Plug.Conn{halted: true} -> conn
+      %Plug.Conn{halted: true} ->
+        conn
+
       _ ->
         conn
         |> assign(:event, event)
@@ -206,7 +236,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Process the registration form submission.
   """
-    def create_user(conn, %{"user" => %{"name" => name, "email" => email, "password" => password}} = params) do
+  def create_user(
+        conn,
+        %{"user" => %{"name" => name, "email" => email, "password" => password}} = params
+      ) do
     require Logger
     Logger.info("Registration attempt for email: #{mask_email(email)}")
 
@@ -214,84 +247,98 @@ defmodule EventasaurusWeb.Auth.AuthController do
     with :ok <- verify_turnstile(params) do
       # Enforce invite-only on POST as well
       referral_event_id = get_session(conn, :signup_event_id)
+
       if is_nil(referral_event_id) do
         Logger.info("Registration attempt without invitation blocked")
+
         conn
-        |> put_flash(:error, "Registrations are currently invite-only. Please sign up via an event.")
+        |> put_flash(
+          :error,
+          "Registrations are currently invite-only. Please sign up via an event."
+        )
         |> redirect(to: ~p"/invite-only")
         |> Plug.Conn.halt()
       else
         user_attrs = %{name: name, referral_event_id: referral_event_id}
+
         case Auth.sign_up_with_email_and_password(email, password, user_attrs) do
-      {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
-        Logger.info("Registration successful with tokens")
-        
-        # Check for stored return URL and event referral
-        return_to = get_session(conn, :user_return_to)
-        referral_event_id = get_session(conn, :signup_event_id)
-        
-        # Customize success message for event-based signups
-        success_message = if referral_event_id do
-          "Account created successfully! Welcome to the event."
-        else
-          "Account created successfully! Please check your email to verify your account."
+          {:ok, %{"access_token" => access_token, "refresh_token" => refresh_token}} ->
+            Logger.info("Registration successful with tokens")
+
+            # Check for stored return URL and event referral
+            return_to = get_session(conn, :user_return_to)
+            referral_event_id = get_session(conn, :signup_event_id)
+
+            # Customize success message for event-based signups
+            success_message =
+              if referral_event_id do
+                "Account created successfully! Welcome to the event."
+              else
+                "Account created successfully! Please check your email to verify your account."
+              end
+
+            conn
+            |> put_session(:access_token, access_token)
+            |> put_session(:refresh_token, refresh_token)
+            |> put_flash(:info, success_message)
+            |> delete_session(:user_return_to)
+            |> delete_session(:signup_event_id)
+            |> redirect(to: return_to || ~p"/dashboard")
+
+          {:ok, %{user: _user, access_token: access_token}} ->
+            Logger.info("Registration successful with access token")
+
+            # Check for stored return URL and event referral
+            return_to = get_session(conn, :user_return_to)
+            referral_event_id = get_session(conn, :signup_event_id)
+
+            # Customize success message for event-based signups
+            success_message =
+              if referral_event_id do
+                "Account created successfully! Welcome to the event."
+              else
+                "Account created successfully!"
+              end
+
+            conn
+            |> put_session(:access_token, access_token)
+            |> put_flash(:info, success_message)
+            |> delete_session(:user_return_to)
+            |> delete_session(:signup_event_id)
+            |> redirect(to: return_to || ~p"/dashboard")
+
+          {:ok, %{user: _user, confirmation_required: true}} ->
+            Logger.info("Registration successful, confirmation required")
+
+            # Cleanup event referral session
+            conn = delete_session(conn, :signup_event_id)
+
+            conn
+            |> put_flash(
+              :info,
+              "Account created successfully! Please check your email to verify your account."
+            )
+            |> redirect(to: ~p"/login")
+
+          {:error, %{"message" => message}} ->
+            Logger.error("Registration failed with message: #{message}")
+
+            conn
+            |> put_flash(:error, message)
+            |> render(:register)
+
+          {:error, reason} ->
+            Logger.error("Registration failed with reason: #{inspect(reason)}")
+
+            conn
+            |> put_flash(:error, "Unable to create account")
+            |> render(:register)
         end
-        
-        conn
-        |> put_session(:access_token, access_token)
-        |> put_session(:refresh_token, refresh_token)
-        |> put_flash(:info, success_message)
-        |> delete_session(:user_return_to)
-        |> delete_session(:signup_event_id)
-        |> redirect(to: return_to || ~p"/dashboard")
-
-      {:ok, %{user: _user, access_token: access_token}} ->
-        Logger.info("Registration successful with access token")
-        
-        # Check for stored return URL and event referral
-        return_to = get_session(conn, :user_return_to)
-        referral_event_id = get_session(conn, :signup_event_id)
-        
-        # Customize success message for event-based signups
-        success_message = if referral_event_id do
-          "Account created successfully! Welcome to the event."
-        else
-          "Account created successfully!"
-        end
-        
-        conn
-        |> put_session(:access_token, access_token)
-        |> put_flash(:info, success_message)
-        |> delete_session(:user_return_to)
-        |> delete_session(:signup_event_id)
-        |> redirect(to: return_to || ~p"/dashboard")
-
-      {:ok, %{user: _user, confirmation_required: true}} ->
-        Logger.info("Registration successful, confirmation required")
-        
-        # Cleanup event referral session
-        conn = delete_session(conn, :signup_event_id)
-        
-        conn
-        |> put_flash(:info, "Account created successfully! Please check your email to verify your account.")
-        |> redirect(to: ~p"/login")
-
-      {:error, %{"message" => message}} ->
-        Logger.error("Registration failed with message: #{message}")
-        conn
-        |> put_flash(:error, message)
-        |> render(:register)
-
-      {:error, reason} ->
-        Logger.error("Registration failed with reason: #{inspect(reason)}")
-        conn
-        |> put_flash(:error, "Unable to create account")
-        |> render(:register)
-      end
       end
     else
       {:error, :turnstile_failed} ->
         Logger.warning("Registration blocked by Turnstile verification")
+
         conn
         |> put_flash(:error, "Please complete the security verification")
         |> render(:register)
@@ -322,22 +369,28 @@ defmodule EventasaurusWeb.Auth.AuthController do
     case Auth.request_password_reset(email) do
       {:ok, _} ->
         conn
-        |> put_flash(:info, "If your email exists in our system, you will receive password reset instructions shortly.")
+        |> put_flash(
+          :info,
+          "If your email exists in our system, you will receive password reset instructions shortly."
+        )
         |> redirect(to: ~p"/auth/login")
 
       {:error, reason} ->
         require Logger
         Logger.error("Password reset request failed for email: #{inspect(reason)}")
-        
-        error_message = case reason do
-          %{status: 429} ->
-            "Too many password reset requests have been sent recently. Please wait a few minutes before trying again."
-          %{message: msg} when is_binary(msg) ->
-            msg
-          _ ->
-            "There was an error processing your request. Please try again."
-        end
-        
+
+        error_message =
+          case reason do
+            %{status: 429} ->
+              "Too many password reset requests have been sent recently. Please wait a few minutes before trying again."
+
+            %{message: msg} when is_binary(msg) ->
+              msg
+
+            _ ->
+              "There was an error processing your request. Please try again."
+          end
+
         conn
         |> put_flash(:error, error_message)
         |> redirect(to: ~p"/auth/forgot-password")
@@ -361,27 +414,32 @@ defmodule EventasaurusWeb.Auth.AuthController do
       %{"code" => code, "type" => "recovery"} when not is_nil(code) ->
         Logger.info("Password recovery callback via authorization code")
         handle_password_recovery_with_code(conn, code)
-        
+
       # OAuth callback with authorization code
       %{"code" => code} when not is_nil(code) ->
         # Determine which provider based on session
-        provider = get_session(conn, :oauth_provider) || "facebook"  # Default to facebook for backward compatibility
-        
+        # Default to facebook for backward compatibility
+        provider = get_session(conn, :oauth_provider) || "facebook"
+
         case provider do
           "google" ->
             handle_google_oauth_callback(conn, code, params)
+
           _ ->
             handle_facebook_oauth_callback(conn, code, params)
         end
 
-      %{"access_token" => _access_token, "refresh_token" => _refresh_token, "type" => "recovery"} = auth_data ->
+      %{"access_token" => _access_token, "refresh_token" => _refresh_token, "type" => "recovery"} =
+          auth_data ->
         Logger.info("Password recovery callback with tokens - setting recovery session")
+
         case Auth.store_session(conn, auth_data, true) do
           {:ok, conn} ->
             conn
             |> put_session(:password_recovery, true)
             |> put_flash(:info, "Please set your new password below.")
             |> redirect(to: ~p"/auth/reset-password")
+
           {:error, _} ->
             conn
             |> put_flash(:error, "Session error. Please try again.")
@@ -390,6 +448,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       %{"access_token" => access_token, "type" => "recovery"} ->
         Logger.info("Password recovery callback with access token - setting recovery session")
+
         conn
         |> put_session(:access_token, access_token)
         |> put_session(:password_recovery, true)
@@ -398,11 +457,13 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       %{"access_token" => access_token, "refresh_token" => _refresh_token} = auth_data ->
         Logger.info("Callback with tokens - storing session")
+
         case Auth.store_session(conn, auth_data, true) do
           {:ok, conn} ->
             conn
             |> handle_post_auth_actions(access_token)
             |> handle_auth_redirect()
+
           {:error, _} ->
             conn
             |> put_flash(:error, "Session error. Please try again.")
@@ -411,6 +472,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       %{"access_token" => access_token} ->
         Logger.info("Callback with access token only - storing session")
+
         conn
         |> put_session(:access_token, access_token)
         |> handle_post_auth_actions(access_token)
@@ -418,12 +480,14 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       %{"error" => error, "error_description" => description} ->
         Logger.error("Callback error: #{error} - #{description}")
+
         conn
         |> put_flash(:error, "Authentication failed: #{description}")
         |> redirect(to: ~p"/auth/login")
 
       %{"error" => error} ->
         Logger.error("Callback error: #{error}")
+
         conn
         |> put_flash(:error, "Authentication failed")
         |> redirect(to: ~p"/auth/login")
@@ -462,7 +526,11 @@ defmodule EventasaurusWeb.Auth.AuthController do
   @doc """
   Process the reset password form submission.
   """
-  def update_password(conn, %{"user" => %{"password" => password, "password_confirmation" => password_confirmation}} = params) do
+  def update_password(
+        conn,
+        %{"user" => %{"password" => password, "password_confirmation" => password_confirmation}} =
+          params
+      ) do
     if password != password_confirmation do
       conn
       |> put_flash(:error, "Passwords do not match.")
@@ -511,7 +579,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
         # No valid context
         true ->
           conn
-          |> put_flash(:error, "Invalid password reset session. Please request a new password reset.")
+          |> put_flash(
+            :error,
+            "Invalid password reset session. Please request a new password reset."
+          )
           |> redirect(to: ~p"/auth/forgot-password")
       end
     end
@@ -520,7 +591,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
   # Fallback for old format (backward compatibility)
   def update_password(conn, %{"token" => token, "password" => password}) do
     require Logger
-    Logger.warning("Deprecated password reset format used. Please include password_confirmation in requests.")
+
+    Logger.warning(
+      "Deprecated password reset format used. Please include password_confirmation in requests."
+    )
 
     # For backward compatibility, use password as confirmation if not provided
     update_password(conn, %{
@@ -537,23 +611,26 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def facebook_login(conn, params) do
     # Store action type and provider (let Supabase handle CSRF state)
-    conn = conn
-    |> put_session(:oauth_action, Map.get(params, "action", "login"))
-    |> put_session(:oauth_provider, "facebook")
+    conn =
+      conn
+      |> put_session(:oauth_action, Map.get(params, "action", "login"))
+      |> put_session(:oauth_provider, "facebook")
 
     # Store any auth context for unified modal flows
-    conn = if context = Map.get(params, "context") do
-      # Decode the JSON context
-      case Jason.decode(URI.decode(context)) do
-        {:ok, decoded_context} ->
-          put_session(conn, :oauth_context, decoded_context)
-        {:error, _} ->
-          Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
-          conn
+    conn =
+      if context = Map.get(params, "context") do
+        # Decode the JSON context
+        case Jason.decode(URI.decode(context)) do
+          {:ok, decoded_context} ->
+            put_session(conn, :oauth_context, decoded_context)
+
+          {:error, _} ->
+            Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
+            conn
+        end
+      else
+        conn
       end
-    else
-      conn
-    end
 
     # Get Facebook OAuth URL and redirect
     facebook_url = Auth.get_facebook_oauth_url()
@@ -565,23 +642,26 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def google_login(conn, params) do
     # Store action type and provider (let Supabase handle CSRF state)
-    conn = conn
-    |> put_session(:oauth_action, Map.get(params, "action", "login"))
-    |> put_session(:oauth_provider, "google")
+    conn =
+      conn
+      |> put_session(:oauth_action, Map.get(params, "action", "login"))
+      |> put_session(:oauth_provider, "google")
 
     # Store any auth context for unified modal flows
-    conn = if context = Map.get(params, "context") do
-      # Decode the JSON context
-      case Jason.decode(URI.decode(context)) do
-        {:ok, decoded_context} ->
-          put_session(conn, :oauth_context, decoded_context)
-        {:error, _} ->
-          Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
-          conn
+    conn =
+      if context = Map.get(params, "context") do
+        # Decode the JSON context
+        case Jason.decode(URI.decode(context)) do
+          {:ok, decoded_context} ->
+            put_session(conn, :oauth_context, decoded_context)
+
+          {:error, _} ->
+            Logger.warning("Failed to decode OAuth context: #{inspect(context)}")
+            conn
+        end
+      else
+        conn
       end
-    else
-      conn
-    end
 
     # Get Google OAuth URL and redirect
     google_url = Auth.get_google_oauth_url()
@@ -593,6 +673,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def facebook_callback(conn, %{"error" => error, "error_description" => description}) do
     Logger.error("Facebook OAuth error: #{error} - #{description}")
+
     conn
     |> delete_session(:oauth_action)
     |> delete_session(:oauth_provider)
@@ -605,6 +686,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   """
   def google_callback(conn, %{"error" => error, "error_description" => description}) do
     Logger.error("Google OAuth error: #{error} - #{description}")
+
     conn
     |> delete_session(:oauth_action)
     |> delete_session(:oauth_provider)
@@ -615,30 +697,35 @@ defmodule EventasaurusWeb.Auth.AuthController do
   defp handle_password_recovery_with_code(conn, code) do
     require Logger
     alias EventasaurusApp.Auth.ServerAuth
-    
+
     # Exchange authorization code for tokens on the server side
     case ServerAuth.exchange_code_for_tokens(code) do
       {:ok, %{"access_token" => _access_token} = auth_data} ->
         Logger.info("Successfully exchanged code for tokens, setting recovery session")
-        
+
         case Auth.store_session(conn, auth_data, true) do
           {:ok, conn} ->
             conn
             |> put_session(:password_recovery, true)
             |> put_flash(:info, "Please set your new password below.")
             |> redirect(to: ~p"/auth/reset-password")
-            
+
           {:error, reason} ->
             Logger.error("Failed to store recovery session: #{inspect(reason)}")
+
             conn
             |> put_flash(:error, "Session error. Please try again.")
             |> redirect(to: ~p"/auth/login")
         end
-        
+
       {:error, reason} ->
         Logger.error("Failed to exchange code for tokens: #{inspect(reason)}")
+
         conn
-        |> put_flash(:error, "Password reset link is invalid or expired. Please request a new one.")
+        |> put_flash(
+          :error,
+          "Password reset link is invalid or expired. Please request a new one."
+        )
         |> redirect(to: ~p"/auth/forgot-password")
     end
   end
@@ -647,13 +734,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
     oauth_action = get_session(conn, :oauth_action) || "login"
     oauth_context = get_session(conn, :oauth_context)
 
-    Logger.info("Facebook OAuth callback - OAuth action: #{inspect(oauth_action)}, Context: #{inspect(oauth_context)}")
+    Logger.info(
+      "Facebook OAuth callback - OAuth action: #{inspect(oauth_action)}, Context: #{inspect(oauth_context)}"
+    )
 
     # Clear the OAuth action, provider, and context from session
-    conn = conn
-    |> delete_session(:oauth_action)
-    |> delete_session(:oauth_provider)
-    |> delete_session(:oauth_context)
+    conn =
+      conn
+      |> delete_session(:oauth_action)
+      |> delete_session(:oauth_provider)
+      |> delete_session(:oauth_context)
 
     case oauth_action do
       "link" ->
@@ -669,6 +759,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           {:error, error} ->
             Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
+
             conn
             |> put_flash(:error, "Facebook authentication failed. Please try again.")
             |> redirect(to: ~p"/auth/login")
@@ -683,13 +774,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           {:error, error} ->
             Logger.error("Facebook OAuth callback failed: #{inspect(error)}")
+
             conn
             |> put_flash(:error, "Facebook authentication failed. Please try again.")
             |> redirect(to: ~p"/")
         end
-        
+
       _ ->
         Logger.warning("Unknown Facebook OAuth action: #{inspect(oauth_action)}")
+
         conn
         |> put_flash(:error, "Invalid authentication request.")
         |> redirect(to: ~p"/auth/login")
@@ -700,17 +793,20 @@ defmodule EventasaurusWeb.Auth.AuthController do
     case Auth.link_facebook_account(conn, code) do
       {:ok, _result} ->
         Logger.info("Facebook account linked successfully")
+
         conn
         |> put_flash(:info, "Facebook account connected successfully!")
         |> redirect(to: ~p"/settings/account")
 
       {:error, reason} ->
         Logger.error("Facebook account linking failed: #{inspect(reason)}")
-        error_message = case reason do
-          :no_authentication_token -> "Authentication session expired. Please log in again."
-          %{message: message} when is_binary(message) -> message
-          _ -> "Failed to connect Facebook account. Please try again."
-        end
+
+        error_message =
+          case reason do
+            :no_authentication_token -> "Authentication session expired. Please log in again."
+            %{message: message} when is_binary(message) -> message
+            _ -> "Failed to connect Facebook account. Please try again."
+          end
 
         conn
         |> put_flash(:error, error_message)
@@ -729,7 +825,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
         {:ok, user} ->
           # Check for stored return URL using the standard session key
           return_to = get_session(conn, :user_return_to)
-          
+
           case Auth.store_session(conn, auth_data, true) do
             {:ok, conn} ->
               conn
@@ -737,6 +833,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
               |> put_flash(:info, "Successfully signed in with Facebook!")
               |> delete_session(:user_return_to)
               |> redirect(to: return_to || ~p"/dashboard")
+
             {:error, _} ->
               conn
               |> put_flash(:error, "Session error. Please try again.")
@@ -745,12 +842,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
         {:error, reason} ->
           Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
+
           conn
           |> put_flash(:error, "Authentication failed - unable to create account.")
           |> redirect(to: ~p"/auth/login")
       end
     else
-      Logger.error("Facebook OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      Logger.error(
+        "Facebook OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}"
+      )
+
       conn
       |> put_flash(:error, "Facebook authentication failed - incomplete data received.")
       |> redirect(to: ~p"/auth/login")
@@ -770,6 +871,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
             {:ok, conn} ->
               conn = put_session(conn, :current_user_id, user.id)
               handle_context_post_auth(conn, user, context)
+
             {:error, _} ->
               conn
               |> put_flash(:error, "Session error. Please try again.")
@@ -778,12 +880,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
         {:error, reason} ->
           Logger.error("Failed to sync Facebook user: #{inspect(reason)}")
+
           conn
           |> put_flash(:error, "Authentication failed - unable to create account.")
           |> redirect(to: ~p"/")
       end
     else
-      Logger.error("Facebook OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      Logger.error(
+        "Facebook OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}"
+      )
+
       conn
       |> put_flash(:error, "Facebook authentication failed - incomplete data received.")
       |> redirect(to: ~p"/")
@@ -794,18 +900,22 @@ defmodule EventasaurusWeb.Auth.AuthController do
     oauth_action = get_session(conn, :oauth_action) || "login"
     oauth_context = get_session(conn, :oauth_context)
 
-    Logger.info("Google OAuth callback - OAuth action: #{inspect(oauth_action)}, Context: #{inspect(oauth_context)}")
+    Logger.info(
+      "Google OAuth callback - OAuth action: #{inspect(oauth_action)}, Context: #{inspect(oauth_context)}"
+    )
 
     # Clear the OAuth action, provider, and context from session
-    conn = conn
-    |> delete_session(:oauth_action)
-    |> delete_session(:oauth_provider)
-    |> delete_session(:oauth_context)
+    conn =
+      conn
+      |> delete_session(:oauth_action)
+      |> delete_session(:oauth_provider)
+      |> delete_session(:oauth_context)
 
     case oauth_action do
       "link" ->
         # Google account linking is not yet supported
         Logger.warning("Google account linking requested but not supported")
+
         conn
         |> put_flash(:error, "Google account linking is temporarily disabled.")
         |> redirect(to: ~p"/settings/account")
@@ -819,6 +929,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           {:error, error} ->
             Logger.error("Google OAuth callback failed: #{inspect(error)}")
+
             conn
             |> put_flash(:error, "Google authentication failed. Please try again.")
             |> redirect(to: ~p"/auth/login")
@@ -833,14 +944,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
           {:error, error} ->
             Logger.error("Google OAuth callback failed: #{inspect(error)}")
+
             conn
             |> put_flash(:error, "Google authentication failed. Please try again.")
             |> redirect(to: ~p"/")
         end
-        
+
       # Reject any unknown oauth_action values for security
       _ ->
         Logger.warning("Unknown Google OAuth action: #{inspect(oauth_action)}")
+
         conn
         |> put_flash(:error, "Invalid authentication request.")
         |> redirect(to: ~p"/auth/login")
@@ -881,7 +994,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
         {:ok, user} ->
           # Check for stored return URL using the standard session key
           return_to = get_session(conn, :user_return_to)
-          
+
           case Auth.store_session(conn, auth_data, true) do
             {:ok, conn} ->
               conn
@@ -889,6 +1002,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
               |> put_flash(:info, "Successfully signed in with Google!")
               |> delete_session(:user_return_to)
               |> redirect(to: return_to || ~p"/dashboard")
+
             {:error, _} ->
               conn
               |> put_flash(:error, "Session error. Please try again.")
@@ -897,12 +1011,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
         {:error, reason} ->
           Logger.error("Failed to sync Google user: #{inspect(reason)}")
+
           conn
           |> put_flash(:error, "Authentication failed - unable to create account.")
           |> redirect(to: ~p"/auth/login")
       end
     else
-      Logger.error("Google OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      Logger.error(
+        "Google OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}"
+      )
+
       conn
       |> put_flash(:error, "Google authentication failed - incomplete data received.")
       |> redirect(to: ~p"/auth/login")
@@ -922,6 +1040,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
             {:ok, conn} ->
               conn = put_session(conn, :current_user_id, user.id)
               handle_context_post_auth(conn, user, context)
+
             {:error, _} ->
               conn
               |> put_flash(:error, "Session error. Please try again.")
@@ -930,12 +1049,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
         {:error, reason} ->
           Logger.error("Failed to sync Google user: #{inspect(reason)}")
+
           conn
           |> put_flash(:error, "Authentication failed - unable to create account.")
           |> redirect(to: ~p"/")
       end
     else
-      Logger.error("Google OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}")
+      Logger.error(
+        "Google OAuth missing required data: user=#{inspect(user_data != nil)}, access_token=#{inspect(access_token != nil)}"
+      )
+
       conn
       |> put_flash(:error, "Google authentication failed - incomplete data received.")
       |> redirect(to: ~p"/")
@@ -947,15 +1070,16 @@ defmodule EventasaurusWeb.Auth.AuthController do
     case context do
       %{"mode" => "interest", "event_id" => event_id} ->
         handle_interest_context(conn, user, event_id)
-      
+
       %{"mode" => "registration", "event_id" => event_id, "intended_status" => intended_status} ->
         handle_registration_context(conn, user, event_id, intended_status)
-      
+
       %{"mode" => "voting", "poll_id" => poll_id, "temp_votes" => temp_votes} ->
         handle_voting_context(conn, user, poll_id, temp_votes)
-      
+
       _ ->
         Logger.warning("Unknown context in handle_context_post_auth: #{inspect(context)}")
+
         conn
         |> put_flash(:info, "Successfully signed in!")
         |> redirect(to: ~p"/dashboard")
@@ -972,7 +1096,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   defp handle_interest_context(conn, user, event_id) do
     # Parse event_id if it's a string
     parsed_event_id = parse_event_id(event_id)
-    
+
     if is_nil(parsed_event_id) do
       conn
       |> put_flash(:info, "Successfully signed in! Please try registering your interest again.")
@@ -983,16 +1107,25 @@ defmodule EventasaurusWeb.Auth.AuthController do
           conn
           |> put_flash(:info, "Successfully signed in!")
           |> redirect(to: ~p"/dashboard")
+
         event ->
           case EventasaurusApp.Events.update_participant_status(event, user, :interested) do
             {:ok, _participant} ->
               conn
-              |> put_flash(:info, "Successfully signed in and registered interest in #{event.title}!")
+              |> put_flash(
+                :info,
+                "Successfully signed in and registered interest in #{event.title}!"
+              )
               |> redirect(to: ~p"/#{event.slug}")
+
             {:error, reason} ->
               Logger.error("Failed to register interest after social auth: #{inspect(reason)}")
+
               conn
-              |> put_flash(:info, "Successfully signed in! Please try registering your interest again.")
+              |> put_flash(
+                :info,
+                "Successfully signed in! Please try registering your interest again."
+              )
               |> redirect(to: ~p"/dashboard")
           end
       end
@@ -1000,14 +1133,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
   end
 
   defp handle_registration_context(conn, user, event_id, intended_status) do
-    status = case intended_status do
-      "interested" -> :interested
-      _ -> :accepted
-    end
-    
+    status =
+      case intended_status do
+        "interested" -> :interested
+        _ -> :accepted
+      end
+
     # Parse event_id if it's a string
     parsed_event_id = parse_event_id(event_id)
-    
+
     if is_nil(parsed_event_id) do
       conn
       |> put_flash(:info, "Successfully signed in! Please try registering again.")
@@ -1018,19 +1152,24 @@ defmodule EventasaurusWeb.Auth.AuthController do
           conn
           |> put_flash(:info, "Successfully signed in!")
           |> redirect(to: ~p"/dashboard")
+
         event ->
           case EventasaurusApp.Events.update_participant_status(event, user, status) do
             {:ok, _participant} ->
-              message = if status == :interested do
-                "Successfully signed in and registered interest in #{event.title}!"
-              else
-                "Successfully signed in and registered for #{event.title}!"
-              end
+              message =
+                if status == :interested do
+                  "Successfully signed in and registered interest in #{event.title}!"
+                else
+                  "Successfully signed in and registered for #{event.title}!"
+                end
+
               conn
               |> put_flash(:info, message)
               |> redirect(to: ~p"/#{event.slug}")
+
             {:error, reason} ->
               Logger.error("Failed to register after social auth: #{inspect(reason)}")
+
               conn
               |> put_flash(:info, "Successfully signed in! Please try registering again.")
               |> redirect(to: ~p"/dashboard")
@@ -1042,8 +1181,10 @@ defmodule EventasaurusWeb.Auth.AuthController do
   defp handle_voting_context(conn, user, poll_id, temp_votes) when is_map(temp_votes) do
     # TODO: Implement vote saving logic here
     # This would need to integrate with the poll voting system
-    Logger.info("Social auth voting context - Poll: #{poll_id}, User: #{user.id}, Votes: #{inspect(temp_votes)}")
-    
+    Logger.info(
+      "Social auth voting context - Poll: #{poll_id}, User: #{user.id}, Votes: #{inspect(temp_votes)}"
+    )
+
     conn
     |> put_flash(:info, "Successfully signed in! Please submit your votes again.")
     |> redirect(to: ~p"/dashboard")
@@ -1066,13 +1207,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
     else
       # For absolute URLs, parse and check the host
       case URI.parse(url) do
-        %URI{host: nil} -> 
+        %URI{host: nil} ->
           # No host means relative URL, but should start with "/"
           String.starts_with?(url, "/")
+
         %URI{host: host, scheme: scheme} when scheme in ["http", "https"] ->
           # Check if it's our domain
           app_host = EventasaurusWeb.Endpoint.host()
           host == app_host || (host == "localhost" && app_host == "localhost")
+
         _ ->
           false
       end
@@ -1080,6 +1223,7 @@ defmodule EventasaurusWeb.Auth.AuthController do
   rescue
     _ -> false
   end
+
   defp valid_internal_url?(_), do: false
 
   # Handle post-authentication actions like processing pending interest registrations.
@@ -1120,9 +1264,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
               # Try to register interest
               case register_user_interest(local_user.id, event_id) do
                 {:ok, event} ->
-                  Logger.info("Successfully registered interest for user #{local_user.id} in event #{event_id}")
+                  Logger.info(
+                    "Successfully registered interest for user #{local_user.id} in event #{event_id}"
+                  )
+
                   conn
-                  |> put_flash(:info, "Welcome! Your interest in '#{event.title}' has been registered.")
+                  |> put_flash(
+                    :info,
+                    "Welcome! Your interest in '#{event.title}' has been registered."
+                  )
                   |> put_session(:just_registered_interest, true)
 
                 {:error, reason} ->
@@ -1174,39 +1324,46 @@ defmodule EventasaurusWeb.Auth.AuthController do
 
       error ->
         Logger.warning("Error registering user interest: #{inspect(error)}")
-                 {:error, :registration_failed}
-     end
-   end
+        {:error, :registration_failed}
+    end
+  end
 
-   # Handle redirect after successful authentication, considering if interest was just registered.
-   defp handle_auth_redirect(conn) do
-     cond do
-       # User just registered interest - redirect back to event
-       get_session(conn, :just_registered_interest) ->
-         # Flash message should already be set by process_pending_interest
-         conn
-         |> delete_session(:just_registered_interest)
-         |> redirect(to: ~p"/dashboard")  # For now, redirect to dashboard
-         # TODO: Could redirect to event page if we store event slug in session
+  # Handle redirect after successful authentication, considering if interest was just registered.
+  defp handle_auth_redirect(conn) do
+    cond do
+      # User just registered interest - redirect back to event
+      get_session(conn, :just_registered_interest) ->
+        # Flash message should already be set by process_pending_interest
+        conn
+        |> delete_session(:just_registered_interest)
+        # For now, redirect to dashboard
+        |> redirect(to: ~p"/dashboard")
 
-       # Normal authentication - redirect to dashboard
-       true ->
-         conn
-         |> put_flash(:info, "Successfully signed in!")
-         |> redirect(to: ~p"/dashboard")
-     end
-   end
+      # TODO: Could redirect to event page if we store event slug in session
+
+      # Normal authentication - redirect to dashboard
+      true ->
+        conn
+        |> put_flash(:info, "Successfully signed in!")
+        |> redirect(to: ~p"/dashboard")
+    end
+  end
 
   # Verify Turnstile token for bot protection
   defp verify_turnstile(params) do
     if Turnstile.enabled?() do
       token = params["cf-turnstile-response"] || params["user"]["cf-turnstile-response"] || ""
-      
+
       case Turnstile.verify_token(token) do
-        {:ok, true} -> :ok
-        {:ok, false} -> {:error, :turnstile_failed}
+        {:ok, true} ->
+          :ok
+
+        {:ok, false} ->
+          {:error, :turnstile_failed}
+
         {:error, reason} ->
           Logger.error("Turnstile verification error: #{inspect(reason)}")
+
           # Allow registration to proceed on network/config errors to avoid blocking legitimate users
           :ok
       end
@@ -1214,13 +1371,15 @@ defmodule EventasaurusWeb.Auth.AuthController do
       :ok
     end
   end
-  
+
   defp parse_event_id(event_id) when is_integer(event_id), do: event_id
+
   defp parse_event_id(event_id) when is_binary(event_id) do
     case Integer.parse(event_id) do
       {int, ""} -> int
       _ -> nil
     end
   end
+
   defp parse_event_id(_), do: nil
- end
+end

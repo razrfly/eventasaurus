@@ -73,6 +73,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
         end
     end
   end
+
   def adapt_data(_), do: {:error, "Invalid data format"}
 
   @doc """
@@ -105,6 +106,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
         end
     end
   end
+
   def adapt_data(_, _), do: {:error, "Invalid data format or adapter type"}
 
   @doc """
@@ -118,6 +120,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
     @registered_adapters
     |> Enum.find(& &1.handles?(raw_data))
   end
+
   def find_best_adapter(_), do: nil
 
   @doc """
@@ -130,6 +133,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
     @registered_adapters
     |> Enum.filter(& &1.handles?(raw_data))
   end
+
   def find_compatible_adapters(_), do: []
 
   @doc """
@@ -150,7 +154,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
     |> Enum.find(fn adapter ->
       try do
         adapter.content_type() == content_type ||
-        content_type in adapter.supported_sections()
+          content_type in adapter.supported_sections()
       rescue
         # Some adapters might not implement all callbacks
         _ -> false
@@ -167,7 +171,9 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
   @spec get_display_config(content_type()) :: map() | nil
   def get_display_config(content_type) do
     case get_adapter_by_type(content_type) do
-      nil -> nil
+      nil ->
+        nil
+
       adapter_module ->
         try do
           adapter_module.display_config()
@@ -214,8 +220,11 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
     behaviours = adapter_module.module_info(:attributes)[:behaviour] || []
 
     if EventasaurusWeb.Live.Components.RichDataAdapterBehaviour in behaviours do
-      Process.put({__MODULE__, :dynamic_adapters},
-        [adapter_module | get_dynamic_adapters()])
+      Process.put(
+        {__MODULE__, :dynamic_adapters},
+        [adapter_module | get_dynamic_adapters()]
+      )
+
       :ok
     else
       {:error, "Module does not implement RichDataAdapterBehaviour"}
@@ -246,29 +255,44 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
   @spec validate_standardized_data(standardized_data()) :: :ok | {:error, [String.t()]}
   def validate_standardized_data(data) when is_map(data) do
     required_fields = [:id, :type, :title]
-    _optional_fields = [:description, :primary_image, :secondary_image, :rating,
-                      :year, :status, :categories, :tags, :external_urls, :sections]
+
+    _optional_fields = [
+      :description,
+      :primary_image,
+      :secondary_image,
+      :rating,
+      :year,
+      :status,
+      :categories,
+      :tags,
+      :external_urls,
+      :sections
+    ]
 
     errors = []
 
     # Check required fields
-    errors = Enum.reduce(required_fields, errors, fn field, acc ->
-      if Map.has_key?(data, field) and data[field] != nil do
-        acc
-      else
-        ["Missing required field: #{field}" | acc]
-      end
-    end)
+    errors =
+      Enum.reduce(required_fields, errors, fn field, acc ->
+        if Map.has_key?(data, field) and data[field] != nil do
+          acc
+        else
+          ["Missing required field: #{field}" | acc]
+        end
+      end)
 
     # Validate data types
     errors =
       cond do
         not is_binary(data[:id]) ->
           ["id must be a string" | errors]
+
         not is_atom(data[:type]) ->
           ["type must be an atom" | errors]
+
         not is_binary(data[:title]) ->
           ["title must be a string" | errors]
+
         true ->
           errors
       end
@@ -278,6 +302,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
       errors -> {:error, Enum.reverse(errors)}
     end
   end
+
   def validate_standardized_data(_), do: {:error, ["Data must be a map"]}
 
   # Private helper functions
@@ -291,6 +316,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
           required_fields: [:id, :title, :type],
           optional_fields: [:description, :rating, :year, :categories, :primary_image]
         }
+
       type when type in [:venue, :restaurant, :activity] ->
         %{
           default_sections: [:hero, :details, :reviews, :photos],
@@ -298,6 +324,7 @@ defmodule EventasaurusWeb.Live.Components.RichDataAdapterManager do
           required_fields: [:id, :title, :type],
           optional_fields: [:description, :rating, :categories, :primary_image]
         }
+
       _ ->
         %{
           default_sections: [:hero, :details],

@@ -71,14 +71,16 @@ defmodule EventasaurusWeb.UserSearchController do
     errors = []
 
     # Validate query
-    errors = if String.length(query) < 2 do
-      ["Search query must be at least 2 characters long" | errors]
-    else
-      errors
-    end
+    errors =
+      if String.length(query) < 2 do
+        ["Search query must be at least 2 characters long" | errors]
+      else
+        errors
+      end
 
     # Validate per_page limit
-    per_page = min(per_page, 50)  # Cap at 50 for performance
+    # Cap at 50 for performance
+    per_page = min(per_page, 50)
 
     if Enum.empty?(errors) do
       {:ok, %{query: query, page: page, per_page: per_page, event_id: event_id}}
@@ -93,6 +95,7 @@ defmodule EventasaurusWeb.UserSearchController do
       case validate_event_permissions(current_user, event_id) do
         :ok ->
           perform_search(conn, current_user, query, page, per_page, event_id)
+
         {:error, reason} ->
           conn
           |> put_status(:forbidden)
@@ -123,7 +126,8 @@ defmodule EventasaurusWeb.UserSearchController do
       users = Accounts.search_users_for_organizers(query, search_opts)
 
       # Format user results for response with context-aware privacy controls
-      formatted_users = Enum.map(users, &format_user_search_result_with_context(&1, current_user, event_id))
+      formatted_users =
+        Enum.map(users, &format_user_search_result_with_context(&1, current_user, event_id))
 
       # Calculate pagination info
       has_more = length(users) == per_page
@@ -152,7 +156,6 @@ defmodule EventasaurusWeb.UserSearchController do
           }
         }
       })
-
     rescue
       e in [Ecto.QueryError, DBConnection.ConnectionError] ->
         Logger.error("User search failed",
@@ -181,11 +184,11 @@ defmodule EventasaurusWeb.UserSearchController do
         else
           {:error, "You don't have permission to manage this event"}
         end
+
       nil ->
         {:error, "Event not found"}
     end
   end
-
 
   # Enhanced format function that conditionally exposes user information
   # based on privacy levels and requester privileges
@@ -216,7 +219,8 @@ defmodule EventasaurusWeb.UserSearchController do
         name: "Private User",
         username: nil,
         profile_public: false,
-        avatar_url: EventasaurusApp.Avatars.generate_user_avatar(%{email: "private@example.com"}, size: 40)
+        avatar_url:
+          EventasaurusApp.Avatars.generate_user_avatar(%{email: "private@example.com"}, size: 40)
       }
     end
   end
@@ -227,6 +231,7 @@ defmodule EventasaurusWeb.UserSearchController do
       nil ->
         # No event context - only basic info
         false
+
       _ ->
         # Check if user can manage the event (can add organizers)
         case validate_event_permissions(requesting_user, event_id) do
@@ -236,13 +241,16 @@ defmodule EventasaurusWeb.UserSearchController do
     end
   end
 
-  defp safe_parse_positive_integer(value, _default) when is_integer(value) and value > 0, do: value
+  defp safe_parse_positive_integer(value, _default) when is_integer(value) and value > 0,
+    do: value
+
   defp safe_parse_positive_integer(value, default) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int > 0 -> int
       _ -> default
     end
   end
+
   defp safe_parse_positive_integer(nil, default), do: default
   defp safe_parse_positive_integer(_, default), do: default
 

@@ -8,11 +8,11 @@ defmodule EventasaurusDiscovery.Locations.Country do
   alias EventasaurusDiscovery.Locations.Country.Slug
 
   schema "countries" do
-    field :name, :string
-    field :code, :string
-    field :slug, Slug.Type
+    field(:name, :string)
+    field(:code, :string)
+    field(:slug, Slug.Type)
 
-    has_many :cities, EventasaurusDiscovery.Locations.City
+    has_many(:cities, EventasaurusDiscovery.Locations.City)
 
     timestamps()
   end

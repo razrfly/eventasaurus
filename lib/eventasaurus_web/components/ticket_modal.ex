@@ -10,15 +10,19 @@ defmodule EventasaurusWeb.Components.TicketModal do
   attr :editing_ticket_id, :any, default: nil, doc: "ID if editing existing ticket"
   attr :on_close, :any, required: true, doc: "event to close modal"
   attr :default_currency, :string, default: "usd", doc: "default currency for tickets"
-  attr :show_additional_options, :boolean, default: false, doc: "whether to show additional options section"
+
+  attr :show_additional_options, :boolean,
+    default: false,
+    doc: "whether to show additional options section"
 
   def ticket_modal(assigns) do
     # Ensure tippable is properly handled as boolean
-    tippable_value = case Map.get(assigns.ticket_form_data, "tippable") do
-      true -> true
-      "true" -> true
-      _ -> false
-    end
+    tippable_value =
+      case Map.get(assigns.ticket_form_data, "tippable") do
+        true -> true
+        "true" -> true
+        _ -> false
+      end
 
     # Get pricing model, default to "fixed" for backward compatibility
     pricing_model = Map.get(assigns.ticket_form_data, "pricing_model", "fixed")
@@ -316,6 +320,4 @@ defmodule EventasaurusWeb.Components.TicketModal do
     </.modal>
     """
   end
-
-
 end

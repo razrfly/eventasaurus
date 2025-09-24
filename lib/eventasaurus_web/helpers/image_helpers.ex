@@ -19,7 +19,8 @@ defmodule EventasaurusWeb.Helpers.ImageHelpers do
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
     |> case do
-      "" -> filename  # fallback to original filename if processing fails
+      # fallback to original filename if processing fails
+      "" -> filename
       title -> title
     end
   end

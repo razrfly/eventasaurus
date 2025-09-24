@@ -33,27 +33,26 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
       broadcast_progress(:error, %{message: "City not found"})
       {:error, "City not found"}
     else
+      Logger.info("""
+      📊 Admin Dashboard: Starting #{source} sync
+      City: #{city.name}, #{city.country.name}
+      Limit: #{limit} events
+      """)
 
-    Logger.info("""
-    📊 Admin Dashboard: Starting #{source} sync
-    City: #{city.name}, #{city.country.name}
-    Limit: #{limit} events
-    """)
+      # Handle different source types
+      case source do
+        "all" ->
+          sync_all_sources(city, limit, args)
 
-    # Handle different source types
-    case source do
-      "all" ->
-        sync_all_sources(city, limit, args)
+        source when is_map_key(@sources, source) ->
+          # Build job arguments based on source (single source path only)
+          options = build_source_options(source, args)
+          sync_single_source(source, city, limit, options)
 
-      source when is_map_key(@sources, source) ->
-        # Build job arguments based on source (single source path only)
-        options = build_source_options(source, args)
-        sync_single_source(source, city, limit, options)
-
-      _ ->
-        broadcast_progress(:error, %{message: "Unknown source: #{source}"})
-        {:error, "Unknown source: #{source}"}
-    end
+        _ ->
+          broadcast_progress(:error, %{message: "Unknown source: #{source}"})
+          {:error, "Unknown source: #{source}"}
+      end
     end
   end
 
@@ -69,7 +68,6 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
     # Queue the actual sync job
     case job_module.new(job_args) |> Oban.insert() do
       {:ok, job} ->
-
         broadcast_progress(:completed, %{
           message: "Sync job queued for #{source_name}",
           job_id: job.id,
@@ -106,28 +104,31 @@ defmodule EventasaurusDiscovery.Admin.DiscoverySyncJob do
       end
 
     # Queue jobs for each source
-    results = Enum.map(@sources, fn {source_name, job_module} ->
-      per_source_options = build_source_options(source_name, args)
-      job_args = %{
-        "city_id" => city.id,
-        "limit" => source_limit,
-        "options" => per_source_options
-      }
+    results =
+      Enum.map(@sources, fn {source_name, job_module} ->
+        per_source_options = build_source_options(source_name, args)
 
-      case job_module.new(job_args) |> Oban.insert() do
-        {:ok, job} ->
-          {:ok, %{source: source_name, job_id: job.id}}
+        job_args = %{
+          "city_id" => city.id,
+          "limit" => source_limit,
+          "options" => per_source_options
+        }
 
-        {:error, reason} ->
-          {:error, %{source: source_name, reason: reason}}
-      end
-    end)
+        case job_module.new(job_args) |> Oban.insert() do
+          {:ok, job} ->
+            {:ok, %{source: source_name, job_id: job.id}}
+
+          {:error, reason} ->
+            {:error, %{source: source_name, reason: reason}}
+        end
+      end)
 
     successful = Enum.filter(results, fn {status, _} -> status == :ok end)
     failed = Enum.filter(results, fn {status, _} -> status == :error end)
 
-    message = "Queued #{length(successful)} sync jobs" <>
-      if(length(failed) > 0, do: " (#{length(failed)} failed)", else: "")
+    message =
+      "Queued #{length(successful)} sync jobs" <>
+        if(length(failed) > 0, do: " (#{length(failed)} failed)", else: "")
 
     broadcast_progress(:completed, %{
       message: message,

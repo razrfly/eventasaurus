@@ -7,14 +7,14 @@ defmodule EventasaurusApp.Events.EventActivity do
   alias EventasaurusApp.Accounts.User
 
   schema "event_activities" do
-    field :activity_type, :string
-    field :metadata, :map, default: %{}
-    field :occurred_at, :utc_datetime
-    field :source, :string
+    field(:activity_type, :string)
+    field(:metadata, :map, default: %{})
+    field(:occurred_at, :utc_datetime)
+    field(:source, :string)
 
-    belongs_to :event, Event
-    belongs_to :group, Group
-    belongs_to :created_by, User, foreign_key: :created_by_id
+    belongs_to(:event, Event)
+    belongs_to(:group, Group)
+    belongs_to(:created_by, User, foreign_key: :created_by_id)
 
     timestamps()
   end

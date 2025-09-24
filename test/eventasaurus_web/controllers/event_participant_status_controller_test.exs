@@ -16,7 +16,8 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
     end
 
     test "updates user status to interested successfully", %{conn: conn, event: event} do
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "interested"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "interested"})
 
       assert json = json_response(conn, 200)
       assert json["success"] == true
@@ -27,7 +28,8 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
     end
 
     test "updates user status to accepted successfully", %{conn: conn, event: event} do
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
 
       assert json = json_response(conn, 200)
       assert json["success"] == true
@@ -36,7 +38,8 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
     end
 
     test "updates user status to declined successfully", %{conn: conn, event: event} do
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "declined"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "declined"})
 
       assert json = json_response(conn, 200)
       assert json["success"] == true
@@ -52,7 +55,8 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
         status: :interested
       })
 
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
 
       assert json = json_response(conn, 200)
       assert json["success"] == true
@@ -72,7 +76,8 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
         status: :accepted
       })
 
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
 
       assert json = json_response(conn, 200)
       assert json["success"] == true
@@ -80,15 +85,23 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
     end
 
     test "returns 400 for invalid status", %{conn: conn, event: event} do
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "invalid_status"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{
+          "status" => "invalid_status"
+        })
 
       assert json = json_response(conn, 400)
       assert json["error"] =~ "Invalid status"
-      assert json["error"] =~ "pending, accepted, declined, cancelled, confirmed_with_order, interested"
+
+      assert json["error"] =~
+               "pending, accepted, declined, cancelled, confirmed_with_order, interested"
     end
 
     test "returns 404 for non-existent event", %{conn: conn} do
-      conn = put(conn, ~p"/api/events/non-existent-slug/participant-status", %{"status" => "interested"})
+      conn =
+        put(conn, ~p"/api/events/non-existent-slug/participant-status", %{
+          "status" => "interested"
+        })
 
       assert json = json_response(conn, 404)
       assert json["error"] == "Event not found"
@@ -98,20 +111,29 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
       event = event_fixture()
       conn = build_conn()
 
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "interested"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "interested"})
 
       assert json = json_response(conn, 401)
       assert json["error"] == "unauthorized"
     end
 
     test "works for all valid statuses", %{conn: _conn, event: event} do
-      valid_statuses = ["pending", "accepted", "declined", "cancelled", "confirmed_with_order", "interested"]
+      valid_statuses = [
+        "pending",
+        "accepted",
+        "declined",
+        "cancelled",
+        "confirmed_with_order",
+        "interested"
+      ]
 
       for status <- valid_statuses do
         # Create a new user for each test to avoid conflicts
         {new_conn, _new_user} = register_and_log_in_user(build_conn())
 
-        conn_result = put(new_conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => status})
+        conn_result =
+          put(new_conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => status})
 
         assert json = json_response(conn_result, 200)
         assert json["success"] == true
@@ -166,7 +188,11 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
       assert Events.get_event_participant_by_event_and_user(event, user) == nil
     end
 
-    test "doesn't remove participant with different status when filtered", %{conn: conn, event: event, user: user} do
+    test "doesn't remove participant with different status when filtered", %{
+      conn: conn,
+      event: event,
+      user: user
+    } do
       # Create accepted participant
       event_participant_fixture(%{
         event: event,
@@ -222,11 +248,12 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
 
     test "returns interested status with metadata", %{conn: conn, event: event, user: user} do
       # Create interested participant with metadata
-      participant = event_participant_fixture(%{
-        event: event,
-        user: user,
-        status: :interested
-      })
+      participant =
+        event_participant_fixture(%{
+          event: event,
+          user: user,
+          status: :interested
+        })
 
       # Update metadata to include timestamp
       Events.update_event_participant(participant, %{
@@ -287,7 +314,12 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
 
   describe "GET /api/events/:slug/participants/:status" do
     setup do
-      {conn, organizer} = register_and_log_in_user(build_conn(), %{name: "Event Organizer", email: "organizer@example.com"})
+      {conn, organizer} =
+        register_and_log_in_user(build_conn(), %{
+          name: "Event Organizer",
+          email: "organizer@example.com"
+        })
+
       event = event_fixture(%{"organizers" => [organizer]})
       %{conn: conn, organizer: organizer, event: event}
     end
@@ -394,7 +426,12 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
 
   describe "GET /api/events/:slug/participant-analytics" do
     setup do
-      {conn, organizer} = register_and_log_in_user(build_conn(), %{name: "Event Organizer", email: "organizer@example.com"})
+      {conn, organizer} =
+        register_and_log_in_user(build_conn(), %{
+          name: "Event Organizer",
+          email: "organizer@example.com"
+        })
+
       event = event_fixture(%{"organizers" => [organizer]})
       %{conn: conn, organizer: organizer, event: event}
     end
@@ -482,9 +519,22 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
   describe "Integration: Complete participant status workflows" do
     setup do
       {conn, user} = register_and_log_in_user(build_conn())
-      {organizer_conn, organizer} = register_and_log_in_user(build_conn(), %{name: "Event Organizer", email: "organizer@example.com"})
+
+      {organizer_conn, organizer} =
+        register_and_log_in_user(build_conn(), %{
+          name: "Event Organizer",
+          email: "organizer@example.com"
+        })
+
       event = event_fixture(%{"organizers" => [organizer]})
-      %{conn: conn, user: user, organizer: organizer, organizer_conn: organizer_conn, event: event}
+
+      %{
+        conn: conn,
+        user: user,
+        organizer: organizer,
+        organizer_conn: organizer_conn,
+        event: event
+      }
     end
 
     test "full participant lifecycle: interested -> accepted -> confirmed", %{
@@ -494,7 +544,9 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
       user: user
     } do
       # 1. User marks interest
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "interested"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "interested"})
+
       assert json_response(conn, 200)["data"]["status"] == "interested"
 
       # 2. Check analytics shows 1 interested
@@ -504,7 +556,9 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
       assert analytics["total_participants"] == 1
 
       # 3. User accepts invitation
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "accepted"})
+
       assert json_response(conn, 200)["data"]["status"] == "accepted"
 
       # 4. Check participant was updated
@@ -513,7 +567,11 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
       assert participant.metadata["previous_status"] == "interested"
 
       # 5. User confirms with order
-      conn = put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "confirmed_with_order"})
+      conn =
+        put(conn, ~p"/api/events/#{event.slug}/participant-status", %{
+          "status" => "confirmed_with_order"
+        })
+
       assert json_response(conn, 200)["data"]["status"] == "confirmed_with_order"
 
       # 6. Final analytics check
@@ -530,8 +588,11 @@ defmodule EventasaurusWeb.EventParticipantStatusControllerTest do
       event: event
     } do
       # Create participants with different statuses
-      {conn2, _user2} = register_and_log_in_user(build_conn(), %{name: "User 2", email: "user2@example.com"})
-      {conn3, _user3} = register_and_log_in_user(build_conn(), %{name: "User 3", email: "user3@example.com"})
+      {conn2, _user2} =
+        register_and_log_in_user(build_conn(), %{name: "User 2", email: "user2@example.com"})
+
+      {conn3, _user3} =
+        register_and_log_in_user(build_conn(), %{name: "User 3", email: "user3@example.com"})
 
       # Set different statuses
       put(conn, ~p"/api/events/#{event.slug}/participant-status", %{"status" => "interested"})
