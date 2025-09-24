@@ -86,16 +86,15 @@ defmodule EventasaurusWeb.Components.Invitations.InvitationMessageComponent do
             id={@id <> "_message"}
             name="message"
             rows="4"
-            value={@message}
             phx-target={@myself}
-            phx-change="update_message"
+            phx-input="update_message"
             maxlength={@max_length}
             placeholder="Hi! I'd love for you to join me at this event..."
             class={[
               "w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500",
               @char_count > @max_length * 0.9 && "border-yellow-300"
             ]}
-          />
+          ><%= @message %></textarea>
           <div class="absolute bottom-2 right-2 text-xs text-gray-400">
             <%= @char_count %>/<%= @max_length %>
           </div>

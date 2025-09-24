@@ -108,6 +108,7 @@ defmodule EventasaurusWeb.Components.Invitations.UserSelectorComponent do
       {:noreply, assign(socket, search_results: [], searching: false)}
     else
       # Perform search immediately (no debouncing in LiveComponents)
+      socket = assign(socket, :searching, true)
       exclude_ids = MapSet.to_list(socket.assigns.selected_user_ids)
 
       results =

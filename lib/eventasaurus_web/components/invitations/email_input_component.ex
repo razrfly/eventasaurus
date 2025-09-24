@@ -44,20 +44,18 @@ defmodule EventasaurusWeb.Components.Invitations.EmailInputComponent do
             id={@id <> "_email_input"}
             name="emails"
             rows="3"
-            value={@email_input}
             phx-target={@myself}
-            phx-change="update_email_input"
+            phx-input="update_email_input"
             placeholder="friend1@example.com, friend2@example.com"
             class={[
               "flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500",
               @error && "border-red-300"
             ]}
-          />
+          ><%= @email_input %></textarea>
           <button
             type="button"
             phx-target={@myself}
             phx-click="add_emails"
-            phx-value-emails={@email_input}
             class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
           >
             Add
@@ -79,8 +77,8 @@ defmodule EventasaurusWeb.Components.Invitations.EmailInputComponent do
   end
 
   @impl true
-  def handle_event("add_emails", %{"emails" => emails_input}, socket) do
-    emails_input = String.trim(emails_input)
+  def handle_event("add_emails", _params, socket) do
+    emails_input = String.trim(socket.assigns.email_input)
 
     if emails_input == "" do
       {:noreply, assign(socket, :error, "Please enter at least one email address")}

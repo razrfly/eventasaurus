@@ -175,11 +175,13 @@ defmodule EventasaurusWeb.Components.PublicPlanWithFriendsModal do
   # Helper functions
 
   defp has_participants?(assigns) do
-    length(assigns.selected_users) + length(assigns.selected_emails) > 0
+    user_count = length(assigns[:selected_users] || [])
+    email_count = length(assigns[:selected_emails] || [])
+    user_count + email_count > 0
   end
 
   defp participant_count(assigns) do
-    length(assigns.selected_users) + length(assigns.selected_emails)
+    length(assigns[:selected_users] || []) + length(assigns[:selected_emails] || [])
   end
 
   defp format_datetime(%DateTime{} = datetime) do

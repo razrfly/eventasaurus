@@ -57,7 +57,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       case {Map.get(event, :slug), Map.get(event, :id)} do
         {slug, _} when is_binary(slug) and slug != "" -> slug
         {_, id} when not is_nil(id) -> "event-#{id}"
-        _ -> "unknown-event-#{System.unique_integer([:positive])}"
+        _ -> "unknown-event"
       end
 
     hash = generate_hash(event)
@@ -113,7 +113,7 @@ defmodule Eventasaurus.SocialCards.HashGenerator do
       case {Map.get(event, :slug), Map.get(event, :id)} do
         {slug, _} when is_binary(slug) and slug != "" -> slug
         {_, id} when not is_nil(id) -> "event-#{id}"
-        _ -> "unknown-event-#{System.unique_integer([:positive])}"
+        _ -> "unknown-event"
       end
 
     %{
