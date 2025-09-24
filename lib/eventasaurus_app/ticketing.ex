@@ -461,7 +461,11 @@ defmodule EventasaurusApp.Ticketing do
     # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
            # Lock the ticket row to prevent concurrent modifications
-           locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+           locked_ticket =
+             Ticket
+             |> where([t], t.id == ^ticket.id)
+             |> lock("FOR UPDATE")
+             |> Repo.one!()
 
            with :ok <- validate_ticket_availability(locked_ticket, quantity),
                 :ok <- validate_flexible_pricing(locked_ticket, custom_price_cents),
@@ -509,7 +513,11 @@ defmodule EventasaurusApp.Ticketing do
     # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
            # Lock the ticket row to prevent concurrent modifications
-           locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+           locked_ticket =
+             Ticket
+             |> where([t], t.id == ^ticket.id)
+             |> lock("FOR UPDATE")
+             |> Repo.one!()
 
            # Load event to check taxation type
            event = Repo.get!(Event, locked_ticket.event_id)
@@ -1024,7 +1032,11 @@ defmodule EventasaurusApp.Ticketing do
     # Use transaction with row locking to prevent overselling
     case Repo.transaction(fn ->
            # Lock the ticket row to prevent concurrent modifications
-           locked_ticket = Repo.get!(Ticket, ticket.id, lock: "FOR UPDATE")
+           locked_ticket =
+             Ticket
+             |> where([t], t.id == ^ticket.id)
+             |> lock("FOR UPDATE")
+             |> Repo.one!()
 
            # Load event to check taxation type
            event = Repo.get!(Event, locked_ticket.event_id)

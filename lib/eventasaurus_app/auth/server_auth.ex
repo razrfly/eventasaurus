@@ -93,8 +93,8 @@ defmodule EventasaurusApp.Auth.ServerAuth do
 
     case HTTPoison.post(url, body, headers, timeout: 5_000, recv_timeout: 8_000) do
       {:ok, %{status_code: status}} when status in [200, 204] ->
-        Logger.info("Password reset request successful for email: #{email}")
-        {:ok, %{email: email}}
+        Logger.info("Password reset request successful")
+        {:ok, %{}}
 
       {:ok, %{status_code: status, body: response_body}} ->
         Logger.error("Password reset request failed with status #{status}: #{response_body}")

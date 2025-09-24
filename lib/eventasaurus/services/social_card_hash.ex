@@ -96,9 +96,28 @@ defmodule Eventasaurus.Services.SocialCardHash do
   """
   @spec generate_temp_path(String.t(), map(), String.t()) :: String.t()
   def generate_temp_path(event_id, event, extension \\ "png") do
+    ext =
+      extension
+      |> to_string()
+      |> String.downcase()
+      |> case do
+        "png" -> "png"
+        "svg" -> "svg"
+        _ -> "png"
+      end
+
     hash = generate_hash(event)
+    sanitized_event_id = sanitize_segment(event_id)
 
     System.tmp_dir!()
-    |> Path.join("eventasaurus_#{event_id}_#{hash}.#{extension}")
+    |> Path.join("eventasaurus_#{sanitized_event_id}_#{hash}.#{ext}")
+  end
+
+  defp sanitize_segment(seg) do
+    seg
+    |> to_string()
+    |> String.replace(~r{[/\\]}, "_")
+    |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
+    |> String.slice(0, 128)
   end
 end

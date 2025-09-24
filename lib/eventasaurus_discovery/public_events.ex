@@ -222,7 +222,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
         where: not is_nil(v.latitude) and not is_nil(v.longitude),
         where:
           fragment(
-            "ST_DWithin(ST_MakePoint(?, ?), ST_MakePoint(?, ?), ?)",
+            "ST_DWithin(geography(ST_SetSRID(ST_MakePoint(?, ?), 4326)), geography(ST_SetSRID(ST_MakePoint(?, ?), 4326)), ?)",
             ^lng,
             ^lat,
             v.longitude,

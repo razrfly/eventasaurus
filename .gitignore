@@ -65,14 +65,16 @@ curl_cookies.txt
 .roomodes
 .taskmaster/
 .trae/
-.windsurf/ 
-
-# Task files
-# tasks.json
-# tasks/
+.windsurf/
+.claude/commands/
+.claude/agents/ 
 
 # Playwright test results
 test-results/
 
 # Playwright MCP screenshots and artifacts
 .playwright-mcp/ 
+
+# Task files
+# tasks.json
+# tasks/ 
