@@ -3,7 +3,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   alias EventasaurusApp.Repo
   alias EventasaurusApp.Events.EventPlans
-  alias EventasaurusWeb.Components.SimplePlanWithFriendsModal
+  alias EventasaurusWeb.Components.PublicPlanWithFriendsModal
   import Ecto.Query
 
   @impl true
@@ -21,8 +21,40 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:show_plan_with_friends_modal, false)
       |> assign(:emails_input, "")
       |> assign(:invitation_message, "")
+      |> assign(:selected_users, [])
+      |> assign(:selected_emails, [])
+      |> assign(:modal_organizer, nil)
 
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_info({:user_selected, user}, socket) do
+    selected_users = socket.assigns.selected_users ++ [user]
+    {:noreply, assign(socket, :selected_users, Enum.uniq_by(selected_users, & &1.id))}
+  end
+
+  @impl true
+  def handle_info({:email_added, email}, socket) do
+    selected_emails = socket.assigns.selected_emails ++ [email]
+    {:noreply, assign(socket, :selected_emails, Enum.uniq(selected_emails))}
+  end
+
+  @impl true
+  def handle_info({:remove_user, user_id}, socket) do
+    selected_users = Enum.reject(socket.assigns.selected_users, &(&1.id == user_id))
+    {:noreply, assign(socket, :selected_users, selected_users)}
+  end
+
+  @impl true
+  def handle_info({:remove_email, email}, socket) do
+    selected_emails = Enum.reject(socket.assigns.selected_emails, &(&1 == email))
+    {:noreply, assign(socket, :selected_emails, selected_emails)}
+  end
+
+  @impl true
+  def handle_info({:message_updated, message}, socket) do
+    {:noreply, assign(socket, :invitation_message, message)}
   end
 
   @impl true
@@ -231,7 +263,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
          |> redirect(to: ~p"/events/#{socket.assigns.existing_plan.private_event.slug}")}
 
       true ->
-        {:noreply, assign(socket, :show_plan_with_friends_modal, true)}
+        # Get authenticated user for the modal
+        user = get_authenticated_user(socket)
+
+        {:noreply,
+         socket
+         |> assign(:show_plan_with_friends_modal, true)
+         |> assign(:modal_organizer, user)}
     end
   end
 
@@ -241,7 +279,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
      socket
      |> assign(:show_plan_with_friends_modal, false)
      |> assign(:emails_input, "")
-     |> assign(:invitation_message, "")}
+     |> assign(:invitation_message, "")
+     |> assign(:selected_users, [])
+     |> assign(:selected_emails, [])}
   end
 
   @impl true
@@ -260,13 +300,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   @impl true
-  def handle_event("submit_plan_with_friends", params, socket) do
+  def handle_event("submit_plan_with_friends", _params, socket) do
     case create_plan_from_public_event(socket) do
       {:ok, private_event} ->
-        # Parse and send invitations if emails provided
-        if params["emails"] && String.trim(params["emails"]) != "" do
-          send_invitations(private_event, params["emails"], params["message"])
-        end
+        # Send invitations to selected users and emails
+        organizer = get_authenticated_user(socket)
+        send_invitations(
+          private_event,
+          socket.assigns.selected_users,
+          socket.assigns.selected_emails,
+          socket.assigns.invitation_message,
+          organizer
+        )
 
         {:noreply,
          socket
@@ -333,16 +378,44 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  defp send_invitations(_event, emails_string, _message) do
-    # TODO: Implement invitation sending
-    # Parse comma-separated emails and send invitations
-    _emails =
-      emails_string
-      |> String.split(",")
-      |> Enum.map(&String.trim/1)
-      |> Enum.filter(&(&1 != ""))
+  defp send_invitations(event, selected_users, selected_emails, message, organizer) do
 
-    # For now, we'll just skip this
+    # Queue invitation emails for existing users
+    Enum.each(selected_users, fn user ->
+      # Queue the invitation email job
+      %{
+        "user_id" => user.id,
+        "event_id" => event.id,
+        "invitation_message" => message || "",
+        "organizer_id" => organizer.id
+      }
+      |> Eventasaurus.Jobs.EmailInvitationJob.new()
+      |> Oban.insert()
+    end)
+
+    # Queue invitation emails for email-only invitations
+    Enum.each(selected_emails, fn email ->
+      # For email-only invitations, we'll need to handle differently
+      # For now, we'll just create participants and send emails
+      # This would normally create a guest user or find existing user
+      case EventasaurusApp.Accounts.get_user_by_email(email) do
+        nil ->
+          # TODO: Create guest user invitation flow
+          # For now, skip email-only invitations
+          :ok
+
+        user ->
+          %{
+            "user_id" => user.id,
+            "event_id" => event.id,
+            "invitation_message" => message || "",
+            "organizer_id" => organizer.id
+          }
+          |> Eventasaurus.Jobs.EmailInvitationJob.new()
+          |> Oban.insert()
+      end
+    end)
+
     :ok
   end
 
@@ -676,15 +749,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       <% end %>
 
       <!-- Plan with Friends Modal -->
-      <SimplePlanWithFriendsModal.modal
-        id="plan-with-friends-modal"
-        show={@show_plan_with_friends_modal}
-        public_event={@event}
-        emails_input={@emails_input}
-        invitation_message={@invitation_message}
-        on_close="close_plan_modal"
-        on_submit="submit_plan_with_friends"
-      />
+      <%= if @show_plan_with_friends_modal do %>
+        <PublicPlanWithFriendsModal.modal
+          id="plan-with-friends-modal"
+          show={@show_plan_with_friends_modal}
+          public_event={@event}
+          selected_users={@selected_users}
+          selected_emails={@selected_emails}
+          invitation_message={@invitation_message}
+          organizer={@modal_organizer}
+          on_close="close_plan_modal"
+          on_submit="submit_plan_with_friends"
+        />
+      <% end %>
     </div>
     """
   end
