@@ -5,6 +5,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     EventCardBadges,
     ParticipantAvatars
   }
+
   alias EventasaurusApp.DateTimeHelper
   import EventasaurusWeb.Helpers.LanguageHelpers
 
@@ -18,7 +19,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
     # Generate a unique ID based on the component's ID (which includes layout prefix)
     unique_id = assigns.id || "#{assigns.layout}-event-#{assigns.event.id}"
     assigns = assign(assigns, :unique_id, unique_id)
-    
+
     ~H"""
     <article class="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow" role="article" aria-labelledby={"event-title-#{@unique_id}"}>
       <a href={~p"/#{@event.slug}"} class="block" aria-label={"View #{get_event_title(@event, @language || "en")}"}>
@@ -137,7 +138,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
 
   defp card_padding(:desktop), do: "p-3"
   defp card_padding(:mobile), do: "p-4"
-  
+
   defp action_padding(:desktop), do: "pt-2 px-3 pb-3"
   defp action_padding(:mobile), do: "pt-2 px-4 pb-3"
 
@@ -147,13 +148,15 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   defp title_size(:desktop), do: "text-2xl font-semibold text-gray-900 mb-1"
   defp title_size(:mobile), do: "text-lg font-semibold text-gray-900 mb-2"
 
-  defp image_container_class(:desktop), do: "w-full sm:w-64 h-44 sm:h-44 rounded-lg overflow-hidden flex-shrink-0"
+  defp image_container_class(:desktop),
+    do: "w-full sm:w-64 h-44 sm:h-44 rounded-lg overflow-hidden flex-shrink-0"
+
   defp image_container_class(:mobile), do: "w-16 h-16 rounded-lg overflow-hidden flex-shrink-0"
 
   defp render_action_button(event) do
     can_manage = Map.get(event, :can_manage, false)
     assigns = %{event: event, can_manage: can_manage}
-    
+
     ~H"""
     <%= if @can_manage do %>
       <a 
@@ -165,7 +168,7 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
         Manage
       </a>
     <% end %>
-    
+
     <a 
       href={~p"/#{@event.slug}"}
       class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
@@ -178,22 +181,29 @@ defmodule EventasaurusWeb.Components.Events.EventCard do
   end
 
   defp format_time(nil, _timezone), do: "Time TBD"
+
   defp format_time(%DateTime{} = datetime, timezone) do
     timezone = timezone || "UTC"
     converted_dt = DateTimeHelper.utc_to_timezone(datetime, timezone)
-    
+
     Calendar.strftime(converted_dt, "%I:%M %p")
     |> String.replace(" 0", " ")
   end
+
   defp format_time(%NaiveDateTime{} = datetime, _timezone) do
     # NaiveDateTime doesn't have timezone info, format as-is
     Calendar.strftime(datetime, "%I:%M %p")
     |> String.replace(" 0", " ")
   end
+
   defp format_time(_, _), do: "Time TBD"
 
   @impl true
-  def handle_event("update_participant_status", %{"event_id" => event_id, "status" => status}, socket) do
+  def handle_event(
+        "update_participant_status",
+        %{"event_id" => event_id, "status" => status},
+        socket
+      ) do
     # Forward the event to the parent LiveView
     send(self(), {:update_participant_status, %{"event_id" => event_id, "status" => status}})
     {:noreply, socket}

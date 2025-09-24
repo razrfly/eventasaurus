@@ -44,7 +44,8 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
       html = html_response(conn, 200)
 
       # Should show the user's event (check for the actual event link that appears in the table)
-      assert html =~ "User&#39;s Test Event"  # HTML-encoded apostrophe
+      # HTML-encoded apostrophe
+      assert html =~ "User&#39;s Test Event"
       assert html =~ "Upcoming Events"
     end
 
@@ -58,19 +59,23 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
       # Should show empty state message or have no events in the table
       # Since we don't have specific empty state text, just check that no events are shown
       refute html =~ "User's Test Event"
-      assert html =~ "Your Events"  # Header should still be there
+      # Header should still be there
+      assert html =~ "Your Events"
     end
   end
 
   describe "Admin Event Management page rendering" do
     test "loads admin view for event organizer", %{conn: conn} do
       venue = insert(:venue, name: "Test Venue", city: "Test City")
-      event = insert(:event,
-        title: "Management Test Event",
-        tagline: "Test tagline for management",
-        description: "This is a test event description",
-        venue: venue
-      )
+
+      event =
+        insert(:event,
+          title: "Management Test Event",
+          tagline: "Test tagline for management",
+          description: "This is a test event description",
+          venue: venue
+        )
+
       {conn, _user} = log_in_event_organizer(conn, event)
 
       conn = get(conn, ~p"/events/#{event.slug}")
@@ -112,7 +117,9 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
       assert redirected_to(conn) == ~p"/dashboard"
     end
 
-    test "✅ SECURITY: returns 404 for non-existent event and redirects to dashboard", %{conn: conn} do
+    test "✅ SECURITY: returns 404 for non-existent event and redirects to dashboard", %{
+      conn: conn
+    } do
       # Create and log in a user first since the route now requires authentication
       {conn, _user} = register_and_log_in_user(conn)
 
@@ -125,12 +132,14 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
     end
 
     test "displays venue information correctly", %{conn: conn} do
-      venue = insert(:venue,
-        name: "Conference Center",
-        address: "123 Main St",
-        city: "San Francisco",
-        state: "CA"
-      )
+      venue =
+        insert(:venue,
+          name: "Conference Center",
+          address: "123 Main St",
+          city: "San Francisco",
+          state: "CA"
+        )
+
       event = insert(:event, title: "Venue Test Event", venue: venue)
       {conn, _user} = log_in_event_organizer(conn, event)
 
@@ -163,13 +172,15 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
   describe "Public Event page rendering" do
     test "loads public event page for anyone", %{conn: conn} do
       venue = insert(:venue, name: "Public Venue", city: "Public City")
-      event = insert(:event,
-        title: "Public Test Event",
-        tagline: "Public event tagline",
-        description: "This is a public event",
-        venue: venue,
-        visibility: :public
-      )
+
+      event =
+        insert(:event,
+          title: "Public Test Event",
+          tagline: "Public event tagline",
+          description: "This is a public event",
+          venue: venue,
+          visibility: :public
+        )
 
       # Use LiveView testing for the public event page (/:slug route)
       {:ok, view, html} = live(conn, ~p"/#{event.slug}")
@@ -217,11 +228,12 @@ defmodule EventasaurusWeb.EventLive.PageRenderingTest do
     end
 
     test "handles virtual events on public page", %{conn: conn} do
-      event = insert(:event,
-        title: "Public Virtual Event",
-        venue_id: nil,
-        visibility: :public
-      )
+      event =
+        insert(:event,
+          title: "Public Virtual Event",
+          venue_id: nil,
+          visibility: :public
+        )
 
       {:ok, view, html} = live(conn, ~p"/#{event.slug}")
 

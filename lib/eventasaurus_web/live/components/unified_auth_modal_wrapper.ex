@@ -3,12 +3,12 @@ defmodule EventasaurusWeb.UnifiedAuthModalWrapper do
   Shared behavior for components that wrap UnifiedAuthModal.
   Provides common mount, update, and handle_event implementations.
   """
-  
+
   defmacro __using__(_opts) do
     quote do
       use EventasaurusWeb, :live_component
       alias EventasaurusWeb.UnifiedAuthModal
-      
+
       @impl true
       def mount(socket) do
         {:ok, socket}
@@ -26,7 +26,7 @@ defmodule EventasaurusWeb.UnifiedAuthModalWrapper do
       end
 
       # Make these overridable in case a wrapper needs custom behavior
-      defoverridable [mount: 1, update: 2, handle_event: 3]
+      defoverridable mount: 1, update: 2, handle_event: 3
     end
   end
 end

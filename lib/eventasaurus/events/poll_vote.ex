@@ -6,18 +6,18 @@ defmodule EventasaurusApp.Events.PollVote do
   alias EventasaurusApp.Accounts.User
 
   schema "poll_votes" do
-    field :vote_value, :string
-    field :vote_numeric, :decimal
-    field :vote_rank, :integer
-    field :voted_at, :utc_datetime
+    field(:vote_value, :string)
+    field(:vote_numeric, :decimal)
+    field(:vote_rank, :integer)
+    field(:voted_at, :utc_datetime)
 
-    belongs_to :poll_option, PollOption
-    belongs_to :voter, User, foreign_key: :voter_id
-    belongs_to :poll, Poll, foreign_key: :poll_id
+    belongs_to(:poll_option, PollOption)
+    belongs_to(:voter, User, foreign_key: :voter_id)
+    belongs_to(:poll, Poll, foreign_key: :poll_id)
 
     # Deletion metadata fields
-    field :deletion_reason, :string
-    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
+    field(:deletion_reason, :string)
+    belongs_to(:deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id)
 
     timestamps()
     soft_delete_schema()
@@ -26,7 +26,15 @@ defmodule EventasaurusApp.Events.PollVote do
   @doc false
   def changeset(poll_vote, attrs) do
     poll_vote
-    |> cast(attrs, [:vote_value, :vote_numeric, :vote_rank, :voted_at, :poll_option_id, :voter_id, :poll_id])
+    |> cast(attrs, [
+      :vote_value,
+      :vote_numeric,
+      :vote_rank,
+      :voted_at,
+      :poll_option_id,
+      :voter_id,
+      :poll_id
+    ])
     |> validate_required([:poll_option_id, :voter_id, :poll_id])
     |> validate_vote_fields()
     |> put_voted_at()
@@ -34,7 +42,8 @@ defmodule EventasaurusApp.Events.PollVote do
     |> foreign_key_constraint(:voter_id)
     |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
-         message: "You have already voted for this option")
+      message: "You have already voted for this option"
+    )
   end
 
   @doc """
@@ -50,7 +59,8 @@ defmodule EventasaurusApp.Events.PollVote do
     |> foreign_key_constraint(:voter_id)
     |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
-         message: "You have already voted for this option")
+      message: "You have already voted for this option"
+    )
   end
 
   @doc """
@@ -66,7 +76,8 @@ defmodule EventasaurusApp.Events.PollVote do
     |> foreign_key_constraint(:voter_id)
     |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
-         message: "You have already voted for this option")
+      message: "You have already voted for this option"
+    )
   end
 
   @doc """
@@ -83,7 +94,8 @@ defmodule EventasaurusApp.Events.PollVote do
     |> foreign_key_constraint(:voter_id)
     |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
-         message: "You have already voted for this option")
+      message: "You have already voted for this option"
+    )
   end
 
   @doc """
@@ -100,7 +112,8 @@ defmodule EventasaurusApp.Events.PollVote do
     |> foreign_key_constraint(:voter_id)
     |> foreign_key_constraint(:poll_id)
     |> unique_constraint([:poll_option_id, :voter_id],
-         message: "You have already voted for this option")
+      message: "You have already voted for this option"
+    )
   end
 
   @doc """
@@ -109,7 +122,8 @@ defmodule EventasaurusApp.Events.PollVote do
   def positive?(%__MODULE__{vote_value: "yes"}), do: true
   def positive?(%__MODULE__{vote_value: "selected"}), do: true
   def positive?(%__MODULE__{vote_value: "star", vote_numeric: rating}) when rating >= 3, do: true
-  def positive?(%__MODULE__{vote_value: "ranked"}), do: true  # All ranked votes are considered positive
+  # All ranked votes are considered positive
+  def positive?(%__MODULE__{vote_value: "ranked"}), do: true
   def positive?(%__MODULE__{}), do: false
 
   @doc """
@@ -133,11 +147,15 @@ defmodule EventasaurusApp.Events.PollVote do
   def vote_score(%__MODULE__{vote_value: "maybe"}), do: 0.5
   def vote_score(%__MODULE__{vote_value: "no"}), do: 0.0
   def vote_score(%__MODULE__{vote_value: "selected"}), do: 1.0
-  def vote_score(%__MODULE__{vote_value: "star", vote_numeric: rating}), do: Decimal.to_float(rating)
+
+  def vote_score(%__MODULE__{vote_value: "star", vote_numeric: rating}),
+    do: Decimal.to_float(rating)
+
   def vote_score(%__MODULE__{vote_value: "ranked", vote_rank: rank}) do
     # Higher ranks get lower scores (1st place = 10 points, 2nd = 9, etc.)
     max(11 - rank, 1) / 10.0
   end
+
   def vote_score(%__MODULE__{}), do: 0.0
 
   @doc """
@@ -147,10 +165,12 @@ defmodule EventasaurusApp.Events.PollVote do
   def vote_display(%__MODULE__{vote_value: "maybe"}), do: "Maybe"
   def vote_display(%__MODULE__{vote_value: "no"}), do: "No"
   def vote_display(%__MODULE__{vote_value: "selected"}), do: "Selected"
+
   def vote_display(%__MODULE__{vote_value: "star", vote_numeric: rating}) do
     rating_str = rating |> Decimal.to_float() |> :erlang.float_to_binary(decimals: 1)
     "#{rating_str} ★"
   end
+
   def vote_display(%__MODULE__{vote_value: "ranked", vote_rank: rank}) do
     case rank do
       1 -> "1st Choice"
@@ -159,6 +179,7 @@ defmodule EventasaurusApp.Events.PollVote do
       n when n > 3 -> "#{n}th Choice"
     end
   end
+
   def vote_display(%__MODULE__{}), do: "Unknown"
 
   @doc """
@@ -201,12 +222,14 @@ defmodule EventasaurusApp.Events.PollVote do
   def rank_options(max_rank \\ 10) do
     1..max_rank
     |> Enum.map(fn rank ->
-      label = case rank do
-        1 -> "1st Choice"
-        2 -> "2nd Choice"
-        3 -> "3rd Choice"
-        n -> "#{n}th Choice"
-      end
+      label =
+        case rank do
+          1 -> "1st Choice"
+          2 -> "2nd Choice"
+          3 -> "3rd Choice"
+          n -> "#{n}th Choice"
+        end
+
       {label, rank}
     end)
   end
@@ -269,7 +292,7 @@ defmodule EventasaurusApp.Events.PollVote do
     end
   end
 
-        defp put_voted_at(changeset) do
+  defp put_voted_at(changeset) do
     case get_field(changeset, :voted_at) do
       nil -> put_change(changeset, :voted_at, DateTime.utc_now() |> DateTime.truncate(:second))
       _ -> changeset

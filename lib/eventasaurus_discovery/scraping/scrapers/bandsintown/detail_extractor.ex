@@ -32,16 +32,18 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   # Extract JSON-LD structured data (most reliable)
   defp extract_json_ld_event(html) do
     # Look for all JSON-LD scripts - there may be multiple
-    json_ld_scripts = Regex.scan(~r/<script[^>]*type="application\/ld\+json"[^>]*>(.*?)<\/script>/s, html)
+    json_ld_scripts =
+      Regex.scan(~r/<script[^>]*type="application\/ld\+json"[^>]*>(.*?)<\/script>/s, html)
 
     # Try to find the MusicEvent schema
-    result = json_ld_scripts
-    |> Enum.find_value(fn [_, json_str] ->
-      case parse_json_ld(json_str) do
-        {:ok, data} -> {:ok, data}
-        _ -> nil
-      end
-    end)
+    result =
+      json_ld_scripts
+      |> Enum.find_value(fn [_, json_str] ->
+        case parse_json_ld(json_str) do
+          {:ok, data} -> {:ok, data}
+          _ -> nil
+        end
+      end)
 
     result || {:error, :no_json_ld}
   end
@@ -50,9 +52,10 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
     case Jason.decode(json_str) do
       {:ok, data} when is_list(data) ->
         # Find the Event object
-        event = Enum.find(data, fn item ->
-          is_map(item) && Map.get(item, "@type") in ["Event", "MusicEvent"]
-        end)
+        event =
+          Enum.find(data, fn item ->
+            is_map(item) && Map.get(item, "@type") in ["Event", "MusicEvent"]
+          end)
 
         if event do
           {:ok, transform_json_ld_event(event)}
@@ -97,7 +100,8 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
       # Artist information
       "artist_name" => performer["name"],
       "artist_url" => performer["url"],
-      "artist_same_as" => performer["sameAs"], # Social media links
+      # Social media links
+      "artist_same_as" => performer["sameAs"],
 
       # Ticket information
       "ticket_url" => extract_ticket_url(offers),
@@ -115,6 +119,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   defp extract_image_url(nil), do: nil
   defp extract_image_url(image) when is_binary(image), do: image
   defp extract_image_url(image) when is_map(image), do: image["url"]
+
   defp extract_image_url(images) when is_list(images) do
     case List.first(images) do
       nil -> nil
@@ -127,6 +132,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   defp extract_ticket_url([offer | _]), do: offer["url"]
 
   defp extract_min_price([]), do: nil
+
   defp extract_min_price(offers) do
     offers
     |> Enum.map(fn o -> parse_price(o["price"] || o["lowPrice"]) end)
@@ -135,6 +141,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   end
 
   defp extract_max_price([]), do: nil
+
   defp extract_max_price(offers) do
     offers
     |> Enum.map(fn o -> parse_price(o["price"] || o["highPrice"]) end)
@@ -146,6 +153,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   defp extract_currency([offer | _]), do: offer["priceCurrency"]
 
   defp extract_availability([]), do: nil
+
   defp extract_availability([offer | _]) do
     case offer["availability"] do
       "http://schema.org/InStock" -> "in_stock"
@@ -157,6 +165,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
 
   defp parse_price(nil), do: nil
   defp parse_price(price) when is_number(price), do: price
+
   defp parse_price(price) when is_binary(price) do
     price
     |> String.replace(~r/[^\d.]/, "")
@@ -256,9 +265,10 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
 
   defp extract_image(document) do
     # Try og:image meta tag first
-    og_image = Floki.find(document, "meta[property='og:image']")
-    |> Floki.attribute("content")
-    |> List.first()
+    og_image =
+      Floki.find(document, "meta[property='og:image']")
+      |> Floki.attribute("content")
+      |> List.first()
 
     og_image || extract_main_image(document)
   end
@@ -277,15 +287,17 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
 
   defp extract_rsvp_count(document) do
     # Look for RSVP count in various formats
-    rsvp_text = Floki.find(document, "[data-rsvp-count], .rsvp-count, .attending-count")
-    |> Floki.text()
+    rsvp_text =
+      Floki.find(document, "[data-rsvp-count], .rsvp-count, .attending-count")
+      |> Floki.text()
 
     extract_number_from_text(rsvp_text)
   end
 
   defp extract_interested_count(document) do
-    interested_text = Floki.find(document, "[data-interested-count], .interested-count")
-    |> Floki.text()
+    interested_text =
+      Floki.find(document, "[data-interested-count], .interested-count")
+      |> Floki.text()
 
     extract_number_from_text(interested_text)
   end
@@ -321,9 +333,10 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
   end
 
   defp extract_event_status(document) do
-    status_text = Floki.find(document, ".event-status, [data-event-status]")
-    |> Floki.text()
-    |> String.downcase()
+    status_text =
+      Floki.find(document, ".event-status, [data-event-status]")
+      |> Floki.text()
+      |> String.downcase()
 
     cond do
       String.contains?(status_text, "cancelled") -> "cancelled"
@@ -339,6 +352,7 @@ defmodule EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.DetailExtractor do
         number_str
         |> String.replace(",", "")
         |> parse_abbreviated_number()
+
       _ ->
         nil
     end

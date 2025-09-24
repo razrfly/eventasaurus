@@ -37,28 +37,32 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
     end
 
     test "handles payment_intent.succeeded webhook", %{conn: conn, user: user, ticket: ticket} do
-      order = insert(:order,
-        user: user,
-        ticket: ticket,
-        event: ticket.event,
-        status: "pending",
-        payment_reference: "pi_test_webhook_success"
-      )
+      order =
+        insert(:order,
+          user: user,
+          ticket: ticket,
+          event: ticket.event,
+          status: "pending",
+          payment_reference: "pi_test_webhook_success"
+        )
 
       # Mock Stripe webhook verification
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
-        {:ok, %{
-          "id" => "evt_test_webhook",
-          "type" => "payment_intent.succeeded",
-          "object" => "event",
-          "data" => %{
-            "object" => %{
-              "id" => "pi_test_webhook_success",
-              "status" => "succeeded",
-              "amount" => 1000
-            }
-          }
-        }}
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
+        {:ok,
+         %{
+           "id" => "evt_test_webhook",
+           "type" => "payment_intent.succeeded",
+           "object" => "event",
+           "data" => %{
+             "object" => %{
+               "id" => "pi_test_webhook_success",
+               "status" => "succeeded",
+               "amount" => 1000
+             }
+           }
+         }}
       end)
 
       # Mock sync function to confirm order
@@ -66,18 +70,19 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
         {:ok, %{"status" => "succeeded"}}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "payment_intent.succeeded",
-        object: "event",
-        data: %{
-          object: %{
-            id: "pi_test_webhook_success",
-            status: "succeeded",
-            amount: 1000
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "payment_intent.succeeded",
+          object: "event",
+          data: %{
+            object: %{
+              id: "pi_test_webhook_success",
+              status: "succeeded",
+              amount: 1000
+            }
           }
-        }
-      })
+        })
 
       conn = call_webhook(conn, webhook_body)
 
@@ -90,28 +95,32 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
     end
 
     test "handles checkout.session.completed webhook", %{conn: conn, user: user, ticket: ticket} do
-      order = insert(:order,
-        user: user,
-        ticket: ticket,
-        event: ticket.event,
-        status: "pending",
-        stripe_session_id: "cs_test_webhook_completed"
-      )
+      order =
+        insert(:order,
+          user: user,
+          ticket: ticket,
+          event: ticket.event,
+          status: "pending",
+          stripe_session_id: "cs_test_webhook_completed"
+        )
 
       # Mock Stripe webhook verification
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
-        {:ok, %{
-          "id" => "evt_test_webhook",
-          "type" => "checkout.session.completed",
-          "object" => "event",
-          "data" => %{
-            "object" => %{
-              "id" => "cs_test_webhook_completed",
-              "payment_status" => "paid",
-              "amount_total" => 1000
-            }
-          }
-        }}
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
+        {:ok,
+         %{
+           "id" => "evt_test_webhook",
+           "type" => "checkout.session.completed",
+           "object" => "event",
+           "data" => %{
+             "object" => %{
+               "id" => "cs_test_webhook_completed",
+               "payment_status" => "paid",
+               "amount_total" => 1000
+             }
+           }
+         }}
       end)
 
       # Mock sync function to confirm order
@@ -119,18 +128,19 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
         {:ok, %{"payment_status" => "paid"}}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "checkout.session.completed",
-        object: "event",
-        data: %{
-          object: %{
-            id: "cs_test_webhook_completed",
-            payment_status: "paid",
-            amount_total: 1000
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "checkout.session.completed",
+          object: "event",
+          data: %{
+            object: %{
+              id: "cs_test_webhook_completed",
+              payment_status: "paid",
+              amount_total: 1000
+            }
           }
-        }
-      })
+        })
 
       conn = call_webhook(conn, webhook_body)
 
@@ -142,41 +152,50 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
       assert updated_order.confirmed_at != nil
     end
 
-    test "handles payment_intent.payment_failed webhook gracefully", %{conn: conn, user: user, ticket: ticket} do
-      order = insert(:order,
-        user: user,
-        ticket: ticket,
-        event: ticket.event,
-        status: "pending",
-        payment_reference: "pi_test_webhook_failed"
-      )
+    test "handles payment_intent.payment_failed webhook gracefully", %{
+      conn: conn,
+      user: user,
+      ticket: ticket
+    } do
+      order =
+        insert(:order,
+          user: user,
+          ticket: ticket,
+          event: ticket.event,
+          status: "pending",
+          payment_reference: "pi_test_webhook_failed"
+        )
 
       # Mock Stripe webhook verification
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
-        {:ok, %{
-          "id" => "evt_test_webhook",
-          "type" => "payment_intent.payment_failed",
-          "object" => "event",
-          "data" => %{
-            "object" => %{
-              "id" => "pi_test_webhook_failed",
-              "status" => "failed"
-            }
-          }
-        }}
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
+        {:ok,
+         %{
+           "id" => "evt_test_webhook",
+           "type" => "payment_intent.payment_failed",
+           "object" => "event",
+           "data" => %{
+             "object" => %{
+               "id" => "pi_test_webhook_failed",
+               "status" => "failed"
+             }
+           }
+         }}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "payment_intent.payment_failed",
-        object: "event",
-        data: %{
-          object: %{
-            id: "pi_test_webhook_failed",
-            status: "failed"
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "payment_intent.payment_failed",
+          object: "event",
+          data: %{
+            object: %{
+              id: "pi_test_webhook_failed",
+              status: "failed"
+            }
           }
-        }
-      })
+        })
 
       conn = call_webhook(conn, webhook_body)
 
@@ -188,39 +207,48 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
       assert updated_order.confirmed_at == nil
     end
 
-    test "handles checkout.session.expired webhook gracefully", %{conn: conn, user: user, ticket: ticket} do
-      order = insert(:order,
-        user: user,
-        ticket: ticket,
-        event: ticket.event,
-        status: "pending",
-        stripe_session_id: "cs_test_webhook_expired"
-      )
+    test "handles checkout.session.expired webhook gracefully", %{
+      conn: conn,
+      user: user,
+      ticket: ticket
+    } do
+      order =
+        insert(:order,
+          user: user,
+          ticket: ticket,
+          event: ticket.event,
+          status: "pending",
+          stripe_session_id: "cs_test_webhook_expired"
+        )
 
       # Mock Stripe webhook verification
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
-        {:ok, %{
-          "id" => "evt_test_webhook",
-          "type" => "checkout.session.expired",
-          "object" => "event",
-          "data" => %{
-            "object" => %{
-              "id" => "cs_test_webhook_expired"
-            }
-          }
-        }}
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
+        {:ok,
+         %{
+           "id" => "evt_test_webhook",
+           "type" => "checkout.session.expired",
+           "object" => "event",
+           "data" => %{
+             "object" => %{
+               "id" => "cs_test_webhook_expired"
+             }
+           }
+         }}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "checkout.session.expired",
-        object: "event",
-        data: %{
-          object: %{
-            id: "cs_test_webhook_expired"
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "checkout.session.expired",
+          object: "event",
+          data: %{
+            object: %{
+              id: "cs_test_webhook_expired"
+            }
           }
-        }
-      })
+        })
 
       conn = call_webhook(conn, webhook_body)
 
@@ -233,29 +261,33 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
 
     test "handles unknown webhook events gracefully", %{conn: conn} do
       # Mock Stripe webhook verification
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
-        {:ok, %{
-          "id" => "evt_test_webhook",
-          "type" => "unknown.event.type",
-          "object" => "event",
-          "data" => %{
-            "object" => %{
-              "id" => "unknown_object_id"
-            }
-          }
-        }}
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
+        {:ok,
+         %{
+           "id" => "evt_test_webhook",
+           "type" => "unknown.event.type",
+           "object" => "event",
+           "data" => %{
+             "object" => %{
+               "id" => "unknown_object_id"
+             }
+           }
+         }}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "unknown.event.type",
-        object: "event",
-        data: %{
-          object: %{
-            id: "unknown_object_id"
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "unknown.event.type",
+          object: "event",
+          data: %{
+            object: %{
+              id: "unknown_object_id"
+            }
           }
-        }
-      })
+        })
 
       conn = call_webhook(conn, webhook_body)
 
@@ -264,33 +296,37 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
 
     test "handles missing orders gracefully", %{conn: conn} do
       # Mock Stripe webhook verification for a payment_intent that doesn't match any order
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
-        {:ok, %{
-          "id" => "evt_test_webhook",
-          "type" => "payment_intent.succeeded",
-          "object" => "event",
-          "data" => %{
-            "object" => %{
-              "id" => "pi_nonexistent_order",
-              "status" => "succeeded",
-              "amount" => 1000
-            }
-          }
-        }}
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
+        {:ok,
+         %{
+           "id" => "evt_test_webhook",
+           "type" => "payment_intent.succeeded",
+           "object" => "event",
+           "data" => %{
+             "object" => %{
+               "id" => "pi_nonexistent_order",
+               "status" => "succeeded",
+               "amount" => 1000
+             }
+           }
+         }}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "payment_intent.succeeded",
-        object: "event",
-        data: %{
-          object: %{
-            id: "pi_nonexistent_order",
-            status: "succeeded",
-            amount: 1000
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "payment_intent.succeeded",
+          object: "event",
+          data: %{
+            object: %{
+              id: "pi_nonexistent_order",
+              status: "succeeded",
+              amount: 1000
+            }
           }
-        }
-      })
+        })
 
       conn = call_webhook(conn, webhook_body)
 
@@ -299,21 +335,24 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
 
     test "webhook security validates webhook signature before processing", %{conn: conn} do
       # Mock failed signature verification
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
         {:error, "Invalid signature"}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "payment_intent.succeeded",
-        object: "event",
-        data: %{
-          object: %{
-            id: "pi_test_invalid_signature",
-            status: "succeeded"
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "payment_intent.succeeded",
+          object: "event",
+          data: %{
+            object: %{
+              id: "pi_test_invalid_signature",
+              status: "succeeded"
+            }
           }
-        }
-      })
+        })
 
       conn = call_webhook(conn, webhook_body, "invalid_signature")
 
@@ -337,15 +376,18 @@ defmodule EventasaurusWeb.StripeWebhookControllerTest do
 
     test "validates webhook signature before processing", %{conn: conn} do
       # Mock signature verification failure
-      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body, _signature, _secret ->
+      expect(EventasaurusApp.StripeMock, :verify_webhook_signature, fn _body,
+                                                                       _signature,
+                                                                       _secret ->
         {:error, "Invalid signature"}
       end)
 
-      webhook_body = Jason.encode!(%{
-        id: "evt_test_webhook",
-        type: "test.event",
-        object: "event"
-      })
+      webhook_body =
+        Jason.encode!(%{
+          id: "evt_test_webhook",
+          type: "test.event",
+          object: "event"
+        })
 
       conn =
         conn

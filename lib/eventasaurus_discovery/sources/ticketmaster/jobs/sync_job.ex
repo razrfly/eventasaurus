@@ -49,11 +49,13 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
     fetch_pages_recursive(city, radius, 0, max_pages, [], target_limit)
   end
 
-  defp fetch_pages_recursive(_city, _radius, page, max_pages, events, _limit) when page >= max_pages do
+  defp fetch_pages_recursive(_city, _radius, page, max_pages, events, _limit)
+       when page >= max_pages do
     {:ok, events}
   end
 
-  defp fetch_pages_recursive(_city, _radius, _page, _max_pages, events, limit) when length(events) >= limit do
+  defp fetch_pages_recursive(_city, _radius, _page, _max_pages, events, limit)
+       when length(events) >= limit do
     {:ok, Enum.take(events, limit)}
   end
 
@@ -67,7 +69,8 @@ defmodule EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob do
         else
           # Rate limiting with safety checks
           rate_limit = max(Config.source_config().rate_limit, 1)
-          sleep_ms = max(div(1000, rate_limit), 100)  # Minimum 100ms between requests
+          # Minimum 100ms between requests
+          sleep_ms = max(div(1000, rate_limit), 100)
           Process.sleep(sleep_ms)
           fetch_pages_recursive(city, radius, page + 1, max_pages, all_events, limit)
         end

@@ -82,11 +82,12 @@ defmodule EventasaurusApp.EventsTest do
       manual_emails = ["newuser@example.com"]
       invitation_message = "Come join us!"
 
-      result = Events.process_guest_invitations(event, organizer,
-        suggestion_structs: suggestion_structs,
-        manual_emails: manual_emails,
-        invitation_message: invitation_message
-      )
+      result =
+        Events.process_guest_invitations(event, organizer,
+          suggestion_structs: suggestion_structs,
+          manual_emails: manual_emails,
+          invitation_message: invitation_message
+        )
 
       # Should have 2 successful invitations
       assert result.successful_invitations == 2
@@ -119,18 +120,18 @@ defmodule EventasaurusApp.EventsTest do
       existing_user = user_fixture(%{email: "existing@example.com"})
 
       # Create existing participant
-      {:ok, _} = Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: existing_user.id,
-        role: :invitee,
-        status: :pending
-      })
+      {:ok, _} =
+        Events.create_event_participant(%{
+          event_id: event.id,
+          user_id: existing_user.id,
+          role: :invitee,
+          status: :pending
+        })
 
       suggestion_structs = [%{user_id: existing_user.id}]
 
-      result = Events.process_guest_invitations(event, organizer,
-        suggestion_structs: suggestion_structs
-      )
+      result =
+        Events.process_guest_invitations(event, organizer, suggestion_structs: suggestion_structs)
 
       assert result.successful_invitations == 0
       assert result.skipped_duplicates == 1
@@ -145,28 +146,33 @@ defmodule EventasaurusApp.EventsTest do
       existing_user = user_fixture(%{email: "existing@example.com"})
 
       # Create existing participant
-      {:ok, _} = Events.create_event_participant(%{
-        event_id: event.id,
-        user_id: existing_user.id,
-        role: :invitee,
-        status: :pending
-      })
+      {:ok, _} =
+        Events.create_event_participant(%{
+          event_id: event.id,
+          user_id: existing_user.id,
+          role: :invitee,
+          status: :pending
+        })
 
       # New user for suggestion
       new_user = user_fixture(%{email: "newuser@example.com"})
 
       suggestion_structs = [
-        %{user_id: existing_user.id},  # Should be skipped (duplicate)
-        %{user_id: new_user.id},       # Should succeed
-        %{user_id: 99999}              # Should fail (user not found)
+        # Should be skipped (duplicate)
+        %{user_id: existing_user.id},
+        # Should succeed
+        %{user_id: new_user.id},
+        # Should fail (user not found)
+        %{user_id: 99999}
       ]
 
       manual_emails = ["fresh@example.com", "existing@example.com"]
 
-      result = Events.process_guest_invitations(event, organizer,
-        suggestion_structs: suggestion_structs,
-        manual_emails: manual_emails
-      )
+      result =
+        Events.process_guest_invitations(event, organizer,
+          suggestion_structs: suggestion_structs,
+          manual_emails: manual_emails
+        )
 
       # 1 new suggestion + 1 fresh email = 2 successful
       # 1 existing suggestion + 1 existing email = 2 skipped
@@ -194,14 +200,15 @@ defmodule EventasaurusApp.EventsTest do
 
       manual_emails = ["directnew@example.com"]
 
-      result = Events.process_guest_invitations(event, organizer,
-        suggestion_structs: suggestion_structs,
-        manual_emails: manual_emails,
-        invitation_message: "This should be ignored",
-        mode: :direct_add
-      )
+      result =
+        Events.process_guest_invitations(event, organizer,
+          suggestion_structs: suggestion_structs,
+          manual_emails: manual_emails,
+          invitation_message: "This should be ignored",
+          mode: :direct_add
+        )
 
-            # Should have 2 successful direct adds
+      # Should have 2 successful direct adds
       assert result.successful_invitations == 2
       assert result.skipped_duplicates == 0
       assert result.failed_invitations == 0
@@ -235,20 +242,22 @@ defmodule EventasaurusApp.EventsTest do
 
   describe "threshold functionality" do
     test "threshold_met?/1 returns false for attendee_count threshold when not met" do
-      event = event_fixture(%{
-        threshold_type: "attendee_count",
-        threshold_count: 5
-      })
+      event =
+        event_fixture(%{
+          threshold_type: "attendee_count",
+          threshold_count: 5
+        })
 
       # By default, there are no participants, so threshold should not be met
       assert Event.threshold_met?(event) == false
     end
 
     test "threshold_met?/1 returns false for revenue threshold when not met" do
-      event = event_fixture(%{
-        threshold_type: "revenue",
-        threshold_revenue_cents: 10000
-      })
+      event =
+        event_fixture(%{
+          threshold_type: "revenue",
+          threshold_revenue_cents: 10000
+        })
 
       # By default, there are no orders, so threshold should not be met
       assert Event.threshold_met?(event) == false
@@ -334,7 +343,10 @@ defmodule EventasaurusApp.EventsTest do
       }
 
       assert {:error, %Ecto.Changeset{} = changeset} = Events.create_event(invalid_attrs)
-      assert "must be one of: ticketed_event, contribution_collection, ticketless" in errors_on(changeset).taxation_type
+
+      assert "must be one of: ticketed_event, contribution_collection, ticketless" in errors_on(
+               changeset
+             ).taxation_type
     end
 
     test "Event.changeset/2 validates taxation_type against valid values" do
@@ -355,59 +367,74 @@ defmodule EventasaurusApp.EventsTest do
 
     test "Event.changeset/2 enforces business rule: contribution_collection events cannot be ticketed" do
       # Valid combination: contribution_collection + is_ticketed=false
-      changeset1 = Event.changeset(%Event{}, %{
-        taxation_type: "contribution_collection",
-        is_ticketed: false
-      })
+      changeset1 =
+        Event.changeset(%Event{}, %{
+          taxation_type: "contribution_collection",
+          is_ticketed: false
+        })
+
       refute changeset1.errors[:is_ticketed]
 
       # Invalid combination: contribution_collection + is_ticketed=true
-      changeset2 = Event.changeset(%Event{}, %{
-        taxation_type: "contribution_collection",
-        is_ticketed: true
-      })
+      changeset2 =
+        Event.changeset(%Event{}, %{
+          taxation_type: "contribution_collection",
+          is_ticketed: true
+        })
+
       assert changeset2.errors[:is_ticketed]
+
       assert "must be false for contribution collection events" in errors_on(changeset2).is_ticketed
     end
 
     test "Event.changeset/2 enforces business rule: ticketless events cannot be ticketed" do
       # Valid combination: ticketless + is_ticketed=false
-      changeset1 = Event.changeset(%Event{}, %{
-        taxation_type: "ticketless",
-        is_ticketed: false
-      })
+      changeset1 =
+        Event.changeset(%Event{}, %{
+          taxation_type: "ticketless",
+          is_ticketed: false
+        })
+
       refute changeset1.errors[:is_ticketed]
 
       # Invalid combination: ticketless + is_ticketed=true
-      changeset2 = Event.changeset(%Event{}, %{
-        taxation_type: "ticketless",
-        is_ticketed: true
-      })
+      changeset2 =
+        Event.changeset(%Event{}, %{
+          taxation_type: "ticketless",
+          is_ticketed: true
+        })
+
       assert changeset2.errors[:is_ticketed]
       assert "must be false for ticketless events" in errors_on(changeset2).is_ticketed
     end
 
     test "Event.changeset/2 allows all combinations for ticketed_event taxation type" do
       # Both combinations should be valid for ticketed_event
-      changeset1 = Event.changeset(%Event{}, %{
-        taxation_type: "ticketed_event",
-        is_ticketed: true
-      })
+      changeset1 =
+        Event.changeset(%Event{}, %{
+          taxation_type: "ticketed_event",
+          is_ticketed: true
+        })
+
       refute changeset1.errors[:taxation_type]
 
-      changeset2 = Event.changeset(%Event{}, %{
-        taxation_type: "ticketed_event",
-        is_ticketed: false  # Free events can still be taxed as ticketed events
-      })
+      changeset2 =
+        Event.changeset(%Event{}, %{
+          taxation_type: "ticketed_event",
+          # Free events can still be taxed as ticketed events
+          is_ticketed: false
+        })
+
       refute changeset2.errors[:taxation_type]
     end
 
     test "update_event/2 can change taxation_type while respecting business rules" do
       # Create event as ticketed_event
-      event = event_fixture(%{
-        taxation_type: "ticketed_event",
-        is_ticketed: true
-      })
+      event =
+        event_fixture(%{
+          taxation_type: "ticketed_event",
+          is_ticketed: true
+        })
 
       # Can update to contribution_collection if is_ticketed is also updated to false
       update_attrs = %{
@@ -421,10 +448,11 @@ defmodule EventasaurusApp.EventsTest do
     end
 
     test "update_event/2 fails when trying to set invalid taxation_type combination" do
-      event = event_fixture(%{
-        taxation_type: "ticketed_event",
-        is_ticketed: false
-      })
+      event =
+        event_fixture(%{
+          taxation_type: "ticketed_event",
+          is_ticketed: false
+        })
 
       # Try to set contribution_collection but leave is_ticketed as true
       invalid_attrs = %{
@@ -433,6 +461,7 @@ defmodule EventasaurusApp.EventsTest do
       }
 
       assert {:error, %Ecto.Changeset{} = changeset} = Events.update_event(event, invalid_attrs)
+
       assert "must be false for contribution collection events" in errors_on(changeset).is_ticketed
     end
 

@@ -42,7 +42,8 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
     case content_type do
       :track -> perform_search(query, limit)
       nil -> perform_search(query, limit)
-      _ -> {:ok, []} # Don't search for other types
+      # Don't search for other types
+      _ -> {:ok, []}
     end
   end
 
@@ -51,7 +52,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
       {:ok, tracks} ->
         normalized_results = Enum.map(tracks, &normalize_search_result/1)
         {:ok, normalized_results}
-        
+
       {:error, reason} ->
         Logger.error("Spotify search failed: #{inspect(reason)}")
         {:error, reason}
@@ -65,6 +66,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
         case SpotifyService.get_track_details(id) do
           {:ok, track_data} ->
             {:ok, normalize_track_details(track_data)}
+
           {:error, reason} ->
             {:error, reason}
         end
@@ -81,6 +83,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
         case SpotifyService.get_cached_track_details(id) do
           {:ok, track_data} ->
             {:ok, normalize_track_details(track_data)}
+
           {:error, reason} ->
             {:error, reason}
         end
@@ -98,8 +101,10 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
     cond do
       is_nil(client_id) or client_id == "" ->
         {:error, "SPOTIFY_CLIENT_ID environment variable is not set"}
+
       is_nil(client_secret) or client_secret == "" ->
         {:error, "SPOTIFY_CLIENT_SECRET environment variable is not set"}
+
       true ->
         :ok
     end
@@ -133,7 +138,8 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
       cache_ttl: %{
         type: :integer,
         required: false,
-        default: 3600, # 1 hour in seconds
+        # 1 hour in seconds
+        default: 3600,
         description: "Cache time-to-live in seconds"
       }
     }
@@ -144,6 +150,7 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
     case type do
       :track ->
         {:ok, normalize_track_details(raw_data)}
+
       _ ->
         {:error, "Unsupported content type for normalization: #{type}"}
     end
@@ -156,12 +163,13 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
   defp normalize_search_result(track) do
     artists = track[:artists] || []
     primary_artist = List.first(artists) || "Unknown Artist"
-    
+
     # Format description like "Artist - Album"
-    description = case track[:album] do
-      nil -> primary_artist
-      album -> "#{primary_artist} - #{album}"
-    end
+    description =
+      case track[:album] do
+        nil -> primary_artist
+        album -> "#{primary_artist} - #{album}"
+      end
 
     %{
       id: track[:id],
@@ -190,11 +198,12 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
   defp normalize_track_details(track_data) do
     artists = track_data[:artists] || []
     primary_artist = List.first(artists) || "Unknown Artist"
-    
-    description = case track_data[:album] do
-      nil -> primary_artist
-      album -> "#{primary_artist} - #{album}"
-    end
+
+    description =
+      case track_data[:album] do
+        nil -> primary_artist
+        album -> "#{primary_artist} - #{album}"
+      end
 
     # Get the best image from available images
     images = track_data[:images] || []
@@ -225,8 +234,10 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
       external_urls: %{
         spotify: track_data[:external_url]
       },
-      cast: [], # Not applicable to music tracks
-      crew: [], # Could include producers, writers in the future
+      # Not applicable to music tracks
+      cast: [],
+      # Could include producers, writers in the future
+      crew: [],
       media: %{
         audio_features: track_data[:audio_features] || %{},
         duration_formatted: format_duration(track_data[:duration_ms]),
@@ -253,26 +264,32 @@ defmodule EventasaurusWeb.Services.SpotifyRichDataProvider do
       }
     end)
   end
+
   defp normalize_images(_), do: []
 
   defp build_images_from_url(nil), do: []
+
   defp build_images_from_url(image_url) do
     [%{url: image_url, type: :cover, size: "unknown"}]
   end
 
   defp get_best_image_url([]), do: nil
+
   defp get_best_image_url([image | _rest]) when is_map(image) do
     image["url"]
   end
+
   defp get_best_image_url(_), do: nil
 
   defp format_duration(nil), do: nil
+
   defp format_duration(ms) when is_integer(ms) do
     seconds = div(ms, 1000)
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
-    
+
     "#{minutes}:#{String.pad_leading(Integer.to_string(remaining_seconds), 2, "0")}"
   end
+
   defp format_duration(_), do: nil
 end

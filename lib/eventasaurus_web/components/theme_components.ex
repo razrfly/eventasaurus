@@ -28,6 +28,7 @@ defmodule EventasaurusWeb.ThemeComponents do
   """
   def is_event_host?(nil, _current_user), do: false
   def is_event_host?(_event, nil), do: false
+
   def is_event_host?(event, current_user) do
     event.user_id == current_user.id
   end
@@ -42,7 +43,7 @@ defmodule EventasaurusWeb.ThemeComponents do
   """
   def get_theme_assigns(event, current_user) do
     %{
-      theme: event && event.theme || "minimal",
+      theme: (event && event.theme) || "minimal",
       is_event_host: is_event_host?(event, current_user),
       event_id: event && event.id
     }

@@ -47,7 +47,8 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     longitude = Decimal.to_float(city.longitude)
 
     # Fetch events from API
-    {:ok, events} = Client.fetch_all_city_events(latitude, longitude, bandsintown_slug, max_pages: max_pages)
+    {:ok, events} =
+      Client.fetch_all_city_events(latitude, longitude, bandsintown_slug, max_pages: max_pages)
 
     # Apply limit
     events_to_process = if limit, do: Enum.take(events, limit), else: events
@@ -92,50 +93,52 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
 
   defp schedule_detail_jobs(events, source_id) do
     # Schedule individual jobs for each event with rate limiting
-    scheduled_jobs = events
-    |> Enum.with_index()
-    |> Enum.map(fn {event, index} ->
-      # Add delay between jobs to respect rate limits
-      # Start immediately, then 5 seconds between each job
-      scheduled_at = DateTime.add(DateTime.utc_now(), index * 5, :second)
+    scheduled_jobs =
+      events
+      |> Enum.with_index()
+      |> Enum.map(fn {event, index} ->
+        # Add delay between jobs to respect rate limits
+        # Start immediately, then 5 seconds between each job
+        scheduled_at = DateTime.add(DateTime.utc_now(), index * 5, :second)
 
-      job_args = %{
-        "url" => event.url || event[:url],
-        "source_id" => source_id,
-        "event_data" => event
-      }
+        job_args = %{
+          "url" => event.url || event[:url],
+          "source_id" => source_id,
+          "event_data" => event
+        }
 
-      # Create the job using the module's new function
-      result = EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(
-        job_args,
-        queue: "scraper_detail",
-        scheduled_at: scheduled_at
-      )
-      |> Oban.insert()
+        # Create the job using the module's new function
+        result =
+          EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob.new(
+            job_args,
+            queue: "scraper_detail",
+            scheduled_at: scheduled_at
+          )
+          |> Oban.insert()
 
-      case result do
-        {:error, reason} -> Logger.error("Failed to insert job: #{inspect(reason)}")
-        _ -> nil
-      end
+        case result do
+          {:error, reason} -> Logger.error("Failed to insert job: #{inspect(reason)}")
+          _ -> nil
+        end
 
-      result
-    end)
+        result
+      end)
 
     # Count successful insertions
-    successful_count = Enum.count(scheduled_jobs, fn
-      {:ok, _} -> true
-      _ -> false
-    end)
+    successful_count =
+      Enum.count(scheduled_jobs, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
 
     successful_count
   end
-
-
 
   defp get_or_create_bandsintown_source do
     case Repo.get_by(Source, slug: "bandsintown") do
       nil ->
         config = source_config()
+
         %Source{}
         |> Source.changeset(config)
         |> Repo.insert!()
@@ -156,5 +159,4 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob do
     pages = div(limit, 20)
     if rem(limit, 20) > 0, do: pages + 1, else: pages
   end
-
 end

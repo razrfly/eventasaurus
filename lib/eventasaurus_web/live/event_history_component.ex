@@ -33,14 +33,14 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp calculate_stats(socket) do
     activities = socket.assigns.activities || []
-    
+
     stats = %{
       total_activities: length(activities),
       movies_watched: Enum.count(activities, &(&1.activity_type == "movie_watched")),
       tv_shows_watched: Enum.count(activities, &(&1.activity_type == "tv_watched")),
       places_visited: Enum.count(activities, &(&1.activity_type == "place_visited"))
     }
-    
+
     assign(socket, :stats, stats)
   end
 
@@ -367,7 +367,11 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   end
 
   @impl true
-  def handle_event("filter_activities", %{"activity_filter" => filter, "activity_sort" => sort}, socket) do
+  def handle_event(
+        "filter_activities",
+        %{"activity_filter" => filter, "activity_sort" => sort},
+        socket
+      ) do
     {:noreply, assign(socket, activity_filter: filter, activity_sort: sort)}
   end
 
@@ -385,7 +389,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   def handle_event("toggle_activity_menu", %{"activity-id" => activity_id}, socket) do
     activity_id = String.to_integer(activity_id)
     current_menu = socket.assigns.show_activity_menu
-    
+
     new_menu = if current_menu == activity_id, do: nil, else: activity_id
     {:noreply, assign(socket, :show_activity_menu, new_menu)}
   end
@@ -399,9 +403,14 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   def handle_event("edit_activity", %{"activity-id" => activity_id}, socket) do
     activity_id = String.to_integer(activity_id)
     activity = Enum.find(socket.assigns.activities, &(&1.id == activity_id))
-    
+
     if activity && activity.created_by_id == socket.assigns.user.id do
-      {:noreply, assign(socket, editing_activity: activity, show_activity_creation: true, show_activity_menu: nil)}
+      {:noreply,
+       assign(socket,
+         editing_activity: activity,
+         show_activity_creation: true,
+         show_activity_menu: nil
+       )}
     else
       {:noreply, assign(socket, :show_activity_menu, nil)}
     end
@@ -411,18 +420,19 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   def handle_event("delete_activity", %{"activity-id" => activity_id}, socket) do
     activity_id = String.to_integer(activity_id)
     activity = Enum.find(socket.assigns.activities, &(&1.id == activity_id))
-    
+
     if activity && activity.created_by_id == socket.assigns.user.id do
       case Events.delete_event_activity(activity) do
         {:ok, _deleted_activity} ->
-          socket = 
+          socket =
             socket
             |> assign(:show_activity_menu, nil)
             |> load_activities()
             |> calculate_stats()
+
           send(self(), {:activity_deleted, activity})
           {:noreply, socket}
-        
+
         {:error, _changeset} ->
           send(self(), {:show_error, "Failed to delete activity"})
           {:noreply, assign(socket, :show_activity_menu, nil)}
@@ -440,22 +450,24 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   @impl true
   def handle_event("update_activity", params, socket) do
     activity = socket.assigns.editing_activity
-    
+
     if activity && activity.created_by_id == socket.assigns.user.id do
-      updated_metadata = Map.merge(activity.metadata || %{}, %{
-        "notes" => params["notes"],
-        "title" => params["title"]
-      })
-      
+      updated_metadata =
+        Map.merge(activity.metadata || %{}, %{
+          "notes" => params["notes"],
+          "title" => params["title"]
+        })
+
       case Events.update_event_activity(activity, %{metadata: updated_metadata}) do
         {:ok, _updated_activity} ->
-          socket = 
+          socket =
             socket
             |> assign(:editing_activity, nil)
             |> load_activities()
             |> calculate_stats()
+
           {:noreply, socket}
-        
+
         {:error, _changeset} ->
           send(self(), {:show_error, "Failed to update activity"})
           {:noreply, socket}
@@ -482,7 +494,13 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   @impl true
   def handle_event("toggle_select_all", _params, socket) do
-    filtered_activities = filter_and_sort_activities(socket.assigns.activities, socket.assigns.activity_filter, socket.assigns.activity_sort)
+    filtered_activities =
+      filter_and_sort_activities(
+        socket.assigns.activities,
+        socket.assigns.activity_filter,
+        socket.assigns.activity_sort
+      )
+
     all_activity_ids = Enum.map(filtered_activities, & &1.id)
 
     updated_selected =
@@ -509,26 +527,29 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     activities_to_delete =
       socket.assigns.activities
       |> Enum.filter(&(&1.id in selected_ids))
-    
+
     # Split into authorized and unauthorized activities
-    {authorized, unauthorized} = 
+    {authorized, unauthorized} =
       Enum.split_with(activities_to_delete, &(&1.created_by_id == current_user_id))
-    
+
     # Log unauthorized attempts
     if unauthorized != [] do
       unauthorized_ids = Enum.map(unauthorized, & &1.id)
-      Logger.warning("Unauthorized batch delete attempt by user #{current_user_id}: #{inspect(unauthorized_ids)}")
+
+      Logger.warning(
+        "Unauthorized batch delete attempt by user #{current_user_id}: #{inspect(unauthorized_ids)}"
+      )
     end
-    
+
     # Delete only authorized activities
-    {ok_count, failures} = 
+    {ok_count, failures} =
       Enum.reduce(authorized, {0, []}, fn activity, {ok, fails} ->
         case Events.delete_event_activity(activity) do
           {:ok, _} -> {ok + 1, fails}
           {:error, reason} -> {ok, [{activity.id, reason} | fails]}
         end
       end)
-    
+
     if failures != [] do
       Logger.warning("Failed to delete activities: #{inspect(failures)}")
     end
@@ -536,7 +557,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     # Reload activities after deletion
     deleted_ids = Enum.map(authorized, & &1.id) -- Enum.map(failures, fn {id, _} -> id end)
     remaining_selected = Enum.reject(selected_ids, &(&1 in deleted_ids))
-    
+
     socket =
       socket
       |> assign(:selected_activities, remaining_selected)
@@ -546,21 +567,24 @@ defmodule EventasaurusWeb.EventHistoryComponent do
     # Build informative message
     fail_count = length(failures)
     unauthorized_count = length(unauthorized)
-    
-    message = cond do
-      ok_count == 0 and (fail_count > 0 or unauthorized_count > 0) ->
-        "No activities deleted. #{unauthorized_count} unauthorized, #{fail_count} failed"
-      unauthorized_count > 0 or fail_count > 0 ->
-        "Deleted #{ok_count} activities. #{unauthorized_count} unauthorized, #{fail_count} failed"
-      ok_count == 1 ->
-        "1 activity deleted successfully"
-      true ->
-        "#{ok_count} activities deleted successfully"
-    end
+
+    message =
+      cond do
+        ok_count == 0 and (fail_count > 0 or unauthorized_count > 0) ->
+          "No activities deleted. #{unauthorized_count} unauthorized, #{fail_count} failed"
+
+        unauthorized_count > 0 or fail_count > 0 ->
+          "Deleted #{ok_count} activities. #{unauthorized_count} unauthorized, #{fail_count} failed"
+
+        ok_count == 1 ->
+          "1 activity deleted successfully"
+
+        true ->
+          "#{ok_count} activities deleted successfully"
+      end
 
     {:noreply, put_flash(socket, :info, message)}
   end
-
 
   # Helper functions
   defp filter_and_sort_activities(activities, filter, sort) do
@@ -570,46 +594,67 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   end
 
   defp filter_activities(activities, "all"), do: activities
+
   defp filter_activities(activities, "movies") do
     Enum.filter(activities, &(&1.activity_type == "movie_watched"))
   end
+
   defp filter_activities(activities, "tv") do
     Enum.filter(activities, &(&1.activity_type == "tv_watched"))
   end
+
   defp filter_activities(activities, "places") do
     Enum.filter(activities, &(&1.activity_type == "place_visited"))
   end
+
   defp filter_activities(activities, "manual") do
     Enum.filter(activities, &(&1.source == "manual"))
   end
+
   defp filter_activities(activities, _), do: activities
 
   defp sort_activities(activities, "newest") do
     Enum.sort_by(activities, & &1.inserted_at, {:desc, NaiveDateTime})
   end
+
   defp sort_activities(activities, "oldest") do
     Enum.sort_by(activities, & &1.inserted_at, {:asc, NaiveDateTime})
   end
+
   defp sort_activities(activities, "type") do
     Enum.sort_by(activities, & &1.activity_type)
   end
+
   defp sort_activities(activities, "name") do
     Enum.sort_by(activities, &activity_title/1)
   end
+
   defp sort_activities(activities, _), do: activities
 
   defp activity_title(%EventActivity{} = activity) do
     case activity.activity_type do
-      "movie_watched" -> activity.metadata["title"] || "Movie watched"
-      "tv_watched" -> activity.metadata["title"] || "TV show watched"
-      "game_played" -> activity.metadata["game_name"] || activity.metadata["title"] || "Game played"
-      "book_read" -> activity.metadata["title"] || "Book read"
-      "place_visited" -> activity.metadata["name"] || activity.metadata["title"] || "Place visited"
-      "activity_completed" -> activity.metadata["title"] || "Activity completed"
-      _ -> activity.metadata["title"] || "Activity"
+      "movie_watched" ->
+        activity.metadata["title"] || "Movie watched"
+
+      "tv_watched" ->
+        activity.metadata["title"] || "TV show watched"
+
+      "game_played" ->
+        activity.metadata["game_name"] || activity.metadata["title"] || "Game played"
+
+      "book_read" ->
+        activity.metadata["title"] || "Book read"
+
+      "place_visited" ->
+        activity.metadata["name"] || activity.metadata["title"] || "Place visited"
+
+      "activity_completed" ->
+        activity.metadata["title"] || "Activity completed"
+
+      _ ->
+        activity.metadata["title"] || "Activity"
     end
   end
-
 
   defp format_activity_type("movie_watched"), do: "Movie"
   defp format_activity_type("tv_watched"), do: "TV Show"
@@ -622,22 +667,23 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp activity_phase_badge_class(_activity), do: "bg-green-100 text-green-800"
 
-
   defp format_short_date(%NaiveDateTime{} = ndt) do
     ndt
     |> NaiveDateTime.to_date()
     |> Calendar.strftime("%m/%d")
   end
+
   defp format_short_date(%DateTime{} = datetime) do
     Calendar.strftime(datetime, "%m/%d")
   end
+
   defp format_short_date(_), do: ""
 
   defp format_relative_date(%NaiveDateTime{} = ndt) do
     date = NaiveDateTime.to_date(ndt)
     today = Date.utc_today()
     days_diff = Date.diff(today, date)
-    
+
     cond do
       days_diff == 0 -> "today"
       days_diff == 1 -> "1d ago"
@@ -646,20 +692,24 @@ defmodule EventasaurusWeb.EventHistoryComponent do
       true -> "#{div(days_diff, 365)}y ago"
     end
   end
+
   defp format_relative_date(%DateTime{} = datetime) do
     datetime
     |> DateTime.to_naive()
     |> format_relative_date()
   end
+
   defp format_relative_date(_), do: ""
 
   defp format_release_year(release_date) when is_binary(release_date) do
     String.slice(release_date, 0, 4)
   end
+
   defp format_release_year(_), do: ""
 
   defp activity_icon_svg("movie_watched") do
     assigns = %{}
+
     ~H"""
     <svg class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 20 20">
       <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm3 2l.01.01L7 5l.01.01L7 5l.01.01L7 5l.01.01L7 5l.01.01L7 5l.01.01L7 5h.01L7 5V3zm1 0h2v2H8V5zm0 0V3h2v2H8zm4-2v2h-2V3h2zm-2 4V5h2v2h-2z" clip-rule="evenodd" />
@@ -669,6 +719,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp activity_icon_svg("tv_watched") do
     assigns = %{}
+
     ~H"""
     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -678,6 +729,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp activity_icon_svg("game_played") do
     assigns = %{}
+
     ~H"""
     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 011-1h1a2 2 0 100-4H7a1 1 0 01-1-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
@@ -687,6 +739,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp activity_icon_svg("place_visited") do
     assigns = %{}
+
     ~H"""
     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -697,6 +750,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp activity_icon_svg("book_read") do
     assigns = %{}
+
     ~H"""
     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -706,6 +760,7 @@ defmodule EventasaurusWeb.EventHistoryComponent do
 
   defp activity_icon_svg(_) do
     assigns = %{}
+
     ~H"""
     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -727,4 +782,3 @@ defmodule EventasaurusWeb.EventHistoryComponent do
   defp activity_type_badge_class("book_read"), do: "bg-yellow-100 text-yellow-800"
   defp activity_type_badge_class(_), do: "bg-gray-100 text-gray-800"
 end
-

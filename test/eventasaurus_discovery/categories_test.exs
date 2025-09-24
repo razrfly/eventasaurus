@@ -15,9 +15,10 @@ defmodule EventasaurusDiscovery.CategoriesTest do
         display_order: 99
       }
 
-      {:ok, category} = %Category{}
-                        |> Category.changeset(attrs)
-                        |> Repo.insert()
+      {:ok, category} =
+        %Category{}
+        |> Category.changeset(attrs)
+        |> Repo.insert()
 
       assert category.name == "Test Category"
       assert category.slug == "test-category"
@@ -35,8 +36,9 @@ defmodule EventasaurusDiscovery.CategoriesTest do
         color: "not-a-hex-color"
       }
 
-      changeset = %Category{}
-                  |> Category.changeset(invalid_attrs)
+      changeset =
+        %Category{}
+        |> Category.changeset(invalid_attrs)
 
       refute changeset.valid?
       errors = errors_on(changeset)
@@ -49,13 +51,15 @@ defmodule EventasaurusDiscovery.CategoriesTest do
         slug: "duplicate-test"
       }
 
-      {:ok, _first} = %Category{}
-                      |> Category.changeset(attrs)
-                      |> Repo.insert()
+      {:ok, _first} =
+        %Category{}
+        |> Category.changeset(attrs)
+        |> Repo.insert()
 
-      {:error, changeset} = %Category{}
-                            |> Category.changeset(attrs)
-                            |> Repo.insert()
+      {:error, changeset} =
+        %Category{}
+        |> Category.changeset(attrs)
+        |> Repo.insert()
 
       errors = errors_on(changeset)
       assert "has already been taken" in Enum.map(errors[:slug] || [], fn {msg, _} -> msg end)

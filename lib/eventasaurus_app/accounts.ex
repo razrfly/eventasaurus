@@ -353,7 +353,10 @@ defmodule EventasaurusApp.Accounts do
         },
         # Order by start_at desc, then by role priority (organizer first) for same event
         # Use the fragment directly in ORDER BY since role_priority is a computed field
-        order_by: [desc: :start_at, desc: fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", eu.id)],
+        order_by: [
+          desc: :start_at,
+          desc: fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", eu.id)
+        ],
         # Use DISTINCT ON to ensure each event appears only once
         distinct: :id,
         limit: ^limit

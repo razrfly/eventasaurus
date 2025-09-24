@@ -20,10 +20,11 @@ defmodule Mix.Tasks.Karnet.Test do
     Mix.Task.run("app.start")
 
     # Parse arguments
-    {opts, _, _} = OptionParser.parse(args,
-      switches: [pages: :integer, extract: :boolean],
-      aliases: [p: :pages, e: :extract]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        switches: [pages: :integer, extract: :boolean],
+        aliases: [p: :pages, e: :extract]
+      )
 
     pages_to_fetch = opts[:pages] || 1
     should_extract = opts[:extract] || false
@@ -74,12 +75,17 @@ defmodule Mix.Tasks.Karnet.Test do
         Logger.info("✓ Successfully fetched page")
         Logger.info("HTML size: #{byte_size(html)} bytes")
         Logger.info("Contains 'wydarzenia': #{String.contains?(html, "wydarzenia")}")
-        Logger.info("Contains 'Kraków': #{String.contains?(html, "Kraków") || String.contains?(html, "Krakow")}")
+
+        Logger.info(
+          "Contains 'Kraków': #{String.contains?(html, "Kraków") || String.contains?(html, "Krakow")}"
+        )
 
         # Check for event-like content
         has_links = String.contains?(html, "href")
-        has_dates = Regex.match?(~r/\d{1,2}\.\d{1,2}\.\d{4}/, html) ||
-                   Regex.match?(~r/\d{4}-\d{2}-\d{2}/, html)
+
+        has_dates =
+          Regex.match?(~r/\d{1,2}\.\d{1,2}\.\d{4}/, html) ||
+            Regex.match?(~r/\d{4}-\d{2}-\d{2}/, html)
 
         Logger.info("Has links: #{has_links}")
         Logger.info("Has date patterns: #{has_dates}")
@@ -124,6 +130,7 @@ defmodule Mix.Tasks.Karnet.Test do
         if length(events) > 0 do
           # Show first few events as examples
           Logger.info("\nFirst 3 events:")
+
           events
           |> Enum.take(3)
           |> Enum.with_index(1)
@@ -145,9 +152,15 @@ defmodule Mix.Tasks.Karnet.Test do
           with_categories = Enum.count(events, & &1.category)
 
           total_events = length(events)
-          date_percentage = if total_events > 0, do: round(with_dates / total_events * 100), else: 0
-          venue_percentage = if total_events > 0, do: round(with_venues / total_events * 100), else: 0
-          category_percentage = if total_events > 0, do: round(with_categories / total_events * 100), else: 0
+
+          date_percentage =
+            if total_events > 0, do: round(with_dates / total_events * 100), else: 0
+
+          venue_percentage =
+            if total_events > 0, do: round(with_venues / total_events * 100), else: 0
+
+          category_percentage =
+            if total_events > 0, do: round(with_categories / total_events * 100), else: 0
 
           Logger.info("""
 
@@ -159,6 +172,7 @@ defmodule Mix.Tasks.Karnet.Test do
 
           # Check for unique URLs
           unique_urls = events |> Enum.map(& &1.url) |> Enum.uniq() |> length()
+
           if unique_urls < length(events) do
             Logger.warning("⚠️ Found duplicate URLs: #{length(events) - unique_urls} duplicates")
           else

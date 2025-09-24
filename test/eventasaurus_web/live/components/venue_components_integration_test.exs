@@ -16,7 +16,7 @@ defmodule EventasaurusWeb.Live.Components.VenueComponentsIntegrationTest do
         "formatted_phone_number" => "+1 212-310-6600",
         "website" => "https://www.centralparknyc.org/",
         "rating" => 4.6,
-        "user_ratings_total" => 145289,
+        "user_ratings_total" => 145_289,
         "price_level" => 0,
         "business_status" => "OPERATIONAL",
         "types" => ["park", "tourist_attraction", "establishment", "point_of_interest"],
@@ -42,15 +42,16 @@ defmodule EventasaurusWeb.Live.Components.VenueComponentsIntegrationTest do
       assert adapted.title == "Central Park"
       assert adapted.type == :activity
       assert adapted.rating.value == 4.6
-      assert adapted.rating.count == 145289
+      assert adapted.rating.count == 145_289
     end
 
     test "RichDataDisplayComponent with Google Places data", %{venue_data: venue_data} do
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-venue",
-        rich_data: venue_data,
-        compact: false
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-venue",
+          rich_data: venue_data,
+          compact: false
+        })
 
       # Should render the venue name
       assert html =~ "Central Park"
@@ -68,11 +69,12 @@ defmodule EventasaurusWeb.Live.Components.VenueComponentsIntegrationTest do
     end
 
     test "compact mode rendering", %{venue_data: venue_data} do
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-venue-compact",
-        rich_data: venue_data,
-        compact: true
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-venue-compact",
+          rich_data: venue_data,
+          compact: true
+        })
 
       # Should still render essential info in compact mode
       assert html =~ "Central Park"
@@ -89,11 +91,12 @@ defmodule EventasaurusWeb.Live.Components.VenueComponentsIntegrationTest do
         }
       }
 
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-minimal-venue",
-        rich_data: minimal_data,
-        compact: false
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-minimal-venue",
+          rich_data: minimal_data,
+          compact: false
+        })
 
       # Should render without errors even with minimal data
       assert html =~ "Test Venue"
@@ -106,11 +109,12 @@ defmodule EventasaurusWeb.Live.Components.VenueComponentsIntegrationTest do
         "other_field" => "value"
       }
 
-      html = render_component(RichDataDisplayComponent, %{
-        id: "test-unsupported",
-        rich_data: unsupported_data,
-        compact: false
-      })
+      html =
+        render_component(RichDataDisplayComponent, %{
+          id: "test-unsupported",
+          rich_data: unsupported_data,
+          compact: false
+        })
 
       assert html =~ "No compatible adapter found for data"
     end

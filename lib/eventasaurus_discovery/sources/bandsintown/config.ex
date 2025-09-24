@@ -6,20 +6,24 @@ defmodule EventasaurusDiscovery.Sources.Bandsintown.Config do
   @behaviour EventasaurusDiscovery.Sources.SourceConfig
 
   @base_url "https://www.bandsintown.com"
-  @rate_limit 2  # Conservative rate limit for scraping
+  # Conservative rate limit for scraping
+  @rate_limit 2
 
   @impl EventasaurusDiscovery.Sources.SourceConfig
   def source_config do
     EventasaurusDiscovery.Sources.SourceConfig.merge_config(%{
       name: "BandsInTown",
       slug: "bandsintown",
-      priority: 80,  # Lower priority than Ticketmaster
+      # Lower priority than Ticketmaster
+      priority: 80,
       rate_limit: @rate_limit,
-      timeout: 15_000,  # Longer timeout for scraping
+      # Longer timeout for scraping
+      timeout: 15_000,
       max_retries: 3,
       queue: :discovery,
       base_url: @base_url,
-      api_key: nil,  # No API key needed for scraping
+      # No API key needed for scraping
+      api_key: nil,
       api_secret: nil
     })
   end

@@ -58,22 +58,28 @@ defmodule EventasaurusWeb.PageController do
   def redirect_to_auth_login(conn, _params) do
     # Preserve query parameters when redirecting
     query_string = conn.query_string
-    path = if query_string != "" do
-      "/auth/login?" <> query_string
-    else
-      "/auth/login"
-    end
+
+    path =
+      if query_string != "" do
+        "/auth/login?" <> query_string
+      else
+        "/auth/login"
+      end
+
     redirect(conn, to: path)
   end
 
   def redirect_to_auth_register(conn, _params) do
     # Preserve query parameters when redirecting
     query_string = conn.query_string
-    path = if query_string != "" do
-      "/auth/register?" <> query_string
-    else
-      "/auth/register"
-    end
+
+    path =
+      if query_string != "" do
+        "/auth/register?" <> query_string
+      else
+        "/auth/register"
+      end
+
     redirect(conn, to: path)
   end
 
@@ -81,13 +87,14 @@ defmodule EventasaurusWeb.PageController do
     # Redirect to auth register with event_id parameter
     query_string = conn.query_string
     event_param = "event_id=#{URI.encode_www_form(event_id)}"
-    
-    path = if query_string != "" do
-      "/auth/register?#{event_param}&#{query_string}"
-    else
-      "/auth/register?#{event_param}"
-    end
-    
+
+    path =
+      if query_string != "" do
+        "/auth/register?#{event_param}&#{query_string}"
+      else
+        "/auth/register?#{event_param}"
+      end
+
     redirect(conn, to: path)
   end
 

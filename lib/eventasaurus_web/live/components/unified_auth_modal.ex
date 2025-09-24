@@ -45,15 +45,17 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   @impl true
   def update(assigns, socket) do
     mode = Map.get(assigns, :mode, :interest)
-    
+
     # Build the form based on mode - registration/voting need name, interest only needs email
-    form_data = case mode do
-      mode when mode in [:registration, :voting] ->
-        %{"email" => socket.assigns[:email] || "", "name" => socket.assigns[:name] || ""}
-      _ ->
-        %{"email" => socket.assigns[:email] || ""}
-    end
-    
+    form_data =
+      case mode do
+        mode when mode in [:registration, :voting] ->
+          %{"email" => socket.assigns[:email] || "", "name" => socket.assigns[:name] || ""}
+
+        _ ->
+          %{"email" => socket.assigns[:email] || ""}
+      end
+
     form = to_form(form_data, as: :auth)
 
     {:ok,
@@ -86,6 +88,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     case validate_params(params, socket.assigns.mode) do
       errors when map_size(errors) == 0 ->
         handle_magic_link_submission(socket, params)
+
       errors ->
         # Convert our error map to the format Phoenix forms expect
         # Phoenix forms expect a keyword list with {message, opts} tuples
@@ -109,17 +112,18 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   def handle_event("close", _params, socket) do
     # Send close event to parent LiveView
     close_event = socket.assigns.on_close
-    
+
     # Use existing atoms for known events, otherwise send as string
-    message = case close_event do
-      "close_interest_modal" -> :close_interest_modal
-      "close_registration_modal" -> :close_registration_modal
-      "close_vote_modal" -> :close_vote_modal
-      event when is_atom(event) -> event
-      event when is_binary(event) -> {:close_modal, event}
-      _ -> :close_modal
-    end
-    
+    message =
+      case close_event do
+        "close_interest_modal" -> :close_interest_modal
+        "close_registration_modal" -> :close_registration_modal
+        "close_vote_modal" -> :close_vote_modal
+        event when is_atom(event) -> event
+        event when is_binary(event) -> {:close_modal, event}
+        _ -> :close_modal
+      end
+
     send(self(), message)
     {:noreply, reset_modal_state(socket)}
   end
@@ -377,10 +381,13 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     case poll_type do
       :binary ->
         render_binary_vote_summary(assigns, votes)
+
       :approval ->
         render_approval_vote_summary(assigns, votes)
+
       :ranked ->
         render_ranked_vote_summary(assigns, votes)
+
       :star ->
         render_star_vote_summary(assigns, votes)
     end
@@ -388,6 +395,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   defp render_binary_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for {option_id, vote_value} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
@@ -407,6 +415,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   defp render_approval_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for {option_id, _vote_value} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
@@ -426,6 +435,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   defp render_ranked_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for vote <- @votes |> Enum.sort_by(fn
           %{rank: rank} -> rank
@@ -452,6 +462,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   defp render_star_vote_summary(assigns, votes) do
     assigns = assign(assigns, :votes, votes)
+
     ~H"""
     <%= for {option_id, stars} <- @votes do %>
       <% option = Enum.find(@poll_options, &(&1.id == option_id)) %>
@@ -474,13 +485,15 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   defp get_mode_config(:interest, assigns) do
     %{
       title: "Express Interest in #{assigns.event.title}",
-      form_description: "Enter your email address to receive a magic link. Once you click the link, we'll automatically register your interest in this event.",
+      form_description:
+        "Enter your email address to receive a magic link. Once you click the link, we'll automatically register your interest in this event.",
       completion_text: "register your interest"
     }
   end
 
   defp get_mode_config(:registration, assigns) do
     intended_status = Map.get(assigns, :intended_status, :accepted)
+
     case intended_status do
       :interested ->
         %{
@@ -488,10 +501,12 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
           form_description: "We'll create an account for you so you can manage your interest.",
           completion_text: "register your interest"
         }
+
       _ ->
         %{
           title: "Register for #{assigns.event.title}",
-          form_description: "We'll create an account for you so you can manage your registration.",
+          form_description:
+            "We'll create an account for you so you can manage your registration.",
           completion_text: "complete your registration"
         }
     end
@@ -500,7 +515,8 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   defp get_mode_config(:voting, _assigns) do
     %{
       title: "Save Your Votes",
-      form_description: "Enter your details to save these votes. You'll receive a magic link via email to create your account.",
+      form_description:
+        "Enter your details to save these votes. You'll receive a magic link via email to create your account.",
       completion_text: "save your votes"
     }
   end
@@ -509,27 +525,29 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     errors = %{}
 
     # Email is always required
-    errors = if params["email"] == nil or String.trim(params["email"]) == "" do
-      Map.put(errors, :email, "Email is required")
-    else
-      # More robust email validation pattern
-      if String.match?(params["email"], ~r/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) do
-        errors
+    errors =
+      if params["email"] == nil or String.trim(params["email"]) == "" do
+        Map.put(errors, :email, "Email is required")
       else
-        Map.put(errors, :email, "Please enter a valid email address")
+        # More robust email validation pattern
+        if String.match?(params["email"], ~r/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) do
+          errors
+        else
+          Map.put(errors, :email, "Please enter a valid email address")
+        end
       end
-    end
 
     # Name is required for registration and voting modes
-    errors = if mode in [:registration, :voting] do
-      if params["name"] == nil or String.trim(params["name"]) == "" do
-        Map.put(errors, :name, "Name is required")
+    errors =
+      if mode in [:registration, :voting] do
+        if params["name"] == nil or String.trim(params["name"]) == "" do
+          Map.put(errors, :name, "Name is required")
+        else
+          errors
+        end
       else
         errors
       end
-    else
-      errors
-    end
 
     errors
   end
@@ -540,8 +558,10 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     case socket.assigns.mode do
       :interest ->
         handle_interest_magic_link(socket, form_data)
+
       :registration ->
         handle_registration_magic_link(socket, form_data)
+
       :voting ->
         handle_voting_magic_link(socket, form_data)
     end
@@ -549,7 +569,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
   defp handle_interest_magic_link(socket, form_data) do
     email = form_data["email"]
-    
+
     # Include event ID in user metadata for post-auth processing
     user_metadata = %{
       "name" => email |> String.split("@") |> List.first(),
@@ -559,7 +579,7 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     case Auth.send_magic_link(email, user_metadata) do
       {:ok, _} ->
         send(socket.parent_pid, {:magic_link_sent, email})
-        
+
         {:noreply,
          socket
          |> assign(:loading, false)
@@ -569,14 +589,14 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
       {:error, reason} ->
         error_message = format_auth_error(reason)
         send(socket.parent_pid, {:magic_link_error, error_message})
-        
+
         {:noreply, assign(socket, :loading, false)}
     end
   end
 
   defp handle_registration_magic_link(socket, form_data) do
     %{"name" => name, "email" => email} = form_data
-    
+
     case EventasaurusApp.Events.register_user_for_event(socket.assigns.event.id, name, email) do
       {:ok, :new_registration, _participant} ->
         intended_status = Map.get(socket.assigns, :intended_status, :accepted)
@@ -585,7 +605,12 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
 
       {:ok, :existing_user_registered, _participant} ->
         intended_status = Map.get(socket.assigns, :intended_status, :accepted)
-        send(self(), {:registration_success, :existing_user_registered, name, email, intended_status})
+
+        send(
+          self(),
+          {:registration_success, :existing_user_registered, name, email, intended_status}
+        )
+
         {:noreply, assign(socket, :loading, false)}
 
       {:error, :already_registered} ->
@@ -601,18 +626,28 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
   defp handle_voting_magic_link(socket, form_data) do
     %{"name" => name, "email" => email} = form_data
     temp_votes = socket.assigns.temp_votes
-    
+
     if has_temp_votes?(temp_votes) do
       # Send appropriate message based on poll type
       case socket.assigns[:poll] do
         nil ->
           send(self(), {:vote_error, :no_poll})
+
         %{poll_type: "date_selection"} ->
-          send(self(), {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes, socket.assigns.poll_options})
+          send(
+            self(),
+            {:save_all_votes_for_user, socket.assigns.event.id, name, email, temp_votes,
+             socket.assigns.poll_options}
+          )
+
         poll ->
-          send(self(), {:save_all_poll_votes_for_user, poll.id, name, email, temp_votes, socket.assigns.poll_options})
+          send(
+            self(),
+            {:save_all_poll_votes_for_user, poll.id, name, email, temp_votes,
+             socket.assigns.poll_options}
+          )
       end
-      
+
       {:noreply, assign(socket, :loading, false)}
     else
       send(self(), {:vote_error, :no_votes})
@@ -629,18 +664,19 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
       temp_votes: socket.assigns.temp_votes,
       intended_status: Map.get(socket.assigns, :intended_status, :accepted)
     }
-    
+
     # Create auth URL with context parameters
-    auth_url = case provider do
-      :facebook -> "/auth/facebook"
-      :google -> "/auth/google"
-    end
-    
+    auth_url =
+      case provider do
+        :facebook -> "/auth/facebook"
+        :google -> "/auth/google"
+      end
+
     # Build full URL with context
     context_json = context |> Jason.encode!() |> URI.encode()
     action = Atom.to_string(socket.assigns.mode)
     full_url = "#{auth_url}?action=#{action}&context=#{context_json}"
-    
+
     # Use JavaScript redirect to navigate with context
     {:noreply, push_navigate(socket, to: full_url, replace: false)}
   end
@@ -658,8 +694,10 @@ defmodule EventasaurusWeb.UnifiedAuthModal do
     case temp_votes do
       %{poll_type: _type, votes: votes} when is_map(votes) ->
         map_size(votes) > 0
+
       votes when is_map(votes) ->
         map_size(votes) > 0
+
       _ ->
         false
     end

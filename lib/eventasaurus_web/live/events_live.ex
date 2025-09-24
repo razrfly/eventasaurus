@@ -5,7 +5,7 @@ defmodule EventasaurusWeb.EventsLive do
   @impl true
   def mount(_params, _session, socket) do
     events = Events.list_public_events()
-    
+
     {:ok,
      socket
      |> assign(:page_title, "Browse Events")
@@ -17,7 +17,7 @@ defmodule EventasaurusWeb.EventsLive do
   @impl true
   def handle_event("search", %{"search" => search_term}, socket) do
     send(self(), {:do_search, search_term})
-    
+
     {:noreply,
      socket
      |> assign(:search, search_term)
@@ -27,7 +27,7 @@ defmodule EventasaurusWeb.EventsLive do
   @impl true
   def handle_info({:do_search, search_term}, socket) do
     events = Events.list_public_events(search: search_term)
-    
+
     {:noreply,
      socket
      |> assign(:events, events)
@@ -189,16 +189,18 @@ defmodule EventasaurusWeb.EventsLive do
   defp format_status(_), do: "Confirmed"
 
   defp format_event_date(nil, _timezone), do: "Date TBD"
+
   defp format_event_date(datetime, timezone) do
     # Convert to the event's timezone if specified
-    datetime = if timezone do
-      case DateTime.shift_zone(datetime, timezone) do
-        {:ok, shifted} -> shifted
-        _ -> datetime
+    datetime =
+      if timezone do
+        case DateTime.shift_zone(datetime, timezone) do
+          {:ok, shifted} -> shifted
+          _ -> datetime
+        end
+      else
+        datetime
       end
-    else
-      datetime
-    end
 
     # Format as "Jan 15, 2024 at 7:00 PM"
     month = Calendar.strftime(datetime, "%b")
@@ -207,12 +209,14 @@ defmodule EventasaurusWeb.EventsLive do
     hour = datetime.hour
     minute = Calendar.strftime(datetime, "%M")
     period = if hour >= 12, do: "PM", else: "AM"
-    hour_12 = case hour do
-      0 -> 12
-      h when h > 12 -> h - 12
-      h -> h
-    end
-    
+
+    hour_12 =
+      case hour do
+        0 -> 12
+        h when h > 12 -> h - 12
+        h -> h
+      end
+
     "#{month} #{day}, #{year} at #{hour_12}:#{minute} #{period}"
   end
 end

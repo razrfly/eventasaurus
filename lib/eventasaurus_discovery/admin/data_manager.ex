@@ -40,17 +40,23 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       clean_orphaned_sources()
 
       # 5. Optionally clear related Oban jobs
-      oban_count = if clear_oban_jobs do
-        clear_discovery_oban_jobs()
-      else
-        0
-      end
+      oban_count =
+        if clear_oban_jobs do
+          clear_discovery_oban_jobs()
+        else
+          0
+        end
 
-      Logger.info("Successfully cleared #{deleted_count} public events#{if oban_count > 0, do: " and #{oban_count} Oban jobs", else: ""}")
+      Logger.info(
+        "Successfully cleared #{deleted_count} public events#{if oban_count > 0, do: " and #{oban_count} Oban jobs", else: ""}"
+      )
+
       deleted_count
     end)
     |> case do
-      {:ok, count} -> {:ok, count}
+      {:ok, count} ->
+        {:ok, count}
+
       {:error, reason} ->
         Logger.error("Failed to clear public events: #{inspect(reason)}")
         {:error, reason}
@@ -96,7 +102,9 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       end
     end)
     |> case do
-      {:ok, count} -> {:ok, count}
+      {:ok, count} ->
+        {:ok, count}
+
       {:error, reason} ->
         Logger.error("Failed to clear events by source: #{inspect(reason)}")
         {:error, reason}
@@ -113,7 +121,8 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       # Get all event IDs for this city (through venues)
       event_ids =
         from(pe in PublicEvent,
-          join: v in EventasaurusApp.Venues.Venue, on: v.id == pe.venue_id,
+          join: v in EventasaurusApp.Venues.Venue,
+          on: v.id == pe.venue_id,
           where: v.city_id == ^city_id,
           select: pe.id
         )
@@ -142,7 +151,9 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       end
     end)
     |> case do
-      {:ok, count} -> {:ok, count}
+      {:ok, count} ->
+        {:ok, count}
+
       {:error, reason} ->
         Logger.error("Failed to clear events by city: #{inspect(reason)}")
         {:error, reason}
@@ -187,7 +198,9 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
       end
     end)
     |> case do
-      {:ok, count} -> {:ok, count}
+      {:ok, count} ->
+        {:ok, count}
+
       {:error, reason} ->
         Logger.error("Failed to clear events by date range: #{inspect(reason)}")
         {:error, reason}
@@ -198,18 +211,21 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
 
   defp clear_discovery_oban_jobs do
     # Clear all completed discovery-related Oban jobs to allow re-importing
-    {count, _} = Repo.delete_all(
-      from j in "oban_jobs",
-        where: j.worker in [
-          "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob",
-          "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",
-          "EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob",
-          "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob",
-          "EventasaurusDiscovery.Scraping.Scrapers.Ticketmaster.Jobs.EventDetailJob",
-          "EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob",
-          "EventasaurusDiscovery.Admin.DiscoverySyncJob"
-        ] and j.state in ["completed", "discarded", "cancelled"]
-    )
+    {count, _} =
+      Repo.delete_all(
+        from(j in "oban_jobs",
+          where:
+            j.worker in [
+              "EventasaurusDiscovery.Sources.Ticketmaster.Jobs.SyncJob",
+              "EventasaurusDiscovery.Sources.Bandsintown.Jobs.SyncJob",
+              "EventasaurusDiscovery.Sources.Karnet.Jobs.SyncJob",
+              "EventasaurusDiscovery.Scraping.Scrapers.Bandsintown.Jobs.EventDetailJob",
+              "EventasaurusDiscovery.Scraping.Scrapers.Ticketmaster.Jobs.EventDetailJob",
+              "EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob",
+              "EventasaurusDiscovery.Admin.DiscoverySyncJob"
+            ] and j.state in ["completed", "discarded", "cancelled"]
+        )
+      )
 
     Logger.info("Cleared #{count} completed discovery Oban jobs")
     count
@@ -264,13 +280,16 @@ defmodule EventasaurusDiscovery.Admin.DataManager do
         city_id = String.to_integer(city_id_str)
 
         %{
-          events: Repo.aggregate(
-            from(pe in PublicEvent,
-              join: v in EventasaurusApp.Venues.Venue, on: v.id == pe.venue_id,
-              where: v.city_id == ^city_id),
-            :count,
-            :id
-          ),
+          events:
+            Repo.aggregate(
+              from(pe in PublicEvent,
+                join: v in EventasaurusApp.Venues.Venue,
+                on: v.id == pe.venue_id,
+                where: v.city_id == ^city_id
+              ),
+              :count,
+              :id
+            ),
           city_id: city_id
         }
 

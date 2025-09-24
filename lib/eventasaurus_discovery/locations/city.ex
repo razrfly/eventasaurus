@@ -8,13 +8,13 @@ defmodule EventasaurusDiscovery.Locations.City do
   alias EventasaurusDiscovery.Locations.City.Slug
 
   schema "cities" do
-    field :name, :string
-    field :slug, Slug.Type
-    field :latitude, :decimal
-    field :longitude, :decimal
+    field(:name, :string)
+    field(:slug, Slug.Type)
+    field(:latitude, :decimal)
+    field(:longitude, :decimal)
 
-    belongs_to :country, EventasaurusDiscovery.Locations.Country
-    has_many :venues, EventasaurusApp.Venues.Venue
+    belongs_to(:country, EventasaurusDiscovery.Locations.Country)
+    has_many(:venues, EventasaurusApp.Venues.Venue)
 
     timestamps()
   end

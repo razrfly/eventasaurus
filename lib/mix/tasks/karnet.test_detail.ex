@@ -23,16 +23,18 @@ defmodule Mix.Tasks.Karnet.TestDetail do
     Mix.Task.run("app.start")
 
     # Parse arguments
-    {opts, _, _} = OptionParser.parse(args,
-      switches: [url: :string, festival: :boolean],
-      aliases: [u: :url, f: :festival]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        switches: [url: :string, festival: :boolean],
+        aliases: [u: :url, f: :festival]
+      )
 
-    url = cond do
-      opts[:festival] -> @festival_url
-      opts[:url] -> opts[:url]
-      true -> @default_event_url
-    end
+    url =
+      cond do
+        opts[:festival] -> @festival_url
+        opts[:url] -> opts[:url]
+        true -> @default_event_url
+      end
 
     Logger.info("""
     🧪 Testing Karnet Scraper - Phase 2 (Detail Extraction)
@@ -59,7 +61,10 @@ defmodule Mix.Tasks.Karnet.TestDetail do
       {:ok, html} ->
         Logger.info("✓ Successfully fetched page")
         Logger.info("HTML size: #{byte_size(html)} bytes")
-        Logger.info("Contains event content: #{String.contains?(html, "event") || String.contains?(html, "wydarzenie")}")
+
+        Logger.info(
+          "Contains event content: #{String.contains?(html, "event") || String.contains?(html, "wydarzenie")}"
+        )
 
       {:error, reason} ->
         Logger.error("✗ Failed to fetch page: #{inspect(reason)}")
@@ -99,11 +104,13 @@ defmodule Mix.Tasks.Karnet.TestDetail do
             end
 
             if event_data.description_translations do
-              desc_text = case event_data.description_translations do
-                %{"pl" => text} -> text
-                %{"en" => text} -> text
-                _ -> "No valid description"
-              end
+              desc_text =
+                case event_data.description_translations do
+                  %{"pl" => text} -> text
+                  %{"en" => text} -> text
+                  _ -> "No valid description"
+                end
+
               Logger.info("Description: #{String.slice(desc_text, 0, 200)}...")
             else
               Logger.info("Description: Not found")
@@ -159,6 +166,7 @@ defmodule Mix.Tasks.Karnet.TestDetail do
         {:ok, {start_dt, end_dt}} ->
           Logger.info("✓ Parsed successfully")
           Logger.info("  Start: #{start_dt}")
+
           if start_dt != end_dt do
             Logger.info("  End: #{end_dt}")
           end

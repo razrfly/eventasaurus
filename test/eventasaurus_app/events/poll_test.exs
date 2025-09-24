@@ -1,5 +1,6 @@
 defmodule EventasaurusApp.Events.PollTest do
-  use EventasaurusApp.DataCase, async: false  # async: false for PubSub testing
+  # async: false for PubSub testing
+  use EventasaurusApp.DataCase, async: false
 
   import EventasaurusApp.EventsFixtures
   import EventasaurusApp.AccountsFixtures
@@ -57,21 +58,23 @@ defmodule EventasaurusApp.Events.PollTest do
     end
 
     test "list_polls/1 returns polls for an event", %{user: user, event: event} do
-      {:ok, poll1} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Poll 1",
-        voting_system: "binary",
-        poll_type: "general",
-        created_by_id: user.id
-      })
+      {:ok, poll1} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Poll 1",
+          voting_system: "binary",
+          poll_type: "general",
+          created_by_id: user.id
+        })
 
-      {:ok, poll2} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Poll 2",
-        voting_system: "approval",
-        poll_type: "venue",
-        created_by_id: user.id
-      })
+      {:ok, poll2} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Poll 2",
+          voting_system: "approval",
+          poll_type: "venue",
+          created_by_id: user.id
+        })
 
       polls = Events.list_polls(event)
       assert length(polls) == 2
@@ -80,13 +83,14 @@ defmodule EventasaurusApp.Events.PollTest do
     end
 
     test "get_poll!/1 returns poll with preloaded associations", %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Test Poll",
-        voting_system: "binary",
-        poll_type: "general",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Test Poll",
+          voting_system: "binary",
+          poll_type: "general",
+          created_by_id: user.id
+        })
 
       fetched_poll = Events.get_poll!(poll.id)
       assert fetched_poll.id == poll.id
@@ -97,13 +101,14 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "poll options management" do
     setup %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Test Poll",
-        voting_system: "approval",
-        poll_type: "general",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Test Poll",
+          voting_system: "approval",
+          poll_type: "general",
+          created_by_id: user.id
+        })
 
       %{poll: poll}
     end
@@ -129,12 +134,14 @@ defmodule EventasaurusApp.Events.PollTest do
     end
 
     test "delete_poll_option/1 removes option", %{poll: poll} do
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Option to Delete"
-      })
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option to Delete"
+        })
 
       assert {:ok, _} = Events.delete_poll_option(option)
+
       assert_raise Ecto.NoResultsError, fn ->
         Events.get_poll_option!(option.id)
       end
@@ -143,20 +150,22 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "binary voting system" do
     setup %{user: user, user2: user2, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Binary Poll",
-        voting_system: "binary",
-        poll_type: "general",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Binary Poll",
+          voting_system: "binary",
+          poll_type: "general",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Yes or No Option",
-        suggested_by_id: user.id
-      })
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Yes or No Option",
+          suggested_by_id: user.id
+        })
 
       %{poll: Events.get_poll!(poll.id), option: option}
     end
@@ -190,7 +199,12 @@ defmodule EventasaurusApp.Events.PollTest do
       assert {:error, _} = Events.cast_binary_vote(poll, option, user, "invalid")
     end
 
-    test "multiple users can vote on same option", %{poll: poll, option: option, user: user, user2: user2} do
+    test "multiple users can vote on same option", %{
+      poll: poll,
+      option: option,
+      user: user,
+      user2: user2
+    } do
       {:ok, vote1} = Events.cast_binary_vote(poll, option, user, "yes")
       {:ok, vote2} = Events.cast_binary_vote(poll, option, user2, "no")
 
@@ -203,18 +217,36 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "approval voting system" do
     setup %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Approval Poll",
-        voting_system: "approval",
-        poll_type: "general",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Approval Poll",
+          voting_system: "approval",
+          poll_type: "general",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 1", suggested_by_id: user.id})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 2", suggested_by_id: user.id})
-      {:ok, option3} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 3", suggested_by_id: user.id})
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 1",
+          suggested_by_id: user.id
+        })
+
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 2",
+          suggested_by_id: user.id
+        })
+
+      {:ok, option3} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 3",
+          suggested_by_id: user.id
+        })
 
       %{
         poll: Events.get_poll!(poll.id),
@@ -224,7 +256,12 @@ defmodule EventasaurusApp.Events.PollTest do
       }
     end
 
-    test "cast_approval_vote/4 allows voting for multiple options", %{poll: poll, option1: option1, option2: option2, user: user} do
+    test "cast_approval_vote/4 allows voting for multiple options", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      user: user
+    } do
       {:ok, vote1} = Events.cast_approval_vote(poll, option1, user, true)
       {:ok, vote2} = Events.cast_approval_vote(poll, option2, user, true)
 
@@ -246,7 +283,13 @@ defmodule EventasaurusApp.Events.PollTest do
       assert result == :vote_removed
     end
 
-    test "cast_approval_votes/3 handles multiple options efficiently", %{poll: poll, option1: option1, option2: option2, option3: option3, user: user} do
+    test "cast_approval_votes/3 handles multiple options efficiently", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      option3: option3,
+      user: user
+    } do
       option_ids = [option1.id, option2.id, option3.id]
 
       {:ok, votes} = Events.cast_approval_votes(poll, option_ids, user)
@@ -259,18 +302,36 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "ranked choice voting system" do
     setup %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Ranked Poll",
-        voting_system: "ranked",
-        poll_type: "general",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Ranked Poll",
+          voting_system: "ranked",
+          poll_type: "general",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "First Choice", suggested_by_id: user.id})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Second Choice", suggested_by_id: user.id})
-      {:ok, option3} = Events.create_poll_option(%{poll_id: poll.id, title: "Third Choice", suggested_by_id: user.id})
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "First Choice",
+          suggested_by_id: user.id
+        })
+
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Second Choice",
+          suggested_by_id: user.id
+        })
+
+      {:ok, option3} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Third Choice",
+          suggested_by_id: user.id
+        })
 
       %{
         poll: Events.get_poll!(poll.id),
@@ -286,7 +347,13 @@ defmodule EventasaurusApp.Events.PollTest do
       assert vote.poll_option_id == option1.id
     end
 
-    test "cast_ranked_votes/3 creates full ranking", %{poll: poll, option1: option1, option2: option2, option3: option3, user: user} do
+    test "cast_ranked_votes/3 creates full ranking", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      option3: option3,
+      user: user
+    } do
       rankings = [
         {option1.id, 1},
         {option3.id, 2},
@@ -303,16 +370,28 @@ defmodule EventasaurusApp.Events.PollTest do
       assert votes_by_option[option2.id] |> List.first() |> Map.get(:vote_rank) == 3
     end
 
-    test "cast_ranked_votes/3 prevents duplicate ranks", %{poll: poll, option1: option1, option2: option2, user: user} do
+    test "cast_ranked_votes/3 prevents duplicate ranks", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      user: user
+    } do
       rankings = [
         {option1.id, 1},
-        {option2.id, 1}  # Duplicate rank
+        # Duplicate rank
+        {option2.id, 1}
       ]
 
       assert {:error, _} = Events.cast_ranked_votes(poll, rankings, user)
     end
 
-    test "cast_ranked_votes/3 replaces existing rankings", %{poll: poll, option1: option1, option2: option2, option3: option3, user: user} do
+    test "cast_ranked_votes/3 replaces existing rankings", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      option3: option3,
+      user: user
+    } do
       # Initial ranking
       initial_rankings = [{option1.id, 1}, {option2.id, 2}]
       {:ok, _} = Events.cast_ranked_votes(poll, initial_rankings, user)
@@ -333,17 +412,29 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "star rating voting system" do
     setup %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Star Poll",
-        voting_system: "star",
-        poll_type: "general",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Star Poll",
+          voting_system: "star",
+          poll_type: "general",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Rate Me 1", suggested_by_id: user.id})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Rate Me 2", suggested_by_id: user.id})
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Rate Me 1",
+          suggested_by_id: user.id
+        })
+
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Rate Me 2",
+          suggested_by_id: user.id
+        })
 
       %{poll: Events.get_poll!(poll.id), option1: option1, option2: option2}
     end
@@ -359,7 +450,12 @@ defmodule EventasaurusApp.Events.PollTest do
       assert {:error, _} = Events.cast_star_vote(poll, option1, user, -1)
     end
 
-    test "cast_star_vote/4 allows multiple option ratings", %{poll: poll, option1: option1, option2: option2, user: user} do
+    test "cast_star_vote/4 allows multiple option ratings", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      user: user
+    } do
       {:ok, _} = Events.cast_star_vote(poll, option1, user, 4)
       {:ok, _} = Events.cast_star_vote(poll, option2, user, 2)
 
@@ -367,7 +463,11 @@ defmodule EventasaurusApp.Events.PollTest do
       assert length(votes) == 2
     end
 
-    test "cast_star_vote/4 replaces existing rating for same option", %{poll: poll, option1: option1, user: user} do
+    test "cast_star_vote/4 replaces existing rating for same option", %{
+      poll: poll,
+      option1: option1,
+      user: user
+    } do
       {:ok, _} = Events.cast_star_vote(poll, option1, user, 3)
       {:ok, new_vote} = Events.cast_star_vote(poll, option1, user, 5)
 
@@ -379,22 +479,39 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "vote management and utilities" do
     setup %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Management Poll",
-        voting_system: "approval",
-        poll_type: "general",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Management Poll",
+          voting_system: "approval",
+          poll_type: "general",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 1", suggested_by_id: user.id})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option 2", suggested_by_id: user.id})
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 1",
+          suggested_by_id: user.id
+        })
+
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option 2",
+          suggested_by_id: user.id
+        })
 
       %{poll: Events.get_poll!(poll.id), option1: option1, option2: option2}
     end
 
-    test "remove_user_vote/2 removes specific vote", %{poll: poll, option1: option1, option2: option2, user: user} do
+    test "remove_user_vote/2 removes specific vote", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      user: user
+    } do
       # Create votes
       {:ok, _} = Events.cast_approval_vote(poll, option1, user, true)
       {:ok, _} = Events.cast_approval_vote(poll, option2, user, true)
@@ -407,7 +524,12 @@ defmodule EventasaurusApp.Events.PollTest do
       assert List.first(votes).poll_option_id == option2.id
     end
 
-    test "clear_user_poll_votes/2 removes all user votes for poll", %{poll: poll, option1: option1, option2: option2, user: user} do
+    test "clear_user_poll_votes/2 removes all user votes for poll", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      user: user
+    } do
       # Create votes
       {:ok, _} = Events.cast_approval_vote(poll, option1, user, true)
       {:ok, _} = Events.cast_approval_vote(poll, option2, user, true)
@@ -431,7 +553,12 @@ defmodule EventasaurusApp.Events.PollTest do
       assert Events.can_user_vote?(user, updated_poll) == false
     end
 
-    test "get_user_voting_summary/2 returns comprehensive vote summary", %{poll: poll, option1: option1, option2: option2, user: user} do
+    test "get_user_voting_summary/2 returns comprehensive vote summary", %{
+      poll: poll,
+      option1: option1,
+      option2: option2,
+      user: user
+    } do
       # Create votes
       {:ok, _} = Events.cast_approval_vote(poll, option1, user, true)
       {:ok, _} = Events.cast_approval_vote(poll, option2, user, true)
@@ -462,21 +589,23 @@ defmodule EventasaurusApp.Events.PollTest do
 
     test "finalize_event_poll/3 triggers event-level actions", %{user: user, event: event} do
       # Create a date poll for finalization testing
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Date Selection",
-        voting_system: "approval",
-        poll_type: "date",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Date Selection",
+          voting_system: "approval",
+          poll_type: "date",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "2024-12-15",
-        description: "December 15th",
-        suggested_by_id: user.id
-      })
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "2024-12-15",
+          description: "December 15th",
+          suggested_by_id: user.id
+        })
 
       # Cast some votes
       {:ok, _} = Events.cast_approval_vote(poll, option, user, true)
@@ -497,27 +626,39 @@ defmodule EventasaurusApp.Events.PollTest do
 
       # This test would verify PubSub broadcasting
       # Implementation depends on the specific PubSub setup
-      assert true  # Placeholder - actual implementation would test broadcasts
+      # Placeholder - actual implementation would test broadcasts
+      assert true
     end
   end
 
   describe "concurrent voting and race conditions" do
     setup %{user: user, user2: user2, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Concurrent Poll",
-        voting_system: "binary",
-        poll_type: "general",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Concurrent Poll",
+          voting_system: "binary",
+          poll_type: "general",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option} = Events.create_poll_option(%{poll_id: poll.id, title: "Concurrent Option", suggested_by_id: user.id})
+      {:ok, option} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Concurrent Option",
+          suggested_by_id: user.id
+        })
 
       %{poll: Events.get_poll!(poll.id), option: option}
     end
 
-    test "concurrent votes from different users succeed", %{poll: poll, option: option, user: user, user2: user2} do
+    test "concurrent votes from different users succeed", %{
+      poll: poll,
+      option: option,
+      user: user,
+      user2: user2
+    } do
       # Simulate concurrent voting
       task1 = Task.async(fn -> Events.cast_binary_vote(poll, option, user, "yes") end)
       task2 = Task.async(fn -> Events.cast_binary_vote(poll, option, user2, "no") end)
@@ -533,19 +674,24 @@ defmodule EventasaurusApp.Events.PollTest do
       assert length(votes) == 2
     end
 
-    test "concurrent votes from same user handle conflicts properly", %{poll: poll, option: option, user: user} do
+    test "concurrent votes from same user handle conflicts properly", %{
+      poll: poll,
+      option: option,
+      user: user
+    } do
       # Simulate user rapidly clicking - should result in one final vote
-      tasks = for vote_value <- ["yes", "no", "yes"] do
-        Task.async(fn -> Events.cast_binary_vote(poll, option, user, vote_value) end)
-      end
+      tasks =
+        for vote_value <- ["yes", "no", "yes"] do
+          Task.async(fn -> Events.cast_binary_vote(poll, option, user, vote_value) end)
+        end
 
       results = Enum.map(tasks, &Task.await/1)
 
       # At least one should succeed
       assert Enum.any?(results, fn
-        {:ok, _} -> true
-        _ -> false
-      end)
+               {:ok, _} -> true
+               _ -> false
+             end)
 
       # Should only have one vote for the user
       user_votes = Events.get_user_poll_votes(poll, user)
@@ -555,17 +701,29 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "poll analytics and reporting" do
     setup %{user: user, user2: user2, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Analytics Poll",
-        voting_system: "star",
-        poll_type: "general",
-        status: "voting",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Analytics Poll",
+          voting_system: "star",
+          poll_type: "general",
+          status: "voting",
+          created_by_id: user.id
+        })
 
-      {:ok, option1} = Events.create_poll_option(%{poll_id: poll.id, title: "Option A", suggested_by_id: user.id})
-      {:ok, option2} = Events.create_poll_option(%{poll_id: poll.id, title: "Option B", suggested_by_id: user.id})
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option A",
+          suggested_by_id: user.id
+        })
+
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Option B",
+          suggested_by_id: user.id
+        })
 
       # Create some votes for analytics
       {:ok, _} = Events.cast_star_vote(poll, option1, user, 5)
@@ -586,45 +744,50 @@ defmodule EventasaurusApp.Events.PollTest do
 
     test "get_poll_votes/1 returns all votes for poll", %{poll: poll} do
       votes = Events.get_poll_votes(poll)
-      assert length(votes) == 3  # Based on setup
+      # Based on setup
+      assert length(votes) == 3
     end
   end
 
   describe "backward compatibility with date polling" do
     test "existing date polling functions still work", %{user: user, event: event} do
       # Test that existing date polling is unaffected
-      {:ok, date_poll} = Events.create_event_date_poll(%{
-        event_id: event.id,
-        created_by_user_id: user.id
-      })
+      {:ok, date_poll} =
+        Events.create_event_date_poll(%{
+          event_id: event.id,
+          created_by_user_id: user.id
+        })
 
       assert date_poll.event_id == event.id
 
       # Verify date options still work
-      {:ok, date_option} = Events.create_event_date_option(%{
-        event_date_poll_id: date_poll.id,
-        event_date: ~D[2024-12-01],
-        start_time: ~T[10:00:00],
-        end_time: ~T[18:00:00]
-      })
+      {:ok, date_option} =
+        Events.create_event_date_option(%{
+          event_date_poll_id: date_poll.id,
+          event_date: ~D[2024-12-01],
+          start_time: ~T[10:00:00],
+          end_time: ~T[18:00:00]
+        })
 
       assert date_option.event_date_poll_id == date_poll.id
     end
 
     test "date polling and generic polling coexist", %{user: user, event: event} do
       # Create both types of polls for same event
-      {:ok, date_poll} = Events.create_event_date_poll(%{
-        event_id: event.id,
-        created_by_user_id: user.id
-      })
+      {:ok, date_poll} =
+        Events.create_event_date_poll(%{
+          event_id: event.id,
+          created_by_user_id: user.id
+        })
 
-      {:ok, generic_poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Generic Poll",
-        voting_system: "approval",
-        poll_type: "venue",
-        created_by_id: user.id
-      })
+      {:ok, generic_poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Generic Poll",
+          voting_system: "approval",
+          poll_type: "venue",
+          created_by_id: user.id
+        })
 
       # Both should exist and not interfere
       assert date_poll.event_id == event.id
@@ -635,13 +798,15 @@ defmodule EventasaurusApp.Events.PollTest do
 
   describe "place_id duplicate detection" do
     setup %{user: user, event: event} do
-      {:ok, poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Places Poll",
-        voting_system: "binary",
-        poll_type: "places",
-        created_by_id: user.id
-      })
+      {:ok, poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Places Poll",
+          voting_system: "binary",
+          poll_type: "places",
+          created_by_id: user.id
+        })
+
       {:ok, poll: poll}
     end
 
@@ -655,22 +820,24 @@ defmodule EventasaurusApp.Events.PollTest do
         "photos" => []
       }
 
-      {:ok, option1} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Starbucks",
-        external_data: starbucks_1_data,
-        suggested_by_id: user.id
-      })
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Starbucks",
+          external_data: starbucks_1_data,
+          suggested_by_id: user.id
+        })
 
       assert option1.title == "Starbucks"
 
       # Try to create the same place (same place_id) - should fail
-      {:error, changeset} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Starbucks",
-        external_data: starbucks_1_data,
-        suggested_by_id: user.id
-      })
+      {:error, changeset} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Starbucks",
+          external_data: starbucks_1_data,
+          suggested_by_id: user.id
+        })
 
       assert "You have already suggested this option" in errors_on(changeset).title
 
@@ -683,12 +850,13 @@ defmodule EventasaurusApp.Events.PollTest do
         "photos" => []
       }
 
-      {:ok, option2} = Events.create_poll_option(%{
-        poll_id: poll.id,
-        title: "Starbucks",
-        external_data: starbucks_2_data,
-        suggested_by_id: user.id
-      })
+      {:ok, option2} =
+        Events.create_poll_option(%{
+          poll_id: poll.id,
+          title: "Starbucks",
+          external_data: starbucks_2_data,
+          suggested_by_id: user.id
+        })
 
       assert option2.title == "Starbucks"
       assert option2.id != option1.id
@@ -696,13 +864,14 @@ defmodule EventasaurusApp.Events.PollTest do
 
     test "falls back to title for non-place options", %{user: user, event: event} do
       # Create a movie poll
-      {:ok, movie_poll} = Events.create_poll(%{
-        event_id: event.id,
-        title: "Movie Poll",
-        voting_system: "binary",
-        poll_type: "movie",
-        created_by_id: user.id
-      })
+      {:ok, movie_poll} =
+        Events.create_poll(%{
+          event_id: event.id,
+          title: "Movie Poll",
+          voting_system: "binary",
+          poll_type: "movie",
+          created_by_id: user.id
+        })
 
       # Create a movie option without place_id
       movie_data = %{
@@ -711,22 +880,25 @@ defmodule EventasaurusApp.Events.PollTest do
         "year" => 1999
       }
 
-      {:ok, option1} = Events.create_poll_option(%{
-        poll_id: movie_poll.id,
-        title: "The Matrix",
-        external_data: movie_data,
-        suggested_by_id: user.id
-      })
+      {:ok, option1} =
+        Events.create_poll_option(%{
+          poll_id: movie_poll.id,
+          title: "The Matrix",
+          external_data: movie_data,
+          suggested_by_id: user.id
+        })
 
       assert option1.title == "The Matrix"
 
       # Try to create the same movie title - should fail
-      {:error, changeset} = Events.create_poll_option(%{
-        poll_id: movie_poll.id,
-        title: "The Matrix",
-        external_data: %{"tmdb_id" => "789012"},  # Different ID but same title
-        suggested_by_id: user.id
-      })
+      {:error, changeset} =
+        Events.create_poll_option(%{
+          poll_id: movie_poll.id,
+          title: "The Matrix",
+          # Different ID but same title
+          external_data: %{"tmdb_id" => "789012"},
+          suggested_by_id: user.id
+        })
 
       assert "You have already suggested this option" in errors_on(changeset).title
     end

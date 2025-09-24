@@ -1,7 +1,7 @@
 defmodule EventasaurusWeb.PollHelpers do
   @moduledoc """
   Centralized helper functions for poll-related functionality.
-  
+
   This module consolidates common poll helper functions to eliminate duplication
   across multiple LiveView modules (PublicPollLive, PublicPollsLive, PublicEventLive).
   """
@@ -48,8 +48,10 @@ defmodule EventasaurusWeb.PollHelpers do
       %{total_unique_voters: count} when is_integer(count) and count > 0 ->
         word = if count == 1, do: "participant", else: "participants"
         "#{count} #{word}"
+
       %{total_unique_voters: _} ->
         "No participants yet"
+
       _ ->
         "Loading..."
     end
@@ -88,24 +90,24 @@ defmodule EventasaurusWeb.PollHelpers do
   def handle_authenticated_vote(socket, poll_id, params, user) do
     polls = get_polls_from_socket(socket)
     poll = Enum.find(polls, &(&1.id == poll_id))
-    
+
     case poll do
       nil ->
-        {:error, "Poll not found", remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)}
-        
+        {:error, "Poll not found",
+         remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)}
+
       poll ->
         # Process the vote based on poll type and voting system
         case process_vote(poll, params, user) do
           {:ok, _result} ->
             send(self(), {:vote_completed, poll_id})
             {:ok, :vote_processed}
-            
+
           {:error, reason} ->
             {:error, reason, remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)}
         end
     end
   end
-
 
   @doc """
   Processes a vote for a poll option.
@@ -116,30 +118,38 @@ defmodule EventasaurusWeb.PollHelpers do
       {:error, "Voting is closed or you are not allowed to vote"}
     else
       # Safely parse option id
-      option_id = case params["option_id"] || params["option-id"] do
-        option_id_str when is_binary(option_id_str) ->
-          case Integer.parse(option_id_str) do
-            {id, ""} -> id
-            _ -> nil
-          end
-        option_id_int when is_integer(option_id_int) -> option_id_int
-        _ -> nil
-      end
-      
+      option_id =
+        case params["option_id"] || params["option-id"] do
+          option_id_str when is_binary(option_id_str) ->
+            case Integer.parse(option_id_str) do
+              {id, ""} -> id
+              _ -> nil
+            end
+
+          option_id_int when is_integer(option_id_int) ->
+            option_id_int
+
+          _ ->
+            nil
+        end
+
       if is_nil(option_id) do
         {:error, "Invalid option id"}
       else
         # Get the poll option and validate it belongs to the poll
         case Events.get_poll_option(option_id) do
-          nil -> 
+          nil ->
             {:error, "Option not found"}
+
           poll_option ->
             # Ensure option belongs to this poll and is active
             cond do
               poll_option.poll_id != poll.id ->
                 {:error, "Option does not belong to this poll"}
+
               Map.get(poll_option, :deleted_at) != nil or poll_option.status != "active" ->
                 {:error, "Option is inactive"}
+
               true ->
                 process_vote_by_system(poll, poll_option, user, params)
             end
@@ -147,13 +157,13 @@ defmodule EventasaurusWeb.PollHelpers do
       end
     end
   end
-  
+
   # Process vote based on voting system
   defp process_vote_by_system(poll, poll_option, user, params) do
     case poll.voting_system do
       "binary" ->
         vote_value = String.downcase(to_string(params["vote_value"] || params["vote"] || "yes"))
-        
+
         if vote_value in ["yes", "maybe", "no"] do
           case Events.cast_binary_vote(poll, poll_option, user, vote_value) do
             {:ok, _vote} -> {:ok, :voted}
@@ -162,32 +172,37 @@ defmodule EventasaurusWeb.PollHelpers do
         else
           {:error, "Invalid vote value for binary voting. Use 'yes', 'maybe', or 'no'."}
         end
-        
+
       "approval" ->
-        selected = case params["vote_value"] || params["vote"] do
-          val when val in ["true", "1", "yes", "selected"] -> true
-          val when val in ["false", "0", "no", "unselected"] -> false
-          _ -> true  # Default to selected for approval voting
-        end
-        
+        selected =
+          case params["vote_value"] || params["vote"] do
+            val when val in ["true", "1", "yes", "selected"] -> true
+            val when val in ["false", "0", "no", "unselected"] -> false
+            # Default to selected for approval voting
+            _ -> true
+          end
+
         case Events.cast_approval_vote(poll, poll_option, user, selected) do
           {:ok, _vote} -> {:ok, :voted}
           {:error, reason} -> {:error, "Failed to submit vote: #{inspect(reason)}"}
         end
-        
+
       "star" ->
-        rating = case params["rating"] || params["vote_value"] || params["vote"] do
-          rating_str when is_binary(rating_str) ->
-            case Float.parse(rating_str) do
-              {rating, _} when rating >= 1.0 and rating <= 5.0 -> rating
-              _ -> nil
-            end
-          rating_num when is_number(rating_num) and rating_num >= 1 and rating_num <= 5 -> 
-            rating_num
-          _ -> 
-            nil
-        end
-        
+        rating =
+          case params["rating"] || params["vote_value"] || params["vote"] do
+            rating_str when is_binary(rating_str) ->
+              case Float.parse(rating_str) do
+                {rating, _} when rating >= 1.0 and rating <= 5.0 -> rating
+                _ -> nil
+              end
+
+            rating_num when is_number(rating_num) and rating_num >= 1 and rating_num <= 5 ->
+              rating_num
+
+            _ ->
+              nil
+          end
+
         if is_nil(rating) do
           {:error, "Invalid rating for star voting. Use rating between 1 and 5."}
         else
@@ -196,20 +211,23 @@ defmodule EventasaurusWeb.PollHelpers do
             {:error, reason} -> {:error, "Failed to submit vote: #{inspect(reason)}"}
           end
         end
-        
+
       "ranked" ->
-        rank = case params["rank"] || params["vote_rank"] || params["vote"] do
-          rank_str when is_binary(rank_str) ->
-            case Integer.parse(rank_str) do
-              {rank, ""} when rank > 0 -> rank
-              _ -> nil
-            end
-          rank_int when is_integer(rank_int) and rank_int > 0 -> 
-            rank_int
-          _ -> 
-            nil
-        end
-        
+        rank =
+          case params["rank"] || params["vote_rank"] || params["vote"] do
+            rank_str when is_binary(rank_str) ->
+              case Integer.parse(rank_str) do
+                {rank, ""} when rank > 0 -> rank
+                _ -> nil
+              end
+
+            rank_int when is_integer(rank_int) and rank_int > 0 ->
+              rank_int
+
+            _ ->
+              nil
+          end
+
         if is_nil(rank) do
           {:error, "Invalid rank for ranked voting. Use positive integer."}
         else
@@ -218,7 +236,7 @@ defmodule EventasaurusWeb.PollHelpers do
             {:error, reason} -> {:error, "Failed to submit vote: #{inspect(reason)}"}
           end
         end
-        
+
       unknown_system ->
         {:error, "Unsupported voting system: #{unknown_system}"}
     end
@@ -238,10 +256,13 @@ defmodule EventasaurusWeb.PollHelpers do
   """
   def generate_social_image_url(event, poll \\ nil) do
     case Map.get(event, :hash) do
-      nil -> nil
-      hash when is_nil(poll) -> 
+      nil ->
+        nil
+
+      hash when is_nil(poll) ->
         "#{EventasaurusWeb.Endpoint.url()}/events/#{event.slug}/social-card-#{hash}/polls.png"
-      hash -> 
+
+      hash ->
         "#{EventasaurusWeb.Endpoint.url()}/events/#{event.slug}/social-card-#{hash}/poll-#{poll.id}.png"
     end
   end

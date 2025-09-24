@@ -25,17 +25,17 @@ defmodule EventasaurusApp.Events.OrderTest do
       assert changeset.valid?
     end
 
-        test "requires quantity, subtotal_cents, total_cents, user_id, event_id, and ticket_id" do
+    test "requires quantity, subtotal_cents, total_cents, user_id, event_id, and ticket_id" do
       changeset = Order.changeset(%Order{}, %{})
 
       assert %{
-        quantity: ["can't be blank"],
-        subtotal_cents: ["can't be blank"],
-        total_cents: ["can't be blank"],
-        user_id: ["can't be blank"],
-        event_id: ["can't be blank"],
-        ticket_id: ["can't be blank"]
-      } = errors_on(changeset)
+               quantity: ["can't be blank"],
+               subtotal_cents: ["can't be blank"],
+               total_cents: ["can't be blank"],
+               user_id: ["can't be blank"],
+               event_id: ["can't be blank"],
+               ticket_id: ["can't be blank"]
+             } = errors_on(changeset)
     end
 
     test "validates quantity is greater than 0" do
@@ -169,7 +169,8 @@ defmodule EventasaurusApp.Events.OrderTest do
         quantity: 1,
         subtotal_cents: 5000,
         tax_cents: 500,
-        total_cents: 4000,  # Should be 5500
+        # Should be 5500
+        total_cents: 4000,
         currency: "usd",
         status: "pending",
         user_id: user.id,
@@ -254,17 +255,22 @@ defmodule EventasaurusApp.Events.OrderTest do
 
     test "can_cancel?/1" do
       assert Order.can_cancel?(%Order{status: "pending"})
-      refute Order.can_cancel?(%Order{status: "confirmed"})  # Confirmed orders cannot be canceled, only refunded
+      # Confirmed orders cannot be canceled, only refunded
+      refute Order.can_cancel?(%Order{status: "confirmed"})
       refute Order.can_cancel?(%Order{status: "refunded"})
       refute Order.can_cancel?(%Order{status: "canceled"})
     end
 
     test "can_refund?/1" do
       refute Order.can_refund?(%Order{status: "pending"})
-      refute Order.can_refund?(%Order{status: "confirmed", payment_reference: nil})  # No payment captured
-      assert Order.can_refund?(%Order{status: "confirmed", payment_reference: "pi_123"})  # Payment captured
-      refute Order.can_refund?(%Order{status: "canceled", payment_reference: nil})  # No payment captured
-      assert Order.can_refund?(%Order{status: "canceled", payment_reference: "pi_123"})  # Payment captured
+      # No payment captured
+      refute Order.can_refund?(%Order{status: "confirmed", payment_reference: nil})
+      # Payment captured
+      assert Order.can_refund?(%Order{status: "confirmed", payment_reference: "pi_123"})
+      # No payment captured
+      refute Order.can_refund?(%Order{status: "canceled", payment_reference: nil})
+      # Payment captured
+      assert Order.can_refund?(%Order{status: "canceled", payment_reference: "pi_123"})
       refute Order.can_refund?(%Order{status: "refunded"})
     end
   end

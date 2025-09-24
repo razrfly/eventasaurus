@@ -16,12 +16,14 @@ defmodule EventasaurusWeb.Helpers.EventHelpers do
       name_match = location.name && String.contains?(String.downcase(location.name), query_lower)
 
       # Check address
-      address_match = location.address &&
-        String.contains?(String.downcase(location.address), query_lower)
+      address_match =
+        location.address &&
+          String.contains?(String.downcase(location.address), query_lower)
 
       # Check city
-      city_match = location.city &&
-        String.contains?(String.downcase(location.city), query_lower)
+      city_match =
+        location.city &&
+          String.contains?(String.downcase(location.city), query_lower)
 
       name_match || address_match || city_match
     end)
@@ -33,7 +35,8 @@ defmodule EventasaurusWeb.Helpers.EventHelpers do
   Generate a random Zoom meeting URL.
   """
   def generate_zoom_meeting_url do
-    meeting_id = generate_random_meeting_id(11) # Zoom meeting IDs are typically 11 digits
+    # Zoom meeting IDs are typically 11 digits
+    meeting_id = generate_random_meeting_id(11)
     "https://zoom.us/j/#{meeting_id}"
   end
 
@@ -41,7 +44,8 @@ defmodule EventasaurusWeb.Helpers.EventHelpers do
   Generate a random Google Meet URL.
   """
   def generate_google_meet_url do
-    meeting_id = generate_random_meeting_id(10, :alphanum) # Google Meet uses alphanumeric codes
+    # Google Meet uses alphanumeric codes
+    meeting_id = generate_random_meeting_id(10, :alphanum)
     "https://meet.google.com/#{meeting_id}"
   end
 
@@ -57,9 +61,11 @@ defmodule EventasaurusWeb.Helpers.EventHelpers do
 
       :alphanum ->
         chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-        result = 1..length
-        |> Enum.map(fn _ -> String.at(chars, Enum.random(0..35)) end)
-        |> Enum.join("")
+
+        result =
+          1..length
+          |> Enum.map(fn _ -> String.at(chars, Enum.random(0..35)) end)
+          |> Enum.join("")
 
         # Only add hyphens for Google Meet format (10 chars)
         if length == 10 do

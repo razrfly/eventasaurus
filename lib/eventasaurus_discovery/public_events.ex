@@ -44,9 +44,14 @@ defmodule EventasaurusDiscovery.PublicEvents do
     now = DateTime.utc_now()
 
     from(pe in PublicEvent,
-      join: v in Venue, on: pe.venue_id == v.id,
-      join: c in City, on: v.city_id == c.id,
-      where: ilike(c.name, ^"%#{city_name}%") and pe.starts_at > ^now,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      join: c in City,
+      on: v.city_id == c.id,
+      where:
+        ilike(c.name, ^"%#{city_name}%") and
+          ((not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+             (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       offset: ^offset
@@ -83,10 +88,16 @@ defmodule EventasaurusDiscovery.PublicEvents do
     now = DateTime.utc_now()
 
     from(pe in PublicEvent,
-      join: v in Venue, on: pe.venue_id == v.id,
-      join: c in City, on: v.city_id == c.id,
-      join: country in Country, on: c.country_id == country.id,
-      where: ilike(country.name, ^"%#{country_name}%") and pe.starts_at > ^now,
+      join: v in Venue,
+      on: pe.venue_id == v.id,
+      join: c in City,
+      on: v.city_id == c.id,
+      join: country in Country,
+      on: c.country_id == country.id,
+      where:
+        ilike(country.name, ^"%#{country_name}%") and
+          ((not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+             (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       offset: ^offset
@@ -123,7 +134,9 @@ defmodule EventasaurusDiscovery.PublicEvents do
     now = DateTime.utc_now()
 
     from(pe in PublicEvent,
-      where: pe.starts_at > ^now,
+      where:
+        (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+          (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour)),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       offset: ^offset
@@ -156,18 +169,25 @@ defmodule EventasaurusDiscovery.PublicEvents do
 
     now = DateTime.utc_now()
 
-    query = from(pe in PublicEvent,
-      where: pe.venue_id == ^venue_id,
-      order_by: [asc: pe.starts_at],
-      limit: ^limit,
-      offset: ^offset
-    )
+    query =
+      from(pe in PublicEvent,
+        where: pe.venue_id == ^venue_id,
+        order_by: [asc: pe.starts_at],
+        limit: ^limit,
+        offset: ^offset
+      )
 
-    query = if upcoming_only do
-      where(query, [pe], pe.starts_at > ^now)
-    else
-      query
-    end
+    query =
+      if upcoming_only do
+        where(
+          query,
+          [pe],
+          (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+        )
+      else
+        query
+      end
 
     query
     |> Repo.all()
@@ -195,20 +215,35 @@ defmodule EventasaurusDiscovery.PublicEvents do
 
     now = DateTime.utc_now()
 
-    query = from(pe in PublicEvent,
-      join: v in Venue, on: pe.venue_id == v.id,
-      where: not is_nil(v.latitude) and not is_nil(v.longitude),
-      where: fragment("ST_DWithin(ST_MakePoint(?, ?), ST_MakePoint(?, ?), ?)",
-        ^lng, ^lat, v.longitude, v.latitude, ^radius_meters),
-      order_by: [asc: pe.starts_at],
-      limit: ^limit
-    )
+    query =
+      from(pe in PublicEvent,
+        join: v in Venue,
+        on: pe.venue_id == v.id,
+        where: not is_nil(v.latitude) and not is_nil(v.longitude),
+        where:
+          fragment(
+            "ST_DWithin(ST_MakePoint(?, ?), ST_MakePoint(?, ?), ?)",
+            ^lng,
+            ^lat,
+            v.longitude,
+            v.latitude,
+            ^radius_meters
+          ),
+        order_by: [asc: pe.starts_at],
+        limit: ^limit
+      )
 
-    query = if upcoming_only do
-      where(query, [pe], pe.starts_at > ^now)
-    else
-      query
-    end
+    query =
+      if upcoming_only do
+        where(
+          query,
+          [pe],
+          (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+        )
+      else
+        query
+      end
 
     query
     |> Repo.all()
@@ -230,8 +265,11 @@ defmodule EventasaurusDiscovery.PublicEvents do
     PublicEvent
     |> Repo.get(id)
     |> case do
-      nil -> nil
-      event -> Repo.preload(event, [:venue, :performers, :categories, venue: [city_ref: :country]])
+      nil ->
+        nil
+
+      event ->
+        Repo.preload(event, [:venue, :performers, :categories, venue: [city_ref: :country]])
     end
   end
 
@@ -247,8 +285,11 @@ defmodule EventasaurusDiscovery.PublicEvents do
     PublicEvent
     |> Repo.get_by(slug: slug)
     |> case do
-      nil -> nil
-      event -> Repo.preload(event, [:venue, :performers, :categories, venue: [city_ref: :country]])
+      nil ->
+        nil
+
+      event ->
+        Repo.preload(event, [:venue, :performers, :categories, venue: [city_ref: :country]])
     end
   end
 
@@ -268,17 +309,24 @@ defmodule EventasaurusDiscovery.PublicEvents do
 
     now = DateTime.utc_now()
 
-    query = from(pe in PublicEvent,
-      where: ilike(pe.title, ^"%#{query_string}%"),
-      order_by: [asc: pe.starts_at],
-      limit: ^limit
-    )
+    query =
+      from(pe in PublicEvent,
+        where: ilike(pe.title, ^"%#{query_string}%"),
+        order_by: [asc: pe.starts_at],
+        limit: ^limit
+      )
 
-    query = if upcoming_only do
-      where(query, [pe], pe.starts_at > ^now)
-    else
-      query
-    end
+    query =
+      if upcoming_only do
+        where(
+          query,
+          [pe],
+          (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+        )
+      else
+        query
+      end
 
     query
     |> Repo.all()
@@ -319,7 +367,9 @@ defmodule EventasaurusDiscovery.PublicEvents do
     limit = Keyword.get(opts, :limit, 20)
 
     from(pe in PublicEvent,
-      where: pe.starts_at > ^DateTime.utc_now(),
+      where:
+        (not is_nil(pe.ends_at) and pe.ends_at > ^DateTime.utc_now()) or
+          (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(DateTime.utc_now(), -24, :hour)),
       order_by: [asc: pe.starts_at],
       limit: ^limit,
       preload: [:categories, :venue]
@@ -336,30 +386,41 @@ defmodule EventasaurusDiscovery.PublicEvents do
     now = DateTime.utc_now()
 
     # Build base query with category filter
-    query = from pe in PublicEvent,
-      join: pec in "public_event_categories", on: pec.event_id == pe.id,
-      join: c in EventasaurusDiscovery.Categories.Category, on: c.id == pec.category_id,
-      where: c.is_active == true,
-      distinct: true,
-      order_by: [asc: pe.starts_at],
-      limit: ^limit,
-      offset: ^offset
+    query =
+      from(pe in PublicEvent,
+        join: pec in "public_event_categories",
+        on: pec.event_id == pe.id,
+        join: c in EventasaurusDiscovery.Categories.Category,
+        on: c.id == pec.category_id,
+        where: c.is_active == true,
+        distinct: true,
+        order_by: [asc: pe.starts_at],
+        limit: ^limit,
+        offset: ^offset
+      )
 
     # Handle both slugs and IDs
-    query = if Enum.all?(category_slugs_or_ids, &is_integer/1) do
-      where(query, [pe, pec, c], c.id in ^category_slugs_or_ids)
-    else
-      # Convert to strings if needed
-      slugs = Enum.map(category_slugs_or_ids, &to_string/1)
-      where(query, [pe, pec, c], c.slug in ^slugs)
-    end
+    query =
+      if Enum.all?(category_slugs_or_ids, &is_integer/1) do
+        where(query, [pe, pec, c], c.id in ^category_slugs_or_ids)
+      else
+        # Convert to strings if needed
+        slugs = Enum.map(category_slugs_or_ids, &to_string/1)
+        where(query, [pe, pec, c], c.slug in ^slugs)
+      end
 
     # Apply upcoming filter
-    query = if upcoming_only do
-      where(query, [pe], pe.starts_at > ^now)
-    else
-      query
-    end
+    query =
+      if upcoming_only do
+        where(
+          query,
+          [pe],
+          (not is_nil(pe.ends_at) and pe.ends_at > ^now) or
+            (is_nil(pe.ends_at) and pe.starts_at > ^DateTime.add(now, -24, :hour))
+        )
+      else
+        query
+      end
 
     query
     |> Repo.all()
@@ -374,12 +435,15 @@ defmodule EventasaurusDiscovery.PublicEvents do
     event = Repo.preload(event, :categories)
 
     # Find primary category from the join table
-    primary = from(pec in "public_event_categories",
-      join: c in EventasaurusDiscovery.Categories.Category, on: c.id == pec.category_id,
-      where: pec.event_id == ^event.id and pec.is_primary == true,
-      select: c,
-      limit: 1
-    ) |> Repo.one()
+    primary =
+      from(pec in "public_event_categories",
+        join: c in EventasaurusDiscovery.Categories.Category,
+        on: c.id == pec.category_id,
+        where: pec.event_id == ^event.id and pec.is_primary == true,
+        select: c,
+        limit: 1
+      )
+      |> Repo.one()
 
     primary || List.first(event.categories)
   end
@@ -408,7 +472,8 @@ defmodule EventasaurusDiscovery.PublicEvents do
     case event.title_translations do
       %{^preferred => title} when is_binary(title) and title != "" -> title
       %{^fallback => title} when is_binary(title) and title != "" -> title
-      _ -> event.title  # Final fallback to original title field
+      # Final fallback to original title field
+      _ -> event.title
     end
   end
 
@@ -435,29 +500,32 @@ defmodule EventasaurusDiscovery.PublicEvents do
     fallback = Keyword.get(opts, :fallback, if(preferred == "en", do: "pl", else: "en"))
 
     # Preload sources if not already loaded
-    event = if Ecto.assoc_loaded?(event.sources) do
-      event
-    else
-      Repo.preload(event, [:sources])
-    end
+    event =
+      if Ecto.assoc_loaded?(event.sources) do
+        event
+      else
+        Repo.preload(event, [:sources])
+      end
 
     # Find description from sources
-    description = event.sources
-    |> Enum.find_value(fn source ->
-      case source.description_translations do
-        %{^preferred => desc} when is_binary(desc) and desc != "" -> desc
-        _ -> nil
-      end
-    end)
+    description =
+      event.sources
+      |> Enum.find_value(fn source ->
+        case source.description_translations do
+          %{^preferred => desc} when is_binary(desc) and desc != "" -> desc
+          _ -> nil
+        end
+      end)
 
     # Try fallback language if preferred not found
-    description || event.sources
-    |> Enum.find_value(fn source ->
-      case source.description_translations do
-        %{^fallback => desc} when is_binary(desc) and desc != "" -> desc
-        _ -> nil
-      end
-    end)
+    description ||
+      event.sources
+      |> Enum.find_value(fn source ->
+        case source.description_translations do
+          %{^fallback => desc} when is_binary(desc) and desc != "" -> desc
+          _ -> nil
+        end
+      end)
   end
 
   @doc """
@@ -469,6 +537,7 @@ defmodule EventasaurusDiscovery.PublicEvents do
       ["pl", "en"]
   """
   def get_title_languages(%PublicEvent{title_translations: nil}), do: []
+
   def get_title_languages(%PublicEvent{title_translations: translations}) do
     Map.keys(translations)
   end
@@ -483,11 +552,12 @@ defmodule EventasaurusDiscovery.PublicEvents do
   """
   def get_description_languages(%PublicEvent{} = event) do
     # Preload sources if not already loaded
-    event = if Ecto.assoc_loaded?(event.sources) do
-      event
-    else
-      Repo.preload(event, [:sources])
-    end
+    event =
+      if Ecto.assoc_loaded?(event.sources) do
+        event
+      else
+        Repo.preload(event, [:sources])
+      end
 
     event.sources
     |> Enum.flat_map(fn source ->

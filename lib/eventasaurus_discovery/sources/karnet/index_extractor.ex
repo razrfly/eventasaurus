@@ -52,19 +52,22 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
       "article.event",
       "[data-event-id]",
       ".listing-item",
-      ".row .col-md-4",  # Common grid layout
+      # Common grid layout
+      ".row .col-md-4",
       ".events-list .item"
     ]
 
-    events = Enum.reduce_while(selectors, [], fn selector, _acc ->
-      case Floki.find(document, selector) do
-        [] ->
-          {:cont, []}
-        cards ->
-          Logger.debug("Found #{length(cards)} events using selector: #{selector}")
-          {:halt, cards}
-      end
-    end)
+    events =
+      Enum.reduce_while(selectors, [], fn selector, _acc ->
+        case Floki.find(document, selector) do
+          [] ->
+            {:cont, []}
+
+          cards ->
+            Logger.debug("Found #{length(cards)} events using selector: #{selector}")
+            {:halt, cards}
+        end
+      end)
 
     # If no specific event cards found, try to find event links directly
     if events == [] do
@@ -79,16 +82,19 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
   defp extract_event_from_card(card) do
     try do
       # Extract URL - using the actual structure from Karnet
-      url = case Floki.find(card, "a.event-image, a.event-content") do
-        [] -> nil
-        links ->
-          Floki.attribute(links, "href")
-          |> List.first()
-          |> case do
-            nil -> nil
-            href -> Config.build_event_url(href)
-          end
-      end
+      url =
+        case Floki.find(card, "a.event-image, a.event-content") do
+          [] ->
+            nil
+
+          links ->
+            Floki.attribute(links, "href")
+            |> List.first()
+            |> case do
+              nil -> nil
+              href -> Config.build_event_url(href)
+            end
+        end
 
       if url do
         %{
@@ -140,9 +146,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
       end
     end)
     |> Enum.filter(&(&1 != nil))
-    |> Enum.uniq_by(&(&1.url))  # Remove duplicates
+    # Remove duplicates
+    |> Enum.uniq_by(& &1.url)
   end
-
 
   defp extract_title(card) do
     # For Karnet, title is in h3.event-title
@@ -153,7 +159,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
 
         Enum.find_value(title_selectors, fn selector ->
           case Floki.find(card, selector) do
-            [] -> nil
+            [] ->
+              nil
+
             elements ->
               Floki.text(elements)
               |> String.trim()
@@ -180,7 +188,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
       ".event-date",
       ".date",
       ".data",
-      ".kiedy",  # "when" in Polish
+      # "when" in Polish
+      ".kiedy",
       ".event-meta time",
       "[class*='date']",
       "time",
@@ -189,7 +198,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
 
     Enum.find_value(date_selectors, fn selector ->
       case Floki.find(card, selector) do
-        [] -> nil
+        [] ->
+          nil
+
         elements ->
           # Try to get datetime attribute first
           datetime = Floki.attribute(elements, "datetime") |> List.first()
@@ -215,15 +226,19 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
       ".event-venue",
       ".venue",
       ".location",
-      ".miejsce",  # "place" in Polish
-      ".gdzie",    # "where" in Polish
+      # "place" in Polish
+      ".miejsce",
+      # "where" in Polish
+      ".gdzie",
       "[class*='venue']",
       "[class*='location']"
     ]
 
     Enum.find_value(venue_selectors, fn selector ->
       case Floki.find(card, selector) do
-        [] -> nil
+        [] ->
+          nil
+
         elements ->
           Floki.text(elements)
           |> String.trim()
@@ -247,35 +262,41 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
       ".label"
     ]
 
-    category = Enum.find_value(category_selectors, fn selector ->
-      case Floki.find(card, selector) do
-        [] -> nil
-        elements ->
-          Floki.text(elements)
-          |> String.trim()
-          |> String.downcase()
-          |> case do
-            "" -> nil
-            text -> text
-          end
-      end
-    end)
+    category =
+      Enum.find_value(category_selectors, fn selector ->
+        case Floki.find(card, selector) do
+          [] ->
+            nil
+
+          elements ->
+            Floki.text(elements)
+            |> String.trim()
+            |> String.downcase()
+            |> case do
+              "" -> nil
+              text -> text
+            end
+        end
+      end)
 
     # NEW: If no category found, extract from event links within the card
-    category = if is_nil(category) do
-      links = Floki.find(card, "a[href*='/wydarzenia/']")
-      Enum.find_value(links, fn link ->
-        href = Floki.attribute([link], "href") |> List.first()
-        extract_category_from_wydarzenia_url(href)
-      end)
-    else
-      category
-    end
+    category =
+      if is_nil(category) do
+        links = Floki.find(card, "a[href*='/wydarzenia/']")
+
+        Enum.find_value(links, fn link ->
+          href = Floki.attribute([link], "href") |> List.first()
+          extract_category_from_wydarzenia_url(href)
+        end)
+      else
+        category
+      end
 
     category
   end
 
   defp extract_category_from_wydarzenia_url(nil), do: nil
+
   defp extract_category_from_wydarzenia_url(url) when is_binary(url) do
     case Regex.run(~r{/wydarzenia/([^/,]+)}, url) do
       [_, category] -> String.trim(category) |> String.downcase()
@@ -293,14 +314,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
 
     Enum.find_value(img_selectors, fn selector ->
       case Floki.find(card, selector) do
-        [] -> nil
+        [] ->
+          nil
+
         imgs ->
           src = Floki.attribute(imgs, "src") |> List.first()
+
           if src do
             Config.build_event_url(src)
           else
             # Try data-src for lazy loading
-            Floki.attribute(imgs, "data-src") |> List.first()
+            Floki.attribute(imgs, "data-src")
+            |> List.first()
             |> case do
               nil -> nil
               data_src -> Config.build_event_url(data_src)
@@ -313,7 +338,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
   defp extract_description(card) do
     desc_selectors = [
       ".description",
-      ".opis",  # "description" in Polish
+      # "description" in Polish
+      ".opis",
       ".excerpt",
       ".summary",
       "p"
@@ -321,11 +347,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
 
     Enum.find_value(desc_selectors, fn selector ->
       case Floki.find(card, selector) do
-        [] -> nil
+        [] ->
+          nil
+
         elements ->
           Floki.text(elements)
           |> String.trim()
-          |> String.slice(0, 200)  # Limit to 200 chars
+          # Limit to 200 chars
+          |> String.slice(0, 200)
           |> case do
             "" -> nil
             text -> text
@@ -342,21 +371,25 @@ defmodule EventasaurusDiscovery.Sources.Karnet.IndexExtractor do
   end
 
   defp extract_date_from_parent(nil), do: nil
+
   defp extract_date_from_parent(parent) do
     extract_date_text(parent)
   end
 
   defp extract_venue_from_parent(nil), do: nil
+
   defp extract_venue_from_parent(parent) do
     extract_venue_name(parent)
   end
 
   defp extract_thumbnail_from_parent(nil), do: nil
+
   defp extract_thumbnail_from_parent(parent) do
     extract_thumbnail(parent)
   end
 
   defp extract_description_from_parent(nil), do: nil
+
   defp extract_description_from_parent(parent) do
     extract_description(parent)
   end

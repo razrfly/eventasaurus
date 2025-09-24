@@ -26,14 +26,18 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
 
     Logger.debug("🌐 Fetching Karnet page: #{url} (attempt #{attempt}/#{retries})")
 
-    case HTTPoison.get(url, Config.headers(), timeout: Config.timeout(), recv_timeout: Config.timeout()) do
+    case HTTPoison.get(url, Config.headers(),
+           timeout: Config.timeout(),
+           recv_timeout: Config.timeout()
+         ) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body, headers: headers}} ->
         # Check if response is compressed
-        decoded_body = case get_header(headers, "content-encoding") do
-          "gzip" -> :zlib.gunzip(body)
-          "deflate" -> :zlib.uncompress(body)
-          _ -> body
-        end
+        decoded_body =
+          case get_header(headers, "content-encoding") do
+            "gzip" -> :zlib.gunzip(body)
+            "deflate" -> :zlib.uncompress(body)
+            _ -> body
+          end
 
         # Ensure proper UTF-8 encoding for Polish content
         encoded_body = ensure_utf8(decoded_body)
@@ -43,7 +47,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
         Logger.warning("❌ Page not found: #{url}")
         {:error, :not_found}
 
-      {:ok, %HTTPoison.Response{status_code: status_code} = response} when status_code in 301..302 ->
+      {:ok, %HTTPoison.Response{status_code: status_code} = response}
+      when status_code in 301..302 ->
         # Handle redirects
         case get_redirect_location(response) do
           {:ok, redirect_url} ->
@@ -57,7 +62,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
       {:ok, %HTTPoison.Response{status_code: 429}} ->
         # Rate limited - wait longer and retry
         Logger.warning("⏳ Rate limited, waiting longer...")
-        Process.sleep(30_000)  # Wait 30 seconds
+        # Wait 30 seconds
+        Process.sleep(30_000)
         retry_request(url, opts, retries, attempt)
 
       {:ok, %HTTPoison.Response{status_code: status_code}} when status_code >= 500 ->
@@ -88,7 +94,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
     fetch_pages_recursive(1, max_pages, [])
   end
 
-  defp fetch_pages_recursive(page_num, max_pages, acc) when is_integer(max_pages) and page_num > max_pages do
+  defp fetch_pages_recursive(page_num, max_pages, acc)
+       when is_integer(max_pages) and page_num > max_pages do
     {:ok, Enum.reverse(acc)}
   end
 
@@ -114,6 +121,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
 
       {:error, reason} ->
         Logger.error("Failed to fetch page #{page_num}: #{inspect(reason)}")
+
         if length(acc) > 0 do
           # Return what we have so far
           Logger.warning("⚠️ Returning partial results: #{length(acc)} pages")
@@ -130,7 +138,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
     Logger.info("⏳ Waiting #{wait_time}ms before retry...")
     Process.sleep(wait_time)
 
-    fetch_page(url, Keyword.merge(opts, [retries: retries, attempt: attempt + 1]))
+    fetch_page(url, Keyword.merge(opts, retries: retries, attempt: attempt + 1))
   end
 
   defp retry_request(_url, _opts, _retries, _attempt) do
@@ -157,7 +165,8 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
         body
         |> :unicode.characters_to_binary(:latin1, :utf8)
         |> case do
-          {:error, _, _} -> body  # Return original if all else fails
+          # Return original if all else fails
+          {:error, _, _} -> body
           fixed -> fixed
         end
 
@@ -180,10 +189,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Client do
   defp has_events?(html) do
     # Check if the HTML contains event listings
     # Looking for typical event card elements
-    String.contains?(html, "class=\"event-item\"") ||
-    String.contains?(html, "class=\"wydarzenie\"") ||
-    String.contains?(html, "data-event-id") ||
     # Also check for specific event content patterns
-    (String.contains?(html, "href") && String.contains?(html, "/wydarzenia/"))
+    String.contains?(html, "class=\"event-item\"") ||
+      String.contains?(html, "class=\"wydarzenie\"") ||
+      String.contains?(html, "data-event-id") ||
+      (String.contains?(html, "href") && String.contains?(html, "/wydarzenia/"))
   end
 end

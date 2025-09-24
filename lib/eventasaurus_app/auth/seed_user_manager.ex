@@ -14,9 +14,9 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   """
   def create_user(attrs) do
     email = Map.get(attrs, :email)
-    
+
     Logger.info("Creating user: #{email}")
-    
+
     if ServiceRoleHelper.service_role_key_available?() do
       create_auth_user(attrs)
     else
@@ -29,12 +29,12 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   """
   def get_or_create_user(attrs) do
     email = Map.get(attrs, :email)
-    
+
     case Repo.get_by(Accounts.User, email: email) do
       nil ->
         Logger.info("Creating new user: #{email}")
         create_user(attrs)
-        
+
       existing_user ->
         Logger.info("User already exists: #{email}, updating...")
         update_existing_user(existing_user, attrs)
@@ -47,22 +47,26 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   """
   def batch_create_users(users_attrs) do
     Logger.info("Starting batch user creation for #{length(users_attrs)} users")
-    
-    results = Enum.map(users_attrs, fn attrs ->
-      case create_user(attrs) do
-        {:ok, user} -> 
-          {:ok, user}
-        {:error, reason} -> 
-          Logger.error("Failed to create user #{Map.get(attrs, :email)}: #{inspect(reason)}")
-          {:error, {attrs, reason}}
-      end
-    end)
-    
+
+    results =
+      Enum.map(users_attrs, fn attrs ->
+        case create_user(attrs) do
+          {:ok, user} ->
+            {:ok, user}
+
+          {:error, reason} ->
+            Logger.error("Failed to create user #{Map.get(attrs, :email)}: #{inspect(reason)}")
+            {:error, {attrs, reason}}
+        end
+      end)
+
     successful = for {:ok, user} <- results, do: user
     failed = for {:error, data} <- results, do: data
-    
-    Logger.info("Batch creation complete: #{length(successful)} successful, #{length(failed)} failed")
-    
+
+    Logger.info(
+      "Batch creation complete: #{length(successful)} successful, #{length(failed)} failed"
+    )
+
     {successful, failed}
   end
 
@@ -72,17 +76,18 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
     email = Map.get(attrs, :email)
     password = Map.get(attrs, :password, "testpass123")
     name = Map.get(attrs, :name, "Test User")
-    
+
     Logger.debug("Creating Supabase auth user for #{email}")
-    
+
     case Client.admin_create_user(email, password, %{name: name}, true) do
       {:ok, auth_user} ->
-        user_attrs = attrs
-        |> Map.put(:supabase_id, auth_user["id"])
-        |> Map.delete(:password)
-        
+        user_attrs =
+          attrs
+          |> Map.put(:supabase_id, auth_user["id"])
+          |> Map.delete(:password)
+
         create_database_user(user_attrs)
-        
+
       {:error, %{message: message}} when is_binary(message) ->
         if String.contains?(message, ["already been registered", "User creation failed"]) do
           Logger.warning("Auth user already exists for #{email}, creating local user only")
@@ -91,7 +96,7 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
           Logger.error("Supabase auth creation failed for #{email}: #{message}")
           {:error, message}
         end
-        
+
       {:error, error} ->
         Logger.error("Unexpected error creating auth for #{email}: #{inspect(error)}")
         {:error, error}
@@ -100,23 +105,25 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
 
   defp create_local_user(attrs) do
     Logger.warning("Creating local user without auth for #{Map.get(attrs, :email)}")
-    
-    user_attrs = attrs
-    |> Map.put(:supabase_id, "pending-" <> Ecto.UUID.generate())
-    |> Map.delete(:password)
-    
+
+    user_attrs =
+      attrs
+      |> Map.put(:supabase_id, "pending-" <> Ecto.UUID.generate())
+      |> Map.delete(:password)
+
     create_database_user(user_attrs)
   end
 
   defp create_database_user(attrs) do
-    changeset = %Accounts.User{}
-    |> Ecto.Changeset.change(attrs)
-    
+    changeset =
+      %Accounts.User{}
+      |> Ecto.Changeset.change(attrs)
+
     case Repo.insert(changeset) do
       {:ok, user} ->
         Logger.info("Successfully created user: #{user.email}")
         {:ok, user}
-        
+
       {:error, changeset} ->
         Logger.error("Database insert failed: #{inspect(changeset.errors)}")
         {:error, changeset}
@@ -124,14 +131,15 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   end
 
   defp update_existing_user(user, attrs) do
-    changeset = user
-    |> Ecto.Changeset.change(Map.delete(attrs, :password))
-    
+    changeset =
+      user
+      |> Ecto.Changeset.change(Map.delete(attrs, :password))
+
     case Repo.update(changeset) do
       {:ok, updated_user} ->
         Logger.info("Successfully updated user: #{updated_user.email}")
         {:ok, updated_user}
-        
+
       {:error, changeset} ->
         Logger.error("Failed to update user: #{inspect(changeset.errors)}")
         {:error, changeset}
@@ -141,34 +149,41 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   defp handle_existing_auth_user(attrs) do
     # Since the auth user exists, we need to fetch their Supabase ID and create/update the local user
     email = Map.get(attrs, :email)
-    
+
     # Try to fetch the existing auth user from Supabase
-    supabase_id = case Client.admin_get_user_by_email(email) do
-      {:ok, auth_user} when not is_nil(auth_user) ->
-        Logger.info("Found existing Supabase user for #{email}: #{auth_user["id"]}")
-        auth_user["id"]
-      {:ok, nil} ->
-        Logger.warning("Supabase user not found for #{email}, using pending ID")
-        "pending-" <> Ecto.UUID.generate()
-      {:error, reason} ->
-        Logger.warning("Could not fetch Supabase user for #{email}: #{inspect(reason)}, using pending ID")
-        "pending-" <> Ecto.UUID.generate()
-    end
-    
-    user_attrs = attrs
-    |> Map.put(:supabase_id, supabase_id)
-    |> Map.delete(:password)
-    
+    supabase_id =
+      case Client.admin_get_user_by_email(email) do
+        {:ok, auth_user} when not is_nil(auth_user) ->
+          Logger.info("Found existing Supabase user for #{email}: #{auth_user["id"]}")
+          auth_user["id"]
+
+        {:ok, nil} ->
+          Logger.warning("Supabase user not found for #{email}, using pending ID")
+          "pending-" <> Ecto.UUID.generate()
+
+        {:error, reason} ->
+          Logger.warning(
+            "Could not fetch Supabase user for #{email}: #{inspect(reason)}, using pending ID"
+          )
+
+          "pending-" <> Ecto.UUID.generate()
+      end
+
+    user_attrs =
+      attrs
+      |> Map.put(:supabase_id, supabase_id)
+      |> Map.delete(:password)
+
     case Repo.get_by(Accounts.User, email: email) do
-      nil -> 
+      nil ->
         Logger.info("Creating local user for existing auth: #{email}")
         create_database_user(user_attrs)
-      existing -> 
+
+      existing ->
         Logger.info("Updating existing user: #{email}")
         update_existing_user(existing, user_attrs)
     end
   end
-
 
   @doc """
   Validates that a user can authenticate with Supabase.
@@ -176,12 +191,12 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   """
   def validate_auth(email, password) do
     Logger.info("Validating authentication for #{email}")
-    
+
     case Client.sign_in(email, password) do
       {:ok, _} ->
         Logger.info("✅ Authentication successful for #{email}")
         :ok
-        
+
       {:error, reason} ->
         Logger.error("❌ Authentication failed for #{email}: #{inspect(reason)}")
         {:error, reason}
@@ -193,30 +208,32 @@ defmodule EventasaurusApp.Auth.SeedUserManager do
   """
   def summarize_users do
     users = Repo.all(Accounts.User)
-    
-    with_auth = Enum.filter(users, fn u -> 
-      u.supabase_id && !String.starts_with?(u.supabase_id, "pending")
-    end)
-    
-    without_auth = Enum.filter(users, fn u -> 
-      !u.supabase_id || String.starts_with?(u.supabase_id, "pending")
-    end)
-    
+
+    with_auth =
+      Enum.filter(users, fn u ->
+        u.supabase_id && !String.starts_with?(u.supabase_id, "pending")
+      end)
+
+    without_auth =
+      Enum.filter(users, fn u ->
+        !u.supabase_id || String.starts_with?(u.supabase_id, "pending")
+      end)
+
     Logger.info("""
-    
+
     ===== User Summary =====
     Total users: #{length(users)}
     With auth: #{length(with_auth)}
     Without auth: #{length(without_auth)}
-    
+
     Users with authentication:
     #{Enum.map(with_auth, fn u -> "  - #{u.email}" end) |> Enum.join("\n")}
-    
+
     Users without authentication:
     #{Enum.map(without_auth, fn u -> "  - #{u.email}" end) |> Enum.join("\n")}
     ========================
     """)
-    
+
     %{
       total: length(users),
       with_auth: length(with_auth),

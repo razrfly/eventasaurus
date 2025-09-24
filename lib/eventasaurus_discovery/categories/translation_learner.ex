@@ -29,32 +29,36 @@ defmodule EventasaurusDiscovery.Categories.TranslationLearner do
         locale_translations = Map.get(translations, locale, %{})
 
         # Only update if we don't have a name yet, or if this is a new variant
-        updated_locale = case Map.get(locale_translations, "name") do
-          nil ->
-            # No translation yet, add it
-            Map.put(locale_translations, "name", external_name)
+        updated_locale =
+          case Map.get(locale_translations, "name") do
+            nil ->
+              # No translation yet, add it
+              Map.put(locale_translations, "name", external_name)
 
-          existing when existing == external_name ->
-            # Same translation already exists
-            locale_translations
-
-          _different ->
-            # Different translation exists - store as alternate
-            alternates = Map.get(locale_translations, "alternates", [])
-            if external_name in alternates do
+            existing when existing == external_name ->
+              # Same translation already exists
               locale_translations
-            else
-              Map.put(locale_translations, "alternates", [external_name | alternates])
-            end
-        end
+
+            _different ->
+              # Different translation exists - store as alternate
+              alternates = Map.get(locale_translations, "alternates", [])
+
+              if external_name in alternates do
+                locale_translations
+              else
+                Map.put(locale_translations, "alternates", [external_name | alternates])
+              end
+          end
 
         # Add source information
         sources = Map.get(updated_locale, "sources", [])
-        updated_locale = if source in sources do
-          updated_locale
-        else
-          Map.put(updated_locale, "sources", [source | sources])
-        end
+
+        updated_locale =
+          if source in sources do
+            updated_locale
+          else
+            Map.put(updated_locale, "sources", [source | sources])
+          end
 
         # Update the translations
         updated_translations = Map.put(translations, locale, updated_locale)
@@ -118,9 +122,11 @@ defmodule EventasaurusDiscovery.Categories.TranslationLearner do
         name: category.name,
         translation_count: length(locales),
         locales: locales,
-        sources: Enum.flat_map(locales, fn locale ->
-          Map.get(translations[locale], "sources", [])
-        end) |> Enum.uniq()
+        sources:
+          Enum.flat_map(locales, fn locale ->
+            Map.get(translations[locale], "sources", [])
+          end)
+          |> Enum.uniq()
       }
     end)
   end

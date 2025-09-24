@@ -61,12 +61,13 @@ defmodule Mix.Tasks.Discovery.Sync do
     inline = opts[:inline] || false
 
     # Enforce limit for inline mode to prevent rate limiting
-    limit = if inline && limit > 10 do
-      Logger.warning("⚠️  Inline mode limited to max 10 events to prevent rate limiting")
-      10
-    else
-      limit
-    end
+    limit =
+      if inline && limit > 10 do
+        Logger.warning("⚠️  Inline mode limited to max 10 events to prevent rate limiting")
+        10
+      else
+        limit
+      end
 
     options = build_source_options(source_name, opts)
 
@@ -84,15 +85,16 @@ defmodule Mix.Tasks.Discovery.Sync do
   end
 
   defp parse_args(args) do
-    {opts, remaining, _} = OptionParser.parse(args,
-      switches: [
-        city: :string,
-        city_id: :integer,
-        limit: :integer,
-        radius: :integer,
-        inline: :boolean
-      ]
-    )
+    {opts, remaining, _} =
+      OptionParser.parse(args,
+        switches: [
+          city: :string,
+          city_id: :integer,
+          limit: :integer,
+          radius: :integer,
+          inline: :boolean
+        ]
+      )
 
     source = List.first(remaining) || "all"
     {String.downcase(source), opts}
@@ -190,6 +192,7 @@ defmodule Mix.Tasks.Discovery.Sync do
 
   defp exit_with_error(message) do
     Logger.error("❌ #{message}")
+
     Logger.info("""
 
     Usage: mix discovery.sync [source] --city [city_slug] --limit [number]
@@ -201,6 +204,7 @@ defmodule Mix.Tasks.Discovery.Sync do
       mix discovery.sync bandsintown --city warsaw --limit 50
       mix discovery.sync all --city krakow --limit 500
     """)
+
     System.halt(1)
   end
 end

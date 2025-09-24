@@ -15,6 +15,7 @@ defmodule EventasaurusWeb.AuthenticationUXTest do
       "email" => user.email,
       "user_metadata" => %{"name" => user.name}
     }
+
     TestClient.set_test_user(token, supabase_user)
 
     # Add the token to the session
@@ -24,10 +25,11 @@ defmodule EventasaurusWeb.AuthenticationUXTest do
 
   describe "authentication user experience" do
     test "authenticated user sees their info in header", %{conn: conn} do
-      user = EventasaurusApp.AccountsFixtures.user_fixture(%{
-        name: "John Doe",
-        email: "john@example.com"
-      })
+      user =
+        EventasaurusApp.AccountsFixtures.user_fixture(%{
+          name: "John Doe",
+          email: "john@example.com"
+        })
 
       # Authenticate the user
       {conn, _token} = authenticate_user(conn, user)
@@ -58,17 +60,20 @@ defmodule EventasaurusWeb.AuthenticationUXTest do
       refute response =~ "Log out"
       # Check that no user email appears in the header/nav area specifically
       # (avoiding false positives from footer content)
-      header_section = response
+      header_section =
+        response
         |> String.split("<main")
         |> List.first()
+
       refute header_section =~ ~r/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
     end
 
     test "user state persists across pages", %{conn: conn} do
-      user = EventasaurusApp.AccountsFixtures.user_fixture(%{
-        name: "Jane Smith",
-        email: "jane@example.com"
-      })
+      user =
+        EventasaurusApp.AccountsFixtures.user_fixture(%{
+          name: "Jane Smith",
+          email: "jane@example.com"
+        })
 
       # Authenticate the user
       {conn, _token} = authenticate_user(conn, user)

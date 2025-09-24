@@ -114,11 +114,12 @@ defmodule EventasaurusDiscovery.Pagination do
     has_more? = length(entries) > page_size
     entries = Enum.take(entries, page_size)
 
-    next_cursor = if has_more? and entries != [] do
-      List.last(entries).id
-    else
-      nil
-    end
+    next_cursor =
+      if has_more? and entries != [] do
+        List.last(entries).id
+      else
+        nil
+      end
 
     %{
       entries: entries,

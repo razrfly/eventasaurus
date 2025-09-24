@@ -130,7 +130,9 @@ defmodule Eventasaurus.Services.SvgConverterTest do
   describe "cleanup_temp_file/1" do
     test "schedules file cleanup successfully" do
       # Create a temporary file
-      temp_file = Path.join(System.tmp_dir!(), "test_cleanup_#{System.unique_integer([:positive])}.png")
+      temp_file =
+        Path.join(System.tmp_dir!(), "test_cleanup_#{System.unique_integer([:positive])}.png")
+
       File.write!(temp_file, "test content")
 
       assert File.exists?(temp_file)
@@ -144,7 +146,8 @@ defmodule Eventasaurus.Services.SvgConverterTest do
       # Wait for cleanup to happen (with a reasonable timeout)
       # In a real test, you might want to use a shorter delay for testing
       # or mock the Process.sleep call
-      Process.sleep(100)  # Short sleep to ensure Task has started
+      # Short sleep to ensure Task has started
+      Process.sleep(100)
 
       # We can't easily test the actual cleanup without waiting 5 seconds,
       # so we just verify the function returns :ok

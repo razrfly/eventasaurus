@@ -1,9 +1,9 @@
 defmodule EventasaurusWeb.GroupLive.Show do
   use EventasaurusWeb, :live_view
-  
+
   alias EventasaurusApp.Groups
   alias EventasaurusApp.Events
-  
+
   @impl true
   def mount(%{"slug" => slug}, _session, socket) do
     # Check authentication first
@@ -13,7 +13,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
          socket
          |> put_flash(:error, "You must be logged in to view groups.")
          |> redirect(to: "/auth/login")}
-      
+
       user ->
         # Try to find the group with access control
         case Groups.get_group_by_slug_if_accessible(slug, user) do
@@ -22,7 +22,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
              socket
              |> put_flash(:error, "Group not found or you don't have access to view it.")
              |> redirect(to: "/groups")}
-          
+
           group ->
             # Check if user is a member
             if not Groups.user_in_group?(group, user) do
@@ -55,22 +55,27 @@ defmodule EventasaurusWeb.GroupLive.Show do
               # Load full group data for members
               members = Groups.list_group_members_with_roles(group)
               member_count = length(members)
-              
+
               # Load group events using unified function with proper ordering
-              time_filter = :upcoming  # Default to upcoming events
-              events = Events.list_events_for_group(group, user, [
-                time_filter: time_filter,
-                limit: 100
-              ])
-              
+              # Default to upcoming events
+              time_filter = :upcoming
+
+              events =
+                Events.list_events_for_group(group, user,
+                  time_filter: time_filter,
+                  limit: 100
+                )
+
               # Calculate filter counts by fetching all events once
-              all_events = Events.list_events_for_group(group, user, [
-                time_filter: :all,
-                limit: 1000
-              ])
+              all_events =
+                Events.list_events_for_group(group, user,
+                  time_filter: :all,
+                  limit: 1000
+                )
+
               filter_counts = calculate_filter_counts(all_events)
               event_count = length(events)
-              
+
               {:ok,
                socket
                |> assign(:user, user)
@@ -102,44 +107,48 @@ defmodule EventasaurusWeb.GroupLive.Show do
         end
     end
   end
-  
+
   @impl true
   def handle_params(_params, _url, socket) do
     # Get the action from the socket's live_action
     action = socket.assigns.live_action
-    
+
     # Set the active tab based on the action
-    active_tab = case action do
-      :events -> "events"
-      :people -> "members"
-      :activities -> "activities"
-      _ -> "events"  # Default to events
-    end
-    
+    active_tab =
+      case action do
+        :events -> "events"
+        :people -> "members"
+        :activities -> "activities"
+        # Default to events
+        _ -> "events"
+      end
+
     socket = assign(socket, :active_tab, active_tab)
-    
+
     # Load activities if switching to activities tab
-    socket = if active_tab == "activities" and socket.assigns[:is_member] do
-      load_activities(socket)
-    else
-      socket
-    end
-    
+    socket =
+      if active_tab == "activities" and socket.assigns[:is_member] do
+        load_activities(socket)
+      else
+        socket
+      end
+
     # Load members if switching to members tab
-    socket = if active_tab == "members" and socket.assigns[:is_member] do
-      load_members_page(socket, 1)
-    else
-      socket
-    end
-    
+    socket =
+      if active_tab == "members" and socket.assigns[:is_member] do
+        load_members_page(socket, 1)
+      else
+        socket
+      end
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("join_group", _params, socket) do
     group = socket.assigns.group
     user = socket.assigns.user
-    
+
     # Check if user can join this group
     case Groups.can_join_group?(group, user) do
       {:ok, :immediate} ->
@@ -149,22 +158,26 @@ defmodule EventasaurusWeb.GroupLive.Show do
             # Reload group data after joining
             members = Groups.list_group_members_with_roles(group)
             member_count = length(members)
-            
+
             # Load group events using unified function with proper ordering
             time_filter = :upcoming
-            events = Events.list_events_for_group(group, user, [
-              time_filter: time_filter,
-              limit: 100
-            ])
-            
+
+            events =
+              Events.list_events_for_group(group, user,
+                time_filter: time_filter,
+                limit: 100
+              )
+
             # Calculate filter counts
-            all_events = Events.list_events_for_group(group, user, [
-              time_filter: :all,
-              limit: 1000
-            ])
+            all_events =
+              Events.list_events_for_group(group, user,
+                time_filter: :all,
+                limit: 1000
+              )
+
             filter_counts = calculate_filter_counts(all_events)
             event_count = length(events)
-            
+
             {:noreply,
              socket
              |> put_flash(:info, "Successfully joined the group!")
@@ -186,40 +199,40 @@ defmodule EventasaurusWeb.GroupLive.Show do
              |> assign(:add_member_search, "")
              |> assign(:selected_user_id, nil)
              |> assign(:open_member_menu, nil)}
-          
+
           {:error, _} ->
             {:noreply,
              socket
              |> put_flash(:error, "Failed to join group")}
         end
-        
+
       {:ok, :request_required} ->
         {:noreply,
          socket
          |> put_flash(:info, "Join request sent! Waiting for admin approval.")}
-      
+
       {:error, :already_member} ->
         {:noreply,
          socket
          |> put_flash(:info, "You are already a member of this group")}
-      
+
       {:error, :invite_only} ->
         {:noreply,
          socket
          |> put_flash(:error, "This group is invite-only. Contact an admin to join.")}
-      
+
       {:error, :cannot_view} ->
         {:noreply,
          socket
          |> put_flash(:error, "You cannot join this group")}
     end
   end
-  
+
   @impl true
   def handle_event("leave_group", _params, socket) do
     group = socket.assigns.group
     user = socket.assigns.user
-    
+
     # Don't allow creator to leave
     if socket.assigns.is_creator do
       {:noreply,
@@ -232,7 +245,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
            socket
            |> put_flash(:info, "You have left the group")
            |> redirect(to: "/groups")}
-        
+
         {:error, _} ->
           {:noreply,
            socket
@@ -240,7 +253,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
       end
     end
   end
-  
+
   @impl true
   def handle_event("delete_group", _params, socket) do
     if socket.assigns.is_creator do
@@ -250,7 +263,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
            socket
            |> put_flash(:info, "Group deleted successfully")
            |> redirect(to: "/groups")}
-        
+
         {:error, _} ->
           {:noreply,
            socket
@@ -262,57 +275,62 @@ defmodule EventasaurusWeb.GroupLive.Show do
        |> put_flash(:error, "Only the group creator can delete the group")}
     end
   end
-  
+
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     # Build the path based on the tab
-    path = case tab do
-      "events" -> "/groups/#{socket.assigns.group.slug}/events"
-      "members" -> "/groups/#{socket.assigns.group.slug}/people"
-      "activities" -> "/groups/#{socket.assigns.group.slug}/activities"
-      _ -> "/groups/#{socket.assigns.group.slug}"
-    end
-    
+    path =
+      case tab do
+        "events" -> "/groups/#{socket.assigns.group.slug}/events"
+        "members" -> "/groups/#{socket.assigns.group.slug}/people"
+        "activities" -> "/groups/#{socket.assigns.group.slug}/activities"
+        _ -> "/groups/#{socket.assigns.group.slug}"
+      end
+
     {:noreply, push_patch(socket, to: path)}
   end
-  
+
   @impl true
   def handle_event("search_members", %{"query" => query}, socket) do
-    socket = socket
-             |> assign(:search_query, query)
-             |> assign(:current_page, 1)
-    
+    socket =
+      socket
+      |> assign(:search_query, query)
+      |> assign(:current_page, 1)
+
     socket = load_members_page(socket, 1)
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("filter_by_role", %{"role" => role}, socket) do
-    socket = socket
-             |> assign(:role_filter, role)
-             |> assign(:current_page, 1)
-    
+    socket =
+      socket
+      |> assign(:role_filter, role)
+      |> assign(:current_page, 1)
+
     socket = load_members_page(socket, 1)
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("filter_members", %{"role_filter" => role}, socket) do
-    socket = socket
-             |> assign(:role_filter, role)
-             |> assign(:current_page, 1)
-    
+    socket =
+      socket
+      |> assign(:role_filter, role)
+      |> assign(:current_page, 1)
+
     socket = load_members_page(socket, 1)
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("clear_member_filters", _params, socket) do
-    socket = socket
-             |> assign(:role_filter, "all")
-             |> assign(:search_query, "")
-             |> assign(:current_page, 1)
-    
+    socket =
+      socket
+      |> assign(:role_filter, "all")
+      |> assign(:search_query, "")
+      |> assign(:current_page, 1)
+
     socket = load_members_page(socket, 1)
     {:noreply, socket}
   end
@@ -323,12 +341,12 @@ defmodule EventasaurusWeb.GroupLive.Show do
     socket = load_members_page(socket, page_num)
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("open_add_modal", _params, socket) do
     # Load potential members when opening modal
     potential_members = Groups.list_potential_group_members(socket.assigns.group, limit: 10)
-    
+
     {:noreply,
      socket
      |> assign(:show_add_modal, true)
@@ -336,7 +354,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
      |> assign(:add_member_search, "")
      |> assign(:selected_user_id, nil)}
   end
-  
+
   @impl true
   def handle_event("close_add_modal", _params, socket) do
     {:noreply,
@@ -346,44 +364,47 @@ defmodule EventasaurusWeb.GroupLive.Show do
      |> assign(:add_member_search, "")
      |> assign(:selected_user_id, nil)}
   end
-  
+
   @impl true
   def handle_event("search_potential_members", %{"search" => search}, socket) do
-    potential_members = if String.trim(search) == "" do
-      Groups.list_potential_group_members(socket.assigns.group, limit: 10)
-    else
-      Groups.list_potential_group_members(socket.assigns.group, search: search, limit: 10)
-    end
-    
+    potential_members =
+      if String.trim(search) == "" do
+        Groups.list_potential_group_members(socket.assigns.group, limit: 10)
+      else
+        Groups.list_potential_group_members(socket.assigns.group, search: search, limit: 10)
+      end
+
     {:noreply,
      socket
      |> assign(:add_member_search, search)
      |> assign(:potential_members, potential_members)}
   end
-  
+
   @impl true
   def handle_event("select_user", %{"user_id" => user_id}, socket) do
     case Integer.parse(user_id) do
       {parsed_id, _} ->
         {:noreply, assign(socket, :selected_user_id, parsed_id)}
+
       :error ->
         {:noreply, socket |> put_flash(:error, "Invalid user ID")}
     end
   end
-  
+
   @impl true
   def handle_event("add_member", %{"role" => role}, socket) do
     if socket.assigns.selected_user_id do
       case EventasaurusApp.Accounts.get_user(socket.assigns.selected_user_id) do
         nil ->
           {:noreply, socket |> put_flash(:error, "User not found")}
+
         user ->
           case Groups.add_user_to_group(socket.assigns.group, user, role, socket.assigns.user) do
             {:ok, _} ->
               # Reload members
               socket = load_members_page(socket, 1)
               member_count = Groups.count_group_members(socket.assigns.group)
-              
+
               {:noreply,
                socket
                |> assign(:show_add_modal, false)
@@ -392,7 +413,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
                |> assign(:selected_user_id, nil)
                |> assign(:member_count, member_count)
                |> put_flash(:info, "Member added successfully")}
-               
+
             {:error, _} ->
               {:noreply,
                socket
@@ -405,7 +426,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
        |> put_flash(:error, "Please select a user to add")}
     end
   end
-  
+
   @impl true
   def handle_event("toggle_member_menu", %{"user_id" => user_id}, socket) do
     case Integer.parse(user_id) do
@@ -413,11 +434,12 @@ defmodule EventasaurusWeb.GroupLive.Show do
         # Toggle menu - if same user clicked, close it; otherwise open new one
         open_menu = if socket.assigns.open_member_menu == parsed_id, do: nil, else: parsed_id
         {:noreply, assign(socket, :open_member_menu, open_menu)}
+
       :error ->
         {:noreply, socket |> put_flash(:error, "Invalid user ID")}
     end
   end
-  
+
   @impl true
   def handle_event("close_member_menu", _params, socket) do
     {:noreply, assign(socket, :open_member_menu, nil)}
@@ -425,13 +447,14 @@ defmodule EventasaurusWeb.GroupLive.Show do
 
   @impl true
   def handle_event("filter_activities", %{"activity_type" => activity_type}, socket) do
-    socket = socket
-             |> assign(:activity_filter, activity_type)
-             |> load_activities()
-    
+    socket =
+      socket
+      |> assign(:activity_filter, activity_type)
+      |> load_activities()
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("remove_member", %{"user_id" => user_id}, socket) do
     case Integer.parse(user_id) do
@@ -441,20 +464,21 @@ defmodule EventasaurusWeb.GroupLive.Show do
           case EventasaurusApp.Accounts.get_user(parsed_id) do
             nil ->
               {:noreply, socket |> put_flash(:error, "User not found")}
+
             user ->
               case Groups.remove_user_from_group(socket.assigns.group, user, socket.assigns.user) do
                 {:ok, _} ->
                   # Reload members
                   socket = load_members_page(socket, socket.assigns.current_page)
-                  
+
                   # Update member count
                   member_count = Groups.count_group_members(socket.assigns.group)
-                  
+
                   {:noreply,
                    socket
                    |> assign(:member_count, member_count)
                    |> put_flash(:info, "Member removed successfully")}
-                   
+
                 {:error, _} ->
                   {:noreply,
                    socket
@@ -466,25 +490,29 @@ defmodule EventasaurusWeb.GroupLive.Show do
            socket
            |> put_flash(:error, "You don't have permission to remove this member")}
         end
+
       :error ->
         {:noreply, socket |> put_flash(:error, "Invalid user ID")}
     end
   end
-  
+
   # Helper functions
-  
+
   def format_relative_time(datetime) do
     # Convert to DateTime if it's a NaiveDateTime, return fallback for invalid types
-    datetime = case datetime do
-      %NaiveDateTime{} = ndt -> 
-        DateTime.from_naive!(ndt, "Etc/UTC")
-      %DateTime{} = dt -> 
-        dt
-      _ -> 
-        # Return fallback for unsupported types (nil, string, integer, etc.)
-        nil
-    end
-    
+    datetime =
+      case datetime do
+        %NaiveDateTime{} = ndt ->
+          DateTime.from_naive!(ndt, "Etc/UTC")
+
+        %DateTime{} = dt ->
+          dt
+
+        _ ->
+          # Return fallback for unsupported types (nil, string, integer, etc.)
+          nil
+      end
+
     # Handle nil case - return fallback string
     if datetime == nil do
       "unknown"
@@ -494,7 +522,7 @@ defmodule EventasaurusWeb.GroupLive.Show do
       diff_minutes = div(diff_seconds, 60)
       diff_hours = div(diff_minutes, 60)
       diff_days = div(diff_hours, 24)
-      
+
       cond do
         diff_seconds < 60 -> "just now"
         diff_minutes < 60 -> "#{diff_minutes} minute#{if diff_minutes != 1, do: "s"} ago"
@@ -504,55 +532,59 @@ defmodule EventasaurusWeb.GroupLive.Show do
       end
     end
   end
-  
+
   def role_badge_class(role) do
     base = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-    
+
     case role do
       "admin" -> "#{base} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
       "member" -> "#{base} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
       _ -> "#{base} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
     end
   end
-  
+
   defp load_members_page(socket, page) do
     opts = [
       page: page,
       per_page: 20,
       search: socket.assigns[:search_query] || ""
     ]
-    
+
     # Add role filter if not "all"
     role_filter = socket.assigns[:role_filter] || "all"
-    opts = if role_filter != "all" do
-      Keyword.put(opts, :role, role_filter)
-    else
-      opts
-    end
-    
+
+    opts =
+      if role_filter != "all" do
+        Keyword.put(opts, :role, role_filter)
+      else
+        opts
+      end
+
     result = Groups.list_group_members_paginated(socket.assigns.group, opts)
-    
+
     socket
     |> assign(:paginated_members, result.entries)
     |> assign(:total_pages, result.total_pages)
     |> assign(:current_page, result.page)
   end
-  
+
   defp load_activities(socket) do
     group = socket.assigns.group
     activity_filter = socket.assigns[:activity_filter] || "all"
-    
+
     # Build options for filtering
     opts = []
-    opts = if activity_filter != "all" do
-      Keyword.put(opts, :activity_type, activity_filter)
-    else
-      opts
-    end
-    
+
+    opts =
+      if activity_filter != "all" do
+        Keyword.put(opts, :activity_type, activity_filter)
+      else
+        opts
+      end
+
     # Fetch activities for the group
     activities = Events.list_group_activities(group.id, opts)
-    
+
     socket
     |> assign(:activities, activities)
   end
@@ -562,23 +594,26 @@ defmodule EventasaurusWeb.GroupLive.Show do
   def handle_info({:filter_time, time_filter}, socket) do
     # Validate time_filter for group events (only upcoming and past are supported)
     time_filter = if time_filter in [:upcoming, :past], do: time_filter, else: :upcoming
-    
+
     group = socket.assigns.group
     user = socket.assigns.user
-    
+
     # Use unified function for filtered events with proper ordering
-    events = Events.list_events_for_group(group, user, [
-      time_filter: time_filter,
-      limit: 100
-    ])
-    
+    events =
+      Events.list_events_for_group(group, user,
+        time_filter: time_filter,
+        limit: 100
+      )
+
     # Get all events for filter counts
-    all_events = Events.list_events_for_group(group, user, [
-      time_filter: :all,
-      limit: 1000
-    ])
+    all_events =
+      Events.list_events_for_group(group, user,
+        time_filter: :all,
+        limit: 1000
+      )
+
     filter_counts = calculate_filter_counts(all_events)
-    
+
     {:noreply,
      socket
      |> assign(:time_filter, time_filter)
@@ -590,23 +625,25 @@ defmodule EventasaurusWeb.GroupLive.Show do
 
   defp calculate_filter_counts(events) do
     now = DateTime.utc_now()
-    
-    upcoming_count = events
-    |> Enum.count(fn event ->
-      case event.start_at do
-        nil -> true
-        start_at -> DateTime.compare(start_at, now) in [:gt, :eq]
-      end
-    end)
-    
-    past_count = events
-    |> Enum.count(fn event ->
-      case event.start_at do
-        nil -> false
-        start_at -> DateTime.compare(start_at, now) == :lt
-      end
-    end)
-    
+
+    upcoming_count =
+      events
+      |> Enum.count(fn event ->
+        case event.start_at do
+          nil -> true
+          start_at -> DateTime.compare(start_at, now) in [:gt, :eq]
+        end
+      end)
+
+    past_count =
+      events
+      |> Enum.count(fn event ->
+        case event.start_at do
+          nil -> false
+          start_at -> DateTime.compare(start_at, now) == :lt
+        end
+      end)
+
     %{
       upcoming: upcoming_count,
       past: past_count

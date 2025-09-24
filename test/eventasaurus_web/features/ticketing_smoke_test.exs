@@ -15,18 +15,20 @@ defmodule EventasaurusWeb.TicketingSmokeTest do
       organizer = insert(:user)
       user = insert(:user)
 
-      event = insert(:event,
-        users: [organizer],
-        is_ticketed: true,
-        status: :confirmed
-      )
+      event =
+        insert(:event,
+          users: [organizer],
+          is_ticketed: true,
+          status: :confirmed
+        )
 
-      ticket = insert(:ticket,
-        event: event,
-        quantity: 50,
-        starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
-        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
-      )
+      ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 50,
+          starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
+          ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
+        )
 
       %{user: user, event: event, ticket: ticket, organizer: organizer}
     end
@@ -63,14 +65,16 @@ defmodule EventasaurusWeb.TicketingSmokeTest do
 
     test "very low cost tickets work", %{user: user, event: event} do
       # Very low cost tickets should work (avoiding 0 due to validation)
-      low_cost_ticket = insert(:ticket,
-        event: event,
-        base_price_cents: 1,  # 1 cent
-        minimum_price_cents: 1,
-        quantity: 100,
-        starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
-        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
-      )
+      low_cost_ticket =
+        insert(:ticket,
+          event: event,
+          # 1 cent
+          base_price_cents: 1,
+          minimum_price_cents: 1,
+          quantity: 100,
+          starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
+          ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
+        )
 
       {:ok, order} = Ticketing.create_order(user, low_cost_ticket, %{quantity: 1})
       {:ok, confirmed_order} = Ticketing.confirm_order(order, "test_payment")
@@ -81,12 +85,13 @@ defmodule EventasaurusWeb.TicketingSmokeTest do
 
     test "sold out logic works", %{user: user, event: event} do
       # Create ticket with 1 quantity, then sell it out
-      limited_ticket = insert(:ticket,
-        event: event,
-        quantity: 1,
-        starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
-        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
-      )
+      limited_ticket =
+        insert(:ticket,
+          event: event,
+          quantity: 1,
+          starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
+          ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
+        )
 
       # First order should work
       {:ok, _order1} = Ticketing.create_order(user, limited_ticket, %{quantity: 1})
@@ -102,22 +107,24 @@ defmodule EventasaurusWeb.TicketingSmokeTest do
       event = insert(:event, is_ticketed: true)
       user = insert(:user)
 
-      flexible_ticket = insert(:ticket,
-        event: event,
-        pricing_model: "flexible",
-        base_price_cents: 5000,
-        minimum_price_cents: 1000,
-        suggested_price_cents: 3000,
-        quantity: 100,
-        starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
-        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
-      )
+      flexible_ticket =
+        insert(:ticket,
+          event: event,
+          pricing_model: "flexible",
+          base_price_cents: 5000,
+          minimum_price_cents: 1000,
+          suggested_price_cents: 3000,
+          quantity: 100,
+          starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
+          ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
+        )
 
       # Should accept amount between min and max
-      {:ok, order} = Ticketing.create_order(user, flexible_ticket, %{
-        quantity: 1,
-        custom_price_cents: 2500
-      })
+      {:ok, order} =
+        Ticketing.create_order(user, flexible_ticket, %{
+          quantity: 1,
+          custom_price_cents: 2500
+        })
 
       assert order.subtotal_cents == 2500
     end
@@ -127,11 +134,13 @@ defmodule EventasaurusWeb.TicketingSmokeTest do
     setup do
       user = insert(:user)
       event = insert(:event, is_ticketed: true)
-      ticket = insert(:ticket,
-        event: event,
-        starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
-        ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
-      )
+
+      ticket =
+        insert(:ticket,
+          event: event,
+          starts_at: DateTime.utc_now() |> DateTime.add(-1, :hour),
+          ends_at: DateTime.utc_now() |> DateTime.add(30, :day)
+        )
 
       %{user: user, event: event, ticket: ticket}
     end

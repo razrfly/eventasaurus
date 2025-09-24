@@ -3,14 +3,14 @@ defmodule EventasaurusDiscovery.Sources.Source do
   import Ecto.Changeset
 
   schema "sources" do
-    field :name, :string
-    field :slug, :string
-    field :website_url, :string
-    field :priority, :integer, default: 50
-    field :is_active, :boolean, default: true
-    field :metadata, :map, default: %{}
+    field(:name, :string)
+    field(:slug, :string)
+    field(:website_url, :string)
+    field(:priority, :integer, default: 50)
+    field(:is_active, :boolean, default: true)
+    field(:metadata, :map, default: %{})
 
-    has_many :public_event_sources, EventasaurusDiscovery.PublicEvents.PublicEventSource
+    has_many(:public_event_sources, EventasaurusDiscovery.PublicEvents.PublicEventSource)
 
     timestamps()
   end
@@ -21,7 +21,9 @@ defmodule EventasaurusDiscovery.Sources.Source do
     |> cast(attrs, [:name, :slug, :website_url, :priority, :is_active, :metadata])
     |> validate_required([:name, :slug])
     |> update_change(:slug, &(&1 && String.downcase(&1)))
-    |> validate_format(:website_url, ~r/^https?:\/\/\S+$/i, message: "must start with http:// or https://")
+    |> validate_format(:website_url, ~r/^https?:\/\/\S+$/i,
+      message: "must start with http:// or https://"
+    )
     |> validate_number(:priority, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> unique_constraint(:slug)
   end

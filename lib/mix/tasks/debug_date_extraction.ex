@@ -15,7 +15,8 @@ defmodule Mix.Tasks.Debug.DateExtraction do
     Mix.Task.run("app.start")
 
     # Test URL from our database
-    test_url = "https://www.bandsintown.com/e/107352926-tegie-chlopy-at-ochotnicza-straz-pozarna-ossow?came_from=257&utm_medium=web&utm_source=home&utm_campaign=event"
+    test_url =
+      "https://www.bandsintown.com/e/107352926-tegie-chlopy-at-ochotnicza-straz-pozarna-ossow?came_from=257&utm_medium=web&utm_source=home&utm_campaign=event"
 
     Logger.info("🔍 Testing date extraction from: #{test_url}")
 
@@ -56,20 +57,25 @@ defmodule Mix.Tasks.Debug.DateExtraction do
 
       case type do
         "datetime" ->
-          dates = Floki.find(document, selector)
-                 |> Floki.attribute("datetime")
+          dates =
+            Floki.find(document, selector)
+            |> Floki.attribute("datetime")
+
           Logger.info("   Found datetime attributes: #{inspect(dates)}")
 
         "text" ->
-          dates = Floki.find(document, selector)
-                 |> Floki.text()
+          dates =
+            Floki.find(document, selector)
+            |> Floki.text()
+
           if dates != "" do
             Logger.info("   Found text content: #{inspect(dates)}")
           end
 
         "json" ->
-          json_scripts = Floki.find(document, selector)
-                        |> Enum.map(&Floki.text/1)
+          json_scripts =
+            Floki.find(document, selector)
+            |> Enum.map(&Floki.text/1)
 
           Enum.with_index(json_scripts, 1)
           |> Enum.each(fn {json_text, idx} ->
@@ -79,6 +85,7 @@ defmodule Mix.Tasks.Debug.DateExtraction do
               {:ok, json_data} ->
                 # Look for date fields
                 date_fields = find_date_fields(json_data)
+
                 if length(date_fields) > 0 do
                   Logger.info("     Date fields found: #{inspect(date_fields)}")
                 else
@@ -99,13 +106,14 @@ defmodule Mix.Tasks.Debug.DateExtraction do
       cond do
         # Key suggests it's a date
         String.contains?(String.downcase(key), "date") or
-        String.contains?(String.downcase(key), "time") ->
+            String.contains?(String.downcase(key), "time") ->
           [{key, value}]
 
         # Value looks like a date/time
-        is_binary(value) and (String.contains?(value, "T") or
-                             Regex.match?(~r/\d{4}-\d{2}-\d{2}/, value) or
-                             Regex.match?(~r/\d{1,2}\/\d{1,2}\/\d{4}/, value)) ->
+        is_binary(value) and
+            (String.contains?(value, "T") or
+               Regex.match?(~r/\d{4}-\d{2}-\d{2}/, value) or
+               Regex.match?(~r/\d{1,2}\/\d{1,2}\/\d{4}/, value)) ->
           [{key, value}]
 
         # Recursively check nested maps/lists

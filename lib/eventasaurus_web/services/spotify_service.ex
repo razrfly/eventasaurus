@@ -10,10 +10,13 @@ defmodule EventasaurusWeb.Services.SpotifyService do
   @base_url "https://api.spotify.com/v1"
   @auth_url "https://accounts.spotify.com/api/token"
   @cache_table :spotify_cache
-  @cache_ttl :timer.hours(1) # Cache for 1 hour
+  # Cache for 1 hour
+  @cache_ttl :timer.hours(1)
   @rate_limit_table :spotify_rate_limit
-  @rate_limit_window :timer.seconds(1) # 1 second window
-  @rate_limit_max_requests 100 # Spotify allows 100 requests per second
+  # 1 second window
+  @rate_limit_window :timer.seconds(1)
+  # Spotify allows 100 requests per second
+  @rate_limit_max_requests 100
 
   # ============================================================================
   # Client API
@@ -73,7 +76,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
       {:ok, new_state} ->
         result = search_tracks_impl(query, limit, new_state.access_token)
         {:reply, result, new_state}
-      
+
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
@@ -85,7 +88,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
       {:ok, new_state} ->
         result = get_track_details_impl(track_id, new_state.access_token)
         {:reply, result, new_state}
-      
+
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
@@ -97,7 +100,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
     case get_cached_data(track_id) do
       {:hit, cached_data} ->
         {:reply, {:ok, cached_data}, state}
-      
+
       :miss ->
         # Not in cache, fetch from API
         case ensure_valid_token(state) do
@@ -107,11 +110,11 @@ defmodule EventasaurusWeb.Services.SpotifyService do
                 # Cache the successful result
                 cache_data(track_id, track_data)
                 {:reply, {:ok, track_data}, new_state}
-              
+
               {:error, _} = error ->
                 {:reply, error, new_state}
             end
-          
+
           {:error, reason} ->
             {:reply, {:error, reason}, state}
         end
@@ -124,7 +127,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
       {:ok, new_state} ->
         result = get_tracks_impl(track_ids, new_state.access_token)
         {:reply, result, new_state}
-      
+
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
@@ -139,7 +142,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
     |> case do
       {:ok, token, expires_at} ->
         {:ok, %{state | access_token: token, expires_at: expires_at}}
-      
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -154,7 +157,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
       |> case do
         {:ok, token, new_expires_at} ->
           {:ok, %{state | access_token: token, expires_at: new_expires_at}}
-        
+
         {:error, reason} ->
           {:error, reason}
       end
@@ -169,7 +172,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
       {:error, "Spotify credentials not configured"}
     else
       credentials = Base.encode64("#{client_id}:#{client_secret}")
-      
+
       headers = [
         {"Authorization", "Basic #{credentials}"},
         {"Content-Type", "application/x-www-form-urlencoded"}
@@ -184,15 +187,15 @@ defmodule EventasaurusWeb.Services.SpotifyService do
               expires_at = DateTime.add(DateTime.utc_now(), expires_in, :second)
               Logger.debug("Spotify access token obtained, expires at #{expires_at}")
               {:ok, token, expires_at}
-            
+
             {:error, _} ->
               {:error, "Failed to parse Spotify auth response"}
           end
-        
+
         {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
           Logger.error("Spotify auth failed: #{status} - #{body}")
           {:error, "Spotify authentication failed"}
-        
+
         {:error, %HTTPoison.Error{reason: reason}} ->
           Logger.error("Spotify auth request failed: #{inspect(reason)}")
           {:error, "Network error during Spotify authentication"}
@@ -202,11 +205,13 @@ defmodule EventasaurusWeb.Services.SpotifyService do
 
   defp search_tracks_impl(query, limit, access_token) do
     with :ok <- check_rate_limit() do
-      url = "#{@base_url}/search?" <> URI.encode_query(%{
-        "q" => query,
-        "type" => "track",
-        "limit" => limit
-      })
+      url =
+        "#{@base_url}/search?" <>
+          URI.encode_query(%{
+            "q" => query,
+            "type" => "track",
+            "limit" => limit
+          })
 
       headers = [
         {"Authorization", "Bearer #{access_token}"},
@@ -219,18 +224,18 @@ defmodule EventasaurusWeb.Services.SpotifyService do
             {:ok, %{"tracks" => %{"items" => tracks}}} ->
               formatted_tracks = Enum.map(tracks, &format_search_result/1)
               {:ok, formatted_tracks}
-            
+
             {:error, _} ->
               {:error, "Failed to parse Spotify search response"}
           end
-        
+
         {:ok, %HTTPoison.Response{status_code: 401}} ->
           {:error, "Spotify authentication failed"}
-        
+
         {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
           Logger.error("Spotify search failed: #{status} - #{body}")
           {:error, "Spotify search failed"}
-        
+
         {:error, %HTTPoison.Error{reason: reason}} ->
           Logger.error("Spotify search request failed: #{inspect(reason)}")
           {:error, "Network error during Spotify search"}
@@ -245,7 +250,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
     with :ok <- check_rate_limit() do
       # Get basic track info
       track_url = "#{@base_url}/tracks/#{track_id}"
-      
+
       # Get audio features
       features_url = "#{@base_url}/audio-features/#{track_id}"
 
@@ -258,26 +263,27 @@ defmodule EventasaurusWeb.Services.SpotifyService do
       track_task = Task.async(fn -> HTTPoison.get(track_url, headers) end)
       features_task = Task.async(fn -> HTTPoison.get(features_url, headers) end)
 
-      with {:ok, %HTTPoison.Response{status_code: 200, body: track_body}} <- Task.await(track_task),
-           {:ok, %HTTPoison.Response{status_code: 200, body: features_body}} <- Task.await(features_task),
+      with {:ok, %HTTPoison.Response{status_code: 200, body: track_body}} <-
+             Task.await(track_task),
+           {:ok, %HTTPoison.Response{status_code: 200, body: features_body}} <-
+             Task.await(features_task),
            {:ok, track_data} <- Jason.decode(track_body),
            {:ok, features_data} <- Jason.decode(features_body) do
-        
         detailed_track = format_detailed_result(track_data, features_data)
         {:ok, detailed_track}
       else
         {:ok, %HTTPoison.Response{status_code: 401}} ->
           {:error, "Spotify authentication failed"}
-        
+
         {:ok, %HTTPoison.Response{status_code: 404}} ->
           {:error, "Track not found"}
-        
+
         {:ok, %HTTPoison.Response{status_code: status}} ->
           {:error, "Spotify API error: #{status}"}
-        
+
         {:error, %HTTPoison.Error{reason: reason}} ->
           {:error, "Network error: #{inspect(reason)}"}
-        
+
         {:error, _} ->
           {:error, "Failed to parse Spotify response"}
       end
@@ -303,14 +309,14 @@ defmodule EventasaurusWeb.Services.SpotifyService do
             {:ok, %{"tracks" => tracks}} ->
               formatted_tracks = Enum.map(tracks, &format_search_result/1)
               {:ok, formatted_tracks}
-            
+
             {:error, _} ->
               {:error, "Failed to parse Spotify response"}
           end
-        
+
         {:ok, %HTTPoison.Response{status_code: status}} ->
           {:error, "Spotify API error: #{status}"}
-        
+
         {:error, %HTTPoison.Error{reason: reason}} ->
           {:error, "Network error: #{inspect(reason)}"}
       end
@@ -336,17 +342,18 @@ defmodule EventasaurusWeb.Services.SpotifyService do
     artists = track["artists"] || []
     artist_names = Enum.map(artists, & &1["name"])
     primary_artist = List.first(artist_names) || "Unknown Artist"
-    
+
     album = track["album"] || %{}
     images = album["images"] || []
-    
+
     # Get the medium-sized image (usually 300x300)
-    image_url = case images do
-      [_large, medium, _small] -> medium["url"]
-      [_large, small] -> small["url"] 
-      [single] -> single["url"]
-      [] -> nil
-    end
+    image_url =
+      case images do
+        [_large, medium, _small] -> medium["url"]
+        [_large, small] -> small["url"]
+        [single] -> single["url"]
+        [] -> nil
+      end
 
     %{
       type: :track,
@@ -368,7 +375,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
   defp format_detailed_result(track_data, features_data) do
     basic = format_search_result(track_data)
     album = track_data["album"] || %{}
-    
+
     Map.merge(basic, %{
       album_release_date: album["release_date"],
       album_type: album["album_type"],
@@ -422,7 +429,7 @@ defmodule EventasaurusWeb.Services.SpotifyService do
           :ets.delete(@cache_table, key)
           :miss
         end
-      
+
       [] ->
         :miss
     end
@@ -436,12 +443,14 @@ defmodule EventasaurusWeb.Services.SpotifyService do
 
   # Format duration from milliseconds to MM:SS format
   defp format_duration(nil), do: nil
+
   defp format_duration(milliseconds) when is_integer(milliseconds) do
     seconds = div(milliseconds, 1000)
     minutes = div(seconds, 60)
     remaining_seconds = rem(seconds, 60)
-    
+
     "#{minutes}:#{String.pad_leading(Integer.to_string(remaining_seconds), 2, "0")}"
   end
+
   defp format_duration(_), do: nil
 end

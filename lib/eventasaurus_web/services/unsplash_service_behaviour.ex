@@ -8,11 +8,11 @@ defmodule EventasaurusWeb.Services.UnsplashServiceBehaviour do
   Search for photos on Unsplash.
   """
   @callback search_photos(String.t(), integer(), integer()) ::
-    {:ok, list()} | {:error, String.t()}
+              {:ok, list()} | {:error, String.t()}
 
   @doc """
   Track a photo download for Unsplash API compliance.
   """
   @callback track_download(String.t()) ::
-    :ok | {:error, String.t()}
+              :ok | {:error, String.t()}
 end

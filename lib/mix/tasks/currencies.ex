@@ -33,6 +33,7 @@ defmodule Mix.Tasks.Currencies do
       :ok ->
         IO.puts("✅ Currencies refreshed successfully.")
         Logger.info("Admin task: Currency refresh completed successfully")
+
       {:error, reason} ->
         IO.puts("❌ Failed to refresh currencies: #{inspect(reason)}")
         Logger.error("Admin task: Currency refresh failed: #{inspect(reason)}")

@@ -21,16 +21,14 @@ defmodule EventasaurusWeb.PublicPollLive do
       {:ok,
        socket
        |> put_flash(:error, "Event not found")
-       |> redirect(to: ~p"/")
-      }
+       |> redirect(to: ~p"/")}
     else
       case Events.get_event_by_slug(slug) do
         nil ->
           {:ok,
            socket
            |> put_flash(:error, "Event not found")
-           |> redirect(to: ~p"/")
-          }
+           |> redirect(to: ~p"/")}
 
         event ->
           case get_poll_by_id(event, poll_id) do
@@ -38,8 +36,7 @@ defmodule EventasaurusWeb.PublicPollLive do
               {:ok,
                socket
                |> put_flash(:error, "Poll not found")
-               |> redirect(to: ~p"/#{event.slug}/polls")
-              }
+               |> redirect(to: ~p"/#{event.slug}/polls")}
 
             poll ->
               {:ok,
@@ -48,14 +45,22 @@ defmodule EventasaurusWeb.PublicPollLive do
                |> assign(:poll, poll)
                |> assign(:page_title, "#{poll.title} - #{event.title}")
                |> assign(:meta_title, "#{poll.title} - #{event.title}")
-               |> assign(:meta_description, poll.description || "Participate in this poll for #{event.title}")
-               |> assign(:meta_image, EventasaurusWeb.PollHelpers.generate_social_image_url(event, poll))
-               |> assign(:canonical_url, "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls/#{poll.id}")
+               |> assign(
+                 :meta_description,
+                 poll.description || "Participate in this poll for #{event.title}"
+               )
+               |> assign(
+                 :meta_image,
+                 EventasaurusWeb.PollHelpers.generate_social_image_url(event, poll)
+               )
+               |> assign(
+                 :canonical_url,
+                 "#{EventasaurusWeb.Endpoint.url()}/#{event.slug}/polls/#{poll.id}"
+               )
                # Anonymous voting state
                |> assign(:show_anonymous_voter, false)
                |> assign(:temp_votes, %{})
-               |> assign(:loading_polls, [])
-              }
+               |> assign(:loading_polls, [])}
           end
       end
     end
@@ -69,12 +74,11 @@ defmodule EventasaurusWeb.PublicPollLive do
   @impl true
   def handle_event("show_anonymous_voter", %{"poll_id" => poll_id}, socket) do
     poll_id = String.to_integer(poll_id)
-    
+
     if socket.assigns.poll.id == poll_id do
       {:noreply,
        socket
-       |> assign(:show_anonymous_voter, true)
-      }
+       |> assign(:show_anonymous_voter, true)}
     else
       {:noreply, socket}
     end
@@ -84,13 +88,15 @@ defmodule EventasaurusWeb.PublicPollLive do
     {:noreply,
      socket
      |> assign(:show_anonymous_voter, false)
-     |> assign(:loading_polls, remove_poll_from_loading_list(socket.assigns.loading_polls, socket.assigns.poll.id))
-    }
+     |> assign(
+       :loading_polls,
+       remove_poll_from_loading_list(socket.assigns.loading_polls, socket.assigns.poll.id)
+     )}
   end
 
   def handle_event("vote", params, socket) do
     poll_id = String.to_integer(params["poll_id"])
-    
+
     # Handle voting logic based on whether user is authenticated
     case socket.assigns[:auth_user] do
       nil ->
@@ -98,34 +104,37 @@ defmodule EventasaurusWeb.PublicPollLive do
         if socket.assigns.poll.id == poll_id do
           {:noreply,
            socket
-           |> assign(:show_anonymous_voter, true)
-          }
+           |> assign(:show_anonymous_voter, true)}
         else
           {:noreply, socket}
         end
-        
+
       user ->
         # Handle authenticated user voting - check poll ID first
         if socket.assigns.poll.id == poll_id do
           # Add poll to loading state for authenticated users only
           loading_polls = add_poll_to_loading_list(socket.assigns.loading_polls, poll_id)
           socket = assign(socket, :loading_polls, loading_polls)
-          
-          case EventasaurusWeb.PollHelpers.handle_authenticated_vote(socket, poll_id, params, user) do
+
+          case EventasaurusWeb.PollHelpers.handle_authenticated_vote(
+                 socket,
+                 poll_id,
+                 params,
+                 user
+               ) do
             {:ok, :vote_processed} ->
               {:noreply, socket}
+
             {:error, reason, loading_polls} ->
               {:noreply,
                socket
                |> put_flash(:error, reason)
-               |> assign(:loading_polls, loading_polls)
-              }
+               |> assign(:loading_polls, loading_polls)}
           end
         else
           {:noreply,
            socket
-           |> put_flash(:error, "Poll not found")
-          }
+           |> put_flash(:error, "Poll not found")}
         end
     end
   end
@@ -135,14 +144,16 @@ defmodule EventasaurusWeb.PublicPollLive do
     if socket.assigns.poll.id == poll_id do
       # Reload the poll data after anonymous voting
       updated_poll = Events.get_poll!(poll_id)
-      
+
       {:noreply,
        socket
        |> assign(:poll, updated_poll)
-       |> assign(:loading_polls, remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id))
+       |> assign(
+         :loading_polls,
+         remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)
+       )
        |> assign(:show_anonymous_voter, false)
-       |> put_flash(:info, "Vote submitted successfully!")
-      }
+       |> put_flash(:info, "Vote submitted successfully!")}
     else
       {:noreply, socket}
     end
@@ -152,13 +163,15 @@ defmodule EventasaurusWeb.PublicPollLive do
     if socket.assigns.poll.id == poll_id do
       # Reload the poll data after voting
       updated_poll = Events.get_poll!(poll_id)
-      
+
       {:noreply,
        socket
        |> assign(:poll, updated_poll)
-       |> assign(:loading_polls, remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id))
-       |> put_flash(:info, "Vote submitted successfully!")
-      }
+       |> assign(
+         :loading_polls,
+         remove_poll_from_loading_list(socket.assigns.loading_polls, poll_id)
+       )
+       |> put_flash(:info, "Vote submitted successfully!")}
     else
       {:noreply, socket}
     end
@@ -202,16 +215,9 @@ defmodule EventasaurusWeb.PublicPollLive do
       {id, ""} ->
         polls = Events.list_polls(event)
         Enum.find(polls, &(&1.id == id))
+
       _ ->
         nil
     end
   end
-
-
-
-
-
-
-
-
 end

@@ -6,20 +6,24 @@ defmodule EventasaurusWeb.CategoryDemoController do
   def index(conn, params) do
     # Get selected categories from params
     selected_categories = params["categories"] || []
-    selected_categories = if is_list(selected_categories), do: selected_categories, else: [selected_categories]
+
+    selected_categories =
+      if is_list(selected_categories), do: selected_categories, else: [selected_categories]
+
     selected_categories = Enum.reject(selected_categories, &(&1 == ""))
 
     # Get all categories for filter
     all_categories = Categories.list_active_categories()
 
     # Get events based on filters
-    events = if Enum.empty?(selected_categories) do
-      # Get all recent events
-      PublicEvents.recent_events(limit: 20)
-    else
-      # Filter by selected categories
-      PublicEvents.by_categories(selected_categories, limit: 20)
-    end
+    events =
+      if Enum.empty?(selected_categories) do
+        # Get all recent events
+        PublicEvents.recent_events(limit: 20)
+      else
+        # Filter by selected categories
+        PublicEvents.by_categories(selected_categories, limit: 20)
+      end
 
     # Get locale from params or default to "en"
     locale = params["locale"] || "en"

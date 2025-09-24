@@ -105,8 +105,10 @@ defmodule EventasaurusWeb.Helpers.CurrencyHelpersTest do
 
       # Test that required currencies for existing models are available
       required_currencies = ["usd", "eur", "gbp", "cad", "aud", "jpy"]
+
       Enum.each(required_currencies, fn currency ->
-        assert currency in currencies, "Currency #{currency} should be available for model validation"
+        assert currency in currencies,
+               "Currency #{currency} should be available for model validation"
       end)
     end
   end

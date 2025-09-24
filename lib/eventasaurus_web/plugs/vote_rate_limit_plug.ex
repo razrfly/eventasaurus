@@ -57,7 +57,7 @@ defmodule EventasaurusWeb.Plugs.VoteRateLimitPlug do
   defp check_global_limit(client_id, current_time) do
     global_key = "global:#{client_id}"
     limit = if authenticated_user?(client_id), do: @global_limit_auth, else: @global_limit_anon
-    
+
     check_rate_limit(global_key, current_time, limit)
   end
 
@@ -82,6 +82,7 @@ defmodule EventasaurusWeb.Plugs.VoteRateLimitPlug do
           :ets.insert(@table_name, {key, 1, current_time})
           :ok
         end
+
       [] ->
         # First request in window
         :ets.insert(@table_name, {key, 1, current_time})
@@ -95,6 +96,7 @@ defmodule EventasaurusWeb.Plugs.VoteRateLimitPlug do
     case :ets.whereis(@table_name) do
       :undefined ->
         :ets.new(@table_name, [:set, :named_table, :public])
+
       _ ->
         :ok
     end
@@ -114,8 +116,10 @@ defmodule EventasaurusWeb.Plugs.VoteRateLimitPlug do
   defp get_poll_id(conn) do
     # Extract poll ID from path params or body
     case conn.path_params do
-      %{"poll_id" => poll_id} -> poll_id
-      _ -> 
+      %{"poll_id" => poll_id} ->
+        poll_id
+
+      _ ->
         case conn.params do
           %{"poll_id" => poll_id} -> poll_id
           _ -> "unknown"

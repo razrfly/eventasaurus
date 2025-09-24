@@ -50,28 +50,38 @@ defmodule Mix.Tasks.Seed.Clean do
     end
 
     # Parse arguments
-    {opts, _} = OptionParser.parse!(args,
-      strict: [
-        only: :string,
-        force: :boolean
-      ]
-    )
+    {opts, _} =
+      OptionParser.parse!(args,
+        strict: [
+          only: :string,
+          force: :boolean
+        ]
+      )
 
     # Start the app
     Mix.Task.run("app.start")
 
     # Determine what to clean
-    entities = if opts[:only] do
-      String.split(opts[:only], ",")
-    else
-      ["all"]
-    end
+    entities =
+      if opts[:only] do
+        String.split(opts[:only], ",")
+      else
+        ["all"]
+      end
 
     # Confirm unless --force
     unless opts[:force] do
-      IO.puts(IO.ANSI.format([:bright, :yellow, "\n⚠️  This will DELETE data from your development database!", :reset]))
+      IO.puts(
+        IO.ANSI.format([
+          :bright,
+          :yellow,
+          "\n⚠️  This will DELETE data from your development database!",
+          :reset
+        ])
+      )
+
       IO.puts("Entities to clean: #{inspect(entities)}")
-      
+
       unless Mix.shell().yes?("\nAre you sure you want to continue?") do
         IO.puts(IO.ANSI.format([:yellow, "\n❌ Cleaning cancelled.", :reset]))
         exit(:normal)
@@ -96,61 +106,63 @@ defmodule Mix.Tasks.Seed.Clean do
 
   defp clean_entity("users") do
     IO.write("Cleaning users... ")
-    
+
     # Keep system users
     system_emails = ["admin@example.com", "demo@example.com"]
-    
-    deleted = Repo.delete_all(
-      from u in EventasaurusApp.Accounts.User,
-      where: u.email not in ^system_emails
-    )
-    
+
+    deleted =
+      Repo.delete_all(
+        from(u in EventasaurusApp.Accounts.User,
+          where: u.email not in ^system_emails
+        )
+      )
+
     IO.puts("✓ Deleted #{elem(deleted, 0)} users")
   end
 
   defp clean_entity("events") do
     IO.write("Cleaning events... ")
-    
+
     # This will cascade to participants, polls, activities via foreign keys
     {count, _} = Repo.delete_all(EventasaurusApp.Events.Event)
-    
+
     IO.puts("✓ Deleted #{count} events")
   end
 
   defp clean_entity("groups") do
     IO.write("Cleaning groups... ")
-    
+
     # Delete group memberships first
     Repo.delete_all(EventasaurusApp.Groups.GroupUser)
     {count, _} = Repo.delete_all(EventasaurusApp.Groups.Group)
-    
+
     IO.puts("✓ Deleted #{count} groups")
   end
 
   defp clean_entity("polls") do
     IO.write("Cleaning polls... ")
-    
+
     # Delete in order of dependencies
     Repo.delete_all(EventasaurusApp.Events.PollVote)
     Repo.delete_all(EventasaurusApp.Events.PollOption)
     {count, _} = Repo.delete_all(EventasaurusApp.Events.Poll)
-    
+
     IO.puts("✓ Deleted #{count} polls")
   end
 
   defp clean_entity("activities") do
     IO.write("Cleaning activities... ")
-    
+
     {count, _} = Repo.delete_all(EventasaurusApp.Events.EventActivity)
-    
+
     IO.puts("✓ Deleted #{count} activities")
   end
 
   defp clean_entity("venues") do
     IO.write("Cleaning venues... ")
-    
+
     {count, _} = Repo.delete_all(EventasaurusApp.Venues.Venue)
-    
+
     IO.puts("✓ Deleted #{count} venues")
   end
 

@@ -55,13 +55,15 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   """
   def get_generic_poll_with_options_and_votes(poll_id) do
     try do
-      query = from p in Poll,
-        where: p.id == ^poll_id and p.poll_type == "date_selection",
-        preload: [
-          poll_options: [:votes, :suggested_by],
-          event: [],
-          created_by: []
-        ]
+      query =
+        from(p in Poll,
+          where: p.id == ^poll_id and p.poll_type == "date_selection",
+          preload: [
+            poll_options: [:votes, :suggested_by],
+            event: [],
+            created_by: []
+          ]
+        )
 
       case Repo.one(query) do
         nil -> {:error, "Poll not found or not a date_selection poll"}
@@ -121,6 +123,7 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
     case option.metadata do
       nil ->
         {:error, "No metadata found in poll option"}
+
       metadata when is_map(metadata) ->
         # Use our comprehensive DateMetadata validation
         alias EventasaurusApp.Events.DateMetadata
@@ -128,17 +131,22 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
         case DateMetadata.validate_metadata_structure(metadata) do
           :ok ->
             changeset = DateMetadata.changeset(%DateMetadata{}, metadata)
+
             if changeset.valid? do
               {:ok, option}
             else
-              errors = Enum.map(changeset.errors, fn {field, {message, _opts}} ->
-                "#{field}: #{message}"
-              end)
+              errors =
+                Enum.map(changeset.errors, fn {field, {message, _opts}} ->
+                  "#{field}: #{message}"
+                end)
+
               {:error, "Invalid date metadata - #{Enum.join(errors, ", ")}"}
             end
+
           {:error, reason} ->
             {:error, "Metadata structure validation failed: #{reason}"}
         end
+
       _ ->
         {:error, "Metadata must be a valid map"}
     end
@@ -154,11 +162,14 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
       {:ok, validated_option} ->
         # Additional legacy compatibility check
         case extract_date_from_option(validated_option) do
-          {:ok, _date} -> {:ok, validated_option}
+          {:ok, _date} ->
+            {:ok, validated_option}
+
           {:error, reason} ->
             Logger.warning("Date extraction failed for option #{option.id}: #{reason}")
             {:error, "Invalid date metadata in option"}
         end
+
       {:error, reason} ->
         Logger.warning("Date metadata validation failed for option #{option.id}: #{reason}")
         {:error, reason}
@@ -186,7 +197,6 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
     |> html_escape()
   end
 
-
   @doc """
   Returns HTML-safe poll title and description for UI components.
   """
@@ -197,7 +207,6 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
     }
   end
 
-
   @doc """
   Returns HTML-safe vote display text.
   """
@@ -206,7 +215,6 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
     |> vote_value_to_display()
     |> html_escape()
   end
-
 
   @doc """
   Returns HTML-safe status display for polls.
@@ -217,8 +225,6 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
     |> html_escape()
   end
 
-
-
   @doc """
   Converts adapted data to safe HTML for template rendering.
   Useful for directly rendering adapter output in Phoenix templates.
@@ -228,13 +234,14 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
       poll_title: safe_poll_display(poll_data).title,
       poll_description: safe_poll_display(poll_data).description,
       status: safe_status_display(poll_data),
-      options: Enum.map(poll_data.poll_options || [], fn option ->
-        %{
-          id: option.id,
-          title: safe_option_title(option),
-          votes: Enum.map(option.votes || [], &safe_vote_display/1)
-        }
-      end)
+      options:
+        Enum.map(poll_data.poll_options || [], fn option ->
+          %{
+            id: option.id,
+            title: safe_option_title(option),
+            votes: Enum.map(option.votes || [], &safe_vote_display/1)
+          }
+        end)
     }
   end
 
@@ -323,7 +330,7 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   """
   def has_time_slots?(%PollOption{metadata: metadata}) when is_map(metadata) do
     Map.get(metadata, "time_enabled", false) == true and
-    not Map.get(metadata, "all_day", false)
+      not Map.get(metadata, "all_day", false)
   end
 
   def has_time_slots?(_), do: false
@@ -375,10 +382,12 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
              true <- minute >= 0 and minute <= 59 do
           format_12_hour_time(hour, minute)
         else
-          _ -> time_string  # Fallback to original string if parsing fails
+          # Fallback to original string if parsing fails
+          _ -> time_string
         end
 
-      _ -> time_string
+      _ ->
+        time_string
     end
   end
 
@@ -393,13 +402,15 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   @doc """
   Converts 24-hour time to 12-hour format with AM/PM.
   """
-  def format_12_hour_time(hour, minute) when hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 do
-    {display_hour, period} = case hour do
-      0 -> {12, "AM"}
-      h when h < 12 -> {h, "AM"}
-      12 -> {12, "PM"}
-      h -> {h - 12, "PM"}
-    end
+  def format_12_hour_time(hour, minute)
+      when hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 do
+    {display_hour, period} =
+      case hour do
+        0 -> {12, "AM"}
+        h when h < 12 -> {h, "AM"}
+        12 -> {12, "PM"}
+        h -> {h - 12, "PM"}
+      end
 
     minute_str = minute |> Integer.to_string() |> String.pad_leading(2, "0")
     "#{display_hour}:#{minute_str} #{period}"
@@ -428,6 +439,7 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
 
       has_time_slots?(option) ->
         time_slots = extract_time_slots(option)
+
         case time_slots do
           [] -> base_display
           slots -> "#{base_display} • #{format_time_slots_display(slots)}"
@@ -444,7 +456,7 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
   def validate_no_time_overlaps(time_slots) when is_list(time_slots) do
     time_slots
     |> Enum.map(&parse_time_slot_to_minutes/1)
-    |> Enum.filter(& &1 != nil)
+    |> Enum.filter(&(&1 != nil))
     |> check_overlaps()
   end
 
@@ -489,10 +501,10 @@ defmodule EventasaurusWeb.Adapters.DatePollAdapter do
           _ -> nil
         end
 
-      _ -> nil
+      _ ->
+        nil
     end
   end
 
   defp time_to_minutes(_), do: nil
-
 end

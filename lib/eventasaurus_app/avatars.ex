@@ -29,8 +29,12 @@ defmodule EventasaurusApp.Avatars do
         kw when is_list(kw) and length(kw) > 0 ->
           # Check if it's a keyword list (all tuples with atom keys)
           if Keyword.keyword?(kw), do: Map.new(kw), else: %{}
-        map when is_map(map) -> map
-        _ -> %{}
+
+        map when is_map(map) ->
+          map
+
+        _ ->
+          %{}
       end
 
     config = Application.get_env(:eventasaurus, :avatars)
@@ -49,8 +53,8 @@ defmodule EventasaurusApp.Avatars do
     # Merge default options with provided options
     merged_options = Map.merge(default_options, options)
 
-        # URL encode the seed (using query format for proper encoding)
-    encoded_seed = URI.encode_query([seed: to_string(seed)]) |> String.replace("seed=", "")
+    # URL encode the seed (using query format for proper encoding)
+    encoded_seed = URI.encode_query(seed: to_string(seed)) |> String.replace("seed=", "")
 
     # Build the base URL
     url = "#{base_url}/#{style}/#{format}?seed=#{encoded_seed}"

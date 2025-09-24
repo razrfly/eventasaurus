@@ -15,11 +15,12 @@ defmodule EventasaurusApp.MoxSetupTest do
       # Arrange: Set up mock expectations
       EventasaurusApp.Auth.ClientMock
       |> expect(:get_user, fn "test_token" ->
-        {:ok, %{
-          "id" => "test-user-id",
-          "email" => "test@example.com",
-          "user_metadata" => %{"name" => "Test User"}
-        }}
+        {:ok,
+         %{
+           "id" => "test-user-id",
+           "email" => "test@example.com",
+           "user_metadata" => %{"name" => "Test User"}
+         }}
       end)
 
       # Act: Call the mock
@@ -35,15 +36,16 @@ defmodule EventasaurusApp.MoxSetupTest do
       # Arrange: Set up mock expectations for photo search
       EventasaurusWeb.Services.UnsplashServiceMock
       |> expect(:search_photos, fn "nature", 1, 10 ->
-        {:ok, [
-          %{
-            id: "photo-1",
-            description: "Beautiful nature photo",
-            urls: %{regular: "https://example.com/photo1.jpg"},
-            user: %{name: "Test Photographer"},
-            download_location: "https://api.unsplash.com/photos/photo-1/download"
-          }
-        ]}
+        {:ok,
+         [
+           %{
+             id: "photo-1",
+             description: "Beautiful nature photo",
+             urls: %{regular: "https://example.com/photo1.jpg"},
+             user: %{name: "Test Photographer"},
+             download_location: "https://api.unsplash.com/photos/photo-1/download"
+           }
+         ]}
       end)
 
       # Act: Call the mock
@@ -60,15 +62,16 @@ defmodule EventasaurusApp.MoxSetupTest do
       # Arrange: Set up mock expectations for movie search
       EventasaurusWeb.Services.TmdbServiceMock
       |> expect(:search_multi, fn "Avatar", 1 ->
-        {:ok, [
-          %{
-            type: :movie,
-            id: 19995,
-            title: "Avatar",
-            overview: "A paraplegic Marine dispatched to the moon Pandora...",
-            poster_path: "/jRXYjXNq0Cs2TcJjLkki24MLp7u.jpg"
-          }
-        ]}
+        {:ok,
+         [
+           %{
+             type: :movie,
+             id: 19995,
+             title: "Avatar",
+             overview: "A paraplegic Marine dispatched to the moon Pandora...",
+             poster_path: "/jRXYjXNq0Cs2TcJjLkki24MLp7u.jpg"
+           }
+         ]}
       end)
 
       # Act: Call the mock
@@ -88,10 +91,11 @@ defmodule EventasaurusApp.MoxSetupTest do
       # Arrange: Set up a different mock expectation
       EventasaurusApp.Auth.ClientMock
       |> expect(:sign_in, fn "user@test.com", "password123" ->
-        {:ok, %{
-          "access_token" => "mock_access_token",
-          "refresh_token" => "mock_refresh_token"
-        }}
+        {:ok,
+         %{
+           "access_token" => "mock_access_token",
+           "refresh_token" => "mock_refresh_token"
+         }}
       end)
 
       # Act: Call the mock

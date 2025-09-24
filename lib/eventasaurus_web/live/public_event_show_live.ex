@@ -2,6 +2,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   use EventasaurusWeb, :live_view
 
   alias EventasaurusApp.Repo
+  alias EventasaurusApp.Events.EventPlans
+  alias EventasaurusWeb.Components.SimplePlanWithFriendsModal
   import Ecto.Query
 
   @impl true
@@ -16,6 +18,9 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       |> assign(:event, nil)
       |> assign(:loading, true)
       |> assign(:selected_occurrence, nil)
+      |> assign(:show_plan_with_friends_modal, false)
+      |> assign(:emails_input, "")
+      |> assign(:invitation_message, "")
 
     {:ok, socket}
   end
@@ -47,90 +52,127 @@ defmodule EventasaurusWeb.PublicEventShowLive do
         |> push_navigate(to: ~p"/activities")
 
       event ->
-        # Get primary category ID once to avoid multiple queries
-        primary_category_id = get_primary_category_id(event.id)
+        # Get primary category for this event
+        primary_category_id =
+          from(pec in EventasaurusDiscovery.Categories.PublicEventCategory,
+            where: pec.event_id == ^event.id and pec.is_primary == true,
+            select: pec.category_id,
+            limit: 1
+          )
+          |> Repo.one()
+
+        # Check if user has existing plan
+        existing_plan =
+          if socket.assigns[:current_user] do
+            EventPlans.get_user_plan_for_event(socket.assigns.current_user.id, event.id)
+          end
 
         # Enrich with display fields
         enriched_event =
           event
+          |> Map.put(:primary_category_id, primary_category_id)
           |> Map.put(:display_title, get_localized_title(event, language))
           |> Map.put(:display_description, get_localized_description(event, language))
           |> Map.put(:cover_image_url, get_cover_image_url(event))
           |> Map.put(:occurrence_list, parse_occurrences(event))
-          |> Map.put(:primary_category_id, primary_category_id)
 
         socket
         |> assign(:event, enriched_event)
         |> assign(:selected_occurrence, select_default_occurrence(enriched_event))
+        |> assign(:existing_plan, existing_plan)
     end
   end
 
   defp get_localized_title(event, language) do
     case event.title_translations do
-      nil -> event.title
+      nil ->
+        event.title
+
       translations when is_map(translations) ->
         translations[language] || translations["en"] || event.title
-      _ -> event.title
+
+      _ ->
+        event.title
     end
   end
 
   defp get_localized_description(event, language) do
     # Sort sources by priority and take the first one's description
-    sorted_sources = event.sources
-    |> Enum.sort_by(fn source ->
-      priority = case source.metadata do
-        %{"priority" => p} when is_integer(p) -> p
-        %{"priority" => p} when is_binary(p) ->
-          case Integer.parse(p) do
-            {num, _} -> num
-            _ -> 10
+    sorted_sources =
+      event.sources
+      |> Enum.sort_by(fn source ->
+        priority =
+          case source.metadata do
+            %{"priority" => p} when is_integer(p) ->
+              p
+
+            %{"priority" => p} when is_binary(p) ->
+              case Integer.parse(p) do
+                {num, _} -> num
+                _ -> 10
+              end
+
+            _ ->
+              10
           end
-        _ -> 10
-      end
 
-      # Newer timestamps first (negative for descending sort)
-      ts = case source.last_seen_at do
-        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
-        _ -> 9_223_372_036_854_775_807
-      end
+        # Newer timestamps first (negative for descending sort)
+        ts =
+          case source.last_seen_at do
+            %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+            _ -> 9_223_372_036_854_775_807
+          end
 
-      {priority, ts}
-    end)
+        {priority, ts}
+      end)
 
     case sorted_sources do
       [source | _] ->
         case source.description_translations do
-          nil -> nil
+          nil ->
+            nil
+
           translations when is_map(translations) ->
             translations[language] || translations["en"] || nil
-          _ -> nil
+
+          _ ->
+            nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   defp get_cover_image_url(event) do
     # Sort sources by priority and try to get the first available image
-    sorted_sources = event.sources
-    |> Enum.sort_by(fn source ->
-      priority = case source.metadata do
-        %{"priority" => p} when is_integer(p) -> p
-        %{"priority" => p} when is_binary(p) ->
-          case Integer.parse(p) do
-            {num, _} -> num
-            _ -> 10
+    sorted_sources =
+      event.sources
+      |> Enum.sort_by(fn source ->
+        priority =
+          case source.metadata do
+            %{"priority" => p} when is_integer(p) ->
+              p
+
+            %{"priority" => p} when is_binary(p) ->
+              case Integer.parse(p) do
+                {num, _} -> num
+                _ -> 10
+              end
+
+            _ ->
+              10
           end
-        _ -> 10
-      end
 
-      # Newer timestamps first (negative for descending sort)
-      ts = case source.last_seen_at do
-        %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
-        _ -> 9_223_372_036_854_775_807
-      end
+        # Newer timestamps first (negative for descending sort)
+        ts =
+          case source.last_seen_at do
+            %DateTime{} = dt -> -DateTime.to_unix(dt, :second)
+            _ -> 9_223_372_036_854_775_807
+          end
 
-      {priority, ts}
-    end)
+        {priority, ts}
+      end)
 
     # Try to extract image from sources with URL sanitization
     Enum.find_value(sorted_sources, fn source ->
@@ -140,6 +182,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   end
 
   defp extract_image_from_metadata(nil), do: nil
+
   defp extract_image_from_metadata(metadata) do
     cond do
       # Ticketmaster stores images in an array
@@ -166,6 +209,141 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     selected = Enum.at(occurrence_list, occurrence_index)
 
     {:noreply, assign(socket, :selected_occurrence, selected)}
+  end
+
+  @impl true
+  def handle_event("open_plan_modal", _params, socket) do
+    # Debug logging
+    require Logger
+    Logger.debug("Plan with Friends modal - Socket assigns: user=#{inspect(socket.assigns[:user])}, auth_user=#{inspect(socket.assigns[:auth_user])}")
+
+    cond do
+      !socket.assigns[:auth_user] ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Please log in to create private events"))
+         |> redirect(to: ~p"/auth/login")}
+
+      socket.assigns[:existing_plan] ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Redirecting to your existing private event..."))
+         |> redirect(to: ~p"/events/#{socket.assigns.existing_plan.private_event.slug}")}
+
+      true ->
+        {:noreply, assign(socket, :show_plan_with_friends_modal, true)}
+    end
+  end
+
+  @impl true
+  def handle_event("close_plan_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_plan_with_friends_modal, false)
+     |> assign(:emails_input, "")
+     |> assign(:invitation_message, "")}
+  end
+
+  @impl true
+  def handle_event("update_emails", %{"emails" => emails}, socket) do
+    {:noreply, assign(socket, :emails_input, emails)}
+  end
+
+  @impl true
+  def handle_event("update_message", %{"message" => message}, socket) do
+    {:noreply, assign(socket, :invitation_message, message)}
+  end
+
+  @impl true
+  def handle_event("stop_propagation", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("submit_plan_with_friends", params, socket) do
+    case create_plan_from_public_event(socket) do
+      {:ok, private_event} ->
+        # Parse and send invitations if emails provided
+        if params["emails"] && String.trim(params["emails"]) != "" do
+          send_invitations(private_event, params["emails"], params["message"])
+        end
+
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Your private event has been created!"))
+         |> redirect(to: ~p"/events/#{private_event.slug}")}
+
+      {:error, :event_in_past} ->
+        {:noreply,
+         socket
+         |> assign(:show_plan_with_friends_modal, false)
+         |> put_flash(
+           :error,
+           gettext("Cannot create plans for events that have already occurred")
+         )}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> assign(:show_plan_with_friends_modal, false)
+         |> put_flash(
+           :error,
+           gettext("Sorry, there was an error creating your private event. Please try again.")
+         )}
+    end
+  end
+
+  defp create_plan_from_public_event(socket) do
+    user = get_authenticated_user(socket)
+
+    EventPlans.create_from_public_event(
+      socket.assigns.event.id,
+      user.id
+    )
+    |> case do
+      {:ok, {_event_plan, private_event}} -> {:ok, private_event}
+      error -> error
+    end
+  end
+
+  defp get_authenticated_user(socket) do
+    # First try the processed user from the database
+    case socket.assigns[:user] do
+      %{id: id} = user when not is_nil(id) ->
+        user
+
+      _ ->
+        # Fallback to raw auth_user from Supabase/dev mode
+        case socket.assigns[:auth_user] do
+          # Dev mode: User struct directly
+          %{id: id} = user when is_integer(id) ->
+            user
+
+          # Supabase auth: map with string id
+          %{"id" => id} = auth_user when is_binary(id) ->
+            auth_user
+
+          # Handle other possible formats
+          %{id: id} = auth_user when is_binary(id) ->
+            auth_user
+
+          _ ->
+            raise "No authenticated user found"
+        end
+    end
+  end
+
+  defp send_invitations(_event, emails_string, _message) do
+    # TODO: Implement invitation sending
+    # Parse comma-separated emails and send invitations
+    _emails =
+      emails_string
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.filter(&(&1 != ""))
+
+    # For now, we'll just skip this
+    :ok
   end
 
   @impl true
@@ -200,6 +378,24 @@ defmodule EventasaurusWeb.PublicEventShowLive do
               </nav>
             </div>
 
+            <!-- Past Event Banner -->
+            <%= if event_is_past?(@event) do %>
+              <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div class="flex items-start">
+                  <Heroicons.clock class="w-6 h-6 text-yellow-600 mr-3 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p class="text-yellow-800 font-semibold">
+                      <%= gettext("This event has already occurred") %>
+                    </p>
+                    <p class="text-yellow-700 text-sm mt-1">
+                      <%= gettext("This is an archived event page. The event took place on %{date}.",
+                          date: format_event_datetime(@event.starts_at)) %>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+
             <!-- Event Header -->
             <div class="bg-white rounded-lg shadow-lg overflow-hidden">
               <!-- Cover Image -->
@@ -216,49 +412,15 @@ defmodule EventasaurusWeb.PublicEventShowLive do
               <div class="p-8">
                 <!-- Categories -->
                 <%= if @event.categories && @event.categories != [] do %>
-                  <div class="mb-4">
-                    <!-- Primary Category -->
-                    <% primary_category = get_primary_category(@event) %>
-                    <% secondary_categories = get_secondary_categories(@event) %>
-
-                    <div class="flex flex-wrap gap-2 items-center">
-                      <!-- Primary category - larger and emphasized -->
-                      <%= if primary_category do %>
-                        <.link
-                          navigate={~p"/activities?category=#{primary_category.slug}"}
-                          class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition"
-                          style={"background-color: #{primary_category.color || "#6B7280"}"}
-                        >
-                          <%= if primary_category.icon do %>
-                            <span class="mr-1"><%= primary_category.icon %></span>
-                          <% end %>
-                          <%= primary_category.name %>
-                        </.link>
-                      <% end %>
-
-                      <!-- Secondary categories - smaller and less emphasized -->
-                      <%= if secondary_categories != [] do %>
-                        <span class="text-gray-400 mx-1">•</span>
-                        <%= for category <- secondary_categories do %>
-                          <.link
-                            navigate={~p"/activities?category=#{category.slug}"}
-                            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
-                          >
-                            <%= category.name %>
-                          </.link>
-                        <% end %>
-                      <% end %>
-                    </div>
-
-                    <!-- Category hint text -->
-                    <p class="mt-2 text-xs text-gray-500">
-                      <%= if secondary_categories != [] do %>
-                        <%= gettext("Also filed under: %{categories}",
-                            categories: Enum.map_join(secondary_categories, ", ", & &1.name)) %>
-                      <% else %>
-                        <%= gettext("Click category to see related events") %>
-                      <% end %>
-                    </p>
+                  <div class="mb-4 flex flex-wrap gap-2">
+                    <%= for category <- @event.categories do %>
+                      <span
+                        class="px-3 py-1 rounded-full text-sm font-medium text-white"
+                        style={"background-color: #{category.color || "#6B7280"}"}
+                      >
+                        <%= category.name %>
+                      </span>
+                    <% end %>
                   </div>
                 <% end %>
 
@@ -291,21 +453,23 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                   </div>
 
                   <!-- Venue -->
-                  <div>
-                    <div class="flex items-center text-gray-600 mb-1">
-                      <Heroicons.map_pin class="w-5 h-5 mr-2" />
-                      <span class="font-medium"><%= gettext("Venue") %></span>
+                  <%= if @event.venue do %>
+                    <div>
+                      <div class="flex items-center text-gray-600 mb-1">
+                        <Heroicons.map_pin class="w-5 h-5 mr-2" />
+                        <span class="font-medium"><%= gettext("Venue") %></span>
+                      </div>
+                      <p class="text-gray-900">
+                        <%= @event.venue.name %>
+                        <%= if @event.venue.address do %>
+                          <br />
+                          <span class="text-sm text-gray-600">
+                            <%= @event.venue.address %>
+                          </span>
+                        <% end %>
+                      </p>
                     </div>
-                    <p class="text-gray-900">
-                      <%= @event.venue.name %>
-                      <%= if @event.venue.address do %>
-                        <br />
-                        <span class="text-sm text-gray-600">
-                          <%= @event.venue.address %>
-                        </span>
-                      <% end %>
-                    </p>
-                  </div>
+                  <% end %>
 
                   <!-- Price -->
                   <div>
@@ -319,11 +483,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                   </div>
 
                   <!-- Ticket Link -->
-                  <% ticket_url = get_best_ticket_url(@event, @selected_occurrence) %>
-                  <%= if ticket_url do %>
+                  <%= if @event.ticket_url do %>
                     <div>
                       <a
-                        href={ticket_url}
+                        href={@event.ticket_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
@@ -331,6 +494,19 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                         <Heroicons.ticket class="w-5 h-5 mr-2" />
                         <%= gettext("Get Tickets") %>
                       </a>
+                    </div>
+                  <% end %>
+
+                  <!-- Plan with Friends Button (Only for future events) -->
+                  <%= unless event_is_past?(@event) do %>
+                    <div>
+                      <button
+                        phx-click="open_plan_modal"
+                        class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
+                      >
+                        <Heroicons.user_group class="w-5 h-5 mr-2" />
+                        <%= gettext("Plan with Friends") %>
+                      </button>
                     </div>
                   <% end %>
                 </div>
@@ -384,21 +560,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                               phx-value-index={index}
                               class={"w-full text-left px-4 py-3 rounded-lg border transition #{if @selected_occurrence == occurrence, do: "border-blue-600 bg-blue-50", else: "border-gray-200 hover:bg-gray-50"}"}
                             >
-                              <div class="flex items-center justify-between">
-                                <div>
-                                  <span class="font-medium"><%= format_time_only(occurrence.datetime) %></span>
-                                  <%= if occurrence.label do %>
-                                    <span class="ml-2 text-sm text-gray-600">
-                                      <%= occurrence.label %>
-                                    </span>
-                                  <% end %>
-                                </div>
-                                <%= if occurrence.source_name do %>
-                                  <span class="text-xs text-gray-500">
-                                    via <%= occurrence.source_name %>
-                                  </span>
-                                <% end %>
-                              </div>
+                              <span class="font-medium"><%= format_time_only(occurrence.datetime) %></span>
                               <%= if occurrence.label do %>
                                 <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
                               <% end %>
@@ -415,19 +577,10 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                               phx-value-index={index}
                               class={"w-full text-left px-4 py-3 rounded-lg border transition #{if @selected_occurrence == occurrence, do: "border-blue-600 bg-blue-50", else: "border-gray-200 hover:bg-gray-50"}"}
                             >
-                              <div class="flex items-center justify-between">
-                                <div>
-                                  <span class="font-medium"><%= format_occurrence_datetime(occurrence) %></span>
-                                  <%= if occurrence.label do %>
-                                    <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
-                                  <% end %>
-                                </div>
-                                <%= if occurrence.source_name && occurrence.source_name != "Unknown" do %>
-                                  <span class="text-xs text-gray-500">
-                                    via <%= occurrence.source_name %>
-                                  </span>
-                                <% end %>
-                              </div>
+                              <span class="font-medium"><%= format_occurrence_datetime(occurrence) %></span>
+                              <%= if occurrence.label do %>
+                                <span class="ml-2 text-sm text-gray-600"><%= occurrence.label %></span>
+                              <% end %>
                             </button>
                           <% end %>
                         </div>
@@ -476,31 +629,22 @@ defmodule EventasaurusWeb.PublicEventShowLive do
                     <%= gettext("Event Sources") %>
                   </h3>
                   <div class="flex flex-wrap gap-4">
-                    <!-- Always show all sources -->
                     <%= for source <- @event.sources do %>
                       <% source_url = get_source_url(source) %>
                       <% source_name = get_source_name(source) %>
-                      <% is_selected_source = @selected_occurrence && (
-                          (@selected_occurrence[:source_id] && source.source_id == @selected_occurrence[:source_id]) ||
-                          (@selected_occurrence[:external_id] && source.external_id == @selected_occurrence[:external_id])
-                        ) %>
                       <div class="text-sm">
                         <%= if source_url do %>
-                          <a href={source_url} target="_blank" rel="noopener noreferrer" class={"font-medium #{if is_selected_source, do: "text-blue-700 font-semibold", else: "text-blue-600"} hover:text-blue-800"}>
+                          <a href={source_url} target="_blank" rel="noopener noreferrer" class="font-medium text-blue-600 hover:text-blue-800">
                             <%= source_name %>
                             <Heroicons.arrow_top_right_on_square class="w-3 h-3 inline ml-1" />
                           </a>
                         <% else %>
-                          <span class={"font-medium #{if is_selected_source, do: "text-gray-900 font-semibold", else: "text-gray-700"}"}>
+                          <span class="font-medium text-gray-700">
                             <%= source_name %>
                           </span>
                         <% end %>
                         <span class="text-gray-500 ml-2">
-                          <%= if is_selected_source do %>
-                            <span class="text-blue-600 font-medium"><%= gettext("• Selected date") %></span>
-                          <% else %>
-                            <%= gettext("Last updated") %> <%= format_relative_time(source.last_seen_at) %>
-                          <% end %>
+                          <%= gettext("Last updated") %> <%= format_relative_time(source.last_seen_at) %>
                         </span>
                       </div>
                     <% end %>
@@ -530,56 +674,44 @@ defmodule EventasaurusWeb.PublicEventShowLive do
           </div>
         <% end %>
       <% end %>
+
+      <!-- Plan with Friends Modal -->
+      <SimplePlanWithFriendsModal.modal
+        id="plan-with-friends-modal"
+        show={@show_plan_with_friends_modal}
+        public_event={@event}
+        emails_input={@emails_input}
+        invitation_message={@invitation_message}
+        on_close="close_plan_modal"
+        on_submit="submit_plan_with_friends"
+      />
     </div>
     """
   end
 
   # Helper Functions
-  defp get_primary_category(event) do
-    case event[:primary_category_id] do
-      nil -> nil
-      cat_id -> Enum.find(event.categories, &(&1.id == cat_id))
-    end
-  end
-
-  defp get_secondary_categories(event) do
-    case event[:primary_category_id] do
-      nil ->
-        # If no primary found, treat all but first as secondary
-        case event.categories do
-          [_first | rest] -> rest
-          _ -> []
-        end
-      primary_id ->
-        Enum.reject(event.categories, &(&1.id == primary_id))
-    end
-  end
-
-  defp get_primary_category_id(event_id) do
-    Repo.one(
-      from pec in "public_event_categories",
-      where: pec.event_id == ^event_id and pec.is_primary == true,
-      select: pec.category_id,
-      limit: 1
-    )
-  end
-
   defp format_event_datetime(nil), do: gettext("TBD")
+
   defp format_event_datetime(datetime) do
     Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
   end
 
   defp format_price_range(event) do
     symbol = currency_symbol(event.currency)
+
     cond do
       event.min_price && event.max_price && event.min_price == event.max_price ->
         "#{symbol}#{event.min_price}"
+
       event.min_price && event.max_price ->
         "#{symbol}#{event.min_price} - #{symbol}#{event.max_price}"
+
       event.min_price ->
         gettext("From %{price}", price: "#{symbol}#{event.min_price}")
+
       event.max_price ->
         gettext("Up to %{price}", price: "#{symbol}#{event.max_price}")
+
       true ->
         gettext("See details")
     end
@@ -592,6 +724,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp currency_symbol(_), do: "$"
 
   defp format_description(nil), do: Phoenix.HTML.raw("")
+
   defp format_description(description) do
     # Escapes HTML and converts newlines to <br>, returning Safe HTML
     Phoenix.HTML.Format.text_to_html(description, escape: true)
@@ -600,6 +733,7 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp get_source_url(source) do
     # Guard against nil metadata and sanitize URLs
     md = source.metadata || %{}
+
     url =
       cond do
         # Ticketmaster stores URL in ticketmaster_data.url
@@ -617,24 +751,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     normalize_http_url(url)
   end
 
-  defp get_best_ticket_url(event, selected_occurrence) do
-    # First priority: if there's a selected occurrence with a source URL, use it
-    if selected_occurrence && selected_occurrence[:source_url] do
-      selected_occurrence[:source_url]
-    else
-      # Second priority: use the event's ticket_url if available
-      if event.ticket_url do
-        event.ticket_url
-      else
-        # Third priority: find the first source with a valid URL
-        event.sources
-        |> Enum.map(&get_source_url/1)
-        |> Enum.find(&(&1 != nil))
-      end
-    end
-  end
-
   defp normalize_http_url(nil), do: nil
+
   defp normalize_http_url(url) when is_binary(url) do
     case URI.parse(url) do
       %URI{scheme: scheme} = uri when scheme in ["http", "https"] -> URI.to_string(uri)
@@ -657,33 +775,27 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     cond do
       diff < 3600 -> gettext("%{count} minutes ago", count: div(diff, 60))
       diff < 86400 -> gettext("%{count} hours ago", count: div(diff, 3600))
-      diff < 604800 -> gettext("%{count} days ago", count: div(diff, 86400))
+      diff < 604_800 -> gettext("%{count} days ago", count: div(diff, 86400))
       true -> Calendar.strftime(datetime, "%b %d, %Y")
     end
   end
 
   # Occurrence helper functions
   defp parse_occurrences(%{occurrences: nil}), do: nil
-  defp parse_occurrences(%{occurrences: %{"dates" => dates}, sources: sources}) when is_list(dates) do
+
+  defp parse_occurrences(%{occurrences: %{"dates" => dates}}) when is_list(dates) do
     dates
     |> Enum.map(fn date_info ->
       with {:ok, date} <- Date.from_iso8601(date_info["date"]),
            {:ok, time} <- parse_time(date_info["time"]) do
         datetime = DateTime.new!(date, time, "Etc/UTC")
 
-        # Pass the full date_info to find_source_for_occurrence for improved lookup
-        source_info = find_source_for_occurrence(date_info, sources)
-        label = determine_occurrence_label(date_info, source_info, time)
-
         %{
           datetime: datetime,
           date: date,
           time: time,
           external_id: date_info["external_id"],
-          source_id: date_info["source_id"],  # Include source_id in occurrence data
-          label: label,
-          source_name: source_info[:name],
-          source_url: source_info[:url]  # Include source URL for each occurrence
+          label: date_info["label"]
         }
       else
         _ -> nil
@@ -692,9 +804,11 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     |> Enum.reject(&is_nil/1)
     |> Enum.sort_by(& &1.datetime, DateTime)
   end
+
   defp parse_occurrences(_), do: nil
 
   defp parse_time(nil), do: {:ok, ~T[20:00:00]}
+
   defp parse_time(time_str) when is_binary(time_str) do
     case String.split(time_str, ":") do
       [h, m] -> Time.new(String.to_integer(h), String.to_integer(m), 0)
@@ -702,10 +816,12 @@ defmodule EventasaurusWeb.PublicEventShowLive do
       _ -> {:ok, ~T[20:00:00]}
     end
   end
+
   defp parse_time(_), do: {:ok, ~T[20:00:00]}
 
   defp select_default_occurrence(%{occurrence_list: nil}), do: nil
   defp select_default_occurrence(%{occurrence_list: []}), do: nil
+
   defp select_default_occurrence(%{occurrence_list: occurrences}) do
     now = DateTime.utc_now()
     # Find the next upcoming occurrence, or the first if all are in the past
@@ -716,7 +832,8 @@ defmodule EventasaurusWeb.PublicEventShowLive do
 
   defp occurrence_display_type(nil), do: :none
   defp occurrence_display_type([]), do: :none
-  defp occurrence_display_type(occurrences) when is_list(occurrences) do
+
+  defp occurrence_display_type(occurrences) do
     cond do
       # More than 20 dates - daily show
       length(occurrences) > 20 ->
@@ -732,72 +849,13 @@ defmodule EventasaurusWeb.PublicEventShowLive do
     end
   end
 
-  defp find_source_for_occurrence(nil, _sources), do: %{name: "Unknown", url: nil}
-  defp find_source_for_occurrence(date_info, sources) when is_map(date_info) do
-    # First try to find by source_id (more reliable)
-    source = if date_info["source_id"] do
-      Enum.find(sources, fn s -> s.source_id == date_info["source_id"] end)
-    else
-      nil
-    end
-
-    # Fall back to external_id matching if source_id lookup fails
-    source = source || if date_info["external_id"] do
-      Enum.find(sources, fn s -> s.external_id == date_info["external_id"] end)
-    else
-      nil
-    end
-
-    case source do
-      nil -> %{name: "Unknown", url: nil}
-      source ->
-        %{
-          name: get_source_name(source),
-          metadata: source.metadata,
-          url: source.source_url  # Include the source URL
-        }
-    end
-  end
-  # Backward compatibility for old calls with just external_id
-  defp find_source_for_occurrence(external_id, sources) when is_binary(external_id) do
-    find_source_for_occurrence(%{"external_id" => external_id}, sources)
-  end
-
-  defp determine_occurrence_label(date_info, source_info, time) do
-    cond do
-      # If there's an explicit label in the occurrence data, use it
-      date_info["label"] -> date_info["label"]
-
-      # Check if this is a special time that might indicate a different type
-      is_early_show?(time) -> "Matinee / VIP Experience"
-
-      # Check source metadata for ticket type info
-      ticket_type = get_in(source_info, [:metadata, "ticket_type"]) -> ticket_type
-
-      # Default based on time
-      true -> format_show_type(time)
-    end
-  end
-
-  defp is_early_show?(time) do
-    time.hour < 17  # Before 5 PM
-  end
-
-  defp format_show_type(time) do
-    cond do
-      time.hour < 12 -> "Morning Show"
-      time.hour < 17 -> "Afternoon Show"
-      time.hour < 20 -> "Early Evening Show"
-      true -> "Evening Show"
-    end
-  end
-
   defp all_same_day?(occurrences) do
     dates = Enum.map(occurrences, & &1.date) |> Enum.uniq()
     length(dates) == 1
   end
 
   defp format_occurrence_datetime(nil), do: gettext("Select a date")
+
   defp format_occurrence_datetime(%{datetime: datetime}) do
     Calendar.strftime(datetime, "%A, %B %d, %Y at %I:%M %p")
   end
@@ -813,4 +871,18 @@ defmodule EventasaurusWeb.PublicEventShowLive do
   defp format_short_date(%DateTime{} = datetime) do
     Calendar.strftime(datetime, "%b %d")
   end
+
+  defp event_is_past?(%{starts_at: nil}), do: false
+
+  defp event_is_past?(%{ends_at: ends_at}) when not is_nil(ends_at) do
+    DateTime.compare(ends_at, DateTime.utc_now()) == :lt
+  end
+
+  defp event_is_past?(%{starts_at: starts_at}) when not is_nil(starts_at) do
+    # For events without end dates, consider past if started more than 24 hours ago
+    twenty_four_hours_ago = DateTime.add(DateTime.utc_now(), -24, :hour)
+    DateTime.compare(starts_at, twenty_four_hours_ago) == :lt
+  end
+
+  defp event_is_past?(_), do: false
 end

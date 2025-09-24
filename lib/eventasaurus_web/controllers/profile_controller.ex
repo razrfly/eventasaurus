@@ -29,25 +29,27 @@ defmodule EventasaurusWeb.ProfileController do
           if user.profile_public == true do
             # Public profile - show the profile page
             auth_user = conn.assigns[:auth_user]
-            
+
             # Ensure we have a proper User struct for mutual events query
-            viewer_user = case auth_user do
-              %User{} = u -> u
-              %{id: id} when is_integer(id) -> Accounts.get_user(id)
-              _ -> nil
-            end
-            
+            viewer_user =
+              case auth_user do
+                %User{} = u -> u
+                %{id: id} when is_integer(id) -> Accounts.get_user(id)
+                _ -> nil
+              end
+
             # Get profile data - filter to public events only for public profiles
             stats = Accounts.get_user_event_stats(user)
             recent_events = Accounts.get_user_recent_events(user, limit: 10, public_only: true)
-            
+
             # Get mutual events if user is logged in and different from profile user
-            mutual_events = if viewer_user && viewer_user.id != user.id do
-              Accounts.get_mutual_events(viewer_user, user, limit: 6)
-            else
-              []
-            end
-            
+            mutual_events =
+              if viewer_user && viewer_user.id != user.id do
+                Accounts.get_mutual_events(viewer_user, user, limit: 6)
+              else
+                []
+              end
+
             conn
             |> assign(:user, user)
             |> assign(:page_title, "#{User.display_name(user)} (@#{canonical_username})")
@@ -64,7 +66,7 @@ defmodule EventasaurusWeb.ProfileController do
               # User viewing their own private profile - show all events
               stats = Accounts.get_user_event_stats(user)
               recent_events = Accounts.get_user_recent_events(user, limit: 10, public_only: false)
-              
+
               conn
               |> assign(:user, user)
               |> assign(:page_title, "Your Profile (@#{canonical_username})")
@@ -122,7 +124,7 @@ defmodule EventasaurusWeb.ProfileController do
 
   @doc """
   Redirect legacy /user/:username URLs to new /users/:username format
-  
+
   This provides backward compatibility for old bookmarks and shared links.
   """
   def redirect_legacy(conn, %{"username" => username}) do

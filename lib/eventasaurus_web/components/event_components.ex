@@ -328,11 +328,13 @@ defmodule EventasaurusWeb.EventComponents do
     tickets
     |> Enum.reduce(0, fn ticket, acc ->
       quantity = Map.get(selected_tickets, ticket.id, 0)
+
       if quantity > 0 do
         case ticket.pricing_model do
-          "fixed" -> acc + (ticket.base_price_cents * quantity)
-          "flexible" -> acc + (ticket.minimum_price_cents * quantity)  # Use minimum for calculation
-          "dynamic" -> acc + (ticket.base_price_cents * quantity)
+          "fixed" -> acc + ticket.base_price_cents * quantity
+          # Use minimum for calculation
+          "flexible" -> acc + ticket.minimum_price_cents * quantity
+          "dynamic" -> acc + ticket.base_price_cents * quantity
           _ -> acc
         end
       else
@@ -350,8 +352,16 @@ defmodule EventasaurusWeb.EventComponents do
   3. Threshold-Based Pre-Sale - for demand validation before committing
   """
   attr :selected_path, :string, default: "confirmed", doc: "the currently selected setup path"
-  attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
-  attr :show_stage_transitions, :boolean, default: false, values: [true, false], doc: "whether to show full selector in edit mode"
+
+  attr :mode, :string,
+    default: "full",
+    doc: "display mode: 'full' for new events, 'compact' for edit"
+
+  attr :show_stage_transitions, :boolean,
+    default: false,
+    values: [true, false],
+    doc: "whether to show full selector in edit mode"
+
   attr :date_certainty, :string, default: "confirmed", doc: "date selection status"
   attr :venue_certainty, :string, default: "confirmed", doc: "venue selection status"
   attr :participation_type, :string, default: "free", doc: "participation type"
@@ -460,37 +470,72 @@ defmodule EventasaurusWeb.EventComponents do
   attr :selected_venue_address, :string, default: nil, doc: "the selected venue address"
   attr :submit_label, :string, default: "Submit", doc: "the submit button label"
   attr :cancel_path, :string, default: nil, doc: "path to redirect on cancel (edit only)"
-  attr :action, :atom, required: true, values: [:new, :edit], doc: "whether this is a new or edit form"
+
+  attr :action, :atom,
+    required: true,
+    values: [:new, :edit],
+    doc: "whether this is a new or edit form"
+
   attr :show_all_timezones, :boolean, default: false, doc: "whether to show all timezones"
   attr :cover_image_url, :string, default: nil, doc: "the cover image URL"
-  attr :external_image_data, :map, default: nil, doc: "external image data for Unsplash/TMDB attribution"
-  attr :on_image_click, :string, default: nil, doc: "event name to trigger when clicking on the image picker"
+
+  attr :external_image_data, :map,
+    default: nil,
+    doc: "external image data for Unsplash/TMDB attribution"
+
+  attr :on_image_click, :string,
+    default: nil,
+    doc: "event name to trigger when clicking on the image picker"
+
   attr :id, :string, default: nil, doc: "unique id for the form element, required for hooks"
   # Legacy enable_date_polling attribute removed - using generic polling system
-  attr :setup_path, :string, default: "confirmed", doc: "the selected setup path: polling, confirmed, or threshold"
-  attr :mode, :string, default: "full", doc: "display mode: 'full' for new events, 'compact' for edit"
-  attr :show_stage_transitions, :boolean, default: false, values: [true, false], doc: "whether to show full selector in edit mode"
+  attr :setup_path, :string,
+    default: "confirmed",
+    doc: "the selected setup path: polling, confirmed, or threshold"
+
+  attr :mode, :string,
+    default: "full",
+    doc: "display mode: 'full' for new events, 'compact' for edit"
+
+  attr :show_stage_transitions, :boolean,
+    default: false,
+    values: [true, false],
+    doc: "whether to show full selector in edit mode"
+
   # Ticketing-related attributes
   attr :tickets, :list, default: [], doc: "list of existing tickets for the event"
   # Recent locations attributes
   attr :recent_locations, :list, default: [], doc: "list of recent locations for the user"
-  attr :show_recent_locations, :boolean, default: false, doc: "whether to show the recent locations dropdown"
-  attr :filtered_recent_locations, :list, default: [], doc: "filtered list of recent locations based on search"
-  attr :rich_external_data, :map, default: %{}, doc: "rich data imported from external APIs (TMDB, Spotify, etc.)"
+
+  attr :show_recent_locations, :boolean,
+    default: false,
+    doc: "whether to show the recent locations dropdown"
+
+  attr :filtered_recent_locations, :list,
+    default: [],
+    doc: "filtered list of recent locations based on search"
+
+  attr :rich_external_data, :map,
+    default: %{},
+    doc: "rich data imported from external APIs (TMDB, Spotify, etc.)"
+
   attr :user_groups, :list, default: [], doc: "list of groups the user can assign the event to"
   attr :date_certainty, :string, default: "confirmed", doc: "date selection status"
   attr :venue_certainty, :string, default: "confirmed", doc: "venue selection status"
   attr :participation_type, :string, default: "free", doc: "participation type"
 
   def event_form(assigns) do
-    assigns = assign_new(assigns, :id, fn ->
-      action_suffix = case Map.get(assigns, :action) do
-        :new -> "new"
-        :edit -> "edit"
-        _ -> "default"
-      end
-      "event-form-#{action_suffix}"
-    end)
+    assigns =
+      assign_new(assigns, :id, fn ->
+        action_suffix =
+          case Map.get(assigns, :action) do
+            :new -> "new"
+            :edit -> "edit"
+            _ -> "default"
+          end
+
+        "event-form-#{action_suffix}"
+      end)
 
     ~H"""
     <!-- Event Setup Path Selector -->
@@ -1366,26 +1411,28 @@ defmodule EventasaurusWeb.EventComponents do
   end
 
   defp format_datetime_for_input(_, _), do: ""
-  
+
   # Helper function to format ticket datetime with event timezone
   defp format_ticket_datetime(nil, _event), do: ""
+
   defp format_ticket_datetime(%DateTime{} = datetime, event) do
     timezone = if event && event.timezone, do: event.timezone, else: "UTC"
+
     datetime
     |> DateTimeHelper.utc_to_timezone(timezone)
     |> Calendar.strftime("%m/%d %I:%M %p %Z")
   end
-  defp format_ticket_datetime(_, _), do: ""
 
+  defp format_ticket_datetime(_, _), do: ""
 
   # ======== STAGE INDICATOR HELPERS ========
 
   defp stage_icon_class(path) do
     base_classes = "w-10 h-10 rounded-lg flex items-center justify-center"
+
     case path do
       "polling" -> "#{base_classes} bg-blue-100"
       "confirmed" -> "#{base_classes} bg-green-100"
-
       "threshold" -> "#{base_classes} bg-orange-100"
       _ -> "#{base_classes} bg-gray-100"
     end
@@ -1399,6 +1446,7 @@ defmodule EventasaurusWeb.EventComponents do
           <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
         </svg>
         """
+
       "confirmed" ->
         """
         <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1412,6 +1460,7 @@ defmodule EventasaurusWeb.EventComponents do
           <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
         </svg>
         """
+
       _ ->
         """
         <svg class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1425,7 +1474,6 @@ defmodule EventasaurusWeb.EventComponents do
     case path do
       "polling" -> "Planning Stage"
       "confirmed" -> "Confirmed Event"
-
       "threshold" -> "Threshold Pre-Sale"
       _ -> "Unknown Stage"
     end
@@ -1435,16 +1483,13 @@ defmodule EventasaurusWeb.EventComponents do
     case path do
       "polling" -> "Collecting date votes from attendees"
       "confirmed" -> "Event date is set, collecting RSVPs"
-
       "threshold" -> "Pre-sale validation in progress"
       _ -> "Status unknown"
     end
   end
 
-
   defp lock_reason(path) do
     case path do
-
       "threshold" -> "Pre-sale locked"
       _ -> "No changes"
     end
@@ -1452,7 +1497,6 @@ defmodule EventasaurusWeb.EventComponents do
 
   defp stage_final_color(path) do
     case path do
-
       "threshold" -> "bg-orange-500"
       _ -> "bg-gray-300"
     end
@@ -1486,17 +1530,19 @@ defmodule EventasaurusWeb.EventComponents do
   def threshold_progress(assigns) do
     # Only show progress for events with valid threshold requirements
     if threshold_has_valid_targets?(assigns.event) do
+      current_attendees =
+        EventasaurusApp.EventStateMachine.get_current_attendee_count(assigns.event)
 
-      current_attendees = EventasaurusApp.EventStateMachine.get_current_attendee_count(assigns.event)
       current_revenue = EventasaurusApp.EventStateMachine.get_current_revenue(assigns.event)
       threshold_met = EventasaurusApp.EventStateMachine.threshold_met?(assigns.event)
 
-      assigns = assign(assigns, %{
-        current_attendees: current_attendees,
-        current_revenue: current_revenue,
-        threshold_met: threshold_met,
-        show_progress: true
-      })
+      assigns =
+        assign(assigns, %{
+          current_attendees: current_attendees,
+          current_revenue: current_revenue,
+          threshold_met: threshold_met,
+          show_progress: true
+        })
 
       ~H"""
       <div class={["threshold-progress", @class]}>
@@ -1570,11 +1616,12 @@ defmodule EventasaurusWeb.EventComponents do
   attr :label, :string, default: "Attendees"
 
   defp render_attendee_progress(assigns) do
-    percentage = if assigns.target && assigns.target > 0 do
-      min(round((assigns.current / assigns.target) * 100), 100)
-    else
-      0
-    end
+    percentage =
+      if assigns.target && assigns.target > 0 do
+        min(round(assigns.current / assigns.target * 100), 100)
+      else
+        0
+      end
 
     assigns = assign(assigns, percentage: percentage)
 
@@ -1620,20 +1667,25 @@ defmodule EventasaurusWeb.EventComponents do
   attr :label, :string, default: "Revenue"
 
   defp render_revenue_progress(assigns) do
-    percentage = if assigns.target && assigns.target > 0 do
-      min(round((assigns.current / assigns.target) * 100), 100)
-    else
-      0
-    end
+    percentage =
+      if assigns.target && assigns.target > 0 do
+        min(round(assigns.current / assigns.target * 100), 100)
+      else
+        0
+      end
 
-    current_formatted = EventasaurusWeb.Helpers.CurrencyHelpers.format_currency(assigns.current, assigns.currency)
-    target_formatted = EventasaurusWeb.Helpers.CurrencyHelpers.format_currency(assigns.target, assigns.currency)
+    current_formatted =
+      EventasaurusWeb.Helpers.CurrencyHelpers.format_currency(assigns.current, assigns.currency)
 
-    assigns = assign(assigns, %{
-      percentage: percentage,
-      current_formatted: current_formatted,
-      target_formatted: target_formatted
-    })
+    target_formatted =
+      EventasaurusWeb.Helpers.CurrencyHelpers.format_currency(assigns.target, assigns.currency)
+
+    assigns =
+      assign(assigns, %{
+        percentage: percentage,
+        current_formatted: current_formatted,
+        target_formatted: target_formatted
+      })
 
     ~H"""
     <div class="revenue-progress">
@@ -1671,16 +1723,21 @@ defmodule EventasaurusWeb.EventComponents do
   # Helper function to format cents as dollars for display
   defp format_cents_as_dollars(nil), do: ""
   defp format_cents_as_dollars(""), do: ""
+
   defp format_cents_as_dollars(cents) when is_integer(cents) and cents > 0 do
     Float.round(cents / 100, 2) |> Float.to_string()
   end
+
   defp format_cents_as_dollars(cents) when is_binary(cents) do
     case Integer.parse(cents) do
       {parsed, ""} when parsed > 0 ->
         Float.round(parsed / 100, 2) |> Float.to_string()
-      _ -> ""
+
+      _ ->
+        ""
     end
   end
+
   defp format_cents_as_dollars(_), do: ""
 
   def threshold_has_valid_targets?(%{threshold_type: "attendee_count"} = event),
@@ -1690,7 +1747,8 @@ defmodule EventasaurusWeb.EventComponents do
     do: event.threshold_revenue_cents && event.threshold_revenue_cents > 0
 
   def threshold_has_valid_targets?(%{threshold_type: "both"} = event),
-    do: (event.threshold_count && event.threshold_count > 0) &&
+    do:
+      event.threshold_count && event.threshold_count > 0 &&
         (event.threshold_revenue_cents && event.threshold_revenue_cents > 0)
 
   def threshold_has_valid_targets?(_), do: false
@@ -1752,12 +1810,14 @@ defmodule EventasaurusWeb.EventComponents do
   # Helper function to format TMDB release year
   defp format_tmdb_year(nil), do: "N/A"
   defp format_tmdb_year(""), do: "N/A"
+
   defp format_tmdb_year(date_string) when is_binary(date_string) do
     case String.split(date_string, "-") do
       [year | _] -> year
       _ -> "N/A"
     end
   end
+
   defp format_tmdb_year(_), do: "N/A"
 
   # Helper function to safely encode JSON data
@@ -1767,5 +1827,4 @@ defmodule EventasaurusWeb.EventComponents do
       {:error, _} -> "{}"
     end
   end
-
 end

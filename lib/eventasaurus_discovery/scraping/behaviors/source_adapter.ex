@@ -7,36 +7,36 @@ defmodule EventasaurusDiscovery.Scraping.Behaviors.SourceAdapter do
   """
 
   @type venue_data :: %{
-    name: String.t(),
-    address: String.t() | nil,
-    city: String.t() | nil,
-    state: String.t() | nil,
-    country: String.t() | nil,
-    latitude: float() | nil,
-    longitude: float() | nil,
-    place_id: String.t() | nil,
-    metadata: map()
-  }
+          name: String.t(),
+          address: String.t() | nil,
+          city: String.t() | nil,
+          state: String.t() | nil,
+          country: String.t() | nil,
+          latitude: float() | nil,
+          longitude: float() | nil,
+          place_id: String.t() | nil,
+          metadata: map()
+        }
 
   @type event_data :: %{
-    external_id: String.t(),
-    title: String.t(),
-    description: String.t() | nil,
-    start_at: DateTime.t(),
-    ends_at: DateTime.t() | nil,
-    venue_data: venue_data() | nil,
-    performer_names: [String.t()],
-    metadata: map()
-  }
+          external_id: String.t(),
+          title: String.t(),
+          description: String.t() | nil,
+          start_at: DateTime.t(),
+          ends_at: DateTime.t() | nil,
+          venue_data: venue_data() | nil,
+          performer_names: [String.t()],
+          metadata: map()
+        }
 
   @type source_config :: %{
-    name: String.t(),
-    slug: String.t(),
-    priority: integer(),
-    base_url: String.t(),
-    api_key: String.t() | nil,
-    rate_limit: integer()
-  }
+          name: String.t(),
+          slug: String.t(),
+          priority: integer(),
+          base_url: String.t(),
+          api_key: String.t() | nil,
+          rate_limit: integer()
+        }
 
   @doc """
   Returns the source configuration for this adapter.
@@ -53,7 +53,8 @@ defmodule EventasaurusDiscovery.Scraping.Behaviors.SourceAdapter do
   Fetches detailed data for a specific item.
   Returns structured event data ready for processing.
   """
-  @callback fetch_detail(item :: map(), source_id :: integer()) :: {:ok, event_data()} | {:error, term()}
+  @callback fetch_detail(item :: map(), source_id :: integer()) ::
+              {:ok, event_data()} | {:error, term()}
 
   @doc """
   Parses raw response data into structured format.

@@ -19,10 +19,13 @@ defmodule EventasaurusWeb do
 
   def static_paths do
     base_paths = ~w(assets fonts images favicon.ico robots.txt)
+
     if Mix.env() == :dev do
-      base_paths  # No themes in dev - handled by route
+      # No themes in dev - handled by route
+      base_paths
     else
-      ["themes" | base_paths]  # Include themes in prod - served from priv/static
+      # Include themes in prod - served from priv/static
+      ["themes" | base_paths]
     end
   end
 

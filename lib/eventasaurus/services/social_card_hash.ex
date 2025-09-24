@@ -97,6 +97,7 @@ defmodule Eventasaurus.Services.SocialCardHash do
   @spec generate_temp_path(String.t(), map(), String.t()) :: String.t()
   def generate_temp_path(event_id, event, extension \\ "png") do
     hash = generate_hash(event)
+
     System.tmp_dir!()
     |> Path.join("eventasaurus_#{event_id}_#{hash}.#{extension}")
   end

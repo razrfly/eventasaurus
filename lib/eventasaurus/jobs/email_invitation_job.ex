@@ -8,9 +8,10 @@ defmodule Eventasaurus.Jobs.EmailInvitationJob do
     queue: :emails,
     max_attempts: 3,
     unique: [
-      fields: [:args], 
-      keys: [:user_id, :event_id], 
-      period: 300  # 5 minutes
+      fields: [:args],
+      keys: [:user_id, :event_id],
+      # 5 minutes
+      period: 300
     ]
 
   alias EventasaurusApp.{Events, Accounts}
@@ -19,26 +20,26 @@ defmodule Eventasaurus.Jobs.EmailInvitationJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-    args: %{
-      "user_id" => user_id,
-      "event_id" => event_id,
-      "invitation_message" => invitation_message,
-      "organizer_id" => organizer_id
-    }
-  }) do
+        args: %{
+          "user_id" => user_id,
+          "event_id" => event_id,
+          "invitation_message" => invitation_message,
+          "organizer_id" => organizer_id
+        }
+      }) do
     with {:ok, user} <- get_user(user_id),
          {:ok, event} <- get_event_with_venue(event_id),
          {:ok, organizer} <- get_user(organizer_id),
          {:ok, participant} <- get_participant(event, user) do
-      
       send_invitation_email(user, event, invitation_message, organizer, participant)
     else
       {:error, reason} ->
-        Logger.error("Email invitation job failed", 
-          user_id: user_id, 
-          event_id: event_id, 
+        Logger.error("Email invitation job failed",
+          user_id: user_id,
+          event_id: event_id,
           reason: inspect(reason)
         )
+
         {:error, reason}
     end
   end
@@ -72,17 +73,18 @@ defmodule Eventasaurus.Jobs.EmailInvitationJob do
 
     # Add small delay to respect Resend's 2/second rate limit
     # With max 2 concurrent jobs, this ensures we stay under the limit
-    Process.sleep(600)  # 0.6 seconds
+    # 0.6 seconds
+    Process.sleep(600)
 
     guest_name = Events.get_user_display_name(user)
 
     case Eventasaurus.Emails.send_guest_invitation(
-      user.email,
-      guest_name,
-      event,
-      invitation_message,
-      organizer
-    ) do
+           user.email,
+           guest_name,
+           event,
+           invitation_message,
+           organizer
+         ) do
       {:ok, response} ->
         Logger.info("Email invitation sent successfully",
           user_id: user.id,
@@ -108,7 +110,7 @@ defmodule Eventasaurus.Jobs.EmailInvitationJob do
         error_message = Events.format_email_error(reason)
         failed_participant = EventParticipant.mark_email_failed(participant, error_message)
         Events.update_event_participant(participant, %{metadata: failed_participant.metadata})
-        
+
         {:error, reason}
     end
   end

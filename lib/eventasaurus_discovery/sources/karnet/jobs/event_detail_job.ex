@@ -45,7 +45,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Extract event details
     case DetailExtractor.extract_event_details(html, url) do
       {:ok, event_data} ->
-        Logger.debug("📋 Extracted event data - Title: #{event_data[:title]}, Venue: #{inspect(event_data[:venue_data])}")
+        Logger.debug(
+          "📋 Extracted event data - Title: #{event_data[:title]}, Venue: #{inspect(event_data[:venue_data])}"
+        )
 
         # Check if venue data is nil (events without venues should be discarded)
         if is_nil(event_data[:venue_data]) do
@@ -58,7 +60,10 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
           # Parse dates
           enriched_data = add_parsed_dates(enriched_data)
-          Logger.debug("📅 Parsed dates - Start: #{inspect(enriched_data[:starts_at])}, End: #{inspect(enriched_data[:ends_at])}")
+
+          Logger.debug(
+            "📅 Parsed dates - Start: #{inspect(enriched_data[:starts_at])}, End: #{inspect(enriched_data[:ends_at])}"
+          )
 
           # Get source
           source = Repo.get!(Source, source_id)
@@ -126,7 +131,9 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
     # Venue is required - no fallback
     venue_data = event_data[:venue_data]
 
-    Logger.debug("🔄 Transforming for processor - Venue: #{inspect(venue_data)}, Start: #{inspect(event_data[:starts_at])}")
+    Logger.debug(
+      "🔄 Transforming for processor - Venue: #{inspect(venue_data)}, Start: #{inspect(event_data[:starts_at])}"
+    )
 
     %{
       # Required fields
@@ -136,12 +143,14 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
       source_url: event_data[:url],
 
       # CRITICAL: Processor expects 'start_at' not 'starts_at'!
-      start_at: event_data[:starts_at],  # Changed from 'starts_at' to 'start_at'
+      # Changed from 'starts_at' to 'start_at'
+      start_at: event_data[:starts_at],
       ends_at: event_data[:ends_at],
 
       # Venue - will be processed by VenueProcessor
       venue_data: venue_data,
-      venue: venue_data,  # Alternative key
+      # Alternative key
+      venue: venue_data,
 
       # Performers
       performers: event_data[:performers] || [],
@@ -177,6 +186,7 @@ defmodule EventasaurusDiscovery.Sources.Karnet.Jobs.EventDetailJob do
 
   defp extract_performer_names(nil), do: []
   defp extract_performer_names([]), do: []
+
   defp extract_performer_names(performers) when is_list(performers) do
     Enum.map(performers, fn
       %{name: name} -> name

@@ -401,6 +401,7 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
     case Enum.at(photos, index) do
       nil ->
         {:noreply, socket}
+
       photo ->
         {:noreply,
          socket
@@ -510,15 +511,20 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
     rich_data = socket.assigns.rich_data
 
     # Support both standardized format (new) and old format (for backward compatibility)
-    all_photos = case rich_data do
-      %{sections: %{photos: %{photos: photos}}} when is_list(photos) ->
-        normalize_standardized_photos(photos)
-      %{images: images} when is_list(images) ->
-        normalize_photos(images)
-      %{"images" => images} when is_list(images) ->
-        normalize_photos(images)
-      _ -> []
-    end
+    all_photos =
+      case rich_data do
+        %{sections: %{photos: %{photos: photos}}} when is_list(photos) ->
+          normalize_standardized_photos(photos)
+
+        %{images: images} when is_list(images) ->
+          normalize_photos(images)
+
+        %{"images" => images} when is_list(images) ->
+          normalize_photos(images)
+
+        _ ->
+          []
+      end
 
     # Limit total photos for performance
     total_photos = min(length(all_photos), @max_photos_displayed)
@@ -530,9 +536,11 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
 
     # Get photos for current page
     start_index = (current_page - 1) * @photos_per_page
-    visible_photos = limited_photos
-                     |> Enum.drop(start_index)
-                     |> Enum.take(@photos_per_page)
+
+    visible_photos =
+      limited_photos
+      |> Enum.drop(start_index)
+      |> Enum.take(@photos_per_page)
 
     socket
     |> assign(:all_photos, limited_photos)
@@ -551,9 +559,11 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
 
     # Calculate photos for the new page
     start_index = (page - 1) * @photos_per_page
-    visible_photos = all_photos
-                     |> Enum.drop(start_index)
-                     |> Enum.take(@photos_per_page)
+
+    visible_photos =
+      all_photos
+      |> Enum.drop(start_index)
+      |> Enum.take(@photos_per_page)
 
     socket
     |> assign(:current_page, page)
@@ -566,6 +576,7 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
     |> Enum.filter(&is_valid_standardized_photo?/1)
     |> Enum.map(&normalize_standardized_photo/1)
   end
+
   defp normalize_standardized_photos(_), do: []
 
   defp normalize_photos(images) when is_list(images) do
@@ -573,16 +584,19 @@ defmodule EventasaurusWeb.Live.Components.VenuePhotosComponent do
     |> Enum.filter(&is_valid_photo?/1)
     |> Enum.map(&normalize_photo/1)
   end
+
   defp normalize_photos(_), do: []
 
   defp is_valid_standardized_photo?(photo) when is_map(photo) do
     Map.has_key?(photo, :url) or Map.has_key?(photo, "url")
   end
+
   defp is_valid_standardized_photo?(_), do: false
 
   defp is_valid_photo?(image) when is_map(image) do
     Map.has_key?(image, "url") and is_binary(image["url"])
   end
+
   defp is_valid_photo?(_), do: false
 
   defp normalize_standardized_photo(photo) when is_map(photo) do

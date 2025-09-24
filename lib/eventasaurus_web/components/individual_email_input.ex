@@ -139,5 +139,6 @@ defmodule EventasaurusWeb.Components.IndividualEmailInput do
   defp valid_email?(email) when is_binary(email) do
     String.match?(email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/)
   end
+
   defp valid_email?(_), do: false
 end

@@ -57,7 +57,10 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
   @impl true
   def update(assigns, socket) do
     require Logger
-    Logger.debug("RichDataDisplayComponent update called with rich_data: #{inspect(assigns[:rich_data])}")
+
+    Logger.debug(
+      "RichDataDisplayComponent update called with rich_data: #{inspect(assigns[:rich_data])}"
+    )
 
     {:ok,
      socket
@@ -112,7 +115,8 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
   end
 
   defp render_section(assigns, section_name) do
-    component_module = RichDataSectionRegistry.get_section_component(assigns.content_type, section_name)
+    component_module =
+      RichDataSectionRegistry.get_section_component(assigns.content_type, section_name)
 
     if component_module do
       assigns = Map.put(assigns, :section_name, section_name)
@@ -253,7 +257,10 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
         socket
         |> assign(:standardized_data, standardized_data)
         |> assign(:content_type, standardized_data.type)
-        |> assign(:display_sections, determine_display_sections(socket.assigns, standardized_data))
+        |> assign(
+          :display_sections,
+          determine_display_sections(socket.assigns, standardized_data)
+        )
         |> assign(:adaptation_error, nil)
 
       {:error, reason} ->
@@ -267,9 +274,11 @@ defmodule EventasaurusWeb.Live.Components.RichDataDisplayComponent do
   end
 
   defp adapt_raw_data(nil, _), do: {:error, "No data provided"}
+
   defp adapt_raw_data(raw_data, nil) do
     RichDataAdapterManager.adapt_data(raw_data)
   end
+
   defp adapt_raw_data(raw_data, force_adapter) do
     RichDataAdapterManager.adapt_data(raw_data, force_adapter)
   end

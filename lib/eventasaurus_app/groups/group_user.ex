@@ -4,15 +4,15 @@ defmodule EventasaurusApp.Groups.GroupUser do
   import Ecto.SoftDelete.Schema
 
   schema "group_users" do
-    field :role, :string
-    
-    belongs_to :group, EventasaurusApp.Groups.Group
-    belongs_to :user, EventasaurusApp.Accounts.User
-    
+    field(:role, :string)
+
+    belongs_to(:group, EventasaurusApp.Groups.Group)
+    belongs_to(:user, EventasaurusApp.Accounts.User)
+
     # Deletion metadata fields
-    field :deletion_reason, :string
-    belongs_to :deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id
-    
+    field(:deletion_reason, :string)
+    belongs_to(:deleted_by_user, EventasaurusApp.Accounts.User, foreign_key: :deleted_by_user_id)
+
     timestamps()
     soft_delete_schema()
   end

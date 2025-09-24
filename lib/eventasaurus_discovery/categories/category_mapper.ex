@@ -23,7 +23,8 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
     iex> map_categories("ticketmaster", ["Music", "Rock"], %{"concerts" => {1, true}})
     [{1, true}]
   """
-  def map_categories(source, source_categories, category_lookup) when is_list(source_categories) do
+  def map_categories(source, source_categories, category_lookup)
+      when is_list(source_categories) do
     source_string = to_string(source)
 
     # Load mappings (in production, we'd cache this)
@@ -34,12 +35,14 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
     defaults_mappings = Map.get(mappings, "defaults", %{})
 
     # Map each source category
-    mapped_categories = source_categories
-    |> Enum.flat_map(fn category ->
-      map_single_category(category, source_mappings, defaults_mappings, category_lookup)
-    end)
-    |> Enum.uniq_by(&elem(&1, 0))  # Remove duplicates by category ID
-    |> mark_primary_category()
+    mapped_categories =
+      source_categories
+      |> Enum.flat_map(fn category ->
+        map_single_category(category, source_mappings, defaults_mappings, category_lookup)
+      end)
+      # Remove duplicates by category ID
+      |> Enum.uniq_by(&elem(&1, 0))
+      |> mark_primary_category()
 
     # If no categories mapped, return empty (caller should add "other" fallback)
     mapped_categories
@@ -63,7 +66,9 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
         file_path = Path.join(config_path, file)
 
         case load_yaml_file(file_path) do
-          {:ok, mappings} -> Map.put(acc, source_key, mappings)
+          {:ok, mappings} ->
+            Map.put(acc, source_key, mappings)
+
           {:error, reason} ->
             Logger.error("Failed to load #{file}: #{inspect(reason)}")
             acc
@@ -90,6 +95,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
           "direct" => process_direct_mappings(mappings),
           "patterns" => process_patterns(data["patterns"] || [])
         }
+
         {:ok, processed_mappings}
 
       {:ok, _} ->
@@ -133,11 +139,17 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
               [] ->
                 # Try pattern matching from defaults
                 try_pattern_mapping(normalized, defaults_mappings, category_lookup)
-              result -> result
+
+              result ->
+                result
             end
-          result -> result
+
+          result ->
+            result
         end
-      result -> result
+
+      result ->
+        result
     end
   end
 
@@ -145,10 +157,13 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
     direct_mappings = Map.get(mappings, "direct", %{})
 
     case Map.get(direct_mappings, normalized_category) do
-      nil -> []
+      nil ->
+        []
+
       internal_category ->
         case Map.get(category_lookup, internal_category) do
-          {id, true} -> [{id, false}]  # Will be marked as primary later
+          # Will be marked as primary later
+          {id, true} -> [{id, false}]
           _ -> []
         end
     end
@@ -176,6 +191,7 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
     case Regex.compile(pattern, "i") do
       {:ok, regex} ->
         Regex.match?(regex, text)
+
       {:error, _} ->
         # Fallback: treat as glob pattern with * and ?
         glob_pattern =
@@ -207,9 +223,11 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
         case other_categories do
           [{id, _} | rest] ->
             [{id, true} | Enum.map(rest, fn {id, _} -> {id, false} end)]
+
           [] ->
             []
         end
+
       [{first_id, _} | rest_real] ->
         # Real categories exist, mark the first real category as primary
         # and all others (including "Other") as secondary
@@ -222,10 +240,12 @@ defmodule EventasaurusDiscovery.Categories.CategoryMapper do
   defp get_other_category_id do
     # Query for the "Other" category ID
     # Using the same query pattern as in CategoryExtractor
-    query = from c in EventasaurusDiscovery.Categories.Category,
-      where: c.slug == "other" and c.is_active == true,
-      select: c.id,
-      limit: 1
+    query =
+      from(c in EventasaurusDiscovery.Categories.Category,
+        where: c.slug == "other" and c.is_active == true,
+        select: c.id,
+        limit: 1
+      )
 
     Repo.one(query)
   end

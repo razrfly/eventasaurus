@@ -5,12 +5,12 @@ defmodule EventasaurusApp.Events.EventDatePoll do
   alias EventasaurusApp.Accounts.User
 
   schema "event_date_polls" do
-    field :voting_deadline, :utc_datetime
-    field :finalized_date, :date
+    field(:voting_deadline, :utc_datetime)
+    field(:finalized_date, :date)
 
-    belongs_to :event, Event
-    belongs_to :created_by, User, foreign_key: :created_by_id
-    has_many :date_options, EventDateOption
+    belongs_to(:event, Event)
+    belongs_to(:created_by, User, foreign_key: :created_by_id)
+    has_many(:date_options, EventDateOption)
 
     timestamps()
   end
@@ -54,9 +54,11 @@ defmodule EventasaurusApp.Events.EventDatePoll do
   Check if the poll is currently active (not finalized and within deadline).
   """
   def active?(%__MODULE__{finalized_date: nil, voting_deadline: nil}), do: true
+
   def active?(%__MODULE__{finalized_date: nil, voting_deadline: deadline}) do
     DateTime.compare(DateTime.utc_now(), deadline) == :lt
   end
+
   def active?(%__MODULE__{finalized_date: _}), do: false
 
   @doc """
@@ -67,7 +69,9 @@ defmodule EventasaurusApp.Events.EventDatePoll do
 
   defp validate_voting_deadline(changeset) do
     case get_field(changeset, :voting_deadline) do
-      nil -> changeset
+      nil ->
+        changeset
+
       deadline ->
         if DateTime.compare(deadline, DateTime.utc_now()) == :gt do
           changeset
@@ -81,10 +85,13 @@ defmodule EventasaurusApp.Events.EventDatePoll do
     finalized_date = get_field(changeset, :finalized_date)
 
     case finalized_date do
-      nil -> changeset
+      nil ->
+        changeset
+
       date ->
         # Validate that finalized date is not in the past
         today = Date.utc_today()
+
         if Date.compare(date, today) != :lt do
           changeset
         else

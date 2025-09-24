@@ -1,7 +1,7 @@
 defmodule EventasaurusApp.AuditLogger do
   @moduledoc """
   Audit logging for sensitive operations in the polling system.
-  
+
   Logs important events like vote casting, poll creation/modification,
   and administrative actions for security and compliance.
   """
@@ -23,7 +23,7 @@ defmodule EventasaurusApp.AuditLogger do
     }
 
     Logger.info("AUDIT: #{event_type}", audit_data)
-    
+
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
   end
@@ -43,7 +43,7 @@ defmodule EventasaurusApp.AuditLogger do
     }
 
     Logger.info("AUDIT: #{event_type}", audit_data)
-    
+
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
   end
@@ -64,7 +64,7 @@ defmodule EventasaurusApp.AuditLogger do
     }
 
     Logger.warning("ADMIN_AUDIT: #{event_type}", audit_data)
-    
+
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
   end
@@ -84,7 +84,7 @@ defmodule EventasaurusApp.AuditLogger do
     }
 
     Logger.warning("SECURITY_AUDIT: #{event_type}", audit_data)
-    
+
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
   end
@@ -104,18 +104,32 @@ defmodule EventasaurusApp.AuditLogger do
   end
 
   def log_poll_phase_changed(poll_id, user_id, from_phase, to_phase, metadata \\ %{}) do
-    log_poll_event("poll_phase_changed", poll_id, user_id, 
-      Map.merge(metadata, %{from_phase: from_phase, to_phase: to_phase}))
+    log_poll_event(
+      "poll_phase_changed",
+      poll_id,
+      user_id,
+      Map.merge(metadata, %{from_phase: from_phase, to_phase: to_phase})
+    )
   end
 
   def log_vote_cast(poll_id, option_id, user_id, vote_data, metadata \\ %{}) do
-    log_vote_event("vote_cast", poll_id, option_id, user_id, 
-      Map.put(metadata, :vote_data, vote_data))
+    log_vote_event(
+      "vote_cast",
+      poll_id,
+      option_id,
+      user_id,
+      Map.put(metadata, :vote_data, vote_data)
+    )
   end
 
   def log_vote_updated(poll_id, option_id, user_id, old_vote, new_vote, metadata \\ %{}) do
-    log_vote_event("vote_updated", poll_id, option_id, user_id, 
-      Map.merge(metadata, %{old_vote: old_vote, new_vote: new_vote}))
+    log_vote_event(
+      "vote_updated",
+      poll_id,
+      option_id,
+      user_id,
+      Map.merge(metadata, %{old_vote: old_vote, new_vote: new_vote})
+    )
   end
 
   def log_vote_deleted(poll_id, option_id, user_id, metadata \\ %{}) do
@@ -123,18 +137,23 @@ defmodule EventasaurusApp.AuditLogger do
   end
 
   def log_rate_limit_exceeded(user_id, poll_id, metadata \\ %{}) do
-    log_security_event("rate_limit_exceeded", user_id, 
-      Map.put(metadata, :poll_id, poll_id))
+    log_security_event("rate_limit_exceeded", user_id, Map.put(metadata, :poll_id, poll_id))
   end
 
   def log_validation_failed(user_id, validation_type, metadata \\ %{}) do
-    log_security_event("validation_failed", user_id, 
-      Map.put(metadata, :validation_type, validation_type))
+    log_security_event(
+      "validation_failed",
+      user_id,
+      Map.put(metadata, :validation_type, validation_type)
+    )
   end
 
   def log_unauthorized_access(user_id, resource_type, resource_id, metadata \\ %{}) do
-    log_security_event("unauthorized_access", user_id, 
-      Map.merge(metadata, %{resource_type: resource_type, resource_id: resource_id}))
+    log_security_event(
+      "unauthorized_access",
+      user_id,
+      Map.merge(metadata, %{resource_type: resource_type, resource_id: resource_id})
+    )
   end
 
   @doc """
@@ -152,7 +171,7 @@ defmodule EventasaurusApp.AuditLogger do
     }
 
     Logger.info("AUDIT: #{event_type}", audit_data)
-    
+
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
   end
@@ -160,7 +179,13 @@ defmodule EventasaurusApp.AuditLogger do
   @doc """
   Logs group membership-related audit events.
   """
-  def log_group_membership_event(event_type, group_id, target_user_id, acting_user_id, metadata \\ %{}) do
+  def log_group_membership_event(
+        event_type,
+        group_id,
+        target_user_id,
+        acting_user_id,
+        metadata \\ %{}
+      ) do
     audit_data = %{
       event_type: event_type,
       resource_type: "group_membership",
@@ -172,7 +197,7 @@ defmodule EventasaurusApp.AuditLogger do
     }
 
     Logger.info("AUDIT: #{event_type}", audit_data)
-    
+
     # Store in database if needed for compliance
     # store_audit_record(audit_data)
   end
@@ -192,18 +217,40 @@ defmodule EventasaurusApp.AuditLogger do
   end
 
   def log_member_added(group_id, target_user_id, acting_user_id, role, metadata \\ %{}) do
-    log_group_membership_event("member_added", group_id, target_user_id, acting_user_id,
-      Map.put(metadata, :role, role))
+    log_group_membership_event(
+      "member_added",
+      group_id,
+      target_user_id,
+      acting_user_id,
+      Map.put(metadata, :role, role)
+    )
   end
 
   def log_member_removed(group_id, target_user_id, acting_user_id, reason, metadata \\ %{}) do
-    log_group_membership_event("member_removed", group_id, target_user_id, acting_user_id,
-      Map.put(metadata, :reason, reason))
+    log_group_membership_event(
+      "member_removed",
+      group_id,
+      target_user_id,
+      acting_user_id,
+      Map.put(metadata, :reason, reason)
+    )
   end
 
-  def log_member_role_changed(group_id, target_user_id, acting_user_id, from_role, to_role, metadata \\ %{}) do
-    log_group_membership_event("member_role_changed", group_id, target_user_id, acting_user_id,
-      Map.merge(metadata, %{from_role: from_role, to_role: to_role}))
+  def log_member_role_changed(
+        group_id,
+        target_user_id,
+        acting_user_id,
+        from_role,
+        to_role,
+        metadata \\ %{}
+      ) do
+    log_group_membership_event(
+      "member_role_changed",
+      group_id,
+      target_user_id,
+      acting_user_id,
+      Map.merge(metadata, %{from_role: from_role, to_role: to_role})
+    )
   end
 
   def log_group_sync(group_id, acting_user_id, results, metadata \\ %{}) do
@@ -212,13 +259,17 @@ defmodule EventasaurusApp.AuditLogger do
       added: results[:added] || 0,
       already_members: results[:already_members] || 0
     }
-    
-    log_group_event("group_sync_completed", group_id, acting_user_id,
+
+    log_group_event(
+      "group_sync_completed",
+      group_id,
+      acting_user_id,
       Map.merge(metadata, %{
         sync_results: safe_results,
         added_count: safe_results[:added],
         already_members_count: safe_results[:already_members]
-      }))
+      })
+    )
   end
 
   def log_event_sync(group_id, event_id, acting_user_id, results, metadata \\ %{}) do
@@ -227,22 +278,38 @@ defmodule EventasaurusApp.AuditLogger do
       added: results[:added] || 0,
       already_members: results[:already_members] || 0
     }
-    
-    log_group_event("event_sync_completed", group_id, acting_user_id,
+
+    log_group_event(
+      "event_sync_completed",
+      group_id,
+      acting_user_id,
       Map.merge(metadata, %{
         event_id: event_id,
         sync_results: safe_results,
         added_count: safe_results[:added],
         already_members_count: safe_results[:already_members]
-      }))
+      })
+    )
   end
 
   def log_join_request_approved(group_id, requester_user_id, approver_user_id, metadata \\ %{}) do
-    log_group_membership_event("join_request_approved", group_id, requester_user_id, approver_user_id, metadata)
+    log_group_membership_event(
+      "join_request_approved",
+      group_id,
+      requester_user_id,
+      approver_user_id,
+      metadata
+    )
   end
 
   def log_join_request_denied(group_id, requester_user_id, denier_user_id, metadata \\ %{}) do
-    log_group_membership_event("join_request_denied", group_id, requester_user_id, denier_user_id, metadata)
+    log_group_membership_event(
+      "join_request_denied",
+      group_id,
+      requester_user_id,
+      denier_user_id,
+      metadata
+    )
   end
 
   # Private functions
